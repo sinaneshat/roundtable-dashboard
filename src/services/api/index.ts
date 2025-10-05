@@ -28,14 +28,11 @@ export {
 } from './chat-memories';
 
 // ============================================================================
-// Customer Portal Service Exports
-// Used for payment method management and invoice downloads
+// Chat Messages Service Exports
+// All messages use streaming for better UX (sendMessage endpoint removed)
 // ============================================================================
 
 export {
-  type SendMessageRequest,
-  type SendMessageResponse,
-  sendMessageService,
   type StreamChatRequest,
   type StreamChatResponse,
   streamChatService,

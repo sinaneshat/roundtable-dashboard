@@ -374,82 +374,68 @@ export const ParticipantDetailResponseSchema = createApiResponseSchema(Participa
 // ============================================================================
 // Message Schemas
 // ============================================================================
-
-export const SendMessageRequestSchema = z.object({
-  content: z.string().min(1).openapi({
-    description: 'User message content',
-    example: 'What are some innovative product ideas for sustainability?',
-  }),
-  parentMessageId: z.string().optional().openapi({
-    description: 'Parent message ID for threading',
-    example: 'msg_parent123',
-  }),
-}).openapi('SendMessageRequest');
+// Note: SendMessageRequestSchema removed - use StreamChatRequestSchema for all chat operations
 
 /**
- * Streaming chat request schema - AI SDK v5 Message Persistence Pattern
- * Following official AI SDK v5 chatbot message persistence pattern:
- * https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot-message-persistence
+ * AI SDK v5 UIMessage Part Types
+ * Following official AI SDK v5 documentation
+ */
+const UIMessagePartSchema = z.discriminatedUnion('type', [
+  z.object({
+    type: z.literal('text'),
+    text: z.string().min(1, 'Text content cannot be empty'),
+  }),
+  z.object({
+    type: z.literal('tool-call'),
+    toolCallId: z.string(),
+    toolName: z.string(),
+    args: z.record(z.string(), z.unknown()),
+  }).passthrough(),
+  z.object({
+    type: z.literal('tool-result'),
+    toolCallId: z.string(),
+    toolName: z.string(),
+    result: z.unknown(),
+  }).passthrough(),
+  z.object({
+    type: z.literal('file'),
+    data: z.string(),
+    mimeType: z.string(),
+  }).passthrough(),
+]).openapi('UIMessagePart');
+
+/**
+ * AI SDK v5 Standard Streaming Request
+ * Following https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot exactly
  *
- * Frontend sends only the last message, backend loads previous messages from DB
- * For auto-trigger/regenerate, message is optional
+ * Server receives ALL messages from client
+ * Also accepts optional configuration updates for dynamic mode/participant changes
  */
 export const StreamChatRequestSchema = z.object({
-  // Thread ID for loading previous messages from database
-  id: z.string().openapi({
-    description: 'Thread ID - used to load conversation history from database',
-    example: 'thread_abc123',
-  }),
-  // Last user message from frontend (AI SDK v5 UIMessage format)
-  // Optional for regenerate/auto-trigger scenarios
-  message: z.object({
+  // AI SDK v5 Standard: Array of all messages including the new one
+  messages: z.array(z.object({
     id: z.string(),
     role: z.enum(['user', 'assistant']),
-    // Parts can be text, tool-call, tool-result, file, etc.
-    parts: z.array(z.object({
-      type: z.string(),
-    }).passthrough()),
-  }).passthrough().optional().openapi({
-    description: 'Last message from frontend (AI SDK v5 UIMessage format). Optional for auto-trigger/regenerate.',
+    parts: z.array(UIMessagePartSchema).min(1),
+  }).passthrough()).min(1).openapi({
+    description: 'All conversation messages (UIMessage[] from AI SDK v5)',
   }),
-  // Optional trigger for regeneration
-  trigger: z.string().optional().openapi({
-    description: 'Trigger type from AI SDK v5 (e.g., "submit-user-message", "regenerate-assistant-message")',
+  // Dynamic configuration updates (optional)
+  mode: z.enum(['analyzing', 'brainstorming', 'debating', 'solving']).optional().openapi({
+    description: 'Updated conversation mode',
   }),
-  // Optional message ID for regeneration
-  messageId: z.string().optional().openapi({
-    description: 'Message ID for regeneration (used with regenerate trigger)',
+  participants: z.array(z.object({
+    modelId: z.string(),
+    role: z.string().optional(),
+    customRoleId: z.string().optional(),
+    order: z.number().int().nonnegative(),
+  })).optional().openapi({
+    description: 'Updated participant configuration',
+  }),
+  memoryIds: z.array(z.string()).optional().openapi({
+    description: 'Updated memory IDs to attach',
   }),
 }).openapi('StreamChatRequest');
-
-const MessageListPayloadSchema = z.object({
-  messages: z.array(ChatMessageSchema).openapi({
-    description: 'List of thread messages',
-  }),
-  count: z.number().int().nonnegative().openapi({
-    description: 'Total number of messages',
-    example: 12,
-  }),
-}).openapi('MessageListPayload');
-
-const MessageDetailPayloadSchema = z.object({
-  message: ChatMessageSchema.openapi({
-    description: 'Message details',
-  }),
-}).openapi('MessageDetailPayload');
-
-const SendMessagePayloadSchema = z.object({
-  userMessage: ChatMessageSchema.openapi({
-    description: 'User message that was sent',
-  }),
-  assistantMessages: z.array(ChatMessageSchema).openapi({
-    description: 'Assistant responses from all participants',
-  }),
-}).openapi('SendMessagePayload');
-
-export const MessageListResponseSchema = createApiResponseSchema(MessageListPayloadSchema).openapi('MessageListResponse');
-export const MessageDetailResponseSchema = createApiResponseSchema(MessageDetailPayloadSchema).openapi('MessageDetailResponse');
-export const SendMessageResponseSchema = createApiResponseSchema(SendMessagePayloadSchema).openapi('SendMessageResponse');
 
 // ============================================================================
 // Memory Schemas
@@ -673,7 +659,6 @@ export type AddParticipantRequest = z.infer<typeof AddParticipantRequestSchema>;
 export type UpdateParticipantRequest = z.infer<typeof UpdateParticipantRequestSchema>;
 
 export type ChatMessage = z.infer<typeof ChatMessageSchema>;
-export type SendMessageRequest = z.infer<typeof SendMessageRequestSchema>;
 export type StreamChatRequest = z.infer<typeof StreamChatRequestSchema>;
 
 export type ChatMemory = z.infer<typeof ChatMemorySchema>;

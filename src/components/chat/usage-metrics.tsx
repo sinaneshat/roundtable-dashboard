@@ -1,9 +1,10 @@
 'use client';
 
-import { AlertCircle, MessageSquare, MessagesSquare } from 'lucide-react';
-import Link from 'next/link';
+import { AlertCircle, ArrowUpCircle, MessageSquare, MessagesSquare } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 
+import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { useSidebar } from '@/components/ui/sidebar';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -15,10 +16,12 @@ import { cn } from '@/lib/ui/cn';
  *
  * Displays user's current usage statistics for threads and messages
  * Shows progress bars and remaining quota
+ * Non-clickable - only shows upgrade button when quota is maxed out
  * Positioned above the profile icon in the sidebar
  */
 export function UsageMetrics() {
   const t = useTranslations();
+  const router = useRouter();
   const { state } = useSidebar();
   const { data: usageData, isLoading, isError } = useUsageStatsQuery();
 
@@ -63,15 +66,19 @@ export function UsageMetrics() {
     );
   }
 
-  // Calculate if user is approaching limits (80% or more)
+  // Calculate if user is approaching limits (80% or more) or maxed out (100%)
   const threadsWarning = usage.threads.percentage >= 80;
   const messagesWarning = usage.messages.percentage >= 80;
+  const threadsMaxedOut = usage.threads.percentage >= 100;
+  const messagesMaxedOut = usage.messages.percentage >= 100;
+  const isMaxedOut = threadsMaxedOut || messagesMaxedOut;
+
+  const handleUpgrade = () => {
+    router.push('/chat/pricing');
+  };
 
   return (
-    <Link
-      href="/chat/pricing"
-      className="group block px-2 py-3 transition-colors hover:bg-sidebar-accent/50 rounded-md"
-    >
+    <div className="px-2 py-3">
       <div className="space-y-3">
         {/* Threads Usage */}
         <div className="space-y-1.5">
@@ -153,13 +160,19 @@ export function UsageMetrics() {
           </span>
         </div>
 
-        {/* Upgrade hint - shown when approaching limits */}
-        {(threadsWarning || messagesWarning) && (
-          <div className="text-[10px] text-primary group-hover:underline">
-            {t('usage.upgradeHint')}
-          </div>
+        {/* Upgrade button - only shown when quota is maxed out */}
+        {isMaxedOut && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-full rounded-full gap-1.5"
+            onClick={handleUpgrade}
+          >
+            <ArrowUpCircle className="size-3.5" />
+            {t('usage.upgradeNow')}
+          </Button>
         )}
       </div>
-    </Link>
+    </div>
   );
 }

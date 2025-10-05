@@ -155,7 +155,7 @@ export const chatMessage = sqliteTable('chat_message', {
     .references((): ReturnType<typeof text> => chatMessage.id as ReturnType<typeof text>, {
       onDelete: 'set null',
     }),
-  createdAt: integer('created_at', { mode: 'timestamp' })
+  createdAt: integer('created_at', { mode: 'timestamp_ms' })
     .defaultNow()
     .notNull(),
 }, table => [

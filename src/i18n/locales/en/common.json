@@ -318,6 +318,27 @@
       "description": "Are you sure you want to cancel your subscription? You will retain access until the end of your billing period.",
       "confirm": "Yes, Cancel Subscription"
     },
+    "cancelSubscription": {
+      "title": "Cancel Your Subscription?",
+      "warning": "Are you absolutely sure you want to cancel?",
+      "description": "Canceling your subscription will limit your access to premium features. Your subscription will remain active until the end of your current billing period.",
+      "activeUntil": "Active until",
+      "confirmButton": "Yes, Cancel Subscription",
+      "whatYouWillLose": "What you'll lose access to:",
+      "loss": {
+        "premiumModels": "Access to premium AI models and advanced capabilities",
+        "unlimitedConversations": "Unlimited conversations and messages",
+        "prioritySupport": "Priority customer support and assistance",
+        "advancedFeatures": "Advanced features and customization options"
+      },
+      "timeline": {
+        "title": "Cancellation Timeline:",
+        "immediate": "No further charges will be made to your account",
+        "accessUntil": "You'll retain full access to all premium features until {date}",
+        "downgrade": "After your subscription ends, your account will automatically downgrade to the free tier"
+      },
+      "termsNotice": "By confirming, you agree to the cancellation terms. You can reactivate your subscription at any time before it expires."
+    },
     "currentSubscription": {
       "description": "Manage your active subscription",
       "title": "Current Subscription"
@@ -397,7 +418,12 @@
     },
     "quickActions": "Quick Actions",
     "recentTransactions": "Your recent billing transactions",
-    "status": "Status",
+    "status": {
+      "label": "Status",
+      "canceled": "Canceled",
+      "canceledTooltip": "Your subscription will be canceled on {date}. You'll retain full access to all premium features until then, after which your account will automatically downgrade to the free tier.",
+      "endOfPeriod": "the end of your billing period"
+    },
     "subscribe": "Subscribe",
     "subscription": "Subscription",
     "subscriptionPlan": "Subscription Plan",
@@ -978,6 +1004,28 @@
   "chat": {
     "title": "Chats",
     "description": "Manage your conversations and chat history",
+    "actions": {
+      "copy": "Copy message",
+      "regenerate": "Regenerate response",
+      "edit": "Edit and regenerate",
+      "messageCopied": "Message copied",
+      "messageCopiedDescription": "Message content copied to clipboard"
+    },
+    "editMessage": {
+      "title": "Edit Message",
+      "description": "Edit your message and regenerate AI responses based on the new prompt",
+      "saveAndRegenerate": "Save & Regenerate"
+    },
+    "error": {
+      "generic": "An error occurred. Please try again."
+    },
+    "streaming": {
+      "responding": "responding",
+      "waiting": "waiting",
+      "remaining": "remaining",
+      "nextUp": "Next up",
+      "completed": "completed"
+    },
     "hero": {
       "staticText": "Collaborate with",
       "rotatingWords": {
@@ -1040,12 +1088,23 @@
     "favoriteFailedDescription": "Could not update favorite status. Please try again.",
     "makePublic": "Make Public",
     "makePrivate": "Make Private",
+    "makePublicConfirmTitle": "Make this thread public?",
+    "makePublicConfirmDescription": "Anyone with the link will be able to view this thread and its messages.",
     "shareThread": "Share Thread",
+    "shareThreadDescription": "Share this link with anyone to give them access to this thread",
     "deleteThread": "Delete Thread",
     "madePublic": "Thread is now public",
     "madePublicDescription": "Anyone with the link can now view this thread",
     "madePrivate": "Thread is now private",
     "madePrivateDescription": "Only you can view this thread",
+    "linkCopied": "Link copied",
+    "linkCopiedDescription": "Share link copied to clipboard",
+    "copyFailed": "Failed to copy link",
+    "copyFailedDescription": "Could not copy link to clipboard. Please try again.",
+    "scrollToBottom": "Scroll to bottom",
+    "copyLink": "Copy link",
+    "publicToggleFailed": "Failed to update visibility",
+    "publicToggleFailedDescription": "Could not update thread visibility. Please try again.",
     "updateFailed": "Failed to update thread",
     "updateFailedDescription": "Could not update the thread. Please try again.",
     "generatingTitle": "Generating title from your message...",
@@ -1517,7 +1576,11 @@
       "subscribe": "Subscribe",
       "cancelSubscription": "Cancel Subscription",
       "switchPlan": "Switch to This Plan",
-      "processing": "Processing..."
+      "processing": "Processing...",
+      "active": "Active",
+      "annual": "Annual Plan",
+      "monthly": "Monthly Plan",
+      "upgradeToPro": "Upgrade to Pro"
     },
     "free": {
       "alwaysActive": "Always Active",
@@ -1803,7 +1866,8 @@
     "plan": "Plan",
     "daysLeft": "days left",
     "errorLoading": "Unable to load usage data",
-    "upgradeHint": "Upgrade for more"
+    "upgradeHint": "Upgrade for more",
+    "upgradeNow": "Upgrade Now"
   },
   "user": {
     "defaultName": "User"

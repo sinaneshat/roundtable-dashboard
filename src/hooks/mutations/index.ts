@@ -10,6 +10,7 @@
 // ============================================================================
 
 // Chat mutations (protected) - All chat-related operations
+// NOTE: useSendMessageMutation removed - use AI SDK v5 useChat hook for all message operations
 export {
   useAddParticipantMutation,
   useCreateCustomRoleMutation,
@@ -19,7 +20,8 @@ export {
   useDeleteMemoryMutation,
   useDeleteParticipantMutation,
   useDeleteThreadMutation,
-  useSendMessageMutation,
+  useToggleFavoriteMutation,
+  useTogglePublicMutation,
   useUpdateCustomRoleMutation,
   useUpdateMemoryMutation,
   useUpdateParticipantMutation,

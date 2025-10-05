@@ -16,8 +16,6 @@ import {
   MemoryListResponseSchema,
   ParticipantDetailResponseSchema,
   ParticipantIdParamSchema,
-  SendMessageRequestSchema,
-  SendMessageResponseSchema,
   StreamChatRequestSchema,
   ThreadDetailResponseSchema,
   ThreadIdParamSchema,
@@ -300,40 +298,12 @@ export const deleteParticipantRoute = createRoute({
 // ============================================================================
 // Note: GET /chat/threads/:id/messages removed - use GET /chat/threads/:id instead
 // Note: GET /chat/messages/:id removed - no use case for viewing single message
-
-export const sendMessageRoute = createRoute({
-  method: 'post',
-  path: '/chat/threads/:id/messages',
-  tags: ['chat'],
-  summary: 'Send message',
-  description: 'Send a user message and receive responses from all enabled participants',
-  request: {
-    params: ThreadIdParamSchema,
-    body: {
-      content: {
-        'application/json': {
-          schema: SendMessageRequestSchema,
-        },
-      },
-    },
-  },
-  responses: {
-    [HttpStatusCodes.OK]: {
-      description: 'Message sent and responses received',
-      content: {
-        'application/json': { schema: SendMessageResponseSchema },
-      },
-    },
-    [HttpStatusCodes.UNAUTHORIZED]: { description: 'Authentication required' },
-    [HttpStatusCodes.NOT_FOUND]: { description: 'Thread not found' },
-    [HttpStatusCodes.BAD_REQUEST]: { description: 'Invalid request data or no participants enabled' },
-    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: { description: 'Internal Server Error' },
-  },
-});
+// Note: POST /chat/threads/:id/messages (sendMessageRoute) removed - use streamChatRoute for all chat operations
 
 /**
  * Streaming chat endpoint using Server-Sent Events (SSE)
  * Returns AI responses token-by-token for real-time streaming UX
+ * This replaces the old sendMessageRoute - all chat messages should be streamed for better UX
  */
 export const streamChatRoute = createRoute({
   method: 'post',

@@ -24,6 +24,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { toast } from '@/components/ui/use-toast';
 import { useCreateThreadMutation } from '@/hooks/mutations/chat-mutations';
 import { cn } from '@/lib/ui/cn';
+import { chatGlass } from '@/lib/ui/glassmorphism';
 
 // ============================================================================
 // Constants
@@ -198,11 +199,15 @@ export function ChatInput({
           firstMessage: data.message,
           title: 'New Chat',
           mode: data.mode,
-          participants: participants.map(p => ({
-            modelId: p.modelId,
-            ...(p.role && { role: p.role }), // Only include role if it exists
-            ...(p.customRoleId && { customRoleId: p.customRoleId }), // Only include customRoleId if it exists
-          })),
+          // Sort participants by order field before sending to API
+          // This ensures database priority matches the configured order
+          participants: participants
+            .sort((a, b) => a.order - b.order)
+            .map(p => ({
+              modelId: p.modelId,
+              ...(p.role && { role: p.role }), // Only include role if it exists
+              ...(p.customRoleId && { customRoleId: p.customRoleId }), // Only include customRoleId if it exists
+            })),
           memoryIds: selectedMemoryIds.length > 0 ? selectedMemoryIds : undefined,
         },
       });
@@ -250,7 +255,7 @@ export function ChatInput({
   // ============================================================================
 
   return (
-    <div className={cn('w-full max-w-4xl mx-auto space-y-3', className)}>
+    <div className={cn('w-full space-y-3', className)}>
       {/* Participants Preview - Above Chat Box - Always show selected participants */}
       {participants.length > 0 && (
         <ParticipantsPreview participants={participants} className="mb-2" />
@@ -263,10 +268,9 @@ export function ChatInput({
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3, ease: [0.25, 0.1, 0.25, 1] }}
           className={cn(
-            'relative flex flex-col gap-2 rounded-3xl border backdrop-blur-xl bg-background/5 shadow-sm transition-all duration-200 p-3',
-            isFocused
-              ? 'border-ring ring-2 ring-ring/20'
-              : 'border-input hover:border-ring/50',
+            chatGlass.inputBox,
+            'relative flex flex-col gap-2 rounded-3xl p-3',
+            isFocused && 'ring-2 ring-white/20',
           )}
         >
           {/* Textarea - Full Width with Auto-resize */}
@@ -303,7 +307,7 @@ export function ChatInput({
             <Select value={modeValue} onValueChange={value => setValue('mode', value as typeof modeValue)}>
               <SelectTrigger
                 size="sm"
-                className="h-8 w-fit gap-2 rounded-full border-0 bg-secondary/50 hover:bg-secondary px-3"
+                className="h-8 w-fit gap-1.5 rounded-full border px-3 text-xs"
               >
                 <SelectValue>
                   <div className="flex items-center gap-1.5">

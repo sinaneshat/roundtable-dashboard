@@ -2,6 +2,7 @@ import { Slot } from "@radix-ui/react-slot"
 import { cva, type VariantProps } from "class-variance-authority"
 import * as React from "react"
 
+import { glassBadge } from "@/lib/ui/glassmorphism"
 import { cn } from "@/lib/ui/cn"
 
 const badgeVariants = cva(
@@ -21,6 +22,8 @@ const badgeVariants = cva(
           "border-transparent bg-chart-3 text-white [a&]:hover:bg-chart-3/90 focus-visible:ring-chart-3/20 dark:focus-visible:ring-chart-3/40",
         warning:
           "border-transparent bg-chart-2 text-white [a&]:hover:bg-chart-2/90 focus-visible:ring-chart-2/20 dark:focus-visible:ring-chart-2/40",
+        glass:
+          cn(glassBadge, "text-foreground"),
       },
     },
     defaultVariants: {

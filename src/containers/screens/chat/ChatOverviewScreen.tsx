@@ -1,15 +1,14 @@
 'use client';
 
 import { motion } from 'motion/react';
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
 import type { ParticipantConfig } from '@/components/chat/chat-config-sheet';
 import { ChatInput } from '@/components/chat/chat-input';
 import { ChatQuickStart } from '@/components/chat/chat-quick-start';
-import { Logo } from '@/components/logo';
-import { ScaleIn } from '@/components/ui/motion';
-import { TextHoverEffect } from '@/components/ui/text-hover-effect';
+import { WavyBackground } from '@/components/ui/wavy-background';
 
 export default function ChatOverviewScreen() {
   const router = useRouter();
@@ -41,53 +40,70 @@ export default function ChatOverviewScreen() {
   };
 
   return (
-    <div className="flex flex-col w-full h-full">
-      {/* Scrollable Content Area */}
-      <div className="flex-1 overflow-y-auto">
-        <div className="flex flex-col items-center px-4 pt-8 pb-6">
-          {/* Hero Section - Large and Dominant */}
-          <div className="flex flex-col items-center gap-8 text-center w-full mb-12">
-            {/* Logo - Very Large */}
-            <ScaleIn duration={0.5} delay={0}>
-              <div className="flex items-center justify-center">
-                <Logo size="lg" variant="full" className="w-32 h-32 md:w-40 md:h-40 lg:w-48 lg:h-48" />
-              </div>
-            </ScaleIn>
+    <div className="relative flex flex-1 flex-col min-h-0">
+      {/* Wavy Background - Edge-to-edge, breaking out of parent padding */}
+      <div className="absolute inset-0 -mx-4 lg:-mx-6 z-0 overflow-hidden">
+        <WavyBackground containerClassName="h-full w-full" />
+      </div>
 
-            {/* Animated Text - roundtable.now */}
+      {/* Content Layer - Above wavy background, matches chat thread structure */}
+      <div className="relative z-10 flex flex-1 flex-col min-h-0">
+        {/* Hero Section with Logo - Centered with max-w-4xl like chat messages */}
+        <div className="flex-shrink-0 pt-16 pb-12">
+          <div className="mx-auto max-w-4xl px-4 lg:px-6">
             <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 0.6, delay: 0.3 }}
-              className="h-[80px] md:h-[100px] lg:h-[120px] w-full max-w-4xl px-8"
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.8 }}
+              className="flex flex-col items-center gap-6 text-center"
             >
-              <TextHoverEffect text="roundtable.now" />
+              {/* Roundtable Logo */}
+              <div className="relative h-28 w-28 md:h-36 md:w-36">
+                <Image
+                  src="/static/logo.png"
+                  alt="Roundtable Logo"
+                  fill
+                  className="object-contain drop-shadow-2xl"
+                  priority
+                />
+              </div>
+              {/* Roundtable Text */}
+              <p className="text-3xl font-bold text-white drop-shadow-2xl md:text-5xl lg:text-6xl">
+                roundtable.now
+              </p>
+              <p className="text-base font-normal text-white/90 drop-shadow-lg md:text-lg lg:text-xl">
+                Where AI models collaborate together
+              </p>
             </motion.div>
+          </div>
+        </div>
 
-            {/* Quick Start Cards */}
+        {/* Scrollable Content Area - Matches chat thread ScrollArea pattern */}
+        <div className="flex-1 overflow-y-auto">
+          {/* Quick Start Cards - Same max-w-4xl container as chat messages */}
+          <div className="mx-auto max-w-4xl px-4 lg:px-6 pb-8">
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4, delay: 0.6 }}
-              className="w-full max-w-6xl"
+              transition={{ duration: 0.4, delay: 0.5 }}
+              className="w-full"
             >
               <ChatQuickStart onSuggestionClick={handleSuggestionClick} />
             </motion.div>
           </div>
         </div>
-      </div>
 
-      {/* Sticky Chat Input - Within dashboard content area */}
-      <div className="sticky bottom-0 w-full">
-        <div className="max-w-4xl mx-auto py-3 px-4">
-          <ChatInput
-            className="w-full"
-            onThreadCreated={handleThreadCreated}
-            initialMessage={selectedPrompt}
-            initialMode={selectedMode}
-            initialParticipants={selectedParticipants}
-            data-chat-input
-          />
+        {/* Sticky Chat Input - Same container pattern as thread input */}
+        <div className="sticky bottom-0 flex-shrink-0 w-full pb-4 pt-3">
+          <div className="mx-auto max-w-4xl px-4 lg:px-6">
+            <ChatInput
+              onThreadCreated={handleThreadCreated}
+              initialMessage={selectedPrompt}
+              initialMode={selectedMode}
+              initialParticipants={selectedParticipants}
+              data-chat-input
+            />
+          </div>
         </div>
       </div>
     </div>

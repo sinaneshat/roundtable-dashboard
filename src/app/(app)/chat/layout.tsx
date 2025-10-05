@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import type React from 'react';
 
+import { BreadcrumbProvider } from '@/components/chat/breadcrumb-context';
 import { ChatContentWrapper } from '@/components/chat/chat-content-wrapper';
 import { NavigationHeader } from '@/components/chat/chat-header';
 import { AppSidebar } from '@/components/chat/chat-nav';
@@ -32,17 +33,19 @@ export default async function ChatLayout({
           { name: 'Chat', url: '/chat' },
         ]}
       />
-      <SidebarProvider>
-        <AppSidebar />
-        <SidebarInset>
-          <NavigationHeader />
-          <ChatContentWrapper>
-            <div className="flex flex-1 flex-col gap-6 p-4 pt-0 lg:ps-6 lg:pe-6 lg:pt-0 w-full min-w-0">
-              {children}
-            </div>
-          </ChatContentWrapper>
-        </SidebarInset>
-      </SidebarProvider>
+      <BreadcrumbProvider>
+        <SidebarProvider>
+          <AppSidebar />
+          <SidebarInset>
+            <NavigationHeader />
+            <ChatContentWrapper>
+              <div className="flex flex-1 flex-col gap-6 p-4 pt-0 lg:ps-6 lg:pe-6 lg:pt-0 w-full min-w-0">
+                {children}
+              </div>
+            </ChatContentWrapper>
+          </SidebarInset>
+        </SidebarProvider>
+      </BreadcrumbProvider>
       {modal}
     </>
   );

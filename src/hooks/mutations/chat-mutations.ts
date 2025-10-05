@@ -19,7 +19,6 @@ import {
   deleteMemoryService,
   deleteParticipantService,
   deleteThreadService,
-  sendMessageService,
   updateCustomRoleService,
   updateMemoryService,
   updateParticipantService,
@@ -135,23 +134,233 @@ export function useDeleteThreadMutation() {
  * Hook to toggle thread favorite status
  * Protected endpoint - requires authentication
  *
- * After successful toggle, invalidates specific thread and lists
+ * Uses optimistic updates for instant UI feedback
+ * Rolls back on error
  */
 export function useToggleFavoriteMutation() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ threadId, isFavorite }: { threadId: string; isFavorite: boolean }) =>
+    mutationFn: ({ threadId, isFavorite }: { threadId: string; isFavorite: boolean; slug?: string }) =>
       updateThreadService(threadId, { json: { isFavorite } }),
-    onSuccess: (_data, variables) => {
-      // Invalidate specific thread and lists
+    // Optimistic update: Update UI immediately before server response
+    onMutate: async (variables) => {
+      // Cancel any outgoing refetches to prevent overwriting optimistic update
+      await queryClient.cancelQueries({ queryKey: queryKeys.threads.all });
+      if (variables.slug) {
+        await queryClient.cancelQueries({ queryKey: queryKeys.threads.bySlug(variables.slug) });
+      }
+
+      // Snapshot the previous values for rollback
+      const previousThreads = queryClient.getQueryData(queryKeys.threads.all);
+      const previousBySlug = variables.slug
+        ? queryClient.getQueryData(queryKeys.threads.bySlug(variables.slug))
+        : null;
+
+      // Optimistically update all thread list queries
+      queryClient.setQueriesData(
+        { queryKey: queryKeys.threads.all },
+        (old: unknown) => {
+          if (!old || typeof old !== 'object')
+            return old;
+          if (!('pages' in old))
+            return old;
+          const pages = old.pages as Array<{ success: boolean; data?: { items?: Array<{ id: string; isFavorite?: boolean }> } }>;
+
+          return {
+            ...old,
+            pages: pages.map((page) => {
+              if (!page.success || !page.data?.items)
+                return page;
+
+              return {
+                ...page,
+                data: {
+                  ...page.data,
+                  items: page.data.items.map(thread =>
+                    thread.id === variables.threadId
+                      ? { ...thread, isFavorite: variables.isFavorite }
+                      : thread,
+                  ),
+                },
+              };
+            }),
+          };
+        },
+      );
+
+      // Optimistically update bySlug query if slug is provided
+      if (variables.slug) {
+        queryClient.setQueryData(
+          queryKeys.threads.bySlug(variables.slug),
+          (old: unknown) => {
+            if (!old || typeof old !== 'object')
+              return old;
+            if (!('success' in old) || !old.success)
+              return old;
+            if (!('data' in old) || !old.data || typeof old.data !== 'object')
+              return old;
+            if (!('thread' in old.data))
+              return old;
+
+            return {
+              ...old,
+              data: {
+                ...(old.data as Record<string, unknown>),
+                thread: {
+                  ...(old.data as { thread: Record<string, unknown> }).thread,
+                  isFavorite: variables.isFavorite,
+                },
+              },
+            };
+          },
+        );
+      }
+
+      // Return context with previous values for rollback
+      return { previousThreads, previousBySlug, slug: variables.slug };
+    },
+    // On error, rollback to previous values
+    onError: (error, _variables, context) => {
+      if (context?.previousThreads) {
+        queryClient.setQueryData(queryKeys.threads.all, context.previousThreads);
+      }
+      if (context?.slug && context?.previousBySlug) {
+        queryClient.setQueryData(queryKeys.threads.bySlug(context.slug), context.previousBySlug);
+      }
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Failed to toggle favorite', error);
+      }
+    },
+    // On success, invalidate to ensure data is in sync
+    onSettled: (_data, _error, variables) => {
       invalidationPatterns.threadDetail(variables.threadId).forEach((key) => {
         queryClient.invalidateQueries({ queryKey: key });
       });
+      if (variables.slug) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.threads.bySlug(variables.slug) });
+      }
     },
-    onError: (error) => {
+    retry: (failureCount, error: unknown) => {
+      const httpError = error as { status?: number };
+      if (httpError?.status && httpError.status >= 400 && httpError.status < 500) {
+        return false;
+      }
+      return failureCount < 2;
+    },
+    throwOnError: false,
+  });
+}
+
+/**
+ * Hook to toggle thread public/private status
+ * Protected endpoint - requires authentication
+ *
+ * Uses optimistic updates for instant UI feedback
+ * Rolls back on error
+ */
+export function useTogglePublicMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ threadId, isPublic }: { threadId: string; isPublic: boolean; slug?: string }) =>
+      updateThreadService(threadId, { json: { isPublic } }),
+    // Optimistic update: Update UI immediately before server response
+    onMutate: async (variables) => {
+      // Cancel any outgoing refetches to prevent overwriting optimistic update
+      await queryClient.cancelQueries({ queryKey: queryKeys.threads.all });
+      if (variables.slug) {
+        await queryClient.cancelQueries({ queryKey: queryKeys.threads.bySlug(variables.slug) });
+      }
+
+      // Snapshot the previous values for rollback
+      const previousThreads = queryClient.getQueryData(queryKeys.threads.all);
+      const previousBySlug = variables.slug
+        ? queryClient.getQueryData(queryKeys.threads.bySlug(variables.slug))
+        : null;
+
+      // Optimistically update all thread list queries
+      queryClient.setQueriesData(
+        { queryKey: queryKeys.threads.all },
+        (old: unknown) => {
+          if (!old || typeof old !== 'object')
+            return old;
+          if (!('pages' in old))
+            return old;
+          const pages = old.pages as Array<{ success: boolean; data?: { items?: Array<{ id: string; isPublic?: boolean }> } }>;
+
+          return {
+            ...old,
+            pages: pages.map((page) => {
+              if (!page.success || !page.data?.items)
+                return page;
+
+              return {
+                ...page,
+                data: {
+                  ...page.data,
+                  items: page.data.items.map(thread =>
+                    thread.id === variables.threadId
+                      ? { ...thread, isPublic: variables.isPublic }
+                      : thread,
+                  ),
+                },
+              };
+            }),
+          };
+        },
+      );
+
+      // Optimistically update bySlug query if slug is provided
+      if (variables.slug) {
+        queryClient.setQueryData(
+          queryKeys.threads.bySlug(variables.slug),
+          (old: unknown) => {
+            if (!old || typeof old !== 'object')
+              return old;
+            if (!('success' in old) || !old.success)
+              return old;
+            if (!('data' in old) || !old.data || typeof old.data !== 'object')
+              return old;
+            if (!('thread' in old.data))
+              return old;
+
+            return {
+              ...old,
+              data: {
+                ...(old.data as Record<string, unknown>),
+                thread: {
+                  ...(old.data as { thread: Record<string, unknown> }).thread,
+                  isPublic: variables.isPublic,
+                },
+              },
+            };
+          },
+        );
+      }
+
+      // Return context with previous values for rollback
+      return { previousThreads, previousBySlug, slug: variables.slug };
+    },
+    // On error, rollback to previous values
+    onError: (error, _variables, context) => {
+      if (context?.previousThreads) {
+        queryClient.setQueryData(queryKeys.threads.all, context.previousThreads);
+      }
+      if (context?.slug && context?.previousBySlug) {
+        queryClient.setQueryData(queryKeys.threads.bySlug(context.slug), context.previousBySlug);
+      }
       if (process.env.NODE_ENV === 'development') {
-        console.error('Failed to toggle favorite', error);
+        console.error('Failed to toggle public status', error);
+      }
+    },
+    // On success, invalidate to ensure data is in sync
+    onSettled: (_data, _error, variables) => {
+      invalidationPatterns.threadDetail(variables.threadId).forEach((key) => {
+        queryClient.invalidateQueries({ queryKey: key });
+      });
+      if (variables.slug) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.threads.bySlug(variables.slug) });
       }
     },
     retry: (failureCount, error: unknown) => {
@@ -168,40 +377,9 @@ export function useToggleFavoriteMutation() {
 // ============================================================================
 // Message Mutations
 // ============================================================================
-
-/**
- * Hook to send a message to a thread
- * Protected endpoint - requires authentication
- *
- * After successful send, invalidates thread details and usage stats
- */
-export function useSendMessageMutation() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: ({ threadId, data }: Parameters<typeof sendMessageService>[0] extends string ? { threadId: string; data: Parameters<typeof sendMessageService>[1] } : never) =>
-      sendMessageService(threadId, data),
-    onSuccess: (_data, variables) => {
-      // Invalidate thread details and usage stats
-      invalidationPatterns.afterThreadMessage(variables.threadId).forEach((key) => {
-        queryClient.invalidateQueries({ queryKey: key });
-      });
-    },
-    onError: (error) => {
-      if (process.env.NODE_ENV === 'development') {
-        console.error('Failed to send message', error);
-      }
-    },
-    retry: (failureCount, error: unknown) => {
-      const httpError = error as { status?: number };
-      if (httpError?.status && httpError.status >= 400 && httpError.status < 500) {
-        return false;
-      }
-      return failureCount < 2;
-    },
-    throwOnError: false,
-  });
-}
+// NOTE: useSendMessageMutation removed - use AI SDK v5 useChat hook for all message operations
+// All messages are now streamed via streamChatService for better UX
+// Reference: https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot
 
 // ============================================================================
 // Participant Mutations

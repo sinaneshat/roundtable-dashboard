@@ -84,12 +84,24 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   };
 
   const handleDeleteChat = (chatId: string) => {
+    // Find the chat being deleted to get its slug
+    const chat = chats.find(c => c.id === chatId);
+    const chatSlug = chat?.slug;
+
     deleteThreadMutation.mutate(chatId, {
       onSuccess: () => {
         toastManager.success(
           t('chat.threadDeleted'),
           t('chat.threadDeletedDescription'),
         );
+
+        // If deleting the currently viewed thread, redirect to /chat
+        if (chatSlug) {
+          const currentPath = window.location.pathname;
+          if (currentPath.includes(`/chat/${chatSlug}`)) {
+            router.push('/chat');
+          }
+        }
       },
       onError: () => {
         toastManager.error(

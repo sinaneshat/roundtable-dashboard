@@ -19,7 +19,7 @@ import type { ErrorContext } from '@/api/core';
 import { apiLogger } from '@/api/middleware/hono-logger';
 import type { ApiEnv } from '@/api/types';
 import type { AIModel } from '@/lib/ai/models-config';
-import { AI_MODELS, getModelById } from '@/lib/ai/models-config';
+import { AI_MODELS, getModelById, isValidOpenRouterModelId } from '@/lib/ai/models-config';
 
 /**
  * OpenRouter service configuration
@@ -97,9 +97,27 @@ class OpenRouterService {
 
   /**
    * Get model configuration by ID
-   * Throws if model not found or disabled
+   * Throws if model not found, disabled, or not a valid OpenRouter model
    */
   private getModelConfig(modelId: string): AIModel {
+    // First validate against known OpenRouter models
+    if (!isValidOpenRouterModelId(modelId)) {
+      apiLogger.error('Invalid OpenRouter model ID', {
+        requestedModelId: modelId,
+        message: 'Model ID not found in OpenRouter API. Check https://openrouter.ai/api/v1/models',
+      });
+
+      const context: ErrorContext = {
+        errorType: 'validation',
+        field: 'modelId',
+      };
+      throw createError.badRequest(
+        `Invalid OpenRouter model ID: ${modelId}. Check https://openrouter.ai/api/v1/models for valid model IDs.`,
+        context,
+      );
+    }
+
+    // Then check if it exists in our configuration
     const model = getModelById(modelId);
 
     if (!model) {
@@ -116,6 +134,7 @@ class OpenRouterService {
       throw createError.notFound(`Model ${modelId} not found in configuration`, context);
     }
 
+    // Finally check if it's enabled
     if (!model.isEnabled) {
       const context: ErrorContext = {
         errorType: 'validation',
@@ -147,11 +166,10 @@ class OpenRouterService {
     const client = this.getClient();
     const modelConfig = this.getModelConfig(params.modelId);
 
-    // Build system prompt with plain text enforcement
-    const plainTextInstruction = 'IMPORTANT: You must respond ONLY in plain text. Do NOT use Markdown, HTML, or any markup language. Do NOT use formatting like **bold**, *italic*, `code`, or [links]. Write naturally as if speaking in a conversation. Use simple punctuation and line breaks only.';
+    // Build system prompt with simplified plain text guidance
     const systemPrompt = params.system
-      ? `${plainTextInstruction}\n\n${params.system}`
-      : plainTextInstruction;
+      ? `${this.PLAIN_TEXT_INSTRUCTION}\n\n${params.system}`
+      : this.PLAIN_TEXT_INSTRUCTION;
 
     try {
       const result = await generateText({
@@ -196,11 +214,16 @@ class OpenRouterService {
     const client = this.getClient();
     const modelConfig = this.getModelConfig(params.modelId);
 
+    // Build system prompt with simplified plain text guidance
+    const systemPrompt = params.system
+      ? `${this.PLAIN_TEXT_INSTRUCTION}\n\n${params.system}`
+      : this.PLAIN_TEXT_INSTRUCTION;
+
     try {
       const result = streamText({
         model: client.chat(modelConfig.modelId),
         messages: convertToModelMessages(params.messages),
-        system: params.system,
+        system: systemPrompt,
         temperature: params.temperature ?? modelConfig.defaultSettings.temperature,
         maxOutputTokens: params.maxTokens ?? modelConfig.defaultSettings.maxTokens,
         topP: params.topP ?? modelConfig.defaultSettings.topP,
@@ -261,11 +284,10 @@ class OpenRouterService {
     const client = this.getClient();
     const modelConfig = this.getModelConfig(params.modelId);
 
-    // Build system prompt with plain text enforcement
-    const plainTextInstruction = 'IMPORTANT: You must respond ONLY in plain text. Do NOT use Markdown, HTML, or any markup language. Do NOT use formatting like **bold**, *italic*, `code`, or [links]. Write naturally as if speaking in a conversation. Use simple punctuation and line breaks only.';
+    // Build system prompt with simplified plain text guidance
     const systemPrompt = params.system
-      ? `${plainTextInstruction}\n\n${params.system}`
-      : plainTextInstruction;
+      ? `${this.PLAIN_TEXT_INSTRUCTION}\n\n${params.system}`
+      : this.PLAIN_TEXT_INSTRUCTION;
 
     try {
       const result = streamText({
@@ -299,248 +321,17 @@ class OpenRouterService {
   }
 
   // ============================================================================
-  // Multi-Model Orchestration
-  // ============================================================================
-
-  /**
-   * Orchestrate multiple models in a conversation
-   * Each participant responds in priority order with full awareness of other participants
-   * Uses AI SDK v5 UIMessage format
-   */
-  async orchestrateMultiModel(
-    participants: Array<{
-      participantId: string;
-      modelId: string;
-      role?: string | null;
-      priority: number;
-      systemPrompt?: string;
-      temperature?: number;
-      maxTokens?: number;
-    }>,
-    messages: UIMessage[],
-    mode: 'analyzing' | 'brainstorming' | 'debating' | 'solving',
-  ): Promise<Array<{
-      participantId: string;
-      modelId: string;
-      role?: string | null;
-      text: string;
-      finishReason: string;
-      usage: {
-        promptTokens: number;
-        completionTokens: number;
-        totalTokens: number;
-      };
-    }>> {
-    // Sort participants by priority (lower number = higher priority)
-    const sortedParticipants = [...participants].sort((a, b) => a.priority - b.priority);
-
-    // Build mode-specific system context
-    const modeContext = this.getModeSystemContext(mode);
-
-    // Build collaborative context describing all participants
-    const collaborativeContext = this.buildCollaborativeContext(sortedParticipants, mode);
-
-    const results: Array<{
-      participantId: string;
-      modelId: string;
-      role?: string | null;
-      text: string;
-      finishReason: string;
-      usage: {
-        promptTokens: number;
-        completionTokens: number;
-        totalTokens: number;
-      };
-    }> = [];
-
-    // Accumulate messages for context (using UIMessage format)
-    const conversationMessages: UIMessage[] = [...messages];
-
-    // Execute each participant in priority order
-    for (const participant of sortedParticipants) {
-      const system = this.buildSystemPrompt({
-        role: participant.role,
-        mode,
-        modeContext,
-        collaborativeContext,
-        participantCount: sortedParticipants.length,
-        customPrompt: participant.systemPrompt,
-      });
-
-      try {
-        const result = await this.generateText({
-          modelId: participant.modelId,
-          messages: conversationMessages,
-          system,
-          temperature: participant.temperature,
-          maxTokens: participant.maxTokens,
-        });
-
-        results.push({
-          participantId: participant.participantId,
-          modelId: participant.modelId,
-          role: participant.role,
-          text: result.text,
-          finishReason: result.finishReason,
-          usage: result.usage,
-        });
-
-        // Add this model's response to conversation context for next participant (UIMessage format)
-        conversationMessages.push({
-          id: `msg-${Date.now()}-${participant.participantId}`,
-          role: 'assistant',
-          parts: [
-            {
-              type: 'text',
-              text: participant.role ? `[${participant.role}]: ${result.text}` : result.text,
-            },
-          ],
-        });
-      } catch (error) {
-        apiLogger.error('Multi-model orchestration failed for participant', {
-          participantId: participant.participantId,
-          modelId: participant.modelId,
-          error: error instanceof Error ? error.message : String(error),
-        });
-
-        // Continue with other participants even if one fails
-        results.push({
-          participantId: participant.participantId,
-          modelId: participant.modelId,
-          role: participant.role,
-          text: `[Error: Failed to generate response${participant.role ? ` from ${participant.role}` : ''}]`,
-          finishReason: 'error',
-          usage: {
-            promptTokens: 0,
-            completionTokens: 0,
-            totalTokens: 0,
-          },
-        });
-      }
-    }
-
-    return results;
-  }
-
-  // ============================================================================
   // Helper Methods
   // ============================================================================
 
   /**
-   * Plain text instruction to enforce plain text responses
-   * Used across all AI interactions
+   * Simplified plain text guidance
+   * Gentle reminder to avoid heavy formatting without being overly restrictive
+   *
+   * NOTE: For multi-participant streaming, use centralized configuration from
+   * @/lib/ai/models-config instead of this service-level constant
    */
-  private readonly PLAIN_TEXT_INSTRUCTION = 'IMPORTANT: You must respond ONLY in plain text. Do NOT use Markdown, HTML, or any markup language. Do NOT use formatting like **bold**, *italic*, `code`, or [links]. Write naturally as if speaking in a conversation. Use simple punctuation and line breaks only.';
-
-  /**
-   * Build system prompt for a participant based on role and mode
-   * Now includes collaborative awareness of other participants
-   */
-  private buildSystemPrompt(params: {
-    role?: string | null;
-    mode: 'analyzing' | 'brainstorming' | 'debating' | 'solving';
-    modeContext: string;
-    collaborativeContext?: string;
-    participantCount?: number;
-    customPrompt?: string;
-  }): string {
-    const parts: string[] = [];
-
-    // CRITICAL: Enforce plain text responses only
-    parts.push(this.PLAIN_TEXT_INSTRUCTION);
-
-    // Add collaborative awareness header
-    if (params.participantCount && params.participantCount > 1) {
-      const roleText = params.role ? `as "${params.role}"` : '';
-      parts.push(`You are participating ${roleText} in a multi-AI collaborative discussion with ${params.participantCount} AI participants total.`);
-
-      // Add collaborative context showing other participants
-      if (params.collaborativeContext) {
-        parts.push(params.collaborativeContext);
-      }
-
-      // Add round-based discussion awareness
-      parts.push(`This is a round-based collaborative discussion where each AI participant contributes in turn. You will see responses from other AI participants and should build upon, challenge, or complement their ideas as appropriate for the ${params.mode} mode.`);
-    } else if (params.role) {
-      parts.push(`You are "${params.role}" in a collaborative AI discussion.`);
-    }
-
-    // Add mode-specific context
-    parts.push(params.modeContext);
-
-    // Add role-specific guidance if role is provided
-    const roleGuidance = params.role ? this.getRoleGuidance(params.role) : '';
-    if (roleGuidance) {
-      parts.push(roleGuidance);
-    }
-
-    // Add custom prompt if provided
-    if (params.customPrompt) {
-      parts.push(params.customPrompt);
-    }
-
-    return parts.join('\n\n');
-  }
-
-  /**
-   * Build collaborative context describing all participants
-   * Makes each AI aware of other participants in the discussion
-   */
-  private buildCollaborativeContext(
-    participants: Array<{
-      participantId: string;
-      modelId: string;
-      role?: string | null;
-      priority: number;
-    }>,
-    mode: string,
-  ): string {
-    if (participants.length <= 1) {
-      return '';
-    }
-
-    const participantDescriptions = participants.map((p, index) => {
-      const modelInfo = getModelById(p.modelId);
-      const modelName = modelInfo?.name || p.modelId;
-      const roleText = p.role ? `"${p.role}"` : 'an AI participant';
-      return `${index + 1}. ${roleText} (${modelName})`;
-    }).join('\n');
-
-    return `**Collaborative Team:**\nYou are working with the following AI participants:\n${participantDescriptions}\n\nYou are all working together in ${mode} mode. Be aware of each other's contributions and respond accordingly. Reference other participants' ideas when building on them or presenting alternative perspectives.`;
-  }
-
-  /**
-   * Get system context based on conversation mode
-   */
-  private getModeSystemContext(mode: 'analyzing' | 'brainstorming' | 'debating' | 'solving'): string {
-    const contexts = {
-      analyzing: 'Your task is to analyze the problem or topic from your unique perspective. Provide thorough analysis, identify key patterns, and surface important insights.',
-      brainstorming: 'Your task is to generate creative ideas and explore possibilities. Build on others\' suggestions, think divergently, and propose novel approaches.',
-      debating: 'Your task is to engage in constructive debate. Present arguments for your perspective, challenge assumptions respectfully, and help refine ideas through critical discussion.',
-      solving: 'Your task is to work toward practical solutions. Focus on actionable steps, consider feasibility, and help the group converge on implementable answers.',
-    };
-
-    return contexts[mode];
-  }
-
-  /**
-   * Get role-specific guidance for common roles
-   */
-  private getRoleGuidance(role: string): string | null {
-    const roleGuidance: Record<string, string> = {
-      'The Ideator': 'Generate creative and innovative ideas. Think outside the box and propose unconventional solutions.',
-      'Devil\'s Advocate': 'Challenge assumptions and identify potential problems. Play the skeptic to stress-test ideas.',
-      'Builder': 'Focus on practical implementation. Consider technical feasibility and how ideas can be built.',
-      'Practical Evaluator': 'Assess ideas for practicality and real-world viability. Consider costs, resources, and constraints.',
-      'Visionary Thinker': 'Think long-term and strategically. Consider future implications and transformative potential.',
-      'Domain Expert': 'Apply specialized knowledge and expertise. Provide authoritative insights in your domain.',
-      'User Advocate': 'Represent the end user\'s perspective. Focus on user needs, experience, and value.',
-      'Implementation Strategist': 'Plan execution and deployment. Break down ideas into actionable steps and timelines.',
-      'The Data Analyst': 'Ground discussions in data and evidence. Identify what metrics matter and how to measure success.',
-    };
-
-    return roleGuidance[role] || null;
-  }
+  private readonly PLAIN_TEXT_INSTRUCTION = 'Please respond in clear, natural language. Avoid heavy markdown formatting when possible.';
 
   /**
    * Validate model supports required capabilities

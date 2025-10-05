@@ -1,13 +1,28 @@
 import * as React from "react"
 
 import { cn } from "@/lib/ui/cn"
+import { glassCard } from "@/lib/ui/glassmorphism"
 
-function Card({ className, ...props }: React.ComponentProps<"div">) {
+type CardVariant = "default" | "glass" | "glass-subtle" | "glass-strong";
+
+type CardProps = React.ComponentProps<"div"> & {
+  variant?: CardVariant;
+};
+
+function Card({ className, variant = "default", ...props }: CardProps) {
+  const variantClasses = {
+    default: "bg-card text-card-foreground rounded-xl border py-6 shadow-sm",
+    glass: cn(glassCard("medium"), "rounded-xl py-6"),
+    "glass-subtle": cn(glassCard("subtle"), "rounded-xl py-6"),
+    "glass-strong": cn(glassCard("strong"), "rounded-xl py-6"),
+  };
+
   return (
     <div
       data-slot="card"
       className={cn(
-        "bg-card text-card-foreground flex flex-col gap-6 rounded-xl border py-6 shadow-sm",
+        "flex flex-col gap-6",
+        variantClasses[variant],
         className
       )}
       {...props}
