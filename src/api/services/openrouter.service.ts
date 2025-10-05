@@ -293,7 +293,7 @@ class OpenRouterService {
     participants: Array<{
       participantId: string;
       modelId: string;
-      role: string;
+      role?: string | null;
       priority: number;
       systemPrompt?: string;
       temperature?: number;
@@ -304,7 +304,7 @@ class OpenRouterService {
   ): Promise<Array<{
       participantId: string;
       modelId: string;
-      role: string;
+      role?: string | null;
       text: string;
       finishReason: string;
       usage: {
@@ -322,7 +322,7 @@ class OpenRouterService {
     const results: Array<{
       participantId: string;
       modelId: string;
-      role: string;
+      role?: string | null;
       text: string;
       finishReason: string;
       usage: {
@@ -369,7 +369,7 @@ class OpenRouterService {
           parts: [
             {
               type: 'text',
-              text: `[${participant.role}]: ${result.text}`,
+              text: participant.role ? `[${participant.role}]: ${result.text}` : result.text,
             },
           ],
         });
@@ -385,7 +385,7 @@ class OpenRouterService {
           participantId: participant.participantId,
           modelId: participant.modelId,
           role: participant.role,
-          text: `[Error: Failed to generate response from ${participant.role}]`,
+          text: `[Error: Failed to generate response${participant.role ? ` from ${participant.role}` : ''}]`,
           finishReason: 'error',
           usage: {
             promptTokens: 0,
@@ -407,21 +407,23 @@ class OpenRouterService {
    * Build system prompt for a participant based on role and mode
    */
   private buildSystemPrompt(params: {
-    role: string;
+    role?: string | null;
     mode: 'analyzing' | 'brainstorming' | 'debating' | 'solving';
     modeContext: string;
     customPrompt?: string;
   }): string {
     const parts: string[] = [];
 
-    // Add role context
-    parts.push(`You are "${params.role}" in a collaborative AI discussion.`);
+    // Add role context if role is provided
+    if (params.role) {
+      parts.push(`You are "${params.role}" in a collaborative AI discussion.`);
+    }
 
     // Add mode-specific context
     parts.push(params.modeContext);
 
-    // Add role-specific guidance
-    const roleGuidance = this.getRoleGuidance(params.role);
+    // Add role-specific guidance if role is provided
+    const roleGuidance = params.role ? this.getRoleGuidance(params.role) : '';
     if (roleGuidance) {
       parts.push(roleGuidance);
     }

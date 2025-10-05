@@ -2,6 +2,7 @@
 
 import { useTranslations } from 'next-intl';
 
+import { ChatInput } from '@/components/chat/chat-input';
 import { Logo } from '@/components/logo';
 import { LayoutTextFlip } from '@/components/ui/layout-text-flip';
 import { ScaleIn, StaggerContainer, StaggerItem } from '@/components/ui/motion';
@@ -18,10 +19,10 @@ export default function ChatOverviewScreen() {
   ];
 
   return (
-    <div className="flex min-h-screen w-full flex-col items-center justify-start px-4 pt-16 md:pt-20">
+    <div className="flex min-h-screen w-full flex-col items-center justify-between px-4 pt-16 md:pt-20 pb-8">
       {/* Main content block with stagger animation */}
       <StaggerContainer
-        className="flex flex-col items-center gap-6 text-center"
+        className="flex flex-col items-center gap-6 text-center flex-1 justify-center"
         staggerDelay={0.15}
         delayChildren={0.1}
       >
@@ -46,14 +47,14 @@ export default function ChatOverviewScreen() {
             {t('chat.hero.subtitle')}
           </p>
         </StaggerItem>
-
-        {/* Getting Started Hint with fade */}
-        <StaggerItem className="mt-2">
-          <p className="text-xs md:text-sm text-muted-foreground/60">
-            {t('chat.selectOrCreate')}
-          </p>
-        </StaggerItem>
       </StaggerContainer>
+
+      {/* Enhanced Chat Input - ChatGPT-style with attachments and mode selector */}
+      <div className="w-full flex justify-center">
+        <StaggerItem className="w-full">
+          <ChatInput className="w-full" />
+        </StaggerItem>
+      </div>
     </div>
   );
 }

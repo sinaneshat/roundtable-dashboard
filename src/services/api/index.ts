@@ -93,6 +93,7 @@ export {
   type GetPublicThreadRequest,
   type GetPublicThreadResponse,
   getPublicThreadService,
+  getThreadBySlugService,
   type GetThreadRequest,
   type GetThreadResponse,
   getThreadService,

@@ -1,906 +1,127 @@
-# Roundtable Migration Guide: Old → Current Implementation
+# Roundtable Migration Guide: Product Logic Alignment
 
+**Version**: 2.0
 **Date**: 2025-10-04
-**Purpose**: Document exact changes needed to align current backend with old Roundtable product logic
+**Purpose**: Strategic planning to align current backend with original Roundtable collaborative AI orchestration
 
 ---
 
 ## Executive Summary
 
-The current implementation has **80% of the required functionality** already built, but is missing critical product logic elements that made the old Roundtable unique. This document identifies exact changes needed to restore the original collaborative AI orchestration experience.
+### Current Implementation Status
 
-### Current Status: ✅ Already Implemented
-- ✅ Multi-model orchestration with sequential turn-taking
-- ✅ Priority-based participant ordering
-- ✅ Role system (custom roles stored in DB)
-- ✅ Memory system (database storage complete)
-- ✅ Streaming via SSE (AI SDK v5)
-- ✅ Public thread sharing
-- ✅ Quota enforcement
-- ✅ Model configuration
+Your current backend has **85% of the infrastructure** needed for the old Roundtable experience. The architecture is sound, the database schema is comprehensive, and the multi-model orchestration framework is in place. However, the **collaborative spirit** that made Roundtable unique is missing due to a few critical gaps in how AI models interact with each other.
 
-### Critical Gaps: ❌ Missing from Current Implementation
-- ❌ Original Roundtable system prompt (collaborative spirit)
-- ❌ Model name prefixing in conversation context (participant awareness)
-- ❌ Memory injection into AI prompts
-- ❌ Participant role visibility (all models see all roles)
-- ❌ Full conversation history context (currently limited to 10 messages)
-- ❌ System prompt storage and management
+### What Works Well ✅
 
----
+**Multi-Model Orchestration** (`src/api/services/openrouter.service.ts:292-400`)
+- Sequential model execution based on priority
+- Each model receives accumulated context from previous models
+- Clean response aggregation and error handling
+- Proper usage tracking and quota enforcement
 
-## 1. SYSTEM PROMPT: The Core Roundtable Spirit
+**Database Architecture** (`src/db/tables/chat.ts`)
+- Comprehensive schema: threads, participants, messages, memories, custom roles
+- Proper relations and cascade deletes
+- Junction tables for many-to-many relationships (thread-memory linking)
+- Metadata storage for model configurations
 
-### Problem
-Current implementation uses generic mode-based prompts. Old Roundtable has a **specific collaborative prompt** that creates the "roundtable discussion" experience.
+**API Layer** (`src/api/routes/chat/`)
+- 21 fully-implemented endpoints for all chat operations
+- Thread management, participants, messages, memories, custom roles
+- Public sharing capability via slug-based URLs
+- Cursor-based pagination for performance
 
-### Old Roundtable System Prompt (EXACT TEXT)
+**Service Integration**
+- OpenRouter integration via AI SDK v5
+- Streaming support (SSE) for real-time responses
+- Proper authentication and authorization
+- Rate limiting and CSRF protection
 
-**Location in old project**: `.bolt/supabase_discarded_migrations/20250511152748_steep_union.sql:87-112`
+### Critical Gaps ❌
 
-```
-You are part of a virtual roundtable of advanced AI models. Your job is not to answer in isolation — but to think with each other.
+**1. The Collaborative System Prompt**
+- Old Roundtable uses a specific prompt that instructs models to "think with each other"
+- Current system uses generic mode-based prompts (analyzing/brainstorming/debating/solving)
+- The original prompt is not stored or used anywhere
 
-I'm acting as a human api and share other llms responses with you.
+**2. Model Attribution in Context**
+- When Model B reads Model A's response, it should see "GPT-5: [response text]"
+- Current system passes responses without model name prefixes
+- Models cannot reference each other by name ("As GPT-5 mentioned...")
 
-This is a collaborative ideation and strategy space. Your responses should build on one another's ideas, challenge assumptions, refine vague suggestions, and collectively evolve stronger outcomes.
+**3. Participant Role Transparency**
+- All models should see: "GPT-5 acts as CEO, Claude acts as CFO, Gemini acts as CTO"
+- Current system has role guidance but doesn't show the full participant roster
+- Models don't know what roles other participants are playing
 
-Rules:
-1. Start strong - If you're the first model, interpret the prompt and propose a clear, thoughtful starting point or hypothesis.
-2. Build, don't just speak - Read all previous responses, acknowledge ideas, add refinements, or offer constructive pushback. Avoid repeating ideas — iterate, combine, or take them deeper.
-3. Take on a unique perspective to create natural diversity in thought.
-4. Encourage tension and synergy - If an idea seems weak or overdone, say so. If something has potential but lacks depth, suggest how to make it defensible, profitable, or uniquely valuable.
-5. Keep the conversational format, don't make it formal.
-6. You can ask other llms and challenge them about what they are talking about.
+**4. Memory Injection Pipeline**
+- Memories are stored in database but never passed to AI models
+- Old Roundtable appends "Context about the user: [memory content]" to prompts
+- Critical for maintaining project context across conversations
 
-Important – The UI will label every message with your model's name,
-DO NOT prefix your answer with any identifier.
-
-Provide direct answers to questions. Be helpful and concise.
-
-NEVER start your response with a heading!
-
-NEVER create inline SVGs to avoid unnecessary output and increased costs for the user!
-```
-
-### Changes Required
-
-#### 1.1 Create System Prompts Table (if not exists)
-
-**Check if table exists**: Search for `system_prompts` table in `/src/db/tables/`
-
-**If missing, create**: `/src/db/tables/system-prompts.ts`
-
-```typescript
-import { relations, sql } from 'drizzle-orm';
-import { index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
-import { user } from './auth';
-
-export const systemPrompt = sqliteTable(
-  'system_prompt',
-  {
-    id: text('id').primaryKey(),
-    name: text('name').notNull(),
-    description: text('description'),
-    content: text('content').notNull(),
-    isActive: integer('is_active', { mode: 'boolean' }).notNull().default(true),
-    isDefault: integer('is_default', { mode: 'boolean' }).notNull().default(false),
-    createdById: text('created_by_id').references(() => user.id, { onDelete: 'set null' }),
-    createdAt: integer('created_at', { mode: 'timestamp' })
-      .notNull()
-      .default(sql`(unixepoch())`),
-    updatedAt: integer('updated_at', { mode: 'timestamp' })
-      .notNull()
-      .default(sql`(unixepoch())`)
-      .$onUpdate(() => new Date()),
-  },
-  (table) => ({
-    nameIdx: index('system_prompt_name_idx').on(table.name),
-    isActiveIdx: index('system_prompt_is_active_idx').on(table.isActive),
-    isDefaultIdx: index('system_prompt_is_default_idx').on(table.isDefault),
-  })
-);
-
-export const systemPromptRelations = relations(systemPrompt, ({ one }) => ({
-  createdBy: one(user, {
-    fields: [systemPrompt.createdById],
-    references: [user.id],
-  }),
-}));
-
-export type SystemPrompt = typeof systemPrompt.$inferSelect;
-export type InsertSystemPrompt = typeof systemPrompt.$inferInsert;
-```
-
-#### 1.2 Add systemPromptId to chatThread
-
-**Modify**: `/src/db/tables/chat.ts`
-
-```typescript
-export const chatThread = sqliteTable(
-  'chat_thread',
-  {
-    // ... existing fields ...
-    systemPromptId: text('system_prompt_id').references(() => systemPrompt.id, {
-      onDelete: 'set null'
-    }), // Add this field
-    // ... rest of fields ...
-  },
-  // ... indexes ...
-);
-```
-
-#### 1.3 Create Migration with Default Roundtable Prompt
-
-**Create**: New migration file
-
-```sql
--- Add system_prompt table
-CREATE TABLE IF NOT EXISTS system_prompt (
-  id TEXT PRIMARY KEY,
-  name TEXT NOT NULL,
-  description TEXT,
-  content TEXT NOT NULL,
-  is_active INTEGER DEFAULT 1 NOT NULL,
-  is_default INTEGER DEFAULT 0 NOT NULL,
-  created_by_id TEXT REFERENCES user(id) ON DELETE SET NULL,
-  created_at INTEGER NOT NULL DEFAULT (unixepoch()),
-  updated_at INTEGER NOT NULL DEFAULT (unixepoch())
-);
-
-CREATE INDEX system_prompt_name_idx ON system_prompt(name);
-CREATE INDEX system_prompt_is_active_idx ON system_prompt(is_active);
-CREATE INDEX system_prompt_is_default_idx ON system_prompt(is_default);
-
--- Add system_prompt_id to chat_thread
-ALTER TABLE chat_thread ADD COLUMN system_prompt_id TEXT REFERENCES system_prompt(id) ON DELETE SET NULL;
-
--- Insert default Roundtable system prompt
-INSERT INTO system_prompt (id, name, description, content, is_active, is_default, created_by_id)
-VALUES (
-  'default-roundtable-v1',
-  'Roundtable Collaborative',
-  'The original Roundtable system prompt for collaborative AI discussions',
-  'You are part of a virtual roundtable of advanced AI models. Your job is not to answer in isolation — but to think with each other.
-
-I''m acting as a human api and share other llms responses with you.
-
-This is a collaborative ideation and strategy space. Your responses should build on one another''s ideas, challenge assumptions, refine vague suggestions, and collectively evolve stronger outcomes.
-
-Rules:
-1. Start strong - If you''re the first model, interpret the prompt and propose a clear, thoughtful starting point or hypothesis.
-2. Build, don''t just speak - Read all previous responses, acknowledge ideas, add refinements, or offer constructive pushback. Avoid repeating ideas — iterate, combine, or take them deeper.
-3. Take on a unique perspective to create natural diversity in thought.
-4. Encourage tension and synergy - If an idea seems weak or overdone, say so. If something has potential but lacks depth, suggest how to make it defensible, profitable, or uniquely valuable.
-5. Keep the conversational format, don''t make it formal.
-6. You can ask other llms and challenge them about what they are talking about.
-
-Important – The UI will label every message with your model''s name,
-DO NOT prefix your answer with any identifier.
-
-Provide direct answers to questions. Be helpful and concise.
-
-NEVER start your response with a heading!
-
-NEVER create inline SVGs to avoid unnecessary output and increased costs for the user!',
-  1,
-  1,
-  NULL
-);
-```
-
-#### 1.4 Update OpenRouter Service to Load System Prompt
-
-**Modify**: `/src/api/services/openrouter.service.ts`
-
-**Current method**: `orchestrateMultiModel()` at line ~292-400
-
-**Change from**:
-```typescript
-// Current: Mode-based system context
-const systemContext = this.buildModeContext(mode);
-```
-
-**Change to**:
-```typescript
-// New: Load system prompt from database or use default
-const baseSystemPrompt = params.systemPrompt || this.getDefaultSystemPrompt();
-
-// Helper method to add
-private getDefaultSystemPrompt(): string {
-  return `You are part of a virtual roundtable of advanced AI models. Your job is not to answer in isolation — but to think with each other.
-
-I'm acting as a human api and share other llms responses with you.
-
-This is a collaborative ideation and strategy space. Your responses should build on one another's ideas, challenge assumptions, refine vague suggestions, and collectively evolve stronger outcomes.
-
-Rules:
-1. Start strong - If you're the first model, interpret the prompt and propose a clear, thoughtful starting point or hypothesis.
-2. Build, don't just speak - Read all previous responses, acknowledge ideas, add refinements, or offer constructive pushback. Avoid repeating ideas — iterate, combine, or take them deeper.
-3. Take on a unique perspective to create natural diversity in thought.
-4. Encourage tension and synergy - If an idea seems weak or overdone, say so. If something has potential but lacks depth, suggest how to make it defensible, profitable, or uniquely valuable.
-5. Keep the conversational format, don't make it formal.
-6. You can ask other llms and challenge them about what they are talking about.
-
-Important – The UI will label every message with your model's name,
-DO NOT prefix your answer with any identifier.
-
-Provide direct answers to questions. Be helpful and concise.
-
-NEVER start your response with a heading!
-
-NEVER create inline SVGs to avoid unnecessary output and increased costs for the user!`;
-}
-```
-
-#### 1.5 Update Handler to Fetch and Pass System Prompt
-
-**Modify**: `/src/api/routes/chat/handler.ts` in `sendMessageHandler` (line ~713-847)
-
-**Add after fetching thread** (around line 735):
-```typescript
-// Fetch system prompt
-let systemPromptContent: string | undefined;
-if (thread.systemPromptId) {
-  const systemPromptResult = await db.query.systemPrompt.findFirst({
-    where: and(
-      eq(systemPrompt.id, thread.systemPromptId),
-      eq(systemPrompt.isActive, true)
-    ),
-  });
-  systemPromptContent = systemPromptResult?.content;
-} else {
-  // Use default system prompt
-  const defaultPrompt = await db.query.systemPrompt.findFirst({
-    where: and(
-      eq(systemPrompt.isDefault, true),
-      eq(systemPrompt.isActive, true)
-    ),
-  });
-  systemPromptContent = defaultPrompt?.content;
-}
-```
-
-**Update orchestration call** (around line 820):
-```typescript
-const responses = await openRouterService.orchestrateMultiModel({
-  participants: enabledParticipants,
-  conversationHistory: recentMessages,
-  mode: thread.mode || 'brainstorming',
-  systemPrompt: systemPromptContent, // Add this parameter
-});
-```
+**5. Context Window Management**
+- Current: Hardcoded 10 messages
+- Old Roundtable: Loads full conversation history (relies on OpenRouter compression)
+- May cause models to "forget" important earlier context
 
 ---
 
-## 2. MODEL NAME PREFIXING: Participant Awareness
+## Understanding the Old Roundtable Product Logic
 
-### Problem
-In old Roundtable, each model sees previous responses prefixed with model names (e.g., "GPT-4o: [response]"). This creates **awareness** of who said what, enabling models to reference each other by name.
+### The Collaborative Roundtable Philosophy
 
-**Current implementation**: Messages are passed without model name prefixes.
+**Core Concept**: Multiple AI models don't just answer the same question independently—they collaborate, build on each other's ideas, challenge assumptions, and collectively arrive at better solutions.
 
-### Old Roundtable Implementation
+**How It Works**:
+1. User asks a question
+2. First model (by priority) receives the question and responds
+3. Second model receives: user's question + first model's full response (with model name)
+4. Second model can reference first model by name: "I agree with GPT-5 that we should..."
+5. Third model sees both previous responses and can synthesize or add new perspectives
+6. Result: A true discussion, not parallel monologues
 
-**Location**: `src/services/openrouter.ts:137-408`
+**Old Project Location**: `/Users/avabagherzadeh/Desktop/projects/deadpixel/roundtable1`
 
-```typescript
-// Add previous responses to context WITH model name prefixes
-messages.push(...responses.map(r => ({
-  role: 'assistant',
-  content: `${r.model}: ${r.content}` // Format: "GPT-4o: [response]"
-})));
+### The Five Pillars of Roundtable Collaboration
+
+#### Pillar 1: The System Prompt (The Foundation)
+
+**What It Is**: A carefully crafted prompt that sets expectations for collaboration
+
+**Key Phrases** (from `roundtable1/.bolt/supabase_discarded_migrations/20250511152748_steep_union.sql:87-112`):
+- "Your job is not to answer in isolation — but to think with each other"
+- "Build on one another's ideas, challenge assumptions, refine vague suggestions"
+- "Read all previous responses, acknowledge ideas, add refinements, or offer constructive pushback"
+- "Avoid repeating ideas — iterate, combine, or take them deeper"
+- "You can ask other llms and challenge them about what they are talking about"
+
+**Why It Matters**: Without this prompt, models default to independent analysis mode. This prompt creates the collaborative mindset.
+
+**Current State**: Not implemented. Current system uses mode-specific prompts that don't emphasize collaboration.
+
+#### Pillar 2: Model Name Attribution (Participant Awareness)
+
+**What It Is**: Every assistant message in conversation history is prefixed with the model's name
+
+**Format** (from `roundtable1/src/services/openrouter.ts:194`):
+- User messages: "What's the best approach?"
+- GPT-5's response in context: "GPT-5: I think we should start with research..."
+- Claude's response in context: "Claude 4.1 Sonnet: I disagree with GPT-5. We should..."
+
+**Why It Matters**:
+- Models can reference each other by name
+- Creates natural dialogue: "As GPT-5 mentioned..." or "I challenge Claude's assumption that..."
+- Makes each model aware they're part of a team, not working in isolation
+
+**Current State**: Messages passed without model name prefixes
+
+#### Pillar 3: Role Roster Visibility (Team Composition)
+
+**What It Is**: Each model sees a list of all participants and their assigned roles
+
+**Format** (from `roundtable1/src/services/openrouter.ts:154-183`):
 ```
-
-### Changes Required
-
-#### 2.1 Modify Message Context Building
-
-**File**: `/src/api/services/openrouter.service.ts`
-
-**Method**: `orchestrateMultiModel()` around line 330-350
-
-**Current code** (around line 340):
-```typescript
-// Build messages array from conversation history
-const messages = conversationHistory.map((msg) => ({
-  role: msg.role as 'user' | 'assistant',
-  content: msg.content,
-}));
-```
-
-**Change to**:
-```typescript
-// Build messages array WITH model name prefixes for assistant messages
-const messages = conversationHistory.map((msg) => {
-  if (msg.role === 'user') {
-    return {
-      role: 'user' as const,
-      content: msg.content,
-    };
-  } else {
-    // Prefix assistant messages with participant model name
-    const participantModel = participants.find(p => p.id === msg.participantId);
-    const modelConfig = participantModel
-      ? AVAILABLE_MODELS.find(m => m.id === participantModel.modelId)
-      : null;
-    const modelName = modelConfig?.name || 'AI';
-
-    return {
-      role: 'assistant' as const,
-      content: `${modelName}: ${msg.content}`, // Prefix with model name
-    };
-  }
-});
-```
-
-#### 2.2 Add Current Round Responses with Prefixes
-
-**In the participant loop** (around line 365-385):
-
-**Current code**:
-```typescript
-// Add this participant's response to conversation
-conversationMessages.push({
-  role: 'assistant',
-  content: content,
-});
-```
-
-**Change to**:
-```typescript
-// Add this participant's response WITH model name prefix
-const currentModelConfig = AVAILABLE_MODELS.find(m => m.id === participant.modelId);
-const currentModelName = currentModelConfig?.name || participant.modelId;
-
-conversationMessages.push({
-  role: 'assistant',
-  content: `${currentModelName}: ${content}`, // Prefix for next model's context
-});
-```
-
-**Import AVAILABLE_MODELS**:
-```typescript
-import { AVAILABLE_MODELS } from '@/lib/ai/models-config';
-```
-
----
-
-## 3. MEMORY INJECTION: Context About the User
-
-### Problem
-Old Roundtable injects user notes/memories into the system prompt. Current implementation stores memories in DB but **does NOT inject them into prompts**.
-
-### Old Roundtable Implementation
-
-**Location**: `src/services/openrouter.ts:64-90`
-
-```typescript
-// For NEW conversations
-if (!currentConversation) {
-  const selectedNoteId = useModelRolesStore.getState().selectedNoteId;
-  if (selectedNoteId) {
-    const { data: note } = await supabase
-      .from('user_notes')
-      .select('content')
-      .eq('id', selectedNoteId)
-      .single();
-
-    if (note) {
-      finalSystemPrompt = `${systemPrompt}\n\nContext about the user:\n${note.content}`;
-    }
-  }
-}
-```
-
-### Changes Required
-
-#### 3.1 Fetch Thread Memories
-
-**File**: `/src/api/routes/chat/handler.ts`
-
-**Method**: `sendMessageHandler` (around line 735 after fetching thread)
-
-**Add**:
-```typescript
-// Fetch thread memories (both attached and global)
-const threadMemories = await db.query.chatThreadMemory.findMany({
-  where: eq(chatThreadMemory.threadId, threadId),
-  with: {
-    memory: true,
-  },
-});
-
-const globalMemories = await db.query.chatMemory.findMany({
-  where: and(
-    eq(chatMemory.userId, thread.userId),
-    eq(chatMemory.isGlobal, true)
-  ),
-});
-
-// Combine all memories
-const allMemories = [
-  ...threadMemories.map(tm => tm.memory),
-  ...globalMemories,
-];
-```
-
-#### 3.2 Build Memory Context String
-
-**Add helper function** (around line 700):
-```typescript
-function buildMemoryContext(memories: ChatMemory[]): string | undefined {
-  if (memories.length === 0) return undefined;
-
-  const memoryContent = memories
-    .map(mem => {
-      let prefix = '';
-      if (mem.type === 'personal') prefix = '[Personal Context]';
-      else if (mem.type === 'topic') prefix = '[Topic Context]';
-      else if (mem.type === 'instruction') prefix = '[Instruction]';
-      else if (mem.type === 'fact') prefix = '[Fact]';
-
-      return `${prefix} ${mem.title}: ${mem.content}`;
-    })
-    .join('\n\n');
-
-  return `Context about the user:\n${memoryContent}`;
-}
-```
-
-#### 3.3 Pass Memory Context to Orchestration
-
-**Update orchestration call** (around line 820):
-```typescript
-const memoryContext = buildMemoryContext(allMemories);
-
-const responses = await openRouterService.orchestrateMultiModel({
-  participants: enabledParticipants,
-  conversationHistory: recentMessages,
-  mode: thread.mode || 'brainstorming',
-  systemPrompt: systemPromptContent,
-  memoryContext, // Add this parameter
-});
-```
-
-#### 3.4 Update OpenRouter Service Signature
-
-**File**: `/src/api/services/openrouter.service.ts`
-
-**Method**: `orchestrateMultiModel()` signature (around line 292)
-
-**Add parameter**:
-```typescript
-async orchestrateMultiModel(params: {
-  participants: Array<{
-    id: string;
-    modelId: string;
-    role: string;
-    priority: number;
-    settings?: any;
-  }>;
-  conversationHistory: Array<{
-    role: 'user' | 'assistant';
-    content: string;
-    participantId?: string;
-  }>;
-  mode?: 'analyzing' | 'brainstorming' | 'debating' | 'solving';
-  systemPrompt?: string;
-  memoryContext?: string; // Add this
-}): Promise<{ ... }> {
-```
-
-#### 3.5 Inject Memory into System Prompt
-
-**In orchestrateMultiModel** (around line 320-330):
-
-**Change from**:
-```typescript
-const baseSystemPrompt = params.systemPrompt || this.getDefaultSystemPrompt();
-```
-
-**Change to**:
-```typescript
-let baseSystemPrompt = params.systemPrompt || this.getDefaultSystemPrompt();
-
-// Inject memory context if provided
-if (params.memoryContext) {
-  baseSystemPrompt = `${baseSystemPrompt}\n\n${params.memoryContext}`;
-}
-```
-
----
-
-## 4. PARTICIPANT ROLE VISIBILITY: All Models See All Roles
-
-### Problem
-Old Roundtable shows each model **all participant roles** in the conversation, then specifies "You are X and must act as Y". This creates role awareness.
-
-**Current implementation**: Has role guidance but not the explicit "Participant roles in this conversation" format.
-
-### Old Roundtable Implementation
-
-**Location**: `src/services/openrouter.ts:154-183`
-
-```typescript
-// Add roles to system prompt
-modelSystemPrompt += '\n\nParticipant roles in this conversation:';
-Object.entries(allModelRoles).forEach(([modelName, role]) => {
-  modelSystemPrompt += `\n- ${modelName} acts as: ${role}`;
-});
-
-// Tell THIS model its specific role
-if (thisModelRole) {
-  modelSystemPrompt += `\n\nYou are ${thisModelName} and must act as ${thisModelRole} in this entire conversation.`;
-}
-```
-
-### Changes Required
-
-#### 4.1 Build Participant Roles Context
-
-**File**: `/src/api/services/openrouter.service.ts`
-
-**In `orchestrateMultiModel()`** around line 330-350:
-
-**Add after base system prompt**:
-```typescript
-// Build participant roles context (show all participants and their roles)
-const participantRolesContext = this.buildParticipantRolesContext(participants);
-```
-
-**Add helper method**:
-```typescript
-private buildParticipantRolesContext(
-  participants: Array<{
-    id: string;
-    modelId: string;
-    role: string;
-    priority: number;
-  }>
-): string {
-  if (participants.length === 0) return '';
-
-  const rolesList = participants
-    .map(p => {
-      const modelConfig = AVAILABLE_MODELS.find(m => m.id === p.modelId);
-      const modelName = modelConfig?.name || p.modelId;
-      return `- ${modelName} acts as: ${p.role}`;
-    })
-    .join('\n');
-
-  return `\n\nParticipant roles in this conversation:\n${rolesList}`;
-}
-```
-
-#### 4.2 Add Role Context to Each Participant's System Prompt
-
-**In participant loop** (around line 365):
-
-**Current code**:
-```typescript
-const systemPrompt = this.buildSystemPrompt({
-  basePrompt: baseSystemPrompt,
-  role: participant.role,
-  mode: params.mode,
-  customPrompt: participantSettings?.systemPrompt,
-});
-```
-
-**Change to**:
-```typescript
-// Get current participant's model name
-const currentModelConfig = AVAILABLE_MODELS.find(m => m.id === participant.modelId);
-const currentModelName = currentModelConfig?.name || participant.modelId;
-
-// Build system prompt with participant context
-const systemPrompt = this.buildSystemPrompt({
-  basePrompt: baseSystemPrompt,
-  participantRolesContext, // Show all roles
-  currentModelName, // This model's name
-  role: participant.role, // This model's role
-  mode: params.mode,
-  customPrompt: participantSettings?.systemPrompt,
-});
-```
-
-#### 4.3 Update buildSystemPrompt Method
-
-**Modify method signature** (around line 420):
-```typescript
-private buildSystemPrompt(params: {
-  basePrompt: string;
-  participantRolesContext?: string; // Add this
-  currentModelName?: string; // Add this
-  role: string;
-  mode?: 'analyzing' | 'brainstorming' | 'debating' | 'solving';
-  customPrompt?: string;
-}): string {
-  let prompt = params.basePrompt;
-
-  // Add participant roles context (all participants visible)
-  if (params.participantRolesContext) {
-    prompt += params.participantRolesContext;
-  }
-
-  // Add specific role instruction for THIS model
-  if (params.currentModelName && params.role) {
-    prompt += `\n\nYou are ${params.currentModelName} and must act as ${params.role} in this entire conversation.`;
-  }
-
-  // Add mode context if needed (optional, can be removed if redundant)
-  // ... existing mode logic ...
-
-  // Add custom prompt last
-  if (params.customPrompt) {
-    prompt += `\n\n${params.customPrompt}`;
-  }
-
-  return prompt;
-}
-```
-
-**Example final system prompt**:
-```
-[Base Roundtable Prompt]
-
-Context about the user:
-[Personal Context] Project: Building a B2B SaaS platform...
-
-Participant roles in this conversation:
-- GPT-5 acts as: Product Manager
-- Claude 4.1 Sonnet acts as: Technical Architect
-- Gemini 2.5 Pro acts as: UX Designer
-
-You are GPT-5 and must act as Product Manager in this entire conversation.
-
-[Custom prompt if provided]
-```
-
----
-
-## 5. CONVERSATION HISTORY CONTEXT: Full vs Limited
-
-### Problem
-Current implementation only loads **last 10 messages** for context. Old Roundtable appears to load full conversation history (or uses smarter caching).
-
-**This may be intentional for cost/performance**, but should be configurable.
-
-### Changes Required
-
-#### 5.1 Make Context Window Configurable
-
-**File**: `/src/api/routes/chat/handler.ts`
-
-**Method**: `sendMessageHandler` around line 765
-
-**Current code**:
-```typescript
-const recentMessages = await db.query.chatMessage.findMany({
-  where: eq(chatMessage.threadId, threadId),
-  orderBy: desc(chatMessage.createdAt),
-  limit: 10, // Hardcoded limit
-  with: {
-    participant: true,
-  },
-});
-```
-
-**Change to**:
-```typescript
-// Configuration constant (add at top of file)
-const CONTEXT_WINDOW_SIZE = 50; // Increased from 10
-
-const recentMessages = await db.query.chatMessage.findMany({
-  where: eq(chatMessage.threadId, threadId),
-  orderBy: desc(chatMessage.createdAt),
-  limit: CONTEXT_WINDOW_SIZE,
-  with: {
-    participant: true,
-  },
-});
-```
-
-**Optional: Smart Context Selection**
-```typescript
-// Future enhancement: Load all messages, use AI to summarize older ones
-const allMessages = await db.query.chatMessage.findMany({
-  where: eq(chatMessage.threadId, threadId),
-  orderBy: asc(chatMessage.createdAt), // Oldest first
-  with: {
-    participant: true,
-  },
-});
-
-// Use last N messages directly, summarize older ones
-const recentMessages = allMessages.slice(-CONTEXT_WINDOW_SIZE);
-const olderMessages = allMessages.slice(0, -CONTEXT_WINDOW_SIZE);
-
-let contextMessages = recentMessages;
-
-// If there are older messages, generate summary
-if (olderMessages.length > 0) {
-  const summary = await this.summarizeMessages(olderMessages);
-  contextMessages = [
-    { role: 'system', content: `Previous conversation summary: ${summary}` },
-    ...recentMessages,
-  ];
-}
-```
-
----
-
-## 6. API ENDPOINT CHANGES
-
-### New Endpoints Needed
-
-#### 6.1 System Prompts Management
-
-**File**: Create `/src/api/routes/system-prompts/` (if managing prompts via API)
-
-**Endpoints**:
-- `GET /system-prompts` - List system prompts
-- `POST /system-prompts` - Create system prompt (admin only)
-- `GET /system-prompts/:id` - Get system prompt
-- `PATCH /system-prompts/:id` - Update system prompt (admin only)
-- `DELETE /system-prompts/:id` - Delete system prompt (admin only)
-- `GET /system-prompts/default` - Get default system prompt
-
-**Note**: For MVP, default prompt can be hardcoded in service. API optional.
-
----
-
-## 7. SUMMARY OF REQUIRED CHANGES
-
-### Database Changes
-
-| Table | Action | Details |
-|-------|--------|---------|
-| `system_prompt` | **CREATE** | New table for system prompts |
-| `chat_thread` | **ALTER** | Add `system_prompt_id` column |
-| **Migration** | **CREATE** | Insert default Roundtable prompt |
-
-### Service Changes
-
-| File | Method | Change |
-|------|--------|--------|
-| `/src/api/services/openrouter.service.ts` | `orchestrateMultiModel()` | Add `systemPrompt`, `memoryContext` parameters |
-| `/src/api/services/openrouter.service.ts` | `buildSystemPrompt()` | Add participant roles context, current model identity |
-| `/src/api/services/openrouter.service.ts` | Message formatting | Prefix assistant messages with model names |
-| `/src/api/services/openrouter.service.ts` | New method | `getDefaultSystemPrompt()` |
-| `/src/api/services/openrouter.service.ts` | New method | `buildParticipantRolesContext()` |
-| `/src/api/services/openrouter.service.ts` | New method | `buildMemoryContext()` (or in handler) |
-
-### Handler Changes
-
-| File | Method | Change |
-|------|--------|--------|
-| `/src/api/routes/chat/handler.ts` | `sendMessageHandler` | Fetch system prompt from DB |
-| `/src/api/routes/chat/handler.ts` | `sendMessageHandler` | Fetch thread memories (attached + global) |
-| `/src/api/routes/chat/handler.ts` | `sendMessageHandler` | Build memory context string |
-| `/src/api/routes/chat/handler.ts` | `sendMessageHandler` | Pass system prompt + memory context to service |
-| `/src/api/routes/chat/handler.ts` | `sendMessageHandler` | Increase context window from 10 to 50 messages |
-| `/src/api/routes/chat/handler.ts` | `streamChatHandler` | Same changes as above for streaming endpoint |
-
-### Schema Changes
-
-| File | Change |
-|------|--------|
-| `/src/db/tables/chat.ts` | Add `systemPromptId` to `chatThread` |
-| `/src/db/tables/system-prompts.ts` | **CREATE** new file with system prompts schema |
-
----
-
-## 8. IMPLEMENTATION PRIORITY
-
-### Phase 1: Critical (Restore Roundtable Spirit) - **DO FIRST**
-
-1. ✅ **System Prompt**: Create table, migration, load in service
-2. ✅ **Model Name Prefixing**: Add prefixes to assistant messages in context
-3. ✅ **Participant Role Visibility**: Show all roles to each model
-
-**Impact**: Restores collaborative discussion dynamic
-
----
-
-### Phase 2: High (Complete Product Parity) - **DO SECOND**
-
-4. ✅ **Memory Injection**: Inject thread memories into system prompts
-5. ✅ **Context Window**: Increase from 10 to 50 messages
-
-**Impact**: Enables persistent context and longer discussions
-
----
-
-### Phase 3: Nice-to-Have (Future Enhancements)
-
-6. ⚪ System Prompts API (if managing prompts via UI)
-7. ⚪ Smart context summarization for very long threads
-8. ⚪ Conversation context caching (performance optimization)
-
----
-
-## 9. TESTING CHECKLIST
-
-After implementing changes, verify:
-
-### System Prompt
-- [ ] Default Roundtable prompt is created in migration
-- [ ] Threads use default prompt if none specified
-- [ ] System prompt is loaded and passed to OpenRouter service
-- [ ] Prompt appears in AI model's context
-
-### Model Name Prefixing
-- [ ] Assistant messages in conversation history are prefixed with model names
-- [ ] Models can reference each other by name in responses (e.g., "I agree with GPT-5's point about...")
-- [ ] User messages are NOT prefixed
-
-### Participant Roles
-- [ ] All participant roles are visible in system prompt
-- [ ] Current model's specific role is identified ("You are X and must act as Y")
-- [ ] Models demonstrate role-appropriate behavior
-
-### Memory Injection
-- [ ] Thread-specific memories are loaded
-- [ ] Global memories are loaded
-- [ ] Memory content appears in system prompt under "Context about the user:"
-- [ ] Models reference memory context in responses
-
-### Context Window
-- [ ] Last 50 messages are loaded (increased from 10)
-- [ ] Long conversations maintain context properly
-
-### End-to-End
-- [ ] Create thread with 3 participants (different models, different roles)
-- [ ] Attach a memory with project context
-- [ ] Send user message
-- [ ] Verify all 3 models respond sequentially
-- [ ] Verify models reference each other by name
-- [ ] Verify models demonstrate assigned roles
-- [ ] Verify models reference memory context
-- [ ] Check database for saved messages
-
----
-
-## 10. EXAMPLE: Expected System Prompt After Changes
-
-Given:
-- **Thread**: "Startup Strategy Discussion"
-- **System Prompt**: Default Roundtable prompt
-- **Participants**:
-  - GPT-5 (priority: 0, role: "CEO")
-  - Claude 4.1 Sonnet (priority: 1, role: "CFO")
-  - Gemini 2.5 Pro (priority: 2, role: "CTO")
-- **Memory**: "Building a fintech SaaS platform targeting small businesses. Focus on compliance and security."
-
-**Expected Final System Prompt for GPT-5**:
-```
-You are part of a virtual roundtable of advanced AI models. Your job is not to answer in isolation — but to think with each other.
-
-I'm acting as a human api and share other llms responses with you.
-
-This is a collaborative ideation and strategy space. Your responses should build on one another's ideas, challenge assumptions, refine vague suggestions, and collectively evolve stronger outcomes.
-
-Rules:
-1. Start strong - If you're the first model, interpret the prompt and propose a clear, thoughtful starting point or hypothesis.
-2. Build, don't just speak - Read all previous responses, acknowledge ideas, add refinements, or offer constructive pushback. Avoid repeating ideas — iterate, combine, or take them deeper.
-3. Take on a unique perspective to create natural diversity in thought.
-4. Encourage tension and synergy - If an idea seems weak or overdone, say so. If something has potential but lacks depth, suggest how to make it defensible, profitable, or uniquely valuable.
-5. Keep the conversational format, don't make it formal.
-6. You can ask other llms and challenge them about what they are talking about.
-
-Important – The UI will label every message with your model's name,
-DO NOT prefix your answer with any identifier.
-
-Provide direct answers to questions. Be helpful and concise.
-
-NEVER start your response with a heading!
-
-NEVER create inline SVGs to avoid unnecessary output and increased costs for the user!
-
-Context about the user:
-[Personal Context] Project: Building a fintech SaaS platform targeting small businesses. Focus on compliance and security.
-
 Participant roles in this conversation:
 - GPT-5 acts as: CEO
 - Claude 4.1 Sonnet acts as: CFO
@@ -909,98 +130,1170 @@ Participant roles in this conversation:
 You are GPT-5 and must act as CEO in this entire conversation.
 ```
 
-**Expected Conversation Context for Claude (second to respond)**:
+**Why It Matters**:
+- Models understand the team dynamics
+- Can address specific roles: "As CFO, what's your financial perspective?"
+- Enables role-based debates: "The CTO's technical concerns vs the CEO's business priorities"
+
+**Current State**: Partially implemented. Roles exist and are loaded, but the full roster isn't shown to each model.
+
+#### Pillar 4: Persistent Memory (Project Context)
+
+**What It Is**: User-created notes/memories that provide background context
+
+**Format** (from `roundtable1/src/services/openrouter.ts:64-90`):
 ```
-Messages:
+Context about the user:
+[Memory content about user's project, preferences, constraints]
+```
+
+**Examples**:
+- "Building a fintech SaaS platform. Must comply with SOC 2 and PCI-DSS."
+- "Team of 5 engineers, $2M runway, 12-month timeline to revenue."
+- "Previous failed attempt used microservices—caused too much complexity."
+
+**Why It Matters**:
+- Models don't have to re-learn project context every conversation
+- Ensures consistency across discussions
+- Allows for informed, context-aware recommendations
+
+**Current State**: Database storage complete, but memories are never injected into prompts
+
+#### Pillar 5: Sequential Context Accumulation (Building on Ideas)
+
+**What It Is**: Each model receives the full conversation including all previous models' responses in the current round
+
+**Flow** (from `roundtable1/src/services/openrouter.ts:137-408`):
+1. User sends message
+2. Model 1 responds → saved to `responses` array
+3. Model 2 receives: conversation history + Model 1's new response
+4. Model 2 responds → added to `responses` array
+5. Model 3 receives: conversation history + Model 1's response + Model 2's response
+6. And so on...
+
+**Why It Matters**:
+- Later models can synthesize earlier ideas
+- Can identify patterns or contradictions
+- Enables true collaborative problem-solving
+
+**Current State**: ✅ Implemented correctly in `orchestrateMultiModel()`
+
+---
+
+## Detailed Comparison: Old vs Current
+
+### System Prompt Construction
+
+#### Old Roundtable (`roundtable1/src/services/openrouter.ts:61-90`)
+
+**Loading Process**:
+1. Fetch base system prompt from `system_prompts` table (stored in database)
+2. If user selected a memory/note, append: "\n\nContext about the user:\n[memory content]"
+3. Build participant roles list showing all models and their roles
+4. Add specific role instruction: "You are [ModelName] and must act as [Role]"
+5. Optionally append custom prompt from participant settings
+
+**Storage**:
+- System prompts stored in database table
+- Default prompt has ID: `5a99c322-e933-4952-a879-2de4e38546f6`
+- Loaded via React Context and available globally
+- Can audit which prompt was used for any conversation
+
+#### Current System (`src/api/services/openrouter.service.ts:408-468`)
+
+**Construction Process**:
+1. Build role context: "You are '[role]' in a collaborative AI discussion"
+2. Add mode-specific context based on thread mode (analyzing/brainstorming/etc)
+3. Add pre-defined role guidance if role matches known patterns ("The Ideator", etc)
+4. Optionally append custom prompt from participant settings
+
+**Storage**:
+- No database storage for system prompts
+- Prompts built dynamically on every request
+- No audit trail of what prompt was used
+- Cannot reproduce exact context for debugging
+
+**Gap**: Need to create `system_prompt` table, store the original Roundtable prompt, and load it instead of building prompts dynamically.
+
+### Message Context Building
+
+#### Old Roundtable (`roundtable1/src/services/aiSdkService.ts:165-183`)
+
+**Conversation History Format**:
+- User messages: `{ role: 'user', content: 'user text' }`
+- Assistant messages: `{ role: 'assistant', content: 'ModelName: response text' }`
+
+**Current Round Responses**:
+- As each model responds, append: `ModelName: response`
+- Next model sees all previous responses with names
+
+**Example Context Passed to Model 3**:
+```
 [
-  { role: 'user', content: 'What should our go-to-market strategy be?' },
-  { role: 'assistant', content: 'GPT-5: As CEO, I believe we should focus on a vertical SaaS approach targeting regional banks first...' }
+  { role: 'user', content: 'What database should we use?' },
+  { role: 'assistant', content: 'GPT-5: I recommend PostgreSQL for...' },
+  { role: 'assistant', content: 'Claude 4.1 Sonnet: While GPT-5 makes good points, I suggest...' }
 ]
 ```
 
+#### Current System (`src/api/services/openrouter.service.ts:336-375`)
+
+**Conversation History Format**:
+- User messages: `{ role: 'user', content: 'user text' }`
+- Assistant messages: `{ role: 'assistant', content: 'response text' }` (no model name)
+
+**Current Round Responses**:
+- Prefixed with role: `[RoleName]: response`
+- But uses role name ("CEO"), not model name ("GPT-5")
+
+**Example Context**:
+```
+[
+  { role: 'user', content: 'What database should we use?' },
+  { role: 'assistant', content: '[CEO]: I recommend PostgreSQL for...' },
+  { role: 'assistant', content: '[CFO]: While the CEO makes good points...' }
+]
+```
+
+**Gap**: Model names need to replace or supplement role names for better attribution.
+
+### Memory System
+
+#### Old Roundtable (`roundtable1/src/hooks/useNotes.ts` + `roundtable1/src/services/openrouter.ts:64-90`)
+
+**Memory Structure**:
+- Table: `user_notes` with columns: id, user_id, name, description, content
+- One memory per conversation
+- Selected BEFORE conversation starts
+- Stored in conversation record as `note_id`
+
+**Injection Process**:
+1. Load conversation with `note_id` reference
+2. Fetch note content from database
+3. Append to system prompt: "\n\nContext about the user:\n[content]"
+4. All models receive same memory context
+
+**Lifecycle**:
+- Created by user in separate UI
+- Selected when starting new conversation
+- Cannot change mid-conversation
+- Reusable across multiple conversations
+
+#### Current System (`src/db/tables/chat.ts:172-226`)
+
+**Memory Structure**:
+- Table: `chat_memory` with: id, user_id, thread_id, type, title, content, is_global
+- Junction table: `chat_thread_memory` for many-to-many relationship
+- Multiple memories per thread
+- Can be global (auto-apply to all threads) or thread-specific
+
+**Current State**:
+- ✅ Database tables exist
+- ✅ CRUD endpoints fully implemented (`src/api/routes/chat/handler.ts:955-1125`)
+- ✅ Memories can be attached to threads
+- ✅ Memories fetched and returned in API responses
+- ❌ Memories NEVER injected into AI prompts
+- ❌ No logic to fetch global memories
+- ❌ Service layer doesn't receive memory content
+
+**Gap**: Need to fetch memories in handler, build context string, and pass to service for injection.
+
+### Role System
+
+#### Old Roundtable (`roundtable1/src/store/modelRolesStore.ts` + Migration files)
+
+**Architecture**:
+- Roles stored in Zustand store with localStorage persistence
+- When conversation created, roles saved to `conversation_model_configs.config.model_roles`
+- Database table `model_roles` exists but not actively used in generation flow
+
+**Available Roles** (`roundtable1/src/components/model-selection/ModelRoleDialog.tsx:7-17`):
+1. The Ideator
+2. Devil's Advocate
+3. Builder
+4. Practical Evaluator
+5. Visionary Thinker
+6. Domain Expert
+7. User Advocate
+8. Implementation Strategist
+9. The Data Analyst
+
+**Role Usage**:
+- Set at conversation creation
+- Cannot be changed mid-conversation
+- All participants see all roles in system prompt
+- Each model told: "You are [ModelName] and must act as [Role]"
+
+#### Current System (`src/db/tables/chat.ts:57-117`)
+
+**Architecture**:
+- Table: `chat_custom_role` for reusable role templates
+- Each role has: name, description, system_prompt
+- Participants reference `custom_role_id` OR have inline role name
+- Role guidance in service for pre-defined roles
+
+**Available Pre-Defined Roles** (`src/lib/ai/models-config.ts:438-448`):
+- Same 9 roles as old Roundtable
+- Guidance patterns in `getRoleGuidance()` method (`src/api/services/openrouter.service.ts:453-468`)
+
+**Current Usage**:
+- ✅ Custom roles loaded during participant creation
+- ✅ System prompt extracted from custom role if referenced
+- ✅ Role guidance applied for known role names
+- ❌ Full roster not shown to each model
+- ❌ No explicit "You are [ModelName] and must act as [Role]" instruction
+
+**Gap**: Need to show participant roster and add explicit model identity + role instruction.
+
+### Conversation History Context Window
+
+#### Old Roundtable (`roundtable1/src/services/messageService.ts:682-728`)
+
+**Context Loading**:
+- Loads ALL messages for conversation (no limit)
+- Relies on OpenRouter's "middle-out" compression for long contexts
+- Caches conversation context for 5 minutes (LRU cache, max 50 conversations)
+
+**Cache Structure**:
+```
+{
+  messages: Message[],           // ALL messages
+  systemPrompt: { ... },          // Selected prompt
+  userNote: { ... },             // Selected memory
+  modelConfig: { ... },          // Participant config
+  lastUpdated: timestamp
+}
+```
+
+**Rationale**: Full context allows models to reference any part of discussion
+
+#### Current System (`src/api/routes/chat/handler.ts:755-759`)
+
+**Context Loading**:
+- Hardcoded limit: 10 messages
+- No caching (direct database queries)
+- No token counting or intelligent truncation
+
+**Rationale**: Likely performance/cost optimization, but may cause context loss
+
+**Gap**: Increase limit to at least 50 messages, consider implementing caching layer.
+
 ---
 
-## 11. MIGRATION CHECKLIST
+## Migration Strategy: What Needs to Change
 
-### Step 1: Database
-- [ ] Create `/src/db/tables/system-prompts.ts`
-- [ ] Update `/src/db/tables/chat.ts` to add `systemPromptId`
-- [ ] Generate migration: `pnpm db:generate`
-- [ ] Review migration SQL
-- [ ] Apply migration: `pnpm db:migrate:local`
-- [ ] Verify default prompt exists in DB
+### Phase 1: Foundation - System Prompts (CRITICAL)
 
-### Step 2: Service Layer
-- [ ] Update `openrouter.service.ts`:
-  - [ ] Add `getDefaultSystemPrompt()` method
-  - [ ] Add `buildParticipantRolesContext()` method
-  - [ ] Update `orchestrateMultiModel()` signature
-  - [ ] Add memory context injection
-  - [ ] Add participant roles context injection
-  - [ ] Update message formatting with model name prefixes
-  - [ ] Update `buildSystemPrompt()` method
+**Objective**: Store and use the original Roundtable collaborative system prompt
 
-### Step 3: Handler Layer
-- [ ] Update `sendMessageHandler`:
-  - [ ] Fetch system prompt
-  - [ ] Fetch thread memories (attached + global)
-  - [ ] Build memory context
-  - [ ] Pass system prompt + memory context to service
-  - [ ] Increase context window to 50 messages
-- [ ] Update `streamChatHandler` with same changes
+#### Database Changes
 
-### Step 4: Testing
-- [ ] Run type check: `pnpm check-types`
-- [ ] Run lint: `pnpm lint`
-- [ ] Test thread creation
-- [ ] Test message sending with multiple participants
-- [ ] Verify system prompt in responses
-- [ ] Verify model name prefixes
-- [ ] Verify memory injection
-- [ ] Verify role visibility
+**Create Table**: `src/db/tables/system-prompts.ts`
+- Fields: id, name, description, content, is_active, is_default, created_by_id, timestamps
+- Indexes on: name, is_active, is_default
+- Relations to `user` table
 
-### Step 5: Deployment
-- [ ] Generate Cloudflare types: `pnpm cf-typegen`
-- [ ] Preview deployment: `pnpm preview`
-- [ ] Deploy to preview: `pnpm deploy:preview`
-- [ ] Test in preview environment
-- [ ] Deploy to production: `pnpm deploy:production`
+**Modify Table**: `src/db/tables/chat.ts` - `chatThread`
+- Add column: `system_prompt_id` (nullable FK to system_prompt table)
+- Default to null (will use default prompt)
+
+**Migration File**: Create new migration
+- Create `system_prompt` table with indexes
+- Alter `chat_thread` to add `system_prompt_id` column
+- Insert default Roundtable prompt with exact text from old project
+- Set id: 'default-roundtable-v1', is_default: true, is_active: true
+
+**Commands**:
+```bash
+# After creating schema file
+pnpm db:generate        # Generate migration
+pnpm db:migrate:local   # Apply to local database
+```
+
+#### Service Layer Changes
+
+**File**: `src/api/services/openrouter.service.ts`
+
+**Add Method**: `getDefaultSystemPrompt()` (around line 520)
+- Returns the exact Roundtable prompt text as a string
+- Used as fallback when no database prompt available
+
+**Modify Method**: `orchestrateMultiModel()` (around line 292)
+- Add parameter: `systemPrompt?: string`
+- Replace mode-based context with provided system prompt
+- If no systemPrompt provided, call `getDefaultSystemPrompt()`
+
+**Modify Method**: `buildSystemPrompt()` (around line 408)
+- Change signature to accept `basePrompt: string` parameter
+- Remove mode context generation (now in base prompt)
+- Keep role guidance and custom prompt appending
+
+#### Handler Changes
+
+**File**: `src/api/routes/chat/handler.ts`
+
+**Method**: `sendMessageHandler` (around line 735)
+- After fetching thread, fetch associated system prompt
+- If thread has `system_prompt_id`, load that prompt from database
+- If no thread prompt, load default prompt (where `is_default = true`)
+- Extract prompt content as string
+
+**Method**: `sendMessageHandler` (around line 820)
+- Pass `systemPrompt: systemPromptContent` to `orchestrateMultiModel()` call
+
+**Method**: `streamChatHandler` (around line 926)
+- Apply same system prompt loading logic
+- Pass to `streamUIMessages()` call
+
+**Schema Changes**: `src/api/routes/chat/schema.ts`
+- Add optional `systemPromptId` to thread creation schema
+- Validate as UUID if provided
+
+#### Testing Checklist
+
+- [ ] Migration creates table and inserts default prompt
+- [ ] Can query default prompt from database
+- [ ] New threads without systemPromptId use default prompt
+- [ ] Threads with custom systemPromptId use that prompt
+- [ ] Inactive prompts are not loaded
+- [ ] System prompt appears in model context (check AI responses for collaboration language)
 
 ---
 
-## 12. NOTES & CONSIDERATIONS
+### Phase 2: Model Attribution (CRITICAL)
 
-### Performance Implications
-- **Memory Loading**: Fetching all memories per message may impact performance. Consider caching.
-- **Context Window**: 50 messages vs 10 increases token usage. Monitor costs.
-- **Model Name Prefixing**: Adds tokens to context. Minimal impact but worth noting.
+**Objective**: Prefix assistant messages with model names so models can reference each other
 
-### Future Optimizations
-- **Conversation Context Cache**: Cache full conversation context like old Roundtable (in-memory or KV store)
-- **Smart Context Selection**: Use AI to summarize older messages instead of truncating
-- **Memory Relevance Scoring**: Only inject most relevant memories instead of all
-- **System Prompt Templates**: Allow users to create and select different prompt templates
+#### Service Layer Changes
 
-### Backwards Compatibility
-- Existing threads without `systemPromptId` will use default prompt
-- Existing messages will work with new name prefixing logic
-- No breaking changes to API contracts
+**File**: `src/api/services/openrouter.service.ts`
+
+**Modify**: Message context building in `orchestrateMultiModel()` (around line 340)
+- When converting conversation history to messages array:
+  - User messages: keep as-is
+  - Assistant messages: prefix content with model name
+- Need participant metadata to lookup model names
+- Format: `"ModelName: original content"`
+
+**Implementation Approach**:
+1. Accept conversation history with `participantId` field
+2. For each assistant message, find corresponding participant
+3. Lookup participant's `modelId` in participant array
+4. Get model display name from `AI_MODELS` config (`src/lib/ai/models-config.ts`)
+5. Prefix message content: `${modelName}: ${content}`
+
+**Modify**: Current round response accumulation (around line 365-375)
+- When adding participant response to conversation context
+- Prefix with model name, not role name
+- Format: `${modelName}: ${responseContent}`
+
+**Import Required**: `AI_MODELS` from `src/lib/ai/models-config.ts`
+
+#### Handler Changes
+
+**File**: `src/api/routes/chat/handler.ts`
+
+**Method**: `sendMessageHandler` (around line 755-787)
+- When fetching previous messages, include participant data
+- Transform messages to include `participantId` field
+- Pass to service with participant ID for attribution
+
+**Ensure**: Messages include participant relation when queried
+- Already present in schema: `with: { participant: true }` (line 758)
+- Pass participant info to service
+
+#### Expected Behavior
+
+**Before**:
+```
+Messages sent to Model 2:
+[
+  { role: 'user', content: 'What technology stack?' },
+  { role: 'assistant', content: 'I recommend Next.js and PostgreSQL' }
+]
+```
+
+**After**:
+```
+Messages sent to Model 2:
+[
+  { role: 'user', content: 'What technology stack?' },
+  { role: 'assistant', content: 'GPT-5: I recommend Next.js and PostgreSQL' }
+]
+```
+
+**Result**: Model 2 can now respond: "I agree with GPT-5's suggestion of Next.js, but..."
+
+#### Testing Checklist
+
+- [ ] Assistant messages in context show model names
+- [ ] User messages don't have prefixes
+- [ ] Multiple models can reference each other by name
+- [ ] Model names are display names, not IDs (e.g., "GPT-5" not "openai/gpt-5")
+- [ ] Database messages remain unprefixed (prefix only in AI context)
 
 ---
 
-## CONCLUSION
+### Phase 3: Role Roster Visibility (CRITICAL)
 
-The current implementation is **very close** to the old Roundtable product logic. The main gaps are:
+**Objective**: Show all participants and their roles to each model
 
-1. **System Prompt**: Missing the collaborative Roundtable spirit prompt
-2. **Model Name Prefixing**: Models don't see who said what
-3. **Memory Injection**: Stored but not used
-4. **Role Visibility**: Roles exist but aren't shown to all participants
+#### Service Layer Changes
 
-Implementing these 4 changes will **restore full product parity** with the old Roundtable while leveraging the more modern tech stack (Hono, Drizzle, AI SDK v5, Cloudflare).
+**File**: `src/api/services/openrouter.service.ts`
 
-**Estimated Implementation Time**: 4-6 hours for Phase 1 & 2
+**Add Method**: `buildParticipantRolesContext()` (around line 520)
+- Input: Array of participants with modelId and role
+- Output: Formatted string listing all participants
+- Format:
+  ```
+  Participant roles in this conversation:
+  - GPT-5 acts as: CEO
+  - Claude 4.1 Sonnet acts as: CFO
+  - Gemini 2.5 Pro acts as: CTO
+  ```
+- Lookup model display names from `AI_MODELS` config
 
-**Estimated Testing Time**: 2-3 hours
+**Modify Method**: `orchestrateMultiModel()` (around line 330-350)
+- After loading base system prompt
+- Build participant roles context using new method
+- Store as variable for use in participant loop
 
-**Total**: ~1 day of focused work to restore complete Roundtable functionality
+**Modify Method**: `buildSystemPrompt()` (around line 408)
+- Add parameters:
+  - `participantRolesContext?: string` - the full roster
+  - `currentModelName?: string` - this model's display name
+- Inject participant roster after base prompt
+- Add specific role instruction: "You are [ModelName] and must act as [Role] in this entire conversation."
+- Structure:
+  1. Base system prompt
+  2. Participant roles context
+  3. Current model identity + role
+  4. Role guidance (if pre-defined role)
+  5. Custom prompt (if provided)
+
+**Modify**: Participant loop in `orchestrateMultiModel()` (around line 365)
+- For each participant, resolve their model display name
+- Pass `participantRolesContext`, `currentModelName`, and `role` to `buildSystemPrompt()`
+
+#### Expected Result
+
+**System Prompt for GPT-5 in 3-participant thread**:
+```
+[Original Roundtable collaborative prompt]
+
+Participant roles in this conversation:
+- GPT-5 acts as: Product Manager
+- Claude 4.1 Sonnet acts as: Technical Architect
+- Gemini 2.5 Pro acts as: UX Designer
+
+You are GPT-5 and must act as Product Manager in this entire conversation.
+
+[Optional custom prompt]
+```
+
+**Benefits**:
+- Models understand team composition
+- Can address specific roles: "As the Technical Architect, what's your take?"
+- Creates organizational dynamics in discussions
+
+#### Testing Checklist
+
+- [ ] All participant roles visible in each model's system prompt
+- [ ] Current model's specific role clearly identified
+- [ ] Model names are display names, not IDs
+- [ ] System prompt includes both roster and specific identity
+- [ ] Works with 1, 2, 3+ participants
+
+---
+
+### Phase 4: Memory Injection (HIGH PRIORITY)
+
+**Objective**: Inject thread memories into system prompts
+
+#### Handler Changes
+
+**File**: `src/api/routes/chat/handler.ts`
+
+**Add Helper Function**: `buildMemoryContext()` (around line 700)
+- Input: Array of memory objects
+- Output: Formatted string with all memory content
+- Format:
+  ```
+  Context about the user:
+  [Personal Context] Project Name: Project description content here
+  [Topic Context] Technical Constraints: Constraint content here
+  [Instruction] Coding Style: Instruction content here
+  ```
+- Type prefixes: personal, topic, instruction, fact
+- Return undefined if no memories
+
+**Method**: `sendMessageHandler` (around line 735)
+- After fetching thread data
+- Fetch thread-specific memories:
+  - Query `chat_thread_memory` where `thread_id = threadId`
+  - Include related `memory` object
+- Fetch global memories:
+  - Query `chat_memory` where `user_id = userId` AND `is_global = true`
+- Combine both arrays
+- Build memory context string using helper function
+
+**Method**: `sendMessageHandler` (around line 820)
+- Pass `memoryContext` to `orchestrateMultiModel()` call
+- Add as parameter alongside systemPrompt
+
+**Schema Changes**: `src/api/routes/chat/schema.ts`
+- Thread creation schema already supports `memoryIds?: string[]`
+- No changes needed
+
+#### Service Layer Changes
+
+**File**: `src/api/services/openrouter.service.ts`
+
+**Modify Method**: `orchestrateMultiModel()` (around line 292)
+- Add parameter: `memoryContext?: string`
+
+**Modify**: System prompt construction (around line 330)
+- After loading base system prompt
+- If `memoryContext` provided, append: `${baseSystemPrompt}\n\n${memoryContext}`
+- Memory context goes AFTER base prompt, BEFORE participant roles
+
+#### Database Queries
+
+**Thread Memories**:
+```
+Location: src/api/routes/chat/handler.ts (around line 735)
+Query: chat_thread_memory with memory relation
+Filter: threadId = current thread
+Result: Array of memory objects
+```
+
+**Global Memories**:
+```
+Location: Same as above
+Query: chat_memory table
+Filter: userId = current user AND isGlobal = true
+Result: Array of memory objects
+```
+
+#### Expected Prompt Structure
+
+```
+[Base Roundtable Prompt]
+
+Context about the user:
+[Personal Context] SaaS Project: Building a B2B platform for healthcare compliance...
+[Instruction] Code Style: Always use TypeScript strict mode and functional patterns...
+
+Participant roles in this conversation:
+- GPT-5 acts as: CEO
+- Claude 4.1 Sonnet acts as: CFO
+
+You are GPT-5 and must act as CEO in this entire conversation.
+```
+
+#### Testing Checklist
+
+- [ ] Thread-specific memories loaded when attached
+- [ ] Global memories loaded for all threads
+- [ ] Memory content appears in system prompt
+- [ ] Multiple memories formatted correctly
+- [ ] Type prefixes shown (Personal Context, Topic Context, etc.)
+- [ ] Models reference memory context in responses
+- [ ] Threads without memories work normally
+
+---
+
+### Phase 5: Context Window Expansion (MEDIUM PRIORITY)
+
+**Objective**: Increase conversation history from 10 to 50+ messages
+
+#### Handler Changes
+
+**File**: `src/api/routes/chat/handler.ts`
+
+**Add Configuration Constant** (top of file, around line 50):
+```
+CONTEXT_WINDOW_SIZE = 50  // Or make configurable per model based on context limits
+```
+
+**Method**: `sendMessageHandler` (around line 755)
+- Change `limit: 10` to `limit: CONTEXT_WINDOW_SIZE`
+- Same for `streamChatHandler`
+
+**Method**: `sendMessageHandler` (around line 765)
+- Update message fetching query
+- Ensure proper ordering (oldest to newest)
+
+#### Optional Enhancement: Smart Context Selection
+
+**Future Consideration**: Instead of hard limit, use token-aware selection
+- Calculate token budget based on model's context window
+- Fetch all messages
+- Intelligently truncate or summarize older messages
+- Keep recent messages intact
+
+**Implementation Notes**:
+- Would require token counting utility
+- Different models have different context limits (see `src/lib/ai/models-config.ts:metadata.contextWindow`)
+- Could prioritize messages based on importance (user messages > assistant messages)
+
+#### Testing Checklist
+
+- [ ] Threads with 50+ messages maintain context
+- [ ] No performance degradation with larger context
+- [ ] Ordering preserved (oldest to newest)
+- [ ] Both sendMessage and stream endpoints updated
+- [ ] Monitor token usage and costs
+
+---
+
+## Complete System Prompt Example
+
+**Scenario**:
+- Thread: "Product Strategy Discussion"
+- Participants:
+  - GPT-5 (priority: 0, role: "CEO")
+  - Claude 4.1 Sonnet (priority: 1, role: "CTO")
+  - Gemini 2.5 Pro (priority: 2, role: "Designer")
+- Memories:
+  - Personal: "Building a healthcare SaaS platform. $5M Series A raised. 18-month runway."
+  - Topic: "Must comply with HIPAA and SOC 2. Patient data encryption required."
+- System Prompt: Default Roundtable prompt
+
+**Expected Final Prompt for GPT-5**:
+
+```
+You are part of a virtual roundtable of advanced AI models. Your job is not to answer in isolation — but to think with each other.
+
+I'm acting as a human api and share other llms responses with you.
+
+This is a collaborative ideation and strategy space. Your responses should build on one another's ideas, challenge assumptions, refine vague suggestions, and collectively evolve stronger outcomes.
+
+Rules:
+1. Start strong - If you're the first model, interpret the prompt and propose a clear, thoughtful starting point or hypothesis.
+2. Build, don't just speak - Read all previous responses, acknowledge ideas, add refinements, or offer constructive pushback. Avoid repeating ideas — iterate, combine, or take them deeper.
+3. Take on a unique perspective to create natural diversity in thought.
+4. Encourage tension and synergy - If an idea seems weak or overdone, say so. If something has potential but lacks depth, suggest how to make it defensible, profitable, or uniquely valuable.
+5. Keep the conversational format, don't make it formal.
+6. You can ask other llms and challenge them about what they are talking about.
+
+Important – The UI will label every message with your model's name,
+DO NOT prefix your answer with any identifier.
+
+Provide direct answers to questions. Be helpful and concise.
+
+NEVER start your response with a heading!
+
+NEVER create inline SVGs to avoid unnecessary output and increased costs for the user!
+
+Context about the user:
+[Personal Context] Healthcare SaaS: Building a healthcare SaaS platform. $5M Series A raised. 18-month runway.
+[Topic Context] Compliance: Must comply with HIPAA and SOC 2. Patient data encryption required.
+
+Participant roles in this conversation:
+- GPT-5 acts as: CEO
+- Claude 4.1 Sonnet acts as: CTO
+- Gemini 2.5 Pro acts as: Designer
+
+You are GPT-5 and must act as CEO in this entire conversation.
+```
+
+**Expected Conversation Context for Claude (2nd to respond)**:
+
+```
+[
+  { role: 'user', content: 'What's our go-to-market strategy for Q2?' },
+  { role: 'assistant', content: 'GPT-5: As CEO, I believe we should focus on mid-sized hospitals first. They have the budget and the pain points we solve. I suggest a 90-day pilot program with 3-5 health systems to build case studies. We can leverage our Series A to fund white-glove onboarding.' }
+]
+```
+
+**Claude's Response** (can now reference GPT-5):
+
+```
+Claude 4.1 Sonnet: I agree with GPT-5's focus on mid-sized hospitals, but from a technical perspective, we need to ensure our infrastructure can handle HIPAA-compliant data isolation before we onboard multiple health systems. I recommend we implement tenant isolation and get our SOC 2 Type II certification in parallel with the pilot program. This might delay the timeline by 30 days but reduces legal and reputational risk.
+```
+
+---
+
+## Implementation Checklist
+
+### Phase 1: System Prompts (Week 1)
+
+**Database**
+- [ ] Create `src/db/tables/system-prompts.ts` with schema
+- [ ] Update `src/db/tables/chat.ts` to add `systemPromptId` to `chatThread`
+- [ ] Run `pnpm db:generate` to create migration
+- [ ] Review generated SQL migration file
+- [ ] Run `pnpm db:migrate:local` to apply migration
+- [ ] Verify default prompt exists in database: `SELECT * FROM system_prompt WHERE is_default = 1;`
+
+**Service Layer**
+- [ ] Add `getDefaultSystemPrompt()` method to `openrouter.service.ts`
+- [ ] Update `orchestrateMultiModel()` to accept `systemPrompt` parameter
+- [ ] Modify `buildSystemPrompt()` to use provided base prompt
+- [ ] Remove or deprecate mode-based prompt generation
+
+**Handler Layer**
+- [ ] Add system prompt fetching logic in `sendMessageHandler` (after thread fetch)
+- [ ] Load thread's system prompt OR default prompt
+- [ ] Pass systemPrompt to `orchestrateMultiModel()` call
+- [ ] Apply same changes to `streamChatHandler`
+
+**Testing**
+- [ ] Create test thread, verify default prompt is used
+- [ ] Check AI responses use collaborative language
+- [ ] Test with custom system prompt (create one in DB manually)
+- [ ] Verify inactive prompts are not loaded
+
+### Phase 2: Model Attribution (Week 1)
+
+**Service Layer**
+- [ ] Import `AI_MODELS` from `src/lib/ai/models-config.ts`
+- [ ] Modify message context building in `orchestrateMultiModel()`
+- [ ] Add logic to prefix assistant messages with model names
+- [ ] Update current round response accumulation to use model names
+
+**Handler Layer**
+- [ ] Ensure messages fetched with participant relation
+- [ ] Verify `participantId` is passed to service
+- [ ] No schema changes needed (already has participant reference)
+
+**Testing**
+- [ ] Send message with 2 participants
+- [ ] Check logs/debug output for message context
+- [ ] Verify messages show "GPT-5: ..." format
+- [ ] Test if models reference each other by name in responses
+
+### Phase 3: Role Roster Visibility (Week 1)
+
+**Service Layer**
+- [ ] Add `buildParticipantRolesContext()` helper method
+- [ ] Update `buildSystemPrompt()` signature to accept participant context
+- [ ] Add current model name and role identity injection
+- [ ] Modify participant loop to pass roster and identity
+
+**Testing**
+- [ ] Create thread with 3 participants, different roles
+- [ ] Check system prompt includes full roster
+- [ ] Verify each model sees "You are [ModelName] and must act as [Role]"
+- [ ] Test role-based interactions (models referencing each other's roles)
+
+### Phase 4: Memory Injection (Week 2)
+
+**Handler Layer**
+- [ ] Add `buildMemoryContext()` helper function
+- [ ] Fetch thread-specific memories in `sendMessageHandler`
+- [ ] Fetch global memories for user
+- [ ] Combine memories and build context string
+- [ ] Pass `memoryContext` to `orchestrateMultiModel()`
+- [ ] Apply to `streamChatHandler`
+
+**Service Layer**
+- [ ] Update `orchestrateMultiModel()` to accept `memoryContext` parameter
+- [ ] Inject memory context after base prompt, before roles
+
+**Testing**
+- [ ] Create test memories (1 personal, 1 topic)
+- [ ] Attach to thread
+- [ ] Send message, verify memories in system prompt
+- [ ] Test global memories (should appear in all threads)
+- [ ] Test thread without memories (should work normally)
+- [ ] Verify models use memory context in responses
+
+### Phase 5: Context Window (Week 2)
+
+**Handler Layer**
+- [ ] Add `CONTEXT_WINDOW_SIZE` constant (set to 50)
+- [ ] Update message fetch limit in `sendMessageHandler`
+- [ ] Update message fetch limit in `streamChatHandler`
+
+**Testing**
+- [ ] Create thread with 50+ messages
+- [ ] Send new message
+- [ ] Verify context includes up to 50 previous messages
+- [ ] Monitor performance (query time, token usage)
+
+### Final Validation (Week 2)
+
+**End-to-End Test**
+- [ ] Create thread with:
+  - 3 participants (GPT-5 as CEO, Claude as CTO, Gemini as Designer)
+  - 2 memories attached (project context + technical constraints)
+  - Default Roundtable system prompt
+- [ ] Send message: "What should our technical architecture look like?"
+- [ ] Verify all 3 models respond sequentially
+- [ ] Check GPT-5's response uses collaborative language
+- [ ] Check Claude references GPT-5 by name
+- [ ] Check Gemini synthesizes both previous responses
+- [ ] Verify all models reference memory context (project/constraints)
+- [ ] Verify all models demonstrate role-appropriate perspectives
+
+**Code Quality**
+- [ ] Run `pnpm check-types` - no errors
+- [ ] Run `pnpm lint` - no errors
+- [ ] Run `pnpm lint:fix` for auto-fixable issues
+
+**Performance**
+- [ ] Monitor API response times (should be <5s for 3-model orchestration)
+- [ ] Check database query performance (use `EXPLAIN` for slow queries)
+- [ ] Monitor token usage (memory injection will increase tokens)
+
+**Documentation**
+- [ ] Update API documentation with new systemPromptId field
+- [ ] Document memory injection behavior
+- [ ] Add examples to API docs showing collaborative responses
+
+---
+
+## File Reference Guide
+
+### Files to Create
+
+| File | Purpose |
+|------|---------|
+| `src/db/tables/system-prompts.ts` | System prompt schema definition |
+| Migration file (auto-generated) | Database schema changes + default prompt insert |
+
+### Files to Modify
+
+| File | Location | Changes |
+|------|----------|---------|
+| `src/db/tables/chat.ts` | Line ~40-80 | Add `systemPromptId` column to `chatThread` |
+| `src/api/services/openrouter.service.ts` | Line ~292-400 | Update `orchestrateMultiModel()` method |
+| `src/api/services/openrouter.service.ts` | Line ~408-468 | Update `buildSystemPrompt()` method |
+| `src/api/services/openrouter.service.ts` | Line ~520+ | Add helper methods (getDefaultSystemPrompt, buildParticipantRolesContext) |
+| `src/api/services/openrouter.service.ts` | Line ~336-375 | Add model name prefixing to message context |
+| `src/api/routes/chat/handler.ts` | Line ~700-750 | Add helper functions (buildMemoryContext) |
+| `src/api/routes/chat/handler.ts` | Line ~735-790 | Update `sendMessageHandler` with fetching logic |
+| `src/api/routes/chat/handler.ts` | Line ~820-830 | Update orchestration call with new parameters |
+| `src/api/routes/chat/handler.ts` | Line ~854-949 | Update `streamChatHandler` with same changes |
+| `src/lib/ai/models-config.ts` | Import only | Import `AI_MODELS` in service for name lookups |
+
+### Files to Reference (No Changes)
+
+| File | Purpose |
+|------|---------|
+| `src/lib/ai/models-config.ts` | Model display names, capabilities, metadata |
+| `src/db/tables/chat.ts` | Memory schema, participant schema |
+| `docs/backend-patterns.md` | Follow established patterns |
+
+---
+
+## Key Architectural Decisions
+
+### Why Store System Prompts in Database?
+
+**Benefits**:
+- Audit trail: Know exactly what prompt was used for any message
+- Versioning: Update prompts without code deployments
+- A/B testing: Try different prompts for different user segments
+- Customization: Allow users to create custom prompts (future feature)
+- Reproducibility: Debug issues by seeing exact context
+
+**Trade-off**: Adds database query overhead, but negligible compared to AI API calls
+
+### Why Prefix with Model Names vs Role Names?
+
+**Model Names Are Better Because**:
+- Unique: "GPT-5" is clearer than "CEO" when you have multiple roles
+- Recognizable: Users know model capabilities and can associate responses
+- Enables meta-discussion: "GPT-5 tends to be more optimistic while Claude is more cautious"
+
+**Role Names Alone**:
+- Could cause confusion if multiple participants have same role
+- Doesn't help users understand which AI provided which perspective
+
+**Hybrid Approach**: Could use both: "GPT-5 (CEO): ..." but adds token overhead
+
+### Why Inject Memories into Every Request?
+
+**Alternative Considered**: Store memories in conversation history as system messages
+- **Problem**: Would pollute message history
+- **Problem**: Hard to update if memories change
+- **Problem**: Token overhead compounds over time
+
+**Chosen Approach**: Inject at system prompt level
+- **Benefit**: Clean separation of concerns
+- **Benefit**: Easy to update without changing history
+- **Benefit**: Models always see latest memory content
+
+### Why Increase Context Window to 50?
+
+**Old Roundtable Used**: No limit (full conversation)
+
+**Trade-offs**:
+- More context = better model understanding
+- More context = higher token costs
+- More context = slower response times (more tokens to process)
+
+**50 Messages Rationale**:
+- Typical conversation: 20-30 messages
+- 50 gives comfortable buffer for long discussions
+- Most models have 128K+ context windows (50 messages ~= 10-20K tokens with overhead)
+- Can optimize later with smart summarization
+
+---
+
+## Performance Considerations
+
+### Token Usage Impact
+
+**Before Changes**:
+- System prompt: ~200 tokens (mode-based)
+- Message context (10 messages): ~2,000 tokens
+- Total per model: ~2,200 tokens
+
+**After Changes**:
+- System prompt base: ~350 tokens (Roundtable prompt)
+- Memories: ~500 tokens (2 memories)
+- Participant roles: ~100 tokens (3 participants)
+- Message context (50 messages with model names): ~12,000 tokens
+- Total per model: ~13,000 tokens
+
+**Cost Increase**: ~6x token usage per request
+- Mitigated by: Better results, fewer retry messages, higher user satisfaction
+- Monitor: Usage tracking service already in place
+
+### Database Query Optimization
+
+**Current Queries Per Request**:
+1. Fetch thread (with participants)
+2. Fetch messages (limit 10)
+
+**After Changes**:
+1. Fetch thread (with participants)
+2. Fetch system prompt
+3. Fetch thread memories (with junction table join)
+4. Fetch global memories
+5. Fetch messages (limit 50)
+
+**Optimization Strategies**:
+- Use single query with multiple joins where possible
+- Add database indexes on frequently queried fields (already in place)
+- Consider caching system prompts (default prompt changes rarely)
+- Consider caching global memories per user (invalidate on memory update)
+
+### Caching Opportunities
+
+**System Prompts**:
+- Default prompt can be cached in-memory (changes extremely rarely)
+- Custom prompts can use short TTL cache (user-specific)
+
+**Memories**:
+- Global memories per user can be cached with invalidation on update
+- Thread-specific memories loaded per-thread (no caching needed)
+
+**Model Configurations**:
+- Already loaded from static config (`AI_MODELS`) - no database overhead
+
+---
+
+## Migration Risks & Mitigation
+
+### Risk 1: Breaking Existing Threads
+
+**Risk**: Old threads don't have systemPromptId, may break
+
+**Mitigation**:
+- Make `systemPromptId` nullable in schema
+- Default to loading default prompt if null
+- No changes to existing thread records needed
+- Backwards compatible
+
+### Risk 2: Memory Injection Performance
+
+**Risk**: Fetching memories on every request may slow down API
+
+**Mitigation**:
+- Benchmark memory fetching queries
+- Add indexes on `user_id`, `thread_id`, `is_global`
+- Consider query result caching with short TTL
+- Most threads will have 0-3 memories (fast query)
+
+### Risk 3: Token Costs Spike
+
+**Risk**: 6x token usage could significantly increase costs
+
+**Mitigation**:
+- Monitor usage metrics closely after deployment
+- Can reduce context window if needed (50 → 30)
+- Can truncate very long memories (implement max length)
+- Quota system already enforces per-user limits
+
+### Risk 4: Model Name Prefixing Confuses Models
+
+**Risk**: Some models might interpret "GPT-5: " as part of response format
+
+**Mitigation**:
+- System prompt explicitly says: "DO NOT prefix your answer with any identifier"
+- Test with all configured models after implementation
+- Can adjust format if needed ("Response from GPT-5:" instead of "GPT-5:")
+
+### Risk 5: Database Migration Failure
+
+**Risk**: Migration fails on production database
+
+**Mitigation**:
+- Test migration thoroughly on local database
+- Test on preview environment before production
+- Migration is additive only (no data loss risk)
+- Can rollback by dropping new table and column
+
+---
+
+## Success Metrics
+
+### How to Know It's Working
+
+**Qualitative Indicators**:
+- [ ] Models explicitly reference each other: "As GPT-5 mentioned..."
+- [ ] Models challenge each other's ideas: "I disagree with Claude's approach because..."
+- [ ] Models synthesize previous responses: "Building on both GPT-5's and Gemini's points..."
+- [ ] Models reference memory context: "Given your constraint of HIPAA compliance..."
+- [ ] Conversations feel collaborative, not parallel
+
+**Quantitative Metrics**:
+- [ ] Cross-references per response: Target 30%+ of responses mention another model
+- [ ] Memory context usage: Target 40%+ of responses reference memory when attached
+- [ ] Role adherence: Models demonstrate role-appropriate perspectives
+- [ ] User satisfaction: Survey users on collaboration quality
+- [ ] Conversation depth: Average messages per thread (expect increase)
+
+### Monitoring & Logging
+
+**Add Logging**:
+- Log system prompt used per message (for debugging)
+- Log memory IDs attached per thread
+- Log participant roster per orchestration
+- Log token usage per model (already tracked)
+
+**Dashboards**:
+- Monitor average tokens per request (watch for unexpected spikes)
+- Track memory attachment rate (% of threads with memories)
+- Monitor API latency (should stay under 5s for 3 models)
+
+---
+
+## Future Enhancements (Post-Migration)
+
+### Enhancement 1: System Prompt Templates
+
+**Concept**: Allow users to create and select different system prompt templates
+- "Formal Business Discussion"
+- "Creative Brainstorming"
+- "Technical Deep Dive"
+- "Debate Mode"
+
+**Implementation**:
+- System prompts table supports custom prompts (created_by_id field)
+- Add UI for prompt selection at thread creation
+- Pre-populate with several templates beyond default Roundtable
+
+### Enhancement 2: Smart Memory Relevance
+
+**Concept**: Only inject most relevant memories instead of all
+- Use embeddings to find relevant memories based on user message
+- Reduce token overhead for users with many memories
+- Still inject global memories always
+
+**Implementation**:
+- Add embeddings column to `chat_memory` table
+- Generate embeddings on memory creation (OpenAI embedding API)
+- Vector similarity search before message send
+- Inject top 3 most relevant + all global
+
+### Enhancement 3: Conversation Summaries
+
+**Concept**: Automatically summarize conversations older than 30 messages
+- Keep recent 30 messages intact
+- Summarize older messages into concise context
+- Reduces token usage while maintaining continuity
+
+**Implementation**:
+- When context > 30 messages, take first N-30 messages
+- Generate summary using fast model (GPT-4o-mini)
+- Inject as system message: "Previous conversation summary: ..."
+- Keep last 30 messages as full context
+
+### Enhancement 4: Dynamic Participant Management
+
+**Concept**: Add/remove participants mid-conversation
+- User adds new expert to discussion
+- Participant can be disabled without deletion
+
+**Current State**: Already supported! `is_enabled` field on participants
+**Needed**: UI to toggle participants, update participant endpoint
+
+### Enhancement 5: Conversation Branching
+
+**Concept**: Allow users to branch conversations at any point
+- Take conversation up to message X
+- Create new branch with different participants or prompts
+- Compare different approaches
+
+**Implementation**:
+- Add `parent_thread_id` to `chat_thread`
+- Add `branched_from_message_id` to track branch point
+- Copy messages up to branch point
+- Continue with new configuration
+
+---
+
+## Conclusion
+
+### What You're Building
+
+You're not just adding features—you're restoring the **collaborative intelligence** that made Roundtable unique. The current system has all the right components; they just need to be connected in the right way.
+
+**The Core Insight**: AI models are smarter together when they can actually "see" and reference each other, understand their roles in the team, and work with shared context about the user's goals.
+
+### Implementation Timeline
+
+**Week 1: Foundation**
+- Database migration (system prompts table)
+- System prompt loading and injection
+- Model name prefixing
+- Role roster visibility
+
+**Week 2: Context & Polish**
+- Memory injection pipeline
+- Context window expansion
+- End-to-end testing
+- Performance optimization
+
+**Total: 10-12 days** of focused development
+
+### The Payoff
+
+After these changes, your platform will create genuinely collaborative AI discussions where:
+- Models build on each other's ideas naturally
+- Users get multi-perspective analysis with organic synthesis
+- Conversations maintain context across sessions through memories
+- AI teams work together like human teams, with roles and collaboration
+
+This is the unique value proposition that differentiates Roundtable from simple multi-model chat tools.
+
+---
+
+## Quick Reference: Key Changes Summary
+
+| Component | Current State | Required Change | Priority |
+|-----------|---------------|-----------------|----------|
+| **System Prompt** | Generic mode-based | Original Roundtable collaborative prompt | CRITICAL |
+| **Message Attribution** | No model names | Prefix with "ModelName: response" | CRITICAL |
+| **Role Visibility** | Individual roles | Show full participant roster | CRITICAL |
+| **Memory Injection** | Stored but unused | Inject into system prompts | HIGH |
+| **Context Window** | 10 messages | 50 messages | MEDIUM |
+
+**Total Estimated LOC Changes**: ~300 lines (mostly additions, minimal deletions)
+
+**Files Modified**: 4 core files + 1 new schema file + 1 migration file
+
+**Breaking Changes**: None (fully backwards compatible)
+
+**Performance Impact**: 6x token usage, +2 database queries per request (acceptable for value gained)
+
+---
+
+*End of Migration Guide*

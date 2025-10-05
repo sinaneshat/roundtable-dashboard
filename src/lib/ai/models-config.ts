@@ -452,8 +452,8 @@ export type DefaultRole = typeof DEFAULT_ROLES[number];
 /**
  * Get model by ID
  */
-export function getModelById(id: string): AIModel | undefined {
-  return AI_MODELS.find(model => model.id === id);
+export function getModelById(modelId: string): AIModel | undefined {
+  return AI_MODELS.find(model => model.modelId === modelId);
 }
 
 /**

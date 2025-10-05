@@ -208,8 +208,8 @@ export const CreateThreadRequestSchema = z.object({
       description: 'Model ID (e.g., anthropic/claude-3.5-sonnet)',
       example: 'anthropic/claude-3.5-sonnet',
     }),
-    role: z.string().openapi({
-      description: 'Assigned role for this model (immutable)',
+    role: z.string().optional().openapi({
+      description: 'Optional assigned role for this model (immutable)',
       example: 'The Ideator',
     }),
     customRoleId: z.string().optional().openapi({

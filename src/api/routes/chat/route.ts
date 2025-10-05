@@ -182,6 +182,28 @@ export const getPublicThreadRoute = createRoute({
   },
 });
 
+export const getThreadBySlugRoute = createRoute({
+  method: 'get',
+  path: '/chat/threads/slug/:slug',
+  tags: ['chat'],
+  summary: 'Get thread by slug',
+  description: 'Get thread details by slug for the authenticated user (ensures ownership)',
+  request: {
+    params: ThreadSlugParamSchema,
+  },
+  responses: {
+    [HttpStatusCodes.OK]: {
+      description: 'Thread retrieved successfully',
+      content: {
+        'application/json': { schema: ThreadDetailResponseSchema },
+      },
+    },
+    [HttpStatusCodes.UNAUTHORIZED]: { description: 'Authentication required' },
+    [HttpStatusCodes.NOT_FOUND]: { description: 'Thread not found or does not belong to user' },
+    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: { description: 'Internal Server Error' },
+  },
+});
+
 // ============================================================================
 // Participant Routes
 // ============================================================================

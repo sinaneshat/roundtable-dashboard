@@ -154,3 +154,18 @@ export async function getPublicThreadService(slug: string) {
     }),
   );
 }
+
+/**
+ * Get a thread by slug for the authenticated user
+ * Protected endpoint - requires authentication (ownership check)
+ *
+ * @param slug - Thread slug
+ */
+export async function getThreadBySlugService(slug: string) {
+  const client = await createApiClient();
+  return parseResponse(
+    client.chat.threads.slug[':slug'].$get({
+      param: { slug },
+    }),
+  );
+}

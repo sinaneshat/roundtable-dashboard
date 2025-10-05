@@ -34,8 +34,8 @@ const QUOTA_CONFIGURATIONS = [
     threadsPerMonth: 2, // "2 conversations / mo"
     messagesPerMonth: 20, // "20 messages / mo"
     maxAiModels: 5, // "Up to 5 AI models"
-    allowCustomRoles: false,
-    allowMemories: false,
+    allowCustomRoles: true, // Allow for development/testing
+    allowMemories: true, // Allow for development/testing
     allowThreadExport: false,
     metadata: {
       description: 'Free tier - perfect for trying out Roundtable',

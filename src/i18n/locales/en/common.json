@@ -988,6 +988,13 @@
       },
       "subtitle": "Where multiple AI models brainstorm together to solve complex problems"
     },
+    "input": {
+      "placeholder": "Message Roundtable...",
+      "submit": "Send message",
+      "helperText": "Press Enter to send, Shift + Enter for new line"
+    },
+    "threadCreated": "Chat thread created successfully",
+    "threadCreationFailed": "Failed to create chat thread. Please try again.",
     "newChat": "New Chat",
     "newChatDescription": "Start a new conversation",
     "noChatSelected": "No chat selected",
@@ -1010,7 +1017,10 @@
     "noFavorites": "No favorite chats yet",
     "noResults": "No chats found",
     "noResultsDescription": "Try a different search term",
-    "noMessages": "No messages"
+    "noMessages": "No messages",
+    "threadNotFound": "Thread not found",
+    "threadNotFoundDescription": "The chat thread you're looking for doesn't exist",
+    "you": "You"
   },
   "networkStatus": {
     "connectionError": "Connection Error",

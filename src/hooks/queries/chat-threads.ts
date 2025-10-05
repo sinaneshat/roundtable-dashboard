@@ -13,6 +13,7 @@ import { useSession } from '@/lib/auth/client';
 import { queryKeys } from '@/lib/data/query-keys';
 import {
   getPublicThreadService,
+  getThreadBySlugService,
   getThreadService,
   listThreadsService,
 } from '@/services/api';
@@ -57,7 +58,7 @@ export function useThreadsQuery() {
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage) => {
       // Return nextCursor from pagination metadata, or undefined if no more pages
-      if (lastPage.success && lastPage.data.pagination.nextCursor) {
+      if (lastPage.success && lastPage.data?.pagination?.nextCursor) {
         return lastPage.data.pagination.nextCursor;
       }
       return undefined;
@@ -130,6 +131,39 @@ export function usePublicThreadQuery(slug: string | null | undefined, enabled = 
     staleTime: 1 * 60 * 1000, // 1 minute
     enabled: !!slug && enabled, // Only fetch when slug exists
     retry: (failureCount, error) => {
+      const errorStatus = (error as { status?: number })?.status;
+      if (errorStatus && errorStatus >= 400 && errorStatus < 500) {
+        return false;
+      }
+      return failureCount < 2;
+    },
+    throwOnError: false,
+  });
+}
+
+/**
+ * Hook to fetch a thread by slug for authenticated user
+ * Returns thread details including all participants and messages
+ * Protected endpoint - requires authentication and ownership
+ *
+ * @param slug - Thread slug
+ * @param enabled - Optional control over whether to fetch (default: true when slug exists)
+ *
+ * Stale time: 10 seconds (thread details should be fresh for active conversations)
+ */
+export function useThreadBySlugQuery(slug: string | null | undefined, enabled = true) {
+  const { data: session, isPending } = useSession();
+  const isAuthenticated = !isPending && !!session?.user?.id;
+
+  return useQuery({
+    queryKey: queryKeys.threads.bySlug(slug || ''),
+    queryFn: () => getThreadBySlugService(slug!),
+    staleTime: 10 * 1000, // 10 seconds
+    enabled: isAuthenticated && !!slug && enabled, // Only fetch when authenticated and slug exists
+    retry: (failureCount, error) => {
+      if (error instanceof Error && error.message.includes('Authentication')) {
+        return false;
+      }
       const errorStatus = (error as { status?: number })?.status;
       if (errorStatus && errorStatus >= 400 && errorStatus < 500) {
         return false;

@@ -26,14 +26,37 @@ import {
 } from '@/components/ui/sidebar';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { BRAND } from '@/constants/brand';
+import { useThreadsQuery } from '@/hooks/queries/chat-threads';
 import type { Chat } from '@/lib/types/chat';
-import { groupChatsByPeriod, mockChats } from '@/lib/types/chat';
+import { groupChatsByPeriod } from '@/lib/types/chat';
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const router = useRouter();
   const t = useTranslations();
-  const [chats, setChats] = useState<Chat[]>(mockChats);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+
+  // Fetch real threads from API
+  const { data: threadsData } = useThreadsQuery();
+
+  // Transform threads to Chat type
+  const chats: Chat[] = useMemo(() => {
+    if (!threadsData?.pages)
+      return [];
+
+    const threads = threadsData.pages.flatMap(page =>
+      page.success && page.data?.items ? page.data.items : [],
+    );
+
+    return threads.map(thread => ({
+      id: thread.id,
+      title: thread.title,
+      slug: thread.slug,
+      createdAt: new Date(thread.createdAt),
+      updatedAt: new Date(thread.updatedAt),
+      messages: [], // Messages loaded separately when viewing thread
+      isFavorite: false, // TODO: Add favorite support when implemented
+    }));
+  }, [threadsData]);
 
   // Keyboard shortcut to open search (Cmd+K / Ctrl+K)
   useEffect(() => {
@@ -53,15 +76,13 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   };
 
   const handleDeleteChat = (chatId: string) => {
-    // TODO: Implement delete chat functionality
+    // TODO: Implement delete chat mutation
     console.warn('Delete chat:', chatId);
-    setChats(chats.filter(chat => chat.id !== chatId));
   };
 
   const handleToggleFavorite = (chatId: string) => {
-    setChats(chats.map(chat =>
-      chat.id === chatId ? { ...chat, isFavorite: !chat.isFavorite } : chat,
-    ));
+    // TODO: Implement toggle favorite mutation
+    console.warn('Toggle favorite:', chatId);
   };
 
   // Get favorites from chats

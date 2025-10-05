@@ -70,6 +70,7 @@ import {
   getCustomRoleHandler,
   getMemoryHandler,
   getPublicThreadHandler,
+  getThreadBySlugHandler,
   getThreadHandler,
   listCustomRolesHandler,
   listMemoriesHandler,
@@ -93,6 +94,7 @@ import {
   getCustomRoleRoute,
   getMemoryRoute,
   getPublicThreadRoute,
+  getThreadBySlugRoute,
   getThreadRoute,
   listCustomRolesRoute,
   listMemoriesRoute,
@@ -249,6 +251,9 @@ app.use('/chat/threads', csrfProtection, requireSession);
 // PATCH/DELETE: protected mutations (requires auth + CSRF)
 app.use('/chat/threads/:id', protectMutations);
 
+// GET /chat/threads/slug/:slug - get thread by slug (requires auth)
+app.use('/chat/threads/slug/:slug', requireSession);
+
 // POST /chat/threads/:id/messages - send message (requires auth + CSRF)
 app.use('/chat/threads/:id/messages', csrfProtection, requireSession);
 
@@ -295,6 +300,7 @@ const appRoutes = app
   .openapi(listThreadsRoute, listThreadsHandler) // List threads with pagination
   .openapi(createThreadRoute, createThreadHandler) // Create thread with participants + first message
   .openapi(getThreadRoute, getThreadHandler) // Get thread with participants + messages
+  .openapi(getThreadBySlugRoute, getThreadBySlugHandler) // Get thread by slug (authenticated)
   .openapi(updateThreadRoute, updateThreadHandler) // Update thread (title, favorite, public, etc.)
   .openapi(deleteThreadRoute, deleteThreadHandler) // Delete thread
   .openapi(sendMessageRoute, sendMessageHandler) // Send message to thread

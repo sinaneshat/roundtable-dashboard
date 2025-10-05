@@ -43,6 +43,7 @@ import type {
   getCustomRoleRoute,
   getMemoryRoute,
   getPublicThreadRoute,
+  getThreadBySlugRoute,
   getThreadRoute,
   listCustomRolesRoute,
   listMemoriesRoute,
@@ -576,6 +577,66 @@ export const getPublicThreadHandler: RouteHandler<typeof getPublicThreadRoute, A
 
     return Responses.ok(c, {
       thread,
+    });
+  },
+);
+
+export const getThreadBySlugHandler: RouteHandler<typeof getThreadBySlugRoute, ApiEnv> = createHandler(
+  {
+    auth: 'session',
+    validateParams: ThreadSlugParamSchema,
+    operationName: 'getThreadBySlug',
+  },
+  async (c) => {
+    const { user } = c.auth();
+    const { slug } = c.validated.params;
+    const db = await getDbAsync();
+
+    const thread = await db.query.chatThread.findFirst({
+      where: eq(tables.chatThread.slug, slug),
+    });
+
+    if (!thread) {
+      throw createError.notFound('Thread not found', createResourceNotFoundContext('thread', slug));
+    }
+
+    // Ownership check - user can only access their own threads
+    if (thread.userId !== user.id) {
+      throw createError.unauthorized(
+        'Not authorized to access this thread',
+        createAuthorizationErrorContext('thread', slug),
+      );
+    }
+
+    // Fetch participants (ordered by priority)
+    const participants = await db.query.chatParticipant.findMany({
+      where: eq(tables.chatParticipant.threadId, thread.id),
+      orderBy: [tables.chatParticipant.priority],
+    });
+
+    // Fetch messages (ordered by creation time)
+    const messages = await db.query.chatMessage.findMany({
+      where: eq(tables.chatMessage.threadId, thread.id),
+      orderBy: [tables.chatMessage.createdAt],
+    });
+
+    // Fetch attached memories via junction table
+    const threadMemories = await db.query.chatThreadMemory.findMany({
+      where: eq(tables.chatThreadMemory.threadId, thread.id),
+      with: {
+        memory: true, // Include the full memory object
+      },
+    });
+
+    // Extract just the memory objects from the junction records
+    const memories = threadMemories.map(tm => tm.memory);
+
+    // Return everything in one response (same pattern as getThreadHandler)
+    return Responses.ok(c, {
+      thread,
+      participants,
+      messages,
+      memories,
     });
   },
 );

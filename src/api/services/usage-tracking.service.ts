@@ -54,9 +54,9 @@ async function ensureUserUsageRecord(userId: string): Promise<typeof tables.user
         messagesCreated: 0,
         messagesLimit: 20, // Free tier default
         memoriesCreated: 0,
-        memoriesLimit: 0, // Free tier default - no memories
+        memoriesLimit: 5, // Free tier default - basic memories
         customRolesCreated: 0,
-        customRolesLimit: 0, // Free tier default - no custom roles
+        customRolesLimit: 5, // Free tier default - basic custom roles
         subscriptionTier: 'free',
         isAnnual: false,
         createdAt: now,
