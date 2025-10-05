@@ -81,8 +81,10 @@ class OpenRouterService {
   /**
    * Get initialized OpenRouter client
    * Throws if not initialized
+   *
+   * Public for advanced use cases like custom streaming patterns
    */
-  private getClient(): ReturnType<typeof createOpenRouter> {
+  public getClient(): ReturnType<typeof createOpenRouter> {
     if (!this.client) {
       const context: ErrorContext = {
         errorType: 'configuration',
@@ -101,6 +103,10 @@ class OpenRouterService {
     const model = getModelById(modelId);
 
     if (!model) {
+      apiLogger.error('Model not found in configuration', {
+        requestedModelId: modelId,
+      });
+
       const context: ErrorContext = {
         errorType: 'resource',
         resource: 'model',
@@ -141,11 +147,17 @@ class OpenRouterService {
     const client = this.getClient();
     const modelConfig = this.getModelConfig(params.modelId);
 
+    // Build system prompt with plain text enforcement
+    const plainTextInstruction = 'IMPORTANT: You must respond ONLY in plain text. Do NOT use Markdown, HTML, or any markup language. Do NOT use formatting like **bold**, *italic*, `code`, or [links]. Write naturally as if speaking in a conversation. Use simple punctuation and line breaks only.';
+    const systemPrompt = params.system
+      ? `${plainTextInstruction}\n\n${params.system}`
+      : plainTextInstruction;
+
     try {
       const result = await generateText({
         model: client.chat(modelConfig.modelId),
         messages: convertToModelMessages(params.messages),
-        system: params.system,
+        system: systemPrompt,
         temperature: params.temperature ?? modelConfig.defaultSettings.temperature,
         maxOutputTokens: params.maxTokens ?? modelConfig.defaultSettings.maxTokens,
         topP: params.topP ?? modelConfig.defaultSettings.topP,
@@ -249,11 +261,17 @@ class OpenRouterService {
     const client = this.getClient();
     const modelConfig = this.getModelConfig(params.modelId);
 
+    // Build system prompt with plain text enforcement
+    const plainTextInstruction = 'IMPORTANT: You must respond ONLY in plain text. Do NOT use Markdown, HTML, or any markup language. Do NOT use formatting like **bold**, *italic*, `code`, or [links]. Write naturally as if speaking in a conversation. Use simple punctuation and line breaks only.';
+    const systemPrompt = params.system
+      ? `${plainTextInstruction}\n\n${params.system}`
+      : plainTextInstruction;
+
     try {
       const result = streamText({
         model: client.chat(modelConfig.modelId),
         messages: convertToModelMessages(params.messages),
-        system: params.system,
+        system: systemPrompt,
         temperature: params.temperature ?? modelConfig.defaultSettings.temperature,
         topP: params.topP ?? modelConfig.defaultSettings.topP,
         onFinish: params.onFinish
@@ -286,7 +304,7 @@ class OpenRouterService {
 
   /**
    * Orchestrate multiple models in a conversation
-   * Each participant responds in priority order
+   * Each participant responds in priority order with full awareness of other participants
    * Uses AI SDK v5 UIMessage format
    */
   async orchestrateMultiModel(
@@ -319,6 +337,9 @@ class OpenRouterService {
     // Build mode-specific system context
     const modeContext = this.getModeSystemContext(mode);
 
+    // Build collaborative context describing all participants
+    const collaborativeContext = this.buildCollaborativeContext(sortedParticipants, mode);
+
     const results: Array<{
       participantId: string;
       modelId: string;
@@ -341,6 +362,8 @@ class OpenRouterService {
         role: participant.role,
         mode,
         modeContext,
+        collaborativeContext,
+        participantCount: sortedParticipants.length,
         customPrompt: participant.systemPrompt,
       });
 
@@ -404,18 +427,41 @@ class OpenRouterService {
   // ============================================================================
 
   /**
+   * Plain text instruction to enforce plain text responses
+   * Used across all AI interactions
+   */
+  private readonly PLAIN_TEXT_INSTRUCTION = 'IMPORTANT: You must respond ONLY in plain text. Do NOT use Markdown, HTML, or any markup language. Do NOT use formatting like **bold**, *italic*, `code`, or [links]. Write naturally as if speaking in a conversation. Use simple punctuation and line breaks only.';
+
+  /**
    * Build system prompt for a participant based on role and mode
+   * Now includes collaborative awareness of other participants
    */
   private buildSystemPrompt(params: {
     role?: string | null;
     mode: 'analyzing' | 'brainstorming' | 'debating' | 'solving';
     modeContext: string;
+    collaborativeContext?: string;
+    participantCount?: number;
     customPrompt?: string;
   }): string {
     const parts: string[] = [];
 
-    // Add role context if role is provided
-    if (params.role) {
+    // CRITICAL: Enforce plain text responses only
+    parts.push(this.PLAIN_TEXT_INSTRUCTION);
+
+    // Add collaborative awareness header
+    if (params.participantCount && params.participantCount > 1) {
+      const roleText = params.role ? `as "${params.role}"` : '';
+      parts.push(`You are participating ${roleText} in a multi-AI collaborative discussion with ${params.participantCount} AI participants total.`);
+
+      // Add collaborative context showing other participants
+      if (params.collaborativeContext) {
+        parts.push(params.collaborativeContext);
+      }
+
+      // Add round-based discussion awareness
+      parts.push(`This is a round-based collaborative discussion where each AI participant contributes in turn. You will see responses from other AI participants and should build upon, challenge, or complement their ideas as appropriate for the ${params.mode} mode.`);
+    } else if (params.role) {
       parts.push(`You are "${params.role}" in a collaborative AI discussion.`);
     }
 
@@ -434,6 +480,33 @@ class OpenRouterService {
     }
 
     return parts.join('\n\n');
+  }
+
+  /**
+   * Build collaborative context describing all participants
+   * Makes each AI aware of other participants in the discussion
+   */
+  private buildCollaborativeContext(
+    participants: Array<{
+      participantId: string;
+      modelId: string;
+      role?: string | null;
+      priority: number;
+    }>,
+    mode: string,
+  ): string {
+    if (participants.length <= 1) {
+      return '';
+    }
+
+    const participantDescriptions = participants.map((p, index) => {
+      const modelInfo = getModelById(p.modelId);
+      const modelName = modelInfo?.name || p.modelId;
+      const roleText = p.role ? `"${p.role}"` : 'an AI participant';
+      return `${index + 1}. ${roleText} (${modelName})`;
+    }).join('\n');
+
+    return `**Collaborative Team:**\nYou are working with the following AI participants:\n${participantDescriptions}\n\nYou are all working together in ${mode} mode. Be aware of each other's contributions and respond accordingly. Reference other participants' ideas when building on them or presenting alternative perspectives.`;
   }
 
   /**

@@ -3,7 +3,6 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { ArrowUp, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
-import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import type { KeyboardEventHandler } from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -54,8 +53,12 @@ type ChatInputFormData = z.infer<typeof chatInputSchema>;
 
 type ChatInputProps = {
   className?: string;
-  onThreadCreated?: (threadId: string) => void;
+  onThreadCreated?: (threadId: string, threadSlug: string, firstMessage: string) => void;
   autoFocus?: boolean;
+  disabled?: boolean;
+  initialMessage?: string;
+  initialMode?: 'brainstorming' | 'analyzing' | 'debating' | 'solving';
+  initialParticipants?: ParticipantConfig[];
 };
 
 // ============================================================================
@@ -75,21 +78,30 @@ type ChatInputProps = {
  * Design inspired by modern AI chat interfaces
  * Following patterns from /docs/frontend-patterns.md
  */
-export function ChatInput({ className, onThreadCreated, autoFocus = false }: ChatInputProps) {
+export function ChatInput({
+  className,
+  onThreadCreated,
+  autoFocus = false,
+  disabled = false,
+  initialMessage = '',
+  initialMode = 'brainstorming',
+  initialParticipants,
+}: ChatInputProps) {
   const t = useTranslations();
-  const router = useRouter();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [isFocused, setIsFocused] = useState(false);
 
-  // Advanced configuration state - start with default model (no role)
-  const [participants, setParticipants] = useState<ParticipantConfig[]>([
-    {
-      id: 'participant-default',
-      modelId: 'anthropic/claude-sonnet-4.1', // Claude Sonnet 4.5 - matches models-config.ts
-      role: '', // No role by default
-      order: 0,
-    },
-  ]);
+  // Advanced configuration state - use initialParticipants if provided, otherwise default
+  const [participants, setParticipants] = useState<ParticipantConfig[]>(
+    initialParticipants || [
+      {
+        id: 'participant-default',
+        modelId: 'anthropic/claude-3.5-sonnet', // Claude 3.5 Sonnet - matches models-config.ts
+        role: '', // No role by default
+        order: 0,
+      },
+    ],
+  );
   const [selectedMemoryIds, setSelectedMemoryIds] = useState<string[]>([]);
 
   const createThreadMutation = useCreateThreadMutation();
@@ -104,17 +116,42 @@ export function ChatInput({ className, onThreadCreated, autoFocus = false }: Cha
   } = useForm<ChatInputFormData>({
     resolver: zodResolver(chatInputSchema),
     defaultValues: {
-      message: '',
-      mode: 'brainstorming',
+      message: initialMessage,
+      mode: initialMode,
     },
     mode: 'onChange', // Enable onChange mode for real-time validation
   });
+
+  // Update form values when initial props change
+  useEffect(() => {
+    if (initialMessage) {
+      setValue('message', initialMessage);
+      // Auto-resize textarea
+      if (textareaRef.current) {
+        textareaRef.current.style.height = 'auto';
+        textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
+      }
+    }
+  }, [initialMessage, setValue]);
+
+  useEffect(() => {
+    if (initialMode) {
+      setValue('mode', initialMode);
+    }
+  }, [initialMode, setValue]);
+
+  // Update participants when initialParticipants change
+  useEffect(() => {
+    if (initialParticipants && initialParticipants.length > 0) {
+      setParticipants(initialParticipants);
+    }
+  }, [initialParticipants]);
 
   const messageValue = watch('message');
   const modeValue = watch('mode');
   const isSubmitting = createThreadMutation.isPending;
   const hasMessage = Boolean(messageValue && messageValue.trim().length > 0);
-  const isDisabled = isSubmitting || !hasMessage;
+  const isDisabled = disabled || isSubmitting || !hasMessage;
 
   // Merge refs callback for textarea (RHF ref + our ref for auto-resize)
   const mergeTextareaRefs = useCallback((element: HTMLTextAreaElement | null) => {
@@ -174,11 +211,10 @@ export function ChatInput({ className, onThreadCreated, autoFocus = false }: Cha
         reset();
         const thread = result.data.thread;
 
+        // Call parent callback with thread details - parent handles navigation
         if (onThreadCreated) {
-          onThreadCreated(thread.id);
+          onThreadCreated(thread.id, thread.slug, data.message);
         }
-
-        router.push(`/chat/${thread.slug}`);
 
         toast({
           title: t('notifications.success.createSuccess'),
@@ -221,13 +257,13 @@ export function ChatInput({ className, onThreadCreated, autoFocus = false }: Cha
       )}
 
       <form onSubmit={handleSubmit(onSubmit)}>
-        {/* Main Input Container */}
+        {/* Main Input Container - Glassmorphism */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3, ease: [0.25, 0.1, 0.25, 1] }}
           className={cn(
-            'relative flex flex-col gap-2 rounded-3xl border bg-background shadow-sm transition-all duration-200 p-3',
+            'relative flex flex-col gap-2 rounded-3xl border backdrop-blur-xl bg-background/5 shadow-sm transition-all duration-200 p-3',
             isFocused
               ? 'border-ring ring-2 ring-ring/20'
               : 'border-input hover:border-ring/50',
@@ -238,7 +274,7 @@ export function ChatInput({ className, onThreadCreated, autoFocus = false }: Cha
             {...register('message')}
             ref={mergeTextareaRefs}
             placeholder={t('chat.input.placeholder')}
-            disabled={isSubmitting}
+            disabled={disabled || isSubmitting}
             onFocus={() => setIsFocused(true)}
             onBlur={() => setIsFocused(false)}
             onKeyDown={handleKeyDown}

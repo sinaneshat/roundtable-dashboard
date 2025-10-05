@@ -1,5 +1,6 @@
 import type { RouteHandler } from '@hono/zod-openapi';
-import { and, eq } from 'drizzle-orm';
+import { convertToModelMessages, createUIMessageStream, createUIMessageStreamResponse, streamText } from 'ai';
+import { and, eq, ne } from 'drizzle-orm';
 import { ulid } from 'ulid';
 
 import { createError } from '@/api/common/error-handling';
@@ -14,9 +15,9 @@ import type { ErrorContext } from '@/api/core';
 import { createHandler, Responses } from '@/api/core';
 import { CursorPaginationQuerySchema } from '@/api/core/schemas';
 import { apiLogger } from '@/api/middleware/hono-logger';
-import { openRouterService } from '@/api/services/openrouter.service';
+import { initializeOpenRouter, openRouterService } from '@/api/services/openrouter.service';
 import { generateUniqueSlug } from '@/api/services/slug-generator.service';
-import { autoGenerateThreadTitle } from '@/api/services/title-generator.service';
+import { generateTitleFromMessage } from '@/api/services/title-generator.service';
 import {
   enforceCustomRoleQuota,
   enforceMemoryQuota,
@@ -189,12 +190,16 @@ export const listThreadsHandler: RouteHandler<typeof listThreadsRoute, ApiEnv> =
     const db = await getDbAsync();
 
     // Fetch threads with cursor-based pagination (limit + 1 to check hasMore)
+    // Exclude deleted threads from the list (show active and archived only)
     const threads = await db.query.chatThread.findMany({
       where: buildCursorWhereWithFilters(
         tables.chatThread.updatedAt,
         query.cursor,
         'desc',
-        [eq(tables.chatThread.userId, user.id)],
+        [
+          eq(tables.chatThread.userId, user.id),
+          ne(tables.chatThread.status, 'deleted'), // Exclude deleted threads
+        ],
       ),
       orderBy: getCursorOrderBy(tables.chatThread.updatedAt, 'desc'),
       limit: query.limit + 1,
@@ -225,23 +230,22 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
     const body = c.validated.body;
     const db = await getDbAsync();
 
-    // Default title to "New Chat" (will be auto-generated from first message)
-    const title = body.title || 'New Chat';
-
-    // Generate unique slug from title
-    const slug = await generateUniqueSlug(title);
+    // Use temporary title - AI title will be generated asynchronously
+    // But generate slug from first message immediately for nice URLs
+    const tempTitle = 'New Chat';
+    const tempSlug = await generateUniqueSlug(body.firstMessage);
 
     const threadId = ulid();
     const now = new Date();
 
-    // Create thread
+    // Create thread with temporary title (will be updated asynchronously)
     const [thread] = await db
       .insert(tables.chatThread)
       .values({
         id: threadId,
         userId: user.id,
-        title,
-        slug,
+        title: tempTitle,
+        slug: tempSlug,
         mode: body.mode || 'brainstorming',
         status: 'active',
         isFavorite: false,
@@ -278,6 +282,18 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
         }
 
         const participantId = ulid();
+
+        // Only create settings object if at least one value is provided
+        // Use undefined to omit the field entirely when no settings exist
+        const hasSettings = systemPrompt || p.temperature !== undefined || p.maxTokens !== undefined;
+        const settingsValue = hasSettings
+          ? {
+              systemPrompt,
+              temperature: p.temperature,
+              maxTokens: p.maxTokens,
+            }
+          : undefined;
+
         const [participant] = await db
           .insert(tables.chatParticipant)
           .values({
@@ -288,11 +304,7 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
             role: p.role,
             priority: index, // Array order determines priority
             isEnabled: true,
-            settings: {
-              systemPrompt,
-              temperature: p.temperature,
-              maxTokens: p.maxTokens,
-            },
+            ...(settingsValue !== undefined && { settings: settingsValue }),
             createdAt: now,
             updatedAt: now,
           })
@@ -308,73 +320,52 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
       .values({
         id: userMessageId,
         threadId,
-        participantId: null,
+        // Don't include participantId - let it default to null (user messages have no participant)
         role: 'user',
         content: body.firstMessage,
         createdAt: now,
       })
       .returning();
 
-    // Auto-generate thread title from first message in background
-    autoGenerateThreadTitle(threadId, body.firstMessage, c.env).catch((error) => {
-      apiLogger.error('Failed to auto-generate thread title', {
-        threadId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-    });
-
-    // Build conversation context for AI responses using UIMessage format
-    const conversationMessages = buildUIMessages([
-      {
-        id: `msg-${ulid()}`,
-        role: 'user' as const,
-        content: body.firstMessage,
-      },
-    ]);
-
-    // Orchestrate multi-model responses using initialized OpenRouter service
-    const orchestrationResults = await openRouterService.orchestrateMultiModel(
-      participants.map(p => ({
-        participantId: p!.id,
-        modelId: p!.modelId,
-        role: p!.role,
-        priority: p!.priority,
-        systemPrompt: p!.settings?.systemPrompt,
-        temperature: p!.settings?.temperature,
-        maxTokens: p!.settings?.maxTokens,
-      })),
-      conversationMessages,
-      thread!.mode,
-    );
-
-    // Save assistant messages
-    const assistantMessages = await Promise.all(
-      orchestrationResults.map(async (result) => {
-        const messageId = ulid();
-        const [message] = await db
-          .insert(tables.chatMessage)
-          .values({
-            id: messageId,
-            threadId,
-            participantId: result.participantId,
-            role: 'assistant',
-            content: result.text,
-            metadata: {
-              model: result.modelId,
-              finishReason: result.finishReason,
-              usage: result.usage,
-            },
-            createdAt: now,
-          })
-          .returning();
-        return message;
-      }),
-    );
-
     // Increment usage counters AFTER successful creation
+    // AI responses will be generated through the streaming endpoint
     await incrementThreadUsage(user.id);
-    const totalMessagesCreated = 1 + assistantMessages.length;
-    await incrementMessageUsage(user.id, totalMessagesCreated);
+    await incrementMessageUsage(user.id, 1); // Only the user message for now
+
+    // Generate AI title asynchronously in background
+    // This won't block the response, allowing immediate navigation with temp title
+    // Fire-and-forget pattern (no await) - runs in background
+    (async () => {
+      try {
+        // Generate AI title from first message
+        const aiTitle = await generateTitleFromMessage(body.firstMessage, c.env);
+
+        // Update thread with AI-generated title ONLY
+        // IMPORTANT: Don't update slug - it must remain immutable to prevent 404s
+        // The slug was already generated at creation time and users may have bookmarked it
+        await db
+          .update(tables.chatThread)
+          .set({
+            title: aiTitle,
+            updatedAt: new Date(),
+          })
+          .where(eq(tables.chatThread.id, threadId));
+
+        apiLogger.info('Thread title updated asynchronously', {
+          threadId,
+          title: aiTitle,
+        });
+      } catch (error) {
+        // Log error but don't fail the request since thread is already created
+        apiLogger.error('Failed to generate async title for thread', {
+          threadId,
+          error: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined,
+        });
+      }
+    })().catch(() => {
+      // Suppress unhandled rejection warnings
+    });
 
     // Attach memories to thread via junction table if provided
     if (body.memoryIds && body.memoryIds.length > 0) {
@@ -415,11 +406,12 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
       );
     }
 
-    // Return thread with participants and messages
+    // Return thread with participants and first user message
+    // AI responses will be generated via the streaming endpoint
     return Responses.ok(c, {
       thread,
       participants,
-      messages: [userMessage, ...assistantMessages],
+      messages: [userMessage],
     });
   },
 );
@@ -804,10 +796,10 @@ export const sendMessageHandler: RouteHandler<typeof sendMessageRoute, ApiEnv> =
       .values({
         id: userMessageId,
         threadId: id,
-        participantId: null,
+        // Don't include participantId - let it default to null (user messages have no participant)
         role: 'user',
         content: body.content,
-        parentMessageId: body.parentMessageId,
+        ...(body.parentMessageId && { parentMessageId: body.parentMessageId }),
         createdAt: now,
       })
       .returning();
@@ -819,19 +811,8 @@ export const sendMessageHandler: RouteHandler<typeof sendMessageRoute, ApiEnv> =
       limit: 10, // Last 10 messages for context
     });
 
-    // Auto-generate thread title from first user message (like ChatGPT)
-    // Only generate if this is the first message and thread has default title
-    const isFirstMessage = previousMessages.length === 1; // Only the message we just created
-    if (isFirstMessage && thread.title === 'New Chat') {
-      // Generate title in background (don't block response)
-      autoGenerateThreadTitle(id, body.content, c.env).catch((error) => {
-        // Log error but don't fail the request
-        apiLogger.error('Failed to auto-generate thread title', {
-          threadId: id,
-          error: error instanceof Error ? error.message : String(error),
-        });
-      });
-    }
+    // Title is already generated during thread creation
+    // No need to auto-generate here
 
     // Build conversation context using UIMessage format
     const conversationMessages = buildUIMessages([
@@ -909,8 +890,16 @@ export const sendMessageHandler: RouteHandler<typeof sendMessageRoute, ApiEnv> =
 );
 
 /**
- * Stream chat handler using AI SDK v5
- * Streams AI responses token-by-token for real-time UX using built-in streaming
+ * Stream chat handler using AI SDK v5 Message Persistence Pattern
+ * Reference: https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot-message-persistence
+ *
+ * Pattern:
+ * 1. Receive last message from frontend
+ * 2. Load previous messages from database
+ * 3. Combine and validate messages
+ * 4. Stream responses from each participant sequentially
+ * 5. Save messages to database in onFinish
+ * 6. Generate and update title if needed
  */
 export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = createHandler(
   {
@@ -921,91 +910,471 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
   },
   async (c) => {
     const { user } = c.auth();
-    const { id } = c.validated.params;
     const body = c.validated.body;
     const db = await getDbAsync();
 
+    // AI SDK v5 Pattern: Thread ID comes from request body
+    const threadId = body.id;
+    const lastMessage = body.message;
+
     // Verify thread ownership and get thread details with participants
-    const thread = await verifyThreadOwnership(id, user.id, db, { includeParticipants: true });
+    const thread = await verifyThreadOwnership(threadId, user.id, db, { includeParticipants: true });
 
     if (thread.participants.length === 0) {
       throw createError.badRequest('No enabled participants in this thread');
     }
 
-    // Enforce message quota
-    await enforceMessageQuota(user.id);
-
-    // Get previous messages for context (last 10 messages)
+    // AI SDK v5 Pattern: Load previous messages from database
     const previousMessages = await db.query.chatMessage.findMany({
-      where: eq(tables.chatMessage.threadId, id),
+      where: eq(tables.chatMessage.threadId, threadId),
       orderBy: [tables.chatMessage.createdAt],
-      limit: 10,
     });
 
-    // Create user message ID upfront
-    const userMessageId = ulid();
+    // Determine the scenario:
+    // 1. New message: lastMessage is provided
+    // 2. Regenerate: lastMessage is undefined, trigger is 'regenerate-assistant-message'
+    // 3. Auto-trigger: lastMessage is undefined, no trigger (page load with only user message)
+    const trigger = body.trigger;
+    const isRegenerate = trigger === 'regenerate-assistant-message';
+    const isAutoTrigger = !lastMessage && !isRegenerate;
 
-    // Save user message to database immediately
-    await db.insert(tables.chatMessage).values({
-      id: userMessageId,
-      threadId: id,
-      participantId: null,
-      role: 'user',
-      content: body.content,
-      parentMessageId: body.parentMessageId,
-      createdAt: new Date(),
-    });
+    let messages: Array<{ id: string; role: 'user' | 'assistant'; content: string }>;
+    let isNewMessage = false;
 
-    // Auto-generate thread title if first message
-    if (previousMessages.length === 0 && thread.title === 'New Chat') {
-      autoGenerateThreadTitle(id, body.content, c.env).catch((error) => {
-        apiLogger.error('Failed to auto-generate thread title', {
-          threadId: id,
-          error: error instanceof Error ? error.message : String(error),
-        });
+    if (lastMessage) {
+      // Scenario 1: New message from user
+      const userMessageContent = lastMessage.parts
+        .filter(part => part.type === 'text')
+        .map(part => part.text)
+        .join('');
+
+      if (userMessageContent.trim().length === 0) {
+        throw createError.badRequest('User message content is empty');
+      }
+
+      // Enforce message quota
+      await enforceMessageQuota(user.id);
+
+      // Save user message to database
+      const userMessageId = lastMessage.id;
+      await db.insert(tables.chatMessage).values({
+        id: userMessageId,
+        threadId,
+        // Don't include participantId - let it default to null (user messages have no participant)
+        role: 'user',
+        content: userMessageContent,
+        // Don't include parentMessageId - let it default to null
+        createdAt: new Date(),
       });
-    }
 
-    // Build UI messages from database messages + new user message
-    const uiMessages = buildUIMessages([
-      ...previousMessages.map(msg => ({
+      // Combine previous messages with new message
+      messages = [
+        ...previousMessages.map(msg => ({
+          id: msg.id,
+          role: msg.role as 'user' | 'assistant',
+          content: msg.content,
+        })),
+        {
+          id: userMessageId,
+          role: 'user' as const,
+          content: userMessageContent,
+        },
+      ];
+      isNewMessage = true;
+    } else if (isRegenerate) {
+      // Scenario 2: Regenerate assistant message
+      const messageId = body.messageId;
+      if (messageId) {
+        const messageIndex = previousMessages.findIndex(m => m.id === messageId);
+        if (messageIndex !== -1) {
+          messages = previousMessages.slice(0, messageIndex).map(msg => ({
+            id: msg.id,
+            role: msg.role as 'user' | 'assistant',
+            content: msg.content,
+          }));
+        } else {
+          messages = previousMessages.map(msg => ({
+            id: msg.id,
+            role: msg.role as 'user' | 'assistant',
+            content: msg.content,
+          }));
+        }
+      } else {
+        // Remove last assistant message
+        const lastAssistantIndex = previousMessages
+          .map((m, i) => ({
+            m,
+            i,
+          }))
+          .reverse()
+          .find(({ m }) => m.role === 'assistant')
+          ?.i;
+
+        if (lastAssistantIndex !== undefined) {
+          messages = previousMessages.slice(0, lastAssistantIndex).map(msg => ({
+            id: msg.id,
+            role: msg.role as 'user' | 'assistant',
+            content: msg.content,
+          }));
+        } else {
+          messages = previousMessages.map(msg => ({
+            id: msg.id,
+            role: msg.role as 'user' | 'assistant',
+            content: msg.content,
+          }));
+        }
+      }
+    } else if (isAutoTrigger) {
+      // Scenario 3: Auto-trigger (page load with only user message, no AI responses yet)
+      messages = previousMessages.map(msg => ({
         id: msg.id,
         role: msg.role as 'user' | 'assistant',
         content: msg.content,
+      }));
+
+      if (messages.length === 0) {
+        throw createError.badRequest('No messages to process for auto-trigger');
+      }
+    } else {
+      throw createError.badRequest('Invalid request: no message provided and no valid trigger');
+    }
+
+    // Build UI messages for AI SDK
+    const uiMessages = buildUIMessages(messages);
+
+    // Get enabled participants sorted by priority
+    const participants = thread.participants
+      .filter(p => p.isEnabled)
+      .sort((a, b) => a.priority - b.priority);
+
+    apiLogger.info('Participants loaded for streaming', {
+      threadId,
+      totalParticipants: thread.participants.length,
+      enabledParticipants: participants.length,
+      participants: participants.map(p => ({
+        id: p.id,
+        modelId: p.modelId,
+        priority: p.priority,
+        isEnabled: p.isEnabled,
       })),
-      {
-        id: userMessageId,
-        role: 'user' as const,
-        content: body.content,
-      },
-    ]);
+    });
 
-    // Use first enabled participant for streaming
-    const participant = thread.participants[0]!;
+    if (participants.length === 0) {
+      throw createError.badRequest('No enabled participants');
+    }
 
-    // Stream the response using OpenRouter service singleton (AI SDK v5)
-    return openRouterService.streamUIMessages({
-      modelId: participant.modelId,
-      messages: uiMessages,
-      system: participant.settings?.systemPrompt,
-      temperature: participant.settings?.temperature || 0.7,
-      onFinish: async ({ text }) => {
-        // Save assistant message to database
-        const assistantMessageId = ulid();
-        await db.insert(tables.chatMessage).values({
-          id: assistantMessageId,
-          threadId: id,
-          participantId: participant.id,
-          role: 'assistant',
-          content: text,
-          parentMessageId: null,
-          createdAt: new Date(),
+    // Single participant streaming
+    if (participants.length === 1) {
+      const participant = participants[0]!;
+
+      const streamingResponse = openRouterService.streamUIMessages({
+        modelId: participant.modelId,
+        messages: uiMessages,
+        system: participant.settings?.systemPrompt,
+        temperature: participant.settings?.temperature || 0.7,
+        onFinish: async ({ text, usage }) => {
+          try {
+            const assistantMessageId = ulid();
+            await db.insert(tables.chatMessage).values({
+              id: assistantMessageId,
+              threadId,
+              participantId: participant.id,
+              role: 'assistant',
+              content: text,
+              metadata: {
+                model: participant.modelId,
+                role: participant.role,
+                usage: usage ? { totalTokens: usage.totalTokens } : undefined,
+              },
+              // Don't include parentMessageId - let it default to null
+              createdAt: new Date(),
+            });
+
+            // Update usage tracking
+            const messagesToIncrement = isNewMessage ? 2 : 1; // User + Assistant or just Assistant
+            await incrementMessageUsage(user.id, messagesToIncrement);
+
+            // Update thread
+            await db
+              .update(tables.chatThread)
+              .set({
+                lastMessageAt: new Date(),
+                updatedAt: new Date(),
+              })
+              .where(eq(tables.chatThread.id, threadId));
+
+            // Generate title if needed
+            if (thread.title === 'New Chat' && messages.length > 0) {
+              const firstUserMessage = messages.find(m => m.role === 'user');
+              if (firstUserMessage) {
+                const generatedTitle = await generateTitleFromMessage(firstUserMessage.content, c.env);
+                await db
+                  .update(tables.chatThread)
+                  .set({ title: generatedTitle })
+                  .where(eq(tables.chatThread.id, threadId));
+              }
+            }
+          } catch (error) {
+            apiLogger.error('Failed to save streamed message', {
+              threadId,
+              participantId: participant.id,
+              error: error instanceof Error ? error.message : String(error),
+            });
+          }
+        },
+      });
+
+      return streamingResponse;
+    }
+
+    // Multiple participants: Stream each model's response sequentially
+    // AI SDK v5 Pattern: Use createUIMessageStream for sequential multi-participant responses
+    apiLogger.info('Multi-participant streaming initiated', {
+      threadId,
+      participantCount: participants.length,
+      participantModels: participants.map(p => p.modelId),
+    });
+
+    // Build system prompt for collaborative mode
+    const modeInstructions = {
+      analyzing: 'You are participating in a collaborative analysis session. Respond thoughtfully to build on previous insights.',
+      brainstorming: 'You are participating in a collaborative brainstorming session. Build creatively on others\' ideas.',
+      debating: 'You are participating in a structured debate. Engage critically with previous arguments.',
+      solving: 'You are participating in collaborative problem-solving. Build logically on previous solutions.',
+    };
+    const baseSystemPrompt = modeInstructions[thread.mode as keyof typeof modeInstructions];
+
+    // Create UI Message Stream following AI SDK v5 official patterns
+    // Following the multi-step streaming pattern from AI SDK v5 docs
+    // https://sdk.vercel.ai/docs/ai-sdk-core/generating-text#multi-step-streaming
+    const stream = createUIMessageStream({
+      originalMessages: uiMessages,
+      async execute({ writer }) {
+        const contextMessages = [...uiMessages];
+        const completedResponses: Array<{
+          participantId: string;
+          modelId: string;
+          role: string | null;
+          text: string;
+          usage?: { totalTokens: number };
+        }> = [];
+
+        // Get OpenRouter client
+        initializeOpenRouter(c.env);
+        const client = openRouterService.getClient();
+
+        // Stream each participant's response sequentially using REAL streaming
+        // Following AI SDK v5 official pattern: each model waits for previous to complete
+        // Each model sees all previous responses in the conversation context
+        for (let i = 0; i < participants.length; i++) {
+          const participant = participants[i]!; // Assert non-null since we're iterating by index
+
+          apiLogger.info('Starting participant stream', {
+            participantId: participant.id,
+            modelId: participant.modelId,
+            priority: participant.priority,
+            participantIndex: i,
+            totalParticipants: participants.length,
+            contextMessagesCount: contextMessages.length,
+          });
+
+          // Build system prompt with role awareness
+          let systemPrompt = baseSystemPrompt;
+          if (participant.role) {
+            systemPrompt += `\n\nYour assigned role: ${participant.role}`;
+          }
+          if (participant.settings?.systemPrompt) {
+            systemPrompt += `\n\n${participant.settings.systemPrompt}`;
+          }
+
+          // Add awareness of other participants
+          const otherParticipants = participants
+            .filter(p => p.id !== participant.id)
+            .map(p => `${p.modelId}${p.role ? ` (${p.role})` : ''}`)
+            .join(', ');
+          if (otherParticipants) {
+            systemPrompt += `\n\nOther participants in this conversation: ${otherParticipants}`;
+          }
+
+          // Add context awareness instruction
+          if (i > 0) {
+            systemPrompt += '\n\nIMPORTANT: Read and build upon the previous responses in this conversation. Add your unique perspective and insights.';
+          }
+
+          try {
+            // Stream this participant's response in REAL-TIME using streamText
+            // AI SDK v5 pattern: Each streamText call processes the full conversation history
+            const result = streamText({
+              model: client.chat(participant.modelId),
+              messages: convertToModelMessages(contextMessages),
+              system: systemPrompt,
+              temperature: participant.settings?.temperature || 0.7,
+            });
+
+            // AI SDK v5 CRITICAL PATTERN: Each model creates its own complete message
+            // Each toUIMessageStream() creates a new assistant message with its own ID
+            // Include participant metadata so frontend knows which model sent which message
+            writer.merge(result.toUIMessageStream({
+              messageMetadata: () => ({
+                participantId: participant.id,
+                model: participant.modelId,
+                role: participant.role,
+              }),
+            }));
+
+            // Wait for this participant's stream to FULLY complete before next one starts
+            // This is the key to sequential streaming - await each model's completion
+            const text = await result.text;
+            const usage = await result.usage;
+
+            apiLogger.info('Participant stream completed', {
+              participantId: participant.id,
+              modelId: participant.modelId,
+              textLength: text.length,
+              totalTokens: usage?.totalTokens,
+              remainingParticipants: participants.length - i - 1,
+            });
+
+            // Validate response is not empty - if empty, treat as error
+            if (!text || text.trim().length === 0) {
+              apiLogger.warn('Participant returned empty response', {
+                participantId: participant.id,
+                modelId: participant.modelId,
+                totalTokens: usage?.totalTokens,
+              });
+
+              // Write warning message to stream
+              const warningText = `[${participant.modelId}${participant.role ? ` (${participant.role})` : ''} returned an empty response]`;
+              const warningId = ulid();
+
+              writer.write({
+                type: 'text-delta',
+                id: warningId,
+                delta: warningText,
+              });
+
+              // Add to context so subsequent models know about the empty response
+              completedResponses.push({
+                participantId: participant.id,
+                modelId: participant.modelId,
+                role: participant.role,
+                text: warningText,
+              });
+
+              contextMessages.push({
+                id: warningId,
+                role: 'assistant',
+                parts: [{ type: 'text', text: warningText }],
+              });
+
+              // Continue to next participant
+              continue;
+            }
+
+            // Save to database after completion
+            const assistantMessageId = ulid();
+            await db.insert(tables.chatMessage).values({
+              id: assistantMessageId,
+              threadId,
+              participantId: participant.id,
+              role: 'assistant',
+              content: text,
+              metadata: {
+                model: participant.modelId,
+                role: participant.role,
+                usage: usage ? { totalTokens: usage.totalTokens } : undefined,
+              },
+              // Don't include parentMessageId - let it default to null
+              createdAt: new Date(),
+            });
+
+            // Store for context tracking
+            completedResponses.push({
+              participantId: participant.id,
+              modelId: participant.modelId,
+              role: participant.role,
+              text,
+              usage: usage?.totalTokens !== undefined ? { totalTokens: usage.totalTokens } : undefined,
+            });
+
+            // CRITICAL: Add this model's response to context for next model
+            // AI SDK v5 pattern: Build conversation history for sequential processing
+            // Next model will see this response and build upon it
+            contextMessages.push({
+              id: assistantMessageId,
+              role: 'assistant',
+              parts: [{ type: 'text', text }],
+            });
+          } catch (error) {
+            apiLogger.error('Participant streaming failed', {
+              participantId: participant.id,
+              modelId: participant.modelId,
+              error: error instanceof Error ? error.message : String(error),
+              stack: error instanceof Error ? error.stack : undefined,
+            });
+
+            // Write error message as a separate assistant message
+            // AI SDK v5 pattern: Use text-delta event for error messages
+            const errorText = `[Error: ${participant.modelId} failed to respond - ${error instanceof Error ? error.message : 'Unknown error'}]`;
+            const errorId = ulid();
+
+            // Write error as text delta
+            writer.write({
+              type: 'text-delta',
+              id: errorId,
+              delta: errorText,
+            });
+
+            // Add to context so subsequent models know about the error
+            completedResponses.push({
+              participantId: participant.id,
+              modelId: participant.modelId,
+              role: participant.role,
+              text: errorText,
+            });
+
+            contextMessages.push({
+              id: errorId,
+              role: 'assistant',
+              parts: [{ type: 'text', text: errorText }],
+            });
+          }
+        }
+
+        // Log completion of all participants
+        apiLogger.info('All participants completed', {
+          totalParticipants: participants.length,
+          completedCount: completedResponses.length,
+          participantIds: completedResponses.map(r => r.participantId),
         });
 
-        // Increment usage tracking (1 user message already saved + 1 assistant)
-        await incrementMessageUsage(user.id, 1); // Only count assistant message (user already counted)
+        // Update usage and thread after all participants complete
+        const totalMessages = isNewMessage ? completedResponses.length + 1 : completedResponses.length;
+        await incrementMessageUsage(user.id, totalMessages);
+        await db
+          .update(tables.chatThread)
+          .set({
+            lastMessageAt: new Date(),
+            updatedAt: new Date(),
+          })
+          .where(eq(tables.chatThread.id, threadId));
+
+        // Generate title if needed
+        if (thread.title === 'New Chat' && messages.length > 0) {
+          const firstUserMessage = messages.find(m => m.role === 'user');
+          if (firstUserMessage) {
+            const generatedTitle = await generateTitleFromMessage(firstUserMessage.content, c.env);
+            await db
+              .update(tables.chatThread)
+              .set({ title: generatedTitle })
+              .where(eq(tables.chatThread.id, threadId));
+          }
+        }
       },
     });
+
+    // Use createUIMessageStreamResponse following AI SDK v5 official pattern
+    return createUIMessageStreamResponse({ stream });
   },
 );
 

@@ -6,6 +6,7 @@ import {
   createCursorPaginatedResponseSchema,
   CursorPaginationQuerySchema,
 } from '@/api/core/schemas';
+import { isValidModelId } from '@/lib/ai/models-config';
 
 // ============================================================================
 // Path Parameter Schemas
@@ -54,8 +55,8 @@ const ChatParticipantSchema = z.object({
     example: 'thread_abc123',
   }),
   modelId: z.string().openapi({
-    description: 'Model ID (e.g., claude-sonnet-4.1, gpt-5)',
-    example: 'claude-sonnet-4.1',
+    description: 'Model ID (e.g., anthropic/claude-3.5-sonnet, openai/gpt-4o)',
+    example: 'anthropic/claude-3.5-sonnet',
   }),
   role: z.string().openapi({
     description: 'Assigned role for this model',
@@ -204,8 +205,10 @@ export const CreateThreadRequestSchema = z.object({
     example: 'brainstorming',
   }),
   participants: z.array(z.object({
-    modelId: z.string().openapi({
-      description: 'Model ID (e.g., anthropic/claude-3.5-sonnet)',
+    modelId: z.string().refine(isValidModelId, {
+      message: 'Invalid model ID. Must be a valid model from AI configuration.',
+    }).openapi({
+      description: 'Model ID (e.g., anthropic/claude-3.5-sonnet, openai/gpt-4o)',
       example: 'anthropic/claude-3.5-sonnet',
     }),
     role: z.string().optional().openapi({
@@ -304,9 +307,11 @@ export const ThreadDetailResponseSchema = createApiResponseSchema(ThreadDetailPa
 // ============================================================================
 
 export const AddParticipantRequestSchema = z.object({
-  modelId: z.string().min(1).openapi({
-    description: 'Model ID to add',
-    example: 'claude-sonnet-4.1',
+  modelId: z.string().min(1).refine(isValidModelId, {
+    message: 'Invalid model ID. Must be a valid model from AI configuration.',
+  }).openapi({
+    description: 'Model ID to add (e.g., anthropic/claude-3.5-sonnet, openai/gpt-4o)',
+    example: 'anthropic/claude-3.5-sonnet',
   }),
   role: z.string().min(1).max(100).openapi({
     description: 'Assigned role',
@@ -382,17 +387,38 @@ export const SendMessageRequestSchema = z.object({
 }).openapi('SendMessageRequest');
 
 /**
- * Streaming chat request schema
- * Used for streaming AI responses via Server-Sent Events
+ * Streaming chat request schema - AI SDK v5 Message Persistence Pattern
+ * Following official AI SDK v5 chatbot message persistence pattern:
+ * https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot-message-persistence
+ *
+ * Frontend sends only the last message, backend loads previous messages from DB
+ * For auto-trigger/regenerate, message is optional
  */
 export const StreamChatRequestSchema = z.object({
-  content: z.string().min(1).openapi({
-    description: 'User message content for streaming response',
-    example: 'What are some innovative product ideas for sustainability?',
+  // Thread ID for loading previous messages from database
+  id: z.string().openapi({
+    description: 'Thread ID - used to load conversation history from database',
+    example: 'thread_abc123',
   }),
-  parentMessageId: z.string().optional().openapi({
-    description: 'Parent message ID for threading',
-    example: 'msg_parent123',
+  // Last user message from frontend (AI SDK v5 UIMessage format)
+  // Optional for regenerate/auto-trigger scenarios
+  message: z.object({
+    id: z.string(),
+    role: z.enum(['user', 'assistant']),
+    // Parts can be text, tool-call, tool-result, file, etc.
+    parts: z.array(z.object({
+      type: z.string(),
+    }).passthrough()),
+  }).passthrough().optional().openapi({
+    description: 'Last message from frontend (AI SDK v5 UIMessage format). Optional for auto-trigger/regenerate.',
+  }),
+  // Optional trigger for regeneration
+  trigger: z.string().optional().openapi({
+    description: 'Trigger type from AI SDK v5 (e.g., "submit-user-message", "regenerate-assistant-message")',
+  }),
+  // Optional message ID for regeneration
+  messageId: z.string().optional().openapi({
+    description: 'Message ID for regeneration (used with regenerate trigger)',
   }),
 }).openapi('StreamChatRequest');
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { MoreHorizontal, Star } from 'lucide-react';
+import { Globe, Loader2, Lock, MoreHorizontal, Star, Trash2 } from 'lucide-react';
 import { motion } from 'motion/react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -23,20 +23,77 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from '@/components/ui/sidebar';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import type { Chat, ChatGroup } from '@/lib/types/chat';
+import { cn } from '@/lib/ui/cn';
 
 type ChatListProps = {
   chatGroups: ChatGroup[];
   favorites: Chat[];
   onDeleteChat: (chatId: string) => void;
   onToggleFavorite: (chatId: string) => void;
+  onTogglePublic?: (chatId: string) => void;
   searchTerm: string;
+  deletingChatId?: string | null;
+  favoritingChatId?: string | null;
+  updatingPublicChatId?: string | null;
 };
 
 type StickyHeaderProps = {
   children: React.ReactNode;
   zIndex?: number;
 };
+
+// Stable default value to avoid infinite render loop
+const EMPTY_FAVORITES: Chat[] = [];
+
+// Truncate text based on max width - pure function to avoid Rules of Hooks violations in map()
+function truncateText(text: string, maxWidth: number): string {
+  // Create a temporary canvas for measuring text (client-side only)
+  if (typeof window === 'undefined') {
+    return text;
+  }
+
+  const canvas = document.createElement('canvas');
+  const context = canvas.getContext('2d');
+  if (!context) {
+    return text;
+  }
+
+  // Match the font style from sidebar
+  context.font = '14px Inter, system-ui, sans-serif';
+
+  const textWidth = context.measureText(text).width;
+
+  if (textWidth <= maxWidth) {
+    return text;
+  }
+
+  // Binary search for optimal truncation point
+  let left = 0;
+  let right = text.length;
+  let result = text;
+
+  while (left < right) {
+    const mid = Math.floor((left + right + 1) / 2);
+    const testText = `${text.slice(0, mid)}...`;
+    const testWidth = context.measureText(testText).width;
+
+    if (testWidth <= maxWidth) {
+      result = testText;
+      left = mid;
+    } else {
+      right = mid - 1;
+    }
+  }
+
+  return result;
+}
 
 function StickyHeader({ children, zIndex = 10 }: StickyHeaderProps) {
   const headerRef = useRef<HTMLDivElement>(null);
@@ -63,62 +120,123 @@ function StickyHeader({ children, zIndex = 10 }: StickyHeaderProps) {
   );
 }
 
-export function ChatList({ chatGroups, favorites = [], onDeleteChat, onToggleFavorite, searchTerm = '' }: ChatListProps) {
+export function ChatList({
+  chatGroups,
+  favorites = EMPTY_FAVORITES,
+  onDeleteChat,
+  onToggleFavorite,
+  onTogglePublic,
+  searchTerm = '',
+  deletingChatId,
+  favoritingChatId,
+  updatingPublicChatId,
+}: ChatListProps) {
   const { isMobile } = useSidebar();
   const pathname = usePathname();
   const t = useTranslations('chat');
 
-  const renderChatItem = (chat: Chat, index: number) => {
+  const renderChatItem = (chat: Chat) => {
     const chatUrl = `/chat/${chat.slug}`;
     const isActive = pathname === chatUrl;
+    const isDeleting = deletingChatId === chat.id;
+    const isFavoriting = favoritingChatId === chat.id;
+    const isUpdatingPublic = updatingPublicChatId === chat.id;
+    const isLoading = isDeleting || isFavoriting || isUpdatingPublic;
+
+    // Truncate text based on sidebar width (16rem = 256px)
+    // Account for padding, margins, and action button (~160px available for text)
+    const truncatedTitle = truncateText(chat.title, 160);
+    const isTruncated = truncatedTitle !== chat.title;
+
     return (
-      <motion.div
-        key={chat.id}
-        initial={{ opacity: 0, y: -4 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{
-          type: 'spring',
-          stiffness: 400,
-          damping: 35,
-          delay: index * 0.03,
-        }}
-      >
-        <SidebarMenuItem>
-          <SidebarMenuButton
-            asChild
-            isActive={isActive}
-            tooltip={chat.title}
-            className="group-has-[[data-state=open]]/menu-item:bg-sidebar-accent"
-          >
-            <Link href={chatUrl}>
-              <span className="truncate">{chat.title}</span>
-            </Link>
-          </SidebarMenuButton>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <SidebarMenuAction showOnHover>
-                <MoreHorizontal className="size-4" />
-                <span className="sr-only">More</span>
-              </SidebarMenuAction>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent
-              side={isMobile ? 'bottom' : 'right'}
-              align={isMobile ? 'end' : 'start'}
-            >
-              <DropdownMenuItem onClick={() => onToggleFavorite(chat.id)}>
-                <span>{chat.isFavorite ? t('removeFromFavorites') : t('addToFavorites')}</span>
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onClick={() => onDeleteChat(chat.id)}
-                className="text-destructive focus:text-destructive"
+      <SidebarMenuItem key={chat.id}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <SidebarMenuButton asChild isActive={isActive} disabled={isLoading}>
+              <Link
+                href={chatUrl}
+                className={cn(
+                  isLoading && 'pointer-events-none opacity-60',
+                )}
               >
-                <span>{t('deleteChat')}</span>
+                <span>{truncatedTitle}</span>
+              </Link>
+            </SidebarMenuButton>
+          </TooltipTrigger>
+          {isTruncated && (
+            <TooltipContent side="right" className="max-w-xs">
+              <p>{chat.title}</p>
+            </TooltipContent>
+          )}
+        </Tooltip>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <SidebarMenuAction showOnHover disabled={isLoading}>
+              {isLoading
+                ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  )
+                : (
+                    <MoreHorizontal className="size-4" />
+                  )}
+              <span className="sr-only">More</span>
+            </SidebarMenuAction>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent
+            className="w-48 rounded-lg"
+            side={isMobile ? 'bottom' : 'right'}
+            align={isMobile ? 'end' : 'start'}
+          >
+            <DropdownMenuItem
+              onClick={() => onToggleFavorite(chat.id)}
+              disabled={isFavoriting}
+            >
+              {isFavoriting
+                ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  )
+                : (
+                    <Star className={chat.isFavorite ? 'size-4 fill-yellow-500 text-yellow-500' : 'size-4'} />
+                  )}
+              <span>{chat.isFavorite ? t('removeFromFavorites') : t('addToFavorites')}</span>
+            </DropdownMenuItem>
+            {onTogglePublic && (
+              <DropdownMenuItem
+                onClick={() => onTogglePublic(chat.id)}
+                disabled={isUpdatingPublic}
+              >
+                {isUpdatingPublic
+                  ? (
+                      <Loader2 className="size-4 animate-spin" />
+                    )
+                  : chat.isPublic
+                    ? (
+                        <Lock className="size-4" />
+                      )
+                    : (
+                        <Globe className="size-4" />
+                      )}
+                <span>{chat.isPublic ? t('makePrivate') : t('makePublic')}</span>
               </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </SidebarMenuItem>
-      </motion.div>
+            )}
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              onClick={() => onDeleteChat(chat.id)}
+              variant="destructive"
+              disabled={isDeleting}
+            >
+              {isDeleting
+                ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  )
+                : (
+                    <Trash2 className="size-4" />
+                  )}
+              <span>{t('deleteChat')}</span>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </SidebarMenuItem>
     );
   };
 
@@ -135,7 +253,7 @@ export function ChatList({ chatGroups, favorites = [], onDeleteChat, onToggleFav
   }
 
   return (
-    <>
+    <TooltipProvider>
       {/* Favorites Section */}
       {favorites.length > 0 && (
         <SidebarGroup className="group-data-[collapsible=icon]:hidden">
@@ -168,7 +286,7 @@ export function ChatList({ chatGroups, favorites = [], onDeleteChat, onToggleFav
             </SidebarGroupLabel>
           </StickyHeader>
           <SidebarMenu>
-            {favorites.map((chat, index) => renderChatItem(chat, index))}
+            {favorites.map(chat => renderChatItem(chat))}
           </SidebarMenu>
         </SidebarGroup>
       )}
@@ -199,11 +317,11 @@ export function ChatList({ chatGroups, favorites = [], onDeleteChat, onToggleFav
               </SidebarGroupLabel>
             </StickyHeader>
             <SidebarMenu>
-              {group.chats.map((chat, index) => renderChatItem(chat, (groupIndex * 5) + index))}
+              {group.chats.map(chat => renderChatItem(chat))}
             </SidebarMenu>
           </SidebarGroup>
         );
       })}
-    </>
+    </TooltipProvider>
   );
 }

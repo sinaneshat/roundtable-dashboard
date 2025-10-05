@@ -16,6 +16,7 @@ export type Chat = {
   messages: ChatMessage[];
   isActive?: boolean;
   isFavorite?: boolean;
+  isPublic?: boolean;
 };
 
 export type ChatGroup = {

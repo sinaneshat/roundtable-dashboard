@@ -26,7 +26,9 @@ import {
 } from '@/components/ui/sidebar';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { BRAND } from '@/constants/brand';
+import { useDeleteThreadMutation, useToggleFavoriteMutation, useUpdateThreadMutation } from '@/hooks/mutations/chat-mutations';
 import { useThreadsQuery } from '@/hooks/queries/chat-threads';
+import { toastManager } from '@/lib/toast/toast-manager';
 import type { Chat } from '@/lib/types/chat';
 import { groupChatsByPeriod } from '@/lib/types/chat';
 
@@ -37,6 +39,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
   // Fetch real threads from API
   const { data: threadsData } = useThreadsQuery();
+
+  // Mutations
+  const deleteThreadMutation = useDeleteThreadMutation();
+  const toggleFavoriteMutation = useToggleFavoriteMutation();
+  const updateThreadMutation = useUpdateThreadMutation();
 
   // Transform threads to Chat type
   const chats: Chat[] = useMemo(() => {
@@ -54,7 +61,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       createdAt: new Date(thread.createdAt),
       updatedAt: new Date(thread.updatedAt),
       messages: [], // Messages loaded separately when viewing thread
-      isFavorite: false, // TODO: Add favorite support when implemented
+      isFavorite: thread.isFavorite ?? false,
+      isPublic: thread.isPublic ?? false,
     }));
   }, [threadsData]);
 
@@ -76,13 +84,81 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   };
 
   const handleDeleteChat = (chatId: string) => {
-    // TODO: Implement delete chat mutation
-    console.warn('Delete chat:', chatId);
+    deleteThreadMutation.mutate(chatId, {
+      onSuccess: () => {
+        toastManager.success(
+          t('chat.threadDeleted'),
+          t('chat.threadDeletedDescription'),
+        );
+      },
+      onError: () => {
+        toastManager.error(
+          t('chat.threadDeleteFailed'),
+          t('chat.threadDeleteFailedDescription'),
+        );
+      },
+    });
   };
 
   const handleToggleFavorite = (chatId: string) => {
-    // TODO: Implement toggle favorite mutation
-    console.warn('Toggle favorite:', chatId);
+    // Find the current favorite status
+    const chat = chats.find(c => c.id === chatId);
+    const currentFavoriteStatus = chat?.isFavorite ?? false;
+    const newFavoriteStatus = !currentFavoriteStatus;
+
+    toggleFavoriteMutation.mutate(
+      { threadId: chatId, isFavorite: newFavoriteStatus },
+      {
+        onSuccess: () => {
+          toastManager.success(
+            newFavoriteStatus
+              ? t('chat.addedToFavorites')
+              : t('chat.removedFromFavorites'),
+            newFavoriteStatus
+              ? t('chat.addedToFavoritesDescription')
+              : t('chat.removedFromFavoritesDescription'),
+          );
+        },
+        onError: () => {
+          toastManager.error(
+            t('chat.favoriteFailed'),
+            t('chat.favoriteFailedDescription'),
+          );
+        },
+      },
+    );
+  };
+
+  const handleTogglePublic = (chatId: string) => {
+    // Find the current public status
+    const chat = chats.find(c => c.id === chatId);
+    const currentPublicStatus = chat?.isPublic ?? false;
+    const newPublicStatus = !currentPublicStatus;
+
+    updateThreadMutation.mutate(
+      {
+        threadId: chatId,
+        data: { json: { isPublic: newPublicStatus } },
+      },
+      {
+        onSuccess: () => {
+          toastManager.success(
+            newPublicStatus
+              ? t('chat.madePublic')
+              : t('chat.madePrivate'),
+            newPublicStatus
+              ? t('chat.madePublicDescription')
+              : t('chat.madePrivateDescription'),
+          );
+        },
+        onError: () => {
+          toastManager.error(
+            t('chat.updateFailed'),
+            t('chat.updateFailedDescription'),
+          );
+        },
+      },
+    );
   };
 
   // Get favorites from chats
@@ -94,6 +170,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     chats.filter(chat => !chat.isFavorite), [chats]);
 
   const chatGroups = groupChatsByPeriod(nonFavoriteChats);
+
+  // Extract loading states from mutations
+  const deletingChatId = deleteThreadMutation.isPending ? deleteThreadMutation.variables : null;
+  const favoritingChatId = toggleFavoriteMutation.isPending ? toggleFavoriteMutation.variables?.threadId : null;
+  const updatingPublicChatId = updateThreadMutation.isPending ? updateThreadMutation.variables?.threadId : null;
 
   return (
     <>
@@ -155,7 +236,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                   favorites={favorites}
                   onDeleteChat={handleDeleteChat}
                   onToggleFavorite={handleToggleFavorite}
+                  onTogglePublic={handleTogglePublic}
                   searchTerm=""
+                  deletingChatId={deletingChatId}
+                  favoritingChatId={favoritingChatId}
+                  updatingPublicChatId={updatingPublicChatId}
                 />
               </div>
             </ScrollArea>

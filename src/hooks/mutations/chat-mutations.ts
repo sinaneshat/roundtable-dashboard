@@ -131,6 +131,40 @@ export function useDeleteThreadMutation() {
   });
 }
 
+/**
+ * Hook to toggle thread favorite status
+ * Protected endpoint - requires authentication
+ *
+ * After successful toggle, invalidates specific thread and lists
+ */
+export function useToggleFavoriteMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ threadId, isFavorite }: { threadId: string; isFavorite: boolean }) =>
+      updateThreadService(threadId, { json: { isFavorite } }),
+    onSuccess: (_data, variables) => {
+      // Invalidate specific thread and lists
+      invalidationPatterns.threadDetail(variables.threadId).forEach((key) => {
+        queryClient.invalidateQueries({ queryKey: key });
+      });
+    },
+    onError: (error) => {
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Failed to toggle favorite', error);
+      }
+    },
+    retry: (failureCount, error: unknown) => {
+      const httpError = error as { status?: number };
+      if (httpError?.status && httpError.status >= 400 && httpError.status < 500) {
+        return false;
+      }
+      return failureCount < 2;
+    },
+    throwOnError: false,
+  });
+}
+
 // ============================================================================
 // Message Mutations
 // ============================================================================
