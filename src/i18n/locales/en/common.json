@@ -318,7 +318,7 @@
       "description": "Are you sure you want to cancel your subscription? You will retain access until the end of your billing period.",
       "confirm": "Yes, Cancel Subscription"
     },
-    "cancelSubscription": {
+    "cancelSubscriptionDetails": {
       "title": "Cancel Your Subscription?",
       "warning": "Are you absolutely sure you want to cancel?",
       "description": "Canceling your subscription will limit your access to premium features. Your subscription will remain active until the end of your current billing period.",

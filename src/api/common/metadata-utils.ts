@@ -99,6 +99,16 @@ export function parseMetadata(
  * Ensures all required fields are present
  *
  * @param data - SEO metadata fields
+ * @param data.title - Page title
+ * @param data.description - Page description
+ * @param data.keywords - SEO keywords
+ * @param data.ogImage - Open Graph image URL
+ * @param data.ogType - Open Graph type
+ * @param data.canonicalUrl - Canonical URL
+ * @param data.noindex - Whether to prevent indexing
+ * @param data.publishedTime - Publication timestamp
+ * @param data.modifiedTime - Last modification timestamp
+ * @param data.author - Content author
  * @returns Typed SEO metadata object
  */
 export function createSeoMetadata(data: {
@@ -132,6 +142,14 @@ export function createSeoMetadata(data: {
  * Create product metadata for catalog and SEO
  *
  * @param data - Product metadata fields
+ * @param data.features - Product features list
+ * @param data.category - Product category
+ * @param data.tags - Product tags
+ * @param data.tier - Pricing tier
+ * @param data.popular - Whether product is popular
+ * @param data.seoTitle - SEO optimized title
+ * @param data.seoDescription - SEO optimized description
+ * @param data.ogImage - Open Graph image URL
  * @returns Typed product metadata object
  */
 export function createProductMetadata(data: {
