@@ -112,6 +112,7 @@ export function useAutoScroll({
     }
 
     // Re-enable auto-scroll when user manually scrolls to bottom
+    // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- Manual user action to scroll to bottom
     setIsAutoScrollEnabled(true);
     userScrolledRef.current = false;
   }, [smooth]);

@@ -34,6 +34,7 @@ type FaqStructuredDataProps = {
  * ```
  *
  * @param props - FAQ items configuration
+ * @param props.faqs - Array of FAQ items with questions and answers
  * @returns JSX script element with JSON-LD content
  */
 export function FaqStructuredData({ faqs }: FaqStructuredDataProps) {

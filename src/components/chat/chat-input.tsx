@@ -144,6 +144,7 @@ export function ChatInput({
   // Update participants when initialParticipants change
   useEffect(() => {
     if (initialParticipants && initialParticipants.length > 0) {
+      // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- Syncing state with prop changes
       setParticipants(initialParticipants);
     }
   }, [initialParticipants]);

@@ -124,10 +124,11 @@ export const glassBadge = cn(
 
 /**
  * Create custom glass effect with specific opacity
- * @param blurAmount - Tailwind blur class (e.g., 'md', 'xl', '2xl')
- * @param bgOpacity - Background opacity (0-100)
- * @param borderOpacity - Border opacity (0-100)
- * @param shadow - Tailwind shadow class
+ * @param params - Glass effect configuration
+ * @param params.blurAmount - Tailwind blur class (e.g., 'md', 'xl', '2xl')
+ * @param params.bgOpacity - Background opacity (0-100)
+ * @param params.borderOpacity - Border opacity (0-100)
+ * @param params.shadow - Tailwind shadow class
  */
 export function createGlassEffect({
   blurAmount = 'xl',

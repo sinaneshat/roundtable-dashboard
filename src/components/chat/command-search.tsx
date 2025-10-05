@@ -36,7 +36,9 @@ export function CommandSearch({ chats, isOpen, onClose }: CommandSearchProps) {
   // Reset search when modal closes
   useEffect(() => {
     if (!isOpen) {
+      // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- Cleanup state when modal closes
       setSearchQuery('');
+      // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- Cleanup state when modal closes
       setSelectedIndex(0);
     }
   }, [isOpen]);

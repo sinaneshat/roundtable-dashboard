@@ -18,8 +18,8 @@ import { Separator } from '@/components/ui/separator';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { cn } from '@/lib/ui/cn';
 
-import { useBreadcrumb } from './breadcrumb-context';
 import { ChatSection } from './chat-states';
+import { useBreadcrumb } from './use-breadcrumb';
 
 // =============================================================================
 // UNIFIED HEADER SYSTEM FOR CHAT

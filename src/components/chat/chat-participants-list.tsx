@@ -561,7 +561,6 @@ export function ChatParticipantsList({
   // Sync orderedModels when participants change externally
   // Preserve existing order to allow dragging unselected models
   useEffect(() => {
-    // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- Syncing external props to internal state
     setOrderedModels((currentOrder) => {
       const participantMap = new Map(participants.map(p => [p.modelId, p]));
 
@@ -776,6 +775,10 @@ export function ParticipantsPreview({
     const wasStreaming = previousStreamingRef.current;
     const previousIndex = previousParticipantIndexRef.current;
 
+    // Update refs for next comparison
+    previousStreamingRef.current = isStreaming;
+    previousParticipantIndexRef.current = currentParticipantIndex;
+
     // Streaming just stopped - mark the last streaming participant as "just completed"
     if (wasStreaming && !isStreaming && previousIndex !== undefined) {
       const completedParticipant = participants[previousIndex];
@@ -795,9 +798,7 @@ export function ParticipantsPreview({
       }
     }
 
-    // Update refs for next comparison
-    previousStreamingRef.current = isStreaming;
-    previousParticipantIndexRef.current = currentParticipantIndex;
+    return undefined;
   }, [isStreaming, currentParticipantIndex, participants]);
 
   if (participants.length === 0) {

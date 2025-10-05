@@ -29,6 +29,7 @@ type BreadcrumbStructuredDataProps = {
  * ```
  *
  * @param props - Breadcrumb items configuration
+ * @param props.items - Array of breadcrumb items
  * @returns JSX script element with JSON-LD content
  */
 export function BreadcrumbStructuredData({ items }: BreadcrumbStructuredDataProps) {

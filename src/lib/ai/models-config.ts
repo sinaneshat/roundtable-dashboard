@@ -745,11 +745,12 @@ export const PLAIN_TEXT_GUIDANCE = '\n\nPlease respond in clear, natural languag
  * Build system prompt for a participant in a roundtable discussion
  * CRITICAL: Never reveals AI model IDs or mentions "AI" anywhere
  *
- * @param mode - Conversation mode (analyzing, brainstorming, debating, solving)
- * @param participantIndex - Zero-based index of this participant
- * @param participantRole - Optional role for this participant
- * @param customSystemPrompt - Optional custom system prompt
- * @param otherParticipants - Array of other participants with their indices and roles
+ * @param params - Roundtable configuration
+ * @param params.mode - Conversation mode (analyzing, brainstorming, debating, solving)
+ * @param params.participantIndex - Zero-based index of this participant
+ * @param params.participantRole - Optional role for this participant
+ * @param params.customSystemPrompt - Optional custom system prompt
+ * @param params.otherParticipants - Array of other participants with their indices and roles
  */
 export function buildRoundtableSystemPrompt(params: {
   mode: keyof typeof ROUNDTABLE_MODE_INSTRUCTIONS;

@@ -2,7 +2,7 @@
 
 import { Bot } from 'lucide-react';
 import { motion } from 'motion/react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { cn } from '@/lib/ui/cn';
@@ -37,15 +37,22 @@ export function StreamingMessage({
   participantInfo,
   className,
 }: StreamingMessageProps) {
-  // Initialize with full content if not streaming, empty if streaming
+  // Track content and streaming state changes with refs
+  const lastContentRef = useRef(content);
+  const lastStreamingRef = useRef(isStreaming);
+
   const [displayedContent, setDisplayedContent] = useState(isStreaming ? '' : content);
   const [currentIndex, setCurrentIndex] = useState(isStreaming ? 0 : content.length);
-  const [lastContent, setLastContent] = useState(content);
 
-  // Detect when content changes (new message or content update)
+  // Detect when content or streaming state changes
   useEffect(() => {
-    if (content !== lastContent) {
-      setLastContent(content);
+    const contentChanged = content !== lastContentRef.current;
+    const streamingChanged = isStreaming !== lastStreamingRef.current;
+
+    if (contentChanged || streamingChanged) {
+      lastContentRef.current = content;
+      lastStreamingRef.current = isStreaming;
+
       if (isStreaming) {
         // Reset for new streaming content
         setCurrentIndex(0);
@@ -56,7 +63,7 @@ export function StreamingMessage({
         setCurrentIndex(content.length);
       }
     }
-  }, [content, lastContent, isStreaming]);
+  }, [content, isStreaming]);
 
   // Animate content streaming character by character (ChatGPT-style)
   useEffect(() => {

@@ -7,7 +7,6 @@ import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import { useBreadcrumb } from '@/components/chat/breadcrumb-context';
 import type { ParticipantConfig } from '@/components/chat/chat-config-sheet';
 import { ChatDeleteDialog } from '@/components/chat/chat-delete-dialog';
 import { ChatEditDialog } from '@/components/chat/chat-edit-dialog';
@@ -16,6 +15,7 @@ import { ChatMessageList } from '@/components/chat/chat-message';
 import { ChatShareDialog } from '@/components/chat/chat-share-dialog';
 import { ChatThreadInput } from '@/components/chat/chat-thread-input';
 import { ScrollToBottomButton } from '@/components/chat/scroll-to-bottom-button';
+import { useBreadcrumb } from '@/components/chat/use-breadcrumb';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToggleFavoriteMutation, useTogglePublicMutation, useUpdateThreadMutation } from '@/hooks/mutations/chat-mutations';

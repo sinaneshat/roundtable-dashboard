@@ -172,6 +172,11 @@ export function createProductMetadata(data: {
  * Create subscription metadata for billing tracking
  *
  * @param data - Subscription metadata fields
+ * @param data.autoRenewal - Whether subscription auto-renews
+ * @param data.trialEnd - Trial end date
+ * @param data.promotionCode - Applied promotion code
+ * @param data.discountAmount - Discount amount applied
+ * @param data.planChangeHistory - History of plan changes
  * @returns Typed subscription metadata object
  */
 export function createSubscriptionMetadata(data: {
