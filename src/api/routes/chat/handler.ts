@@ -1194,18 +1194,42 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
               },
             });
 
-            // Merge the stream into the writer for real-time client updates
-            writer.merge(result.toUIMessageStream({
-              sendStart: i === 0, // Only send start event for first participant
-              sendFinish: i === participants.length - 1, // Only send finish event for last participant
-              messageMetadata: () => ({
+            // ✅ CRITICAL FIX: Don't use writer.merge() for sequential participants
+            // writer.merge() is for CONCURRENT streams (multiple tool calls at once)
+            // For SEQUENTIAL participants, we need to manually write each stream event
+            // Following AI SDK v5 UIMessageChunk types: 'start', 'text-start', 'text-delta', 'text-end', 'finish'
+
+            // Create a new message for this participant
+            const messageId = ulid();
+            const textId = ulid();
+
+            // Send 'start' event to begin new assistant message
+            writer.write({
+              type: 'start',
+              messageId,
+              messageMetadata: {
                 participantId: participant.id,
                 model: participant.modelId,
                 role: participant.role,
-              }),
-            }));
+              },
+            });
 
-            // ✅ CRITICAL: Wait for the response to ensure onFinish has been called
+            // Send 'text-start' event to begin text content
+            writer.write({
+              type: 'text-start',
+              id: textId,
+            });
+
+            // Stream the text token by token with 'text-delta' events
+            for await (const textDelta of result.textStream) {
+              writer.write({
+                type: 'text-delta',
+                id: textId,
+                delta: textDelta,
+              });
+            }
+
+            // ✅ CRITICAL: Wait for generation to complete
             await result.response;
 
             // Now use the captured values from onFinish callback
@@ -1213,15 +1237,47 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
             const usage = completedUsage;
             const response = completionResponse;
 
-            apiLogger.info('Participant stream completed', {
+            // Send 'text-end' event to complete text content
+            writer.write({
+              type: 'text-end',
+              id: textId,
+            });
+
+            // Send 'finish' event to complete the message
+            // Note: 'finish' event only has messageMetadata, not usage or finishReason
+            writer.write({
+              type: 'finish',
+              messageMetadata: {
+                participantId: participant.id,
+                model: participant.modelId,
+                role: participant.role,
+              },
+            });
+
+            apiLogger.info('Participant generation completed and message finished', {
               participantId: participant.id,
+              participantIndex: i,
               modelId: participant.modelId,
+              messageId,
               textLength: text.length,
               totalTokens: usage?.totalTokens,
               responseId: response?.id,
               messagesCount: response?.messages.length,
               remainingParticipants: participants.length - i - 1,
             });
+
+            // Small delay to ensure stream is fully flushed to client before next participant
+            // This prevents the frontend from receiving overlapping streams
+            // The delay allows the frontend useChat hook to process the completed message
+            // before the next participant's stream starts
+            if (i < participants.length - 1) {
+              // Only delay between participants, not after the last one
+              await new Promise(resolve => setTimeout(resolve, 150));
+              apiLogger.info('Starting next participant after stream flush delay', {
+                nextParticipantIndex: i + 1,
+                nextParticipantId: participants[i + 1]?.id,
+              });
+            }
 
             // Validate response is not empty - if empty, treat as error
             if (!text || text.trim().length === 0) {

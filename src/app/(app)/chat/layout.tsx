@@ -36,10 +36,10 @@ export default async function ChatLayout({
       <BreadcrumbProvider>
         <SidebarProvider>
           <AppSidebar />
-          <SidebarInset>
+          <SidebarInset className="h-svh">
             <NavigationHeader />
             <ChatContentWrapper>
-              <div className="flex flex-1 flex-col gap-6 p-4 pt-0 lg:ps-6 lg:pe-6 lg:pt-0 w-full min-w-0">
+              <div className="flex flex-1 flex-col w-full min-w-0 overflow-hidden">
                 {children}
               </div>
             </ChatContentWrapper>
