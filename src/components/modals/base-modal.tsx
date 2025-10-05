@@ -31,15 +31,16 @@ const sizeClasses: Record<ModalSize, string> = {
  * Reusable modal wrapper following shadcn/ui Dialog patterns
  * Provides consistent sizing, scrolling, and layout behavior
  *
- * @param open - Controls modal visibility
- * @param onOpenChange - Callback when modal visibility changes
- * @param title - Modal title (required for accessibility)
- * @param description - Optional modal description
- * @param children - Modal content
- * @param footer - Optional footer content
- * @param size - Modal size variant (sm, md, lg, xl, full)
- * @param className - Additional CSS classes
- * @param preventScroll - Disable scrolling if content is guaranteed to fit
+ * @param props - Component props
+ * @param props.open - Controls modal visibility
+ * @param props.onOpenChange - Callback when modal visibility changes
+ * @param props.title - Modal title (required for accessibility)
+ * @param props.description - Optional modal description
+ * @param props.children - Modal content
+ * @param props.footer - Optional footer content
+ * @param props.size - Modal size variant (sm, md, lg, xl, full)
+ * @param props.className - Additional CSS classes
+ * @param props.preventScroll - Disable scrolling if content is guaranteed to fit
  */
 export function BaseModal({
   open,

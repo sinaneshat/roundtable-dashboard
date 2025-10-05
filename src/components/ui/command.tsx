@@ -6,14 +6,21 @@ import { Search } from 'lucide-react';
 import * as React from 'react';
 
 import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { glassCard } from '@/lib/ui/glassmorphism';
 import { cn } from '@/lib/ui/cn';
 
-function Command({ ref, className, ...props }: React.ComponentPropsWithoutRef<typeof CommandPrimitive> & { ref?: React.RefObject<React.ElementRef<typeof CommandPrimitive> | null> }) {
+type CommandProps = React.ComponentPropsWithoutRef<typeof CommandPrimitive> & {
+  ref?: React.RefObject<React.ElementRef<typeof CommandPrimitive> | null>;
+  glass?: boolean;
+};
+
+function Command({ ref, className, glass = false, ...props }: CommandProps) {
   return (
     <CommandPrimitive
       ref={ref}
       className={cn(
-        'flex h-full w-full flex-col overflow-hidden rounded-md bg-popover text-popover-foreground',
+        'flex h-full w-full flex-col overflow-hidden rounded-md',
+        glass ? glassCard('medium') : 'bg-popover text-popover-foreground',
         className,
       )}
       {...props}

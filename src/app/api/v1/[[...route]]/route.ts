@@ -20,7 +20,48 @@ function createApiHandler() {
     } as RequestInit);
 
     // All requests go to the main API (now includes docs)
-    return api.fetch(request, process.env);
+    // IMPORTANT: Return the Response directly without awaiting to preserve streaming
+    // The Response object may contain a ReadableStream that must not be buffered
+    const response = await api.fetch(request, process.env);
+
+    // For streaming responses, we need to ensure Next.js doesn't buffer the response
+    // AI SDK v5 streaming uses various content types depending on the protocol
+    const contentType = response.headers.get('content-type') || '';
+    const transferEncoding = response.headers.get('transfer-encoding') || '';
+
+    // Detect streaming responses by checking:
+    // 1. Content-Type (text/event-stream, text/plain, application/x-ndjson, etc.)
+    // 2. Transfer-Encoding: chunked
+    // 3. Presence of response.body stream
+    const isStreamingResponse = contentType.includes('text/event-stream')
+      || contentType.includes('text/plain')
+      || contentType.includes('application/x-ndjson')
+      || contentType.includes('application/octet-stream')
+      || transferEncoding.includes('chunked')
+      || (response.body !== null && typeof response.body === 'object');
+
+    if (isStreamingResponse) {
+      // For streaming responses, clone headers and preserve the stream
+      const headers = new Headers(response.headers);
+
+      // Ensure proper streaming headers are set
+      headers.set('Cache-Control', 'no-cache, no-transform');
+      headers.set('Connection', 'keep-alive');
+      headers.set('X-Accel-Buffering', 'no'); // Disable nginx buffering if present
+
+      // Preserve the original content type
+      if (contentType) {
+        headers.set('Content-Type', contentType);
+      }
+
+      return new Response(response.body, {
+        status: response.status,
+        statusText: response.statusText,
+        headers,
+      });
+    }
+
+    return response;
   };
 }
 
@@ -42,3 +83,15 @@ export const HEAD = handler;
  * that might interfere with Hono's routing
  */
 export const dynamic = 'force-dynamic';
+
+/**
+ * Enable streaming responses for AI SDK
+ * This ensures Next.js doesn't buffer streaming responses
+ */
+export const runtime = 'nodejs'; // or 'edge' for edge runtime
+
+/**
+ * Increase max duration for streaming responses (10 minutes)
+ * AI streaming can take longer than the default timeout
+ */
+export const maxDuration = 600;

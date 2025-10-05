@@ -17,6 +17,8 @@ import { Textarea } from '../ui/textarea';
 type Props = {
   placeholder?: string;
   rows?: number;
+  onKeyDown?: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void;
+  hideLabel?: boolean;
 } & GeneralFormProps;
 
 function RHFTextarea({
@@ -27,8 +29,10 @@ function RHFTextarea({
   required,
   value: externalValue,
   onChange: externalOnChange,
+  onKeyDown,
   rows,
   className,
+  hideLabel = false,
 }: Props) {
   const { control } = useFormContext();
 
@@ -38,7 +42,7 @@ function RHFTextarea({
       name={name}
       render={({ field }) => (
         <FormItem className={className || 'w-full'}>
-          <FormLabel>{title}</FormLabel>
+          {!hideLabel && <FormLabel>{title}</FormLabel>}
           <FormControl>
             <Textarea
               {...field}
@@ -53,6 +57,7 @@ function RHFTextarea({
                   externalOnChange(e);
                 }
               }}
+              onKeyDown={onKeyDown}
               value={field.value !== undefined ? field.value : externalValue}
             />
           </FormControl>

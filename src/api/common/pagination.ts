@@ -1,8 +1,6 @@
 import type { AnyColumn, SQL } from 'drizzle-orm';
 import { and, asc, desc, gt, lt } from 'drizzle-orm';
 
-import type { CursorPaginatedResponse } from '@/api/core/schemas';
-
 /**
  * Cursor Pagination Direction
  * Determines whether we're paginating forward or backward
@@ -51,7 +49,7 @@ export function applyCursorPagination<T>(
   items: T[],
   limit: number,
   getCursor: (item: T) => string,
-): CursorPaginatedResponse<T> {
+) {
   // Check if there are more items beyond the requested limit
   const hasMore = items.length > limit;
 
@@ -62,14 +60,11 @@ export function applyCursorPagination<T>(
   const nextCursor = hasMore && paginatedItems.length > 0 ? getCursor(paginatedItems[paginatedItems.length - 1]!) : null;
 
   return {
-    success: true,
-    data: {
-      items: paginatedItems,
-      pagination: {
-        nextCursor,
-        hasMore,
-        count: paginatedItems.length,
-      },
+    items: paginatedItems,
+    pagination: {
+      nextCursor,
+      hasMore,
+      count: paginatedItems.length,
     },
   };
 }

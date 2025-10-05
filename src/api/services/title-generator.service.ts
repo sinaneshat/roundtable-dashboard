@@ -14,35 +14,49 @@ import { apiLogger } from '@/api/middleware/hono-logger';
 import type { ApiEnv } from '@/api/types';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db/schema';
+import { AI_MODELS } from '@/lib/ai/models-config';
 
 import { initializeOpenRouter, openRouterService } from './openrouter.service';
 import { updateThreadSlug } from './slug-generator.service';
 
 /**
  * System prompt for title generation
- * Instructs the AI to create short, descriptive titles
+ * Ultra-short and simple for fastest, cheapest title generation
  */
-const TITLE_GENERATION_PROMPT = `You are a helpful assistant that generates concise, descriptive titles for conversations.
+const TITLE_GENERATION_PROMPT = `Generate a 5-word title from this message. Title only, no quotes.`;
 
-Based on the user's first message, generate a short title (3-6 words maximum) that captures the main topic or purpose of the conversation.
+/**
+ * Get the best model for title generation
+ * Prioritizes fast, cost-effective models from the configuration
+ */
+function getTitleGenerationModel(): string {
+  // Priority order: cheapest/fastest models first
+  const preferredModels = [
+    'anthropic/claude-3-haiku', // $0.25/Mtok - cheapest Claude
+    'deepseek/deepseek-chat', // $0.14/Mtok - very cheap
+    'anthropic/claude-3.5-sonnet', // Fallback to primary model
+  ];
 
-Rules:
-- Maximum 6 words
-- No quotes or special characters
-- Capitalize first letter of each major word
-- Be specific and descriptive
-- Examples:
-  * "Product Launch Strategy Discussion"
-  * "Python Code Debugging Help"
-  * "Travel Planning for Europe"
-  * "Marketing Campaign Ideas"
-  * "Database Schema Design"
+  // Find first available enabled model from preferences
+  for (const modelId of preferredModels) {
+    const model = AI_MODELS.find(m => m.modelId === modelId && m.isEnabled);
+    if (model) {
+      return model.modelId;
+    }
+  }
 
-Only respond with the title itself, nothing else.`;
+  // Final fallback: use first enabled model
+  const firstEnabled = AI_MODELS.find(m => m.isEnabled);
+  if (!firstEnabled) {
+    throw new Error('No enabled models found in configuration');
+  }
+
+  return firstEnabled.modelId;
+}
 
 /**
  * Generate title from first user message
- * Uses Claude Sonnet 4.1 for fast, accurate title generation
+ * Uses the most cost-effective model from configuration
  */
 export async function generateTitleFromMessage(
   firstMessage: string,
@@ -52,10 +66,12 @@ export async function generateTitleFromMessage(
     // Initialize OpenRouter with API key
     initializeOpenRouter(env);
 
-    // Use Claude Sonnet 4.1 for title generation (fast and accurate)
+    // Get best model for title generation from configuration
+    const titleModel = getTitleGenerationModel();
+
     // Using AI SDK v5 UIMessage format
     const result = await openRouterService.generateText({
-      modelId: 'anthropic/claude-sonnet-4.1',
+      modelId: titleModel,
       messages: [
         {
           id: 'msg-title-gen',
@@ -69,8 +85,8 @@ export async function generateTitleFromMessage(
         },
       ],
       system: TITLE_GENERATION_PROMPT,
-      temperature: 0.7,
-      maxTokens: 50, // Titles should be very short
+      temperature: 0.3, // Lower temperature for more predictable, concise output
+      maxTokens: 15, // Very low limit: ~5 words at ~3 tokens/word
     });
 
     // Clean up the generated title
@@ -79,9 +95,15 @@ export async function generateTitleFromMessage(
     // Remove quotes if AI added them
     title = title.replace(/^["']|["']$/g, '');
 
-    // Limit to 60 characters max
-    if (title.length > 60) {
-      title = title.substring(0, 60).trim();
+    // Enforce 5-word maximum constraint
+    const words = title.split(/\s+/);
+    if (words.length > 5) {
+      title = words.slice(0, 5).join(' ');
+    }
+
+    // Limit to 50 characters max (5 words ~= 50 chars)
+    if (title.length > 50) {
+      title = title.substring(0, 50).trim();
     }
 
     // If title is empty or too short, use fallback
@@ -101,9 +123,9 @@ export async function generateTitleFromMessage(
       error: error instanceof Error ? error.message : String(error),
     });
 
-    // Fallback: Use first few words of message
-    const words = firstMessage.split(' ').slice(0, 5).join(' ');
-    return words.length > 60 ? words.substring(0, 60) : words || 'New Chat';
+    // Fallback: Use first 5 words of message (enforcing 5-word constraint)
+    const words = firstMessage.split(/\s+/).slice(0, 5).join(' ');
+    return words.length > 50 ? words.substring(0, 50).trim() : words || 'New Chat';
   }
 }
 

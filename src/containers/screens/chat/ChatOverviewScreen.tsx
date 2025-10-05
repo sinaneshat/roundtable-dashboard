@@ -1,59 +1,111 @@
 'use client';
 
-import { useTranslations } from 'next-intl';
+import { motion } from 'motion/react';
+import Image from 'next/image';
+import { useRouter } from 'next/navigation';
+import { useState } from 'react';
 
-import { Logo } from '@/components/logo';
-import { LayoutTextFlip } from '@/components/ui/layout-text-flip';
-import { ScaleIn, StaggerContainer, StaggerItem } from '@/components/ui/motion';
+import type { ParticipantConfig } from '@/components/chat/chat-config-sheet';
+import { ChatInput } from '@/components/chat/chat-input';
+import { ChatQuickStart } from '@/components/chat/chat-quick-start';
+import { WavyBackground } from '@/components/ui/wavy-background';
 
 export default function ChatOverviewScreen() {
-  const t = useTranslations();
+  const router = useRouter();
+  const [selectedPrompt, setSelectedPrompt] = useState<string>('');
+  const [selectedMode, setSelectedMode] = useState<'brainstorming' | 'analyzing' | 'debating' | 'solving'>('brainstorming');
+  const [selectedParticipants, setSelectedParticipants] = useState<ParticipantConfig[]>([]);
 
-  // Prepare rotating words from translations
-  const rotatingWords = [
-    t('chat.hero.rotatingWords.multipleAI'),
-    t('chat.hero.rotatingWords.expertSystems'),
-    t('chat.hero.rotatingWords.smartAssistants'),
-    t('chat.hero.rotatingWords.aiThinkTanks'),
-  ];
+  // Handler for thread creation from ChatInput
+  const handleThreadCreated = async (threadId: string, threadSlug: string, _firstMessage: string) => {
+    // Navigate immediately to the thread page
+    // The thread page will handle auto-triggering streaming and title updates
+    router.push(`/chat/${threadSlug}`);
+  };
+
+  // Handler for quick start suggestion click
+  const handleSuggestionClick = (
+    prompt: string,
+    mode: 'brainstorming' | 'analyzing' | 'debating' | 'solving',
+    participants: ParticipantConfig[],
+  ) => {
+    setSelectedPrompt(prompt);
+    setSelectedMode(mode);
+    setSelectedParticipants(participants);
+    // Scroll to input
+    const inputElement = document.querySelector('[data-chat-input]');
+    if (inputElement) {
+      inputElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  };
 
   return (
-    <div className="flex min-h-screen w-full flex-col items-center justify-start px-4 pt-16 md:pt-20">
-      {/* Main content block with stagger animation */}
-      <StaggerContainer
-        className="flex flex-col items-center gap-6 text-center"
-        staggerDelay={0.15}
-        delayChildren={0.1}
-      >
-        {/* Logo - much larger with scale animation */}
-        <StaggerItem>
-          <ScaleIn duration={0.5} delay={0}>
-            <div className="flex items-center justify-center">
-              <Logo size="lg" variant="full" className="w-64 h-64 md:w-80 md:h-80" />
-            </div>
-          </ScaleIn>
-        </StaggerItem>
+    <div className="relative flex flex-1 flex-col min-h-0">
+      {/* Wavy Background - Edge-to-edge, breaking out of parent padding */}
+      <div className="absolute inset-0 -mx-4 lg:-mx-6 z-0 overflow-hidden">
+        <WavyBackground containerClassName="h-full w-full" />
+      </div>
 
-        {/* Hero Section with Animated Text */}
-        <StaggerItem className="flex flex-col items-center gap-5">
-          <LayoutTextFlip
-            text={t('chat.hero.staticText')}
-            words={rotatingWords}
-            duration={3000}
-          />
+      {/* Content Layer - Above wavy background, matches chat thread structure */}
+      <div className="relative z-10 flex flex-1 flex-col min-h-0">
+        {/* Hero Section with Logo - Centered with max-w-4xl like chat messages */}
+        <div className="flex-shrink-0 pt-16 pb-12">
+          <div className="mx-auto max-w-4xl px-4 lg:px-6">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.8 }}
+              className="flex flex-col items-center gap-6 text-center"
+            >
+              {/* Roundtable Logo */}
+              <div className="relative h-28 w-28 md:h-36 md:w-36">
+                <Image
+                  src="/static/logo.png"
+                  alt="Roundtable Logo"
+                  fill
+                  className="object-contain drop-shadow-2xl"
+                  priority
+                />
+              </div>
+              {/* Roundtable Text */}
+              <p className="text-3xl font-bold text-white drop-shadow-2xl md:text-5xl lg:text-6xl">
+                roundtable.now
+              </p>
+              <p className="text-base font-normal text-white/90 drop-shadow-lg md:text-lg lg:text-xl">
+                Where AI models collaborate together
+              </p>
+            </motion.div>
+          </div>
+        </div>
 
-          <p className="text-base md:text-lg text-muted-foreground max-w-xl md:max-w-2xl px-4 leading-relaxed">
-            {t('chat.hero.subtitle')}
-          </p>
-        </StaggerItem>
+        {/* Scrollable Content Area - Matches chat thread ScrollArea pattern */}
+        <div className="flex-1 overflow-y-auto">
+          {/* Quick Start Cards - Same max-w-4xl container as chat messages */}
+          <div className="mx-auto max-w-4xl px-4 lg:px-6 pb-8">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, delay: 0.5 }}
+              className="w-full"
+            >
+              <ChatQuickStart onSuggestionClick={handleSuggestionClick} />
+            </motion.div>
+          </div>
+        </div>
 
-        {/* Getting Started Hint with fade */}
-        <StaggerItem className="mt-2">
-          <p className="text-xs md:text-sm text-muted-foreground/60">
-            {t('chat.selectOrCreate')}
-          </p>
-        </StaggerItem>
-      </StaggerContainer>
+        {/* Sticky Chat Input - Same container pattern as thread input */}
+        <div className="sticky bottom-0 flex-shrink-0 w-full pb-4 pt-3">
+          <div className="mx-auto max-w-4xl px-4 lg:px-6">
+            <ChatInput
+              onThreadCreated={handleThreadCreated}
+              initialMessage={selectedPrompt}
+              initialMode={selectedMode}
+              initialParticipants={selectedParticipants}
+              data-chat-input
+            />
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

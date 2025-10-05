@@ -92,7 +92,7 @@ export const chatParticipant = sqliteTable('chat_participant', {
   modelId: text('model_id').notNull(), // e.g., 'anthropic/claude-3.5-sonnet'
   customRoleId: text('custom_role_id')
     .references(() => chatCustomRole.id, { onDelete: 'set null' }), // Reference to saved custom role (optional)
-  role: text('role').notNull(), // Role name (from custom role or inline) - e.g., "The Ideator", "Devil's Advocate"
+  role: text('role'), // Optional role name (from custom role or inline) - e.g., "The Ideator", "Devil's Advocate"
   priority: integer('priority').notNull().default(0), // Order in which models respond
   isEnabled: integer('is_enabled', { mode: 'boolean' })
     .notNull()
@@ -155,7 +155,7 @@ export const chatMessage = sqliteTable('chat_message', {
     .references((): ReturnType<typeof text> => chatMessage.id as ReturnType<typeof text>, {
       onDelete: 'set null',
     }),
-  createdAt: integer('created_at', { mode: 'timestamp' })
+  createdAt: integer('created_at', { mode: 'timestamp_ms' })
     .defaultNow()
     .notNull(),
 }, table => [

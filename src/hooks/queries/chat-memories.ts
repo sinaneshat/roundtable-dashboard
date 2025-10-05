@@ -26,6 +26,8 @@ import {
  * - Automatic page management via data.pages
  * - Built-in hasNextPage and fetchNextPage
  *
+ * @param enabled - Optional flag to control when the query runs (default: true)
+ *
  * @example
  * ```tsx
  * const { data, fetchNextPage, hasNextPage, isFetchingNextPage } = useMemoriesQuery();
@@ -43,7 +45,7 @@ import {
  *
  * Stale time: 1 minute (memories change less frequently)
  */
-export function useMemoriesQuery() {
+export function useMemoriesQuery(enabled = true) {
   const { data: session, isPending } = useSession();
   const isAuthenticated = !isPending && !!session?.user?.id;
 
@@ -56,7 +58,8 @@ export function useMemoriesQuery() {
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage) => {
       // Return nextCursor from pagination metadata, or undefined if no more pages
-      if (lastPage.success && lastPage.data.pagination.nextCursor) {
+      // Defensive check: ensure success, data, and pagination all exist
+      if (lastPage?.success && lastPage.data?.pagination?.nextCursor) {
         return lastPage.data.pagination.nextCursor;
       }
       return undefined;
@@ -74,7 +77,7 @@ export function useMemoriesQuery() {
       }
       return failureCount < 2;
     },
-    enabled: isAuthenticated, // Only fetch when authenticated
+    enabled: isAuthenticated && enabled, // Only fetch when authenticated and explicitly enabled
     throwOnError: false,
   });
 }

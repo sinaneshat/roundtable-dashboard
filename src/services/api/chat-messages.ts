@@ -3,10 +3,12 @@
  *
  * 100% type-safe RPC service for chat message operations
  * All types automatically inferred from backend Hono routes
+ *
+ * NOTE: All chat messages use streaming for better UX
+ * The old sendMessage endpoint has been removed in favor of streamChat
  */
 
 import type { InferRequestType, InferResponseType } from 'hono/client';
-import { parseResponse } from 'hono/client';
 
 import type { ApiClientType } from '@/api/client';
 import { createApiClient } from '@/api/client';
@@ -14,14 +16,6 @@ import { createApiClient } from '@/api/client';
 // ============================================================================
 // Type Inference - Automatically derived from backend routes
 // ============================================================================
-
-export type SendMessageRequest = InferRequestType<
-  ApiClientType['chat']['threads'][':id']['messages']['$post']
->;
-
-export type SendMessageResponse = InferResponseType<
-  ApiClientType['chat']['threads'][':id']['messages']['$post']
->;
 
 export type StreamChatRequest = InferRequestType<
   ApiClientType['chat']['threads'][':id']['stream']['$post']
@@ -34,32 +28,6 @@ export type StreamChatResponse = InferResponseType<
 // ============================================================================
 // Service Functions
 // ============================================================================
-
-/**
- * Send a message to a thread
- * Protected endpoint - requires authentication
- *
- * This endpoint orchestrates multi-model responses:
- * 1. Saves user message to database
- * 2. Generates AI responses from all enabled participants
- * 3. Saves assistant messages to database
- * 4. Returns both user and assistant messages
- *
- * @param threadId - Thread ID
- * @param data - Message content
- */
-export async function sendMessageService(
-  threadId: string,
-  data: Omit<SendMessageRequest, 'param'>,
-) {
-  const client = await createApiClient();
-  return parseResponse(
-    client.chat.threads[':id'].messages.$post({
-      param: { id: threadId },
-      ...data,
-    }),
-  );
-}
 
 /**
  * Stream AI chat response using SSE

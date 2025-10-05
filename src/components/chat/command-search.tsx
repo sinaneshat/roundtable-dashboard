@@ -10,6 +10,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import type { Chat } from '@/lib/types/chat';
 import { cn } from '@/lib/ui/cn';
+import { glassCard, glassOverlay } from '@/lib/ui/glassmorphism';
 
 type CommandSearchProps = {
   chats: Chat[];
@@ -35,7 +36,9 @@ export function CommandSearch({ chats, isOpen, onClose }: CommandSearchProps) {
   // Reset search when modal closes
   useEffect(() => {
     if (!isOpen) {
+      // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- Cleanup state when modal closes
       setSearchQuery('');
+      // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- Cleanup state when modal closes
       setSelectedIndex(0);
     }
   }, [isOpen]);
@@ -58,7 +61,7 @@ export function CommandSearch({ chats, isOpen, onClose }: CommandSearchProps) {
         case 'Enter':
           e.preventDefault();
           if (filteredChats[selectedIndex]) {
-            router.push(`/chat/chat/${filteredChats[selectedIndex].id}`);
+            router.push(`/chat/${filteredChats[selectedIndex].slug}`);
             onClose();
           }
           break;
@@ -83,7 +86,7 @@ export function CommandSearch({ chats, isOpen, onClose }: CommandSearchProps) {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
-            className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm"
+            className={cn('fixed inset-0 z-50', glassOverlay)}
             onClick={onClose}
           />
 
@@ -102,7 +105,7 @@ export function CommandSearch({ chats, isOpen, onClose }: CommandSearchProps) {
               className="relative w-full max-w-2xl mx-4 overflow-hidden"
               onClick={e => e.stopPropagation()}
             >
-              <div className="bg-background border border-border rounded-lg shadow-2xl overflow-hidden">
+              <div className={cn(glassCard('medium'), 'rounded-lg border overflow-hidden')}>
                 {/* Search Input */}
                 <div className="flex items-center gap-3 px-4 py-3 border-b border-border">
                   <Search className="size-5 text-muted-foreground" />
@@ -155,7 +158,7 @@ export function CommandSearch({ chats, isOpen, onClose }: CommandSearchProps) {
                               }}
                             >
                               <Link
-                                href={`/chat/chat/${chat.id}`}
+                                href={`/chat/${chat.slug}`}
                                 onClick={onClose}
                                 className={cn(
                                   'flex items-center gap-3 px-4 py-3 hover:bg-accent/50 transition-colors cursor-pointer',

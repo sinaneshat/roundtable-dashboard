@@ -70,11 +70,11 @@ import {
   getCustomRoleHandler,
   getMemoryHandler,
   getPublicThreadHandler,
+  getThreadBySlugHandler,
   getThreadHandler,
   listCustomRolesHandler,
   listMemoriesHandler,
   listThreadsHandler,
-  sendMessageHandler,
   streamChatHandler,
   updateCustomRoleHandler,
   updateMemoryHandler,
@@ -93,11 +93,11 @@ import {
   getCustomRoleRoute,
   getMemoryRoute,
   getPublicThreadRoute,
+  getThreadBySlugRoute,
   getThreadRoute,
   listCustomRolesRoute,
   listMemoriesRoute,
   listThreadsRoute,
-  sendMessageRoute,
   streamChatRoute,
   updateCustomRoleRoute,
   updateMemoryRoute,
@@ -153,7 +153,14 @@ app.use('*', requestId());
 // Using Hono's compress() middleware causes binary corruption in OpenNext.js
 // Let Cloudflare handle gzip/brotli compression automatically
 app.use('*', timing());
-app.use('*', timeout(15000));
+// Apply timeout to all routes except streaming endpoints
+app.use('*', async (c, next) => {
+  // Skip timeout for streaming endpoints
+  if (c.req.path.includes('/stream')) {
+    return next();
+  }
+  return timeout(15000)(c, next);
+});
 
 // Body limit
 app.use('*', bodyLimit({
@@ -197,8 +204,14 @@ app.use('*', (c, next) => {
   return middleware(c, next);
 });
 
-// ETag support
-app.use('*', etag());
+// ETag support - Skip for streaming endpoints to avoid buffering
+app.use('*', async (c, next) => {
+  // Skip ETag for streaming endpoints as it buffers the entire response
+  if (c.req.path.includes('/stream')) {
+    return next();
+  }
+  return etag()(c, next);
+});
 
 // Session attachment
 app.use('*', attachSession);
@@ -249,6 +262,9 @@ app.use('/chat/threads', csrfProtection, requireSession);
 // PATCH/DELETE: protected mutations (requires auth + CSRF)
 app.use('/chat/threads/:id', protectMutations);
 
+// GET /chat/threads/slug/:slug - get thread by slug (requires auth)
+app.use('/chat/threads/slug/:slug', requireSession);
+
 // POST /chat/threads/:id/messages - send message (requires auth + CSRF)
 app.use('/chat/threads/:id/messages', csrfProtection, requireSession);
 
@@ -295,10 +311,10 @@ const appRoutes = app
   .openapi(listThreadsRoute, listThreadsHandler) // List threads with pagination
   .openapi(createThreadRoute, createThreadHandler) // Create thread with participants + first message
   .openapi(getThreadRoute, getThreadHandler) // Get thread with participants + messages
+  .openapi(getThreadBySlugRoute, getThreadBySlugHandler) // Get thread by slug (authenticated)
   .openapi(updateThreadRoute, updateThreadHandler) // Update thread (title, favorite, public, etc.)
   .openapi(deleteThreadRoute, deleteThreadHandler) // Delete thread
-  .openapi(sendMessageRoute, sendMessageHandler) // Send message to thread
-  .openapi(streamChatRoute, streamChatHandler) // Stream AI response via SSE
+  .openapi(streamChatRoute, streamChatHandler) // Stream AI response via SSE (replaces sendMessage)
   .openapi(getPublicThreadRoute, getPublicThreadHandler) // Get public thread by slug (no auth)
   // Chat routes - Participant management
   .openapi(addParticipantRoute, addParticipantHandler) // Add model to thread

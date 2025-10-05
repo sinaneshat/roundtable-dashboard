@@ -56,6 +56,8 @@ export default defineConfig({
   schema: './src/db/schema.ts',
   out: './src/db/migrations',
   dialect: 'sqlite',
+  verbose: true,
+  strict: true,
   ...(isLocal
     ? {
         // Local development configuration

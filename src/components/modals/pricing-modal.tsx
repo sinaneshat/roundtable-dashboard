@@ -60,6 +60,8 @@ type PricingModalProps = {
  * @param props.onSubscribe - Callback when user subscribes to a product
  * @param props.onCancel - Callback when user cancels a subscription
  * @param props.onManageBilling - Callback to open Stripe customer portal
+ * @param props.cancelingSubscriptionId - ID of subscription being canceled
+ * @param props.isManagingBilling - Whether currently managing billing
  */
 export function PricingModal({
   open,

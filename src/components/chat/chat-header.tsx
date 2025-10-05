@@ -1,6 +1,7 @@
 'use client';
 
 import { motion } from 'motion/react';
+import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import type { ReactNode } from 'react';
@@ -18,6 +19,7 @@ import { SidebarTrigger } from '@/components/ui/sidebar';
 import { cn } from '@/lib/ui/cn';
 
 import { ChatSection } from './chat-states';
+import { useBreadcrumb } from './use-breadcrumb';
 
 // =============================================================================
 // UNIFIED HEADER SYSTEM FOR CHAT
@@ -38,7 +40,16 @@ type NavigationHeaderProps = {
 export function NavigationHeader({ className }: NavigationHeaderProps = {}) {
   const pathname = usePathname();
   const t = useTranslations();
-  const currentPage = pathname ? breadcrumbMap[pathname] : undefined;
+  const { dynamicBreadcrumb } = useBreadcrumb();
+
+  // Check if this is a thread page (dynamic route)
+  const isThreadPage = pathname?.startsWith('/chat/') && pathname !== '/chat' && pathname !== '/chat/pricing';
+
+  // Use dynamic breadcrumb for thread pages, otherwise use static map
+  const currentPage = isThreadPage && dynamicBreadcrumb
+    ? { titleKey: dynamicBreadcrumb.title, parent: dynamicBreadcrumb.parent || '/chat', isDynamic: true }
+    : pathname ? breadcrumbMap[pathname] : undefined;
+
   const parentPage = currentPage?.parent ? breadcrumbMap[currentPage.parent] : null;
 
   return (
@@ -51,27 +62,42 @@ export function NavigationHeader({ className }: NavigationHeaderProps = {}) {
         className,
       )}
     >
-      <div className="flex items-center gap-2 px-4">
-        <SidebarTrigger className="-ms-1" />
-        <Separator orientation="vertical" className="me-2 h-4" />
-        {currentPage && (
-          <Breadcrumb>
-            <BreadcrumbList>
-              {parentPage && (
-                <>
-                  <BreadcrumbItem className="hidden md:block">
-                    <BreadcrumbLink href={currentPage.parent!}>
-                      {t(parentPage.titleKey)}
-                    </BreadcrumbLink>
-                  </BreadcrumbItem>
-                  <BreadcrumbSeparator className="hidden md:block" />
-                </>
-              )}
-              <BreadcrumbItem>
-                <BreadcrumbPage>{t(currentPage.titleKey)}</BreadcrumbPage>
-              </BreadcrumbItem>
-            </BreadcrumbList>
-          </Breadcrumb>
+      <div className="flex items-center justify-between gap-2 px-4 w-full">
+        <div className="flex items-center gap-2">
+          <SidebarTrigger className="-ms-1" />
+          <Separator orientation="vertical" className="me-2 h-4" />
+          {currentPage && (
+            <Breadcrumb>
+              <BreadcrumbList>
+                {parentPage && (
+                  <>
+                    <BreadcrumbItem className="hidden md:block">
+                      <BreadcrumbLink asChild>
+                        <Link href={currentPage.parent!}>
+                          {t(parentPage.titleKey)}
+                        </Link>
+                      </BreadcrumbLink>
+                    </BreadcrumbItem>
+                    <BreadcrumbSeparator className="hidden md:block" />
+                  </>
+                )}
+                <BreadcrumbItem>
+                  <BreadcrumbPage className="line-clamp-1 max-w-[300px]">
+                    {'isDynamic' in currentPage && currentPage.isDynamic
+                      ? currentPage.titleKey
+                      : t(currentPage.titleKey)}
+                  </BreadcrumbPage>
+                </BreadcrumbItem>
+              </BreadcrumbList>
+            </Breadcrumb>
+          )}
+        </div>
+
+        {/* Action buttons at the right end */}
+        {dynamicBreadcrumb?.actions && (
+          <div className="flex items-center gap-1">
+            {dynamicBreadcrumb.actions}
+          </div>
         )}
       </div>
     </motion.header>
