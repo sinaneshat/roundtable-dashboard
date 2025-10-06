@@ -127,7 +127,7 @@ export function PricingContent({
   // Loading state
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center py-12">
+      <div className="flex items-center justify-center py-16">
         <div className="flex flex-col items-center gap-3">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
           <p className="text-sm text-muted-foreground">{t('common.loading')}</p>
@@ -139,7 +139,7 @@ export function PricingContent({
   // Error state
   if (error) {
     return (
-      <div className="flex items-center justify-center py-12">
+      <div className="flex items-center justify-center py-16">
         <div className="text-center space-y-3">
           <p className="text-sm font-medium text-destructive">{t('common.error')}</p>
           <p className="text-xs text-muted-foreground">{t('plans.errorDescription')}</p>
@@ -152,93 +152,101 @@ export function PricingContent({
   }
 
   return (
-    <div className="space-y-6">
-      {/* Active Subscription Banner */}
-      {showSubscriptionBanner && activeSubscription && (
-        <Card className="bg-primary/5 border-primary/20">
-          <CardContent className="flex items-center gap-3 py-3">
-            <CreditCard className="h-5 w-5 text-primary shrink-0" />
-            <div className="flex-1 min-w-0">
-              <p className="font-medium text-sm">{t('billing.currentPlan')}</p>
-              <p className="text-xs text-muted-foreground">
-                {activeSubscription.currentPeriodEnd
-                  && `${t('billing.renewsOn')} ${new Date(activeSubscription.currentPeriodEnd).toLocaleDateString()}`}
-              </p>
-            </div>
-            <div className="flex items-center gap-2 shrink-0">
-              <div className="px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-medium uppercase">
-                {activeSubscription.status}
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={onManageBilling}
-                className="gap-2"
-              >
-                {t('billing.manageBilling')}
-                <ExternalLink className="h-3.5 w-3.5" />
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+    <div className="mx-auto px-3 sm:px-4 md:px-6">
+      <div className="space-y-8">
+        {/* Active Subscription Banner */}
+        {showSubscriptionBanner && activeSubscription && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3 }}
+          >
+            <Card className="bg-primary/5 border-primary/20">
+              <CardContent className="flex items-center gap-3 py-3">
+                <CreditCard className="h-5 w-5 text-primary shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium text-sm">{t('billing.currentPlan')}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {activeSubscription.currentPeriodEnd
+                      && `${t('billing.renewsOn')} ${new Date(activeSubscription.currentPeriodEnd).toLocaleDateString()}`}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <div className="px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-medium uppercase">
+                    {activeSubscription.status}
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={onManageBilling}
+                    className="gap-2"
+                  >
+                    {t('billing.manageBilling')}
+                    <ExternalLink className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
+        )}
 
-      {/* Pricing Content */}
-      <Tabs
-        value={selectedInterval}
-        onValueChange={value => setSelectedInterval(value as BillingInterval)}
-        className="space-y-8"
-      >
-        {/* Billing Interval Toggle */}
-        <div className="flex justify-center">
-          <TabsList>
-            <TabsTrigger value="month">
-              {t('billing.interval.monthly')}
-            </TabsTrigger>
-            <TabsTrigger value="year">
-              {t('billing.interval.annual')}
-            </TabsTrigger>
-          </TabsList>
-        </div>
+        {/* Pricing Content */}
+        <Tabs
+          value={selectedInterval}
+          onValueChange={value => setSelectedInterval(value as BillingInterval)}
+          className="space-y-8"
+        >
+          {/* Billing Interval Toggle */}
+          <div className="flex justify-center">
+            <TabsList>
+              <TabsTrigger value="month">
+                {t('billing.interval.monthly')}
+              </TabsTrigger>
+              <TabsTrigger value="year">
+                {t('billing.interval.annual')}
+              </TabsTrigger>
+            </TabsList>
+          </div>
 
-        {/* Monthly Plans */}
-        <TabsContent value="month">
-          <ProductGrid
-            products={getProductsForInterval('month')}
-            interval="month"
-            hasActiveSubscription={hasActiveSubscription}
-            getSubscriptionForPrice={getSubscriptionForPrice}
-            hasAnyActiveSubscription={hasAnyActiveSubscription}
-            processingPriceId={processingPriceId}
-            cancelingSubscriptionId={cancelingSubscriptionId}
-            isManagingBilling={isManagingBilling}
-            onSubscribe={onSubscribe}
-            onCancel={onCancel}
-            onManageBilling={onManageBilling}
-            calculateAnnualSavings={calculateAnnualSavings}
-            t={t}
-          />
-        </TabsContent>
+          {/* Monthly Plans */}
+          <TabsContent value="month" className="mt-0">
+            <ProductGrid
+              products={getProductsForInterval('month')}
+              interval="month"
+              hasActiveSubscription={hasActiveSubscription}
+              getSubscriptionForPrice={getSubscriptionForPrice}
+              hasAnyActiveSubscription={hasAnyActiveSubscription}
+              processingPriceId={processingPriceId}
+              cancelingSubscriptionId={cancelingSubscriptionId}
+              isManagingBilling={isManagingBilling}
+              onSubscribe={onSubscribe}
+              onCancel={onCancel}
+              onManageBilling={onManageBilling}
+              calculateAnnualSavings={calculateAnnualSavings}
+              t={t}
+            />
+          </TabsContent>
 
-        {/* Annual Plans */}
-        <TabsContent value="year">
-          <ProductGrid
-            products={getProductsForInterval('year')}
-            interval="year"
-            hasActiveSubscription={hasActiveSubscription}
-            getSubscriptionForPrice={getSubscriptionForPrice}
-            hasAnyActiveSubscription={hasAnyActiveSubscription}
-            processingPriceId={processingPriceId}
-            cancelingSubscriptionId={cancelingSubscriptionId}
-            isManagingBilling={isManagingBilling}
-            onSubscribe={onSubscribe}
-            onCancel={onCancel}
-            onManageBilling={onManageBilling}
-            calculateAnnualSavings={calculateAnnualSavings}
-            t={t}
-          />
-        </TabsContent>
-      </Tabs>
+          {/* Annual Plans */}
+          <TabsContent value="year" className="mt-0">
+            <ProductGrid
+              products={getProductsForInterval('year')}
+              interval="year"
+              hasActiveSubscription={hasActiveSubscription}
+              getSubscriptionForPrice={getSubscriptionForPrice}
+              hasAnyActiveSubscription={hasAnyActiveSubscription}
+              processingPriceId={processingPriceId}
+              cancelingSubscriptionId={cancelingSubscriptionId}
+              isManagingBilling={isManagingBilling}
+              onSubscribe={onSubscribe}
+              onCancel={onCancel}
+              onManageBilling={onManageBilling}
+              calculateAnnualSavings={calculateAnnualSavings}
+              t={t}
+            />
+          </TabsContent>
+        </Tabs>
+      </div>
     </div>
   );
 }
@@ -280,7 +288,7 @@ function ProductGrid({
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        className="flex flex-col items-center justify-center py-12"
+        className="flex flex-col items-center justify-center py-16"
       >
         <p className="text-sm text-muted-foreground">
           {t('billing.noPlansForInterval')}
@@ -304,19 +312,26 @@ function ProductGrid({
 
   return (
     <div className="w-full">
-      <div className="grid grid-cols-1 gap-4 w-full min-w-0 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+      {/* Responsive grid with proper gap and breakpoints */}
+      <div className="grid grid-cols-1 gap-6 w-full sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {/* Free Tier Card - Always First */}
-        <FreePricingCard
-          name={freeTierProduct.name}
-          description={freeTierProduct.description}
-          price={{
-            amount: 0, // Free tier
-            currency: 'usd',
-            interval,
-          }}
-          features={freeTierProduct.features}
-          delay={0}
-        />
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.3, delay: 0 }}
+        >
+          <FreePricingCard
+            name={freeTierProduct.name}
+            description={freeTierProduct.description}
+            price={{
+              amount: 0, // Free tier
+              currency: 'usd',
+              interval,
+            }}
+            features={freeTierProduct.features}
+            delay={0}
+          />
+        </motion.div>
 
         {/* Paid Plans */}
         {products.map((product, index) => {
@@ -334,29 +349,35 @@ function ProductGrid({
           const isMostPopular = products.length === 3 && index === 1;
 
           return (
-            <PricingCard
+            <motion.div
               key={product.id}
-              name={product.name}
-              description={product.description}
-              price={{
-                amount: price.unitAmount,
-                currency: price.currency,
-                interval,
-                trialDays: price.trialPeriodDays,
-              }}
-              features={product.features}
-              isCurrentPlan={hasSubscription}
-              isMostPopular={isMostPopular}
-              isProcessingSubscribe={processingPriceId === price.id}
-              isProcessingCancel={subscription ? cancelingSubscriptionId === subscription.id : false}
-              isProcessingManageBilling={hasSubscription ? isManagingBilling : false}
-              hasOtherSubscription={hasAnyActiveSubscription && !hasSubscription}
-              onSubscribe={() => onSubscribe(price.id)}
-              onCancel={subscription ? () => onCancel(subscription.id) : undefined}
-              onManageBilling={hasSubscription ? onManageBilling : undefined}
-              delay={(index + 1) * 0.1} // Add 1 to account for free tier being first
-              annualSavingsPercent={interval === 'year' ? calculateAnnualSavings(product.id) : undefined}
-            />
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.3, delay: (index + 1) * 0.1 }}
+            >
+              <PricingCard
+                name={product.name}
+                description={product.description}
+                price={{
+                  amount: price.unitAmount,
+                  currency: price.currency,
+                  interval,
+                  trialDays: price.trialPeriodDays,
+                }}
+                features={product.features}
+                isCurrentPlan={hasSubscription}
+                isMostPopular={isMostPopular}
+                isProcessingSubscribe={processingPriceId === price.id}
+                isProcessingCancel={subscription ? cancelingSubscriptionId === subscription.id : false}
+                isProcessingManageBilling={hasSubscription ? isManagingBilling : false}
+                hasOtherSubscription={hasAnyActiveSubscription && !hasSubscription}
+                onSubscribe={() => onSubscribe(price.id)}
+                onCancel={subscription ? () => onCancel(subscription.id) : undefined}
+                onManageBilling={hasSubscription ? onManageBilling : undefined}
+                delay={(index + 1) * 0.1} // Add 1 to account for free tier being first
+                annualSavingsPercent={interval === 'year' ? calculateAnnualSavings(product.id) : undefined}
+              />
+            </motion.div>
           );
         })}
       </div>

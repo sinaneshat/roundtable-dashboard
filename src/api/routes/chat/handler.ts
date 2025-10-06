@@ -23,6 +23,7 @@ import {
   enforceMemoryQuota,
   enforceMessageQuota,
   enforceThreadQuota,
+  getUserUsageStats,
   incrementCustomRoleUsage,
   incrementMemoryUsage,
   incrementMessageUsage,
@@ -31,12 +32,13 @@ import {
 import type { ApiEnv } from '@/api/types';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db/schema';
-import type {
-  ROUNDTABLE_MODE_INSTRUCTIONS,
-} from '@/lib/ai/models-config';
+import type { ModelTierRequirement, ROUNDTABLE_MODE_INSTRUCTIONS } from '@/lib/ai/models-config';
 import {
   buildRoundtableSystemPrompt,
+  canAccessModel,
   formatMessageAsHumanContribution,
+  getModelById,
+  getTierDisplayName,
 } from '@/lib/ai/models-config';
 
 import type {
@@ -249,6 +251,36 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
 
     const body = c.validated.body;
     const db = await getDbAsync();
+
+    // Get user's subscription tier to validate model access
+    const usageStats = await getUserUsageStats(user.id);
+    const userTier = usageStats.subscription.tier as ModelTierRequirement;
+
+    // Validate that user can access all requested models
+    for (const participant of body.participants) {
+      const model = getModelById(participant.modelId);
+
+      if (!model) {
+        throw createError.badRequest(
+          `Model "${participant.modelId}" not found`,
+          {
+            errorType: 'validation',
+            field: 'participants.modelId',
+          },
+        );
+      }
+
+      if (!canAccessModel(userTier, participant.modelId)) {
+        throw createError.unauthorized(
+          `Your ${getTierDisplayName(userTier)} plan does not include access to ${model.name}. Upgrade to ${getTierDisplayName(model.minTier)} or higher to use this model.`,
+          {
+            errorType: 'authorization',
+            resource: 'model',
+            resourceId: participant.modelId,
+          },
+        );
+      }
+    }
 
     // Use temporary title - AI title will be generated asynchronously
     // But generate slug from first message immediately for nice URLs
@@ -604,8 +636,23 @@ export const getPublicThreadHandler: RouteHandler<typeof getPublicThreadRoute, A
       );
     }
 
+    // Fetch participants (ordered by priority) - same as private handler
+    const participants = await db.query.chatParticipant.findMany({
+      where: eq(tables.chatParticipant.threadId, thread.id),
+      orderBy: [tables.chatParticipant.priority],
+    });
+
+    // Fetch messages (ordered by creation time) - same as private handler
+    const messages = await db.query.chatMessage.findMany({
+      where: eq(tables.chatMessage.threadId, thread.id),
+      orderBy: [tables.chatMessage.createdAt],
+    });
+
+    // Return same structure as private thread handler for consistency
     return Responses.ok(c, {
       thread,
+      participants,
+      messages,
     });
   },
 );
@@ -690,6 +737,34 @@ export const addParticipantHandler: RouteHandler<typeof addParticipantRoute, Api
 
     // Verify thread ownership
     await verifyThreadOwnership(id, user.id, db);
+
+    // Get user's subscription tier to validate model access
+    const usageStats = await getUserUsageStats(user.id);
+    const userTier = usageStats.subscription.tier as ModelTierRequirement;
+
+    // Validate that user can access the requested model
+    const model = getModelById(body.modelId);
+
+    if (!model) {
+      throw createError.badRequest(
+        `Model "${body.modelId}" not found`,
+        {
+          errorType: 'validation',
+          field: 'modelId',
+        },
+      );
+    }
+
+    if (!canAccessModel(userTier, body.modelId)) {
+      throw createError.unauthorized(
+        `Your ${getTierDisplayName(userTier)} plan does not include access to ${model.name}. Upgrade to ${getTierDisplayName(model.minTier)} or higher to use this model.`,
+        {
+          errorType: 'authorization',
+          resource: 'model',
+          resourceId: body.modelId,
+        },
+      );
+    }
 
     const participantId = ulid();
     const now = new Date();
@@ -846,6 +921,36 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
 
     // Update participants if provided
     if (newParticipants && newParticipants.length > 0) {
+      // Get user's subscription tier to validate model access
+      const usageStats = await getUserUsageStats(user.id);
+      const userTier = usageStats.subscription.tier as ModelTierRequirement;
+
+      // Validate that user can access all requested models
+      for (const participant of newParticipants) {
+        const model = getModelById(participant.modelId);
+
+        if (!model) {
+          throw createError.badRequest(
+            `Model "${participant.modelId}" not found`,
+            {
+              errorType: 'validation',
+              field: 'participants.modelId',
+            },
+          );
+        }
+
+        if (!canAccessModel(userTier, participant.modelId)) {
+          throw createError.unauthorized(
+            `Your ${getTierDisplayName(userTier)} plan does not include access to ${model.name}. Upgrade to ${getTierDisplayName(model.minTier)} or higher to use this model.`,
+            {
+              errorType: 'authorization',
+              resource: 'model',
+              resourceId: participant.modelId,
+            },
+          );
+        }
+      }
+
       // Delete existing participants
       await db
         .delete(tables.chatParticipant)

@@ -91,6 +91,7 @@ export function useAutoScroll({
     const { scrollTop, scrollHeight, clientHeight } = element;
     const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
 
+    // console.log('isAtBottom check:', { scrollTop, scrollHeight, clientHeight, distanceFromBottom, threshold });
     return distanceFromBottom <= threshold;
   }, [threshold]);
 
@@ -192,13 +193,16 @@ export function useAutoScroll({
       return;
 
     let rafId: number;
+    let lastKnownScrollHeight = element.scrollHeight;
 
     const scrollLoop = () => {
       const currentScrollHeight = element.scrollHeight;
 
-      // Only scroll if we're supposed to auto-scroll and content changed
-      if ((isAutoScrollEnabled || isStreaming) && currentScrollHeight !== lastScrollHeightRef.current) {
+      // Always scroll during streaming if content changed, regardless of user scroll position
+      // This ensures we follow the streaming content in real-time
+      if (currentScrollHeight !== lastKnownScrollHeight) {
         element.scrollTop = element.scrollHeight;
+        lastKnownScrollHeight = currentScrollHeight;
         lastScrollHeightRef.current = currentScrollHeight;
       }
 
@@ -206,7 +210,7 @@ export function useAutoScroll({
       rafId = requestAnimationFrame(scrollLoop);
     };
 
-    // Start the scroll loop
+    // Start the scroll loop immediately
     rafId = requestAnimationFrame(scrollLoop);
 
     // Cleanup on unmount or when streaming stops
@@ -215,7 +219,7 @@ export function useAutoScroll({
         cancelAnimationFrame(rafId);
       }
     };
-  }, [isStreaming, isAutoScrollEnabled]);
+  }, [isStreaming]);
 
   /**
    * Initialize scroll position on mount

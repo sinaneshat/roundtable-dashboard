@@ -64,6 +64,15 @@ export type GetPublicThreadResponse = InferResponseType<
 >;
 
 // ============================================================================
+// Type Aliases - For convenience
+// ============================================================================
+
+/**
+ * Thread mode type (matches database enum)
+ */
+export type ThreadMode = 'analyzing' | 'brainstorming' | 'debating' | 'solving';
+
+// ============================================================================
 // Service Functions
 // ============================================================================
 

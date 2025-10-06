@@ -119,6 +119,15 @@ export type ModelMetadata = {
   };
 };
 
+/**
+ * Subscription tier required to access a model
+ * - free: Available to all users (cheapest, most basic models)
+ * - starter: Requires Starter subscription or higher (basic models)
+ * - pro: Requires Pro subscription or higher (advanced reasoning models)
+ * - power: Requires Power subscription (most expensive, cutting-edge models)
+ */
+export type ModelTierRequirement = 'free' | 'starter' | 'pro' | 'power';
+
 export type AIModel = {
   id: string;
   provider: ModelProvider;
@@ -130,6 +139,7 @@ export type AIModel = {
   isEnabled: boolean;
   order: number;
   metadata: ModelMetadata;
+  minTier: ModelTierRequirement; // Minimum subscription tier required to use this model
 };
 
 /**
@@ -160,6 +170,7 @@ export const AI_MODELS: AIModel[] = [
     },
     isEnabled: true,
     order: 1,
+    minTier: 'pro', // Advanced reasoning model - requires Pro
     metadata: {
       icon: '/static/icons/ai-models/claude.png',
       color: '#C87544',
@@ -196,6 +207,7 @@ export const AI_MODELS: AIModel[] = [
     },
     isEnabled: true,
     order: 2,
+    minTier: 'power', // Premium model - most expensive
     metadata: {
       icon: '/static/icons/ai-models/claude.png',
       color: '#C87544',
@@ -232,6 +244,7 @@ export const AI_MODELS: AIModel[] = [
     },
     isEnabled: true,
     order: 3,
+    minTier: 'free', // Basic, cost-effective model
     metadata: {
       icon: '/static/icons/ai-models/claude.png',
       color: '#C87544',
@@ -270,6 +283,7 @@ export const AI_MODELS: AIModel[] = [
     },
     isEnabled: true,
     order: 4,
+    minTier: 'pro', // Advanced multimodal model
     metadata: {
       icon: '/static/icons/ai-models/openai.png',
       color: '#10A37F',
@@ -306,6 +320,7 @@ export const AI_MODELS: AIModel[] = [
     },
     isEnabled: true,
     order: 5,
+    minTier: 'power', // Premium tier - expensive
     metadata: {
       icon: '/static/icons/ai-models/openai.png',
       color: '#10A37F',
@@ -342,6 +357,7 @@ export const AI_MODELS: AIModel[] = [
     },
     isEnabled: true,
     order: 6,
+    minTier: 'pro', // Reasoning model
     metadata: {
       icon: '/static/icons/ai-models/openai.png',
       color: '#10A37F',
@@ -380,6 +396,7 @@ export const AI_MODELS: AIModel[] = [
     },
     isEnabled: true,
     order: 7,
+    minTier: 'starter', // Mid-tier pricing
     metadata: {
       icon: '/static/icons/ai-models/gemini.png',
       color: '#4285F4',
@@ -416,6 +433,7 @@ export const AI_MODELS: AIModel[] = [
     },
     isEnabled: true,
     order: 8,
+    minTier: 'free', // Most cost-effective model
     metadata: {
       icon: '/static/icons/ai-models/gemini.png',
       color: '#4285F4',
@@ -454,6 +472,7 @@ export const AI_MODELS: AIModel[] = [
     },
     isEnabled: true,
     order: 9,
+    minTier: 'power', // Large, resource-intensive model
     metadata: {
       icon: '/static/icons/ai-models/meta.png',
       color: '#0081FB',
@@ -492,6 +511,7 @@ export const AI_MODELS: AIModel[] = [
     },
     isEnabled: true,
     order: 10,
+    minTier: 'free', // Very cost-effective
     metadata: {
       icon: '/static/icons/ai-models/deepseek.png',
       color: '#1E90FF',
@@ -530,6 +550,7 @@ export const AI_MODELS: AIModel[] = [
     },
     isEnabled: true,
     order: 11,
+    minTier: 'starter', // Research capability
     metadata: {
       icon: '/static/icons/ai-models/perplexity.png',
       color: '#20808D',
@@ -804,4 +825,73 @@ export function formatMessageAsHumanContribution(
 ): string {
   const attribution = getMessageAttribution(participantIndex, participantRole);
   return `${attribution}: ${messageText}`;
+}
+
+// ============================================================================
+// Subscription Tier Access Control
+// ============================================================================
+
+/**
+ * Tier hierarchy for comparison
+ * Higher index = higher tier
+ */
+const TIER_HIERARCHY: Record<ModelTierRequirement, number> = {
+  free: 0,
+  starter: 1,
+  pro: 2,
+  power: 3,
+};
+
+/**
+ * Check if a user's subscription tier can access a specific model tier requirement
+ * @param userTier - The user's current subscription tier
+ * @param requiredTier - The tier required by the model
+ * @returns true if user can access the model, false otherwise
+ */
+export function canAccessModelTier(
+  userTier: ModelTierRequirement,
+  requiredTier: ModelTierRequirement,
+): boolean {
+  return TIER_HIERARCHY[userTier] >= TIER_HIERARCHY[requiredTier];
+}
+
+/**
+ * Check if a user can access a specific model based on their subscription tier
+ * @param userTier - The user's current subscription tier
+ * @param modelId - The model ID to check
+ * @returns true if user can access the model, false otherwise
+ */
+export function canAccessModel(
+  userTier: ModelTierRequirement,
+  modelId: string,
+): boolean {
+  const model = getModelById(modelId);
+  if (!model || !model.isEnabled) {
+    return false;
+  }
+  return canAccessModelTier(userTier, model.minTier);
+}
+
+/**
+ * Filter models that are accessible to a user based on their subscription tier
+ * @param userTier - The user's current subscription tier
+ * @param models - Optional array of models to filter (defaults to all enabled models)
+ * @returns Array of models the user can access
+ */
+export function getAccessibleModels(
+  userTier: ModelTierRequirement,
+  models: AIModel[] = AI_MODELS,
+): AIModel[] {
+  return models.filter(model => 
+    model.isEnabled && canAccessModelTier(userTier, model.minTier),
+  );
+}
+
+/**
+ * Get the tier name in a human-readable format
+ * @param tier - The subscription tier
+ * @returns Capitalized tier name
+ */
+export function getTierDisplayName(tier: ModelTierRequirement): string {
+  return tier.charAt(0).toUpperCase() + tier.slice(1);
 }

@@ -122,8 +122,10 @@
     "knip": "knip",
     "i18n:validate": "tsx scripts/validate-translations.ts",
     "i18n:check-unused": "tsx scripts/find-unused-keys.ts",
-    "i18n:find-hardcoded": "grep -r --include='*.tsx' --include='*.ts' --exclude-dir=node_modules --exclude-dir=.next '\"[^\"]*[A-Za-z][^\"]*\"' src/components/ src/app/ | grep -v 't(' | grep -v 'useTranslations' | head -20",
+    "i18n:find-hardcoded": "tsx scripts/find-hardcoded-strings.ts",
     "i18n:check-missing": "tsx scripts/check-missing-translations.ts",
+    "i18n:audit": "tsx scripts/i18n-audit.ts",
+    "i18n:fix": "tsx scripts/fix-translations.ts",
     "i18n:full-check": "npm run i18n:validate && npm run i18n:check-unused && npm run i18n:find-hardcoded && npm run i18n:check-missing"
   },
   "dependencies": {

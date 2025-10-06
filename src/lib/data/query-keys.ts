@@ -110,21 +110,25 @@ export const invalidationPatterns = {
   ],
 
   // Subscription operations
+  // IMPORTANT: Always invalidate usage queries with subscriptions since quotas are tied to subscription tier
   subscriptions: [
     queryKeys.subscriptions.lists(),
     queryKeys.subscriptions.current(),
+    queryKeys.usage.all,
   ],
 
   subscriptionDetail: (subscriptionId: string) => [
     queryKeys.subscriptions.detail(subscriptionId),
     queryKeys.subscriptions.lists(),
     queryKeys.subscriptions.current(),
+    queryKeys.usage.all,
   ],
 
-  // After checkout - invalidate everything billing related
+  // After checkout - invalidate everything billing related including usage/quotas
   afterCheckout: [
     queryKeys.subscriptions.all,
     queryKeys.products.all,
+    queryKeys.usage.all,
   ],
 
   // Usage operations - invalidate after chat operations

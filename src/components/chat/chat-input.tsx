@@ -9,22 +9,24 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
+import { MessageContentSchema, ThreadModeSchema } from '@/api/routes/chat/schema';
 import type { ParticipantConfig } from '@/components/chat/chat-config-sheet';
 import { ChatMemoriesList } from '@/components/chat/chat-memories-list';
 import { ChatParticipantsList, ParticipantsPreview } from '@/components/chat/chat-participants-list';
 import { Button } from '@/components/ui/button';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from '@/components/ui/use-toast';
 import { useCreateThreadMutation } from '@/hooks/mutations/chat-mutations';
 import { cn } from '@/lib/ui/cn';
 import { chatGlass } from '@/lib/ui/glassmorphism';
+import type { ThreadMode } from '@/services/api';
 
 // ============================================================================
 // Constants
@@ -38,12 +40,18 @@ const CHAT_MODES = [
 ] as const;
 
 // ============================================================================
-// Schema
+// Form Schema - Reusing Backend Validation
 // ============================================================================
 
+/**
+ * Chat input form validation schema
+ * Reuses backend validation schemas to ensure consistency:
+ * - MessageContentSchema: min 1, max 5000 characters (from backend)
+ * - ThreadModeSchema: enum validation (from backend)
+ */
 const chatInputSchema = z.object({
-  message: z.string().min(1, 'Message is required').max(5000, 'Message is too long'),
-  mode: z.enum(['brainstorming', 'analyzing', 'debating', 'solving']),
+  message: MessageContentSchema,
+  mode: ThreadModeSchema,
 });
 
 type ChatInputFormData = z.infer<typeof chatInputSchema>;
@@ -58,7 +66,7 @@ type ChatInputProps = {
   autoFocus?: boolean;
   disabled?: boolean;
   initialMessage?: string;
-  initialMode?: 'brainstorming' | 'analyzing' | 'debating' | 'solving';
+  initialMode?: ThreadMode;
   initialParticipants?: ParticipantConfig[];
 };
 
@@ -292,7 +300,7 @@ export function ChatInput({
           />
 
           {/* Bottom Controls Row */}
-          <div className="flex items-center gap-2 w-full">
+          <div className="flex items-center flex-wrap gap-1.5 sm:gap-2 w-full">
             {/* Left: AI and Memory Buttons */}
             <ChatParticipantsList
               participants={participants}
@@ -308,14 +316,14 @@ export function ChatInput({
             <Select value={modeValue} onValueChange={value => setValue('mode', value as typeof modeValue)}>
               <SelectTrigger
                 size="sm"
-                className="h-8 w-fit gap-1.5 rounded-full border px-3 text-xs"
+                className="h-8 sm:h-9 w-fit gap-1.5 sm:gap-2 rounded-full border px-3 sm:px-4 text-xs"
               >
                 <SelectValue>
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-xs">
+                  <div className="flex items-center gap-1.5 sm:gap-2">
+                    <span className="text-xs sm:text-sm">
                       {CHAT_MODES.find(m => m.value === modeValue)?.icon}
                     </span>
-                    <span className="text-xs font-medium">
+                    <span className="text-xs font-medium hidden xs:inline sm:inline">
                       {CHAT_MODES.find(m => m.value === modeValue)?.label}
                     </span>
                   </div>
@@ -334,10 +342,10 @@ export function ChatInput({
             </Select>
 
             {/* Spacer */}
-            <div className="flex-1" />
+            <div className="flex-1 min-w-[8px]" />
 
             {/* Right: Clear Button and Send Button */}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 sm:gap-2 ml-auto">
               {/* Clear Button (when typing) */}
               <AnimatePresence>
                 {messageValue && !isSubmitting && (

@@ -3,10 +3,10 @@ import { z } from 'zod';
 
 import type { SubscriptionTier } from '../tables/usage';
 import {
-  SUBSCRIPTION_TIERS,
-  subscriptionTierQuotas,
-  userChatUsage,
-  userChatUsageHistory,
+    SUBSCRIPTION_TIERS,
+    subscriptionTierQuotas,
+    userChatUsage,
+    userChatUsageHistory,
 } from '../tables/usage';
 
 // ============================================================================
@@ -154,6 +154,8 @@ export const usageStatsSchema = z.object({
   subscription: z.object({
     tier: subscriptionTierSchema,
     isAnnual: z.boolean(),
+    pendingTierChange: subscriptionTierSchema.nullable().optional(),
+    pendingTierIsAnnual: z.boolean().nullable().optional(),
   }),
 });
 

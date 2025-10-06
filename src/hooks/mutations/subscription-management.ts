@@ -16,8 +16,8 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/data/query-keys';
 import type { getSubscriptionsService } from '@/services/api';
 import {
-  cancelSubscriptionService,
-  switchSubscriptionService,
+    cancelSubscriptionService,
+    switchSubscriptionService,
 } from '@/services/api';
 
 /**
@@ -66,6 +66,13 @@ export function useSwitchSubscriptionMutation() {
       // Invalidate all subscription-related queries to ensure UI updates
       void queryClient.invalidateQueries({
         queryKey: queryKeys.subscriptions.all,
+        refetchType: 'active',
+      });
+
+      // Invalidate usage queries since quota limits are tied to subscription tier
+      // This ensures quota limits, stats, and remaining usage are immediately updated
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.usage.all,
         refetchType: 'active',
       });
     },
@@ -131,6 +138,13 @@ export function useCancelSubscriptionMutation() {
       // Invalidate all subscription-related queries to ensure UI updates
       void queryClient.invalidateQueries({
         queryKey: queryKeys.subscriptions.all,
+        refetchType: 'active',
+      });
+
+      // Invalidate usage queries since quota limits are tied to subscription tier
+      // When subscription is cancelled, user may revert to free tier limits
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.usage.all,
         refetchType: 'active',
       });
     },

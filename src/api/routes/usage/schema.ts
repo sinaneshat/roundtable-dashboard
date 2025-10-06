@@ -107,6 +107,14 @@ export const UsageStatsResponseSchema = createApiResponseSchema(
         description: 'Whether subscription is annual',
         example: false,
       }),
+      pendingTierChange: subscriptionTierSchema.nullable().optional().openapi({
+        description: 'Scheduled tier change (for downgrades at period end)',
+        example: 'starter',
+      }),
+      pendingTierIsAnnual: z.boolean().nullable().optional().openapi({
+        description: 'Whether pending tier is annual',
+        example: false,
+      }),
     }),
   }),
 ).openapi('UsageStatsResponse');

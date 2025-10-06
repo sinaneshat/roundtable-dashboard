@@ -4,7 +4,6 @@ import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 
 import { ChatPageHeader } from '@/components/chat/chat-header';
-import { ChatContainer } from '@/components/chat/chat-layout';
 import { ChatPage } from '@/components/chat/chat-states';
 import { PricingContent } from '@/components/pricing/pricing-content';
 import {
@@ -103,21 +102,19 @@ export default function PricingScreen() {
         description={t('billing.products.description')}
       />
 
-      <ChatContainer>
-        <PricingContent
-          products={products}
-          subscriptions={subscriptions}
-          isLoading={isLoading}
-          error={productsError}
-          processingPriceId={processingPriceId}
-          cancelingSubscriptionId={cancelingSubscriptionId}
-          isManagingBilling={isManagingBilling}
-          onSubscribe={handleSubscribe}
-          onCancel={handleCancel}
-          onManageBilling={handleManageBilling}
-          showSubscriptionBanner={false}
-        />
-      </ChatContainer>
+      <PricingContent
+        products={products}
+        subscriptions={subscriptions}
+        isLoading={isLoading}
+        error={productsError}
+        processingPriceId={processingPriceId}
+        cancelingSubscriptionId={cancelingSubscriptionId}
+        isManagingBilling={isManagingBilling}
+        onSubscribe={handleSubscribe}
+        onCancel={handleCancel}
+        onManageBilling={handleManageBilling}
+        showSubscriptionBanner={false}
+      />
     </ChatPage>
   );
 }

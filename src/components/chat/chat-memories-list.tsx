@@ -6,57 +6,55 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
+import { CreateMemoryRequestSchema } from '@/api/routes/chat/schema';
 import RHFSelect from '@/components/forms/rhf-select';
 import RHFTextField from '@/components/forms/rhf-text-field';
 import RHFTextarea from '@/components/forms/rhf-textarea';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-  CommandSeparator,
+    Command,
+    CommandEmpty,
+    CommandGroup,
+    CommandInput,
+    CommandItem,
+    CommandList,
+    CommandSeparator,
 } from '@/components/ui/command';
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
 } from '@/components/ui/dialog';
 import { Form } from '@/components/ui/form';
 import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
 } from '@/components/ui/popover';
 import { useCreateMemoryMutation, useDeleteMemoryMutation } from '@/hooks/mutations/chat-mutations';
 import { useMemoriesQuery } from '@/hooks/queries/chat-memories';
 import { cn } from '@/lib/ui/cn';
 
 // ============================================================================
-// Types & Schema
+// Types & Schema - Reusing Backend Validation
 // ============================================================================
 
 type ChatMemoriesListProps = {
   selectedMemoryIds: string[];
   onMemoryIdsChange: (memoryIds: string[]) => void;
   className?: string;
+  isStreaming?: boolean; // Disable queries during streaming to prevent excessive refetches
 };
 
-// Zod schema for memory creation form
-const createMemorySchema = z.object({
-  title: z.string().min(1, 'Title is required').max(200, 'Title is too long'),
-  content: z.string().min(1, 'Content is required'),
-  type: z.enum(['personal', 'topic', 'instruction', 'fact']),
-  description: z.string().max(500, 'Description is too long').optional(),
-});
-
-type CreateMemoryFormData = z.infer<typeof createMemorySchema>;
+/**
+ * Memory creation form data
+ * Reuses backend CreateMemoryRequestSchema to ensure consistent validation
+ */
+type CreateMemoryFormData = z.infer<typeof CreateMemoryRequestSchema>;
 
 // ============================================================================
 // Component
@@ -78,18 +76,20 @@ export function ChatMemoriesList({
   selectedMemoryIds,
   onMemoryIdsChange,
   className,
+  isStreaming = false,
 }: ChatMemoriesListProps) {
   const [open, setOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
 
-  const { data: memoriesData } = useMemoriesQuery();
+  // Disable queries during streaming to prevent excessive refetches and flashing
+  const { data: memoriesData } = useMemoriesQuery(!isStreaming);
   const createMemoryMutation = useCreateMemoryMutation();
   const deleteMemoryMutation = useDeleteMemoryMutation();
 
   // Initialize RHF form for creating memories
   const form = useForm<CreateMemoryFormData>({
-    resolver: zodResolver(createMemorySchema),
+    resolver: zodResolver(CreateMemoryRequestSchema),
     defaultValues: {
       title: '',
       content: '',
@@ -197,7 +197,7 @@ export function ChatMemoriesList({
           </Button>
         </PopoverTrigger>
 
-        <PopoverContent className="w-[280px] p-0" align="start">
+        <PopoverContent className="w-[calc(100vw-2rem)] sm:w-[320px] p-0" align="start">
           <Command shouldFilter={false}>
             <CommandInput
               placeholder="Search memories..."

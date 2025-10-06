@@ -16,6 +16,9 @@ import { cn } from '@/lib/ui/cn';
 // Types
 // ============================================================================
 
+/**
+ * Chat message type for display
+ */
 export type ChatMessageType = {
   id: string;
   role: 'user' | 'assistant';
@@ -117,7 +120,7 @@ export const ChatMessage = memo(({
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
-      {/* Avatar */}
+      {/* Avatar - Sticky during streaming for AI messages */}
       {isUser
         ? (
             <Avatar className="size-8 shrink-0">
@@ -131,22 +134,33 @@ export const ChatMessage = memo(({
             </Avatar>
           )
         : (
-            <Avatar className="size-8 shrink-0">
-              {modelConfig?.metadata?.icon
-                ? (
-                    <AvatarImage
-                      src={modelConfig.metadata.icon}
-                      alt={modelConfig.name}
-                    />
-                  )
-                : null}
-              <AvatarFallback
-                style={{ backgroundColor: modelConfig?.metadata?.color || undefined }}
-                className="text-white"
-              >
-                <Bot className="size-4" />
-              </AvatarFallback>
-            </Avatar>
+            <div
+              className={cn(
+                'size-8 shrink-0',
+                message.isStreaming && 'sticky top-4 z-10',
+              )}
+            >
+              {/* Background blur effect when sticky */}
+              {message.isStreaming && (
+                <div className="absolute -inset-2 bg-background/80 backdrop-blur-sm rounded-full -z-10" />
+              )}
+              <Avatar className="size-8 ring-2 ring-background">
+                {modelConfig?.metadata?.icon
+                  ? (
+                      <AvatarImage
+                        src={modelConfig.metadata.icon}
+                        alt={modelConfig.name}
+                      />
+                    )
+                  : null}
+                <AvatarFallback
+                  style={{ backgroundColor: modelConfig?.metadata?.color || undefined }}
+                  className="text-white"
+                >
+                  <Bot className="size-4" />
+                </AvatarFallback>
+              </Avatar>
+            </div>
           )}
 
       {/* Content */}
@@ -169,9 +183,18 @@ export const ChatMessage = memo(({
               )
             : modelConfig && (
               <>
-                <span className="text-sm font-semibold">
+                <span className={cn(
+                  'text-sm font-semibold',
+                  message.isStreaming && 'text-primary animate-pulse',
+                )}
+                >
                   {modelConfig.name}
                 </span>
+                {message.isStreaming && (
+                  <Badge variant="default" className="text-xs h-5 animate-pulse">
+                    Streaming...
+                  </Badge>
+                )}
                 {message.metadata?.role && (
                   <>
                     <span className="text-xs text-muted-foreground">•</span>

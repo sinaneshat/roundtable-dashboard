@@ -258,6 +258,7 @@ export function useToggleFavoriteMutation() {
  *
  * Uses optimistic updates for instant UI feedback
  * Rolls back on error
+ * Triggers ISR revalidation for public pages
  */
 export function useTogglePublicMutation() {
   const queryClient = useQueryClient();
@@ -354,13 +355,33 @@ export function useTogglePublicMutation() {
         console.error('Failed to toggle public status', error);
       }
     },
-    // On success, invalidate to ensure data is in sync
-    onSettled: (_data, _error, variables) => {
+    // On success, trigger ISR revalidation and invalidate queries
+    onSuccess: async (_data, variables) => {
+      // Trigger ISR revalidation for public page using Server Action
+      if (variables.slug) {
+        try {
+          const action = variables.isPublic ? 'publish' : 'unpublish';
+          const { revalidatePublicThread } = await import('@/app/auth/actions');
+          const result = await revalidatePublicThread(variables.slug, action);
+
+          if (!result.success) {
+            console.warn('ISR revalidation failed (non-critical):', result.error);
+          }
+        } catch (revalidateError) {
+          // Don't fail the mutation if revalidation fails
+          // The page will be regenerated on next request
+          console.error('ISR revalidation failed (non-critical):', revalidateError);
+        }
+      }
+
+      // Invalidate to ensure data is in sync
       invalidationPatterns.threadDetail(variables.threadId).forEach((key) => {
         queryClient.invalidateQueries({ queryKey: key });
       });
       if (variables.slug) {
         queryClient.invalidateQueries({ queryKey: queryKeys.threads.bySlug(variables.slug) });
+        // Invalidate public query as well
+        queryClient.invalidateQueries({ queryKey: queryKeys.threads.public(variables.slug) });
       }
     },
     retry: (failureCount, error: unknown) => {

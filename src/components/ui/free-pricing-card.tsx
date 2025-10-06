@@ -52,11 +52,11 @@ export function FreePricingCard({
         </div>
       </motion.div>
 
-      <div className="relative h-full rounded-2xl border-2 border-emerald-500/30 bg-gradient-to-br from-emerald-50/50 via-green-50/30 to-emerald-100/50 p-2 shadow-lg shadow-emerald-500/10 dark:from-emerald-950/20 dark:via-green-950/10 dark:to-emerald-900/20 md:rounded-3xl md:p-3">
+      <div className="relative h-full rounded-2xl border-2 border-emerald-500/40 dark:border-emerald-500/30 bg-gradient-to-br from-emerald-50/50 via-green-50/30 to-emerald-100/50 p-2 shadow-xl shadow-emerald-500/20 dark:from-emerald-950/20 dark:via-green-950/10 dark:to-emerald-900/20 md:rounded-3xl md:p-3">
         {/* Subtle glow effect for luxury feel */}
         <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-emerald-400/5 via-transparent to-green-500/5 md:rounded-3xl" />
 
-        <div className="relative flex h-full flex-col overflow-hidden rounded-xl border border-emerald-500/20 bg-white/80 p-6 backdrop-blur-sm dark:bg-gray-950/80 dark:shadow-[0px_0px_27px_0px_rgba(16,185,129,0.15)]">
+        <div className="relative flex h-full flex-col overflow-hidden rounded-xl border-2 border-emerald-500/30 dark:border-emerald-500/20 bg-white/80 p-6 backdrop-blur-sm dark:bg-gray-950/80 dark:shadow-[0px_0px_27px_0px_rgba(16,185,129,0.15)]">
           {/* Card Content */}
           <div className="relative flex flex-1 flex-col gap-6">
             {/* Header */}

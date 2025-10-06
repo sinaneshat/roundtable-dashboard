@@ -56,6 +56,15 @@ export type DeleteMemoryResponse = InferResponseType<
 >;
 
 // ============================================================================
+// Type Aliases - For convenience
+// ============================================================================
+
+/**
+ * Memory type enum (matches database)
+ */
+export type MemoryType = 'personal' | 'topic' | 'instruction' | 'fact';
+
+// ============================================================================
 // Service Functions
 // ============================================================================
 

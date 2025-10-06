@@ -107,6 +107,14 @@ async function ensureUserUsageRecord(userId: string): Promise<typeof tables.user
 /**
  * Rollover billing period
  * Archives current usage and resets counters for new period
+ *
+ * Following Theo's "Stay Sane with Stripe" pattern:
+ * - If user has active subscription: Stripe webhooks handle period renewal
+ * - If subscription ended: Downgrade to free tier and use calendar months
+ * - Always archive old period before resetting
+ *
+ * Note: This function is primarily for handling expired subscriptions.
+ * Active subscriptions get their periods updated via Stripe sync when invoice.paid fires.
  */
 async function rolloverBillingPeriod(
   userId: string,
@@ -134,29 +142,182 @@ async function rolloverBillingPeriod(
     createdAt: now,
   });
 
-  // Calculate new period
+  // Check if user has an active Stripe subscription
+  // If currentPeriodEnd has passed and no Stripe sync updated it, subscription has ended
+  const user = await db.query.user.findFirst({
+    where: eq(tables.user.id, userId),
+  });
+
+  let shouldDowngradeToFree = false;
+
+  if (user) {
+    // Check if user has a Stripe customer record
+    const stripeCustomer = await db.query.stripeCustomer.findFirst({
+      where: eq(tables.stripeCustomer.userId, userId),
+    });
+
+    if (stripeCustomer) {
+      // Check if they have an active subscription in our DB
+      const activeSubscription = await db.query.stripeSubscription.findFirst({
+        where: and(
+          eq(tables.stripeSubscription.customerId, stripeCustomer.id),
+          eq(tables.stripeSubscription.status, 'active'),
+        ),
+      });
+
+      // No active subscription = downgrade to free
+      shouldDowngradeToFree = !activeSubscription;
+    } else {
+      // No Stripe customer = free tier user
+      shouldDowngradeToFree = true;
+    }
+  } else {
+    // User not found (shouldn't happen) - default to free tier for safety
+    shouldDowngradeToFree = true;
+  }
+
+  // Check if there's a pending tier change to apply
+  const hasPendingTierChange = currentUsage.pendingTierChange && currentUsage.pendingTierPriceId;
+
+  // Calculate new period (calendar-based for free tier or expired subscriptions)
   const periodStart = new Date(now.getFullYear(), now.getMonth(), 1);
   const periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
 
-  // Reset usage counters for new period
-  await db
-    .update(tables.userChatUsage)
-    .set({
-      currentPeriodStart: periodStart,
-      currentPeriodEnd: periodEnd,
-      threadsCreated: 0,
-      messagesCreated: 0,
-      memoriesCreated: 0,
-      customRolesCreated: 0,
-      updatedAt: now,
-    })
-    .where(eq(tables.userChatUsage.userId, userId));
+  if (hasPendingTierChange) {
+    // Apply scheduled downgrade from pending tier change
+    const pendingTier = currentUsage.pendingTierChange!;
+    const pendingIsAnnual = currentUsage.pendingTierIsAnnual || false;
 
-  apiLogger.info('Rolled over billing period for user', {
-    userId,
-    oldPeriod: { start: currentUsage.currentPeriodStart, end: currentUsage.currentPeriodEnd },
-    newPeriod: { start: periodStart, end: periodEnd },
-  });
+    const pendingTierQuota = await db.query.subscriptionTierQuotas.findFirst({
+      where: and(
+        eq(tables.subscriptionTierQuotas.tier, pendingTier),
+        eq(tables.subscriptionTierQuotas.isAnnual, pendingIsAnnual),
+      ),
+    });
+
+    if (pendingTierQuota) {
+      await db
+        .update(tables.userChatUsage)
+        .set({
+          subscriptionTier: pendingTier,
+          isAnnual: pendingIsAnnual,
+          threadsLimit: pendingTierQuota.threadsPerMonth,
+          messagesLimit: pendingTierQuota.messagesPerMonth,
+          memoriesLimit: pendingTierQuota.memoriesPerMonth,
+          customRolesLimit: pendingTierQuota.customRolesPerMonth,
+          currentPeriodStart: periodStart,
+          currentPeriodEnd: periodEnd,
+          threadsCreated: 0,
+          messagesCreated: 0,
+          memoriesCreated: 0,
+          customRolesCreated: 0,
+          // Clear pending tier change fields
+          pendingTierChange: null,
+          pendingTierIsAnnual: null,
+          pendingTierPriceId: null,
+          updatedAt: now,
+        })
+        .where(eq(tables.userChatUsage.userId, userId));
+
+      apiLogger.info('Rolled over billing period - applied scheduled downgrade', {
+        userId,
+        oldTier: currentUsage.subscriptionTier,
+        newTier: pendingTier,
+        oldPeriod: { start: currentUsage.currentPeriodStart, end: currentUsage.currentPeriodEnd },
+        newPeriod: { start: periodStart, end: periodEnd },
+        newLimits: {
+          threads: pendingTierQuota.threadsPerMonth,
+          messages: pendingTierQuota.messagesPerMonth,
+          memories: pendingTierQuota.memoriesPerMonth,
+          customRoles: pendingTierQuota.customRolesPerMonth,
+        },
+      });
+    } else {
+      apiLogger.error('Pending tier quota not found, falling back to free tier', {
+        userId,
+        pendingTier,
+        pendingIsAnnual,
+      });
+      shouldDowngradeToFree = true;
+    }
+  }
+
+  if (shouldDowngradeToFree && !hasPendingTierChange) {
+    // Downgrade to free tier
+    const freeTierQuota = await db.query.subscriptionTierQuotas.findFirst({
+      where: and(
+        eq(tables.subscriptionTierQuotas.tier, 'free'),
+        eq(tables.subscriptionTierQuotas.isAnnual, false),
+      ),
+    });
+
+    const freeLimits = freeTierQuota || {
+      threadsPerMonth: 2,
+      messagesPerMonth: 20,
+      memoriesPerMonth: 5,
+      customRolesPerMonth: 5,
+    };
+
+    await db
+      .update(tables.userChatUsage)
+      .set({
+        subscriptionTier: 'free',
+        isAnnual: false,
+        threadsLimit: freeLimits.threadsPerMonth,
+        messagesLimit: freeLimits.messagesPerMonth,
+        memoriesLimit: freeLimits.memoriesPerMonth,
+        customRolesLimit: freeLimits.customRolesPerMonth,
+        currentPeriodStart: periodStart,
+        currentPeriodEnd: periodEnd,
+        threadsCreated: 0,
+        messagesCreated: 0,
+        memoriesCreated: 0,
+        customRolesCreated: 0,
+        // Clear any pending tier change fields
+        pendingTierChange: null,
+        pendingTierIsAnnual: null,
+        pendingTierPriceId: null,
+        updatedAt: now,
+      })
+      .where(eq(tables.userChatUsage.userId, userId));
+
+    apiLogger.info('Rolled over billing period - downgraded to free tier', {
+      userId,
+      oldTier: currentUsage.subscriptionTier,
+      oldPeriod: { start: currentUsage.currentPeriodStart, end: currentUsage.currentPeriodEnd },
+      newPeriod: { start: periodStart, end: periodEnd },
+      freeLimits: {
+        threads: freeLimits.threadsPerMonth,
+        messages: freeLimits.messagesPerMonth,
+        memories: freeLimits.memoriesPerMonth,
+        customRoles: freeLimits.customRolesPerMonth,
+      },
+    });
+  } else if (!hasPendingTierChange) {
+    // Active subscription exists but period expired
+    // This shouldn't normally happen (Stripe sync should handle it)
+    // Reset usage but keep current tier limits
+    await db
+      .update(tables.userChatUsage)
+      .set({
+        currentPeriodStart: periodStart,
+        currentPeriodEnd: periodEnd,
+        threadsCreated: 0,
+        messagesCreated: 0,
+        memoriesCreated: 0,
+        customRolesCreated: 0,
+        updatedAt: now,
+      })
+      .where(eq(tables.userChatUsage.userId, userId));
+
+    apiLogger.warn('Rolled over billing period with active subscription', {
+      userId,
+      tier: currentUsage.subscriptionTier,
+      message: 'This should be handled by Stripe sync, not rollover',
+      oldPeriod: { start: currentUsage.currentPeriodStart, end: currentUsage.currentPeriodEnd },
+      newPeriod: { start: periodStart, end: periodEnd },
+    });
+  }
 }
 
 /**
@@ -404,6 +565,8 @@ export async function getUserUsageStats(userId: string): Promise<UsageStats> {
     subscription: {
       tier: usage.subscriptionTier,
       isAnnual: usage.isAnnual,
+      pendingTierChange: usage.pendingTierChange || null,
+      pendingTierIsAnnual: usage.pendingTierIsAnnual !== null ? usage.pendingTierIsAnnual : null,
     },
   };
 }
@@ -544,17 +707,25 @@ export async function enforceCustomRoleQuota(userId: string): Promise<void> {
 
 /**
  * Sync user quotas based on subscription changes
- * Handles new subscriptions, upgrades, downgrades, and cancellations
+ * Handles new subscriptions, upgrades, downgrades, cancellations, and billing period resets
+ *
+ * Following Theo's "Stay Sane with Stripe" pattern:
+ * - Always sync from fresh Stripe data (via syncStripeDataFromStripe)
+ * - Update billing periods to match Stripe's subscription periods
+ * - Handle cancellations by preserving quotas until period end
+ * - Reset usage when new billing period starts
  *
  * @param userId - User ID to update quotas for
  * @param priceId - Stripe price ID from the subscription
- * @param isActive - Whether the subscription is active (not canceled)
- * @param currentPeriodEnd - End date of the current billing period
+ * @param subscriptionStatus - Stripe subscription status ('active', 'trialing', 'canceled', etc.)
+ * @param currentPeriodStart - Start date of current billing period from Stripe
+ * @param currentPeriodEnd - End date of current billing period from Stripe
  */
 export async function syncUserQuotaFromSubscription(
   userId: string,
   priceId: string,
-  isActive: boolean,
+  subscriptionStatus: 'active' | 'trialing' | 'canceled' | 'past_due' | 'unpaid' | 'paused' | 'none',
+  currentPeriodStart: Date,
   currentPeriodEnd: Date,
 ): Promise<void> {
   const db = await getDbAsync();
@@ -582,18 +753,39 @@ export async function syncUserQuotaFromSubscription(
     return;
   }
 
-  // If subscription is not active (canceled), don't modify quotas
-  // Quotas remain until currentPeriodEnd
+  // Get current usage record
+  const currentUsage = await ensureUserUsageRecord(userId);
+
+  // Determine if subscription is active (including trialing)
+  const isActive = subscriptionStatus === 'active' || subscriptionStatus === 'trialing';
+
+  // Check if billing period has changed (new period started)
+  const hasPeriodChanged = currentUsage.currentPeriodEnd.getTime() !== currentPeriodEnd.getTime();
+  const isPeriodReset = hasPeriodChanged && currentPeriodEnd > currentUsage.currentPeriodEnd;
+
+  // If subscription is not active (canceled, past_due, etc.), update period tracking
+  // but preserve current quotas until the period ends (Theo's pattern)
   if (!isActive) {
-    apiLogger.info('Subscription not active, preserving quotas until period end', {
+    // Only update the period tracking so rollover knows when to downgrade to free
+    await db
+      .update(tables.userChatUsage)
+      .set({
+        currentPeriodStart,
+        currentPeriodEnd,
+        updatedAt: new Date(),
+      })
+      .where(eq(tables.userChatUsage.userId, userId));
+
+    apiLogger.info('Subscription not active - updated period tracking, preserving quotas', {
       userId,
       tier,
+      subscriptionStatus,
       currentPeriodEnd,
     });
     return;
   }
 
-  // Get quota configuration for the new tier
+  // Get quota configuration for the tier
   const quotaConfig = await db.query.subscriptionTierQuotas.findFirst({
     where: and(
       eq(tables.subscriptionTierQuotas.tier, tier),
@@ -610,10 +802,7 @@ export async function syncUserQuotaFromSubscription(
     throw createError.notFound(`Quota configuration not found for tier: ${tier}`, context);
   }
 
-  // Get current usage record
-  const currentUsage = await ensureUserUsageRecord(userId);
-
-  // Determine if this is an upgrade or downgrade
+  // Determine if this is an upgrade, downgrade, or period reset
   const oldThreadsLimit = currentUsage.threadsLimit;
   const oldMessagesLimit = currentUsage.messagesLimit;
   const newThreadsLimit = quotaConfig.threadsPerMonth;
@@ -625,16 +814,55 @@ export async function syncUserQuotaFromSubscription(
   // Calculate quota updates based on subscription change type
   let updatedThreadsLimit = newThreadsLimit;
   let updatedMessagesLimit = newMessagesLimit;
+  let updatedMemoriesLimit = quotaConfig.memoriesPerMonth;
+  let updatedCustomRolesLimit = quotaConfig.customRolesPerMonth;
 
-  if (isUpgrade) {
-    // For upgrades: Add the difference to current limits (compounding)
+  // Reset usage counters if new billing period has started
+  let resetUsage = {};
+  if (isPeriodReset) {
+    // Archive old period to history before resetting
+    await db.insert(tables.userChatUsageHistory).values({
+      id: ulid(),
+      userId,
+      periodStart: currentUsage.currentPeriodStart,
+      periodEnd: currentUsage.currentPeriodEnd,
+      threadsCreated: currentUsage.threadsCreated,
+      threadsLimit: currentUsage.threadsLimit,
+      messagesCreated: currentUsage.messagesCreated,
+      messagesLimit: currentUsage.messagesLimit,
+      memoriesCreated: currentUsage.memoriesCreated,
+      memoriesLimit: currentUsage.memoriesLimit,
+      customRolesCreated: currentUsage.customRolesCreated,
+      customRolesLimit: currentUsage.customRolesLimit,
+      subscriptionTier: currentUsage.subscriptionTier,
+      isAnnual: currentUsage.isAnnual,
+      createdAt: new Date(),
+    });
+
+    resetUsage = {
+      threadsCreated: 0,
+      messagesCreated: 0,
+      memoriesCreated: 0,
+      customRolesCreated: 0,
+    };
+
+    apiLogger.info('Billing period reset - archived old period and resetting usage', {
+      userId,
+      oldPeriod: { start: currentUsage.currentPeriodStart, end: currentUsage.currentPeriodEnd },
+      newPeriod: { start: currentPeriodStart, end: currentPeriodEnd },
+    });
+  }
+
+  if (isUpgrade && !isPeriodReset) {
+    // UPGRADE MID-PERIOD: Add the difference to current limits (compounding)
+    // User gets immediate access to higher limits
     const threadsDifference = Math.max(0, newThreadsLimit - oldThreadsLimit);
     const messagesDifference = Math.max(0, newMessagesLimit - oldMessagesLimit);
 
     updatedThreadsLimit = currentUsage.threadsLimit + threadsDifference;
     updatedMessagesLimit = currentUsage.messagesLimit + messagesDifference;
 
-    apiLogger.info('Upgrading subscription - compounding quota difference', {
+    apiLogger.info('Upgrading subscription - applying quota increase immediately', {
       userId,
       oldTier: currentUsage.subscriptionTier,
       newTier: tier,
@@ -643,26 +871,62 @@ export async function syncUserQuotaFromSubscription(
       oldLimits: { threads: oldThreadsLimit, messages: oldMessagesLimit },
       newLimits: { threads: updatedThreadsLimit, messages: updatedMessagesLimit },
     });
-  } else if (isDowngrade) {
-    // For downgrades: Set new limits but don't reduce current usage
-    // Current usage stays as is, but limit is reduced
-    apiLogger.info('Downgrading subscription - reducing limits', {
+  } else if (isDowngrade && !isPeriodReset) {
+    // DOWNGRADE MID-PERIOD: Schedule change for period end
+    // Keep current quotas, set pending tier change to apply at currentPeriodEnd
+    // This ensures user keeps access they paid for until period ends
+    updatedThreadsLimit = oldThreadsLimit; // Keep current limits
+    updatedMessagesLimit = oldMessagesLimit; // Keep current limits
+    updatedMemoriesLimit = currentUsage.memoriesLimit; // Keep current limits
+    updatedCustomRolesLimit = currentUsage.customRolesLimit; // Keep current limits
+
+    // Store pending tier change to apply at period end
+    await db
+      .update(tables.userChatUsage)
+      .set({
+        pendingTierChange: tier,
+        pendingTierIsAnnual: isAnnual,
+        pendingTierPriceId: priceId,
+        currentPeriodStart,
+        currentPeriodEnd,
+        updatedAt: new Date(),
+      })
+      .where(eq(tables.userChatUsage.userId, userId));
+
+    apiLogger.info('Downgrade scheduled for period end - preserving current quotas', {
       userId,
-      oldTier: currentUsage.subscriptionTier,
-      newTier: tier,
-      oldLimits: { threads: oldThreadsLimit, messages: oldMessagesLimit },
-      newLimits: { threads: updatedThreadsLimit, messages: updatedMessagesLimit },
+      currentTier: currentUsage.subscriptionTier,
+      pendingTier: tier,
+      effectiveDate: currentPeriodEnd,
+      currentLimits: { threads: oldThreadsLimit, messages: oldMessagesLimit },
+      pendingLimits: { threads: newThreadsLimit, messages: newMessagesLimit },
     });
-  } else {
-    // Same tier (e.g., switching between monthly/annual)
-    apiLogger.info('Subscription tier unchanged - updating billing period', {
+
+    return; // Exit early - don't update tier or limits yet
+  } else if (isPeriodReset) {
+    // Period reset: Use new tier limits from config
+    apiLogger.info('Period reset - applying tier quotas', {
       userId,
       tier,
       isAnnual,
+      newLimits: {
+        threads: updatedThreadsLimit,
+        messages: updatedMessagesLimit,
+        memories: updatedMemoriesLimit,
+        customRoles: updatedCustomRolesLimit,
+      },
+    });
+  } else {
+    // Same tier, same period (e.g., switching between monthly/annual or resuming)
+    apiLogger.info('Subscription updated - applying quota changes', {
+      userId,
+      tier,
+      isAnnual,
+      subscriptionStatus,
     });
   }
 
-  // Update user usage record with new subscription tier and limits
+  // Update user usage record with new subscription tier, limits, and billing period
   await db
     .update(tables.userChatUsage)
     .set({
@@ -670,7 +934,15 @@ export async function syncUserQuotaFromSubscription(
       isAnnual,
       threadsLimit: updatedThreadsLimit,
       messagesLimit: updatedMessagesLimit,
-      currentPeriodEnd, // Update period end to match subscription
+      memoriesLimit: updatedMemoriesLimit,
+      customRolesLimit: updatedCustomRolesLimit,
+      currentPeriodStart, // Always update to Stripe's billing period
+      currentPeriodEnd, // Always update to Stripe's billing period
+      // Clear any pending tier changes (upgrade overrides scheduled downgrade, or period has reset)
+      pendingTierChange: null,
+      pendingTierIsAnnual: null,
+      pendingTierPriceId: null,
+      ...resetUsage, // Reset usage counters if period changed
       updatedAt: new Date(),
     })
     .where(eq(tables.userChatUsage.userId, userId));
@@ -679,13 +951,17 @@ export async function syncUserQuotaFromSubscription(
     userId,
     tier,
     isAnnual,
+    subscriptionStatus,
     limits: {
       threads: updatedThreadsLimit,
       messages: updatedMessagesLimit,
+      memories: updatedMemoriesLimit,
+      customRoles: updatedCustomRolesLimit,
     },
     currentUsage: {
-      threads: currentUsage.threadsCreated,
-      messages: currentUsage.messagesCreated,
+      threads: isPeriodReset ? 0 : currentUsage.threadsCreated,
+      messages: isPeriodReset ? 0 : currentUsage.messagesCreated,
     },
+    billingPeriod: { start: currentPeriodStart, end: currentPeriodEnd },
   });
 }

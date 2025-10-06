@@ -17,7 +17,7 @@ import { ChatThreadInput } from '@/components/chat/chat-thread-input';
 import { ScrollToBottomButton } from '@/components/chat/scroll-to-bottom-button';
 import { useBreadcrumb } from '@/components/chat/use-breadcrumb';
 import { Button } from '@/components/ui/button';
-import { ScrollArea } from '@/components/ui/scroll-area';
+// Removed ScrollArea - using native div with overflow for better scroll control
 import { useToggleFavoriteMutation, useTogglePublicMutation, useUpdateThreadMutation } from '@/hooks/mutations/chat-mutations';
 import { useThreadBySlugQuery } from '@/hooks/queries/chat-threads';
 import { useAutoScroll } from '@/hooks/utils/use-auto-scroll';
@@ -140,7 +140,7 @@ export default function ChatThreadScreen({ slug }: { slug: string }) {
     if (!thread)
       return;
 
-    const shareUrl = `${window.location.origin}/chat/${slug}`;
+    const shareUrl = `${window.location.origin}/public/chat/${slug}`;
     try {
       await navigator.clipboard.writeText(shareUrl);
       toastManager.success(t('chat.linkCopied'), t('chat.linkCopiedDescription'));
@@ -548,10 +548,10 @@ export default function ChatThreadScreen({ slug }: { slug: string }) {
 
   return (
     <div className="relative h-full w-full">
-      {/* Messages Area - Scrollable content with shadcn ScrollArea */}
-      <ScrollArea
+      {/* Messages Area - Scrollable content with native overflow */}
+      <div
         ref={scrollRef}
-        className="absolute inset-0"
+        className="absolute inset-0 overflow-y-auto overflow-x-hidden"
       >
         <div className="mx-auto max-w-4xl px-3 sm:px-4 md:px-6 pb-3 sm:pb-4 pt-3 sm:pt-4">
           <ChatMessageList
@@ -582,16 +582,14 @@ export default function ChatThreadScreen({ slug }: { slug: string }) {
           {/* Add spacing for fixed input area so content doesn't hide behind it */}
           <div className="h-48 sm:h-52 md:h-80" />
         </div>
-      </ScrollArea>
-
-      {/* Scroll-to-Bottom Button - Appears above chat input when scrolled up */}
-      <div className="absolute bottom-0 left-0 right-0 w-full pointer-events-none z-40">
-        <div className="max-w-4xl mx-auto px-3 sm:px-4 md:px-6 pb-24 sm:pb-28 md:pb-32">
-          <div className="flex justify-center pointer-events-auto">
-            <ScrollToBottomButton show={showScrollButton} onClick={scrollToBottom} />
-          </div>
-        </div>
       </div>
+
+      {/* Scroll-to-Bottom Button - Fixed to right side of viewport */}
+      {showScrollButton && (
+        <div className="fixed right-6 bottom-32 z-40">
+          <ScrollToBottomButton show onClick={scrollToBottom} />
+        </div>
+      )}
 
       {/* Input Area - Fixed to bottom of chat container with same centering as messages */}
       <div className="absolute bottom-0 left-0 right-0 w-full z-50">

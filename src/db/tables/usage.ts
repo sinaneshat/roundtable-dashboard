@@ -67,6 +67,14 @@ export const userChatUsage = sqliteTable(
       .default('free'),
     isAnnual: integer('is_annual', { mode: 'boolean' }).notNull().default(false),
 
+    // Pending tier change (for scheduled downgrades at period end)
+    // When set, this tier will be applied at currentPeriodEnd
+    pendingTierChange: text('pending_tier_change', {
+      enum: SUBSCRIPTION_TIERS,
+    }),
+    pendingTierIsAnnual: integer('pending_tier_is_annual', { mode: 'boolean' }),
+    pendingTierPriceId: text('pending_tier_price_id'), // Stripe price ID for the pending tier
+
     // Timestamps
     createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
     updatedAt: integer('updated_at', { mode: 'timestamp' })

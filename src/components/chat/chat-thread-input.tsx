@@ -9,19 +9,21 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
+import { MessageContentSchema } from '@/api/routes/chat/schema';
 import type { ParticipantConfig } from '@/components/chat/chat-config-sheet';
 import { ChatMemoriesList } from '@/components/chat/chat-memories-list';
 import { ChatParticipantsList, ParticipantsPreview } from '@/components/chat/chat-participants-list';
 import { Button } from '@/components/ui/button';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/ui/cn';
+import type { ThreadMode } from '@/services/api';
 
 // ============================================================================
 // Constants
@@ -35,11 +37,15 @@ const CHAT_MODES = [
 ] as const;
 
 // ============================================================================
-// Schema
+// Form Schema - Reusing Backend Validation
 // ============================================================================
 
+/**
+ * Thread input form validation schema
+ * Reuses backend MessageContentSchema to ensure consistency
+ */
 const threadInputSchema = z.object({
-  message: z.string().min(1, 'Message is required').max(5000, 'Message is too long'),
+  message: MessageContentSchema,
 });
 
 type ThreadInputFormData = z.infer<typeof threadInputSchema>;
@@ -49,14 +55,14 @@ type ThreadInputFormData = z.infer<typeof threadInputSchema>;
 // ============================================================================
 
 type ChatThreadInputProps = {
-  mode: 'brainstorming' | 'analyzing' | 'debating' | 'solving';
+  mode: ThreadMode;
   participants: ParticipantConfig[];
   memoryIds: string[];
   isStreaming: boolean;
   currentParticipantIndex?: number;
   disabled?: boolean; // Disable input (e.g., when error occurs)
   chatMessages?: Array<{ participantId?: string | null; [key: string]: unknown }>; // For participant state detection
-  onModeChange: (mode: 'brainstorming' | 'analyzing' | 'debating' | 'solving') => void;
+  onModeChange: (mode: ThreadMode) => void;
   onParticipantsChange: (participants: ParticipantConfig[]) => void;
   onMemoryIdsChange: (memoryIds: string[]) => void;
   onSubmit: (message: string) => void;
@@ -220,16 +226,18 @@ export function ChatThreadInput({
           />
 
           {/* Bottom Controls Row */}
-          <div className="flex items-center gap-1.5 sm:gap-2 w-full">
+          <div className="flex items-center flex-wrap gap-1.5 sm:gap-2 w-full">
             {/* Left: AI and Memory Buttons - Dynamic Configuration */}
             <ChatParticipantsList
               participants={participants}
               onParticipantsChange={onParticipantsChange}
+              isStreaming={isStreaming}
             />
 
             <ChatMemoriesList
               selectedMemoryIds={memoryIds}
               onMemoryIdsChange={onMemoryIdsChange}
+              isStreaming={isStreaming}
             />
 
             {/* Mode Selector - Dynamic, can be changed during conversation */}
@@ -262,10 +270,10 @@ export function ChatThreadInput({
             </Select>
 
             {/* Spacer */}
-            <div className="flex-1" />
+            <div className="flex-1 min-w-[8px]" />
 
             {/* Right: Clear Button and Send/Stop Button */}
-            <div className="flex items-center gap-1.5 sm:gap-2">
+            <div className="flex items-center gap-1.5 sm:gap-2 ml-auto">
               {/* Clear Button (when typing and not streaming) */}
               <AnimatePresence>
                 {messageValue && !isStreaming && (

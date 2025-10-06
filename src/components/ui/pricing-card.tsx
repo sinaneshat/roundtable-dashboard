@@ -115,7 +115,7 @@ export function PricingCard({
         </motion.div>
       )}
 
-      <div className="relative h-full rounded-2xl border p-2 md:rounded-3xl md:p-3">
+      <div className="relative h-full rounded-2xl border-2 border-white/20 dark:border-white/10 p-2 md:rounded-3xl md:p-3 shadow-lg">
         <GlowingEffect
           blur={0}
           borderWidth={2}
@@ -126,7 +126,7 @@ export function PricingCard({
           inactiveZone={0.01}
         />
 
-        <div className="border-0.75 relative flex h-full flex-col overflow-hidden rounded-xl bg-background p-6 dark:shadow-[0px_0px_27px_0px_#2D2D2D]">
+        <div className="relative flex h-full flex-col overflow-hidden rounded-xl border border-white/20 dark:border-white/10 bg-background/50 backdrop-blur-sm p-6 dark:shadow-[0px_0px_27px_0px_#2D2D2D]">
 
           {/* Card Content */}
           <div className="relative flex flex-1 flex-col gap-6">

@@ -2,12 +2,13 @@
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { ArrowUp } from 'lucide-react';
-import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
+import { useRouter } from 'next/navigation';
 import type { KeyboardEventHandler } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
+import { MessageContentSchema } from '@/api/routes/chat/schema';
 import FormProvider from '@/components/forms/form-provider';
 import RHFTextarea from '@/components/forms/rhf-textarea';
 import { Button } from '@/components/ui/button';
@@ -16,11 +17,15 @@ import { useCreateThreadMutation } from '@/hooks/mutations/chat-mutations';
 import { cn } from '@/lib/ui/cn';
 
 // ============================================================================
-// Zod Schema for Form Validation
+// Form Schema - Reusing Backend Validation
 // ============================================================================
 
+/**
+ * Chat prompt form validation schema
+ * Reuses backend MessageContentSchema to ensure consistency (min 1, max 5000 characters)
+ */
 const chatPromptSchema = z.object({
-  message: z.string().min(1, 'Message is required').max(5000, 'Message is too long'),
+  message: MessageContentSchema,
 });
 
 type ChatPromptFormData = z.infer<typeof chatPromptSchema>;

@@ -10,6 +10,9 @@ import { cn } from '@/lib/ui/cn';
 // Types
 // ============================================================================
 
+/**
+ * Thread participant type for header display
+ */
 export type ThreadParticipant = {
   id: string;
   threadId: string;

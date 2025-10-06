@@ -80,8 +80,8 @@ export default function ChatOverviewScreen() {
 
         {/* Scrollable Content Area - Matches chat thread ScrollArea pattern */}
         <div className="flex-1 overflow-y-auto">
-          {/* Quick Start Cards - Same max-w-4xl container as chat messages */}
-          <div className="mx-auto max-w-4xl px-4 lg:px-6 pb-8">
+          {/* Quick Start Cards - Compact on mobile, normal on desktop */}
+          <div className="mx-auto max-w-4xl px-4 lg:px-6 pb-1.5 lg:pb-6">
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -94,7 +94,7 @@ export default function ChatOverviewScreen() {
         </div>
 
         {/* Sticky Chat Input - Same container pattern as thread input */}
-        <div className="sticky bottom-0 flex-shrink-0 w-full pb-4 pt-3">
+        <div className="sticky bottom-0 flex-shrink-0 w-full pb-4 pt-1 lg:pt-3">
           <div className="mx-auto max-w-4xl px-4 lg:px-6">
             <ChatInput
               onThreadCreated={handleThreadCreated}

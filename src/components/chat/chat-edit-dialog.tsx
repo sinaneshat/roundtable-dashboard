@@ -6,26 +6,27 @@ import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
+import { EditMessageSchema } from '@/api/routes/chat/schema';
 import { Button } from '@/components/ui/button';
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
 } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 
 // ============================================================================
-// Schema
+// Form Schema - Reusing Backend Validation
 // ============================================================================
 
-const editMessageSchema = z.object({
-  content: z.string().min(1, 'Message is required').max(5000, 'Message is too long'),
-});
-
-type EditMessageFormData = z.infer<typeof editMessageSchema>;
+/**
+ * Edit message form validation schema
+ * Reuses backend EditMessageSchema to ensure consistency
+ */
+type EditMessageFormData = z.infer<typeof EditMessageSchema>;
 
 // ============================================================================
 // Component Props
@@ -64,7 +65,7 @@ export function ChatEditDialog({
     reset,
     formState: { errors, isDirty },
   } = useForm<EditMessageFormData>({
-    resolver: zodResolver(editMessageSchema),
+    resolver: zodResolver(EditMessageSchema),
     defaultValues: {
       content: initialContent,
     },

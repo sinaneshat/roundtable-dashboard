@@ -8,6 +8,13 @@
       "when": 1759673082766,
       "tag": "0000_blushing_changeling",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1759738010468,
+      "tag": "0001_chief_microchip",
+      "breakpoints": true
     }
   ]
 }

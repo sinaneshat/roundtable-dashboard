@@ -179,18 +179,20 @@ export function ChatPageHeader({
 }: ChatPageHeaderProps) {
   return (
     <ChatSection className={className}>
-      <div className="flex items-center justify-between">
-        <PageHeader
-          title={title}
-          description={description}
-          size={size}
-          showSeparator={false}
-        />
-        {action && (
-          <div className="flex items-center gap-2">
-            {action}
-          </div>
-        )}
+      <div className="mx-auto px-3 sm:px-4 md:px-6">
+        <div className="flex items-center justify-between">
+          <PageHeader
+            title={title}
+            description={description}
+            size={size}
+            showSeparator={false}
+          />
+          {action && (
+            <div className="flex items-center gap-2">
+              {action}
+            </div>
+          )}
+        </div>
       </div>
     </ChatSection>
   );

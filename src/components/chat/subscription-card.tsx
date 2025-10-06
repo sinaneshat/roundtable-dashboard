@@ -1,10 +1,11 @@
 'use client';
 
-import { CreditCard, Loader2 } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+import { ArrowDownCircle, CreditCard, Info, Loader2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
+import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { useSidebar } from '@/components/ui/sidebar';
@@ -88,6 +89,19 @@ export function SubscriptionCard() {
           </div>
         </div>
 
+        {/* Pending Tier Change Badge */}
+        {subscription.pendingTierChange && (
+          <Badge
+            variant="secondary"
+            className="w-full justify-center text-[10px] gap-1 bg-amber-100 dark:bg-amber-950/30 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800"
+          >
+            <ArrowDownCircle className="size-3" />
+            {t('subscription.changingTo')}
+            {' '}
+            <span className="font-semibold capitalize">{subscription.pendingTierChange}</span>
+          </Badge>
+        )}
+
         {/* Manage Billing Button */}
         <Button
           variant="outline"
@@ -107,6 +121,14 @@ export function SubscriptionCard() {
                 t('pricing.card.manageBilling')
               )}
         </Button>
+
+        {/* Info about plan changes */}
+        <div className="flex items-start gap-1.5 text-[10px] text-muted-foreground">
+          <Info className="size-3 mt-0.5 shrink-0" />
+          <p className="leading-tight">
+            {t('subscription.planChangeInfo')}
+          </p>
+        </div>
       </Card>
     </div>
   );

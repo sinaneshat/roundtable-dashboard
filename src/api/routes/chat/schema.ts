@@ -9,6 +9,40 @@ import {
 import { isValidModelId } from '@/lib/ai/models-config';
 
 // ============================================================================
+// Shared Validation Schemas - Used by Frontend and Backend
+// ============================================================================
+
+/**
+ * Message content validation schema
+ * Used for:
+ * - User message input
+ * - Message editing
+ * - Thread creation (first message)
+ *
+ * Shared with frontend to ensure consistent validation rules
+ */
+export const MessageContentSchema = z.string()
+  .min(1, 'Message is required')
+  .max(5000, 'Message is too long (max 5000 characters)');
+
+/**
+ * Thread mode enum validation
+ * Matches chatThread.mode column in database
+ *
+ * Shared with frontend to ensure consistent validation rules
+ */
+export const ThreadModeSchema = z.enum(['analyzing', 'brainstorming', 'debating', 'solving']);
+
+/**
+ * Message edit validation schema
+ *
+ * Shared with frontend to ensure consistent validation rules
+ */
+export const EditMessageSchema = z.object({
+  content: MessageContentSchema,
+});
+
+// ============================================================================
 // Path Parameter Schemas
 // ============================================================================
 
@@ -200,7 +234,7 @@ export const CreateThreadRequestSchema = z.object({
     description: 'Thread title (auto-generated from first message if "New Chat")',
     example: 'Product strategy brainstorm',
   }),
-  mode: z.enum(['analyzing', 'brainstorming', 'debating', 'solving']).optional().default('brainstorming').openapi({
+  mode: ThreadModeSchema.optional().default('brainstorming').openapi({
     description: 'Conversation mode',
     example: 'brainstorming',
   }),
@@ -231,7 +265,7 @@ export const CreateThreadRequestSchema = z.object({
   })).min(1).openapi({
     description: 'Participants array (order determines priority - immutable after creation)',
   }),
-  firstMessage: z.string().min(1).openapi({
+  firstMessage: MessageContentSchema.openapi({
     description: 'Initial user message to start the conversation',
     example: 'What are innovative product ideas for sustainability?',
   }),
@@ -252,7 +286,7 @@ export const UpdateThreadRequestSchema = z.object({
     description: 'Thread title',
     example: 'Updated brainstorm session',
   }),
-  mode: z.enum(['analyzing', 'brainstorming', 'debating', 'solving']).optional().openapi({
+  mode: ThreadModeSchema.optional().openapi({
     description: 'Conversation mode',
     example: 'debating',
   }),
@@ -421,7 +455,7 @@ export const StreamChatRequestSchema = z.object({
     description: 'All conversation messages (UIMessage[] from AI SDK v5)',
   }),
   // Dynamic configuration updates (optional)
-  mode: z.enum(['analyzing', 'brainstorming', 'debating', 'solving']).optional().openapi({
+  mode: ThreadModeSchema.optional().openapi({
     description: 'Updated conversation mode',
   }),
   participants: z.array(z.object({

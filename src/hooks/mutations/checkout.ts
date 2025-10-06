@@ -26,6 +26,9 @@ export function useCreateCheckoutSessionMutation() {
     onSuccess: () => {
       // Invalidate subscriptions to prepare for post-checkout data
       queryClient.invalidateQueries({ queryKey: queryKeys.subscriptions.all });
+      
+      // Invalidate usage queries since new subscription will have different quota limits
+      queryClient.invalidateQueries({ queryKey: queryKeys.usage.all });
     },
     onError: (error) => {
       if (process.env.NODE_ENV === 'development') {
@@ -63,6 +66,9 @@ export function useSyncAfterCheckoutMutation() {
       // Invalidate all billing queries to refetch fresh data
       queryClient.invalidateQueries({ queryKey: queryKeys.subscriptions.all });
       queryClient.invalidateQueries({ queryKey: queryKeys.products.all });
+      
+      // Invalidate usage queries to reflect new quota limits from subscription
+      queryClient.invalidateQueries({ queryKey: queryKeys.usage.all });
     },
     onError: (error) => {
       if (process.env.NODE_ENV === 'development') {

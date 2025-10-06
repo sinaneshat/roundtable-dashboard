@@ -38,14 +38,19 @@ import {
 } from '@/components/ui/sheet';
 import { useMemoriesQuery } from '@/hooks/queries/chat-memories';
 import { useCustomRolesQuery } from '@/hooks/queries/chat-roles';
-import type { AIModel } from '@/lib/ai/models-config';
-import { AI_MODELS, DEFAULT_ROLES } from '@/lib/ai/models-config';
+import { useUsageStatsQuery } from '@/hooks/queries/usage';
+import type { AIModel, ModelTierRequirement } from '@/lib/ai/models-config';
+import { AI_MODELS, DEFAULT_ROLES, getAccessibleModels } from '@/lib/ai/models-config';
 import { cn } from '@/lib/ui/cn';
 
 // ============================================================================
 // Types
 // ============================================================================
 
+/**
+ * Participant configuration for chat threads
+ * Used when configuring or displaying participant information
+ */
 export type ParticipantConfig = {
   id: string;
   modelId: string;
@@ -92,6 +97,13 @@ export function ChatConfigSheet({
   // Only fetch data when sheet is open to prevent unnecessary API calls
   const { data: customRolesData } = useCustomRolesQuery(open);
   const { data: memoriesData } = useMemoriesQuery(open);
+  const { data: usageData } = useUsageStatsQuery();
+
+  // Get user's subscription tier for filtering models
+  const userTier = (usageData?.success ? usageData.data.subscription.tier : 'free') as ModelTierRequirement;
+
+  // Filter models based on user's subscription tier
+  const accessibleModels = getAccessibleModels(userTier);
 
   // Flatten custom roles from pages with defensive checks
   const customRoles = customRolesData?.pages.flatMap(page =>
@@ -185,7 +197,7 @@ export function ChatConfigSheet({
                       <CommandList>
                         <CommandEmpty>No models found.</CommandEmpty>
                         <CommandGroup heading="Available Models">
-                          {AI_MODELS.filter(m => m.isEnabled).map(model => (
+                          {accessibleModels.map(model => (
                             <CommandItem
                               key={model.id}
                               value={model.id}

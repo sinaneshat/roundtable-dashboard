@@ -208,9 +208,9 @@ export const dashboardGlass = {
     'border-b',
   ),
 
-  // Navigation sidebars
+  // Navigation sidebars - solid background matching Shadcn's design
   sidebar: cn(
-    glassVariants.strong,
-    'border-r',
+    'bg-sidebar',
+    'border-r border-sidebar-border',
   ),
 } as const;

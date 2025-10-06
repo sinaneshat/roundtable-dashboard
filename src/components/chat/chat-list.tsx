@@ -1,6 +1,6 @@
 'use client';
 
-import { Globe, Loader2, Lock, MoreHorizontal, Star, Trash2 } from 'lucide-react';
+import { Loader2, Star, Trash2 } from 'lucide-react';
 import { motion } from 'motion/react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -8,20 +8,12 @@ import { useTranslations } from 'next-intl';
 import { useRef } from 'react';
 
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import {
   SidebarGroup,
   SidebarGroupLabel,
   SidebarMenu,
   SidebarMenuAction,
   SidebarMenuButton,
   SidebarMenuItem,
-  useSidebar,
 } from '@/components/ui/sidebar';
 import {
   Tooltip,
@@ -36,12 +28,8 @@ type ChatListProps = {
   chatGroups: ChatGroup[];
   favorites: Chat[];
   onDeleteChat: (chatId: string) => void;
-  onToggleFavorite: (chatId: string) => void;
-  onTogglePublic?: (chatId: string) => void;
   searchTerm: string;
   deletingChatId?: string | null;
-  favoritingChatId?: string | null;
-  updatingPublicChatId?: string | null;
 };
 
 type StickyHeaderProps = {
@@ -52,47 +40,24 @@ type StickyHeaderProps = {
 // Stable default value to avoid infinite render loop
 const EMPTY_FAVORITES: Chat[] = [];
 
-// Truncate text based on max width - pure function to avoid Rules of Hooks violations in map()
-function truncateText(text: string, maxWidth: number): string {
-  // Create a temporary canvas for measuring text (client-side only)
+// Helper to check if text would overflow (for tooltip)
+// This is only used for determining if tooltip is needed, not for rendering
+function wouldTextOverflow(text: string, maxWidth: number): boolean {
+  // Always show tooltip on server-side to avoid hydration mismatch
   if (typeof window === 'undefined') {
-    return text;
+    return true;
   }
 
   const canvas = document.createElement('canvas');
   const context = canvas.getContext('2d');
   if (!context) {
-    return text;
+    return true;
   }
 
-  // Match the font style from sidebar
   context.font = '14px Inter, system-ui, sans-serif';
-
   const textWidth = context.measureText(text).width;
 
-  if (textWidth <= maxWidth) {
-    return text;
-  }
-
-  // Binary search for optimal truncation point
-  let left = 0;
-  let right = text.length;
-  let result = text;
-
-  while (left < right) {
-    const mid = Math.floor((left + right + 1) / 2);
-    const testText = `${text.slice(0, mid)}...`;
-    const testWidth = context.measureText(testText).width;
-
-    if (testWidth <= maxWidth) {
-      result = testText;
-      left = mid;
-    } else {
-      right = mid - 1;
-    }
-  }
-
-  return result;
+  return textWidth > maxWidth;
 }
 
 function StickyHeader({ children, zIndex = 10 }: StickyHeaderProps) {
@@ -124,14 +89,9 @@ export function ChatList({
   chatGroups,
   favorites = EMPTY_FAVORITES,
   onDeleteChat,
-  onToggleFavorite,
-  onTogglePublic,
   searchTerm = '',
   deletingChatId,
-  favoritingChatId,
-  updatingPublicChatId,
 }: ChatListProps) {
-  const { isMobile } = useSidebar();
   const pathname = usePathname();
   const t = useTranslations('chat');
 
@@ -139,91 +99,43 @@ export function ChatList({
     const chatUrl = `/chat/${chat.slug}`;
     const isActive = pathname === chatUrl;
     const isDeleting = deletingChatId === chat.id;
-    const isFavoriting = favoritingChatId === chat.id;
-    const isUpdatingPublic = updatingPublicChatId === chat.id;
-    const isLoading = isDeleting || isFavoriting || isUpdatingPublic;
 
-    // Truncate text based on sidebar width (16rem = 256px)
-    // Account for padding, margins, and action button (~160px available for text)
-    const truncatedTitle = truncateText(chat.title, 160);
-    const isTruncated = truncatedTitle !== chat.title;
+    // Check if text would overflow for tooltip (approximate check)
+    // We use hardcoded max-width (11.5rem = 184px) for consistent truncation
+    const isTruncated = chat.title.length > 25 || wouldTextOverflow(chat.title, 184);
 
     return (
       <SidebarMenuItem key={chat.id}>
-        <Tooltip>
+        <Tooltip delayDuration={300}>
           <TooltipTrigger asChild>
-            <SidebarMenuButton asChild isActive={isActive} disabled={isLoading}>
+            <SidebarMenuButton asChild isActive={isActive} disabled={isDeleting}>
               <Link
                 href={chatUrl}
                 className={cn(
-                  isLoading && 'pointer-events-none opacity-60',
+                  'min-w-0',
+                  isDeleting && 'pointer-events-none opacity-60',
                 )}
               >
-                <span>{truncatedTitle}</span>
+                <span className="truncate block max-w-[11.5rem]">{chat.title}</span>
               </Link>
             </SidebarMenuButton>
           </TooltipTrigger>
           {isTruncated && (
             <TooltipContent side="right" className="max-w-xs">
-              <p>{chat.title}</p>
+              <p className="break-words">{chat.title}</p>
             </TooltipContent>
           )}
         </Tooltip>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <SidebarMenuAction showOnHover disabled={isLoading}>
-              {isLoading
-                ? (
-                    <Loader2 className="size-4 animate-spin" />
-                  )
-                : (
-                    <MoreHorizontal className="size-4" />
-                  )}
-              <span className="sr-only">More</span>
-            </SidebarMenuAction>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent
-            className="w-48 rounded-lg"
-            side={isMobile ? 'bottom' : 'right'}
-            align={isMobile ? 'end' : 'start'}
-          >
-            <DropdownMenuItem
-              onClick={() => onToggleFavorite(chat.id)}
-              disabled={isFavoriting}
-            >
-              {isFavoriting
-                ? (
-                    <Loader2 className="size-4 animate-spin" />
-                  )
-                : (
-                    <Star className={chat.isFavorite ? 'size-4 fill-yellow-500 text-yellow-500' : 'size-4'} />
-                  )}
-              <span>{chat.isFavorite ? t('removeFromFavorites') : t('addToFavorites')}</span>
-            </DropdownMenuItem>
-            {onTogglePublic && (
-              <DropdownMenuItem
-                onClick={() => onTogglePublic(chat.id)}
-                disabled={isUpdatingPublic}
-              >
-                {isUpdatingPublic
-                  ? (
-                      <Loader2 className="size-4 animate-spin" />
-                    )
-                  : chat.isPublic
-                    ? (
-                        <Lock className="size-4" />
-                      )
-                    : (
-                        <Globe className="size-4" />
-                      )}
-                <span>{chat.isPublic ? t('makePrivate') : t('makePublic')}</span>
-              </DropdownMenuItem>
-            )}
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              onClick={() => onDeleteChat(chat.id)}
-              variant="destructive"
+        <Tooltip delayDuration={300}>
+          <TooltipTrigger asChild>
+            <SidebarMenuAction
+              showOnHover
               disabled={isDeleting}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onDeleteChat(chat.id);
+              }}
             >
               {isDeleting
                 ? (
@@ -232,10 +144,13 @@ export function ChatList({
                 : (
                     <Trash2 className="size-4" />
                   )}
-              <span>{t('deleteChat')}</span>
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+              <span className="sr-only">{t('deleteChat')}</span>
+            </SidebarMenuAction>
+          </TooltipTrigger>
+          <TooltipContent side="right">
+            <p>{t('deleteChat')}</p>
+          </TooltipContent>
+        </Tooltip>
       </SidebarMenuItem>
     );
   };
@@ -312,7 +227,7 @@ export function ChatList({
                     delay: (groupIndex * 0.05) + 0.1,
                   }}
                 >
-                  {group.label}
+                  {t(group.label.replace('chat.', ''))}
                 </motion.span>
               </SidebarGroupLabel>
             </StickyHeader>

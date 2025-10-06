@@ -21,7 +21,7 @@ const sizeClasses: Record<ModalSize, string> = {
   sm: 'sm:max-w-[425px]', // Small - Simple forms
   md: 'sm:max-w-lg', // Medium - Default (512px)
   lg: 'sm:max-w-3xl', // Large - Complex content (768px)
-  xl: 'sm:max-w-5xl', // Extra Large - Pricing tables (1024px)
+  xl: 'sm:max-w-7xl', // Extra Large - Pricing tables (1280px) - Increased for better card display
   full: 'sm:max-w-[90vw]', // Full - Maximum width
 };
 

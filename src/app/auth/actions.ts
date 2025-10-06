@@ -1,5 +1,6 @@
 'use server';
 
+import { revalidatePath } from 'next/cache';
 import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 
@@ -55,5 +56,59 @@ export async function redirectIfAuthenticated() {
 
   if (session?.user) {
     redirect('/chat');
+  }
+}
+
+// ============================================================================
+// ISR Revalidation Actions
+// ============================================================================
+
+/**
+ * Revalidate public chat thread page
+ * Used when a thread's public status changes
+ *
+ * Server Action pattern for Next.js-specific features (revalidatePath)
+ * All business logic remains in Hono API (/src/api/routes/)
+ *
+ * @param slug - Thread slug to revalidate
+ * @param action - 'publish' or 'unpublish'
+ * @returns Success status
+ */
+export async function revalidatePublicThread(
+  slug: string,
+  action: 'publish' | 'unpublish',
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    // Verify authentication
+    const headersList = await headers();
+    const session = await auth.api.getSession({ headers: headersList });
+
+    if (!session?.user?.id) {
+      return { success: false, error: 'Unauthorized' };
+    }
+
+    // Validate inputs
+    if (!slug || typeof slug !== 'string') {
+      return { success: false, error: 'Invalid slug' };
+    }
+
+    if (!['publish', 'unpublish'].includes(action)) {
+      return { success: false, error: 'Invalid action' };
+    }
+
+    // Revalidate the public chat page
+    const publicPath = `/public/chat/${slug}`;
+    revalidatePath(publicPath);
+
+    // Also revalidate the sitemap to include/exclude this thread
+    revalidatePath('/sitemap.xml');
+
+    return { success: true };
+  } catch (error) {
+    console.error('Error revalidating public thread:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Revalidation failed',
+    };
   }
 }

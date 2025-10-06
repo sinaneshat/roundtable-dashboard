@@ -9,8 +9,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
+import { MessageContentSchema } from '@/api/routes/chat/schema';
 import { ParticipantsPreview } from '@/components/chat/chat-participants-list';
-import type { ThreadParticipant } from '@/components/chat/chat-thread-header';
 import { Button } from '@/components/ui/button';
 import {
   Select,
@@ -21,6 +21,17 @@ import {
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/ui/cn';
+import type { ThreadMode } from '@/services/api';
+
+// Local type for participant data in the streaming input
+type ThreadParticipant = {
+  id: string;
+  modelId: string;
+  name?: string;
+  role?: string | null;
+  customRoleId?: string | null;
+  priority: number;
+};
 
 // ============================================================================
 // Constants
@@ -34,11 +45,15 @@ const CHAT_MODES = [
 ] as const;
 
 // ============================================================================
-// Schema
+// Form Schema - Reusing Backend Validation
 // ============================================================================
 
+/**
+ * Streaming input form validation schema
+ * Reuses backend MessageContentSchema to ensure consistency
+ */
 const streamingInputSchema = z.object({
-  message: z.string().min(1, 'Message is required').max(5000, 'Message is too long'),
+  message: MessageContentSchema,
 });
 
 type StreamingInputFormData = z.infer<typeof streamingInputSchema>;
@@ -48,7 +63,7 @@ type StreamingInputFormData = z.infer<typeof streamingInputSchema>;
 // ============================================================================
 
 type ChatStreamingInputProps = {
-  threadMode: 'brainstorming' | 'analyzing' | 'debating' | 'solving';
+  threadMode: ThreadMode;
   participants: ThreadParticipant[];
   className?: string;
   autoFocus?: boolean;

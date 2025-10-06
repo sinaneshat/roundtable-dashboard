@@ -1,9 +1,10 @@
 'use client';
 
-import { AlertCircle, ArrowUpCircle, MessageSquare, MessagesSquare } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+import { AlertCircle, ArrowDownCircle, ArrowUpCircle, Clock, MessageSquare, MessagesSquare } from 'lucide-react';
 import { useTranslations } from 'next-intl';
+import { useRouter } from 'next/navigation';
 
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { useSidebar } from '@/components/ui/sidebar';
@@ -159,6 +160,41 @@ export function UsageMetrics() {
             {t('usage.daysLeft')}
           </span>
         </div>
+
+        {/* Pending Tier Change Alert */}
+        {usage.subscription.pendingTierChange && (
+          <div className="rounded-lg border border-amber-200 dark:border-amber-900/30 bg-amber-50 dark:bg-amber-950/20 p-2.5 space-y-1.5">
+            <div className="flex items-start gap-2">
+              <Clock className="size-3.5 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
+              <div className="flex-1 min-w-0 space-y-0.5">
+                <p className="text-[10px] font-medium text-amber-900 dark:text-amber-100">
+                  {t('usage.scheduledChange')}
+                </p>
+                <p className="text-[10px] text-amber-700 dark:text-amber-300">
+                  {t('usage.changingTo')}
+                  {' '}
+                  <span className="font-semibold capitalize">
+                    {usage.subscription.pendingTierChange}
+                  </span>
+                  {' '}
+                  {t('usage.onPeriodEnd')}
+                </p>
+              </div>
+            </div>
+            <Badge
+              variant="outline"
+              className="w-full justify-center text-[9px] h-5 bg-amber-100 dark:bg-amber-900/30 border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300"
+            >
+              <ArrowDownCircle className="size-2.5 mr-1" />
+              {t('usage.keepAccessUntil')}
+              {' '}
+              {new Date(usage.period.end).toLocaleDateString(undefined, {
+                month: 'short',
+                day: 'numeric',
+              })}
+            </Badge>
+          </div>
+        )}
 
         {/* Upgrade button - only shown when quota is maxed out */}
         {isMaxedOut && (

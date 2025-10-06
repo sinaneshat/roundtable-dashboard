@@ -109,8 +109,15 @@ export async function syncStripeDataFromStripe(
     });
   }
 
-  // No subscription exists
+  // No subscription exists - user should be on free tier
   if (subscriptions.data.length === 0) {
+    // Ensure user usage exists and will be on free tier
+    // The rolloverBillingPeriod will handle downgrade when period expires
+    apiLogger.info('No active subscription found for customer', {
+      customerId,
+      userId: customer.userId,
+    });
+    
     return { status: 'none' };
   }
 
@@ -444,12 +451,13 @@ export async function syncStripeDataFromStripe(
   }
 
   // Sync user quotas based on subscription changes
-  // Handles upgrades (compounds quotas), downgrades, and cancellations
-  const isActive = subscription.status === 'active' || subscription.status === 'trialing';
+  // Handles upgrades (compounds quotas), downgrades, cancellations, and billing period resets
+  // Following Theo's pattern: Always pass fresh Stripe data
   await syncUserQuotaFromSubscription(
     customer.userId,
     price.id,
-    isActive,
+    subscription.status,
+    new Date(currentPeriodStart * 1000),
     new Date(currentPeriodEnd * 1000),
   );
 

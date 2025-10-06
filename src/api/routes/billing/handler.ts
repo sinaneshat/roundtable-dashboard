@@ -6,32 +6,32 @@ import { AppError, createError, normalizeError } from '@/api/common/error-handli
 import type { ErrorContext } from '@/api/core';
 import { createHandler, createHandlerWithBatch, Responses } from '@/api/core';
 import { apiLogger } from '@/api/middleware/hono-logger';
-import { stripeService } from '@/api/services/stripe.service';
 import { getCustomerIdByUserId, syncStripeDataFromStripe } from '@/api/services/stripe-sync.service';
+import { stripeService } from '@/api/services/stripe.service';
 import type { ApiEnv } from '@/api/types';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db/schema';
 
 import type {
-  cancelSubscriptionRoute,
-  createCheckoutSessionRoute,
-  createCustomerPortalSessionRoute,
-  getProductRoute,
-  getSubscriptionRoute,
-  handleWebhookRoute,
-  listProductsRoute,
-  listSubscriptionsRoute,
-  switchSubscriptionRoute,
-  syncAfterCheckoutRoute,
+    cancelSubscriptionRoute,
+    createCheckoutSessionRoute,
+    createCustomerPortalSessionRoute,
+    getProductRoute,
+    getSubscriptionRoute,
+    handleWebhookRoute,
+    listProductsRoute,
+    listSubscriptionsRoute,
+    switchSubscriptionRoute,
+    syncAfterCheckoutRoute,
 } from './route';
 import type { SubscriptionResponsePayload } from './schema';
 import {
-  CancelSubscriptionRequestSchema,
-  CheckoutRequestSchema,
-  CustomerPortalRequestSchema,
-  ProductIdParamSchema,
-  SubscriptionIdParamSchema,
-  SwitchSubscriptionRequestSchema,
+    CancelSubscriptionRequestSchema,
+    CheckoutRequestSchema,
+    CustomerPortalRequestSchema,
+    ProductIdParamSchema,
+    SubscriptionIdParamSchema,
+    SwitchSubscriptionRequestSchema,
 } from './schema';
 
 // ============================================================================
@@ -930,7 +930,7 @@ export const switchSubscriptionHandler: RouteHandler<typeof switchSubscriptionRo
         );
       }
 
-      // Verify new price exists
+      // Verify new price exists and get current price for comparison
       const newPrice = await db.query.stripePrice.findFirst({
         where: eq(tables.stripePrice.id, newPriceId),
       });
@@ -939,6 +939,17 @@ export const switchSubscriptionHandler: RouteHandler<typeof switchSubscriptionRo
         throw createError.badRequest(
           `Price ${newPriceId} not found`,
           createResourceNotFoundContext('price', newPriceId),
+        );
+      }
+
+      const currentPrice = await db.query.stripePrice.findFirst({
+        where: eq(tables.stripePrice.id, subscription.priceId),
+      });
+
+      if (!currentPrice) {
+        throw createError.internal(
+          'Current subscription price not found',
+          createResourceNotFoundContext('price', subscription.priceId),
         );
       }
 
@@ -954,16 +965,75 @@ export const switchSubscriptionHandler: RouteHandler<typeof switchSubscriptionRo
         );
       }
 
-      // Update subscription with automatic proration
-      await stripeService.updateSubscription(subscriptionId, {
-        items: [
-          {
-            id: subscriptionItemId,
-            price: newPriceId,
-          },
-        ],
-        proration_behavior: 'create_prorations', // Let Stripe handle billing automatically
-      });
+      // Determine if this is an upgrade or downgrade based on price amount
+      const currentAmount = currentPrice.unitAmount || 0;
+      const newAmount = newPrice.unitAmount || 0;
+      const isUpgrade = newAmount > currentAmount;
+      const isDowngrade = newAmount < currentAmount;
+
+      if (isUpgrade) {
+        // UPGRADE: Apply immediately with proration
+        // User gets instant access to higher limits and pays prorated difference
+        await stripeService.updateSubscription(subscriptionId, {
+          items: [
+            {
+              id: subscriptionItemId,
+              price: newPriceId,
+            },
+          ],
+          proration_behavior: 'create_prorations', // Immediate with proration
+        });
+
+        c.logger.info('Upgrade applied immediately', {
+          logType: 'operation',
+          operationName: 'switchSubscription',
+          userId: user.id,
+          resource: subscriptionId,
+          currentPrice: currentAmount,
+          newPrice: newAmount,
+        });
+      } else if (isDowngrade) {
+        // DOWNGRADE: Schedule for end of period
+        // User keeps current access until period ends, no immediate charge/refund
+        await stripeService.updateSubscription(subscriptionId, {
+          items: [
+            {
+              id: subscriptionItemId,
+              price: newPriceId,
+            },
+          ],
+          proration_behavior: 'none', // No proration for downgrades
+          billing_cycle_anchor: 'unchanged', // Keep same billing date
+        });
+
+        c.logger.info('Downgrade scheduled for period end', {
+          logType: 'operation',
+          operationName: 'switchSubscription',
+          userId: user.id,
+          resource: subscriptionId,
+          currentPrice: currentAmount,
+          newPrice: newAmount,
+          effectiveDate: new Date(stripeSubscription.current_period_end * 1000),
+        });
+      } else {
+        // SAME PRICE: Just update (e.g., switching between monthly/annual of same tier)
+        await stripeService.updateSubscription(subscriptionId, {
+          items: [
+            {
+              id: subscriptionItemId,
+              price: newPriceId,
+            },
+          ],
+          proration_behavior: 'create_prorations',
+        });
+
+        c.logger.info('Subscription updated (same price tier)', {
+          logType: 'operation',
+          operationName: 'switchSubscription',
+          userId: user.id,
+          resource: subscriptionId,
+        });
+      }
 
       // Sync fresh data from Stripe API
       await syncStripeDataFromStripe(subscription.customerId);
