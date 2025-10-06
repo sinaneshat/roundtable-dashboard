@@ -989,8 +989,6 @@ export const switchSubscriptionHandler: RouteHandler<typeof switchSubscriptionRo
           operationName: 'switchSubscription',
           userId: user.id,
           resource: subscriptionId,
-          currentPrice: currentAmount,
-          newPrice: newAmount,
         });
       } else if (isDowngrade) {
         // DOWNGRADE: Schedule for end of period
@@ -1011,9 +1009,6 @@ export const switchSubscriptionHandler: RouteHandler<typeof switchSubscriptionRo
           operationName: 'switchSubscription',
           userId: user.id,
           resource: subscriptionId,
-          currentPrice: currentAmount,
-          newPrice: newAmount,
-          effectiveDate: new Date(stripeSubscription.current_period_end * 1000),
         });
       } else {
         // SAME PRICE: Just update (e.g., switching between monthly/annual of same tier)

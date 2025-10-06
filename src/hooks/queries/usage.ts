@@ -32,18 +32,7 @@ export function useUsageStatsQuery() {
     queryKey: queryKeys.usage.stats(),
     queryFn: getUserUsageStatsService,
     staleTime: 1 * 60 * 1000, // 1 minute
-    retry: (failureCount, error) => {
-      // Don't retry on authentication errors
-      if (error instanceof Error && error.message.includes('Authentication')) {
-        return false;
-      }
-      // Don't retry on client errors (4xx)
-      const errorStatus = (error as { status?: number })?.status;
-      if (errorStatus && errorStatus >= 400 && errorStatus < 500) {
-        return false;
-      }
-      return failureCount < 2;
-    },
+    retry: false,
     enabled: isAuthenticated, // Only fetch when authenticated
     throwOnError: false,
   });
@@ -64,16 +53,7 @@ export function useThreadQuotaQuery() {
     queryKey: queryKeys.usage.threadQuota(),
     queryFn: checkThreadQuotaService,
     staleTime: 30 * 1000, // 30 seconds
-    retry: (failureCount, error) => {
-      if (error instanceof Error && error.message.includes('Authentication')) {
-        return false;
-      }
-      const errorStatus = (error as { status?: number })?.status;
-      if (errorStatus && errorStatus >= 400 && errorStatus < 500) {
-        return false;
-      }
-      return failureCount < 2;
-    },
+    retry: false,
     enabled: isAuthenticated,
     throwOnError: false,
   });
@@ -94,16 +74,7 @@ export function useMessageQuotaQuery() {
     queryKey: queryKeys.usage.messageQuota(),
     queryFn: checkMessageQuotaService,
     staleTime: 30 * 1000, // 30 seconds
-    retry: (failureCount, error) => {
-      if (error instanceof Error && error.message.includes('Authentication')) {
-        return false;
-      }
-      const errorStatus = (error as { status?: number })?.status;
-      if (errorStatus && errorStatus >= 400 && errorStatus < 500) {
-        return false;
-      }
-      return failureCount < 2;
-    },
+    retry: false,
     enabled: isAuthenticated,
     throwOnError: false,
   });

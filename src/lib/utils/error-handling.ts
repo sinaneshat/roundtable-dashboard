@@ -180,7 +180,8 @@ export function formatValidationErrors(
   }
 
   if (validationErrors.length === 1) {
-    return validationErrors[0].message;
+    const firstError = validationErrors[0];
+    return firstError ? firstError.message : 'Validation failed';
   }
 
   return validationErrors.map(err => `${err.field}: ${err.message}`).join('; ');

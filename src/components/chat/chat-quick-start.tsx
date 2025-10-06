@@ -1,12 +1,16 @@
 'use client';
 
 import { motion } from 'motion/react';
+import { useMemo } from 'react';
 
 import type { ParticipantConfig } from '@/components/chat/chat-config-sheet';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
-import { AI_MODELS } from '@/lib/ai/models-config';
+import type { SubscriptionTier } from '@/db/tables/usage';
+import { useUsageStatsQuery } from '@/hooks/queries/usage';
+import { AI_MODELS, canAccessModel, getAccessibleModels, getTierDisplayName } from '@/lib/ai/models-config';
 import type { ChatModeId } from '@/lib/config/chat-modes';
 import { cn } from '@/lib/ui/cn';
 import { glassBadge } from '@/lib/ui/glassmorphism';
@@ -39,9 +43,21 @@ type ChatQuickStartProps = {
  * ChatQuickStart Component
  *
  * Compact, mobile-friendly quick start suggestions
+ * Filters suggestions based on user's subscription tier
  */
 export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartProps) {
-  const suggestions: QuickStartSuggestion[] = [
+  // Get user's subscription tier
+  const { data: usageData } = useUsageStatsQuery();
+  const userTier = (usageData?.success ? usageData.data.subscription.tier : 'free') as SubscriptionTier;
+
+  // Get accessible models for the user
+  const accessibleModels = useMemo(() => getAccessibleModels(userTier), [userTier]);
+  const accessibleModelIds = useMemo(
+    () => new Set<string>(accessibleModels.map(m => m.modelId as string)),
+    [accessibleModels],
+  );
+
+  const allSuggestions: QuickStartSuggestion[] = [
     {
       title: 'Can artificial general intelligence be aligned with human values?',
       prompt: 'Debate the existential challenge: Can we truly align AGI with human values, or is catastrophic misalignment inevitable?',
@@ -76,6 +92,14 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
       ],
     },
   ];
+
+  // Filter suggestions to only include models the user has access to
+  const suggestions = useMemo(() => {
+    return allSuggestions.map(suggestion => ({
+      ...suggestion,
+      participants: suggestion.participants.filter(p => accessibleModelIds.has(p.modelId as string)),
+    })).filter(suggestion => suggestion.participants.length > 0); // Only show suggestions with at least one accessible model
+  }, [accessibleModelIds]);
 
   return (
     <div className={cn('w-full relative z-20 overflow-hidden', className)}>
@@ -114,12 +138,14 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
                             const model = AI_MODELS.find(m => m.modelId === participant.modelId);
                             if (!model)
                               return null;
+                            const isAccessible = canAccessModel(userTier, model.modelId);
                             return (
                               <div
                                 key={participant.id}
                                 className={cn(
                                   glassBadge,
                                   'flex items-center gap-1 rounded-full px-2 py-1 flex-shrink-0',
+                                  !isAccessible && 'opacity-50',
                                 )}
                               >
                                 <Avatar className="size-4">
@@ -132,10 +158,10 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
                                   <span className="text-[10px] font-medium text-white/80 whitespace-nowrap leading-tight">
                                     {model.name.split(' ')[0]}
                                   </span>
-                                  {participant.role && (
-                                    <span className="text-[9px] text-white/60 whitespace-nowrap leading-tight">
-                                      {participant.role}
-                                    </span>
+                                  {!isAccessible && (
+                                    <Badge variant="secondary" className="text-[8px] px-1 py-0 h-3">
+                                      {getTierDisplayName(model.minTier)}
+                                    </Badge>
                                   )}
                                 </div>
                               </div>
@@ -154,12 +180,14 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
                         const model = AI_MODELS.find(m => m.modelId === participant.modelId);
                         if (!model)
                           return null;
+                        const isAccessible = canAccessModel(userTier, model.modelId);
                         return (
                           <div
                             key={participant.id}
                             className={cn(
                               glassBadge,
                               'flex items-center gap-1.5 rounded-full px-2.5 py-1.5 flex-shrink-0',
+                              !isAccessible && 'opacity-50',
                             )}
                           >
                             <Avatar className="size-5">
@@ -169,14 +197,16 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
                               </AvatarFallback>
                             </Avatar>
                             <div className="flex flex-col min-w-0">
-                              <span className="text-xs font-medium text-white truncate">
-                                {model.name}
-                              </span>
-                              {participant.role && (
-                                <span className="text-[10px] text-white/70 truncate">
-                                  {participant.role}
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-xs font-medium text-white truncate">
+                                  {model.name}
                                 </span>
-                              )}
+                                {!isAccessible && (
+                                  <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4">
+                                    {getTierDisplayName(model.minTier)}
+                                  </Badge>
+                                )}
+                              </div>
                             </div>
                           </div>
                         );

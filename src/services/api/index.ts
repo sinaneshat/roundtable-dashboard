@@ -10,7 +10,6 @@
 // ============================================================================
 
 export {
-  type ApiKeyType,
   type CreateApiKeyRequest,
   type CreateApiKeyResponse,
   createApiKeyService,

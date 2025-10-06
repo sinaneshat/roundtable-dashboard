@@ -35,14 +35,7 @@ export function useCreateCheckoutSessionMutation() {
         console.error('Failed to create checkout session', error);
       }
     },
-    retry: (failureCount, error: unknown) => {
-      // Don't retry on client errors (4xx)
-      const httpError = error as { status?: number };
-      if (httpError?.status && httpError.status >= 400 && httpError.status < 500) {
-        return false;
-      }
-      return failureCount < 2;
-    },
+    retry: false,
     throwOnError: false,
   });
 }
@@ -75,13 +68,7 @@ export function useSyncAfterCheckoutMutation() {
         console.error('Failed to sync after checkout', error);
       }
     },
-    retry: (failureCount, error: unknown) => {
-      const httpError = error as { status?: number };
-      if (httpError?.status && httpError.status >= 400 && httpError.status < 500) {
-        return false;
-      }
-      return failureCount < 1; // Only retry once for sync operations
-    },
+    retry: false,
     throwOnError: false,
   });
 }

@@ -27,7 +27,7 @@ export function useApiKeysQuery() {
     staleTime: 1000 * 60 * 5, // 5 minutes - API keys don't change frequently
     refetchOnMount: 'always', // Always refetch when component mounts
     refetchOnWindowFocus: false, // Don't refetch on window focus
-    retry: 2,
+    retry: false,
   });
 }
 
@@ -41,6 +41,6 @@ export function useApiKeyQuery(keyId: string) {
     enabled: !!keyId,
     staleTime: 1000 * 60 * 5, // 5 minutes
     refetchOnWindowFocus: false,
-    retry: 2,
+    retry: false,
   });
 }

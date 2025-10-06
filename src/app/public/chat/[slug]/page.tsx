@@ -66,11 +66,7 @@ export async function generateMetadata({
       keywords,
       // Dynamic OG image with thread content
       image: `/public/chat/${slug}/opengraph-image`,
-      openGraph: {
-        type: 'article',
-        publishedTime: thread.createdAt,
-        modifiedTime: thread.updatedAt,
-      },
+      type: 'article',
     });
   } catch (error) {
     // Handle errors gracefully

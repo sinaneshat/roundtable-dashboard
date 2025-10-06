@@ -46,14 +46,7 @@ export function useCreateApiKeyMutation() {
         console.error('Failed to create API key', error);
       }
     },
-    retry: (failureCount, error: unknown) => {
-      // Don't retry on client errors (4xx)
-      const httpError = error as { status?: number };
-      if (httpError?.status && httpError.status >= 400 && httpError.status < 500) {
-        return false;
-      }
-      return failureCount < 2;
-    },
+    retry: false,
     throwOnError: false,
   });
 }

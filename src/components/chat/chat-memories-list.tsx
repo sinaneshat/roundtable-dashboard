@@ -4,9 +4,8 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { Check, Plus, Sparkles, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
-import type { z } from 'zod';
+import { z } from 'zod';
 
-import { CreateMemoryRequestSchema } from '@/api/routes/chat/schema';
 import RHFSelect from '@/components/forms/rhf-select';
 import RHFTextField from '@/components/forms/rhf-text-field';
 import RHFTextarea from '@/components/forms/rhf-textarea';
@@ -54,9 +53,19 @@ type ChatMemoriesListProps = {
 
 /**
  * Memory creation form data
- * Reuses backend CreateMemoryRequestSchema to ensure consistent validation
+ * Uses a stricter schema than the backend to ensure all fields are filled in the form
  */
-type CreateMemoryFormData = z.infer<typeof CreateMemoryRequestSchema>;
+const CreateMemoryFormSchema = z.object({
+  type: z.enum(['personal', 'topic', 'instruction', 'fact']),
+  title: z.string().min(1).max(200),
+  content: z.string().min(1),
+  description: z.string().max(500).optional(),
+  threadId: z.string().optional(),
+  isGlobal: z.boolean(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
+});
+
+type CreateMemoryFormData = z.infer<typeof CreateMemoryFormSchema>;
 
 // ============================================================================
 // Component
@@ -91,12 +100,13 @@ export function ChatMemoriesList({
 
   // Initialize RHF form for creating memories
   const form = useForm<CreateMemoryFormData>({
-    resolver: zodResolver(CreateMemoryRequestSchema),
+    resolver: zodResolver(CreateMemoryFormSchema),
     defaultValues: {
       title: '',
       content: '',
       type: 'topic',
       description: '',
+      isGlobal: false,
     },
   });
 
@@ -288,7 +298,8 @@ export function ChatMemoriesList({
                               type="button"
                               onClick={e => handleDeleteMemory(memory.id, e)}
                               disabled={deleteMemoryMutation.isPending}
-                              className="ml-2 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-sm hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"
+                              className="ml-2 opacity-60 sm:opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-sm hover:bg-destructive/10 hover:text-destructive disabled:opacity-50 flex-shrink-0"
+                              aria-label="Delete memory"
                             >
                               {deleteMemoryMutation.isPending
                                 ? (

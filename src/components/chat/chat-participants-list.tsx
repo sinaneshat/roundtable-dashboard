@@ -216,7 +216,8 @@ function RoleSelector({
                             type="button"
                             onClick={e => handleDeleteRole(role.id, role.name, e)}
                             disabled={deleteRoleMutation.isPending}
-                            className="ml-2 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-sm hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"
+                            className="ml-2 opacity-60 sm:opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-sm hover:bg-destructive/10 hover:text-destructive disabled:opacity-50 flex-shrink-0"
+                            aria-label="Delete custom role"
                           >
                             {deleteRoleMutation.isPending
                               ? (
@@ -358,7 +359,8 @@ function RoleSelector({
                           type="button"
                           onClick={e => handleDeleteRole(role.id, role.name, e)}
                           disabled={deleteRoleMutation.isPending}
-                          className="ml-2 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-sm hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"
+                          className="ml-2 opacity-60 sm:opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-sm hover:bg-destructive/10 hover:text-destructive disabled:opacity-50 flex-shrink-0"
+                          aria-label="Delete custom role"
                         >
                           {deleteRoleMutation.isPending
                             ? (
@@ -467,22 +469,27 @@ function ModelItem({
             )}
           >
             <div className="flex items-center gap-2">
-              {/* Drag Handle */}
-              {!isDisabledDueToTier && (
-                <button
-                  type="button"
-                  className="cursor-grab active:cursor-grabbing touch-none flex-shrink-0 text-muted-foreground hover:text-foreground p-0.5"
-                  onPointerDown={e => controls.start(e)}
-                  style={{ touchAction: 'none' }}
-                  aria-label="Drag to reorder"
-                  onClick={e => e.stopPropagation()}
-                >
-                  <GripVertical className="size-4" />
-                </button>
-              )}
-              {isDisabledDueToTier && (
-                <div className="w-[20px]" />
-              )}
+              {/* Drag Handle - Always visible, but only interactive when enabled */}
+              <div
+                className={cn(
+                  'flex-shrink-0 text-muted-foreground p-0.5',
+                  !isDisabledDueToTier && 'cursor-grab active:cursor-grabbing hover:text-foreground touch-none',
+                  isDisabledDueToTier && 'cursor-not-allowed opacity-30',
+                )}
+                onPointerDown={isDisabledDueToTier ? undefined : e => controls.start(e)}
+                style={isDisabledDueToTier ? undefined : { touchAction: 'none' }}
+                aria-label={isDisabledDueToTier ? 'Drag disabled - upgrade required' : 'Drag to reorder'}
+                onClick={e => e.stopPropagation()}
+                onKeyDown={(e) => {
+                  if (!isDisabledDueToTier && (e.key === 'Enter' || e.key === ' ')) {
+                    e.preventDefault();
+                  }
+                }}
+                role="button"
+                tabIndex={isDisabledDueToTier ? -1 : 0}
+              >
+                <GripVertical className="size-4" />
+              </div>
 
               {/* Checkbox for Selection */}
               <Checkbox

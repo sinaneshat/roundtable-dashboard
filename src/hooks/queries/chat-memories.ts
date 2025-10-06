@@ -65,18 +65,7 @@ export function useMemoriesQuery(enabled = true) {
       return undefined;
     },
     staleTime: 1 * 60 * 1000, // 1 minute
-    retry: (failureCount, error) => {
-      // Don't retry on authentication errors
-      if (error instanceof Error && error.message.includes('Authentication')) {
-        return false;
-      }
-      // Don't retry on client errors (4xx)
-      const errorStatus = (error as { status?: number })?.status;
-      if (errorStatus && errorStatus >= 400 && errorStatus < 500) {
-        return false;
-      }
-      return failureCount < 2;
-    },
+    retry: false,
     enabled: isAuthenticated && enabled, // Only fetch when authenticated and explicitly enabled
     throwOnError: false,
   });
@@ -101,16 +90,7 @@ export function useMemoryQuery(memoryId: string | null | undefined, enabled = tr
     queryFn: () => getMemoryService(memoryId!),
     staleTime: 2 * 60 * 1000, // 2 minutes
     enabled: isAuthenticated && !!memoryId && enabled, // Only fetch when authenticated and memoryId exists
-    retry: (failureCount, error) => {
-      if (error instanceof Error && error.message.includes('Authentication')) {
-        return false;
-      }
-      const errorStatus = (error as { status?: number })?.status;
-      if (errorStatus && errorStatus >= 400 && errorStatus < 500) {
-        return false;
-      }
-      return failureCount < 2;
-    },
+    retry: false,
     throwOnError: false,
   });
 }

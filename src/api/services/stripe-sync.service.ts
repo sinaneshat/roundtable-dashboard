@@ -456,7 +456,7 @@ export async function syncStripeDataFromStripe(
   await syncUserQuotaFromSubscription(
     customer.userId,
     price.id,
-    subscription.status,
+    subscription.status as 'active' | 'trialing' | 'canceled' | 'past_due' | 'unpaid' | 'paused' | 'none',
     new Date(currentPeriodStart * 1000),
     new Date(currentPeriodEnd * 1000),
   );

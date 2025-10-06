@@ -64,18 +64,7 @@ export function useThreadsQuery() {
       return undefined;
     },
     staleTime: 30 * 1000, // 30 seconds
-    retry: (failureCount, error) => {
-      // Don't retry on authentication errors
-      if (error instanceof Error && error.message.includes('Authentication')) {
-        return false;
-      }
-      // Don't retry on client errors (4xx)
-      const errorStatus = (error as { status?: number })?.status;
-      if (errorStatus && errorStatus >= 400 && errorStatus < 500) {
-        return false;
-      }
-      return failureCount < 2;
-    },
+    retry: false,
     enabled: isAuthenticated, // Only fetch when authenticated
     throwOnError: false,
   });
@@ -100,16 +89,7 @@ export function useThreadQuery(threadId: string | null | undefined, enabled = tr
     queryFn: () => getThreadService(threadId!),
     staleTime: 10 * 1000, // 10 seconds
     enabled: isAuthenticated && !!threadId && enabled, // Only fetch when authenticated and threadId exists
-    retry: (failureCount, error) => {
-      if (error instanceof Error && error.message.includes('Authentication')) {
-        return false;
-      }
-      const errorStatus = (error as { status?: number })?.status;
-      if (errorStatus && errorStatus >= 400 && errorStatus < 500) {
-        return false;
-      }
-      return failureCount < 2;
-    },
+    retry: false,
     throwOnError: false,
   });
 }
@@ -130,13 +110,7 @@ export function usePublicThreadQuery(slug: string | null | undefined, enabled = 
     queryFn: () => getPublicThreadService(slug!),
     staleTime: 1 * 60 * 1000, // 1 minute
     enabled: !!slug && enabled, // Only fetch when slug exists
-    retry: (failureCount, error) => {
-      const errorStatus = (error as { status?: number })?.status;
-      if (errorStatus && errorStatus >= 400 && errorStatus < 500) {
-        return false;
-      }
-      return failureCount < 2;
-    },
+    retry: false,
     throwOnError: false,
   });
 }
@@ -160,16 +134,7 @@ export function useThreadBySlugQuery(slug: string | null | undefined, enabled = 
     queryFn: () => getThreadBySlugService(slug!),
     staleTime: 10 * 1000, // 10 seconds
     enabled: isAuthenticated && !!slug && enabled, // Only fetch when authenticated and slug exists
-    retry: (failureCount, error) => {
-      if (error instanceof Error && error.message.includes('Authentication')) {
-        return false;
-      }
-      const errorStatus = (error as { status?: number })?.status;
-      if (errorStatus && errorStatus >= 400 && errorStatus < 500) {
-        return false;
-      }
-      return failureCount < 2;
-    },
+    retry: false,
     throwOnError: false,
   });
 }

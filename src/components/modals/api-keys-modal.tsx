@@ -20,7 +20,6 @@ import { useEffect, useState } from 'react';
 
 import { BaseModal } from '@/components/modals/base-modal';
 import { ApiKeyForm } from '@/components/settings/api-key-form';
-import { ApiKeysList } from '@/components/settings/api-keys-list';
 import {
   Accordion,
   AccordionContent,
@@ -29,9 +28,12 @@ import {
 } from '@/components/ui/accordion';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import type { ApiKeyResponse } from '@/db/validation/api-keys';
 import { useApiKeysQuery } from '@/hooks';
 import { queryKeys } from '@/lib/data/query-keys';
 import { listApiKeysService } from '@/services/api';
+
+import { ApiKeysList } from '../settings/api-keys-list';
 
 type ApiKeysModalProps = {
   open: boolean;
@@ -160,7 +162,7 @@ export function ApiKeysModal({ open, onOpenChange }: ApiKeysModalProps) {
           </TabsList>
           <TabsContent value="list" className="mt-4">
             <ApiKeysList
-              apiKeys={apiKeys}
+              apiKeys={apiKeys as unknown as ApiKeyResponse[]}
               isLoading={isLoading || isFetching}
               onCreateNew={() => setActiveTab('create')}
             />

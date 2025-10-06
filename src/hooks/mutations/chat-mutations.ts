@@ -51,14 +51,7 @@ export function useCreateThreadMutation() {
         console.error('Failed to create thread', error);
       }
     },
-    retry: (failureCount, error: unknown) => {
-      // Don't retry on client errors (4xx)
-      const httpError = error as { status?: number };
-      if (httpError?.status && httpError.status >= 400 && httpError.status < 500) {
-        return false;
-      }
-      return failureCount < 2;
-    },
+    retry: false,
     throwOnError: false,
   });
 }
@@ -86,13 +79,7 @@ export function useUpdateThreadMutation() {
         console.error('Failed to update thread', error);
       }
     },
-    retry: (failureCount, error: unknown) => {
-      const httpError = error as { status?: number };
-      if (httpError?.status && httpError.status >= 400 && httpError.status < 500) {
-        return false;
-      }
-      return failureCount < 2;
-    },
+    retry: false,
     throwOnError: false,
   });
 }
@@ -119,13 +106,7 @@ export function useDeleteThreadMutation() {
         console.error('Failed to delete thread', error);
       }
     },
-    retry: (failureCount, error: unknown) => {
-      const httpError = error as { status?: number };
-      if (httpError?.status && httpError.status >= 400 && httpError.status < 500) {
-        return false;
-      }
-      return failureCount < 1; // Only retry once for delete operations
-    },
+    retry: false,
     throwOnError: false,
   });
 }
@@ -241,13 +222,7 @@ export function useToggleFavoriteMutation() {
         queryClient.invalidateQueries({ queryKey: queryKeys.threads.bySlug(variables.slug) });
       }
     },
-    retry: (failureCount, error: unknown) => {
-      const httpError = error as { status?: number };
-      if (httpError?.status && httpError.status >= 400 && httpError.status < 500) {
-        return false;
-      }
-      return failureCount < 2;
-    },
+    retry: false,
     throwOnError: false,
   });
 }
@@ -384,13 +359,7 @@ export function useTogglePublicMutation() {
         queryClient.invalidateQueries({ queryKey: queryKeys.threads.public(variables.slug) });
       }
     },
-    retry: (failureCount, error: unknown) => {
-      const httpError = error as { status?: number };
-      if (httpError?.status && httpError.status >= 400 && httpError.status < 500) {
-        return false;
-      }
-      return failureCount < 2;
-    },
+    retry: false,
     throwOnError: false,
   });
 }
@@ -429,13 +398,7 @@ export function useAddParticipantMutation() {
         console.error('Failed to add participant', error);
       }
     },
-    retry: (failureCount, error: unknown) => {
-      const httpError = error as { status?: number };
-      if (httpError?.status && httpError.status >= 400 && httpError.status < 500) {
-        return false;
-      }
-      return failureCount < 2;
-    },
+    retry: false,
     throwOnError: false,
   });
 }
@@ -461,13 +424,7 @@ export function useUpdateParticipantMutation() {
         console.error('Failed to update participant', error);
       }
     },
-    retry: (failureCount, error: unknown) => {
-      const httpError = error as { status?: number };
-      if (httpError?.status && httpError.status >= 400 && httpError.status < 500) {
-        return false;
-      }
-      return failureCount < 2;
-    },
+    retry: false,
     throwOnError: false,
   });
 }
@@ -492,13 +449,7 @@ export function useDeleteParticipantMutation() {
         console.error('Failed to delete participant', error);
       }
     },
-    retry: (failureCount, error: unknown) => {
-      const httpError = error as { status?: number };
-      if (httpError?.status && httpError.status >= 400 && httpError.status < 500) {
-        return false;
-      }
-      return failureCount < 1;
-    },
+    retry: false,
     throwOnError: false,
   });
 }
@@ -529,13 +480,7 @@ export function useCreateMemoryMutation() {
         console.error('Failed to create memory', error);
       }
     },
-    retry: (failureCount, error: unknown) => {
-      const httpError = error as { status?: number };
-      if (httpError?.status && httpError.status >= 400 && httpError.status < 500) {
-        return false;
-      }
-      return failureCount < 2;
-    },
+    retry: false,
     throwOnError: false,
   });
 }
@@ -563,13 +508,7 @@ export function useUpdateMemoryMutation() {
         console.error('Failed to update memory', error);
       }
     },
-    retry: (failureCount, error: unknown) => {
-      const httpError = error as { status?: number };
-      if (httpError?.status && httpError.status >= 400 && httpError.status < 500) {
-        return false;
-      }
-      return failureCount < 2;
-    },
+    retry: false,
     throwOnError: false,
   });
 }
@@ -596,13 +535,7 @@ export function useDeleteMemoryMutation() {
         console.error('Failed to delete memory', error);
       }
     },
-    retry: (failureCount, error: unknown) => {
-      const httpError = error as { status?: number };
-      if (httpError?.status && httpError.status >= 400 && httpError.status < 500) {
-        return false;
-      }
-      return failureCount < 1;
-    },
+    retry: false,
     throwOnError: false,
   });
 }
@@ -633,13 +566,7 @@ export function useCreateCustomRoleMutation() {
         console.error('Failed to create custom role', error);
       }
     },
-    retry: (failureCount, error: unknown) => {
-      const httpError = error as { status?: number };
-      if (httpError?.status && httpError.status >= 400 && httpError.status < 500) {
-        return false;
-      }
-      return failureCount < 2;
-    },
+    retry: false,
     throwOnError: false,
   });
 }
@@ -667,13 +594,7 @@ export function useUpdateCustomRoleMutation() {
         console.error('Failed to update custom role', error);
       }
     },
-    retry: (failureCount, error: unknown) => {
-      const httpError = error as { status?: number };
-      if (httpError?.status && httpError.status >= 400 && httpError.status < 500) {
-        return false;
-      }
-      return failureCount < 2;
-    },
+    retry: false,
     throwOnError: false,
   });
 }
@@ -700,13 +621,7 @@ export function useDeleteCustomRoleMutation() {
         console.error('Failed to delete custom role', error);
       }
     },
-    retry: (failureCount, error: unknown) => {
-      const httpError = error as { status?: number };
-      if (httpError?.status && httpError.status >= 400 && httpError.status < 500) {
-        return false;
-      }
-      return failureCount < 1;
-    },
+    retry: false,
     throwOnError: false,
   });
 }

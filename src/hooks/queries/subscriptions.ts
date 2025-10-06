@@ -27,18 +27,7 @@ export function useSubscriptionsQuery() {
     queryKey: queryKeys.subscriptions.list(),
     queryFn: getSubscriptionsService,
     staleTime: 2 * 60 * 1000, // 2 minutes
-    retry: (failureCount, error) => {
-      // Don't retry on authentication errors
-      if (error instanceof Error && error.message.includes('Authentication')) {
-        return false;
-      }
-      // Don't retry on client errors (4xx)
-      const errorStatus = (error as { status?: number })?.status;
-      if (errorStatus && errorStatus >= 400 && errorStatus < 500) {
-        return false;
-      }
-      return failureCount < 2;
-    },
+    retry: false,
     enabled: isAuthenticated, // Only fetch when authenticated
     throwOnError: false,
   });
@@ -59,16 +48,7 @@ export function useSubscriptionQuery(subscriptionId: string) {
     queryFn: () => getSubscriptionService(subscriptionId),
     staleTime: 2 * 60 * 1000, // 2 minutes
     enabled: isAuthenticated && !!subscriptionId,
-    retry: (failureCount, error) => {
-      if (error instanceof Error && error.message.includes('Authentication')) {
-        return false;
-      }
-      const errorStatus = (error as { status?: number })?.status;
-      if (errorStatus && errorStatus >= 400 && errorStatus < 500) {
-        return false;
-      }
-      return failureCount < 2;
-    },
+    retry: false,
     throwOnError: false,
   });
 }
@@ -89,16 +69,7 @@ export function useCurrentSubscriptionQuery() {
     queryFn: getSubscriptionsService,
     staleTime: 2 * 60 * 1000,
     enabled: isAuthenticated,
-    retry: (failureCount, error) => {
-      if (error instanceof Error && error.message.includes('Authentication')) {
-        return false;
-      }
-      const errorStatus = (error as { status?: number })?.status;
-      if (errorStatus && errorStatus >= 400 && errorStatus < 500) {
-        return false;
-      }
-      return failureCount < 2;
-    },
+    retry: false,
     throwOnError: false,
     // Transform data to get current subscription
     select: (data) => {

@@ -23,14 +23,7 @@ export function useProductsQuery() {
     queryKey: queryKeys.products.list(),
     queryFn: getProductsService,
     staleTime: 2 * 60 * 60 * 1000, // 2 hours
-    retry: (failureCount, error) => {
-      // Don't retry on client errors (4xx)
-      const errorStatus = (error as { status?: number })?.status;
-      if (errorStatus && errorStatus >= 400 && errorStatus < 500) {
-        return false;
-      }
-      return failureCount < 2;
-    },
+    retry: false,
     throwOnError: false,
   });
 }
@@ -47,13 +40,7 @@ export function useProductQuery(productId: string) {
     queryFn: () => getProductService(productId),
     staleTime: 2 * 60 * 60 * 1000, // 2 hours
     enabled: !!productId, // Only fetch when productId is available
-    retry: (failureCount, error) => {
-      const errorStatus = (error as { status?: number })?.status;
-      if (errorStatus && errorStatus >= 400 && errorStatus < 500) {
-        return false;
-      }
-      return failureCount < 2;
-    },
+    retry: false,
     throwOnError: false,
   });
 }
