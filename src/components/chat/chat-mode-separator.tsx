@@ -1,5 +1,7 @@
 'use client';
 
+import { Lightbulb, Scale, Search, Target } from 'lucide-react';
+
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/ui/cn';
 
@@ -8,10 +10,10 @@ import { cn } from '@/lib/ui/cn';
 // ============================================================================
 
 const MODE_CONFIG = {
-  brainstorming: { label: 'Brainstorming', icon: '💡', color: 'bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-500/20' },
-  analyzing: { label: 'Analyzing', icon: '🔍', color: 'bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-500/20' },
-  debating: { label: 'Debating', icon: '⚖️', color: 'bg-orange-500/10 text-orange-700 dark:text-orange-300 border-orange-500/20' },
-  solving: { label: 'Problem Solving', icon: '🎯', color: 'bg-green-500/10 text-green-700 dark:text-green-300 border-green-500/20' },
+  brainstorming: { label: 'Brainstorming', icon: Lightbulb, color: 'bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-500/20' },
+  analyzing: { label: 'Analyzing', icon: Search, color: 'bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-500/20' },
+  debating: { label: 'Debating', icon: Scale, color: 'bg-orange-500/10 text-orange-700 dark:text-orange-300 border-orange-500/20' },
+  solving: { label: 'Problem Solving', icon: Target, color: 'bg-green-500/10 text-green-700 dark:text-green-300 border-green-500/20' },
 } as const;
 
 // ============================================================================
@@ -37,6 +39,7 @@ type ChatModeSeparatorProps = {
  */
 export function ChatModeSeparator({ mode, className }: ChatModeSeparatorProps) {
   const modeConfig = MODE_CONFIG[mode];
+  const ModeIcon = modeConfig.icon;
 
   return (
     <div className={cn('flex items-center justify-center py-6', className)}>
@@ -52,7 +55,7 @@ export function ChatModeSeparator({ mode, className }: ChatModeSeparatorProps) {
             modeConfig.color,
           )}
         >
-          <span>{modeConfig.icon}</span>
+          <ModeIcon className="size-4" />
           <span>{modeConfig.label}</span>
         </Badge>
 

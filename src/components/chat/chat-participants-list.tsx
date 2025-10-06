@@ -2,7 +2,7 @@
 
 import { Bot, Check, GripVertical, Plus, Trash2 } from 'lucide-react';
 import { motion, Reorder, useDragControls } from 'motion/react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { ParticipantConfig } from '@/components/chat/chat-config-sheet';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -30,10 +30,11 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import type { SubscriptionTier } from '@/db/tables/usage';
 import { useCreateCustomRoleMutation, useDeleteCustomRoleMutation } from '@/hooks/mutations/chat-mutations';
 import { useCustomRolesQuery } from '@/hooks/queries/chat-roles';
 import { useUsageStatsQuery } from '@/hooks/queries/usage';
-import type { AIModel, ModelTierRequirement } from '@/lib/ai/models-config';
+import type { AIModel } from '@/lib/ai/models-config';
 import { AI_MODELS, canAccessModel, DEFAULT_ROLES, getAccessibleModels } from '@/lib/ai/models-config';
 import { cn } from '@/lib/ui/cn';
 
@@ -538,10 +539,10 @@ export function ChatParticipantsList({
   ) || [];
 
   // Get user's subscription tier for filtering models
-  const userTier = (usageData?.success ? usageData.data.subscription.tier : 'free') as ModelTierRequirement;
+  const userTier = (usageData?.success ? usageData.data.subscription.tier : 'free') as SubscriptionTier;
 
-  // Filter models based on user's subscription tier
-  const accessibleModels = getAccessibleModels(userTier);
+  // Filter models based on user's subscription tier - memoized to prevent infinite loops
+  const accessibleModels = useMemo(() => getAccessibleModels(userTier), [userTier]);
 
   // Create a unified list of all models with their order
   // Selected models maintain their participant order, unselected go to the end

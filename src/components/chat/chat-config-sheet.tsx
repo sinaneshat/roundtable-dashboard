@@ -1,7 +1,7 @@
 'use client';
 
 import { GripVertical, Plus, Settings2, Sparkles, X } from 'lucide-react';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -36,10 +36,11 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
+import type { SubscriptionTier } from '@/db/tables/usage';
 import { useMemoriesQuery } from '@/hooks/queries/chat-memories';
 import { useCustomRolesQuery } from '@/hooks/queries/chat-roles';
 import { useUsageStatsQuery } from '@/hooks/queries/usage';
-import type { AIModel, ModelTierRequirement } from '@/lib/ai/models-config';
+import type { AIModel } from '@/lib/ai/models-config';
 import { AI_MODELS, DEFAULT_ROLES, getAccessibleModels } from '@/lib/ai/models-config';
 import { cn } from '@/lib/ui/cn';
 
@@ -100,10 +101,10 @@ export function ChatConfigSheet({
   const { data: usageData } = useUsageStatsQuery();
 
   // Get user's subscription tier for filtering models
-  const userTier = (usageData?.success ? usageData.data.subscription.tier : 'free') as ModelTierRequirement;
+  const userTier = (usageData?.success ? usageData.data.subscription.tier : 'free') as SubscriptionTier;
 
-  // Filter models based on user's subscription tier
-  const accessibleModels = getAccessibleModels(userTier);
+  // Filter models based on user's subscription tier - memoized to prevent infinite loops
+  const accessibleModels = useMemo(() => getAccessibleModels(userTier), [userTier]);
 
   // Flatten custom roles from pages with defensive checks
   const customRoles = customRolesData?.pages.flatMap(page =>

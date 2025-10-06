@@ -8,6 +8,8 @@
  * ✅ OpenRouter API verified model IDs
  */
 
+import type { SubscriptionTier } from '@/db/tables/usage';
+
 // ============================================================================
 // ALLOWED MODELS ENUM - Single Source of Truth
 // ============================================================================
@@ -119,15 +121,6 @@ export type ModelMetadata = {
   };
 };
 
-/**
- * Subscription tier required to access a model
- * - free: Available to all users (cheapest, most basic models)
- * - starter: Requires Starter subscription or higher (basic models)
- * - pro: Requires Pro subscription or higher (advanced reasoning models)
- * - power: Requires Power subscription (most expensive, cutting-edge models)
- */
-export type ModelTierRequirement = 'free' | 'starter' | 'pro' | 'power';
-
 export type AIModel = {
   id: string;
   provider: ModelProvider;
@@ -139,7 +132,7 @@ export type AIModel = {
   isEnabled: boolean;
   order: number;
   metadata: ModelMetadata;
-  minTier: ModelTierRequirement; // Minimum subscription tier required to use this model
+  minTier: SubscriptionTier; // Minimum subscription tier required to use this model
 };
 
 /**
@@ -654,54 +647,8 @@ export function isValidModelId(modelId: string): modelId is ValidModelId {
 }
 
 // ============================================================================
-// Roundtable Configuration - Human-like Participant System
+// Roundtable Configuration - Participant System
 // ============================================================================
-
-/**
- * Pool of human names for participant anonymization
- * CRITICAL: These names make AI models believe they're talking to humans
- * This prevents safety filters from detecting AI-to-AI conversations
- */
-const HUMAN_NAMES_POOL = [
-  'Alex',
-  'Jordan',
-  'Morgan',
-  'Taylor',
-  'Casey',
-  'Riley',
-  'Jamie',
-  'Quinn',
-  'Avery',
-  'Cameron',
-  'Dakota',
-  'Reese',
-  'Skylar',
-  'Sage',
-  'River',
-  'Phoenix',
-  'Rowan',
-  'Blake',
-  'Drew',
-  'Finley',
-  'Emerson',
-  'Harper',
-  'Hayden',
-  'Kai',
-  'Logan',
-  'Parker',
-  'Peyton',
-  'Reagan',
-  'Sawyer',
-  'Spencer',
-] as const;
-
-/**
- * Generate a consistent human name for a participant based on their index
- * Uses modulo to cycle through names if there are more participants than names
- */
-export function getParticipantHumanName(participantIndex: number): string {
-  return HUMAN_NAMES_POOL[participantIndex % HUMAN_NAMES_POOL.length] as string;
-}
 
 /**
  * Generate participant identifier (e.g., "Participant 1", "Participant 2")
@@ -712,48 +659,46 @@ export function getParticipantIdentifier(participantIndex: number): string {
 }
 
 /**
- * Generate full participant label with number, name, and role
- * Example: "Participant 1 (Alex - Product Manager)"
+ * Generate participant label with number and optional role
+ * Example: "Participant 1 - Product Manager" or just "Participant 1"
  * This is what other participants see in the system prompt
  */
 export function getParticipantLabel(participantIndex: number, role?: string | null): string {
   const identifier = getParticipantIdentifier(participantIndex);
-  const name = getParticipantHumanName(participantIndex);
 
   if (role) {
-    return `${identifier} (${name} - ${role})`;
+    return `${identifier} - ${role}`;
   }
-  return `${identifier} (${name})`;
+  return identifier;
 }
 
 /**
  * Generate message attribution for conversation history
- * Example: "Alex (Product Manager):" for role or just "Alex:" without role
+ * Example: "Participant 1 (Product Manager):" for role or just "Participant 1:" without role
  * This is what appears before each message in the conversation history
  */
 export function getMessageAttribution(participantIndex: number, role?: string | null): string {
-  const name = getParticipantHumanName(participantIndex);
+  const identifier = getParticipantIdentifier(participantIndex);
 
   if (role) {
-    return `${name} (${role})`;
+    return `${identifier} (${role})`;
   }
-  return name;
+  return identifier;
 }
 
 // ============================================================================
-// Prompt Engineering Patterns - Anti-AI-Detection System
+// Prompt Engineering Patterns
 // ============================================================================
 
 /**
  * Conversation mode instructions
- * CRITICAL: Never mention AI, models, or assistants
- * Frame everything as human roundtable discussions
+ * Models see the discussion as a collaborative multi-perspective analysis
  */
 export const ROUNDTABLE_MODE_INSTRUCTIONS = {
-  analyzing: 'You are participating in a roundtable analysis discussion with other experts. Respond thoughtfully to build on insights shared by other participants.',
-  brainstorming: 'You are participating in a roundtable brainstorming session with other contributors. Build creatively on ideas shared by other participants.',
-  debating: 'You are participating in a roundtable debate with other discussants. Engage critically with arguments presented by other participants.',
-  solving: 'You are participating in a roundtable problem-solving session with other collaborators. Build logically on solutions proposed by other participants.',
+  analyzing: 'You are analyzing this query from your assigned perspective. Other participants are also providing their analysis. Build on the insights that have been shared.',
+  brainstorming: 'You are brainstorming ideas for this query from your assigned perspective. Other participants are also contributing ideas. Build creatively on what has been proposed.',
+  debating: 'You are debating this query from your assigned perspective. Other participants are also presenting their arguments. Engage critically with the points that have been raised.',
+  solving: 'You are solving this problem from your assigned perspective. Other participants are also proposing solutions. Build logically on the approaches that have been suggested.',
 } as const;
 
 /**
@@ -764,14 +709,14 @@ export const PLAIN_TEXT_GUIDANCE = '\n\nPlease respond in clear, natural languag
 
 /**
  * Build system prompt for a participant in a roundtable discussion
- * CRITICAL: Never reveals AI model IDs or mentions "AI" anywhere
+ * Models are not aware of each other's identities, only see the conversation flow
  *
  * @param params - Roundtable configuration
  * @param params.mode - Conversation mode (analyzing, brainstorming, debating, solving)
  * @param params.participantIndex - Zero-based index of this participant
  * @param params.participantRole - Optional role for this participant
  * @param params.customSystemPrompt - Optional custom system prompt
- * @param params.otherParticipants - Array of other participants with their indices and roles
+ * @param params.otherParticipants - Array of other participants (not used in prompt anymore)
  */
 export function buildRoundtableSystemPrompt(params: {
   mode: keyof typeof ROUNDTABLE_MODE_INSTRUCTIONS;
@@ -780,18 +725,18 @@ export function buildRoundtableSystemPrompt(params: {
   customSystemPrompt?: string | null;
   otherParticipants: Array<{ index: number; role?: string | null }>;
 }): string {
-  const { mode, participantIndex, participantRole, customSystemPrompt, otherParticipants } = params;
+  const { mode, participantIndex, participantRole, customSystemPrompt } = params;
 
   // Start with mode-specific instruction
   let systemPrompt = ROUNDTABLE_MODE_INSTRUCTIONS[mode] + PLAIN_TEXT_GUIDANCE;
 
-  // Add participant's identity with human name and number
+  // Add participant's identity with number
   const participantLabel = getParticipantLabel(participantIndex, participantRole);
   systemPrompt += `\n\nYou are ${participantLabel}.`;
 
-  // Add participant's role (already included in label, but keep for clarity)
+  // Add participant's role for additional context
   if (participantRole) {
-    systemPrompt += ` Your role in this discussion: ${participantRole}`;
+    systemPrompt += ` Your perspective: ${participantRole}`;
   }
 
   // Add custom system prompt if provided
@@ -799,20 +744,15 @@ export function buildRoundtableSystemPrompt(params: {
     systemPrompt += `\n\n${customSystemPrompt}`;
   }
 
-  // Add awareness of other participants (CRITICAL: use human names only, NO model IDs)
-  if (otherParticipants.length > 0) {
-    const otherPeople = otherParticipants
-      .map(p => getParticipantLabel(p.index, p.role))
-      .join(', ');
-    systemPrompt += `\n\nOther people in this discussion: ${otherPeople}`;
-  }
+  // Note: We don't inform models about other participants
+  // They just see the conversation history and respond to it
 
   return systemPrompt;
 }
 
 /**
  * Format a message for conversation history
- * Converts AI assistant messages to appear as human participant messages
+ * Shows messages with participant number and optional role
  *
  * @param participantIndex - Index of the participant who sent this message
  * @param participantRole - Role of the participant
@@ -835,7 +775,7 @@ export function formatMessageAsHumanContribution(
  * Tier hierarchy for comparison
  * Higher index = higher tier
  */
-const TIER_HIERARCHY: Record<ModelTierRequirement, number> = {
+const TIER_HIERARCHY: Record<SubscriptionTier, number> = {
   free: 0,
   starter: 1,
   pro: 2,
@@ -849,8 +789,8 @@ const TIER_HIERARCHY: Record<ModelTierRequirement, number> = {
  * @returns true if user can access the model, false otherwise
  */
 export function canAccessModelTier(
-  userTier: ModelTierRequirement,
-  requiredTier: ModelTierRequirement,
+  userTier: SubscriptionTier,
+  requiredTier: SubscriptionTier,
 ): boolean {
   return TIER_HIERARCHY[userTier] >= TIER_HIERARCHY[requiredTier];
 }
@@ -862,7 +802,7 @@ export function canAccessModelTier(
  * @returns true if user can access the model, false otherwise
  */
 export function canAccessModel(
-  userTier: ModelTierRequirement,
+  userTier: SubscriptionTier,
   modelId: string,
 ): boolean {
   const model = getModelById(modelId);
@@ -879,10 +819,10 @@ export function canAccessModel(
  * @returns Array of models the user can access
  */
 export function getAccessibleModels(
-  userTier: ModelTierRequirement,
+  userTier: SubscriptionTier,
   models: AIModel[] = AI_MODELS,
 ): AIModel[] {
-  return models.filter(model => 
+  return models.filter(model =>
     model.isEnabled && canAccessModelTier(userTier, model.minTier),
   );
 }
@@ -892,6 +832,6 @@ export function getAccessibleModels(
  * @param tier - The subscription tier
  * @returns Capitalized tier name
  */
-export function getTierDisplayName(tier: ModelTierRequirement): string {
+export function getTierDisplayName(tier: SubscriptionTier): string {
   return tier.charAt(0).toUpperCase() + tier.slice(1);
 }

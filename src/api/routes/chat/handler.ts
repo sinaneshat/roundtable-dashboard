@@ -32,7 +32,8 @@ import {
 import type { ApiEnv } from '@/api/types';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db/schema';
-import type { ModelTierRequirement, ROUNDTABLE_MODE_INSTRUCTIONS } from '@/lib/ai/models-config';
+import type { SubscriptionTier } from '@/db/tables/usage';
+import type { ROUNDTABLE_MODE_INSTRUCTIONS } from '@/lib/ai/models-config';
 import {
   buildRoundtableSystemPrompt,
   canAccessModel,
@@ -254,7 +255,7 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
 
     // Get user's subscription tier to validate model access
     const usageStats = await getUserUsageStats(user.id);
-    const userTier = usageStats.subscription.tier as ModelTierRequirement;
+    const userTier = usageStats.subscription.tier as SubscriptionTier;
 
     // Validate that user can access all requested models
     for (const participant of body.participants) {
@@ -740,7 +741,7 @@ export const addParticipantHandler: RouteHandler<typeof addParticipantRoute, Api
 
     // Get user's subscription tier to validate model access
     const usageStats = await getUserUsageStats(user.id);
-    const userTier = usageStats.subscription.tier as ModelTierRequirement;
+    const userTier = usageStats.subscription.tier as SubscriptionTier;
 
     // Validate that user can access the requested model
     const model = getModelById(body.modelId);
@@ -923,7 +924,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
     if (newParticipants && newParticipants.length > 0) {
       // Get user's subscription tier to validate model access
       const usageStats = await getUserUsageStats(user.id);
-      const userTier = usageStats.subscription.tier as ModelTierRequirement;
+      const userTier = usageStats.subscription.tier as SubscriptionTier;
 
       // Validate that user can access all requested models
       for (const participant of newParticipants) {

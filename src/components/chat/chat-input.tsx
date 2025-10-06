@@ -1,7 +1,7 @@
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { ArrowUp, X } from 'lucide-react';
+import { ArrowUp, Lightbulb, Scale, Search, Target, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useTranslations } from 'next-intl';
 import type { KeyboardEventHandler } from 'react';
@@ -15,11 +15,11 @@ import { ChatMemoriesList } from '@/components/chat/chat-memories-list';
 import { ChatParticipantsList, ParticipantsPreview } from '@/components/chat/chat-participants-list';
 import { Button } from '@/components/ui/button';
 import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from '@/components/ui/use-toast';
@@ -33,10 +33,10 @@ import type { ThreadMode } from '@/services/api';
 // ============================================================================
 
 const CHAT_MODES = [
-  { value: 'brainstorming', label: 'Brainstorming', icon: '💡' },
-  { value: 'analyzing', label: 'Analyzing', icon: '🔍' },
-  { value: 'debating', label: 'Debating', icon: '⚖️' },
-  { value: 'solving', label: 'Problem Solving', icon: '🎯' },
+  { value: 'brainstorming', label: 'Brainstorming', icon: Lightbulb },
+  { value: 'analyzing', label: 'Analyzing', icon: Search },
+  { value: 'debating', label: 'Debating', icon: Scale },
+  { value: 'solving', label: 'Problem Solving', icon: Target },
 ] as const;
 
 // ============================================================================
@@ -320,9 +320,10 @@ export function ChatInput({
               >
                 <SelectValue>
                   <div className="flex items-center gap-1.5 sm:gap-2">
-                    <span className="text-xs sm:text-sm">
-                      {CHAT_MODES.find(m => m.value === modeValue)?.icon}
-                    </span>
+                    {(() => {
+                      const ModeIcon = CHAT_MODES.find(m => m.value === modeValue)?.icon;
+                      return ModeIcon ? <ModeIcon className="size-3 sm:size-3.5" /> : null;
+                    })()}
                     <span className="text-xs font-medium hidden xs:inline sm:inline">
                       {CHAT_MODES.find(m => m.value === modeValue)?.label}
                     </span>
@@ -330,14 +331,17 @@ export function ChatInput({
                 </SelectValue>
               </SelectTrigger>
               <SelectContent>
-                {CHAT_MODES.map(mode => (
-                  <SelectItem key={mode.value} value={mode.value}>
-                    <div className="flex items-center gap-2">
-                      <span>{mode.icon}</span>
-                      <span>{mode.label}</span>
-                    </div>
-                  </SelectItem>
-                ))}
+                {CHAT_MODES.map((mode) => {
+                  const ModeIcon = mode.icon;
+                  return (
+                    <SelectItem key={mode.value} value={mode.value}>
+                      <div className="flex items-center gap-2">
+                        <ModeIcon className="size-4" />
+                        <span>{mode.label}</span>
+                      </div>
+                    </SelectItem>
+                  );
+                })}
               </SelectContent>
             </Select>
 

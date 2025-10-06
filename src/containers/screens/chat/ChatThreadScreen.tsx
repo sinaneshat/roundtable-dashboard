@@ -2,7 +2,7 @@
 
 import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport } from 'ai';
-import { Globe, Link2, Loader2, Lock, Star, Trash2 } from 'lucide-react';
+import { ArrowDown, Globe, Link2, Loader2, Lock, Star, Trash2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -14,7 +14,6 @@ import type { ChatMessageType } from '@/components/chat/chat-message';
 import { ChatMessageList } from '@/components/chat/chat-message';
 import { ChatShareDialog } from '@/components/chat/chat-share-dialog';
 import { ChatThreadInput } from '@/components/chat/chat-thread-input';
-import { ScrollToBottomButton } from '@/components/chat/scroll-to-bottom-button';
 import { useBreadcrumb } from '@/components/chat/use-breadcrumb';
 import { Button } from '@/components/ui/button';
 // Removed ScrollArea - using native div with overflow for better scroll control
@@ -148,95 +147,6 @@ export default function ChatThreadScreen({ slug }: { slug: string }) {
       toastManager.error(t('chat.copyFailed'), t('chat.copyFailedDescription'));
     }
   }, [slug, t, thread]);
-
-  // Set breadcrumb with action buttons when thread loads
-  useEffect(() => {
-    if (!thread)
-      return;
-
-    setDynamicBreadcrumb({
-      title: thread.title,
-      parent: '/chat',
-      actions: (
-        <>
-          {/* Favorite Button - Star Icon */}
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={handleToggleFavorite}
-            disabled={toggleFavoriteMutation.isPending}
-            className="size-8"
-            title={thread.isFavorite ? t('chat.removeFromFavorites') : t('chat.addToFavorites')}
-          >
-            {toggleFavoriteMutation.isPending
-              ? (
-                  <Loader2 className="size-4 animate-spin" />
-                )
-              : (
-                  <Star
-                    className={cn(
-                      'size-4 transition-colors',
-                      thread.isFavorite && 'fill-yellow-500 text-yellow-500',
-                    )}
-                  />
-                )}
-          </Button>
-
-          {/* Public/Private Toggle Button */}
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={handleTogglePublic}
-            disabled={togglePublicMutation.isPending}
-            className="size-8"
-            title={thread.isPublic ? t('chat.makePrivate') : t('chat.makePublic')}
-          >
-            {togglePublicMutation.isPending
-              ? (
-                  <Loader2 className="size-4 animate-spin" />
-                )
-              : thread.isPublic
-                ? (
-                    <Lock className="size-4" />
-                  )
-                : (
-                    <Globe className="size-4" />
-                  )}
-          </Button>
-
-          {/* Copy Link Button - Only show when public */}
-          {thread.isPublic && (
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={handleCopyLink}
-              className="size-8 text-muted-foreground hover:text-foreground"
-              title={t('chat.copyLink')}
-            >
-              <Link2 className="size-4" />
-            </Button>
-          )}
-
-          {/* Delete Button */}
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={handleDeleteClick}
-            className="size-8 text-muted-foreground hover:text-destructive"
-            title={t('chat.deleteThread')}
-          >
-            <Trash2 className="size-4" />
-          </Button>
-        </>
-      ),
-    });
-
-    // Cleanup: reset breadcrumb when component unmounts
-    return () => {
-      setDynamicBreadcrumb(null);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [thread?.title, thread?.isFavorite, thread?.isPublic, handleToggleFavorite, handleTogglePublic, handleCopyLink, handleDeleteClick]);
 
   // Dynamic configuration state
   const [currentMode, setCurrentMode] = useState<'brainstorming' | 'analyzing' | 'debating' | 'solving'>((thread?.mode as 'brainstorming' | 'analyzing' | 'debating' | 'solving') || 'brainstorming');
@@ -430,6 +340,108 @@ export default function ChatThreadScreen({ slug }: { slug: string }) {
     smooth: true,
   });
 
+  // Set breadcrumb with action buttons when thread loads
+  useEffect(() => {
+    if (!thread)
+      return;
+
+    setDynamicBreadcrumb({
+      title: thread.title,
+      parent: '/chat',
+      actions: (
+        <>
+          {/* Scroll to Bottom Button - Only show when not at bottom */}
+          {showScrollButton && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={scrollToBottom}
+              className="size-8 text-muted-foreground hover:text-foreground"
+              title={t('chat.scrollToBottom')}
+            >
+              <ArrowDown className="size-4" />
+            </Button>
+          )}
+
+          {/* Favorite Button - Star Icon */}
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handleToggleFavorite}
+            disabled={toggleFavoriteMutation.isPending}
+            className="size-8"
+            title={thread.isFavorite ? t('chat.removeFromFavorites') : t('chat.addToFavorites')}
+          >
+            {toggleFavoriteMutation.isPending
+              ? (
+                  <Loader2 className="size-4 animate-spin" />
+                )
+              : (
+                  <Star
+                    className={cn(
+                      'size-4 transition-colors',
+                      thread.isFavorite && 'fill-yellow-500 text-yellow-500',
+                    )}
+                  />
+                )}
+          </Button>
+
+          {/* Public/Private Toggle Button */}
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handleTogglePublic}
+            disabled={togglePublicMutation.isPending}
+            className="size-8"
+            title={thread.isPublic ? t('chat.makePrivate') : t('chat.makePublic')}
+          >
+            {togglePublicMutation.isPending
+              ? (
+                  <Loader2 className="size-4 animate-spin" />
+                )
+              : thread.isPublic
+                ? (
+                    <Lock className="size-4" />
+                  )
+                : (
+                    <Globe className="size-4" />
+                  )}
+          </Button>
+
+          {/* Copy Link Button - Only show when public */}
+          {thread.isPublic && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleCopyLink}
+              className="size-8 text-muted-foreground hover:text-foreground"
+              title={t('chat.copyLink')}
+            >
+              <Link2 className="size-4" />
+            </Button>
+          )}
+
+          {/* Delete Button */}
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handleDeleteClick}
+            className="size-8 text-muted-foreground hover:text-destructive"
+            title={t('chat.deleteThread')}
+          >
+            <Trash2 className="size-4" />
+          </Button>
+        </>
+      ),
+    });
+
+    // Cleanup: reset breadcrumb when component unmounts
+    return () => {
+      setDynamicBreadcrumb(null);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [thread?.title, thread?.isFavorite, thread?.isPublic, showScrollButton, handleToggleFavorite, handleTogglePublic, handleCopyLink, handleDeleteClick, scrollToBottom]);
+
   // Poll for title updates when thread has temporary title
   // Slug is now immutable, so no redirect needed - just refresh data
   useEffect(() => {
@@ -583,13 +595,6 @@ export default function ChatThreadScreen({ slug }: { slug: string }) {
           <div className="h-48 sm:h-52 md:h-80" />
         </div>
       </div>
-
-      {/* Scroll-to-Bottom Button - Fixed to right side of viewport */}
-      {showScrollButton && (
-        <div className="fixed right-6 bottom-32 z-40">
-          <ScrollToBottomButton show onClick={scrollToBottom} />
-        </div>
-      )}
 
       {/* Input Area - Fixed to bottom of chat container with same centering as messages */}
       <div className="absolute bottom-0 left-0 right-0 w-full z-50">

@@ -1,7 +1,7 @@
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { ArrowUp, Square, X } from 'lucide-react';
+import { ArrowUp, Lightbulb, Scale, Search, Square, Target, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useTranslations } from 'next-intl';
 import type { KeyboardEventHandler, MutableRefObject } from 'react';
@@ -38,10 +38,10 @@ type ThreadParticipant = {
 // ============================================================================
 
 const CHAT_MODES = [
-  { value: 'brainstorming', label: 'Brainstorming', icon: '💡' },
-  { value: 'analyzing', label: 'Analyzing', icon: '🔍' },
-  { value: 'debating', label: 'Debating', icon: '⚖️' },
-  { value: 'solving', label: 'Problem Solving', icon: '🎯' },
+  { value: 'brainstorming', label: 'Brainstorming', icon: Lightbulb },
+  { value: 'analyzing', label: 'Analyzing', icon: Search },
+  { value: 'debating', label: 'Debating', icon: Scale },
+  { value: 'solving', label: 'Problem Solving', icon: Target },
 ] as const;
 
 // ============================================================================
@@ -247,9 +247,10 @@ export function ChatStreamingInput({
               >
                 <SelectValue>
                   <div className="flex items-center gap-1.5">
-                    <span className="text-xs">
-                      {CHAT_MODES.find(m => m.value === threadMode)?.icon}
-                    </span>
+                    {(() => {
+                      const ModeIcon = CHAT_MODES.find(m => m.value === threadMode)?.icon;
+                      return ModeIcon ? <ModeIcon className="size-3.5" /> : null;
+                    })()}
                     <span className="text-xs font-medium">
                       {CHAT_MODES.find(m => m.value === threadMode)?.label}
                     </span>
@@ -257,14 +258,17 @@ export function ChatStreamingInput({
                 </SelectValue>
               </SelectTrigger>
               <SelectContent>
-                {CHAT_MODES.map(mode => (
-                  <SelectItem key={mode.value} value={mode.value}>
-                    <div className="flex items-center gap-2">
-                      <span>{mode.icon}</span>
-                      <span>{mode.label}</span>
-                    </div>
-                  </SelectItem>
-                ))}
+                {CHAT_MODES.map((mode) => {
+                  const ModeIcon = mode.icon;
+                  return (
+                    <SelectItem key={mode.value} value={mode.value}>
+                      <div className="flex items-center gap-2">
+                        <ModeIcon className="size-4" />
+                        <span>{mode.label}</span>
+                      </div>
+                    </SelectItem>
+                  );
+                })}
               </SelectContent>
             </Select>
 
