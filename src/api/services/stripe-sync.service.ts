@@ -117,7 +117,7 @@ export async function syncStripeDataFromStripe(
       customerId,
       userId: customer.userId,
     });
-    
+
     return { status: 'none' };
   }
 

@@ -94,6 +94,15 @@ export const queryKeys = {
     details: () => [...queryKeys.customRoles.all, 'detail'] as const,
     detail: (id: string) => QueryKeyFactory.detail('customRoles', id),
   },
+
+  // API Keys
+  apiKeys: {
+    all: QueryKeyFactory.base('apiKeys'),
+    lists: () => [...queryKeys.apiKeys.all, 'list'] as const,
+    list: () => QueryKeyFactory.list('apiKeys'),
+    details: () => [...queryKeys.apiKeys.all, 'detail'] as const,
+    detail: (id: string) => QueryKeyFactory.detail('apiKeys', id),
+  },
 } as const;
 
 /**
@@ -184,5 +193,15 @@ export const invalidationPatterns = {
   customRoleDetail: (roleId: string) => [
     queryKeys.customRoles.detail(roleId),
     queryKeys.customRoles.lists(),
+  ],
+
+  // API Key operations
+  apiKeys: [
+    queryKeys.apiKeys.lists(),
+  ],
+
+  apiKeyDetail: (keyId: string) => [
+    queryKeys.apiKeys.detail(keyId),
+    queryKeys.apiKeys.lists(),
   ],
 } as const;

@@ -20,6 +20,8 @@ import { Button } from '@/components/ui/button';
 import { useToggleFavoriteMutation, useTogglePublicMutation, useUpdateThreadMutation } from '@/hooks/mutations/chat-mutations';
 import { useThreadBySlugQuery } from '@/hooks/queries/chat-threads';
 import { useAutoScroll } from '@/hooks/utils/use-auto-scroll';
+import type { ChatModeId } from '@/lib/config/chat-modes';
+import { getDefaultChatMode } from '@/lib/config/chat-modes';
 import { toastManager } from '@/lib/toast/toast-manager';
 import { cn } from '@/lib/ui/cn';
 
@@ -48,6 +50,10 @@ export default function ChatThreadScreen({ slug }: { slug: string }) {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
   const { setDynamicBreadcrumb } = useBreadcrumb();
+
+  // Track seen message IDs to prevent duplicates during streaming
+  // This helps ensure messages from different participants don't get conflated
+  const seenMessageIdsRef = useRef<Set<string>>(new Set());
 
   // Fetch thread details by slug to get thread ID and initial data
   const { data: threadData, isLoading: isLoadingThread, error: threadError } = useThreadBySlugQuery(slug);
@@ -149,7 +155,7 @@ export default function ChatThreadScreen({ slug }: { slug: string }) {
   }, [slug, t, thread]);
 
   // Dynamic configuration state
-  const [currentMode, setCurrentMode] = useState<'brainstorming' | 'analyzing' | 'debating' | 'solving'>((thread?.mode as 'brainstorming' | 'analyzing' | 'debating' | 'solving') || 'brainstorming');
+  const [currentMode, setCurrentMode] = useState<ChatModeId>(() => (thread?.mode as ChatModeId) || getDefaultChatMode());
   const [currentParticipants, setCurrentParticipants] = useState<ParticipantConfig[]>(() =>
     // Sort by priority to ensure correct order from database
     participants
@@ -280,36 +286,88 @@ export default function ChatThreadScreen({ slug }: { slug: string }) {
 
   // Memoize message transformation to prevent animation resets during streaming
   // Only recreate message objects when actual content changes, not on every render
+  // CRITICAL: Ensure each assistant message has stable identity and metadata
   const chatMessages: ChatMessageType[] = useMemo(() => {
-    return messages.map((msg, index) => {
-      const isLastMessage = index === messages.length - 1;
-      const isAssistantMessage = msg.role === 'assistant';
+    // AI SDK v5 Fix: Group messages by unique message ID + participantId to prevent stream leaking
+    // During multi-participant streaming, the AI SDK might append text to the wrong message
+    // We deduplicate and ensure each message maintains its identity based on metadata
+    const messageMap = new Map<string, ChatMessageType>();
 
-      // Extract participant info from message metadata (set by backend)
+    for (const msg of messages) {
       const participantId = msg.metadata?.participantId ?? null;
       const model = msg.metadata?.model;
       const role = msg.metadata?.role;
 
-      return {
-        id: msg.id,
-        role: msg.role as 'user' | 'assistant',
-        content: msg.parts
-          .filter(part => part.type === 'text')
-          .map(part => part.text)
-          .join(''),
-        participantId,
-        metadata: model
-          ? {
-              model,
-              role,
-            }
-          : null,
-        createdAt: new Date().toISOString(),
-        // AI SDK v5: Mark last assistant message as streaming to show cursor
-        // The text content streams in automatically via the messages array
-        isStreaming: isCurrentlyStreaming && isLastMessage && isAssistantMessage,
-      };
-    });
+      // Extract content from parts
+      const content = msg.parts
+        .filter(part => part.type === 'text')
+        .map(part => part.text)
+        .join('');
+
+      // Create a stable key using message ID + participantId to ensure uniqueness
+      // This prevents messages from different participants being merged
+      const messageKey = participantId ? `${msg.id}-${participantId}` : msg.id;
+
+      // Track seen message IDs to help with debugging
+      if (!seenMessageIdsRef.current.has(msg.id)) {
+        seenMessageIdsRef.current.add(msg.id);
+        if (process.env.NODE_ENV === 'development') {
+          // eslint-disable-next-line no-console
+          console.log('[ChatThread] New message detected:', {
+            id: msg.id,
+            role: msg.role,
+            participantId,
+            model,
+            contentLength: content.length,
+          });
+        }
+      }
+
+      // Check if we already have this message
+      const existingMessage = messageMap.get(messageKey);
+
+      if (existingMessage) {
+        // Update existing message if content changed (streaming update)
+        if (existingMessage.content !== content) {
+          messageMap.set(messageKey, {
+            ...existingMessage,
+            content,
+          });
+        }
+      } else {
+        // New message - add to map
+        messageMap.set(messageKey, {
+          id: msg.id,
+          role: msg.role as 'user' | 'assistant',
+          content,
+          participantId,
+          metadata: model
+            ? {
+                model,
+                role,
+              }
+            : null,
+          createdAt: new Date().toISOString(),
+          isStreaming: false, // Will be set below
+        });
+      }
+    }
+
+    // Convert map back to array, preserving order
+    const deduplicatedMessages = Array.from(messageMap.values());
+
+    // Mark last assistant message as streaming
+    // Find the last assistant message and mark it as streaming if currently streaming
+    if (isCurrentlyStreaming) {
+      for (let i = deduplicatedMessages.length - 1; i >= 0; i--) {
+        if (deduplicatedMessages[i]!.role === 'assistant') {
+          deduplicatedMessages[i]!.isStreaming = true;
+          break;
+        }
+      }
+    }
+
+    return deduplicatedMessages;
   }, [messages, isCurrentlyStreaming]);
 
   // Track if we're waiting for multiple participant responses
@@ -474,6 +532,7 @@ export default function ChatThreadScreen({ slug }: { slug: string }) {
   }, [thread?.id, thread?.title, slug]);
 
   // Track streaming status and current participant
+  // CRITICAL: Monitor message changes to detect when new participants start streaming
   useEffect(() => {
     if (status === 'streaming') {
       // Count how many assistant messages we have to determine which participant is streaming
@@ -481,6 +540,27 @@ export default function ChatThreadScreen({ slug }: { slug: string }) {
       const assistantCount = messages.filter(m => m.role === 'assistant').length;
       // Current participant index is zero-based: 0 for first model, 1 for second, etc.
       // Since assistantCount includes the currently streaming message, subtract 1
+
+      // DEBUG: Log message state during streaming to detect issues
+      if (process.env.NODE_ENV === 'development') {
+        const lastMessage = messages[messages.length - 1];
+        // eslint-disable-next-line no-console -- Debug logging for development
+        console.debug('[ChatThread] Streaming state:', {
+          totalMessages: messages.length,
+          assistantCount,
+          currentParticipantIndex: assistantCount > 0 ? assistantCount - 1 : 0,
+          lastMessage: lastMessage
+            ? {
+                id: lastMessage.id,
+                metadata: lastMessage.metadata,
+                contentLength: lastMessage.parts
+                  .filter(p => p.type === 'text')
+                  .reduce((sum, p) => sum + p.text.length, 0),
+              }
+            : null,
+        });
+      }
+
       // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- Tracking streaming progress
       setCurrentParticipantIndex(assistantCount > 0 ? assistantCount - 1 : 0);
     } else {
@@ -565,7 +645,7 @@ export default function ChatThreadScreen({ slug }: { slug: string }) {
         ref={scrollRef}
         className="absolute inset-0 overflow-y-auto overflow-x-hidden"
       >
-        <div className="mx-auto max-w-4xl px-3 sm:px-4 md:px-6 pb-3 sm:pb-4 pt-3 sm:pt-4">
+        <div className="mx-auto w-full max-w-4xl px-3 sm:px-4 md:px-6 pb-3 sm:pb-4 pt-3 sm:pt-4">
           <ChatMessageList
             messages={chatMessages}
             onRegenerate={handleRegenerateMessage}
@@ -596,9 +676,9 @@ export default function ChatThreadScreen({ slug }: { slug: string }) {
         </div>
       </div>
 
-      {/* Input Area - Fixed to bottom of chat container with same centering as messages */}
-      <div className="absolute bottom-0 left-0 right-0 w-full z-50">
-        <div className="max-w-4xl mx-auto py-3 sm:py-4 px-3 sm:px-4 md:px-6">
+      {/* Input Area - Fixed to bottom with same container width and padding as messages */}
+      <div className="absolute bottom-0 left-0 right-0 z-50">
+        <div className="mx-auto w-full max-w-4xl px-3 sm:px-4 md:px-6 py-3 sm:py-4">
           <ChatThreadInput
             mode={currentMode}
             participants={currentParticipants}

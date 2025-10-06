@@ -3,10 +3,10 @@ import { z } from 'zod';
 
 import type { SubscriptionTier } from '../tables/usage';
 import {
-    SUBSCRIPTION_TIERS,
-    subscriptionTierQuotas,
-    userChatUsage,
-    userChatUsageHistory,
+  SUBSCRIPTION_TIERS,
+  subscriptionTierQuotas,
+  userChatUsage,
+  userChatUsageHistory,
 } from '../tables/usage';
 
 // ============================================================================

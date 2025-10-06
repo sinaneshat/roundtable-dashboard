@@ -1,11 +1,12 @@
 'use client';
 
-import { BadgeCheck, ChevronsUpDown, CreditCard, Loader2, LogOut, Sparkles, X } from 'lucide-react';
+import { BadgeCheck, ChevronsUpDown, CreditCard, Key, Loader2, LogOut, Sparkles, X } from 'lucide-react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 
 import { CancelSubscriptionDialog } from '@/components/chat/cancel-subscription-dialog';
+import { ApiKeysModal } from '@/components/modals/api-keys-modal';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -35,6 +36,8 @@ import {
   useUsageStatsQuery,
 } from '@/hooks';
 import { signOut, useSession } from '@/lib/auth/client';
+import { toastManager } from '@/lib/toast/toast-manager';
+import { getApiErrorMessage } from '@/lib/utils/error-handling';
 
 export function NavUser() {
   const { data: session } = useSession();
@@ -43,6 +46,7 @@ export function NavUser() {
   const { data: usageData } = useUsageStatsQuery();
   const { data: subscriptionsData } = useSubscriptionsQuery();
   const [showCancelDialog, setShowCancelDialog] = useState(false);
+  const [showApiKeysModal, setShowApiKeysModal] = useState(false);
 
   // Mutations
   const customerPortalMutation = useCreateCustomerPortalSessionMutation();
@@ -80,6 +84,8 @@ export function NavUser() {
       }
     } catch (error) {
       console.error('Error creating portal session:', error);
+      const errorMessage = getApiErrorMessage(error, 'Failed to open customer portal');
+      toastManager.error('Portal Error', errorMessage);
     }
   };
 
@@ -92,13 +98,19 @@ export function NavUser() {
       return;
 
     try {
-      await cancelSubscriptionMutation.mutateAsync({
+      const result = await cancelSubscriptionMutation.mutateAsync({
         param: { id: activeSubscription.id },
         json: { immediately: false },
       });
-      setShowCancelDialog(false);
+
+      if (result.success) {
+        setShowCancelDialog(false);
+        // Success is obvious from the dialog closing and UI update - no toast needed
+      }
     } catch (error) {
       console.error('Error canceling subscription:', error);
+      const errorMessage = getApiErrorMessage(error, 'Failed to cancel subscription');
+      toastManager.error('Cancellation Failed', errorMessage);
     }
   };
 
@@ -205,6 +217,10 @@ export function NavUser() {
                     {isPremium ? t('navigation.pricing') : t('pricing.card.upgradeToPro')}
                   </Link>
                 </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setShowApiKeysModal(true)}>
+                  <Key />
+                  API Keys
+                </DropdownMenuItem>
               </DropdownMenuGroup>
               <DropdownMenuSeparator />
 
@@ -260,6 +276,12 @@ export function NavUser() {
         subscriptionTier={subscriptionTier}
         currentPeriodEnd={activeSubscription?.currentPeriodEnd}
         isProcessing={cancelSubscriptionMutation.isPending}
+      />
+
+      {/* API Keys Modal */}
+      <ApiKeysModal
+        open={showApiKeysModal}
+        onOpenChange={setShowApiKeysModal}
       />
     </>
   );

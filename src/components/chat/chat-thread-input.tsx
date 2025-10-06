@@ -1,15 +1,13 @@
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { ArrowUp, Lightbulb, Scale, Search, Square, Target, X } from 'lucide-react';
+import { ArrowUp, Square, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useTranslations } from 'next-intl';
 import type { KeyboardEventHandler } from 'react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { z } from 'zod';
 
-import { MessageContentSchema } from '@/api/routes/chat/schema';
 import type { ParticipantConfig } from '@/components/chat/chat-config-sheet';
 import { ChatMemoriesList } from '@/components/chat/chat-memories-list';
 import { ChatParticipantsList, ParticipantsPreview } from '@/components/chat/chat-participants-list';
@@ -22,33 +20,12 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { getChatModeOptions } from '@/lib/config/chat-modes';
+import type { ThreadInputFormData } from '@/lib/schemas/chat-forms';
+import { ThreadInputFormSchema } from '@/lib/schemas/chat-forms';
 import { cn } from '@/lib/ui/cn';
+import { chatGlass } from '@/lib/ui/glassmorphism';
 import type { ThreadMode } from '@/services/api';
-
-// ============================================================================
-// Constants
-// ============================================================================
-
-const CHAT_MODES = [
-  { value: 'brainstorming', label: 'Brainstorming', icon: Lightbulb },
-  { value: 'analyzing', label: 'Analyzing', icon: Search },
-  { value: 'debating', label: 'Debating', icon: Scale },
-  { value: 'solving', label: 'Problem Solving', icon: Target },
-] as const;
-
-// ============================================================================
-// Form Schema - Reusing Backend Validation
-// ============================================================================
-
-/**
- * Thread input form validation schema
- * Reuses backend MessageContentSchema to ensure consistency
- */
-const threadInputSchema = z.object({
-  message: MessageContentSchema,
-});
-
-type ThreadInputFormData = z.infer<typeof threadInputSchema>;
 
 // ============================================================================
 // Component Props
@@ -114,28 +91,20 @@ export function ChatThreadInput({
     setValue,
     formState: { errors },
   } = useForm<ThreadInputFormData>({
-    resolver: zodResolver(threadInputSchema),
+    resolver: zodResolver(ThreadInputFormSchema),
     defaultValues: {
       message: '',
     },
-    mode: 'onChange',
+    mode: 'all',
   });
 
-  const messageValue = watch('message');
+  const messageRegistration = register('message');
+  const messageValue = watch('message') ?? '';
   const hasMessage = Boolean(messageValue && messageValue.trim().length > 0);
-  const isDisabled = disabled || isStreaming || !hasMessage;
+  const hasParticipants = participants.length > 0;
+  const isDisabled = disabled || isStreaming || !hasMessage || !hasParticipants;
 
-  // Merge refs callback for textarea
-  const mergeTextareaRefs = useCallback((element: HTMLTextAreaElement | null) => {
-    const { ref: rhfRef } = register('message');
-    if (typeof rhfRef === 'function') {
-      rhfRef(element);
-    } else if (rhfRef && 'current' in rhfRef) {
-      (rhfRef as React.MutableRefObject<HTMLTextAreaElement | null>).current = element;
-    }
-
-    textareaRef.current = element;
-  }, [register]);
+  const chatModeOptions = getChatModeOptions();
 
   // Auto-resize textarea (min 3 lines = 72px, max 6 lines = 144px)
   useEffect(() => {
@@ -200,18 +169,19 @@ export function ChatThreadInput({
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3, ease: [0.25, 0.1, 0.25, 1] }}
           className={cn(
-            'relative flex flex-col gap-2 rounded-2xl sm:rounded-3xl p-2.5 sm:p-3 border backdrop-blur-xl',
-            'shadow-sm transition-all duration-200',
-            isFocused
-              ? 'border-ring ring-2 ring-ring/20'
-              : 'border-input hover:border-ring/50',
+            'relative flex flex-col gap-2 rounded-3xl p-2.5 sm:p-3',
+            chatGlass.inputBox,
+            isFocused && 'ring-2 ring-ring/20',
             isStreaming && 'opacity-75',
           )}
         >
           {/* Textarea - Full Width with Auto-resize */}
           <Textarea
-            {...register('message')}
-            ref={mergeTextareaRefs}
+            {...messageRegistration}
+            ref={(e) => {
+              messageRegistration.ref(e);
+              textareaRef.current = e;
+            }}
             placeholder={t('chat.input.threadPlaceholder')}
             disabled={disabled || isStreaming}
             onFocus={() => setIsFocused(true)}
@@ -249,17 +219,17 @@ export function ChatThreadInput({
                 <SelectValue>
                   <div className="flex items-center gap-1.5 sm:gap-2">
                     {(() => {
-                      const ModeIcon = CHAT_MODES.find(m => m.value === mode)?.icon;
+                      const ModeIcon = chatModeOptions.find(m => m.value === mode)?.icon;
                       return ModeIcon ? <ModeIcon className="size-3 sm:size-3.5" /> : null;
                     })()}
                     <span className="text-xs font-medium hidden xs:inline sm:inline">
-                      {CHAT_MODES.find(m => m.value === mode)?.label}
+                      {chatModeOptions.find(m => m.value === mode)?.label}
                     </span>
                   </div>
                 </SelectValue>
               </SelectTrigger>
               <SelectContent>
-                {CHAT_MODES.map((chatMode) => {
+                {chatModeOptions.map((chatMode) => {
                   const ModeIcon = chatMode.icon;
                   return (
                     <SelectItem key={chatMode.value} value={chatMode.value}>
@@ -410,6 +380,16 @@ export function ChatThreadInput({
               className="mt-2 text-xs text-center text-destructive"
             >
               {errors.message.message}
+            </motion.p>
+          )}
+          {!hasParticipants && !isStreaming && (
+            <motion.p
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="mt-2 text-xs text-center text-muted-foreground"
+            >
+              Please select at least one AI model to continue
             </motion.p>
           )}
         </AnimatePresence>

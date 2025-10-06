@@ -33,7 +33,7 @@ import type { ApiEnv } from '@/api/types';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db/schema';
 import type { SubscriptionTier } from '@/db/tables/usage';
-import type { ROUNDTABLE_MODE_INSTRUCTIONS } from '@/lib/ai/models-config';
+import type { SessionTypeMode } from '@/lib/ai/models-config';
 import {
   buildRoundtableSystemPrompt,
   canAccessModel,
@@ -41,6 +41,7 @@ import {
   getModelById,
   getTierDisplayName,
 } from '@/lib/ai/models-config';
+import type { ChatModeId, ThreadStatus } from '@/lib/config/chat-modes';
 
 import type {
   addParticipantRoute,
@@ -299,7 +300,7 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
         userId: user.id,
         title: tempTitle,
         slug: tempSlug,
-        mode: body.mode || 'brainstorming',
+        mode: (body.mode || 'brainstorming') as ChatModeId,
         status: 'active',
         isFavorite: false,
         isPublic: false,
@@ -572,12 +573,35 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
     // Verify thread ownership
     await verifyThreadOwnership(id, user.id, db);
 
+    // Build update object using reusable types from chat-modes config
+    const updateData: {
+      title?: string;
+      mode?: ChatModeId;
+      status?: ThreadStatus;
+      isFavorite?: boolean;
+      isPublic?: boolean;
+      metadata?: Record<string, unknown>;
+      updatedAt: Date;
+    } = {
+      updatedAt: new Date(),
+    };
+
+    if (body.title !== undefined)
+      updateData.title = body.title;
+    if (body.mode !== undefined)
+      updateData.mode = body.mode as ChatModeId;
+    if (body.status !== undefined)
+      updateData.status = body.status as ThreadStatus;
+    if (body.isFavorite !== undefined)
+      updateData.isFavorite = body.isFavorite;
+    if (body.isPublic !== undefined)
+      updateData.isPublic = body.isPublic;
+    if (body.metadata !== undefined)
+      updateData.metadata = body.metadata;
+
     const [updatedThread] = await db
       .update(tables.chatThread)
-      .set({
-        ...body,
-        updatedAt: new Date(),
-      })
+      .set(updateData)
       .where(eq(tables.chatThread.id, id))
       .returning();
 
@@ -913,10 +937,10 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
     if (newMode && newMode !== thread.mode) {
       await db
         .update(tables.chatThread)
-        .set({ mode: newMode, updatedAt: new Date() })
+        .set({ mode: newMode as ChatModeId, updatedAt: new Date() })
         .where(eq(tables.chatThread.id, threadId));
 
-      thread.mode = newMode; // Update local reference
+      thread.mode = newMode as ChatModeId; // Update local reference
       apiLogger.info('Thread mode updated', { threadId, oldMode: thread.mode, newMode });
     }
 
@@ -1157,6 +1181,9 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
 
     // Multiple participants: Stream each model's response sequentially
     // AI SDK v5 Pattern: Use createUIMessageStream for sequential multi-participant responses
+    // ⚠️ CRITICAL: createUIMessageStream is designed for SINGLE message turns
+    // For multi-participant responses, we need to use a DIFFERENT approach
+    // We'll use createDataStreamResponse to send custom events that the frontend can handle
     apiLogger.info('Multi-participant streaming initiated', {
       threadId,
       participantCount: participants.length,
@@ -1171,6 +1198,8 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
     // Create UI Message Stream following AI SDK v5 official patterns
     // Following the multi-step streaming pattern from AI SDK v5 docs
     // https://sdk.vercel.ai/docs/ai-sdk-core/generating-text#multi-step-streaming
+    // ⚠️ NOTE: This uses writer.write() for each message, but the AI SDK's useChat
+    // hook may not properly separate them. The delays and explicit boundaries help.
     const stream = createUIMessageStream({
       originalMessages: uiMessages,
       async execute({ writer }) {
@@ -1203,10 +1232,10 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
             contextMessagesCount: contextMessages.length,
           });
 
-          // Build system prompt with role awareness using centralized configuration
-          // 🔧 CRITICAL: Never reveal AI model IDs - make it seem like a human roundtable
+          // Build system prompt using centralized configuration
+          // Models are fully aware of other participants and can reference them
           const systemPrompt = buildRoundtableSystemPrompt({
-            mode: thread.mode as keyof typeof ROUNDTABLE_MODE_INSTRUCTIONS,
+            mode: thread.mode as SessionTypeMode,
             participantIndex: i,
             participantRole: participant.role,
             customSystemPrompt: participant.settings?.systemPrompt,
@@ -1305,20 +1334,25 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
             // For SEQUENTIAL participants, we need to manually write each stream event
             // Following AI SDK v5 UIMessageChunk types: 'start', 'text-start', 'text-delta', 'text-end', 'finish'
 
-            // Create a new message for this participant
-            const messageId = ulid();
+            // Create a new message for this participant - IMPORTANT: This ID will be used both for streaming AND database
+            // This ensures consistency between what the frontend sees during streaming and what gets persisted
+            const assistantMessageId = ulid();
             const textId = ulid();
 
             // Send 'start' event to begin new assistant message
             writer.write({
               type: 'start',
-              messageId,
+              messageId: assistantMessageId, // Use the same ID that will be saved to DB
               messageMetadata: {
                 participantId: participant.id,
                 model: participant.modelId,
                 role: participant.role,
               },
             });
+
+            // Small delay after start event to ensure frontend processes it
+            // Reduced to 10ms to minimize buffering while maintaining message separation
+            await new Promise(resolve => setTimeout(resolve, 10));
 
             // Send 'text-start' event to begin text content
             writer.write({
@@ -1350,7 +1384,6 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
             });
 
             // Send 'finish' event to complete the message
-            // Note: 'finish' event only has messageMetadata, not usage or finishReason
             writer.write({
               type: 'finish',
               messageMetadata: {
@@ -1364,7 +1397,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
               participantId: participant.id,
               participantIndex: i,
               modelId: participant.modelId,
-              messageId,
+              messageId: assistantMessageId,
               textLength: text.length,
               totalTokens: usage?.totalTokens,
               responseId: response?.id,
@@ -1372,16 +1405,15 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
               remainingParticipants: participants.length - i - 1,
             });
 
-            // Small delay to ensure stream is fully flushed to client before next participant
-            // This prevents the frontend from receiving overlapping streams
-            // The delay allows the frontend useChat hook to process the completed message
-            // before the next participant's stream starts
+            // Minimal delay to ensure complete message boundary between participants
+            // Reduced to 50ms to keep frontend streaming smooth and fast
             if (i < participants.length - 1) {
               // Only delay between participants, not after the last one
-              await new Promise(resolve => setTimeout(resolve, 150));
-              apiLogger.info('Starting next participant after stream flush delay', {
+              await new Promise(resolve => setTimeout(resolve, 50));
+              apiLogger.info('Starting next participant after message boundary delay', {
                 nextParticipantIndex: i + 1,
                 nextParticipantId: participants[i + 1]?.id,
+                previousMessageId: assistantMessageId,
               });
             }
 
@@ -1393,14 +1425,48 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
                 totalTokens: usage?.totalTokens,
               });
 
-              // Write warning message to stream
+              // Write warning message to stream - generate ID early
+              const warningMessageId = ulid();
               const warningText = `[${participant.modelId}${participant.role ? ` (${participant.role})` : ''} returned an empty response]`;
               const warningId = ulid();
+
+              // Send start event for warning message
+              writer.write({
+                type: 'start',
+                messageId: warningMessageId,
+                messageMetadata: {
+                  participantId: participant.id,
+                  model: participant.modelId,
+                  role: participant.role,
+                },
+              });
+
+              // Minimal delay to ensure frontend processes the start event
+              await new Promise(resolve => setTimeout(resolve, 10));
+
+              writer.write({
+                type: 'text-start',
+                id: warningId,
+              });
 
               writer.write({
                 type: 'text-delta',
                 id: warningId,
                 delta: warningText,
+              });
+
+              writer.write({
+                type: 'text-end',
+                id: warningId,
+              });
+
+              writer.write({
+                type: 'finish',
+                messageMetadata: {
+                  participantId: participant.id,
+                  model: participant.modelId,
+                  role: participant.role,
+                },
               });
 
               // Add to context so subsequent models know about the empty response
@@ -1413,7 +1479,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
               });
 
               contextMessages.push({
-                id: warningId,
+                id: warningMessageId,
                 role: 'assistant',
                 parts: [{ type: 'text', text: warningText }],
               });
@@ -1422,12 +1488,12 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
               continue;
             }
 
-            // Save to database after completion
-            const assistantMessageId = ulid();
+            // Save to database after completion - use the same ID that was sent in the stream
+            // This ensures the frontend can match streamed messages with persisted ones
             const now = new Date();
 
             await db.insert(tables.chatMessage).values({
-              id: assistantMessageId,
+              id: assistantMessageId, // Same ID used in the stream start event
               threadId,
               participantId: participant.id,
               role: 'assistant',
@@ -1468,15 +1534,48 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
             });
 
             // Write error message as a separate assistant message
-            // AI SDK v5 pattern: Use text-delta event for error messages
+            // AI SDK v5 pattern: Create complete message structure for error
             const errorText = `[Error: ${participant.modelId} failed to respond - ${error instanceof Error ? error.message : 'Unknown error'}]`;
             const errorId = ulid();
+            const errorMessageId = ulid();
 
-            // Write error as text delta
+            // Send complete message structure for error
+            writer.write({
+              type: 'start',
+              messageId: errorMessageId,
+              messageMetadata: {
+                participantId: participant.id,
+                model: participant.modelId,
+                role: participant.role,
+              },
+            });
+
+            // Minimal delay to ensure frontend processes the start event
+            await new Promise(resolve => setTimeout(resolve, 10));
+
+            writer.write({
+              type: 'text-start',
+              id: errorId,
+            });
+
             writer.write({
               type: 'text-delta',
               id: errorId,
               delta: errorText,
+            });
+
+            writer.write({
+              type: 'text-end',
+              id: errorId,
+            });
+
+            writer.write({
+              type: 'finish',
+              messageMetadata: {
+                participantId: participant.id,
+                model: participant.modelId,
+                role: participant.role,
+              },
             });
 
             // Add to context so subsequent models know about the error
@@ -1489,7 +1588,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
             });
 
             contextMessages.push({
-              id: errorId,
+              id: errorMessageId,
               role: 'assistant',
               parts: [{ type: 'text', text: errorText }],
             });

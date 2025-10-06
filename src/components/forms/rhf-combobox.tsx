@@ -8,20 +8,20 @@ import type { FormOptions, GeneralFormProps } from '@/types/general';
 
 import { Button } from '../ui/button';
 import {
-    Command,
-    CommandEmpty,
-    CommandGroup,
-    CommandInput,
-    CommandItem,
-    CommandList,
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
 } from '../ui/command';
 import {
-    FormControl,
-    FormDescription,
-    FormField,
-    FormItem,
-    FormLabel,
-    FormMessage,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
 } from '../ui/form';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 

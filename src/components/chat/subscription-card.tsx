@@ -1,8 +1,8 @@
 'use client';
 
 import { ArrowDownCircle, CreditCard, Info, Loader2 } from 'lucide-react';
-import { useTranslations } from 'next-intl';
 import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 
 import { Badge } from '@/components/ui/badge';

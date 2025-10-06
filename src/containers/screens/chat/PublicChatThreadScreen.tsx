@@ -45,17 +45,6 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
     reasoning: msg.reasoning,
   })), [serverMessages]);
 
-  // Create participant map for message display (same as ChatThreadScreen)
-  const _participantMap = useMemo(() => new Map(rawParticipants.map(p => [p.id, {
-    id: p.id,
-    threadId: p.threadId,
-    modelId: p.modelId,
-    role: p.role,
-    customRoleId: null,
-    priority: p.priority,
-    createdAt: p.createdAt,
-  }])), [rawParticipants]);
-
   // Show loading state
   if (isLoadingThread) {
     return (
@@ -196,6 +185,7 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
       {/* Messages Area - Full height with bottom padding for CTA */}
       <ScrollArea className="h-[calc(100vh-140px)]">
         <div className="mx-auto max-w-4xl px-3 sm:px-4 md:px-6 py-6 sm:py-8">
+          {/* eslint-disable-next-line style/multiline-ternary */}
           {chatMessages.length === 0 ? (
             <div className="flex items-center justify-center min-h-[50vh]">
               <div className="text-center space-y-4 max-w-md">

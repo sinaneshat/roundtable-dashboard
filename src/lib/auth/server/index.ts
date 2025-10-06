@@ -1,7 +1,7 @@
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { nextCookies } from 'better-auth/next-js';
-import { magicLink } from 'better-auth/plugins';
+import { apiKey, magicLink } from 'better-auth/plugins';
 
 import { db } from '@/db';
 import * as authSchema from '@/db/tables/auth';
@@ -27,7 +27,12 @@ function createAuthAdapter() {
   // For Cloudflare Workers: use the db proxy with transactions disabled (D1 limitation)
   return drizzleAdapter(db, {
     provider: 'sqlite',
-    schema: authSchema,
+    schema: {
+      ...authSchema,
+      // Explicitly map apiKey table for Better Auth API key plugin
+      // Better Auth expects "apikey" (lowercase, no underscore) in the schema object
+      apikey: authSchema.apiKey,
+    },
     // Disable transactions for Cloudflare Workers (D1 doesn't support BEGIN/COMMIT)
     // Keep enabled for local SQLite development
     transaction: isNextDev || isLocal,
@@ -94,6 +99,28 @@ export const auth = betterAuth({
       sendMagicLink: async ({ email, url }) => {
         const { emailService } = await import('@/lib/email/ses-service');
         await emailService.sendMagicLink(email, url);
+      },
+    }),
+    apiKey({
+      // Custom prefix for API keys
+      defaultPrefix: 'rpnd_', // roundtable prefix
+      // Key configuration
+      defaultKeyLength: 64,
+      requireName: true,
+      // Metadata support
+      enableMetadata: true,
+      // Expiration settings
+      keyExpiration: {
+        defaultExpiresIn: null, // No expiration by default
+        disableCustomExpiresTime: false,
+        minExpiresIn: 1, // Minimum 1 day
+        maxExpiresIn: 365, // Maximum 1 year
+      },
+      // Rate limiting configuration
+      rateLimit: {
+        enabled: true,
+        timeWindow: 1000 * 60 * 60 * 24, // 24 hours
+        maxRequests: 1000, // 1000 requests per day by default
       },
     }),
   ],

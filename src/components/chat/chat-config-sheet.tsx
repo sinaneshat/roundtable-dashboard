@@ -135,6 +135,10 @@ export function ChatConfigSheet({
   };
 
   const handleRemoveParticipant = (id: string) => {
+    // Prevent removing the last participant - at least one must remain
+    if (participants.length <= 1) {
+      return;
+    }
     onParticipantsChange(participants.filter(p => p.id !== id));
   };
 
@@ -289,6 +293,8 @@ export function ChatConfigSheet({
                               size="icon"
                               className="size-8"
                               onClick={() => handleRemoveParticipant(participant.id)}
+                              disabled={participants.length <= 1}
+                              title={participants.length <= 1 ? 'At least one participant is required' : 'Remove participant'}
                             >
                               <X className="size-4" />
                             </Button>

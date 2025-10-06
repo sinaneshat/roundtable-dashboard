@@ -48,6 +48,88 @@
     "updating": "Updating"
   },
   "addToFavorites": "Add To Favorites",
+  "apiKeys": {
+    "modal": {
+      "title": "API Keys",
+      "description": "Manage your API keys for programmatic access"
+    },
+    "docs": {
+      "accordion": {
+        "title": "API Documentation",
+        "subtitle": "Explore our API reference and guides",
+        "description": "Access comprehensive documentation to integrate with our API. Choose the format that works best for you."
+      },
+      "links": {
+        "interactive": {
+          "title": "Interactive Documentation",
+          "description": "Browse and test API endpoints with Scalar UI"
+        },
+        "openapi": {
+          "title": "OpenAPI Specification",
+          "description": "Download the complete API spec in JSON format"
+        },
+        "llmText": {
+          "title": "LLM-Friendly Documentation",
+          "description": "Markdown format optimized for AI tools and agents"
+        }
+      }
+    },
+    "tabs": {
+      "list": "My Keys",
+      "create": "Create New"
+    },
+    "form": {
+      "nameLabel": "API Key Name",
+      "namePlaceholder": "e.g., Production API Key",
+      "nameDescription": "A descriptive name to help you identify this key",
+      "expiresInLabel": "Expiration",
+      "expiresInPlaceholder": "Select expiration period",
+      "expiresInDescription": "When this key should expire (optional)",
+      "expiresIn": {
+        "never": "Never expires",
+        "7days": "7 days",
+        "30days": "30 days",
+        "90days": "90 days",
+        "180days": "180 days",
+        "365days": "365 days"
+      },
+      "successTitle": "API Key Created Successfully!",
+      "successMessage": "Your API key has been generated. Make sure to copy it now - you won't be able to see it again.",
+      "generatedKeyLabel": "Your API Key",
+      "copyButton": "Copy",
+      "copied": "Copied!",
+      "copyWarning": "This is your only chance to copy this key. Store it securely - we cannot recover it later.",
+      "createButton": "Create API Key",
+      "doneButton": "Done",
+      "limitReached": {
+        "title": "API Key Limit Reached",
+        "description": "You have reached the maximum limit of 5 API keys. Please delete an existing key before creating a new one."
+      }
+    },
+    "list": {
+      "noKeys": "No API keys yet",
+      "createNew": "Create API Key",
+      "unnamedKey": "Unnamed Key",
+      "createdAt": "Created",
+      "expiresAt": "Expires",
+      "neverExpires": "Never",
+      "expired": "Expired",
+      "status": "Status",
+      "active": "Active",
+      "disabled": "Disabled",
+      "remainingRequests": "Remaining",
+      "rateLimit": "Rate Limit",
+      "day": "day",
+      "delete": "Delete API key",
+      "deleteConfirmTitle": "Delete API Key?",
+      "deleteConfirmDescription": "This action cannot be undone. This API key will immediately stop working.",
+      "deleteButton": "Delete Key",
+      "deleteSuccess": "API key deleted",
+      "deleteSuccessDescription": "The API key has been permanently deleted",
+      "deleteFailed": "Failed to delete API key",
+      "deleteFailedDescription": "An error occurred while deleting the API key"
+    }
+  },
   "auth": {
     "email": "Email",
     "emailPlaceholder": "Enter your email",

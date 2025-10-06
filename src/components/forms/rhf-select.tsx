@@ -1,4 +1,4 @@
-// components/TextInput.tsx
+// components/RHFSelect.tsx
 import React from 'react';
 import { useFormContext } from 'react-hook-form';
 
@@ -54,9 +54,7 @@ function RHFSelect({
               }
               return field.onChange(e);
             }}
-            defaultValue={
-              field.value !== undefined ? field.value : externalValue
-            }
+            value={field.value || externalValue || undefined}
           >
             <FormControl>
               <SelectTrigger>
@@ -65,7 +63,11 @@ function RHFSelect({
             </FormControl>
             <SelectContent>
               {options.map(item => (
-                <SelectItem key={item.value} value={item.value}>
+                <SelectItem
+                  key={item.value}
+                  value={item.value}
+                  disabled={item.value === ''}
+                >
                   <p>{item.label}</p>
                 </SelectItem>
               ))}

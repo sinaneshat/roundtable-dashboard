@@ -16,8 +16,8 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/data/query-keys';
 import type { getSubscriptionsService } from '@/services/api';
 import {
-    cancelSubscriptionService,
-    switchSubscriptionService,
+  cancelSubscriptionService,
+  switchSubscriptionService,
 } from '@/services/api';
 
 /**

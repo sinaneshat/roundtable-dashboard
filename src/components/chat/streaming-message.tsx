@@ -42,7 +42,6 @@ export function StreamingMessage({
   const lastStreamingRef = useRef(isStreaming);
 
   const [displayedContent, setDisplayedContent] = useState(isStreaming ? '' : content);
-  const [currentIndex, setCurrentIndex] = useState(isStreaming ? 0 : content.length);
 
   // Detect when content or streaming state changes
   useEffect(() => {
@@ -55,39 +54,34 @@ export function StreamingMessage({
 
       if (isStreaming) {
         // Reset for new streaming content
-        setCurrentIndex(0);
         setDisplayedContent('');
       } else {
         // Show immediately for non-streaming content
         setDisplayedContent(content);
-        setCurrentIndex(content.length);
       }
     }
   }, [content, isStreaming]);
 
-  // Animate content streaming character by character (ChatGPT-style)
+  // Display content immediately as it arrives (no artificial delay)
+  // CRITICAL: Show text as fast as it's received from backend to keep up with streaming
   useEffect(() => {
-    if (isStreaming && currentIndex < content.length) {
-      // Progressive reveal - faster than real-time but visible
-      const timeout = setTimeout(() => {
-        setDisplayedContent(content.slice(0, currentIndex + 1));
-        setCurrentIndex(currentIndex + 1);
-      }, 20); // 20ms per character for smooth streaming feel
-
-      return () => clearTimeout(timeout);
+    if (isStreaming) {
+      // Show content immediately as it arrives - no character-by-character delay
+      // This ensures frontend keeps up with backend streaming speed
+      if (content !== displayedContent) {
+        setDisplayedContent(content);
+      }
+    } else {
+      // For non-streaming messages, show immediately
+      if (displayedContent !== content) {
+        setDisplayedContent(content);
+      }
     }
-
-    // If streaming stopped but we haven't shown all content yet, show it all
-    if (!isStreaming && displayedContent !== content) {
-      setDisplayedContent(content);
-      setCurrentIndex(content.length);
-    }
-
-    return undefined;
-  }, [content, currentIndex, isStreaming, displayedContent]);
+  }, [content, isStreaming, displayedContent]);
 
   const isUser = role === 'user';
-  const showCursor = isStreaming && currentIndex < content.length;
+  // Show cursor when streaming, regardless of content length (since we show immediately)
+  const showCursor = isStreaming;
 
   // User messages: Right-aligned with rounded box
   if (isUser) {

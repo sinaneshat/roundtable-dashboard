@@ -7,6 +7,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Card } from '@/components/ui/card';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { AI_MODELS } from '@/lib/ai/models-config';
+import type { ChatModeId } from '@/lib/config/chat-modes';
 import { cn } from '@/lib/ui/cn';
 import { glassBadge } from '@/lib/ui/glassmorphism';
 
@@ -17,14 +18,14 @@ import { glassBadge } from '@/lib/ui/glassmorphism';
 type QuickStartSuggestion = {
   title: string;
   prompt: string;
-  mode: 'brainstorming' | 'analyzing' | 'debating' | 'solving';
+  mode: ChatModeId;
   participants: ParticipantConfig[];
 };
 
 type ChatQuickStartProps = {
   onSuggestionClick: (
     prompt: string,
-    mode: QuickStartSuggestion['mode'],
+    mode: ChatModeId,
     participants: ParticipantConfig[],
   ) => void;
   className?: string;

@@ -6,17 +6,48 @@
  */
 
 // ============================================================================
+// API Keys Service Exports
+// ============================================================================
+
+export {
+  type ApiKeyType,
+  type CreateApiKeyRequest,
+  type CreateApiKeyResponse,
+  createApiKeyService,
+  type DeleteApiKeyRequest,
+  type DeleteApiKeyResponse,
+  deleteApiKeyService,
+  type GetApiKeyRequest,
+  type GetApiKeyResponse,
+  getApiKeyService,
+  type ListApiKeysResponse,
+  listApiKeysService,
+  type UpdateApiKeyRequest,
+  type UpdateApiKeyResponse,
+  updateApiKeyService,
+} from './api-keys';
+
+// ============================================================================
 // Chat Memories Service Exports
 // ============================================================================
 
 export {
-    createMemoryService, deleteMemoryService, getMemoryService, listMemoriesService, updateMemoryService, type CreateMemoryRequest,
-    type CreateMemoryResponse, type DeleteMemoryRequest,
-    type DeleteMemoryResponse, type GetMemoryRequest,
-    type GetMemoryResponse, type ListMemoriesRequest,
-    type ListMemoriesResponse, type MemoryType,
-    type UpdateMemoryRequest,
-    type UpdateMemoryResponse
+  type CreateMemoryRequest,
+  type CreateMemoryResponse,
+  createMemoryService,
+  type DeleteMemoryRequest,
+  type DeleteMemoryResponse,
+  deleteMemoryService,
+  type GetMemoryRequest,
+  type GetMemoryResponse,
+  getMemoryService,
+  type ListMemoriesRequest,
+  type ListMemoriesResponse,
+  listMemoriesService,
+  type MemoryType,
+  type UpdateMemoryRequest,
+  type UpdateMemoryResponse,
+  updateMemoryService,
 } from './chat-memories';
 
 // ============================================================================
@@ -25,8 +56,9 @@ export {
 // ============================================================================
 
 export {
-    streamChatService, type StreamChatRequest,
-    type StreamChatResponse
+  type StreamChatRequest,
+  type StreamChatResponse,
+  streamChatService,
 } from './chat-messages';
 
 // ============================================================================
@@ -34,10 +66,15 @@ export {
 // ============================================================================
 
 export {
-    addParticipantService, deleteParticipantService, updateParticipantService, type AddParticipantRequest,
-    type AddParticipantResponse, type DeleteParticipantRequest,
-    type DeleteParticipantResponse, type UpdateParticipantRequest,
-    type UpdateParticipantResponse
+  type AddParticipantRequest,
+  type AddParticipantResponse,
+  addParticipantService,
+  type DeleteParticipantRequest,
+  type DeleteParticipantResponse,
+  deleteParticipantService,
+  type UpdateParticipantRequest,
+  type UpdateParticipantResponse,
+  updateParticipantService,
 } from './chat-participants';
 
 // ============================================================================
@@ -45,12 +82,21 @@ export {
 // ============================================================================
 
 export {
-    createCustomRoleService, deleteCustomRoleService, getCustomRoleService, listCustomRolesService, updateCustomRoleService, type CreateCustomRoleRequest,
-    type CreateCustomRoleResponse, type DeleteCustomRoleRequest,
-    type DeleteCustomRoleResponse, type GetCustomRoleRequest,
-    type GetCustomRoleResponse, type ListCustomRolesRequest,
-    type ListCustomRolesResponse, type UpdateCustomRoleRequest,
-    type UpdateCustomRoleResponse
+  type CreateCustomRoleRequest,
+  type CreateCustomRoleResponse,
+  createCustomRoleService,
+  type DeleteCustomRoleRequest,
+  type DeleteCustomRoleResponse,
+  deleteCustomRoleService,
+  type GetCustomRoleRequest,
+  type GetCustomRoleResponse,
+  getCustomRoleService,
+  type ListCustomRolesRequest,
+  type ListCustomRolesResponse,
+  listCustomRolesService,
+  type UpdateCustomRoleRequest,
+  type UpdateCustomRoleResponse,
+  updateCustomRoleService,
 } from './chat-roles';
 
 // ============================================================================
@@ -58,15 +104,26 @@ export {
 // ============================================================================
 
 export {
-    createThreadService, deleteThreadService, getPublicThreadService,
-    getThreadBySlugService, getThreadService, listThreadsService, updateThreadService, type CreateThreadRequest,
-    type CreateThreadResponse, type DeleteThreadRequest,
-    type DeleteThreadResponse, type GetPublicThreadRequest,
-    type GetPublicThreadResponse, type GetThreadRequest,
-    type GetThreadResponse, type ListThreadsRequest,
-    type ListThreadsResponse, type ThreadMode,
-    type UpdateThreadRequest,
-    type UpdateThreadResponse
+  type CreateThreadRequest,
+  type CreateThreadResponse,
+  createThreadService,
+  type DeleteThreadRequest,
+  type DeleteThreadResponse,
+  deleteThreadService,
+  type GetPublicThreadRequest,
+  type GetPublicThreadResponse,
+  getPublicThreadService,
+  getThreadBySlugService,
+  type GetThreadRequest,
+  type GetThreadResponse,
+  getThreadService,
+  type ListThreadsRequest,
+  type ListThreadsResponse,
+  listThreadsService,
+  type ThreadMode,
+  type UpdateThreadRequest,
+  type UpdateThreadResponse,
+  updateThreadService,
 } from './chat-threads';
 
 // ============================================================================
@@ -74,9 +131,12 @@ export {
 // ============================================================================
 
 export {
-    createCheckoutSessionService, syncAfterCheckoutService, type CreateCheckoutSessionRequest,
-    type CreateCheckoutSessionResponse, type SyncAfterCheckoutRequest,
-    type SyncAfterCheckoutResponse
+  type CreateCheckoutSessionRequest,
+  type CreateCheckoutSessionResponse,
+  createCheckoutSessionService,
+  type SyncAfterCheckoutRequest,
+  type SyncAfterCheckoutResponse,
+  syncAfterCheckoutService,
 } from './checkout';
 
 // ============================================================================
@@ -84,8 +144,9 @@ export {
 // ============================================================================
 
 export {
-    createCustomerPortalSessionService, type CreateCustomerPortalSessionRequest,
-    type CreateCustomerPortalSessionResponse
+  type CreateCustomerPortalSessionRequest,
+  type CreateCustomerPortalSessionResponse,
+  createCustomerPortalSessionService,
 } from './customer-portal';
 
 // ============================================================================
@@ -93,9 +154,12 @@ export {
 // ============================================================================
 
 export {
-    getProductService, getProductsService, type GetProductRequest,
-    type GetProductResponse, type GetProductsRequest,
-    type GetProductsResponse
+  type GetProductRequest,
+  type GetProductResponse,
+  getProductService,
+  type GetProductsRequest,
+  type GetProductsResponse,
+  getProductsService,
 } from './products';
 
 // ============================================================================
@@ -103,9 +167,12 @@ export {
 // ============================================================================
 
 export {
-    cancelSubscriptionService, switchSubscriptionService, type CancelSubscriptionRequest,
-    type CancelSubscriptionResponse, type SwitchSubscriptionRequest,
-    type SwitchSubscriptionResponse
+  type CancelSubscriptionRequest,
+  type CancelSubscriptionResponse,
+  cancelSubscriptionService,
+  type SwitchSubscriptionRequest,
+  type SwitchSubscriptionResponse,
+  switchSubscriptionService,
 } from './subscription-management';
 
 // ============================================================================
@@ -113,9 +180,12 @@ export {
 // ============================================================================
 
 export {
-    getSubscriptionService, getSubscriptionsService, type GetSubscriptionRequest,
-    type GetSubscriptionResponse, type GetSubscriptionsRequest,
-    type GetSubscriptionsResponse
+  type GetSubscriptionRequest,
+  type GetSubscriptionResponse,
+  getSubscriptionService,
+  type GetSubscriptionsRequest,
+  type GetSubscriptionsResponse,
+  getSubscriptionsService,
 } from './subscriptions';
 
 // ============================================================================
@@ -123,9 +193,13 @@ export {
 // ============================================================================
 
 export {
-    checkMessageQuotaService, checkThreadQuotaService, getUserUsageStatsService, type CheckMessageQuotaRequest,
-    type CheckMessageQuotaResponse, type CheckThreadQuotaRequest,
-    type CheckThreadQuotaResponse, type GetUsageStatsRequest,
-    type GetUsageStatsResponse
+  type CheckMessageQuotaRequest,
+  type CheckMessageQuotaResponse,
+  checkMessageQuotaService,
+  type CheckThreadQuotaRequest,
+  type CheckThreadQuotaResponse,
+  checkThreadQuotaService,
+  type GetUsageStatsRequest,
+  type GetUsageStatsResponse,
+  getUserUsageStatsService,
 } from './usage';
-

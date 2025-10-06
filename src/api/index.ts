@@ -29,6 +29,21 @@ import { errorLoggerMiddleware, honoLoggerMiddleware } from './middleware/hono-l
 import { ensureOpenRouterInitialized } from './middleware/openrouter';
 import { RateLimiterFactory } from './middleware/rate-limiter-factory';
 import { ensureStripeInitialized } from './middleware/stripe';
+// API Keys routes
+import {
+  createApiKeyHandler,
+  deleteApiKeyHandler,
+  getApiKeyHandler,
+  listApiKeysHandler,
+  updateApiKeyHandler,
+} from './routes/api-keys/handler';
+import {
+  createApiKeyRoute,
+  deleteApiKeyRoute,
+  getApiKeyRoute,
+  listApiKeysRoute,
+  updateApiKeyRoute,
+} from './routes/api-keys/route';
 // Import routes and handlers directly for proper RPC type inference
 import { secureMeHandler } from './routes/auth/handler';
 import { secureMeRoute } from './routes/auth/route';
@@ -244,6 +259,9 @@ app.notFound(notFound);
 // Following Hono best practices: apply CSRF only to authenticated routes
 app.use('/auth/me', csrfProtection, requireSession);
 
+// Protected API keys endpoints
+app.use('/auth/api-keys', csrfProtection, requireSession);
+
 // Protected billing endpoints (checkout, portal, sync, subscriptions)
 app.use('/billing/checkout', csrfProtection, requireSession);
 app.use('/billing/portal', csrfProtection, requireSession);
@@ -290,6 +308,12 @@ const appRoutes = app
   .openapi(detailedHealthRoute, detailedHealthHandler)
   // Auth routes
   .openapi(secureMeRoute, secureMeHandler)
+  // API Keys routes (protected)
+  .openapi(listApiKeysRoute, listApiKeysHandler)
+  .openapi(getApiKeyRoute, getApiKeyHandler)
+  .openapi(createApiKeyRoute, createApiKeyHandler)
+  .openapi(updateApiKeyRoute, updateApiKeyHandler)
+  .openapi(deleteApiKeyRoute, deleteApiKeyHandler)
   // Billing routes - Products (public)
   .openapi(listProductsRoute, listProductsHandler)
   .openapi(getProductRoute, getProductHandler)
@@ -365,6 +389,7 @@ appRoutes.doc('/doc', c => ({
   tags: [
     { name: 'system', description: 'System health and diagnostics' },
     { name: 'auth', description: 'Authentication and authorization' },
+    { name: 'api-keys', description: 'API key management and authentication' },
     { name: 'billing', description: 'Stripe billing, subscriptions, and payments' },
     { name: 'chat', description: 'Multi-model AI chat threads, messages, and memories' },
     { name: 'usage', description: 'Usage tracking and quota management' },

@@ -18,6 +18,7 @@ import {
 } from '@/components/ui/card';
 import { Form } from '@/components/ui/form';
 import { authClient } from '@/lib/auth/client';
+import { getApiErrorMessage } from '@/lib/utils/error-handling';
 
 import { GoogleButton } from './google-button';
 
@@ -55,9 +56,10 @@ export function AuthForm() {
       setMagicLinkSent(true);
     } catch (error) {
       console.error('Magic link failed:', error);
+      const errorMessage = getApiErrorMessage(error, t('auth.magicLink.error'));
       form.setError('email', {
         type: 'manual',
-        message: t('auth.magicLink.error'),
+        message: errorMessage,
       });
     } finally {
       setIsLoading(false);

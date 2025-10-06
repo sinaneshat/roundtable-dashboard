@@ -9,6 +9,8 @@
  */
 
 import type { SubscriptionTier } from '@/db/tables/usage';
+import type { ChatModeId } from '@/lib/config/chat-modes';
+import { CHAT_MODE_SYSTEM_PROMPTS } from '@/lib/config/chat-modes';
 
 // ============================================================================
 // ALLOWED MODELS ENUM - Single Source of Truth
@@ -691,15 +693,21 @@ export function getMessageAttribution(participantIndex: number, role?: string | 
 // ============================================================================
 
 /**
- * Conversation mode instructions
- * Models see the discussion as a collaborative multi-perspective analysis
+ * Session type instructions with participant awareness
+ * Models know they are participants and can reference each other
+ *
+ * @deprecated Use CHAT_MODE_SYSTEM_PROMPTS from @/lib/config/chat-modes instead
+ * Kept for backward compatibility during migration
  */
-export const ROUNDTABLE_MODE_INSTRUCTIONS = {
-  analyzing: 'You are analyzing this query from your assigned perspective. Other participants are also providing their analysis. Build on the insights that have been shared.',
-  brainstorming: 'You are brainstorming ideas for this query from your assigned perspective. Other participants are also contributing ideas. Build creatively on what has been proposed.',
-  debating: 'You are debating this query from your assigned perspective. Other participants are also presenting their arguments. Engage critically with the points that have been raised.',
-  solving: 'You are solving this problem from your assigned perspective. Other participants are also proposing solutions. Build logically on the approaches that have been suggested.',
-} as const;
+export const SESSION_TYPE_DESCRIPTIONS = CHAT_MODE_SYSTEM_PROMPTS;
+
+/**
+ * Type for session mode keys
+ *
+ * @deprecated Use ChatModeId from @/lib/config/chat-modes instead
+ * Kept for backward compatibility during migration
+ */
+export type SessionTypeMode = ChatModeId;
 
 /**
  * Plain text guidance for all responses
@@ -708,27 +716,27 @@ export const ROUNDTABLE_MODE_INSTRUCTIONS = {
 export const PLAIN_TEXT_GUIDANCE = '\n\nPlease respond in clear, natural language without heavy markdown formatting.';
 
 /**
- * Build system prompt for a participant in a roundtable discussion
- * Models are not aware of each other's identities, only see the conversation flow
+ * Build system prompt with full participant awareness
+ * Models know they are participants and can reference each other
  *
- * @param params - Roundtable configuration
- * @param params.mode - Conversation mode (analyzing, brainstorming, debating, solving)
+ * @param params - Configuration
+ * @param params.mode - Session type (analyzing, brainstorming, debating, solving)
  * @param params.participantIndex - Zero-based index of this participant
  * @param params.participantRole - Optional role for this participant
  * @param params.customSystemPrompt - Optional custom system prompt
- * @param params.otherParticipants - Array of other participants (not used in prompt anymore)
+ * @param params.otherParticipants - Array of other participants in the session
  */
 export function buildRoundtableSystemPrompt(params: {
-  mode: keyof typeof ROUNDTABLE_MODE_INSTRUCTIONS;
+  mode: SessionTypeMode;
   participantIndex: number;
   participantRole?: string | null;
   customSystemPrompt?: string | null;
   otherParticipants: Array<{ index: number; role?: string | null }>;
 }): string {
-  const { mode, participantIndex, participantRole, customSystemPrompt } = params;
+  const { mode, participantIndex, participantRole, customSystemPrompt, otherParticipants } = params;
 
-  // Start with mode-specific instruction
-  let systemPrompt = ROUNDTABLE_MODE_INSTRUCTIONS[mode] + PLAIN_TEXT_GUIDANCE;
+  // Start with mode-specific instruction that includes participant awareness
+  let systemPrompt = SESSION_TYPE_DESCRIPTIONS[mode] + PLAIN_TEXT_GUIDANCE;
 
   // Add participant's identity with number
   const participantLabel = getParticipantLabel(participantIndex, participantRole);
@@ -739,23 +747,31 @@ export function buildRoundtableSystemPrompt(params: {
     systemPrompt += ` Your perspective: ${participantRole}`;
   }
 
+  // Inform about other participants so they can reference each other
+  if (otherParticipants.length > 0) {
+    systemPrompt += `\n\nOther participants in this session: `;
+    const otherLabels = otherParticipants.map((p) => {
+      const label = getParticipantLabel(p.index, p.role);
+      return label;
+    });
+    systemPrompt += otherLabels.join(', ');
+    systemPrompt += '. You can reference them by their participant number when responding.';
+  }
+
   // Add custom system prompt if provided
   if (customSystemPrompt) {
     systemPrompt += `\n\n${customSystemPrompt}`;
   }
 
-  // Note: We don't inform models about other participants
-  // They just see the conversation history and respond to it
-
   return systemPrompt;
 }
 
 /**
- * Format a message for conversation history
- * Shows messages with participant number and optional role
+ * Format an assistant message with clear participant attribution
+ * Shows which participant said what so models can reference each other
  *
- * @param participantIndex - Index of the participant who sent this message
- * @param participantRole - Role of the participant
+ * @param participantIndex - Index of the participant
+ * @param participantRole - Role of the participant (optional)
  * @param messageText - The actual message text
  */
 export function formatMessageAsHumanContribution(

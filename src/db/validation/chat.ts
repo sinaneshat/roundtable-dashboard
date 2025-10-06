@@ -10,18 +10,20 @@ import {
 } from '@/db/tables/chat';
 import type { OpenRouterModelId } from '@/lib/ai/models-config';
 import { ALLOWED_MODEL_IDS } from '@/lib/ai/models-config';
+import { ALLOWED_CHAT_MODES } from '@/lib/config/chat-modes';
 
 /**
  * Chat Thread Schemas
+ * Uses centralized ALLOWED_CHAT_MODES for type safety
  */
 export const chatThreadSelectSchema = createSelectSchema(chatThread);
 export const chatThreadInsertSchema = createInsertSchema(chatThread, {
   title: schema => schema.min(1).max(200),
-  mode: () => z.enum(['analyzing', 'brainstorming', 'debating', 'solving']),
+  mode: () => z.enum(ALLOWED_CHAT_MODES as [string, ...string[]]),
 });
 export const chatThreadUpdateSchema = createUpdateSchema(chatThread, {
   title: schema => schema.min(1).max(200).optional(),
-  mode: () => z.enum(['analyzing', 'brainstorming', 'debating', 'solving']).optional(),
+  mode: () => z.enum(ALLOWED_CHAT_MODES as [string, ...string[]]).optional(),
 });
 
 /**

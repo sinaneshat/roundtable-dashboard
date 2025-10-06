@@ -7,6 +7,7 @@ import {
   CursorPaginationQuerySchema,
 } from '@/api/core/schemas';
 import { isValidModelId } from '@/lib/ai/models-config';
+import { ALLOWED_CHAT_MODES } from '@/lib/config/chat-modes';
 
 // ============================================================================
 // Shared Validation Schemas - Used by Frontend and Backend
@@ -30,8 +31,9 @@ export const MessageContentSchema = z.string()
  * Matches chatThread.mode column in database
  *
  * Shared with frontend to ensure consistent validation rules
+ * Uses centralized ALLOWED_CHAT_MODES for type safety
  */
-export const ThreadModeSchema = z.enum(['analyzing', 'brainstorming', 'debating', 'solving']);
+export const ThreadModeSchema = z.enum(ALLOWED_CHAT_MODES as [string, ...string[]]);
 
 /**
  * Message edit validation schema

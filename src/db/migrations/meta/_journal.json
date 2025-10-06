@@ -15,6 +15,13 @@
       "when": 1759738010468,
       "tag": "0001_chief_microchip",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1759751004081,
+      "tag": "0002_overrated_nemesis",
+      "breakpoints": true
     }
   ]
 }

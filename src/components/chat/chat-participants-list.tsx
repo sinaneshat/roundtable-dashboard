@@ -35,8 +35,10 @@ import { useCreateCustomRoleMutation, useDeleteCustomRoleMutation } from '@/hook
 import { useCustomRolesQuery } from '@/hooks/queries/chat-roles';
 import { useUsageStatsQuery } from '@/hooks/queries/usage';
 import type { AIModel } from '@/lib/ai/models-config';
-import { AI_MODELS, canAccessModel, DEFAULT_ROLES, getAccessibleModels } from '@/lib/ai/models-config';
+import { AI_MODELS, canAccessModel, DEFAULT_ROLES, getTierDisplayName } from '@/lib/ai/models-config';
+import { toastManager } from '@/lib/toast/toast-manager';
 import { cn } from '@/lib/ui/cn';
+import { getApiErrorMessage } from '@/lib/utils/error-handling';
 
 // ============================================================================
 // Types
@@ -109,9 +111,12 @@ function RoleSelector({
 
         // Clear search query
         setRoleSearchQuery('');
+        // Success is obvious from the role appearing in the list - no toast needed
       }
     } catch (error) {
       console.error('Failed to create custom role:', error);
+      const errorMessage = getApiErrorMessage(error, 'Failed to create custom role');
+      toastManager.error('Failed to create role', errorMessage);
     }
   };
 
@@ -119,15 +124,20 @@ function RoleSelector({
     e.stopPropagation(); // Prevent selecting the role when clicking delete
 
     try {
-      await deleteRoleMutation.mutateAsync(roleId);
+      const result = await deleteRoleMutation.mutateAsync(roleId);
 
-      // If the deleted role was the currently selected role, clear it
-      if (participant.customRoleId === roleId || participant.role === roleName) {
-        onClearRole();
+      if (result.success) {
+        // If the deleted role was the currently selected role, clear it
+        if (participant.customRoleId === roleId || participant.role === roleName) {
+          onClearRole();
+        }
+        // Success is obvious from the role disappearing - no toast needed
+        // Mutation auto-invalidates query - no manual refetch needed
       }
-      // Mutation auto-invalidates query - no manual refetch needed
     } catch (error) {
       console.error('Failed to delete custom role:', error);
+      const errorMessage = getApiErrorMessage(error, 'Failed to delete custom role');
+      toastManager.error('Failed to delete role', errorMessage);
     }
   };
 
@@ -416,16 +426,29 @@ function ModelItem({
   onToggle,
   onRoleChange,
   onClearRole,
+  isLastParticipant,
+  userTier,
 }: {
   orderedModel: OrderedModel;
   customRoles: Array<{ id: string; name: string; description: string | null }>;
   onToggle: () => void;
   onRoleChange: (role: string, customRoleId?: string) => void;
   onClearRole: () => void;
+  isLastParticipant: boolean;
+  userTier: SubscriptionTier;
 }) {
   const controls = useDragControls();
   const { model, participant } = orderedModel;
   const isSelected = participant !== null;
+  const isAccessible = canAccessModel(userTier, model.modelId);
+  const isDisabledDueToTier = !isAccessible;
+  const isDisabledDueToLastParticipant = isSelected && isLastParticipant;
+  const isDisabled = isDisabledDueToTier || isDisabledDueToLastParticipant;
+
+  // Create upgrade tooltip content
+  const upgradeTooltipContent = isDisabledDueToTier
+    ? `Upgrade to ${getTierDisplayName(model.minTier)} to access this model`
+    : undefined;
 
   return (
     <Reorder.Item
@@ -434,73 +457,113 @@ function ModelItem({
       dragControls={controls}
       className="relative"
     >
-      <div className="px-2 py-2 border-b last:border-0 hover:bg-accent/50 transition-colors">
-        <div className="flex items-center gap-2">
-          {/* Drag Handle */}
-          <button
-            type="button"
-            className="cursor-grab active:cursor-grabbing touch-none flex-shrink-0 text-muted-foreground hover:text-foreground p-0.5"
-            onPointerDown={e => controls.start(e)}
-            style={{ touchAction: 'none' }}
-            aria-label="Drag to reorder"
-            onClick={e => e.stopPropagation()}
-          >
-            <GripVertical className="size-4" />
-          </button>
-
-          {/* Checkbox for Selection */}
-          <Checkbox
-            checked={isSelected}
-            onCheckedChange={onToggle}
-            className="size-4 flex-shrink-0"
-            onClick={e => e.stopPropagation()}
-          />
-
-          {/* Clickable Row Content - triggers checkbox toggle */}
+      <Tooltip delayDuration={300}>
+        <TooltipTrigger asChild>
           <div
-            role="button"
-            tabIndex={0}
-            className="flex items-center gap-2 flex-1 min-w-0 cursor-pointer"
-            onClick={() => onToggle()}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                onToggle();
-              }
-            }}
+            className={cn(
+              'px-2 py-2 border-b last:border-0 transition-colors',
+              !isDisabledDueToTier && 'hover:bg-accent/50',
+              isDisabledDueToTier && 'opacity-50 cursor-not-allowed',
+            )}
           >
-            {/* Model Avatar and Name */}
-            <Avatar className="size-8 flex-shrink-0">
-              <AvatarImage src={model.metadata.icon} alt={model.name} />
-              <AvatarFallback className="text-xs">
-                {model.name.slice(0, 2).toUpperCase()}
-              </AvatarFallback>
-            </Avatar>
+            <div className="flex items-center gap-2">
+              {/* Drag Handle */}
+              {!isDisabledDueToTier && (
+                <button
+                  type="button"
+                  className="cursor-grab active:cursor-grabbing touch-none flex-shrink-0 text-muted-foreground hover:text-foreground p-0.5"
+                  onPointerDown={e => controls.start(e)}
+                  style={{ touchAction: 'none' }}
+                  aria-label="Drag to reorder"
+                  onClick={e => e.stopPropagation()}
+                >
+                  <GripVertical className="size-4" />
+                </button>
+              )}
+              {isDisabledDueToTier && (
+                <div className="w-[20px]" />
+              )}
 
-            <div className="flex-1 min-w-0">
-              <div className="text-sm font-medium truncate">{model.name}</div>
-              <div className="text-xs text-muted-foreground truncate">
-                {model.description}
+              {/* Checkbox for Selection */}
+              <Checkbox
+                checked={isSelected}
+                onCheckedChange={isDisabled ? undefined : onToggle}
+                disabled={isDisabled}
+                className="size-4 flex-shrink-0"
+                onClick={e => e.stopPropagation()}
+                title={isDisabledDueToLastParticipant ? 'At least one participant is required' : undefined}
+              />
+
+              {/* Clickable Row Content - triggers checkbox toggle */}
+              <div
+                role="button"
+                tabIndex={isDisabledDueToTier ? -1 : 0}
+                className={cn(
+                  'flex items-center gap-2 flex-1 min-w-0',
+                  !isDisabledDueToTier && 'cursor-pointer',
+                  isDisabledDueToTier && 'cursor-not-allowed',
+                )}
+                onClick={isDisabledDueToTier ? undefined : () => onToggle()}
+                onKeyDown={
+                  isDisabledDueToTier
+                    ? undefined
+                    : (e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          onToggle();
+                        }
+                      }
+                }
+              >
+                {/* Model Avatar and Name */}
+                <Avatar className="size-8 flex-shrink-0">
+                  <AvatarImage src={model.metadata.icon} alt={model.name} />
+                  <AvatarFallback className="text-xs">
+                    {model.name.slice(0, 2).toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
+
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium truncate flex items-center gap-2">
+                    {model.name}
+                    {isDisabledDueToTier && (
+                      <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4">
+                        {getTierDisplayName(model.minTier)}
+                      </Badge>
+                    )}
+                  </div>
+                  <div className="text-xs text-muted-foreground truncate">
+                    {model.description}
+                  </div>
+                </div>
               </div>
+
+              {/* Role Selector - shown only for selected models */}
+              {isSelected && participant && !isDisabledDueToTier && (
+                <div
+                  role="presentation"
+                  onClick={e => e.stopPropagation()}
+                >
+                  <RoleSelector
+                    participant={participant}
+                    customRoles={customRoles}
+                    onRoleChange={onRoleChange}
+                    onClearRole={onClearRole}
+                  />
+                </div>
+              )}
             </div>
           </div>
-
-          {/* Role Selector - shown only for selected models */}
-          {isSelected && participant && (
-            <div
-              role="presentation"
-              onClick={e => e.stopPropagation()}
-            >
-              <RoleSelector
-                participant={participant}
-                customRoles={customRoles}
-                onRoleChange={onRoleChange}
-                onClearRole={onClearRole}
-              />
-            </div>
-          )}
-        </div>
-      </div>
+        </TooltipTrigger>
+        {upgradeTooltipContent && (
+          <TooltipContent side="right" className="max-w-xs">
+            <p className="text-sm font-medium">{upgradeTooltipContent}</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              View pricing plans to upgrade your account
+            </p>
+          </TooltipContent>
+        )}
+      </Tooltip>
     </Reorder.Item>
   );
 }
@@ -541,11 +604,12 @@ export function ChatParticipantsList({
   // Get user's subscription tier for filtering models
   const userTier = (usageData?.success ? usageData.data.subscription.tier : 'free') as SubscriptionTier;
 
-  // Filter models based on user's subscription tier - memoized to prevent infinite loops
-  const accessibleModels = useMemo(() => getAccessibleModels(userTier), [userTier]);
+  // Get ALL enabled models (not just accessible ones) - memoized to prevent infinite loops
+  const allEnabledModels = useMemo(() => AI_MODELS.filter(m => m.isEnabled), []);
 
   // Create a unified list of all models with their order
   // Selected models maintain their participant order, unselected go to the end
+  // Now showing ALL models (both accessible and inaccessible)
   const [orderedModels, setOrderedModels] = useState<OrderedModel[]>(() => {
     const selectedModels: OrderedModel[] = participants
       .sort((a, b) => a.order - b.order)
@@ -557,8 +621,8 @@ export function ChatParticipantsList({
       .filter(om => om.model);
 
     const selectedIds = new Set(participants.map(p => p.modelId));
-    const unselectedModels: OrderedModel[] = accessibleModels
-      .filter(m => m.isEnabled && !selectedIds.has(m.modelId))
+    const unselectedModels: OrderedModel[] = allEnabledModels
+      .filter(m => !selectedIds.has(m.modelId))
       .sort((a, b) => a.name.localeCompare(b.name))
       .map((m, index) => ({
         model: m,
@@ -580,10 +644,10 @@ export function ChatParticipantsList({
       participant: participantMap.get(om.model.modelId) || null,
     }));
 
-    // Find any new accessible models that aren't in currentOrder yet
+    // Find any new enabled models that aren't in currentOrder yet
     const existingIds = new Set(updatedModels.map(om => om.model.modelId));
-    const newModels = accessibleModels
-      .filter(m => m.isEnabled && !existingIds.has(m.modelId))
+    const newModels = allEnabledModels
+      .filter(m => !existingIds.has(m.modelId))
       .map(m => ({
         model: m,
         participant: participantMap.get(m.modelId) || null,
@@ -591,7 +655,7 @@ export function ChatParticipantsList({
       }));
 
     return [...updatedModels, ...newModels];
-  }, [participants, accessibleModels]);
+  }, [participants, allEnabledModels]);
 
   useEffect(() => {
     setOrderedModels(updateOrderedModels);
@@ -610,7 +674,10 @@ export function ChatParticipantsList({
     }
 
     if (orderedModel.participant) {
-      // Deselect - remove from participants
+      // Deselect - remove from participants (but prevent removing the last one)
+      if (participants.length <= 1) {
+        return; // Must have at least one participant
+      }
       const filtered = participants.filter(p => p.id !== orderedModel.participant!.id);
       const reindexed = filtered.map((p, index) => ({ ...p, order: index }));
       onParticipantsChange(reindexed);
@@ -754,6 +821,8 @@ export function ChatParticipantsList({
                         onToggle={() => handleToggleModel(orderedModel.model.modelId)}
                         onRoleChange={(role, customRoleId) => handleRoleChange(orderedModel.model.modelId, role, customRoleId)}
                         onClearRole={() => handleClearRole(orderedModel.model.modelId)}
+                        isLastParticipant={orderedModel.participant !== null && participants.length === 1}
+                        userTier={userTier}
                       />
                     ))}
                   </Reorder.Group>

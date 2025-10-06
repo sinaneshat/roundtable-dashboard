@@ -153,39 +153,40 @@ export function useAutoScroll({
   /**
    * Auto-scroll when content changes (messages or streaming)
    * Only scrolls if auto-scroll is enabled (user hasn't scrolled up)
+   * CRITICAL: Respects user's scroll position even during streaming
    */
   useEffect(() => {
     const element = scrollRef.current;
     if (!element)
       return;
 
-    // Only auto-scroll if:
-    // 1. Auto-scroll is enabled (user hasn't scrolled up)
-    // 2. OR we're actively streaming (always follow streaming content)
-    const shouldAutoScroll = isAutoScrollEnabled || isStreaming;
+    // Only auto-scroll if user hasn't manually scrolled up
+    // This respects user choice even during streaming
+    if (!isAutoScrollEnabled) {
+      return;
+    }
 
-    if (shouldAutoScroll) {
-      // For streaming: scroll immediately to follow content as it grows
-      // For new messages: use smooth scroll for better UX
-      if (isStreaming) {
-        // Check if scroll height actually changed (content is growing)
-        const currentScrollHeight = element.scrollHeight;
-        if (currentScrollHeight !== lastScrollHeightRef.current) {
-          element.scrollTop = element.scrollHeight;
-          lastScrollHeightRef.current = currentScrollHeight;
-        }
-      } else {
-        scrollToBottom();
+    // For streaming: scroll immediately to follow content as it grows
+    // For new messages: use smooth scroll for better UX
+    if (isStreaming) {
+      // Check if scroll height actually changed (content is growing)
+      const currentScrollHeight = element.scrollHeight;
+      if (currentScrollHeight !== lastScrollHeightRef.current) {
+        element.scrollTop = element.scrollHeight;
+        lastScrollHeightRef.current = currentScrollHeight;
       }
+    } else {
+      scrollToBottom();
     }
   }, [messages, isStreaming, isAutoScrollEnabled, scrollToBottom]);
 
   /**
    * Continuously scroll during streaming (using requestAnimationFrame)
    * This ensures we scroll even when content is streaming within the same message
+   * CRITICAL: Only auto-scrolls if user hasn't manually scrolled up
    */
   useEffect(() => {
-    if (!isStreaming)
+    if (!isStreaming || !isAutoScrollEnabled)
       return;
 
     const element = scrollRef.current;
@@ -196,10 +197,14 @@ export function useAutoScroll({
     let lastKnownScrollHeight = element.scrollHeight;
 
     const scrollLoop = () => {
+      // Check if user has scrolled up during streaming
+      if (!isAutoScrollEnabled) {
+        return;
+      }
+
       const currentScrollHeight = element.scrollHeight;
 
-      // Always scroll during streaming if content changed, regardless of user scroll position
-      // This ensures we follow the streaming content in real-time
+      // Only scroll if content changed and auto-scroll is still enabled
       if (currentScrollHeight !== lastKnownScrollHeight) {
         element.scrollTop = element.scrollHeight;
         lastKnownScrollHeight = currentScrollHeight;
@@ -219,7 +224,7 @@ export function useAutoScroll({
         cancelAnimationFrame(rafId);
       }
     };
-  }, [isStreaming]);
+  }, [isStreaming, isAutoScrollEnabled]);
 
   /**
    * Initialize scroll position on mount

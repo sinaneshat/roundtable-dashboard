@@ -4,7 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { Check, Plus, Sparkles, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { z } from 'zod';
+import type { z } from 'zod';
 
 import { CreateMemoryRequestSchema } from '@/api/routes/chat/schema';
 import RHFSelect from '@/components/forms/rhf-select';
@@ -13,31 +13,33 @@ import RHFTextarea from '@/components/forms/rhf-textarea';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
-    Command,
-    CommandEmpty,
-    CommandGroup,
-    CommandInput,
-    CommandItem,
-    CommandList,
-    CommandSeparator,
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+  CommandSeparator,
 } from '@/components/ui/command';
 import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
 } from '@/components/ui/dialog';
 import { Form } from '@/components/ui/form';
 import {
-    Popover,
-    PopoverContent,
-    PopoverTrigger,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
 } from '@/components/ui/popover';
 import { useCreateMemoryMutation, useDeleteMemoryMutation } from '@/hooks/mutations/chat-mutations';
 import { useMemoriesQuery } from '@/hooks/queries/chat-memories';
+import { toastManager } from '@/lib/toast/toast-manager';
 import { cn } from '@/lib/ui/cn';
+import { getApiErrorMessage } from '@/lib/utils/error-handling';
 
 // ============================================================================
 // Types & Schema - Reusing Backend Validation
@@ -149,9 +151,12 @@ export function ChatMemoriesList({
         // Close dialog and reset form
         setCreateDialogOpen(false);
         form.reset();
+        // Success is obvious from the memory appearing in the list - no toast needed
       }
     } catch (error) {
       console.error('Failed to create memory:', error);
+      const errorMessage = getApiErrorMessage(error, 'Failed to create memory');
+      toastManager.error('Failed to create memory', errorMessage);
     }
   };
 
@@ -159,15 +164,20 @@ export function ChatMemoriesList({
     e.stopPropagation(); // Prevent toggling selection when clicking delete
 
     try {
-      await deleteMemoryMutation.mutateAsync(memoryId);
+      const result = await deleteMemoryMutation.mutateAsync(memoryId);
 
-      // If the deleted memory was selected, remove it from selection
-      if (selectedMemoryIds.includes(memoryId)) {
-        onMemoryIdsChange(selectedMemoryIds.filter(id => id !== memoryId));
+      if (result.success) {
+        // If the deleted memory was selected, remove it from selection
+        if (selectedMemoryIds.includes(memoryId)) {
+          onMemoryIdsChange(selectedMemoryIds.filter(id => id !== memoryId));
+        }
+        // Success is obvious from the memory disappearing - no toast needed
+        // Mutation auto-invalidates query - no manual refetch needed
       }
-      // Mutation auto-invalidates query - no manual refetch needed
     } catch (error) {
       console.error('Failed to delete memory:', error);
+      const errorMessage = getApiErrorMessage(error, 'Failed to delete memory');
+      toastManager.error('Failed to delete memory', errorMessage);
     }
   };
 

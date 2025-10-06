@@ -70,10 +70,6 @@ export default async function Image({
 
     const { thread, participants = [], messages = [] } = response.data;
 
-    // Get conversation stats
-    const _userMessages = messages?.filter(m => m.role === 'user').length || 0;
-    const _assistantMessages = messages?.filter(m => m.role === 'assistant').length || 0;
-
     // Get first user message preview
     const firstUserMessage = messages?.find(m => m.role === 'user');
     const messagePreview = firstUserMessage?.content

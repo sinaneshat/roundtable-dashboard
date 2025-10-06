@@ -5,16 +5,19 @@ import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
-import type { ParticipantConfig } from '@/components/chat/chat-config-sheet';
 import { ChatInput } from '@/components/chat/chat-input';
 import { ChatQuickStart } from '@/components/chat/chat-quick-start';
 import { WavyBackground } from '@/components/ui/wavy-background';
+import type { ChatModeId } from '@/lib/config/chat-modes';
+import type { ParticipantConfig } from '@/lib/schemas/chat-forms';
+import { chatInputFormDefaults } from '@/lib/schemas/chat-forms';
 
 export default function ChatOverviewScreen() {
   const router = useRouter();
   const [selectedPrompt, setSelectedPrompt] = useState<string>('');
-  const [selectedMode, setSelectedMode] = useState<'brainstorming' | 'analyzing' | 'debating' | 'solving'>('brainstorming');
-  const [selectedParticipants, setSelectedParticipants] = useState<ParticipantConfig[]>([]);
+  const [selectedMode, setSelectedMode] = useState<ChatModeId>(chatInputFormDefaults.mode);
+  // Initialize with default participants (cheapest free-tier model)
+  const [selectedParticipants, setSelectedParticipants] = useState<ParticipantConfig[]>(chatInputFormDefaults.participants);
 
   // Handler for thread creation from ChatInput
   const handleThreadCreated = async (threadId: string, threadSlug: string, _firstMessage: string) => {
@@ -26,7 +29,7 @@ export default function ChatOverviewScreen() {
   // Handler for quick start suggestion click
   const handleSuggestionClick = (
     prompt: string,
-    mode: 'brainstorming' | 'analyzing' | 'debating' | 'solving',
+    mode: ChatModeId,
     participants: ParticipantConfig[],
   ) => {
     setSelectedPrompt(prompt);

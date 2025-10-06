@@ -1,8 +1,8 @@
 'use client';
 
 import { AlertCircle, ArrowDownCircle, ArrowUpCircle, Clock, MessageSquare, MessagesSquare } from 'lucide-react';
-import { useTranslations } from 'next-intl';
 import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';

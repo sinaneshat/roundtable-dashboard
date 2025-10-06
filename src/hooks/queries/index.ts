@@ -9,6 +9,12 @@
 // QUERY HOOKS BY DOMAIN
 // ============================================================================
 
+// API Key queries (protected)
+export {
+  useApiKeyQuery,
+  useApiKeysQuery,
+} from './api-keys';
+
 // Chat memory queries (protected)
 export {
   useMemoriesQuery,

@@ -2,8 +2,8 @@
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { ArrowUp } from 'lucide-react';
-import { useTranslations } from 'next-intl';
 import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import type { KeyboardEventHandler } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/use-toast';
 import { useCreateThreadMutation } from '@/hooks/mutations/chat-mutations';
 import { cn } from '@/lib/ui/cn';
+import { getApiErrorMessage } from '@/lib/utils/error-handling';
 
 // ============================================================================
 // Form Schema - Reusing Backend Validation
@@ -88,10 +89,10 @@ export function ChatPromptForm({ className, onThreadCreated }: ChatPromptFormPro
           // Use default values for simple initial implementation
           title: 'New Chat', // Backend will auto-generate from first message
           mode: 'brainstorming',
-          // Participants will be set by backend based on defaults
+          // Use cheapest free-tier model as default
           participants: [
             {
-              modelId: 'anthropic/claude-3.5-sonnet',
+              modelId: 'google/gemini-2.5-flash',
               role: 'AI Assistant',
             },
           ],
@@ -118,14 +119,13 @@ export function ChatPromptForm({ className, onThreadCreated }: ChatPromptFormPro
           title: t('notifications.success.createSuccess'),
           description: t('chat.threadCreated'),
         });
-      } else {
-        throw new Error('Failed to create thread');
       }
     } catch (error) {
       console.error('Failed to create thread:', error);
+      const errorMessage = getApiErrorMessage(error, t('chat.threadCreationFailed'));
       toast({
         title: t('notifications.error.createFailed'),
-        description: t('chat.threadCreationFailed'),
+        description: errorMessage,
         variant: 'destructive',
       });
     }

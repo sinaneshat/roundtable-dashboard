@@ -1,6 +1,8 @@
 import { relations } from 'drizzle-orm';
 import { index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 
+import { CHAT_MODE_ENUM_VALUES, THREAD_STATUS_ENUM_VALUES } from '@/lib/config/chat-modes';
+
 import { user } from './auth';
 
 /**
@@ -14,10 +16,10 @@ export const chatThread = sqliteTable('chat_thread', {
     .references(() => user.id, { onDelete: 'cascade' }),
   title: text('title').notNull(),
   slug: text('slug').notNull().unique(), // SEO-friendly URL slug (e.g., "product-strategy-abc123")
-  mode: text('mode', { enum: ['analyzing', 'brainstorming', 'debating', 'solving'] })
+  mode: text('mode', { enum: CHAT_MODE_ENUM_VALUES })
     .notNull()
     .default('brainstorming'),
-  status: text('status', { enum: ['active', 'archived', 'deleted'] })
+  status: text('status', { enum: THREAD_STATUS_ENUM_VALUES })
     .notNull()
     .default('active'),
   isFavorite: integer('is_favorite', { mode: 'boolean' })

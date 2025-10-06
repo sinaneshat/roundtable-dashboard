@@ -21,6 +21,13 @@ import type { ApiEnv } from '@/api/types';
  * Follows Hono's recommended pattern for dynamic origin validation
  */
 export const csrfProtection: MiddlewareHandler<ApiEnv> = async (c: Context<ApiEnv>, next) => {
+  // Skip CSRF check for API key authentication (follows security best practices)
+  // API keys in headers are not subject to CSRF attacks
+  const apiKey = c.req.header('x-api-key');
+  if (apiKey) {
+    return next();
+  }
+
   const appUrl = c.env.NEXT_PUBLIC_APP_URL;
   const webappEnv = c.env.NEXT_PUBLIC_WEBAPP_ENV || 'local';
   const isDevelopment = webappEnv === 'local' || c.env.NODE_ENV === 'development';
