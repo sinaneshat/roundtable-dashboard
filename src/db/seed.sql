@@ -1,4 +1,13 @@
--- Preview Database Seed
+-- Database Seed File
+--
+-- Seeds the database with essential data:
+-- - Subscription tier quotas (free, starter, pro, power)
+-- - Stripe products and prices
+--
+-- Usage:
+--   Local:   pnpm db:seed:local
+--   Preview: pnpm db:seed:preview
+--   Prod:    pnpm db:seed:prod
 
 -- Subscription Tier Quotas
 INSERT INTO subscription_tier_quotas (id, tier, is_annual, threads_per_month, messages_per_month, memories_per_month, custom_roles_per_month, max_ai_models, allow_custom_roles, allow_memories, allow_thread_export, metadata, created_at, updated_at) VALUES ('01K6WZH2SQMZ8AH1J08DDS794H', 'free', 0, 2, 20, 5, 5, 5, 1, 1, 0, '{"description":"Free tier - perfect for trying out Roundtable","displayOrder":"1"}', 1759761697591, 1759761697591);
