@@ -5,22 +5,8 @@
     {
       "idx": 0,
       "version": "6",
-      "when": 1759673082766,
-      "tag": "0000_blushing_changeling",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "6",
-      "when": 1759738010468,
-      "tag": "0001_chief_microchip",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "6",
-      "when": 1759751004081,
-      "tag": "0002_overrated_nemesis",
+      "when": 1759761593736,
+      "tag": "0000_spicy_psylocke",
       "breakpoints": true
     }
   ]

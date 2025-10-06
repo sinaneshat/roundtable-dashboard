@@ -9,7 +9,7 @@ import type { InferRequestType, InferResponseType } from 'hono/client';
 import { parseResponse } from 'hono/client';
 
 import type { ApiClientType } from '@/api/client';
-import { createApiClient } from '@/api/client';
+import { createApiClient, createPublicApiClient } from '@/api/client';
 
 // ============================================================================
 // Type Inference - Automatically derived from backend routes
@@ -153,10 +153,13 @@ export async function deleteThreadService(threadId: string) {
  * Get a public thread by slug (no authentication required)
  * Public endpoint - no authentication required
  *
+ * IMPORTANT: Uses createPublicApiClient() instead of createApiClient()
+ * to avoid accessing cookies, which would break ISR/SSG rendering.
+ *
  * @param slug - Thread slug
  */
 export async function getPublicThreadService(slug: string) {
-  const client = await createApiClient();
+  const client = createPublicApiClient();
   return parseResponse(
     client.chat.public[':slug'].$get({
       param: { slug },

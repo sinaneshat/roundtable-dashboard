@@ -33,6 +33,8 @@ const QUOTA_CONFIGURATIONS = [
     isAnnual: false,
     threadsPerMonth: 2, // "2 conversations / mo"
     messagesPerMonth: 20, // "20 messages / mo"
+    memoriesPerMonth: 5, // 5 memories per month
+    customRolesPerMonth: 5, // 5 custom roles per month
     maxAiModels: 5, // "Up to 5 AI models"
     allowCustomRoles: true, // Allow for development/testing
     allowMemories: true, // Allow for development/testing
@@ -55,6 +57,8 @@ const QUOTA_CONFIGURATIONS = [
     isAnnual: false,
     threadsPerMonth: 30, // "30 conversations / mo"
     messagesPerMonth: 150, // "150 messages / mo"
+    memoriesPerMonth: 15, // 15 memories per month
+    customRolesPerMonth: 15, // 15 custom roles per month
     maxAiModels: 5, // "Up to 5 AI models"
     allowCustomRoles: true,
     allowMemories: true,
@@ -73,6 +77,8 @@ const QUOTA_CONFIGURATIONS = [
     isAnnual: true,
     threadsPerMonth: 30,
     messagesPerMonth: 150,
+    memoriesPerMonth: 15,
+    customRolesPerMonth: 15,
     maxAiModels: 5,
     allowCustomRoles: true,
     allowMemories: true,
@@ -96,6 +102,8 @@ const QUOTA_CONFIGURATIONS = [
     isAnnual: false,
     threadsPerMonth: 75, // "75 conversations / mo"
     messagesPerMonth: 400, // "400 messages / mo"
+    memoriesPerMonth: 30, // 30 memories per month
+    customRolesPerMonth: 30, // 30 custom roles per month
     maxAiModels: 7, // "Up to 7 AI models"
     allowCustomRoles: true,
     allowMemories: true,
@@ -115,6 +123,8 @@ const QUOTA_CONFIGURATIONS = [
     isAnnual: true,
     threadsPerMonth: 75,
     messagesPerMonth: 400,
+    memoriesPerMonth: 30,
+    customRolesPerMonth: 30,
     maxAiModels: 7,
     allowCustomRoles: true,
     allowMemories: true,
@@ -139,6 +149,8 @@ const QUOTA_CONFIGURATIONS = [
     isAnnual: false,
     threadsPerMonth: 300, // "300 conversations / mo"
     messagesPerMonth: 1800, // "1,800 messages / mo"
+    memoriesPerMonth: 100, // 100 memories per month
+    customRolesPerMonth: 100, // 100 custom roles per month
     maxAiModels: 15, // "Up to 15 AI models"
     allowCustomRoles: true,
     allowMemories: true,
@@ -157,6 +169,8 @@ const QUOTA_CONFIGURATIONS = [
     isAnnual: true,
     threadsPerMonth: 300,
     messagesPerMonth: 1800,
+    memoriesPerMonth: 100,
+    customRolesPerMonth: 100,
     maxAiModels: 15,
     allowCustomRoles: true,
     allowMemories: true,

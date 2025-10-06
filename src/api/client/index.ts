@@ -72,6 +72,24 @@ export async function createApiClient() {
 }
 
 /**
+ * Create a public API client without authentication
+ *
+ * For public endpoints that don't require authentication.
+ * This client DOES NOT access cookies, making it safe for ISR/SSG pages.
+ * Use this for:
+ * - Public thread endpoints
+ * - Public profile endpoints
+ * - Any other publicly accessible endpoints
+ */
+export function createPublicApiClient() {
+  return hc<AppType>(getBaseUrl(), {
+    headers: {
+      Accept: 'application/json',
+    },
+  });
+}
+
+/**
  * Centralized type for awaited API client - used across all services
  * This eliminates the need to repeat this type definition in every service
  */

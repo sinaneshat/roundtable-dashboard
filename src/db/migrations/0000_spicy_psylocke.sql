@@ -15,6 +15,31 @@ CREATE TABLE `account` (
 	FOREIGN KEY (`user_id`) REFERENCES `user`(`id`) ON UPDATE no action ON DELETE cascade
 );
 --> statement-breakpoint
+CREATE TABLE `api_key` (
+	`id` text PRIMARY KEY NOT NULL,
+	`name` text,
+	`start` text,
+	`prefix` text,
+	`key` text NOT NULL,
+	`user_id` text NOT NULL,
+	`refill_interval` integer,
+	`refill_amount` integer,
+	`last_refill_at` integer,
+	`enabled` integer DEFAULT true NOT NULL,
+	`remaining` integer,
+	`rate_limit_enabled` integer DEFAULT true NOT NULL,
+	`rate_limit_time_window` integer,
+	`rate_limit_max` integer,
+	`request_count` integer DEFAULT 0 NOT NULL,
+	`last_request` integer,
+	`expires_at` integer,
+	`created_at` integer DEFAULT (cast((julianday('now') - 2440587.5)*86400000 as integer)) NOT NULL,
+	`updated_at` integer DEFAULT (cast((julianday('now') - 2440587.5)*86400000 as integer)) NOT NULL,
+	`permissions` text,
+	`metadata` text,
+	FOREIGN KEY (`user_id`) REFERENCES `user`(`id`) ON UPDATE no action ON DELETE cascade
+);
+--> statement-breakpoint
 CREATE TABLE `session` (
 	`id` text PRIMARY KEY NOT NULL,
 	`expires_at` integer NOT NULL,
@@ -340,6 +365,9 @@ CREATE TABLE `user_chat_usage` (
 	`custom_roles_limit` integer NOT NULL,
 	`subscription_tier` text DEFAULT 'free' NOT NULL,
 	`is_annual` integer DEFAULT false NOT NULL,
+	`pending_tier_change` text,
+	`pending_tier_is_annual` integer,
+	`pending_tier_price_id` text,
 	`created_at` integer NOT NULL,
 	`updated_at` integer NOT NULL,
 	FOREIGN KEY (`user_id`) REFERENCES `user`(`id`) ON UPDATE no action ON DELETE cascade
