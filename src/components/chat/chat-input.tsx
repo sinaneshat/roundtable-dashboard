@@ -301,17 +301,13 @@ export function ChatInput({
           if (onThreadCreated) {
             onThreadCreated(thread.id, thread.slug, data.message);
           }
-          toast({
-            title: t('notifications.success.createSuccess'),
-            description: t('chat.threadCreated'),
-          });
         }
       } catch (error) {
         console.error('Failed to create thread:', error);
-        const errorMessage = getApiErrorMessage(error, t('chat.createThreadError'));
+        const errorMessage = getApiErrorMessage(error, t('chat.threadCreationFailed'));
         toast({
           variant: 'destructive',
-          title: t('notifications.error.createError'),
+          title: t('notifications.error.createFailed'),
           description: errorMessage,
         });
       }

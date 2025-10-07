@@ -747,7 +747,7 @@ export function buildRoundtableSystemPrompt(params: {
     systemPrompt += ` Your perspective: ${participantRole}`;
   }
 
-  // Inform about other participants so they can reference each other
+  // Inform about other participants and how to interact with them
   if (otherParticipants.length > 0) {
     systemPrompt += `\n\nOther participants in this session: `;
     const otherLabels = otherParticipants.map((p) => {
@@ -755,7 +755,17 @@ export function buildRoundtableSystemPrompt(params: {
       return label;
     });
     systemPrompt += otherLabels.join(', ');
-    systemPrompt += '. You can reference them by their participant number when responding.';
+    systemPrompt += '.';
+
+    // ✅ CRITICAL: Prevent participants from repeating each other
+    systemPrompt += `\n\nCRITICAL RULES - YOU MUST FOLLOW THESE:
+1. DO NOT quote or repeat what other participants said
+2. DO NOT restate previous messages in any form
+3. DO NOT start with "Participant X said..." or similar
+4. ONLY write your OWN new perspective
+5. You can reference others briefly (e.g., "Building on that point...") but DO NOT repeat their words
+6. Start immediately with YOUR unique contribution
+7. Assume everyone already read previous messages - no need to summarize them`;
   }
 
   // Add custom system prompt if provided

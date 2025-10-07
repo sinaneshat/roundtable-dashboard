@@ -88,11 +88,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
     deleteThreadMutation.mutate(chatId, {
       onSuccess: () => {
-        toastManager.success(
-          t('chat.threadDeleted'),
-          t('chat.threadDeletedDescription'),
-        );
-
         // If deleting the currently viewed thread, redirect to /chat
         if (chatSlug) {
           const currentPath = window.location.pathname;

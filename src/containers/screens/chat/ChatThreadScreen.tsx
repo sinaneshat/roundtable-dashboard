@@ -46,14 +46,6 @@ export type ThreadParticipant = {
 export default function ChatThreadScreen({ slug }: { slug: string }) {
   const t = useTranslations();
   const router = useRouter();
-  const autoTriggeredRef = useRef<string | null>(null);
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
-  const { setDynamicBreadcrumb } = useBreadcrumb();
-
-  // Track seen message IDs to prevent duplicates during streaming
-  // This helps ensure messages from different participants don't get conflated
-  const seenMessageIdsRef = useRef<Set<string>>(new Set());
 
   // Fetch thread details by slug to get thread ID and initial data
   const { data: threadData, isLoading: isLoadingThread, error: threadError } = useThreadBySlugQuery(slug);
@@ -73,6 +65,83 @@ export default function ChatThreadScreen({ slug }: { slug: string }) {
     createdAt: p.createdAt,
   }));
 
+  // Loading state
+  if (isLoadingThread) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="text-center space-y-2">
+          <div className="size-8 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto" />
+          <div className="text-muted-foreground text-sm">{t('actions.loading')}</div>
+        </div>
+      </div>
+    );
+  }
+
+  // Error state
+  if (threadError || !thread) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="text-center space-y-4 max-w-md px-6">
+          <div className="text-destructive">
+            <svg
+              className="size-16 mx-auto mb-4"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+              />
+            </svg>
+          </div>
+          <h2 className="text-2xl font-semibold">{t('chat.threadNotFound')}</h2>
+          <p className="text-muted-foreground">{t('chat.threadNotFoundDescription')}</p>
+          <Button onClick={() => router.push('/chat')}>
+            {t('actions.back')}
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  // ✅ CRITICAL FIX: Only render chat content after data loads
+  // This ensures useChat initializes with correct initialMessages from server
+  return (
+    <ChatThreadContent
+      key={thread.id} // Force remount when thread changes
+      thread={thread}
+      participants={participants}
+      serverMessages={serverMessages}
+      slug={slug}
+    />
+  );
+}
+
+// ============================================================================
+// Chat Thread Content Component
+// ============================================================================
+// Separate component to ensure useChat hook initializes AFTER data loads
+// This fixes the "No messages" bug where useChat initialized with empty array
+
+function ChatThreadContent({
+  thread,
+  participants,
+  serverMessages,
+  slug,
+}: {
+  thread: NonNullable<ReturnType<typeof useThreadBySlugQuery>['data']>['data']['thread'];
+  participants: ThreadParticipant[];
+  serverMessages: NonNullable<ReturnType<typeof useThreadBySlugQuery>['data']>['data']['messages'];
+  slug: string;
+}) {
+  const t = useTranslations();
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
+  const { setDynamicBreadcrumb } = useBreadcrumb();
+
   // Mutations
   const toggleFavoriteMutation = useToggleFavoriteMutation();
   const togglePublicMutation = useTogglePublicMutation();
@@ -80,22 +149,12 @@ export default function ChatThreadScreen({ slug }: { slug: string }) {
 
   // Mutation handlers - memoized to prevent infinite loops in useEffect
   const handleToggleFavorite = useCallback(() => {
-    if (!thread)
-      return;
-
     const newFavoriteStatus = !thread?.isFavorite;
     toggleFavoriteMutation.mutate(
       { threadId: thread.id, isFavorite: newFavoriteStatus, slug },
       {
         onSuccess: () => {
-          toastManager.success(
-            newFavoriteStatus
-              ? t('chat.addedToFavorites')
-              : t('chat.removedFromFavorites'),
-            newFavoriteStatus
-              ? t('chat.addedToFavoritesDescription')
-              : t('chat.removedFromFavoritesDescription'),
-          );
+          // Favorite status updated silently
         },
         onError: () => {
           toastManager.error(
@@ -106,29 +165,19 @@ export default function ChatThreadScreen({ slug }: { slug: string }) {
       },
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [thread?.id, thread?.isFavorite, slug, t]);
+  }, [thread.id, thread.isFavorite, slug, t]);
 
   const handleDeleteClick = useCallback(() => {
     setIsDeleteDialogOpen(true);
   }, []);
 
   const handleTogglePublic = useCallback(() => {
-    if (!thread)
-      return;
-
     const newPublicStatus = !thread?.isPublic;
     togglePublicMutation.mutate(
       { threadId: thread.id, isPublic: newPublicStatus, slug },
       {
         onSuccess: () => {
-          toastManager.success(
-            newPublicStatus
-              ? t('chat.madePublic')
-              : t('chat.madePrivate'),
-            newPublicStatus
-              ? t('chat.madePublicDescription')
-              : t('chat.madePrivateDescription'),
-          );
+          // Public/private status updated silently
         },
         onError: () => {
           toastManager.error(
@@ -139,20 +188,17 @@ export default function ChatThreadScreen({ slug }: { slug: string }) {
       },
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [thread?.id, thread?.isPublic, slug, t]);
+  }, [thread.id, thread.isPublic, slug, t]);
 
   const handleCopyLink = useCallback(async () => {
-    if (!thread)
-      return;
-
     const shareUrl = `${window.location.origin}/public/chat/${slug}`;
     try {
       await navigator.clipboard.writeText(shareUrl);
-      toastManager.success(t('chat.linkCopied'), t('chat.linkCopiedDescription'));
+      // Link copied silently
     } catch {
       toastManager.error(t('chat.copyFailed'), t('chat.copyFailedDescription'));
     }
-  }, [slug, t, thread]);
+  }, [slug, t]);
 
   // Dynamic configuration state
   const [currentMode, setCurrentMode] = useState<ChatModeId>(() => (thread?.mode as ChatModeId) || getDefaultChatMode());
@@ -176,46 +222,210 @@ export default function ChatThreadScreen({ slug }: { slug: string }) {
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editingMessageContent, setEditingMessageContent] = useState('');
 
-  // Initialize useChat with streaming endpoint
-  // AI SDK v5: Use DefaultChatTransport with custom body preparation
+  // ✅ 100% OFFICIAL AI SDK PATTERN: useChat for first participant only
+  // Reference: https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot
   const {
     messages,
-    sendMessage,
+    sendMessage: originalSendMessage,
     status,
     stop,
     regenerate,
     setMessages,
     error,
   } = useChat({
-    // Stable ID for this chat session
-    id: thread?.id || '',
-    // Initial messages from server - include metadata for participant attribution
+    id: thread.id,
     messages: serverMessages.map(msg => ({
       id: msg.id,
       role: msg.role as 'user' | 'assistant',
       parts: [{ type: 'text' as const, text: msg.content }],
-      metadata: msg.metadata, // Include participant and model info
+      metadata: msg.metadata,
     })),
-    // Custom transport to send dynamic configuration with messages
     transport: new DefaultChatTransport({
-      api: `/api/v1/chat/threads/${thread?.id || ''}/stream`,
+      api: `/api/v1/chat/threads/${thread.id}/stream`,
       prepareSendMessagesRequest: ({ id, messages }) => ({
         body: {
           id,
           messages,
-          // Include dynamic configuration
-          mode: currentMode,
-          participants: currentParticipants.map(p => ({
-            modelId: p.modelId,
-            role: p.role || undefined,
-            customRoleId: p.customRoleId,
-            order: p.order,
-          })),
-          memoryIds: currentMemoryIds,
+          // ✅ CRITICAL: Only send participantIndex for normal streaming
+          // Don't send mode/participants/memoryIds - they cause backend to recreate participants!
+          // Config updates should be handled separately (e.g., config dialog)
+          participantIndex: 0, // Always first participant via useChat
         },
       }),
     }),
   });
+
+  // ✅ OFFICIAL PATTERN: sendMessage triggers first participant
+  const sendMessage = originalSendMessage;
+
+  // Track which participants have been triggered to avoid duplicates
+  const triggeredParticipantsRef = useRef<Set<string>>(new Set());
+
+  // Track if we've already triggered the new thread auto-trigger for this thread
+  const newThreadTriggeredRef = useRef<string | null>(null);
+
+  // Track if we're currently streaming a manual participant (participants 1+)
+  const [isStreamingManualParticipant, setIsStreamingManualParticipant] = useState(false);
+
+  // ✅ AUTO-TRIGGER SUBSEQUENT PARTICIPANTS
+  // Automatically trigger remaining participants in sequence for each user message
+  useEffect(() => {
+    // Only auto-trigger if ready and have multiple participants
+    if (status !== 'ready' || isStreamingManualParticipant || currentParticipants.length <= 1) {
+      return;
+    }
+
+    // Find the last user message to determine current round
+    const lastUserMessageIndex = messages.findLastIndex(m => m.role === 'user');
+    if (lastUserMessageIndex === -1) {
+      return; // No user messages yet
+    }
+
+    const lastUserMessage = messages[lastUserMessageIndex];
+    if (!lastUserMessage) {
+      return; // Safety check
+    }
+
+    // Count assistant messages AFTER the last user message (current round only)
+    const assistantMessagesInCurrentRound = messages
+      .slice(lastUserMessageIndex + 1)
+      .filter(m => m.role === 'assistant');
+
+    const participantsRespondedCount = assistantMessagesInCurrentRound.length;
+    const nextParticipantIndex = participantsRespondedCount;
+
+    // ✅ CRITICAL: Auto-trigger only handles participants 1+ (useChat handles participant 0)
+    // Skip if we're waiting for participant 0 (useChat's responsibility)
+    if (nextParticipantIndex === 0) {
+      return; // Participant 0 is handled by useChat
+    }
+
+    // Check if all participants have responded to this user message
+    if (nextParticipantIndex >= currentParticipants.length) {
+      return; // All participants responded to current round
+    }
+
+    // Prevent duplicate triggers for the same participant in same round
+    const triggerKey = `${lastUserMessage.id}-${nextParticipantIndex}`;
+    if (triggeredParticipantsRef.current.has(triggerKey)) {
+      return;
+    }
+
+    // Mark as triggered
+    triggeredParticipantsRef.current.add(triggerKey);
+
+    // ✅ CRITICAL: Set streaming flag BEFORE async to prevent race condition
+    setIsStreamingManualParticipant(true);
+
+    // Trigger the next participant
+    (async () => {
+      try {
+        const response = await fetch(`/api/v1/chat/threads/${thread.id}/stream`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            messages: messages.map(m => ({
+              id: m.id,
+              role: m.role,
+              parts: m.parts,
+            })),
+            // ✅ CRITICAL: Only send participantIndex - don't recreate participants!
+            participantIndex: nextParticipantIndex,
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+
+        // Parse SSE stream
+        const reader = response.body?.getReader();
+        const decoder = new TextDecoder();
+
+        if (!reader) {
+          throw new Error('No response body');
+        }
+
+        // ✅ OFFICIAL AI SDK PATTERN: Manual SSE parsing for subsequent participants
+        // Reference: https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events/Using_server-sent_events
+        let buffer = '';
+        let messageId = '';
+        let messageMetadata: Record<string, unknown> | null = null;
+        let content = '';
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done)
+            break;
+
+          // Decode chunk and accumulate in buffer
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || ''; // Keep incomplete line in buffer
+
+          for (const line of lines) {
+            // Skip empty lines and comments
+            if (!line.trim() || line.startsWith(':'))
+              continue;
+
+            // Parse SSE data events
+            if (line.startsWith('data: ')) {
+              const data = line.slice(6);
+              if (data === '[DONE]')
+                continue;
+
+              try {
+                const event = JSON.parse(data);
+
+                // Handle start event - initialize new message
+                if (event.type === 'start') {
+                  messageId = event.messageId;
+                  messageMetadata = event.messageMetadata || null;
+                  content = '';
+
+                  // Add empty message to state
+                  // eslint-disable-next-line ts/no-explicit-any
+                  setMessages((prev: any) => [...prev, {
+                    id: messageId,
+                    role: 'assistant',
+                    parts: [{ type: 'text', text: '' }],
+                    metadata: messageMetadata,
+                  }]);
+                } else if (event.type === 'text-delta' && event.delta) {
+                  // Handle text delta - accumulate content
+                  content += event.delta;
+
+                  // Update message with accumulated content (trim leading whitespace)
+                  // eslint-disable-next-line ts/no-explicit-any
+                  setMessages((prev: any) =>
+                    // eslint-disable-next-line ts/no-explicit-any
+                    prev.map((m: any) =>
+                      m.id === messageId
+                        ? { ...m, parts: [{ type: 'text', text: content.trimStart() }] }
+                        : m,
+                    ),
+                  );
+                }
+              } catch (error) {
+                console.error('Failed to parse SSE event:', error);
+              }
+            }
+          }
+        }
+      } catch (error) {
+        console.error(`Failed to trigger participant ${nextParticipantIndex}:`, error);
+        toastManager.error(
+          t('chat.participantFailed'),
+          t('chat.participantFailedDescription'),
+        );
+      } finally {
+        setIsStreamingManualParticipant(false);
+      }
+    })();
+    // Dependencies: status, messages, currentParticipants (for length check), thread.id, setMessages, t
+  }, [status, messages, currentParticipants, thread.id, setMessages, t, isStreamingManualParticipant]);
 
   // ============================================================================
   // Message Actions
@@ -224,11 +434,8 @@ export default function ChatThreadScreen({ slug }: { slug: string }) {
   // Copy message to clipboard
   const handleCopyMessage = useCallback((content: string) => {
     navigator.clipboard.writeText(content);
-    toastManager.success(
-      t('chat.actions.messageCopied'),
-      t('chat.actions.messageCopiedDescription'),
-    );
-  }, [t]);
+    // Message copied silently
+  }, []);
 
   // Regenerate responses from the first user message
   // Following AI SDK v5 docs: simply call regenerate() without manual message manipulation
@@ -281,112 +488,56 @@ export default function ChatThreadScreen({ slug }: { slug: string }) {
 
   // Convert AI SDK messages back to ChatMessage format for rendering
   // AI SDK v5: Messages update automatically as streaming happens - no manual state needed
-  // Use status for rendering, but use isWaitingForParticipants for auto-scroll
   const isCurrentlyStreaming = status === 'streaming';
 
-  // Memoize message transformation to prevent animation resets during streaming
-  // Only recreate message objects when actual content changes, not on every render
-  // CRITICAL: Ensure each assistant message has stable identity and metadata
+  // ✅ SIMPLIFIED: Each participant is a separate message (no splitting needed)
+  // Backend sends one message per HTTP request - one participant per message
   const chatMessages: ChatMessageType[] = useMemo(() => {
-    // AI SDK v5 Fix: Group messages by unique message ID + participantId to prevent stream leaking
-    // During multi-participant streaming, the AI SDK might append text to the wrong message
-    // We deduplicate and ensure each message maintains its identity based on metadata
-    const messageMap = new Map<string, ChatMessageType>();
-
-    for (const msg of messages) {
+    return messages.map((msg, index) => {
+      // Extract participant info from metadata (backend provides this)
       const participantId = msg.metadata?.participantId ?? null;
       const model = msg.metadata?.model;
       const role = msg.metadata?.role;
 
-      // Extract content from parts
       const content = msg.parts
         .filter(part => part.type === 'text')
         .map(part => part.text)
         .join('');
 
-      // Create a stable key using message ID + participantId to ensure uniqueness
-      // This prevents messages from different participants being merged
-      const messageKey = participantId ? `${msg.id}-${participantId}` : msg.id;
-
-      // Track seen message IDs to help with debugging
-      if (!seenMessageIdsRef.current.has(msg.id)) {
-        seenMessageIdsRef.current.add(msg.id);
-        if (process.env.NODE_ENV === 'development') {
-          // eslint-disable-next-line no-console
-          console.log('[ChatThread] New message detected:', {
-            id: msg.id,
-            role: msg.role,
-            participantId,
-            model,
-            contentLength: content.length,
-          });
-        }
-      }
-
-      // Check if we already have this message
-      const existingMessage = messageMap.get(messageKey);
-
-      if (existingMessage) {
-        // Update existing message if content changed (streaming update)
-        if (existingMessage.content !== content) {
-          messageMap.set(messageKey, {
-            ...existingMessage,
-            content,
-          });
-        }
-      } else {
-        // New message - add to map
-        messageMap.set(messageKey, {
-          id: msg.id,
-          role: msg.role as 'user' | 'assistant',
-          content,
-          participantId,
-          metadata: model
-            ? {
-                model,
-                role,
-              }
-            : null,
-          createdAt: new Date().toISOString(),
-          isStreaming: false, // Will be set below
-        });
-      }
-    }
-
-    // Convert map back to array, preserving order
-    const deduplicatedMessages = Array.from(messageMap.values());
-
-    // Mark last assistant message as streaming
-    // Find the last assistant message and mark it as streaming if currently streaming
-    if (isCurrentlyStreaming) {
-      for (let i = deduplicatedMessages.length - 1; i >= 0; i--) {
-        if (deduplicatedMessages[i]!.role === 'assistant') {
-          deduplicatedMessages[i]!.isStreaming = true;
-          break;
-        }
-      }
-    }
-
-    return deduplicatedMessages;
+      return {
+        id: msg.id,
+        role: msg.role as 'user' | 'assistant',
+        content,
+        participantId,
+        metadata: model ? { model, role } : null,
+        createdAt: new Date().toISOString(),
+        isStreaming: isCurrentlyStreaming && index === messages.length - 1,
+      };
+    });
   }, [messages, isCurrentlyStreaming]);
 
-  // Track if we're waiting for multiple participant responses
-  // This ensures input stays disabled until ALL participants have responded
+  // ✅ Check if waiting for any participant (useChat, manual, or not all responded yet)
   const isWaitingForParticipants = useMemo(() => {
-    if (status === 'streaming' || status === 'submitted') {
-      return true; // Always disabled when actively streaming
+    // Streaming via useChat or manual participant
+    if (status === 'streaming' || status === 'submitted' || isStreamingManualParticipant) {
+      return true;
     }
 
-    // Count user messages and assistant messages
-    const userMessageCount = messages.filter(m => m.role === 'user').length;
-    const assistantMessageCount = messages.filter(m => m.role === 'assistant').length;
+    // Check if all participants have responded to the last user message
+    const lastUserMessageIndex = messages.findLastIndex(m => m.role === 'user');
+    if (lastUserMessageIndex === -1) {
+      return false; // No user messages yet
+    }
 
-    // Expected assistant messages = user messages × number of participants
-    const expectedAssistantMessages = userMessageCount * currentParticipants.length;
+    // Count assistant messages after the last user message
+    const assistantMessagesInCurrentRound = messages
+      .slice(lastUserMessageIndex + 1)
+      .filter(m => m.role === 'assistant')
+      .length;
 
-    // Still waiting if we haven't received all expected responses
-    return assistantMessageCount < expectedAssistantMessages;
-  }, [status, messages, currentParticipants.length]);
+    // Still waiting if not all participants have responded
+    return assistantMessagesInCurrentRound < currentParticipants.length;
+  }, [status, isStreamingManualParticipant, messages, currentParticipants.length]);
 
   // ChatGPT-like auto-scroll behavior with user override detection
   // Use isWaitingForParticipants for auto-scroll to handle multi-participant streaming
@@ -400,9 +551,6 @@ export default function ChatThreadScreen({ slug }: { slug: string }) {
 
   // Set breadcrumb with action buttons when thread loads
   useEffect(() => {
-    if (!thread)
-      return;
-
     setDynamicBreadcrumb({
       title: thread.title,
       parent: '/chat',
@@ -498,12 +646,12 @@ export default function ChatThreadScreen({ slug }: { slug: string }) {
       setDynamicBreadcrumb(null);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [thread?.title, thread?.isFavorite, thread?.isPublic, showScrollButton, handleToggleFavorite, handleTogglePublic, handleCopyLink, handleDeleteClick, scrollToBottom]);
+  }, [thread.title, thread.isFavorite, thread.isPublic, showScrollButton, handleToggleFavorite, handleTogglePublic, handleCopyLink, handleDeleteClick, scrollToBottom]);
 
   // Poll for title updates when thread has temporary title
   // Slug is now immutable, so no redirect needed - just refresh data
   useEffect(() => {
-    if (!thread || thread?.title !== 'New Chat')
+    if (thread.title !== 'New Chat')
       return;
 
     // Poll every 2 seconds to check if title has been updated
@@ -528,8 +676,7 @@ export default function ChatThreadScreen({ slug }: { slug: string }) {
 
     // Cleanup on unmount or when title changes
     return () => clearInterval(pollInterval);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- Only tracking thread.id and thread.title to avoid unnecessary polling restarts
-  }, [thread?.id, thread?.title, slug]);
+  }, [thread.id, thread.title, slug]);
 
   // Track streaming status and current participant
   // CRITICAL: Monitor message changes to detect when new participants start streaming
@@ -569,74 +716,129 @@ export default function ChatThreadScreen({ slug }: { slug: string }) {
     }
   }, [status, messages]);
 
-  // Auto-trigger streaming for newly created threads
-  // ChatGPT-like experience: Automatically stream AI responses when thread is created
-  // AI SDK v5 pattern: Use regenerate() to trigger streaming without sending a new message
+  // ✅ Auto-trigger for newly created threads
+  // useChat doesn't auto-trigger on page load with existing messages
+  // So we need to manually trigger participant 0 for threads with only 1 user message
   useEffect(() => {
-    if (!thread)
-      return;
-
-    // Check if this is a new thread with only the initial user message
-    const hasOnlyUserMessage = serverMessages.length === 1 && serverMessages[0]?.role === 'user';
-    const hasNoAssistantMessages = messages.filter(m => m.role === 'assistant').length === 0;
+    // Only trigger for new threads (1 user message, 0 assistant messages from DB)
+    const hasOnlyUserMessageInDB = serverMessages.length === 1 && serverMessages[0]?.role === 'user';
+    const hasAssistantMessagesInDB = serverMessages.some(m => m.role === 'assistant');
     const isReady = status === 'ready';
-    const hasThread = Boolean(thread);
-    const notAlreadyTriggered = autoTriggeredRef.current !== thread?.id;
 
-    // Auto-trigger condition: new thread + only user message + no AI responses yet + ready state + not already triggered
-    if (hasThread && hasOnlyUserMessage && hasNoAssistantMessages && isReady && notAlreadyTriggered) {
-      // Mark as triggered to prevent duplicate calls
-      autoTriggeredRef.current = thread?.id || null;
+    if (hasOnlyUserMessageInDB && !hasAssistantMessagesInDB && isReady) {
+      // ✅ CRITICAL: Prevent duplicate triggers for the same thread
+      if (newThreadTriggeredRef.current === thread.id) {
+        return; // Already triggered for this thread
+      }
 
-      // Trigger streaming using regenerate() - this will use the last message without creating a new one
-      // The backend will see the existing user message and start streaming
-      regenerate();
+      // Mark as triggered for this thread
+      newThreadTriggeredRef.current = thread.id;
+
+      // ✅ CRITICAL: Set streaming flag BEFORE async to prevent race condition
+      setIsStreamingManualParticipant(true);
+
+      // Manually trigger participant 0 using our manual trigger logic
+      // This ensures we follow the same pattern as auto-trigger for participants 1+
+      (async () => {
+        try {
+          const response = await fetch(`/api/v1/chat/threads/${thread.id}/stream`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              messages: messages.map(m => ({
+                id: m.id,
+                role: m.role,
+                parts: m.parts,
+              })),
+              participantIndex: 0, // Trigger participant 0
+            }),
+          });
+
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+          }
+
+          // Parse SSE stream (same logic as auto-trigger)
+          const reader = response.body?.getReader();
+          const decoder = new TextDecoder();
+
+          if (!reader) {
+            throw new Error('No response body');
+          }
+
+          let buffer = '';
+          let messageId = '';
+          let messageMetadata: Record<string, unknown> | null = null;
+          let content = '';
+
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done)
+              break;
+
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || '';
+
+            for (const line of lines) {
+              if (!line.trim() || line.startsWith(':'))
+                continue;
+
+              if (line.startsWith('data: ')) {
+                const data = line.slice(6);
+                if (data === '[DONE]')
+                  continue;
+
+                try {
+                  const event = JSON.parse(data);
+
+                  if (event.type === 'start') {
+                    messageId = event.messageId;
+                    messageMetadata = event.messageMetadata || null;
+                    content = '';
+
+                    // eslint-disable-next-line ts/no-explicit-any
+                    setMessages((prev: any) => [...prev, {
+                      id: messageId,
+                      role: 'assistant',
+                      parts: [{ type: 'text', text: '' }],
+                      metadata: messageMetadata,
+                    }]);
+                  } else if (event.type === 'text-delta' && event.delta) {
+                    content += event.delta;
+
+                    // eslint-disable-next-line ts/no-explicit-any
+                    setMessages((prev: any) =>
+                      // eslint-disable-next-line ts/no-explicit-any
+                      prev.map((m: any) =>
+                        m.id === messageId
+                          ? { ...m, parts: [{ type: 'text', text: content.trimStart() }] }
+                          : m,
+                      ),
+                    );
+                  }
+                } catch (error) {
+                  console.error('Failed to parse SSE event:', error);
+                }
+              }
+            }
+          }
+        } catch (error) {
+          console.error('Failed to trigger participant 0 for new thread:', error);
+          toastManager.error(
+            t('chat.participantFailed'),
+            t('chat.participantFailedDescription'),
+          );
+        } finally {
+          setIsStreamingManualParticipant(false);
+        }
+      })();
     }
-    // Only run when thread ID changes or when messages/status change
+    // Only run once when thread loads
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [thread?.id, serverMessages.length, status, messages.length]);
-
-  // Loading state
-  if (isLoadingThread) {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="text-center space-y-2">
-          <div className="size-8 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto" />
-          <div className="text-muted-foreground text-sm">{t('actions.loading')}</div>
-        </div>
-      </div>
-    );
-  }
-
-  // Error state
-  if (threadError || !thread) {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="text-center space-y-4 max-w-md px-6">
-          <div className="text-destructive">
-            <svg
-              className="size-16 mx-auto mb-4"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-              />
-            </svg>
-          </div>
-          <h2 className="text-2xl font-semibold">{t('chat.threadNotFound')}</h2>
-          <p className="text-muted-foreground">{t('chat.threadNotFoundDescription')}</p>
-          <Button onClick={() => router.push('/chat')}>
-            {t('actions.back')}
-          </Button>
-        </div>
-      </div>
-    );
-  }
+  }, [thread.id, serverMessages.length, status]);
 
   return (
     <div className="relative h-full w-full">
@@ -691,9 +893,6 @@ export default function ChatThreadScreen({ slug }: { slug: string }) {
             onParticipantsChange={setCurrentParticipants}
             onMemoryIdsChange={setCurrentMemoryIds}
             onSubmit={(message) => {
-              if (!thread)
-                return;
-
               // AI SDK v5: Send message using correct format
               sendMessage({ text: message });
 

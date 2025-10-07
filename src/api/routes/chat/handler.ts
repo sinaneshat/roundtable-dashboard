@@ -37,7 +37,6 @@ import type { SessionTypeMode } from '@/lib/ai/models-config';
 import {
   buildRoundtableSystemPrompt,
   canAccessModel,
-  formatMessageAsHumanContribution,
   getModelById,
   getTierDisplayName,
 } from '@/lib/ai/models-config';
@@ -922,7 +921,13 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
   async (c) => {
     const { user } = c.auth();
     const { id: threadId } = c.validated.params;
-    const { messages: clientMessages, mode: newMode, participants: newParticipants, memoryIds: newMemoryIds } = c.validated.body;
+    const {
+      messages: clientMessages,
+      participantIndex: requestedParticipantIndex,
+      mode: newMode,
+      participants: newParticipants,
+      memoryIds: newMemoryIds,
+    } = c.validated.body;
     const db = await getDbAsync();
 
     // Verify thread ownership and get participants
@@ -1113,40 +1118,129 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
       })),
     });
 
-    // Single participant streaming
-    if (participants.length === 1) {
-      const participant = participants[0]!;
+    // ✅ AI SDK v5 OFFICIAL PATTERN: Single stream for ALL participants using createUIMessageStream
+    // Reference: https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot-message-persistence
+    // Reference: https://github.com/vercel/ai/discussions/3916
 
-      const streamingResponse = openRouterService.streamUIMessages({
-        modelId: participant.modelId,
-        messages: uiMessages,
-        system: participant.settings?.systemPrompt,
-        temperature: participant.settings?.temperature || 0.7,
-        onFinish: async ({ text, usage }) => {
+    // Get OpenRouter client
+    initializeOpenRouter(c.env);
+    const client = openRouterService.getClient();
+
+    // ✅ OFFICIAL AI SDK PATTERN: One participant per HTTP request
+    // Reference: https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot-message-persistence
+    // Frontend sends separate requests for each participant
+
+    // Validate requested participant index
+    if (requestedParticipantIndex < 0 || requestedParticipantIndex >= participants.length) {
+      throw createError.badRequest(
+        `Invalid participantIndex ${requestedParticipantIndex}. Must be between 0 and ${participants.length - 1}`,
+        {
+          errorType: 'validation',
+          field: 'participantIndex',
+        },
+      );
+    }
+
+    const stream = createUIMessageStream({
+      execute: async ({ writer }) => {
+        // Use all messages as context for this participant
+        const currentHistory = [...uiMessages];
+
+        // Stream ONLY the requested participant
+        const participantIndex = requestedParticipantIndex;
+        const participant = participants[participantIndex]!;
+
+        apiLogger.info('Streaming participant response', {
+          threadId,
+          participantIndex,
+          participantId: participant.id,
+          model: participant.modelId,
+          historyLength: currentHistory.length,
+        });
+        // Build system prompt for this participant
+        // ✅ CRITICAL: Only tell participant about PREVIOUS participants who already responded
+        // Don't mention future participants - causes models to hallucinate/reference them
+        const systemPrompt = buildRoundtableSystemPrompt({
+          mode: thread.mode as SessionTypeMode,
+          participantIndex,
+          participantRole: participant.role,
+          customSystemPrompt: participant.settings?.systemPrompt,
+          otherParticipants: participants
+            .slice(0, participantIndex) // Only previous participants
+            .map(p => ({
+              // ✅ CRITICAL: Use priority (original index) not map index!
+              // When we slice(), the map index resets to 0, giving wrong participant numbers
+              index: p.priority, // Use actual priority/index from database
+              role: p.role,
+            })),
+        });
+
+        // Generate unique message ID upfront
+        const messageId = ulid();
+
+        // ✅ OFFICIAL PATTERN: Stream with onFinish for async database persistence
+        const result = streamText({
+          model: client.chat(participant.modelId),
+          messages: convertToModelMessages(currentHistory),
+          system: systemPrompt,
+          temperature: participant.settings?.temperature || 0.7,
+          onFinish: async ({ text }) => {
+            // ✅ Database save happens ASYNC in background - doesn't block streaming
+            try {
+              const now = new Date();
+
+              await db.insert(tables.chatMessage).values({
+                id: messageId,
+                threadId,
+                participantId: participant.id,
+                role: 'assistant',
+                content: text,
+                metadata: {
+                  model: participant.modelId,
+                  role: participant.role,
+                  mode: thread.mode,
+                  participantId: participant.id,
+                  participantIndex,
+                },
+                createdAt: now,
+              });
+
+              apiLogger.info('Participant response saved to DB', {
+                participantId: participant.id,
+                participantIndex,
+                messageId,
+                textLength: text.length,
+              });
+            } catch (error) {
+              apiLogger.error('Failed to save participant response', {
+                threadId,
+                participantId: participant.id,
+                participantIndex,
+                messageId,
+                error: error instanceof Error ? error.message : String(error),
+              });
+            }
+          },
+        });
+
+        // ✅ OFFICIAL AI SDK PATTERN: Send metadata with each message
+        // Reference: https://ai-sdk.dev/docs/ai-sdk-ui/message-metadata
+        writer.merge(result.toUIMessageStream({
+          generateMessageId: () => messageId,
+          messageMetadata: () => ({
+            participantId: participant.id,
+            model: participant.modelId,
+            role: participant.role,
+          }),
+        }));
+
+        // ✅ Update usage and thread metadata ASYNC in background
+        (async () => {
           try {
-            const assistantMessageId = ulid();
-            const now = new Date();
+            // Only count this single participant's response (+ user message if new)
+            const totalNewMessages = isNewMessage ? 2 : 1;
+            await incrementMessageUsage(user.id, totalNewMessages);
 
-            await db.insert(tables.chatMessage).values({
-              id: assistantMessageId,
-              threadId,
-              participantId: participant.id,
-              role: 'assistant',
-              content: text,
-              metadata: {
-                model: participant.modelId,
-                role: participant.role,
-                mode: thread.mode, // Track which mode was active for this message
-                usage: usage ? { totalTokens: usage.totalTokens } : undefined,
-              },
-              createdAt: now, // Explicitly provide timestamp
-            });
-
-            // Update usage tracking
-            const messagesToIncrement = isNewMessage ? 2 : 1; // User + Assistant or just Assistant
-            await incrementMessageUsage(user.id, messagesToIncrement);
-
-            // Update thread
             await db
               .update(tables.chatThread)
               .set({
@@ -1167,467 +1261,16 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
               }
             }
           } catch (error) {
-            apiLogger.error('Failed to save streamed message', {
+            apiLogger.error('Failed to update thread metadata', {
               threadId,
-              participantId: participant.id,
               error: error instanceof Error ? error.message : String(error),
             });
           }
-        },
-      });
-
-      return streamingResponse;
-    }
-
-    // Multiple participants: Stream each model's response sequentially
-    // AI SDK v5 Pattern: Use createUIMessageStream for sequential multi-participant responses
-    // ⚠️ CRITICAL: createUIMessageStream is designed for SINGLE message turns
-    // For multi-participant responses, we need to use a DIFFERENT approach
-    // We'll use createDataStreamResponse to send custom events that the frontend can handle
-    apiLogger.info('Multi-participant streaming initiated', {
-      threadId,
-      participantCount: participants.length,
-      participantModels: participants.map(p => p.modelId),
-    });
-
-    // Build system prompt for collaborative mode
-    // 🔧 CRITICAL: Frame as HUMAN roundtable discussion (never mention AI/models)
-    // This prevents safety filters from detecting AI-to-AI conversations
-    // Using centralized configuration from models-config.ts
-
-    // Create UI Message Stream following AI SDK v5 official patterns
-    // Following the multi-step streaming pattern from AI SDK v5 docs
-    // https://sdk.vercel.ai/docs/ai-sdk-core/generating-text#multi-step-streaming
-    // ⚠️ NOTE: This uses writer.write() for each message, but the AI SDK's useChat
-    // hook may not properly separate them. The delays and explicit boundaries help.
-    const stream = createUIMessageStream({
-      originalMessages: uiMessages,
-      async execute({ writer }) {
-        const contextMessages = [...uiMessages];
-        const completedResponses: Array<{
-          participantId: string;
-          participantIndex: number;
-          modelId: string;
-          role: string | null;
-          text: string;
-          usage?: { totalTokens: number };
-        }> = [];
-
-        // Get OpenRouter client
-        initializeOpenRouter(c.env);
-        const client = openRouterService.getClient();
-
-        // Stream each participant's response sequentially using REAL streaming
-        // Following AI SDK v5 official pattern: each model waits for previous to complete
-        // Each model sees all previous responses in the conversation context
-        for (let i = 0; i < participants.length; i++) {
-          const participant = participants[i]!; // Assert non-null since we're iterating by index
-
-          apiLogger.info('Starting participant stream', {
-            participantId: participant.id,
-            modelId: participant.modelId,
-            priority: participant.priority,
-            participantIndex: i,
-            totalParticipants: participants.length,
-            contextMessagesCount: contextMessages.length,
-          });
-
-          // Build system prompt using centralized configuration
-          // Models are fully aware of other participants and can reference them
-          const systemPrompt = buildRoundtableSystemPrompt({
-            mode: thread.mode as SessionTypeMode,
-            participantIndex: i,
-            participantRole: participant.role,
-            customSystemPrompt: participant.settings?.systemPrompt,
-            otherParticipants: participants
-              .filter(p => p.id !== participant.id)
-              .map(p => ({
-                index: participants.indexOf(p),
-                role: p.role,
-              })),
-          });
-
-          try {
-            // ✅ AI SDK v5 OFFICIAL MULTI-STEP PATTERN
-            // Following pattern from: https://sdk.vercel.ai/docs/ai-sdk-core/generating-text#multi-step-streaming
-            // Key: Use await result.response to wait for completion and get messages
-
-            // 🔧 CRITICAL FIX: Convert assistant messages to user messages to bypass AI detection
-            // Make it appear as if messages are from HUMAN participants, not AI models
-            // This prevents safety filters from detecting AI-to-AI conversations
-            // Using centralized formatMessageAsHumanContribution from models-config.ts
-            const safeContextMessages = contextMessages.map((msg, idx) => {
-              if (msg.role === 'assistant') {
-                // Find which participant sent this message
-                const prevResponse = completedResponses.find(
-                  r =>
-                    contextMessages.slice(0, idx).filter(m => m.role === 'assistant').length
-                    === completedResponses.indexOf(r) + 1,
-                );
-
-                // Convert to user message with human-like attribution using centralized function
-                return {
-                  ...msg,
-                  role: 'user' as const,
-                  parts: msg.parts.map((part) => {
-                    if (part.type === 'text') {
-                      // Use centralized formatter with participant index and role
-                      const formattedText = formatMessageAsHumanContribution(
-                        prevResponse?.participantIndex ?? 0,
-                        prevResponse?.role,
-                        part.text,
-                      );
-                      return {
-                        ...part,
-                        text: formattedText,
-                      };
-                    }
-                    return part;
-                  }),
-                };
-              }
-              return msg;
-            });
-
-            // Convert context messages to model format
-            const modelMessages = convertToModelMessages(safeContextMessages);
-
-            apiLogger.info('Preparing to stream participant response', {
-              participantIndex: i,
-              participantId: participant.id,
-              modelId: participant.modelId,
-              role: participant.role,
-              temperature: participant.settings?.temperature || 0.7,
-              contextMessagesCount: contextMessages.length,
-              modelMessagesCount: modelMessages.length,
-            });
-
-            // ✅ AI SDK v5 RECOMMENDED PATTERN: Use onFinish callback
-            // This is the most reliable way to capture completion data
-            let completedText = '';
-            let completedUsage: { totalTokens: number } | undefined;
-            let completionResponse: Awaited<ReturnType<typeof streamText>['response']> | undefined;
-
-            const result = streamText({
-              model: client.chat(participant.modelId),
-              messages: modelMessages,
-              system: systemPrompt,
-              temperature: participant.settings?.temperature || 0.7,
-              onFinish: ({ text, usage, response, finishReason }) => {
-                // Capture the completed data in onFinish callback
-                completedText = text;
-                completedUsage = usage?.totalTokens !== undefined ? { totalTokens: usage.totalTokens } : undefined;
-                completionResponse = response;
-
-                apiLogger.info('Participant response completed', {
-                  participantId: participant.id,
-                  modelId: participant.modelId,
-                  textLength: text.length,
-                  usageTokens: usage?.totalTokens,
-                  finishReason,
-                });
-              },
-            });
-
-            // ✅ CRITICAL FIX: Don't use writer.merge() for sequential participants
-            // writer.merge() is for CONCURRENT streams (multiple tool calls at once)
-            // For SEQUENTIAL participants, we need to manually write each stream event
-            // Following AI SDK v5 UIMessageChunk types: 'start', 'text-start', 'text-delta', 'text-end', 'finish'
-
-            // Create a new message for this participant - IMPORTANT: This ID will be used both for streaming AND database
-            // This ensures consistency between what the frontend sees during streaming and what gets persisted
-            const assistantMessageId = ulid();
-            const textId = ulid();
-
-            // Send 'start' event to begin new assistant message
-            writer.write({
-              type: 'start',
-              messageId: assistantMessageId, // Use the same ID that will be saved to DB
-              messageMetadata: {
-                participantId: participant.id,
-                model: participant.modelId,
-                role: participant.role,
-              },
-            });
-
-            // Small delay after start event to ensure frontend processes it
-            // Reduced to 10ms to minimize buffering while maintaining message separation
-            await new Promise(resolve => setTimeout(resolve, 10));
-
-            // Send 'text-start' event to begin text content
-            writer.write({
-              type: 'text-start',
-              id: textId,
-            });
-
-            // Stream the text token by token with 'text-delta' events
-            for await (const textDelta of result.textStream) {
-              writer.write({
-                type: 'text-delta',
-                id: textId,
-                delta: textDelta,
-              });
-            }
-
-            // ✅ CRITICAL: Wait for generation to complete
-            await result.response;
-
-            // Now use the captured values from onFinish callback
-            const text = completedText;
-            const usage = completedUsage;
-            const response = completionResponse;
-
-            // Send 'text-end' event to complete text content
-            writer.write({
-              type: 'text-end',
-              id: textId,
-            });
-
-            // Send 'finish' event to complete the message
-            writer.write({
-              type: 'finish',
-              messageMetadata: {
-                participantId: participant.id,
-                model: participant.modelId,
-                role: participant.role,
-              },
-            });
-
-            apiLogger.info('Participant generation completed and message finished', {
-              participantId: participant.id,
-              participantIndex: i,
-              modelId: participant.modelId,
-              messageId: assistantMessageId,
-              textLength: text.length,
-              totalTokens: usage?.totalTokens,
-              responseId: response?.id,
-              messagesCount: response?.messages.length,
-              remainingParticipants: participants.length - i - 1,
-            });
-
-            // Minimal delay to ensure complete message boundary between participants
-            // Reduced to 50ms to keep frontend streaming smooth and fast
-            if (i < participants.length - 1) {
-              // Only delay between participants, not after the last one
-              await new Promise(resolve => setTimeout(resolve, 50));
-              apiLogger.info('Starting next participant after message boundary delay', {
-                nextParticipantIndex: i + 1,
-                nextParticipantId: participants[i + 1]?.id,
-                previousMessageId: assistantMessageId,
-              });
-            }
-
-            // Validate response is not empty - if empty, treat as error
-            if (!text || text.trim().length === 0) {
-              apiLogger.warn('Participant returned empty response', {
-                participantId: participant.id,
-                modelId: participant.modelId,
-                totalTokens: usage?.totalTokens,
-              });
-
-              // Write warning message to stream - generate ID early
-              const warningMessageId = ulid();
-              const warningText = `[${participant.modelId}${participant.role ? ` (${participant.role})` : ''} returned an empty response]`;
-              const warningId = ulid();
-
-              // Send start event for warning message
-              writer.write({
-                type: 'start',
-                messageId: warningMessageId,
-                messageMetadata: {
-                  participantId: participant.id,
-                  model: participant.modelId,
-                  role: participant.role,
-                },
-              });
-
-              // Minimal delay to ensure frontend processes the start event
-              await new Promise(resolve => setTimeout(resolve, 10));
-
-              writer.write({
-                type: 'text-start',
-                id: warningId,
-              });
-
-              writer.write({
-                type: 'text-delta',
-                id: warningId,
-                delta: warningText,
-              });
-
-              writer.write({
-                type: 'text-end',
-                id: warningId,
-              });
-
-              writer.write({
-                type: 'finish',
-                messageMetadata: {
-                  participantId: participant.id,
-                  model: participant.modelId,
-                  role: participant.role,
-                },
-              });
-
-              // Add to context so subsequent models know about the empty response
-              completedResponses.push({
-                participantId: participant.id,
-                participantIndex: i,
-                modelId: participant.modelId,
-                role: participant.role,
-                text: warningText,
-              });
-
-              contextMessages.push({
-                id: warningMessageId,
-                role: 'assistant',
-                parts: [{ type: 'text', text: warningText }],
-              });
-
-              // Continue to next participant
-              continue;
-            }
-
-            // Save to database after completion - use the same ID that was sent in the stream
-            // This ensures the frontend can match streamed messages with persisted ones
-            const now = new Date();
-
-            await db.insert(tables.chatMessage).values({
-              id: assistantMessageId, // Same ID used in the stream start event
-              threadId,
-              participantId: participant.id,
-              role: 'assistant',
-              content: text,
-              metadata: {
-                model: participant.modelId,
-                role: participant.role,
-                mode: thread.mode, // Track which mode was active for this message
-                usage: usage ? { totalTokens: usage.totalTokens } : undefined,
-              },
-              createdAt: now, // Explicitly provide timestamp
-            });
-
-            // Store for context tracking
-            completedResponses.push({
-              participantId: participant.id,
-              participantIndex: i,
-              modelId: participant.modelId,
-              role: participant.role,
-              text,
-              usage: usage?.totalTokens !== undefined ? { totalTokens: usage.totalTokens } : undefined,
-            });
-
-            // ✅ CRITICAL: Add this model's response to context for next model
-            // AI SDK v5 pattern: Add assistant message to context so next participant sees it
-            // This ensures the next participant sees the full context including this response
-            contextMessages.push({
-              id: assistantMessageId,
-              role: 'assistant',
-              parts: [{ type: 'text', text }],
-            });
-          } catch (error) {
-            apiLogger.error('Participant streaming failed', {
-              participantId: participant.id,
-              modelId: participant.modelId,
-              error: error instanceof Error ? error.message : String(error),
-              stack: error instanceof Error ? error.stack : undefined,
-            });
-
-            // Write error message as a separate assistant message
-            // AI SDK v5 pattern: Create complete message structure for error
-            const errorText = `[Error: ${participant.modelId} failed to respond - ${error instanceof Error ? error.message : 'Unknown error'}]`;
-            const errorId = ulid();
-            const errorMessageId = ulid();
-
-            // Send complete message structure for error
-            writer.write({
-              type: 'start',
-              messageId: errorMessageId,
-              messageMetadata: {
-                participantId: participant.id,
-                model: participant.modelId,
-                role: participant.role,
-              },
-            });
-
-            // Minimal delay to ensure frontend processes the start event
-            await new Promise(resolve => setTimeout(resolve, 10));
-
-            writer.write({
-              type: 'text-start',
-              id: errorId,
-            });
-
-            writer.write({
-              type: 'text-delta',
-              id: errorId,
-              delta: errorText,
-            });
-
-            writer.write({
-              type: 'text-end',
-              id: errorId,
-            });
-
-            writer.write({
-              type: 'finish',
-              messageMetadata: {
-                participantId: participant.id,
-                model: participant.modelId,
-                role: participant.role,
-              },
-            });
-
-            // Add to context so subsequent models know about the error
-            completedResponses.push({
-              participantId: participant.id,
-              participantIndex: i,
-              modelId: participant.modelId,
-              role: participant.role,
-              text: errorText,
-            });
-
-            contextMessages.push({
-              id: errorMessageId,
-              role: 'assistant',
-              parts: [{ type: 'text', text: errorText }],
-            });
-          }
-        }
-
-        // Log completion of all participants
-        apiLogger.info('All participants completed', {
-          totalParticipants: participants.length,
-          completedCount: completedResponses.length,
-          participantIds: completedResponses.map(r => r.participantId),
-        });
-
-        // Update usage and thread after all participants complete
-        const totalMessages = isNewMessage ? completedResponses.length + 1 : completedResponses.length;
-        await incrementMessageUsage(user.id, totalMessages);
-        await db
-          .update(tables.chatThread)
-          .set({
-            lastMessageAt: new Date(),
-            updatedAt: new Date(),
-          })
-          .where(eq(tables.chatThread.id, threadId));
-
-        // Generate title if needed
-        if (thread.title === 'New Chat' && messages.length > 0) {
-          const firstUserMessage = messages.find(m => m.role === 'user');
-          if (firstUserMessage) {
-            const generatedTitle = await generateTitleFromMessage(firstUserMessage.content, c.env);
-            await db
-              .update(tables.chatThread)
-              .set({ title: generatedTitle })
-              .where(eq(tables.chatThread.id, threadId));
-          }
-        }
+        })();
       },
     });
 
-    // Use createUIMessageStreamResponse following AI SDK v5 official pattern
+    // ✅ Return single stream response
     return createUIMessageStreamResponse({ stream });
   },
 );

@@ -413,32 +413,16 @@ export const ParticipantDetailResponseSchema = createApiResponseSchema(Participa
 // Note: SendMessageRequestSchema removed - use StreamChatRequestSchema for all chat operations
 
 /**
- * AI SDK v5 UIMessage Part Types
- * Following official AI SDK v5 documentation
+ * ✅ AI SDK v5 UIMessage Part Schema - OFFICIAL FLEXIBLE PATTERN
+ * Use passthrough() to accept ALL official AI SDK part types without strict validation
+ * Reference: https://sdk.vercel.ai/docs/reference/ai-sdk-core/ui-message
+ *
+ * Official part types include: text, reasoning, file, source-url, source-document,
+ * tool-*, data-*, step-start, etc.
  */
-const UIMessagePartSchema = z.discriminatedUnion('type', [
-  z.object({
-    type: z.literal('text'),
-    text: z.string().min(1, 'Text content cannot be empty'),
-  }),
-  z.object({
-    type: z.literal('tool-call'),
-    toolCallId: z.string(),
-    toolName: z.string(),
-    args: z.record(z.string(), z.unknown()),
-  }).passthrough(),
-  z.object({
-    type: z.literal('tool-result'),
-    toolCallId: z.string(),
-    toolName: z.string(),
-    result: z.unknown(),
-  }).passthrough(),
-  z.object({
-    type: z.literal('file'),
-    data: z.string(),
-    mimeType: z.string(),
-  }).passthrough(),
-]).openapi('UIMessagePart');
+const UIMessagePartSchema = z.object({
+  type: z.string(), // Accept any type string from AI SDK
+}).passthrough().openapi('UIMessagePart'); // Allow all additional fields
 
 /**
  * AI SDK v5 Standard Streaming Request
@@ -470,6 +454,11 @@ export const StreamChatRequestSchema = z.object({
   }),
   memoryIds: z.array(z.string()).optional().openapi({
     description: 'Updated memory IDs to attach',
+  }),
+  // ✅ OFFICIAL AI SDK PATTERN: One participant per HTTP request
+  participantIndex: z.number().int().nonnegative().openapi({
+    description: 'Which participant to stream in this request (0-based). Frontend sends separate requests for each participant.',
+    example: 0,
   }),
 }).openapi('StreamChatRequest');
 

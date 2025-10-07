@@ -46,11 +46,6 @@ export function ChatDeleteDialog({
   const handleDelete = () => {
     deleteThreadMutation.mutate(threadId, {
       onSuccess: () => {
-        toastManager.success(
-          t('chat.threadDeleted'),
-          t('chat.threadDeletedDescription'),
-        );
-
         // Redirect if current thread is being deleted
         if (redirectIfCurrent && threadSlug) {
           const currentPath = window.location.pathname;

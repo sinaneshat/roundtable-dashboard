@@ -56,10 +56,6 @@ export function ChatShareDialog({
       },
       {
         onSuccess: () => {
-          toastManager.success(
-            t('chat.madePublic'),
-            t('chat.madePublicDescription'),
-          );
           setShowShareUrl(true);
         },
         onError: () => {
@@ -77,10 +73,6 @@ export function ChatShareDialog({
     try {
       await navigator.clipboard.writeText(shareUrl);
       setCopied(true);
-      toastManager.success(
-        t('chat.linkCopied'),
-        t('chat.linkCopiedDescription'),
-      );
       setTimeout(() => setCopied(false), 2000);
     } catch {
       toastManager.error(

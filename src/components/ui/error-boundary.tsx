@@ -105,13 +105,8 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
         translations?.description || 'A critical error occurred. Please refresh the page.',
         { duration: 10000 }
       );
-    } else if (level === 'section') {
-      toastManager.warning(
-        translations?.sectionTitle || 'Section Error',
-        translations?.sectionMessage || 'Part of the page encountered an error.',
-        { duration: 6000 }
-      );
     }
+    // Section errors handled silently
 
     // Auto-recovery for component-level errors
     if (level === 'component' && this.state.retryCount < 3) {
@@ -213,7 +208,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
     const { translations } = this.props;
     navigator.clipboard.writeText(JSON.stringify(errorDetails, null, 2))
       .then(() => {
-        toastManager.success(translations?.errorDetailsCopied || 'Error details copied to clipboard');
+        // Error details copied silently
       })
       .catch(() => {
         toastManager.error(translations?.errorDetailsCopyFailed || 'Failed to copy error details');

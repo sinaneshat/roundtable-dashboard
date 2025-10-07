@@ -113,12 +113,6 @@ export function ChatPromptForm({ className, onThreadCreated }: ChatPromptFormPro
 
         // Navigate to the new thread using slug (title already generated)
         router.push(`/chat/${threadSlug}`);
-
-        // Show success toast
-        toast({
-          title: t('notifications.success.createSuccess'),
-          description: t('chat.threadCreated'),
-        });
       }
     } catch (error) {
       console.error('Failed to create thread:', error);

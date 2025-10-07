@@ -57,49 +57,168 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
     [accessibleModels],
   );
 
-  const allSuggestions: QuickStartSuggestion[] = [
-    {
-      title: 'Can artificial general intelligence be aligned with human values?',
-      prompt: 'Debate the existential challenge: Can we truly align AGI with human values, or is catastrophic misalignment inevitable?',
-      mode: 'debating',
-      participants: [
-        { id: 'p1', modelId: 'anthropic/claude-3.5-sonnet', role: 'AI Safety Researcher', order: 0 },
-        { id: 'p2', modelId: 'openai/o1-mini', role: 'Technical Skeptic', order: 1 },
-        { id: 'p3', modelId: 'openai/gpt-4o', role: 'Ethics Philosopher', order: 2 },
-      ],
-    },
-    {
-      title: 'Is objective morality possible without a higher power?',
-      prompt: 'Explore whether objective moral truths can exist in a purely materialist universe without divine authority.',
-      mode: 'debating',
-      participants: [
-        { id: 'p1', modelId: 'anthropic/claude-3.5-sonnet', role: 'Moral Realist', order: 0 },
-        { id: 'p2', modelId: 'openai/gpt-4-turbo', role: 'Moral Relativist', order: 1 },
-        { id: 'p3', modelId: 'google/gemini-2.5-pro', role: 'Pragmatic Ethicist', order: 2 },
-        { id: 'p4', modelId: 'meta-llama/llama-3.1-405b-instruct', role: 'Philosopher', order: 3 },
-      ],
-    },
-    {
-      title: 'Should we edit human embryos to eliminate genetic diseases?',
-      prompt: 'Debate CRISPR germline editing: eliminating suffering vs. playing god and creating designer babies.',
-      mode: 'debating',
-      participants: [
-        { id: 'p1', modelId: 'anthropic/claude-3.5-sonnet', role: 'Bioethicist', order: 0 },
-        { id: 'p2', modelId: 'openai/gpt-4o', role: 'Geneticist', order: 1 },
-        { id: 'p3', modelId: 'deepseek/deepseek-chat', role: 'Disability Rights', order: 2 },
-        { id: 'p4', modelId: 'google/gemini-2.5-pro', role: 'Medical Ethics', order: 3 },
-        { id: 'p5', modelId: 'openai/gpt-4-turbo', role: 'Futurist', order: 4 },
-      ],
-    },
-  ];
+  // Tier-based gray area questions - always returns exactly 3 suggestions
+  // Designed to be morally ambiguous, thought-provoking, and accessible to each tier
+  const suggestions: QuickStartSuggestion[] = useMemo(() => {
+    // Free tier: 3 models (Claude Haiku, Gemini Flash, DeepSeek)
+    const freeTierSuggestions: QuickStartSuggestion[] = [
+      {
+        title: 'Is privacy a right or a privilege in the digital age?',
+        prompt: 'Should individuals sacrifice privacy for security, or is surveillance capitalism the new totalitarianism? Where do we draw the line?',
+        mode: 'debating',
+        participants: [
+          { id: 'p1', modelId: 'anthropic/claude-3-haiku', role: 'Privacy Advocate', order: 0 },
+          { id: 'p2', modelId: 'google/gemini-2.5-flash', role: 'Security Realist', order: 1 },
+          { id: 'p3', modelId: 'deepseek/deepseek-chat', role: 'Tech Ethicist', order: 2 },
+        ],
+      },
+      {
+        title: 'Should we resurrect extinct species using genetic engineering?',
+        prompt: 'De-extinction: ecological restoration or playing god? Discuss bringing back woolly mammoths, passenger pigeons, and other lost species.',
+        mode: 'analyzing',
+        participants: [
+          { id: 'p1', modelId: 'deepseek/deepseek-chat', role: 'Conservation Biologist', order: 0 },
+          { id: 'p2', modelId: 'google/gemini-2.5-flash', role: 'Ecologist', order: 1 },
+          { id: 'p3', modelId: 'anthropic/claude-3-haiku', role: 'Bioethicist', order: 2 },
+        ],
+      },
+      {
+        title: 'Is meritocracy a myth that justifies inequality?',
+        prompt: 'Does hard work truly determine success, or is meritocracy just a comforting lie that masks systemic advantages and inherited privilege?',
+        mode: 'debating',
+        participants: [
+          { id: 'p1', modelId: 'google/gemini-2.5-flash', role: 'Sociologist', order: 0 },
+          { id: 'p2', modelId: 'anthropic/claude-3-haiku', role: 'Economist', order: 1 },
+          { id: 'p3', modelId: 'deepseek/deepseek-chat', role: 'Social Justice Advocate', order: 2 },
+        ],
+      },
+    ];
 
-  // Filter suggestions to only include models the user has access to
-  const suggestions = useMemo(() => {
-    return allSuggestions.map(suggestion => ({
+    // Starter tier: 5 models (+ Gemini Pro, Perplexity)
+    const starterTierSuggestions: QuickStartSuggestion[] = [
+      {
+        title: 'Should we colonize Mars if it means abandoning Earth\'s problems?',
+        prompt: 'Is Mars colonization humanity\'s backup plan or escapism? Should we fix Earth first, or hedge our bets across multiple planets?',
+        mode: 'debating',
+        participants: [
+          { id: 'p1', modelId: 'google/gemini-2.5-pro', role: 'Space Futurist', order: 0 },
+          { id: 'p2', modelId: 'perplexity/llama-3.1-sonar-large-128k-online', role: 'Climate Scientist', order: 1 },
+          { id: 'p3', modelId: 'anthropic/claude-3-haiku', role: 'Resource Economist', order: 2 },
+        ],
+      },
+      {
+        title: 'Can we justify eating meat if lab-grown alternatives exist?',
+        prompt: 'With cultured meat becoming viable, is traditional animal agriculture morally defensible? What about cultural traditions and livelihoods?',
+        mode: 'analyzing',
+        participants: [
+          { id: 'p1', modelId: 'google/gemini-2.5-flash', role: 'Animal Ethicist', order: 0 },
+          { id: 'p2', modelId: 'google/gemini-2.5-pro', role: 'Agronomist', order: 1 },
+          { id: 'p3', modelId: 'deepseek/deepseek-chat', role: 'Cultural Anthropologist', order: 2 },
+        ],
+      },
+      {
+        title: 'Is nuclear energy our climate salvation or a ticking time bomb?',
+        prompt: 'Nuclear power could solve climate change but carries catastrophic risks. Can we trust ourselves with this technology long-term?',
+        mode: 'debating',
+        participants: [
+          { id: 'p1', modelId: 'perplexity/llama-3.1-sonar-large-128k-online', role: 'Energy Policy Expert', order: 0 },
+          { id: 'p2', modelId: 'google/gemini-2.5-pro', role: 'Nuclear Physicist', order: 1 },
+          { id: 'p3', modelId: 'anthropic/claude-3-haiku', role: 'Environmental Activist', order: 2 },
+        ],
+      },
+    ];
+
+    // Pro tier: 8 models (+ Claude 3.5 Sonnet, GPT-4o, o1-mini)
+    const proTierSuggestions: QuickStartSuggestion[] = [
+      {
+        title: 'Should we edit human embryos to eliminate genetic diseases?',
+        prompt: 'CRISPR germline editing: eliminating suffering or creating designer babies? Where is the line between treatment and enhancement?',
+        mode: 'debating',
+        participants: [
+          { id: 'p1', modelId: 'anthropic/claude-3.5-sonnet', role: 'Bioethicist', order: 0 },
+          { id: 'p2', modelId: 'openai/gpt-4o', role: 'Geneticist', order: 1 },
+          { id: 'p3', modelId: 'openai/o1-mini', role: 'Disability Rights Advocate', order: 2 },
+        ],
+      },
+      {
+        title: 'Can artificial general intelligence be aligned with human values?',
+        prompt: 'If we create AGI smarter than us, can we ensure it shares our values? Or is catastrophic misalignment inevitable?',
+        mode: 'analyzing',
+        participants: [
+          { id: 'p1', modelId: 'anthropic/claude-3.5-sonnet', role: 'AI Safety Researcher', order: 0 },
+          { id: 'p2', modelId: 'openai/o1-mini', role: 'Machine Learning Engineer', order: 1 },
+          { id: 'p3', modelId: 'openai/gpt-4o', role: 'Ethics Philosopher', order: 2 },
+        ],
+      },
+      {
+        title: 'Is infinite economic growth possible on a finite planet?',
+        prompt: 'Capitalism demands perpetual growth, but Earth has limits. Must we choose between prosperity and survival, or can we transcend this paradox?',
+        mode: 'debating',
+        participants: [
+          { id: 'p1', modelId: 'openai/gpt-4o', role: 'Ecological Economist', order: 0 },
+          { id: 'p2', modelId: 'anthropic/claude-3.5-sonnet', role: 'Free Market Theorist', order: 1 },
+          { id: 'p3', modelId: 'google/gemini-2.5-pro', role: 'Systems Thinker', order: 2 },
+        ],
+      },
+    ];
+
+    // Power tier: 11 models (+ Claude Opus, GPT-4 Turbo, Llama 405B)
+    const powerTierSuggestions: QuickStartSuggestion[] = [
+      {
+        title: 'Should we terraform planets or preserve them as pristine laboratories?',
+        prompt: 'Terraforming Mars could create a second home for humanity, but would we be destroying irreplaceable alien ecosystems before we even discover them?',
+        mode: 'debating',
+        participants: [
+          { id: 'p1', modelId: 'anthropic/claude-3-opus', role: 'Planetary Scientist', order: 0 },
+          { id: 'p2', modelId: 'openai/gpt-4-turbo', role: 'Exobiologist', order: 1 },
+          { id: 'p3', modelId: 'meta-llama/llama-3.1-405b-instruct', role: 'Space Ethicist', order: 2 },
+          { id: 'p4', modelId: 'anthropic/claude-3.5-sonnet', role: 'Space Policy Expert', order: 3 },
+        ],
+      },
+      {
+        title: 'Is objective morality possible without a higher power?',
+        prompt: 'Can moral truths exist in a purely materialist universe without divine authority? Or are ethics just evolutionary programming and social contracts?',
+        mode: 'analyzing',
+        participants: [
+          { id: 'p1', modelId: 'anthropic/claude-3-opus', role: 'Moral Philosopher', order: 0 },
+          { id: 'p2', modelId: 'openai/gpt-4-turbo', role: 'Evolutionary Psychologist', order: 1 },
+          { id: 'p3', modelId: 'meta-llama/llama-3.1-405b-instruct', role: 'Theologian', order: 2 },
+          { id: 'p4', modelId: 'anthropic/claude-3.5-sonnet', role: 'Neuroscientist', order: 3 },
+        ],
+      },
+      {
+        title: 'Should we create conscious AI even if we can\'t guarantee their wellbeing?',
+        prompt: 'If we develop sentient AI, do we have moral obligations to them? Could creating digital consciousness be the greatest crime or the greatest gift?',
+        mode: 'debating',
+        participants: [
+          { id: 'p1', modelId: 'anthropic/claude-3-opus', role: 'AI Consciousness Researcher', order: 0 },
+          { id: 'p2', modelId: 'openai/gpt-4-turbo', role: 'Digital Rights Advocate', order: 1 },
+          { id: 'p3', modelId: 'anthropic/claude-3.5-sonnet', role: 'Bioethicist', order: 2 },
+          { id: 'p4', modelId: 'meta-llama/llama-3.1-405b-instruct', role: 'Philosophy of Mind Expert', order: 3 },
+        ],
+      },
+    ];
+
+    // Select suggestions based on user tier, ensuring all models are accessible
+    let tierSuggestions: QuickStartSuggestion[];
+
+    if (userTier === 'free') {
+      tierSuggestions = freeTierSuggestions;
+    } else if (userTier === 'starter') {
+      tierSuggestions = starterTierSuggestions;
+    } else if (userTier === 'pro') {
+      tierSuggestions = proTierSuggestions;
+    } else {
+      // power tier
+      tierSuggestions = powerTierSuggestions;
+    }
+
+    // Filter to ensure all participants are accessible (defensive check)
+    return tierSuggestions.map(suggestion => ({
       ...suggestion,
       participants: suggestion.participants.filter(p => accessibleModelIds.has(p.modelId as string)),
-    })).filter(suggestion => suggestion.participants.length > 0); // Only show suggestions with at least one accessible model
-  }, [accessibleModelIds]);
+    })).filter(suggestion => suggestion.participants.length > 0);
+  }, [userTier, accessibleModelIds]);
 
   return (
     <div className={cn('w-full relative z-20 overflow-hidden', className)}>
