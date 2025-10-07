@@ -16,76 +16,24 @@ type SelectSession = z.infer<typeof sessionSelectSchema>;
 type SelectUser = z.infer<typeof userSelectSchema>;
 
 /**
- * Shared authentication helper - extracts session from request headers or API key
+ * Shared authentication helper - extracts session from request headers
  * and sets context variables. Used by both attachSession and requireSession.
  *
  * Supports two authentication methods following Better Auth patterns:
  * 1. Session cookies (browser/web app authentication)
  * 2. API keys via x-api-key header (programmatic access)
+ *
+ * With sessionForAPIKeys enabled, Better Auth automatically validates API keys
+ * and creates sessions when getSession() is called with x-api-key header.
+ * @see https://www.better-auth.com/docs/plugins/api-key#sessions-from-api-keys
  */
 async function authenticateSession(c: Context<ApiEnv>): Promise<{
   session: SelectSession | null;
   user: SelectUser | null;
 }> {
-  // First, check for API key in header (following Better Auth documentation)
-  const apiKey = c.req.header('x-api-key');
-
-  if (apiKey) {
-    try {
-      // Verify API key using Better Auth's built-in verification
-      const apiKeyVerification = await auth.api.verifyApiKey({
-        body: {
-          key: apiKey,
-        },
-      });
-
-      // Better Auth returns { valid: boolean, key: ApiKey | null, error: Error | null }
-      if (apiKeyVerification && apiKeyVerification.valid && apiKeyVerification.key) {
-        const verifiedKey = apiKeyVerification.key;
-
-        // Fetch user from database using userId from API key
-        const { getDbAsync } = await import('@/db');
-        const db = await getDbAsync();
-        const dbUser = await db.query.user.findFirst({
-          where: (users, { eq }) => eq(users.id, verifiedKey.userId),
-        });
-
-        if (dbUser) {
-          // API key is valid and user exists - create contexts
-          const user = {
-            ...dbUser,
-            image: dbUser.image ?? null,
-          } as SelectUser;
-
-          // Create a synthetic session object for API key auth
-          const syntheticSession = {
-            id: `apikey_${verifiedKey.id}`,
-            userId: dbUser.id,
-            expiresAt: verifiedKey.expiresAt ? new Date(verifiedKey.expiresAt) : new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
-            token: apiKey, // Store the API key as token for reference
-            ipAddress: null,
-            userAgent: c.req.header('user-agent') ?? null,
-            createdAt: new Date(),
-            updatedAt: new Date(),
-            impersonatedBy: null,
-          } as SelectSession;
-
-          c.set('session', syntheticSession);
-          c.set('user', user);
-          c.set('requestId', c.req.header('x-request-id') || crypto.randomUUID());
-
-          return { session: syntheticSession, user };
-        }
-      }
-    } catch (error) {
-      // API key verification failed - log and fall through to session check
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      apiLogger.warn('API key verification failed', { error: errorMessage });
-      // Don't throw here - allow falling through to session authentication
-    }
-  }
-
-  // Fall back to session cookie authentication (original behavior)
+  // Better Auth's getSession() automatically handles both:
+  // - Session cookies (standard web authentication)
+  // - API keys (when sessionForAPIKeys: true is enabled)
   const sessionData = await auth.api.getSession({
     headers: c.req.raw.headers,
   });

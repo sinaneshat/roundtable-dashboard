@@ -125,13 +125,22 @@ export const auth = betterAuth({
       },
     }),
     apiKey({
+      // CRITICAL: Sessions from API keys feature
+      // By default, API keys can create sessions. Use disableSessionForAPIKeys: true to disable.
+      // This allows getSession() to recognize and validate API keys automatically
+      // @see https://www.better-auth.com/docs/plugins/api-key#sessions-from-api-keys
+      // NOTE: In Better Auth v1.3.11, this is enabled by default
+
       // Custom prefix for API keys
       defaultPrefix: 'rpnd_', // roundtable prefix
+
       // Key configuration
       defaultKeyLength: 64,
       requireName: true,
+
       // Metadata support
       enableMetadata: true,
+
       // Expiration settings
       keyExpiration: {
         defaultExpiresIn: null, // No expiration by default
@@ -139,6 +148,7 @@ export const auth = betterAuth({
         minExpiresIn: 1, // Minimum 1 day
         maxExpiresIn: 365, // Maximum 1 year
       },
+
       // Rate limiting configuration
       rateLimit: {
         enabled: true,
