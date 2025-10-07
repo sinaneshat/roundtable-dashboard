@@ -20,6 +20,7 @@ import { Button } from '@/components/ui/button';
 import { useToggleFavoriteMutation, useTogglePublicMutation, useUpdateThreadMutation } from '@/hooks/mutations/chat-mutations';
 import { useThreadBySlugQuery } from '@/hooks/queries/chat-threads';
 import { useAutoScroll } from '@/hooks/utils/use-auto-scroll';
+import { streamParticipant } from '@/lib/ai/stream-participant';
 import type { ChatModeId } from '@/lib/config/chat-modes';
 import { getDefaultChatMode } from '@/lib/config/chat-modes';
 import { toastManager } from '@/lib/toast/toast-manager';
@@ -267,6 +268,11 @@ function ChatThreadContent({
   // Track if we're currently streaming a manual participant (participants 1+)
   const [isStreamingManualParticipant, setIsStreamingManualParticipant] = useState(false);
 
+  // ✅ AI SDK v5 OFFICIAL PATTERN: Track abort controllers for manual participant streams
+  // Reference: https://sdk.vercel.ai/docs/ai-sdk-ui/stream-protocol
+  // Allows canceling streams when user clicks stop
+  const abortControllersRef = useRef<Map<number, AbortController>>(new Map());
+
   // ✅ AUTO-TRIGGER SUBSEQUENT PARTICIPANTS
   // Automatically trigger remaining participants in sequence for each user message
   useEffect(() => {
@@ -314,107 +320,29 @@ function ChatThreadContent({
     // Mark as triggered
     triggeredParticipantsRef.current.add(triggerKey);
 
-    // ✅ CRITICAL: Set streaming flag BEFORE async to prevent race condition
+    // ✅ AI SDK v5 OFFICIAL PATTERN: Use streamParticipant utility with abort signal
+    // Reference: https://sdk.vercel.ai/docs/ai-sdk-ui/stream-protocol
     setIsStreamingManualParticipant(true);
 
-    // Trigger the next participant
+    // Create abort controller for this participant
+    const abortController = new AbortController();
+    abortControllersRef.current.set(nextParticipantIndex, abortController);
+
+    // Trigger the next participant using official AI SDK pattern
     (async () => {
       try {
-        const response = await fetch(`/api/v1/chat/threads/${thread.id}/stream`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            messages: messages.map(m => ({
-              id: m.id,
-              role: m.role,
-              parts: m.parts,
-            })),
-            // ✅ CRITICAL: Only send participantIndex - don't recreate participants!
-            participantIndex: nextParticipantIndex,
-          }),
+        await streamParticipant({
+          threadId: thread.id,
+          messages,
+          participantIndex: nextParticipantIndex,
+          onUpdate: setMessages,
+          signal: abortController.signal, // ✅ Pass abort signal for cancellation support
         });
-
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`);
-        }
-
-        // Parse SSE stream
-        const reader = response.body?.getReader();
-        const decoder = new TextDecoder();
-
-        if (!reader) {
-          throw new Error('No response body');
-        }
-
-        // ✅ OFFICIAL AI SDK PATTERN: Manual SSE parsing for subsequent participants
-        // Reference: https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events/Using_server-sent_events
-        let buffer = '';
-        let messageId = '';
-        let messageMetadata: Record<string, unknown> | null = null;
-        let content = '';
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done)
-            break;
-
-          // Decode chunk and accumulate in buffer
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split('\n');
-          buffer = lines.pop() || ''; // Keep incomplete line in buffer
-
-          for (const line of lines) {
-            // Skip empty lines and comments
-            if (!line.trim() || line.startsWith(':'))
-              continue;
-
-            // Parse SSE data events
-            if (line.startsWith('data: ')) {
-              const data = line.slice(6);
-              if (data === '[DONE]')
-                continue;
-
-              try {
-                const event = JSON.parse(data);
-
-                // Handle start event - initialize new message
-                if (event.type === 'start') {
-                  messageId = event.messageId;
-                  messageMetadata = event.messageMetadata || null;
-                  content = '';
-
-                  // Add empty message to state
-                  // eslint-disable-next-line ts/no-explicit-any
-                  setMessages((prev: any) => [...prev, {
-                    id: messageId,
-                    role: 'assistant',
-                    parts: [{ type: 'text', text: '' }],
-                    metadata: messageMetadata,
-                  }]);
-                } else if (event.type === 'text-delta' && event.delta) {
-                  // Handle text delta - accumulate content
-                  content += event.delta;
-
-                  // Update message with accumulated content (trim leading whitespace)
-                  // eslint-disable-next-line ts/no-explicit-any
-                  setMessages((prev: any) =>
-                    // eslint-disable-next-line ts/no-explicit-any
-                    prev.map((m: any) =>
-                      m.id === messageId
-                        ? { ...m, parts: [{ type: 'text', text: content.trimStart() }] }
-                        : m,
-                    ),
-                  );
-                }
-              } catch (error) {
-                console.error('Failed to parse SSE event:', error);
-              }
-            }
-          }
-        }
       } catch (error) {
+        if (error instanceof Error && error.name === 'AbortError') {
+          return; // User cancelled - this is expected
+        }
+
         console.error(`Failed to trigger participant ${nextParticipantIndex}:`, error);
         toastManager.error(
           t('chat.participantFailed'),
@@ -422,10 +350,31 @@ function ChatThreadContent({
         );
       } finally {
         setIsStreamingManualParticipant(false);
+        // Cleanup: Remove abort controller after stream completes
+        abortControllersRef.current.delete(nextParticipantIndex);
       }
     })();
     // Dependencies: status, messages, currentParticipants (for length check), thread.id, setMessages, t
   }, [status, messages, currentParticipants, thread.id, setMessages, t, isStreamingManualParticipant]);
+
+  // ============================================================================
+  // Stream Control
+  // ============================================================================
+
+  // ✅ AI SDK v5 OFFICIAL PATTERN: Stop handler that aborts all participant streams
+  // Reference: https://sdk.vercel.ai/docs/ai-sdk-ui/stream-protocol
+  const handleStop = useCallback(() => {
+    // Stop useChat stream (participant 0 when using useChat)
+    stop();
+
+    // ✅ Abort all manual participant streams (participants 1+)
+    abortControllersRef.current.forEach((controller) => {
+      controller.abort();
+    });
+
+    // Cleanup: Clear all abort controllers
+    abortControllersRef.current.clear();
+  }, [stop]);
 
   // ============================================================================
   // Message Actions
@@ -734,98 +683,29 @@ function ChatThreadContent({
       // Mark as triggered for this thread
       newThreadTriggeredRef.current = thread.id;
 
-      // ✅ CRITICAL: Set streaming flag BEFORE async to prevent race condition
+      // ✅ AI SDK v5 OFFICIAL PATTERN: Use streamParticipant utility with abort signal
+      // Reference: https://sdk.vercel.ai/docs/ai-sdk-ui/stream-protocol
       setIsStreamingManualParticipant(true);
 
-      // Manually trigger participant 0 using our manual trigger logic
-      // This ensures we follow the same pattern as auto-trigger for participants 1+
+      // Create abort controller for participant 0
+      const abortController = new AbortController();
+      abortControllersRef.current.set(0, abortController);
+
+      // Trigger participant 0 for new thread using official AI SDK pattern
       (async () => {
         try {
-          const response = await fetch(`/api/v1/chat/threads/${thread.id}/stream`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              messages: messages.map(m => ({
-                id: m.id,
-                role: m.role,
-                parts: m.parts,
-              })),
-              participantIndex: 0, // Trigger participant 0
-            }),
+          await streamParticipant({
+            threadId: thread.id,
+            messages,
+            participantIndex: 0, // First participant
+            onUpdate: setMessages,
+            signal: abortController.signal, // ✅ Pass abort signal for cancellation support
           });
-
-          if (!response.ok) {
-            throw new Error(`HTTP ${response.status}`);
-          }
-
-          // Parse SSE stream (same logic as auto-trigger)
-          const reader = response.body?.getReader();
-          const decoder = new TextDecoder();
-
-          if (!reader) {
-            throw new Error('No response body');
-          }
-
-          let buffer = '';
-          let messageId = '';
-          let messageMetadata: Record<string, unknown> | null = null;
-          let content = '';
-
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done)
-              break;
-
-            buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split('\n');
-            buffer = lines.pop() || '';
-
-            for (const line of lines) {
-              if (!line.trim() || line.startsWith(':'))
-                continue;
-
-              if (line.startsWith('data: ')) {
-                const data = line.slice(6);
-                if (data === '[DONE]')
-                  continue;
-
-                try {
-                  const event = JSON.parse(data);
-
-                  if (event.type === 'start') {
-                    messageId = event.messageId;
-                    messageMetadata = event.messageMetadata || null;
-                    content = '';
-
-                    // eslint-disable-next-line ts/no-explicit-any
-                    setMessages((prev: any) => [...prev, {
-                      id: messageId,
-                      role: 'assistant',
-                      parts: [{ type: 'text', text: '' }],
-                      metadata: messageMetadata,
-                    }]);
-                  } else if (event.type === 'text-delta' && event.delta) {
-                    content += event.delta;
-
-                    // eslint-disable-next-line ts/no-explicit-any
-                    setMessages((prev: any) =>
-                      // eslint-disable-next-line ts/no-explicit-any
-                      prev.map((m: any) =>
-                        m.id === messageId
-                          ? { ...m, parts: [{ type: 'text', text: content.trimStart() }] }
-                          : m,
-                      ),
-                    );
-                  }
-                } catch (error) {
-                  console.error('Failed to parse SSE event:', error);
-                }
-              }
-            }
-          }
         } catch (error) {
+          if (error instanceof Error && error.name === 'AbortError') {
+            return; // User cancelled - this is expected
+          }
+
           console.error('Failed to trigger participant 0 for new thread:', error);
           toastManager.error(
             t('chat.participantFailed'),
@@ -833,6 +713,8 @@ function ChatThreadContent({
           );
         } finally {
           setIsStreamingManualParticipant(false);
+          // Cleanup: Remove abort controller after stream completes
+          abortControllersRef.current.delete(0);
         }
       })();
     }
@@ -904,7 +786,7 @@ function ChatThreadContent({
                 });
               }
             }}
-            onStop={stop}
+            onStop={handleStop}
           />
         </div>
       </div>

@@ -1,11 +1,14 @@
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
+import { createAuthMiddleware } from 'better-auth/api';
 import { nextCookies } from 'better-auth/next-js';
 import { apiKey, magicLink } from 'better-auth/plugins';
 
 import { db } from '@/db';
 import * as authSchema from '@/db/tables/auth';
 import { getBaseUrl } from '@/utils/helpers';
+
+import { validateEmailDomain } from '../utils';
 
 /**
  * Create Better Auth database adapter
@@ -47,6 +50,16 @@ export const auth = betterAuth({
   secret: process.env.BETTER_AUTH_SECRET,
   baseURL: process.env.BETTER_AUTH_URL || `${getBaseUrl()}/api/auth`,
   database: createAuthAdapter(),
+
+  // Email domain restriction for local and preview environments
+  // Following official better-auth pattern: https://better-auth.com/docs/concepts/hooks
+  hooks: {
+    before: createAuthMiddleware(async (ctx) => {
+      // Validate email domain using reusable utility
+      // Handles: /sign-up/email, /sign-in/email, /sign-in/magic-link
+      validateEmailDomain(ctx);
+    }),
+  },
 
   // Session configuration
   session: {
@@ -90,6 +103,16 @@ export const auth = betterAuth({
     google: {
       clientId: process.env.AUTH_GOOGLE_ID || '',
       clientSecret: process.env.AUTH_GOOGLE_SECRET || '',
+      /**
+       * IMPORTANT: For local/preview OAuth domain restriction:
+       * Configure Google Cloud Console to restrict OAuth to @roundtable.now domain
+       * 1. Go to Google Cloud Console > APIs & Services > Credentials
+       * 2. Edit OAuth 2.0 Client ID
+       * 3. Under "Authorized domains", add: roundtable.now
+       * 4. This enforces domain restriction at the OAuth provider level
+       *
+       * This is the recommended approach per better-auth OAuth best practices
+       */
     },
   },
 

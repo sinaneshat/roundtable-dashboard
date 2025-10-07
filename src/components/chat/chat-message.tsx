@@ -8,6 +8,8 @@ import { memo, useState } from 'react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { FadeIn } from '@/components/ui/motion';
+import { useTypingEffect } from '@/hooks/utils/use-typing-effect';
 import { getModelById } from '@/lib/ai/models-config';
 import { useSession } from '@/lib/auth/client';
 import { cn } from '@/lib/ui/cn';
@@ -71,6 +73,13 @@ export const ChatMessage = memo(({
   const isUser = message.role === 'user';
   const isAssistant = message.role === 'assistant';
 
+  // Typing effect for streaming messages
+  const displayedContent = useTypingEffect(
+    message.content,
+    message.isStreaming || false,
+    15, // 15ms per character - fast and subtle
+  );
+
   // Show actions only for user messages
   const showActions = isUser && (onRegenerate || onCopy || onEdit);
 
@@ -111,7 +120,8 @@ export const ChatMessage = memo(({
   };
 
   return (
-    <div
+    <FadeIn
+      duration={0.2}
       className={cn(
         'group relative flex gap-4 py-6',
         isUser && 'flex-row-reverse', // User messages align to right
@@ -249,7 +259,7 @@ export const ChatMessage = memo(({
               : 'prose prose-sm dark:prose-invert max-w-none',
           )}
           >
-            <span className="whitespace-pre-wrap">{message.content}</span>
+            <span className="whitespace-pre-wrap">{displayedContent}</span>
             {message.isStreaming && (
               <span className="ml-1 inline-block size-1 animate-pulse rounded-full bg-current" />
             )}
@@ -311,7 +321,7 @@ export const ChatMessage = memo(({
           </AnimatePresence>
         </div>
       </div>
-    </div>
+    </FadeIn>
   );
 }, (prevProps, nextProps) => {
   // Only re-render if content actually changed

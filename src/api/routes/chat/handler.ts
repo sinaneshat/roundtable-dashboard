@@ -1,5 +1,5 @@
 import type { RouteHandler } from '@hono/zod-openapi';
-import { convertToModelMessages, createUIMessageStream, createUIMessageStreamResponse, streamText } from 'ai';
+import { consumeStream, convertToModelMessages, createUIMessageStream, createUIMessageStreamResponse, streamText, validateUIMessages } from 'ai';
 import { and, eq, ne } from 'drizzle-orm';
 import { ulid } from 'ulid';
 
@@ -1103,6 +1103,22 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
     // Build UI messages for AI SDK
     const uiMessages = buildUIMessages(messages);
 
+    // Validate UI messages before streaming
+    try {
+      validateUIMessages({ messages: uiMessages });
+    } catch (error) {
+      apiLogger.error('Invalid UI messages', {
+        threadId,
+        userId: user.id,
+        messageCount: uiMessages.length,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw createError.badRequest('Invalid message format', {
+        errorType: 'validation',
+        field: 'messages',
+      });
+    }
+
     // Participants are already filtered for isEnabled=true by verifyThreadOwnership
     // and ordered by priority in the database query - no need to filter/sort again
     const participants = thread.participants;
@@ -1118,17 +1134,9 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
       })),
     });
 
-    // ✅ AI SDK v5 OFFICIAL PATTERN: Single stream for ALL participants using createUIMessageStream
-    // Reference: https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot-message-persistence
-    // Reference: https://github.com/vercel/ai/discussions/3916
-
-    // Get OpenRouter client
+    // One participant per HTTP request (N requests for N participants)
     initializeOpenRouter(c.env);
     const client = openRouterService.getClient();
-
-    // ✅ OFFICIAL AI SDK PATTERN: One participant per HTTP request
-    // Reference: https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot-message-persistence
-    // Frontend sends separate requests for each participant
 
     // Validate requested participant index
     if (requestedParticipantIndex < 0 || requestedParticipantIndex >= participants.length) {
@@ -1157,38 +1165,42 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
           model: participant.modelId,
           historyLength: currentHistory.length,
         });
-        // Build system prompt for this participant
-        // ✅ CRITICAL: Only tell participant about PREVIOUS participants who already responded
-        // Don't mention future participants - causes models to hallucinate/reference them
+        // Build system prompt (only includes previous participants)
         const systemPrompt = buildRoundtableSystemPrompt({
           mode: thread.mode as SessionTypeMode,
           participantIndex,
           participantRole: participant.role,
           customSystemPrompt: participant.settings?.systemPrompt,
           otherParticipants: participants
-            .slice(0, participantIndex) // Only previous participants
+            .slice(0, participantIndex)
             .map(p => ({
-              // ✅ CRITICAL: Use priority (original index) not map index!
-              // When we slice(), the map index resets to 0, giving wrong participant numbers
-              index: p.priority, // Use actual priority/index from database
+              index: p.priority, // Use actual priority, not map index
               role: p.role,
             })),
         });
 
-        // Generate unique message ID upfront
         const messageId = ulid();
 
-        // ✅ OFFICIAL PATTERN: Stream with onFinish for async database persistence
+        apiLogger.info('Stream starting', {
+          threadId,
+          participantId: participant.id,
+          participantIndex,
+          model: participant.modelId,
+        });
+
         const result = streamText({
           model: client.chat(participant.modelId),
           messages: convertToModelMessages(currentHistory),
           system: systemPrompt,
           temperature: participant.settings?.temperature || 0.7,
-          onFinish: async ({ text }) => {
-            // ✅ Database save happens ASYNC in background - doesn't block streaming
+
+          abortSignal: c.req.raw.signal,
+
+          onFinish: async ({ text, usage }) => {
             try {
               const now = new Date();
 
+              // Save message and update thread metadata
               await db.insert(tables.chatMessage).values({
                 id: messageId,
                 threadId,
@@ -1201,15 +1213,43 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
                   mode: thread.mode,
                   participantId: participant.id,
                   participantIndex,
+                  // Store usage if available
+                  ...(usage && { totalTokens: usage.totalTokens }),
                 },
                 createdAt: now,
               });
 
-              apiLogger.info('Participant response saved to DB', {
+              await db.update(tables.chatThread)
+                .set({
+                  lastMessageAt: now,
+                  updatedAt: now,
+                })
+                .where(eq(tables.chatThread.id, threadId));
+
+              const totalNewMessages = isNewMessage ? 2 : 1;
+              await incrementMessageUsage(user.id, totalNewMessages);
+
+              // Generate title if needed
+              if (thread.title === 'New Chat' && messages.length > 0) {
+                const firstUserMessage = messages.find(m => m.role === 'user');
+                if (firstUserMessage) {
+                  const generatedTitle = await generateTitleFromMessage(
+                    firstUserMessage.content,
+                    c.env,
+                  );
+                  await db
+                    .update(tables.chatThread)
+                    .set({ title: generatedTitle })
+                    .where(eq(tables.chatThread.id, threadId));
+                }
+              }
+
+              apiLogger.info('Participant response completed', {
                 participantId: participant.id,
                 participantIndex,
                 messageId,
                 textLength: text.length,
+                totalTokens: usage?.totalTokens || 0,
               });
             } catch (error) {
               apiLogger.error('Failed to save participant response', {
@@ -1218,60 +1258,51 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
                 participantIndex,
                 messageId,
                 error: error instanceof Error ? error.message : String(error),
+                stack: error instanceof Error ? error.stack : undefined,
               });
+              // Don't throw - allow stream to complete for user
             }
+          },
+
+          onError: (error) => {
+            apiLogger.error('Streaming error', {
+              threadId,
+              participantId: participant.id,
+              participantIndex,
+              model: participant.modelId,
+              error: error instanceof Error ? error.message : String(error),
+              stack: error instanceof Error ? error.stack : undefined,
+            });
+          },
+
+          onAbort: () => {
+            apiLogger.warn('Stream aborted by client', {
+              threadId,
+              participantId: participant.id,
+              participantIndex,
+              messageId,
+            });
           },
         });
 
-        // ✅ OFFICIAL AI SDK PATTERN: Send metadata with each message
-        // Reference: https://ai-sdk.dev/docs/ai-sdk-ui/message-metadata
-        writer.merge(result.toUIMessageStream({
+        const uiStream = result.toUIMessageStream({
           generateMessageId: () => messageId,
           messageMetadata: () => ({
             participantId: participant.id,
             model: participant.modelId,
             role: participant.role,
           }),
-        }));
+        });
 
-        // ✅ Update usage and thread metadata ASYNC in background
-        (async () => {
-          try {
-            // Only count this single participant's response (+ user message if new)
-            const totalNewMessages = isNewMessage ? 2 : 1;
-            await incrementMessageUsage(user.id, totalNewMessages);
-
-            await db
-              .update(tables.chatThread)
-              .set({
-                lastMessageAt: new Date(),
-                updatedAt: new Date(),
-              })
-              .where(eq(tables.chatThread.id, threadId));
-
-            // Generate title if needed
-            if (thread.title === 'New Chat' && messages.length > 0) {
-              const firstUserMessage = messages.find(m => m.role === 'user');
-              if (firstUserMessage) {
-                const generatedTitle = await generateTitleFromMessage(firstUserMessage.content, c.env);
-                await db
-                  .update(tables.chatThread)
-                  .set({ title: generatedTitle })
-                  .where(eq(tables.chatThread.id, threadId));
-              }
-            }
-          } catch (error) {
-            apiLogger.error('Failed to update thread metadata', {
-              threadId,
-              error: error instanceof Error ? error.message : String(error),
-            });
-          }
-        })();
+        writer.merge(uiStream);
       },
     });
 
-    // ✅ Return single stream response
-    return createUIMessageStreamResponse({ stream });
+    // consumeSseStream ensures onFinish runs even on client disconnect
+    return createUIMessageStreamResponse({
+      stream,
+      consumeSseStream: consumeStream,
+    });
   },
 );
 
