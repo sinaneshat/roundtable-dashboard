@@ -10,7 +10,7 @@ import { Card } from '@/components/ui/card';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import type { SubscriptionTier } from '@/db/tables/usage';
 import { useUsageStatsQuery } from '@/hooks/queries/usage';
-import { AI_MODELS, canAccessModel, getAccessibleModels, getTierDisplayName } from '@/lib/ai/models-config';
+import { AllowedModelId, canAccessModel, getAccessibleModels, getModelById, getTierDisplayName } from '@/lib/ai/models-config';
 import type { ChatModeId } from '@/lib/config/chat-modes';
 import { cn } from '@/lib/ui/cn';
 import { glassBadge } from '@/lib/ui/glassmorphism';
@@ -59,17 +59,17 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
 
   // Tier-based gray area questions - always returns exactly 3 suggestions
   // Designed to be morally ambiguous, thought-provoking, and accessible to each tier
+  // ✅ Uses ONLY models from AI_MODELS config - single source of truth
   const suggestions: QuickStartSuggestion[] = useMemo(() => {
-    // Free tier: 3 models (Claude Haiku, Gemini Flash, DeepSeek)
+    // Free tier: 2 models (Claude Haiku, Gemini Flash)
     const freeTierSuggestions: QuickStartSuggestion[] = [
       {
         title: 'Is privacy a right or a privilege in the digital age?',
         prompt: 'Should individuals sacrifice privacy for security, or is surveillance capitalism the new totalitarianism? Where do we draw the line?',
         mode: 'debating',
         participants: [
-          { id: 'p1', modelId: 'anthropic/claude-3-haiku', role: 'Privacy Advocate', order: 0 },
-          { id: 'p2', modelId: 'google/gemini-2.5-flash', role: 'Security Realist', order: 1 },
-          { id: 'p3', modelId: 'deepseek/deepseek-chat', role: 'Tech Ethicist', order: 2 },
+          { id: 'p1', modelId: AllowedModelId.CLAUDE_3_HAIKU, role: 'Privacy Advocate', order: 0 },
+          { id: 'p2', modelId: AllowedModelId.GEMINI_2_5_FLASH, role: 'Security Realist', order: 1 },
         ],
       },
       {
@@ -77,9 +77,8 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
         prompt: 'De-extinction: ecological restoration or playing god? Discuss bringing back woolly mammoths, passenger pigeons, and other lost species.',
         mode: 'analyzing',
         participants: [
-          { id: 'p1', modelId: 'deepseek/deepseek-chat', role: 'Conservation Biologist', order: 0 },
-          { id: 'p2', modelId: 'google/gemini-2.5-flash', role: 'Ecologist', order: 1 },
-          { id: 'p3', modelId: 'anthropic/claude-3-haiku', role: 'Bioethicist', order: 2 },
+          { id: 'p1', modelId: AllowedModelId.GEMINI_2_5_FLASH, role: 'Conservation Biologist', order: 0 },
+          { id: 'p2', modelId: AllowedModelId.CLAUDE_3_HAIKU, role: 'Bioethicist', order: 1 },
         ],
       },
       {
@@ -87,23 +86,22 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
         prompt: 'Does hard work truly determine success, or is meritocracy just a comforting lie that masks systemic advantages and inherited privilege?',
         mode: 'debating',
         participants: [
-          { id: 'p1', modelId: 'google/gemini-2.5-flash', role: 'Sociologist', order: 0 },
-          { id: 'p2', modelId: 'anthropic/claude-3-haiku', role: 'Economist', order: 1 },
-          { id: 'p3', modelId: 'deepseek/deepseek-chat', role: 'Social Justice Advocate', order: 2 },
+          { id: 'p1', modelId: AllowedModelId.GEMINI_2_5_FLASH, role: 'Sociologist', order: 0 },
+          { id: 'p2', modelId: AllowedModelId.CLAUDE_3_HAIKU, role: 'Economist', order: 1 },
         ],
       },
     ];
 
-    // Starter tier: 5 models (+ Gemini Pro, Perplexity)
+    // Starter tier: 3 models (Free models + DeepSeek R1)
     const starterTierSuggestions: QuickStartSuggestion[] = [
       {
         title: 'Should we colonize Mars if it means abandoning Earth\'s problems?',
         prompt: 'Is Mars colonization humanity\'s backup plan or escapism? Should we fix Earth first, or hedge our bets across multiple planets?',
         mode: 'debating',
         participants: [
-          { id: 'p1', modelId: 'google/gemini-2.5-pro', role: 'Space Futurist', order: 0 },
-          { id: 'p2', modelId: 'perplexity/llama-3.1-sonar-large-128k-online', role: 'Climate Scientist', order: 1 },
-          { id: 'p3', modelId: 'anthropic/claude-3-haiku', role: 'Resource Economist', order: 2 },
+          { id: 'p1', modelId: AllowedModelId.DEEPSEEK_R1_FREE, role: 'Space Futurist', order: 0 },
+          { id: 'p2', modelId: AllowedModelId.GEMINI_2_5_FLASH, role: 'Climate Scientist', order: 1 },
+          { id: 'p3', modelId: AllowedModelId.CLAUDE_3_HAIKU, role: 'Resource Economist', order: 2 },
         ],
       },
       {
@@ -111,9 +109,9 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
         prompt: 'With cultured meat becoming viable, is traditional animal agriculture morally defensible? What about cultural traditions and livelihoods?',
         mode: 'analyzing',
         participants: [
-          { id: 'p1', modelId: 'google/gemini-2.5-flash', role: 'Animal Ethicist', order: 0 },
-          { id: 'p2', modelId: 'google/gemini-2.5-pro', role: 'Agronomist', order: 1 },
-          { id: 'p3', modelId: 'deepseek/deepseek-chat', role: 'Cultural Anthropologist', order: 2 },
+          { id: 'p1', modelId: AllowedModelId.GEMINI_2_5_FLASH, role: 'Animal Ethicist', order: 0 },
+          { id: 'p2', modelId: AllowedModelId.DEEPSEEK_R1_FREE, role: 'Agronomist', order: 1 },
+          { id: 'p3', modelId: AllowedModelId.CLAUDE_3_HAIKU, role: 'Cultural Anthropologist', order: 2 },
         ],
       },
       {
@@ -121,23 +119,24 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
         prompt: 'Nuclear power could solve climate change but carries catastrophic risks. Can we trust ourselves with this technology long-term?',
         mode: 'debating',
         participants: [
-          { id: 'p1', modelId: 'perplexity/llama-3.1-sonar-large-128k-online', role: 'Energy Policy Expert', order: 0 },
-          { id: 'p2', modelId: 'google/gemini-2.5-pro', role: 'Nuclear Physicist', order: 1 },
-          { id: 'p3', modelId: 'anthropic/claude-3-haiku', role: 'Environmental Activist', order: 2 },
+          { id: 'p1', modelId: AllowedModelId.DEEPSEEK_R1_FREE, role: 'Energy Policy Expert', order: 0 },
+          { id: 'p2', modelId: AllowedModelId.GEMINI_2_5_FLASH, role: 'Nuclear Physicist', order: 1 },
+          { id: 'p3', modelId: AllowedModelId.CLAUDE_3_HAIKU, role: 'Environmental Activist', order: 2 },
         ],
       },
     ];
 
-    // Pro tier: 8 models (+ Claude 3.5 Sonnet, GPT-4o, o1-mini)
+    // Pro tier: 5 models (Claude 4.5 Sonnet, Gemini 2.5 Pro, GPT-4o)
     const proTierSuggestions: QuickStartSuggestion[] = [
       {
         title: 'Should we edit human embryos to eliminate genetic diseases?',
         prompt: 'CRISPR germline editing: eliminating suffering or creating designer babies? Where is the line between treatment and enhancement?',
         mode: 'debating',
         participants: [
-          { id: 'p1', modelId: 'anthropic/claude-3.5-sonnet', role: 'Bioethicist', order: 0 },
-          { id: 'p2', modelId: 'openai/gpt-4o', role: 'Geneticist', order: 1 },
-          { id: 'p3', modelId: 'openai/o1-mini', role: 'Disability Rights Advocate', order: 2 },
+          { id: 'p1', modelId: AllowedModelId.CLAUDE_SONNET_4_5, role: 'Bioethicist', order: 0 },
+          { id: 'p2', modelId: AllowedModelId.GPT_4O, role: 'Geneticist', order: 1 },
+          { id: 'p3', modelId: AllowedModelId.GEMINI_2_5_PRO, role: 'Disability Rights Advocate', order: 2 },
+          { id: 'p4', modelId: AllowedModelId.DEEPSEEK_R1_FREE, role: 'Medical Ethicist', order: 3 },
         ],
       },
       {
@@ -145,9 +144,10 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
         prompt: 'If we create AGI smarter than us, can we ensure it shares our values? Or is catastrophic misalignment inevitable?',
         mode: 'analyzing',
         participants: [
-          { id: 'p1', modelId: 'anthropic/claude-3.5-sonnet', role: 'AI Safety Researcher', order: 0 },
-          { id: 'p2', modelId: 'openai/o1-mini', role: 'Machine Learning Engineer', order: 1 },
-          { id: 'p3', modelId: 'openai/gpt-4o', role: 'Ethics Philosopher', order: 2 },
+          { id: 'p1', modelId: AllowedModelId.CLAUDE_SONNET_4_5, role: 'AI Safety Researcher', order: 0 },
+          { id: 'p2', modelId: AllowedModelId.GPT_4O, role: 'Machine Learning Engineer', order: 1 },
+          { id: 'p3', modelId: AllowedModelId.GEMINI_2_5_PRO, role: 'Ethics Philosopher', order: 2 },
+          { id: 'p4', modelId: AllowedModelId.DEEPSEEK_R1_FREE, role: 'Systems Architect', order: 3 },
         ],
       },
       {
@@ -155,24 +155,26 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
         prompt: 'Capitalism demands perpetual growth, but Earth has limits. Must we choose between prosperity and survival, or can we transcend this paradox?',
         mode: 'debating',
         participants: [
-          { id: 'p1', modelId: 'openai/gpt-4o', role: 'Ecological Economist', order: 0 },
-          { id: 'p2', modelId: 'anthropic/claude-3.5-sonnet', role: 'Free Market Theorist', order: 1 },
-          { id: 'p3', modelId: 'google/gemini-2.5-pro', role: 'Systems Thinker', order: 2 },
+          { id: 'p1', modelId: AllowedModelId.GPT_4O, role: 'Ecological Economist', order: 0 },
+          { id: 'p2', modelId: AllowedModelId.CLAUDE_SONNET_4_5, role: 'Free Market Theorist', order: 1 },
+          { id: 'p3', modelId: AllowedModelId.GEMINI_2_5_PRO, role: 'Systems Thinker', order: 2 },
         ],
       },
     ];
 
-    // Power tier: 11 models (+ Claude Opus, GPT-4 Turbo, Llama 405B)
+    // Power tier: 8 models (GPT-5, Claude Opus 4.1, O3)
     const powerTierSuggestions: QuickStartSuggestion[] = [
       {
         title: 'Should we terraform planets or preserve them as pristine laboratories?',
         prompt: 'Terraforming Mars could create a second home for humanity, but would we be destroying irreplaceable alien ecosystems before we even discover them?',
         mode: 'debating',
         participants: [
-          { id: 'p1', modelId: 'anthropic/claude-3-opus', role: 'Planetary Scientist', order: 0 },
-          { id: 'p2', modelId: 'openai/gpt-4-turbo', role: 'Exobiologist', order: 1 },
-          { id: 'p3', modelId: 'meta-llama/llama-3.1-405b-instruct', role: 'Space Ethicist', order: 2 },
-          { id: 'p4', modelId: 'anthropic/claude-3.5-sonnet', role: 'Space Policy Expert', order: 3 },
+          { id: 'p1', modelId: AllowedModelId.CLAUDE_OPUS_4_1, role: 'Planetary Scientist', order: 0 },
+          { id: 'p2', modelId: AllowedModelId.GPT_5, role: 'Exobiologist', order: 1 },
+          { id: 'p3', modelId: AllowedModelId.O3, role: 'Space Ethicist', order: 2 },
+          { id: 'p4', modelId: AllowedModelId.CLAUDE_SONNET_4_5, role: 'Space Policy Expert', order: 3 },
+          { id: 'p5', modelId: AllowedModelId.GPT_4O, role: 'Astrogeologist', order: 4 },
+          { id: 'p6', modelId: AllowedModelId.GEMINI_2_5_PRO, role: 'Astrobiologist', order: 5 },
         ],
       },
       {
@@ -180,10 +182,12 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
         prompt: 'Can moral truths exist in a purely materialist universe without divine authority? Or are ethics just evolutionary programming and social contracts?',
         mode: 'analyzing',
         participants: [
-          { id: 'p1', modelId: 'anthropic/claude-3-opus', role: 'Moral Philosopher', order: 0 },
-          { id: 'p2', modelId: 'openai/gpt-4-turbo', role: 'Evolutionary Psychologist', order: 1 },
-          { id: 'p3', modelId: 'meta-llama/llama-3.1-405b-instruct', role: 'Theologian', order: 2 },
-          { id: 'p4', modelId: 'anthropic/claude-3.5-sonnet', role: 'Neuroscientist', order: 3 },
+          { id: 'p1', modelId: AllowedModelId.CLAUDE_OPUS_4_1, role: 'Moral Philosopher', order: 0 },
+          { id: 'p2', modelId: AllowedModelId.GPT_5, role: 'Evolutionary Psychologist', order: 1 },
+          { id: 'p3', modelId: AllowedModelId.O3, role: 'Theologian', order: 2 },
+          { id: 'p4', modelId: AllowedModelId.CLAUDE_SONNET_4_5, role: 'Neuroscientist', order: 3 },
+          { id: 'p5', modelId: AllowedModelId.GPT_4O, role: 'Cognitive Scientist', order: 4 },
+          { id: 'p6', modelId: AllowedModelId.GEMINI_2_5_PRO, role: 'Ethics Scholar', order: 5 },
         ],
       },
       {
@@ -191,10 +195,12 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
         prompt: 'If we develop sentient AI, do we have moral obligations to them? Could creating digital consciousness be the greatest crime or the greatest gift?',
         mode: 'debating',
         participants: [
-          { id: 'p1', modelId: 'anthropic/claude-3-opus', role: 'AI Consciousness Researcher', order: 0 },
-          { id: 'p2', modelId: 'openai/gpt-4-turbo', role: 'Digital Rights Advocate', order: 1 },
-          { id: 'p3', modelId: 'anthropic/claude-3.5-sonnet', role: 'Bioethicist', order: 2 },
-          { id: 'p4', modelId: 'meta-llama/llama-3.1-405b-instruct', role: 'Philosophy of Mind Expert', order: 3 },
+          { id: 'p1', modelId: AllowedModelId.CLAUDE_OPUS_4_1, role: 'AI Consciousness Researcher', order: 0 },
+          { id: 'p2', modelId: AllowedModelId.GPT_5, role: 'Digital Rights Advocate', order: 1 },
+          { id: 'p3', modelId: AllowedModelId.CLAUDE_SONNET_4_5, role: 'Bioethicist', order: 2 },
+          { id: 'p4', modelId: AllowedModelId.O3, role: 'Philosophy of Mind Expert', order: 3 },
+          { id: 'p5', modelId: AllowedModelId.GPT_4O, role: 'Computational Consciousness Expert', order: 4 },
+          { id: 'p6', modelId: AllowedModelId.GEMINI_2_5_PRO, role: 'AI Ethics Researcher', order: 5 },
         ],
       },
     ];
@@ -254,7 +260,8 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
                         {suggestion.participants
                           .sort((a, b) => a.order - b.order)
                           .map((participant) => {
-                            const model = AI_MODELS.find(m => m.modelId === participant.modelId);
+                            // Use getModelById which handles both full modelId and short id formats
+                            const model = getModelById(participant.modelId);
                             if (!model)
                               return null;
                             const isAccessible = canAccessModel(userTier, model.modelId);
@@ -296,7 +303,8 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
                     {suggestion.participants
                       .sort((a, b) => a.order - b.order)
                       .map((participant) => {
-                        const model = AI_MODELS.find(m => m.modelId === participant.modelId);
+                        // Use getModelById which handles both full modelId and short id formats
+                        const model = getModelById(participant.modelId);
                         if (!model)
                           return null;
                         const isAccessible = canAccessModel(userTier, model.modelId);

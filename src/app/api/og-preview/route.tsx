@@ -1,23 +1,14 @@
 /**
- * Dynamic Open Graph Image for Public Chat Threads
- * Enhanced with design system colors, actual model icons, and glass-morphism
+ * OG Image Preview API Route
+ * Allows developers to preview OG images before they're generated
  *
- * Features:
- * - Uses actual Roundtable logo (base64 encoded)
- * - Shows real AI model icons for participants
- * - Glass-morphism design matching the app
- * - Chat mode with color coding
- * - ISR with 24-hour revalidation
- * - Proper error handling and fallbacks
+ * Usage:
+ * GET /api/og-preview?slug={threadSlug}
  *
- * Best Practices (Next.js Official):
- * - Uses ImageResponse from 'next/og'
- * - Base64 encoding for local images
- * - Proper size and contentType exports
- * - ISR configuration matching page
- * - Dynamic params from route
+ * This endpoint serves the OG image directly in the browser for preview
  */
 import { ImageResponse } from 'next/og';
+import type { NextRequest } from 'next/server';
 
 import { BRAND } from '@/constants/brand';
 import {
@@ -30,15 +21,6 @@ import {
 } from '@/lib/utils/og-image-helpers';
 import { getPublicThreadService } from '@/services/api';
 
-import * as config from './opengraph-image.config';
-
-export { alt, contentType, revalidate, runtime, size } from './opengraph-image.config';
-
-/**
- * Mode icons mapping (using Lucide-style descriptions)
- * Since ImageResponse doesn't support Lucide icons directly,
- * we use Unicode symbols that match the design
- */
 const MODE_ICONS: Record<string, string> = {
   analyzing: '🔍',
   brainstorming: '💡',
@@ -46,28 +28,33 @@ const MODE_ICONS: Record<string, string> = {
   solving: '🎯',
 };
 
-export default async function Image({
-  params,
-}: {
-  params: Promise<{ slug: string }>;
-}) {
-  const { slug } = await params;
-
-  // Load logo once for all renders
-  let logoBase64: string;
+export async function GET(request: NextRequest) {
   try {
-    logoBase64 = await getLogoBase64();
-  } catch (error) {
-    console.error('Failed to load logo:', error);
-    logoBase64 = '';
-  }
+    const searchParams = request.nextUrl.searchParams;
+    const slug = searchParams.get('slug');
 
-  try {
-    // Fetch thread data for OG image generation
+    if (!slug) {
+      return new Response('Missing slug parameter. Usage: /api/og-preview?slug=your-thread-slug', {
+        status: 400,
+        headers: {
+          'Content-Type': 'text/plain',
+        },
+      });
+    }
+
+    // Load logo
+    let logoBase64: string;
+    try {
+      logoBase64 = await getLogoBase64();
+    } catch (error) {
+      console.error('Failed to load logo:', error);
+      logoBase64 = '';
+    }
+
+    // Fetch thread data
     const response = await getPublicThreadService(slug);
 
     if (!response.success || !response.data?.thread) {
-      // Fallback image for not found threads
       return new ImageResponse(
         (
           <div
@@ -97,7 +84,6 @@ export default async function Image({
                 fontWeight: 800,
                 color: OG_COLORS.textPrimary,
                 textAlign: 'center',
-                maxWidth: '80%',
               }}
             >
               Thread Not Found
@@ -115,7 +101,8 @@ export default async function Image({
           </div>
         ),
         {
-          ...config.size,
+          width: 1200,
+          height: 630,
         },
       );
     }
@@ -128,7 +115,7 @@ export default async function Image({
       ? truncateText(firstUserMessage.content, 120)
       : 'View this AI conversation';
 
-    // Load model icons for participants (up to 4 to avoid clutter)
+    // Load model icons
     const participantIcons = await Promise.all(
       participants.slice(0, 4).map(async (p) => {
         try {
@@ -208,7 +195,7 @@ export default async function Image({
               </div>
             </div>
 
-            {/* Public Badge - Glass morphism */}
+            {/* Public Badge */}
             <div
               style={{
                 display: 'flex',
@@ -220,7 +207,6 @@ export default async function Image({
                 color: OG_COLORS.success,
                 fontWeight: 600,
                 border: `1px solid ${OG_COLORS.glassBorder}`,
-                backdropFilter: 'blur(8px)',
               }}
             >
               PUBLIC
@@ -237,7 +223,6 @@ export default async function Image({
               marginBottom: 20,
               maxHeight: 130,
               overflow: 'hidden',
-              display: '-webkit-box',
               zIndex: 1,
             }}
           >
@@ -261,7 +246,7 @@ export default async function Image({
             </div>
           )}
 
-          {/* Model Participants Icons Row */}
+          {/* Model Participants Icons */}
           {participantIcons.length > 0 && (
             <div
               style={{
@@ -330,7 +315,7 @@ export default async function Image({
             </div>
           )}
 
-          {/* Stats Bar - Glass morphism */}
+          {/* Stats Bar */}
           <div
             style={{
               display: 'flex',
@@ -339,7 +324,7 @@ export default async function Image({
               zIndex: 1,
             }}
           >
-            {/* Mode Badge with Color */}
+            {/* Mode Badge */}
             <div
               style={{
                 display: 'flex',
@@ -400,7 +385,7 @@ export default async function Image({
             </div>
           </div>
 
-          {/* Bottom decorative gradient orb */}
+          {/* Bottom gradient orb */}
           <div
             style={{
               position: 'absolute',
@@ -413,63 +398,44 @@ export default async function Image({
               filter: 'blur(80px)',
             }}
           />
+
+          {/* Preview watermark */}
+          <div
+            style={{
+              position: 'absolute',
+              top: 20,
+              left: 20,
+              padding: '8px 16px',
+              backgroundColor: OG_COLORS.warning,
+              color: '#000',
+              fontSize: 14,
+              fontWeight: 700,
+              borderRadius: 6,
+              opacity: 0.9,
+            }}
+          >
+            PREVIEW
+          </div>
         </div>
       ),
       {
-        ...config.size,
+        width: 1200,
+        height: 630,
       },
     );
   } catch (error) {
-    console.error('Error generating OG image for public thread:', error);
+    console.error('Error in OG preview:', error);
 
-    // Fallback error image
-    return new ImageResponse(
-      (
-        <div
-          style={{
-            height: '100%',
-            width: '100%',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            backgroundColor: OG_COLORS.background,
-            backgroundImage: createGradient(),
-          }}
-        >
-          {logoBase64 && (
-            <img
-              src={logoBase64}
-              alt={BRAND.name}
-              width={80}
-              height={80}
-              style={{ marginBottom: 30 }}
-            />
-          )}
-          <div
-            style={{
-              fontSize: 64,
-              fontWeight: 800,
-              color: OG_COLORS.textPrimary,
-              textAlign: 'center',
-            }}
-          >
-            Public AI Chat
-          </div>
-          <div
-            style={{
-              fontSize: 28,
-              color: OG_COLORS.textSecondary,
-              textAlign: 'center',
-              marginTop: 20,
-            }}
-          >
-            {BRAND.fullName}
-          </div>
-        </div>
-      ),
+    return new Response(
+      JSON.stringify({
+        error: 'Failed to generate OG image preview',
+        message: error instanceof Error ? error.message : 'Unknown error',
+      }),
       {
-        ...config.size,
+        status: 500,
+        headers: {
+          'Content-Type': 'application/json',
+        },
       },
     );
   }

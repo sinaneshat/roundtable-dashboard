@@ -169,6 +169,13 @@ export function ChatMemoriesList({
     }
   };
 
+  // Wrapper to prevent form submit from bubbling to parent chat input form
+  const handleFormSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    e.stopPropagation(); // Prevent event from bubbling to parent form
+    form.handleSubmit(handleCreateMemoryFromForm)(e);
+  };
+
   const handleDeleteMemory = async (memoryId: string, e: React.MouseEvent) => {
     e.stopPropagation(); // Prevent toggling selection when clicking delete
 
@@ -359,7 +366,7 @@ export function ChatMemoriesList({
           </DialogHeader>
 
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(handleCreateMemoryFromForm)} className="space-y-4">
+            <form onSubmit={handleFormSubmit} className="space-y-4">
               <RHFTextField
                 name="title"
                 title="Title"

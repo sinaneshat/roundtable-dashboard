@@ -21,6 +21,12 @@ import {
   classifyOpenRouterError,
   formatErrorForDatabase,
 } from '@/api/services/openrouter-error-handler';
+import {
+  createSession,
+  getCurrentSession,
+  getNextSessionNumber,
+  markParticipantResponded,
+} from '@/api/services/session-tracking.service';
 import { generateUniqueSlug } from '@/api/services/slug-generator.service';
 import { generateTitleFromMessage } from '@/api/services/title-generator.service';
 import {
@@ -38,7 +44,6 @@ import type { ApiEnv } from '@/api/types';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db/schema';
 import type { SubscriptionTier } from '@/db/tables/usage';
-import type { SessionTypeMode } from '@/lib/ai/models-config';
 import {
   buildRoundtableSystemPrompt,
   canAccessModel,
@@ -63,6 +68,7 @@ import type {
   getMemoryRoute,
   getPublicThreadRoute,
   getThreadBySlugRoute,
+  getThreadMessagesRoute,
   getThreadRoute,
   listCustomRolesRoute,
   listMemoriesRoute,
@@ -922,9 +928,80 @@ export const deleteParticipantHandler: RouteHandler<typeof deleteParticipantRout
 // ============================================================================
 // Message Handlers
 // ============================================================================
-// Note: listMessagesHandler removed - use getThreadHandler instead
-// Note: getMessageHandler removed - no use case for viewing single message
-// Note: sendMessageHandler removed - use streamChatHandler for all chat operations
+
+/**
+ * Get messages for a thread with session data
+ * Fetches all messages and enriches them with session tracking metadata
+ */
+export const getThreadMessagesHandler: RouteHandler<typeof getThreadMessagesRoute, ApiEnv> = createHandler(
+  {
+    auth: 'session',
+    validateParams: ThreadIdParamSchema,
+    operationName: 'getThreadMessages',
+  },
+  async (c) => {
+    const { user } = c.auth();
+    const { id: threadId } = c.validated.params;
+    const db = await getDbAsync();
+
+    // Verify thread ownership
+    await verifyThreadOwnership(threadId, user.id, db);
+
+    // Fetch messages with session data using Drizzle relational queries
+    const messages = await db.query.chatMessage.findMany({
+      where: eq(tables.chatMessage.threadId, threadId),
+      orderBy: [tables.chatMessage.createdAt],
+      with: {
+        session: {
+          with: {
+            sessionParticipants: {
+              columns: {
+                modelId: true,
+                role: true,
+                priority: true,
+              },
+              orderBy: [tables.chatSessionParticipant.priority],
+            },
+            sessionMemories: {
+              columns: {
+                memoryTitle: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    // Map messages to response format with session data
+    const messagesWithSession = messages.map(msg => ({
+      id: msg.id,
+      threadId: msg.threadId,
+      participantId: msg.participantId,
+      role: msg.role,
+      content: msg.content,
+      reasoning: msg.reasoning,
+      toolCalls: msg.toolCalls,
+      metadata: msg.metadata,
+      parentMessageId: msg.parentMessageId,
+      createdAt: msg.createdAt,
+      // Session data
+      sessionId: msg.sessionId,
+      sessionNumber: msg.session?.sessionNumber ?? null,
+      sessionMode: msg.session?.mode ?? null,
+      sessionParticipants: msg.session?.sessionParticipants.map(sp => ({
+        modelId: sp.modelId,
+        role: sp.role,
+        priority: sp.priority,
+      })) ?? null,
+      sessionMemories: msg.session?.sessionMemories.map(sm => sm.memoryTitle) ?? null,
+    }));
+
+    return Responses.ok(c, {
+      messages: messagesWithSession,
+      count: messagesWithSession.length,
+    });
+  },
+);
 
 /**
  * Stream chat handler using AI SDK v5 Standard Pattern
@@ -955,6 +1032,9 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
       memoryIds: newMemoryIds,
     } = c.validated.body;
     const db = await getDbAsync();
+
+    // Track current session ID for linking messages
+    let currentSessionId: string | null = null;
 
     // Verify thread ownership and get participants
     let thread = await verifyThreadOwnership(threadId, user.id, db, { includeParticipants: true });
@@ -1084,10 +1164,46 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
       // Enforce quota
       await enforceMessageQuota(user.id);
 
-      // Save to database
+      // ✅ SESSION TRACKING: Create session for this roundtable
+      const sessionNumber = await getNextSessionNumber(threadId);
+
+      // Get memories attached to this thread
+      const threadMemories = await db.query.chatThreadMemory.findMany({
+        where: eq(tables.chatThreadMemory.threadId, threadId),
+        with: {
+          memory: {
+            columns: { id: true, title: true },
+          },
+        },
+      });
+
+      // Create session with all junction table entries
+      const sessionId = await createSession({
+        threadId,
+        sessionNumber,
+        mode: thread.mode,
+        userMessageId: lastClientMessage.id,
+        userPrompt: content,
+        participants: thread.participants.map(p => ({
+          id: p.id,
+          modelId: p.modelId,
+          role: p.role,
+          priority: p.priority,
+        })),
+        memories: threadMemories.map(tm => ({
+          id: tm.memory.id,
+          title: tm.memory.title,
+        })),
+      });
+
+      // Store session ID for use in onFinish
+      currentSessionId = sessionId;
+
+      // Save user message linked to session
       await db.insert(tables.chatMessage).values({
         id: lastClientMessage.id,
         threadId,
+        sessionId, // ✅ Link to session
         role: 'user',
         content,
         createdAt: new Date(),
@@ -1113,6 +1229,10 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
           .map(part => part.text)
           .join(''),
       }));
+
+      // ✅ Get current session for regenerate
+      const currentSession = await getCurrentSession(threadId);
+      currentSessionId = currentSession?.id || null;
     }
 
     // Build UI messages for AI SDK
@@ -1166,7 +1286,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
 
     // Build system prompt (only includes previous participants)
     const systemPrompt = buildRoundtableSystemPrompt({
-      mode: thread.mode as SessionTypeMode,
+      mode: thread.mode as ChatModeId,
       participantIndex,
       participantRole: participant.role,
       customSystemPrompt: participant.settings?.systemPrompt,
@@ -1200,13 +1320,35 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
     // 2. Tier-level limit (from subscription config)
     const maxOutputTokensLimit = modelSpecificLimit || tierMaxOutputTokens;
 
+    // ✅ TIMEOUT PROTECTION: Create abort controller with 60s timeout
+    // Prevents streams from hanging indefinitely if AI provider doesn't respond
+    const STREAM_TIMEOUT_MS = 60000; // 60 seconds
+    const timeoutController = new AbortController();
+    const timeoutId = setTimeout(() => {
+      apiLogger.error('Stream timeout - aborting after 60s', {
+        threadId,
+        participantId: participant.id,
+        participantIndex,
+        model: participant.modelId,
+        timeoutMs: STREAM_TIMEOUT_MS,
+      });
+      timeoutController.abort();
+    }, STREAM_TIMEOUT_MS);
+
+    // ✅ Combine request abort signal with timeout
+    // AbortSignal.any() triggers when either signal aborts (client disconnect OR timeout)
+    const combinedSignal = AbortSignal.any([
+      c.req.raw.signal, // Client disconnect
+      timeoutController.signal, // Timeout
+    ]);
+
     // ✅ AI SDK v5: streamText with official configuration
     const result = streamText({
       model: client.chat(participant.modelId),
       messages: convertToModelMessages(currentHistory),
       system: systemPrompt,
       temperature: participant.settings?.temperature || 0.7,
-      abortSignal: c.req.raw.signal,
+      abortSignal: combinedSignal, // ✅ Use combined signal for both timeout and client disconnect
 
       // ✅ Cost Control: Enforce output token limit based on subscription tier
       maxOutputTokens: maxOutputTokensLimit,
@@ -1242,8 +1384,35 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
       // ✅ Return consistent NEW ID for this participant's message
       generateMessageId: () => messageId,
 
+      // ✅ CRITICAL: Send updated participant data when config changes
+      // When participants are updated (reordered/added/removed), frontend needs new IDs
+      // This prevents "Invalid participantIndex" errors and "losing memory" issues
+      messageMetadata: ({ part }) => {
+        if (part.type === 'start') {
+          // Include updated participant data so frontend can sync state
+          // Map to match frontend ParticipantConfig type exactly
+          const updatedParticipants = participants.map(p => ({
+            id: p.id,
+            modelId: p.modelId,
+            role: p.role || '', // Frontend expects string, not null
+            customRoleId: p.customRoleId || undefined,
+            order: p.priority,
+          }));
+
+          return {
+            participants: updatedParticipants,
+            threadMode: thread.mode,
+          };
+        }
+        // Return undefined for non-start parts (required by TypeScript)
+        return undefined;
+      },
+
       // ✅ AI SDK: Simplified onFinish with formatted UIMessage[] ready to save
       onFinish: async ({ messages, responseMessage, isAborted }) => {
+        // ✅ CLEANUP: Clear timeout immediately when stream finishes
+        clearTimeout(timeoutId);
+
         // 🛡️ Prevent duplicate execution (consumeSseStream can cause multiple calls)
         if (onFinishExecuted) {
           apiLogger.warn('onFinish called multiple times - skipping duplicate', {
@@ -1278,6 +1447,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
           await db.insert(tables.chatMessage).values({
             id: responseMessage.id,
             threadId,
+            sessionId: currentSessionId, // ✅ Link to session
             participantId: participant.id,
             role: 'assistant',
             content: '',
@@ -1291,6 +1461,11 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
             },
             createdAt: now,
           }).onConflictDoNothing();
+
+          // ✅ Mark participant as responded in session
+          if (currentSessionId) {
+            await markParticipantResponded(currentSessionId, participant.id);
+          }
 
           await db.update(tables.chatThread)
             .set({
@@ -1313,6 +1488,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
         await db.insert(tables.chatMessage).values({
           id: responseMessage.id,
           threadId,
+          sessionId: currentSessionId, // ✅ Link to session
           participantId: participant.id,
           role: 'assistant',
           content,
@@ -1329,6 +1505,11 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
           },
           createdAt: now,
         }).onConflictDoNothing();
+
+        // ✅ Mark participant as responded in session
+        if (currentSessionId) {
+          await markParticipantResponded(currentSessionId, participant.id);
+        }
 
         await db.update(tables.chatThread)
           .set({
@@ -1362,19 +1543,29 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
       // ✅ AI SDK: Simplified error handling
       // Store error for metadata in onFinish so UI can display error state
       onError: (error) => {
+        // ✅ CLEANUP: Clear timeout on error
+        clearTimeout(timeoutId);
+
         // Track error for metadata
         streamError = error instanceof Error ? error : new Error(String(error));
 
         const classified = classifyOpenRouterError(error);
 
-        apiLogger.error('Stream error', {
+        // ✅ Enhanced error context with timeout and abort detection
+        const errorContext = {
           threadId,
           participantId: participant.id,
           participantIndex,
           model: participant.modelId,
           errorType: classified.type,
           userMessage: classified.message,
-        });
+          // Detect the specific abort reason
+          isTimeout: timeoutController.signal.aborted && !c.req.raw.signal.aborted,
+          isClientAbort: c.req.raw.signal.aborted,
+          timestamp: new Date().toISOString(),
+        };
+
+        apiLogger.error('Stream error with context', errorContext);
 
         // Return user-friendly error message
         // This becomes the content text streamed to the client

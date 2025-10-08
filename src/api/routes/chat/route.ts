@@ -14,6 +14,7 @@ import {
   MemoryDetailResponseSchema,
   MemoryIdParamSchema,
   MemoryListResponseSchema,
+  MessagesListResponseSchema,
   ParticipantDetailResponseSchema,
   ParticipantIdParamSchema,
   StreamChatRequestSchema,
@@ -296,9 +297,32 @@ export const deleteParticipantRoute = createRoute({
 // ============================================================================
 // Message Routes
 // ============================================================================
-// Note: GET /chat/threads/:id/messages removed - use GET /chat/threads/:id instead
-// Note: GET /chat/messages/:id removed - no use case for viewing single message
-// Note: POST /chat/threads/:id/messages (sendMessageRoute) removed - use streamChatRoute for all chat operations
+
+/**
+ * Get messages for a thread with session data
+ * Returns messages with session tracking metadata for UI display
+ */
+export const getThreadMessagesRoute = createRoute({
+  method: 'get',
+  path: '/chat/threads/:id/messages',
+  tags: ['chat'],
+  summary: 'Get thread messages with session data',
+  description: 'Retrieve all messages for a thread with session tracking metadata for roundtable display',
+  request: {
+    params: ThreadIdParamSchema,
+  },
+  responses: {
+    [HttpStatusCodes.OK]: {
+      description: 'Messages retrieved successfully with session data',
+      content: {
+        'application/json': { schema: MessagesListResponseSchema },
+      },
+    },
+    [HttpStatusCodes.UNAUTHORIZED]: { description: 'Authentication required' },
+    [HttpStatusCodes.NOT_FOUND]: { description: 'Thread not found' },
+    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: { description: 'Internal Server Error' },
+  },
+});
 
 /**
  * Streaming chat endpoint using Server-Sent Events (SSE)

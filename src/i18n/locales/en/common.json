@@ -220,8 +220,37 @@
       "confirmingPayment": "Please wait while we confirm your payment",
       "description": "Your subscription has been activated",
       "redirecting": "Redirecting in {count} seconds",
+      "startChat": "Start Your First Chat",
       "title": "Payment Successful!",
       "viewPlan": "View My Plan"
+    },
+    "failure": {
+      "title": "Payment Failed",
+      "description": "We couldn't process your payment. Don't worry, you haven't been charged.",
+      "paymentFailed": "Payment Processing Failed",
+      "paymentFailedDescription": "Your payment could not be processed. This usually happens due to insufficient funds, card decline, or incorrect payment details.",
+      "syncFailed": "Subscription Sync Failed",
+      "syncFailedDescription": "Your payment was successful, but we encountered an issue activating your subscription. Our team has been notified and will resolve this shortly.",
+      "authFailed": "Session Expired",
+      "authFailedDescription": "Your session expired during payment processing. Please sign in and try again.",
+      "unknownError": "Unexpected Error",
+      "unknownErrorDescription": "An unexpected error occurred while processing your payment. Please try again or contact support if the issue persists.",
+      "technicalDetails": "Technical details",
+      "errorCode": "Error code",
+      "commonReasons": {
+        "title": "Common Reasons for Payment Failure:",
+        "insufficientFunds": "Insufficient funds in your account",
+        "cardDeclined": "Card declined by your bank",
+        "incorrectDetails": "Incorrect card details or billing information",
+        "bankRejection": "Transaction rejected by your bank for security reasons"
+      },
+      "support": {
+        "title": "Need Help?",
+        "description": "If you believe this is an error or if you were charged but still see this message, please contact our support team immediately. We're here to help resolve any billing issues.",
+        "includeInfo": "Please include any error codes shown above when contacting support."
+      },
+      "tryAgain": "Try Again",
+      "returnHome": "Return to Chat"
     }
   },
   "brand": {
@@ -347,6 +376,8 @@
       "responding": "responding",
       "waiting": "waiting"
     },
+    "streamingTimeout": "Streaming Timeout",
+    "streamingTimeoutDescription": "The response took too long. Please try sending your message again.",
     "threadCreated": "Chat thread created successfully",
     "threadCreationFailed": "Failed to create chat thread. Please try again.",
     "threadDeleteFailed": "Failed to delete thread",

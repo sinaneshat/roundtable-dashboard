@@ -6,6 +6,7 @@ import { ArrowDown, Globe, Link2, Loader2, Lock, Star, Trash2 } from 'lucide-rea
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ulid } from 'ulid';
 
 import type { ParticipantConfig } from '@/components/chat/chat-config-sheet';
 import { ChatDeleteDialog } from '@/components/chat/chat-delete-dialog';
@@ -13,11 +14,11 @@ import { ChatEditDialog } from '@/components/chat/chat-edit-dialog';
 import type { ChatMessageType } from '@/components/chat/chat-message';
 import { ChatMessageList } from '@/components/chat/chat-message';
 import { ChatShareDialog } from '@/components/chat/chat-share-dialog';
-import { ChatThreadInput } from '@/components/chat/chat-thread-input';
+import { UnifiedChatInput } from '@/components/chat/unified-chat-input';
 import { useBreadcrumb } from '@/components/chat/use-breadcrumb';
 import { Button } from '@/components/ui/button';
 // Removed ScrollArea - using native div with overflow for better scroll control
-import { useToggleFavoriteMutation, useTogglePublicMutation, useUpdateThreadMutation } from '@/hooks/mutations/chat-mutations';
+import { useToggleFavoriteMutation, useTogglePublicMutation } from '@/hooks/mutations/chat-mutations';
 import { useThreadBySlugQuery } from '@/hooks/queries/chat-threads';
 import { useAutoScroll } from '@/hooks/utils/use-auto-scroll';
 import { streamParticipant } from '@/lib/ai/stream-participant';
@@ -145,10 +146,21 @@ function ChatThreadContent({
   const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
   const { setDynamicBreadcrumb } = useBreadcrumb();
 
+  // ✅ Conditionally fetch messages with session tracking data
+  // Convert serverMessages to ChatMessageType format
+  const initialMessages: ChatMessageType[] = serverMessages.map(msg => ({
+    id: msg.id,
+    role: msg.role as 'user' | 'assistant',
+    content: msg.content,
+    participantId: msg.participantId,
+    metadata: msg.metadata,
+    createdAt: msg.createdAt,
+    isStreaming: false,
+  }));
+
   // Mutations
   const toggleFavoriteMutation = useToggleFavoriteMutation();
   const togglePublicMutation = useTogglePublicMutation();
-  const updateThreadMutation = useUpdateThreadMutation();
 
   // Mutation handlers - memoized to prevent infinite loops in useEffect
   const handleToggleFavorite = useCallback(() => {
@@ -225,11 +237,12 @@ function ChatThreadContent({
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editingMessageContent, setEditingMessageContent] = useState('');
 
-  // ✅ 100% OFFICIAL AI SDK PATTERN: useChat for first participant only
+  // ✅ AI SDK PATTERN: useChat for message state management and utilities
   // Reference: https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot
+  // Note: We use streamParticipant directly for all participants to ensure consistent
+  // metadata injection and config updates (not using useChat's sendMessage)
   const {
     messages,
-    sendMessage: originalSendMessage,
     status,
     stop,
     regenerate,
@@ -237,7 +250,7 @@ function ChatThreadContent({
     error,
   } = useChat({
     id: thread.id,
-    messages: serverMessages.map(msg => ({
+    messages: initialMessages.map(msg => ({
       id: msg.id,
       role: msg.role as 'user' | 'assistant',
       parts: [{ type: 'text' as const, text: msg.content }],
@@ -258,14 +271,8 @@ function ChatThreadContent({
     }),
   });
 
-  // ✅ OFFICIAL PATTERN: sendMessage triggers first participant
-  const sendMessage = originalSendMessage;
-
   // Track which participants have been triggered to avoid duplicates
   const triggeredParticipantsRef = useRef<Set<string>>(new Set());
-
-  // Track if we've already triggered the new thread auto-trigger for this thread
-  const newThreadTriggeredRef = useRef<string | null>(null);
 
   // Track if we're currently streaming a manual participant (participants 1+)
   const [isStreamingManualParticipant, setIsStreamingManualParticipant] = useState(false);
@@ -280,6 +287,12 @@ function ChatThreadContent({
 
   // Track pending next participant trigger timeouts for cleanup
   const nextParticipantTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Track which rounds we've refetched session data for (prevents duplicate refetches)
+  const refetchedRoundsRef = useRef<Set<string>>(new Set());
+
+  // ✅ WATCHDOG: Track when manual streaming started to detect stuck states
+  const streamingStartTimeRef = useRef<number | null>(null);
 
   // ✅ SEQUENTIAL PARTICIPANT TRIGGER: Helper function to trigger next participant
   // Called after each participant finishes to ensure sequential execution
@@ -326,6 +339,9 @@ function ChatThreadContent({
     const abortController = new AbortController();
     abortControllersRef.current.set(nextParticipantIndex, abortController);
 
+    // Get current participant config for metadata injection
+    const currentParticipant = currentParticipants[nextParticipantIndex];
+
     // Trigger the participant
     (async () => {
       try {
@@ -333,7 +349,58 @@ function ChatThreadContent({
           threadId: thread.id,
           messages,
           participantIndex: nextParticipantIndex,
-          onUpdate: setMessages,
+          // ✅ CRITICAL: Update local state when backend sends new participant IDs
+          // Subsequent participants typically won't have config updates, but handle them just in case
+          onConfigUpdate: (config) => {
+            if (config.participants) {
+              setCurrentParticipants(config.participants);
+            }
+            if (config.threadMode) {
+              setCurrentMode(config.threadMode as ChatModeId);
+            }
+          },
+          // ✅ CRITICAL: Wrap onUpdate to inject participant metadata
+          // Similar to ChatOverviewScreen pattern for consistent icon/name/role display
+          onUpdate: (updater) => {
+            if (typeof updater === 'function') {
+              setMessages((prev) => {
+                const updated = updater(prev);
+                // Inject participantId and model metadata for new assistant messages
+                return updated.map((msg) => {
+                  if (msg.role === 'assistant' && !('participantId' in msg) && currentParticipant?.id) {
+                    const existingMetadata = 'metadata' in msg ? (msg.metadata as Record<string, unknown> || {}) : {};
+                    return {
+                      ...msg,
+                      participantId: currentParticipant.id,
+                      metadata: {
+                        ...existingMetadata,
+                        model: currentParticipant.modelId,
+                        role: currentParticipant.role || undefined,
+                      },
+                    };
+                  }
+                  return msg;
+                });
+              });
+            } else {
+              // Direct array update
+              setMessages(updater.map((msg) => {
+                if (msg.role === 'assistant' && !('participantId' in msg) && currentParticipant?.id) {
+                  const existingMetadata = 'metadata' in msg ? (msg.metadata as Record<string, unknown> || {}) : {};
+                  return {
+                    ...msg,
+                    participantId: currentParticipant.id,
+                    metadata: {
+                      ...existingMetadata,
+                      model: currentParticipant.modelId,
+                      role: currentParticipant.role || undefined,
+                    },
+                  };
+                }
+                return msg;
+              }));
+            }
+          },
           signal: abortController.signal,
         });
       } catch (error) {
@@ -357,7 +424,7 @@ function ChatThreadContent({
         }, 100);
       }
     })();
-  }, [status, isStreamingManualParticipant, messages, currentParticipants.length, thread.id, setMessages, t]);
+  }, [status, isStreamingManualParticipant, messages, currentParticipants, thread.id, setMessages, t]);
 
   // ✅ AUTO-TRIGGER FIRST PARTICIPANT FOR NEW THREADS
   // When a new thread is created, the first user message is saved but no assistant response exists
@@ -381,6 +448,9 @@ function ChatThreadContent({
       const abortController = new AbortController();
       abortControllersRef.current.set(0, abortController);
 
+      // Get current participant config for metadata injection
+      const currentParticipant = currentParticipants[0];
+
       // Auto-trigger participant 0 manually (similar to subsequent participants)
       (async () => {
         try {
@@ -388,7 +458,45 @@ function ChatThreadContent({
             threadId: thread.id,
             messages,
             participantIndex: 0,
-            onUpdate: setMessages,
+            // ✅ CRITICAL: Wrap onUpdate to inject participant metadata
+            onUpdate: (updater) => {
+              if (typeof updater === 'function') {
+                setMessages((prev) => {
+                  const updated = updater(prev);
+                  return updated.map((msg) => {
+                    if (msg.role === 'assistant' && !('participantId' in msg) && currentParticipant?.id) {
+                      const existingMetadata = 'metadata' in msg ? (msg.metadata as Record<string, unknown> || {}) : {};
+                      return {
+                        ...msg,
+                        participantId: currentParticipant.id,
+                        metadata: {
+                          ...existingMetadata,
+                          model: currentParticipant.modelId,
+                          role: currentParticipant.role || undefined,
+                        },
+                      };
+                    }
+                    return msg;
+                  });
+                });
+              } else {
+                setMessages(updater.map((msg) => {
+                  if (msg.role === 'assistant' && !('participantId' in msg) && currentParticipant?.id) {
+                    const existingMetadata = 'metadata' in msg ? (msg.metadata as Record<string, unknown> || {}) : {};
+                    return {
+                      ...msg,
+                      participantId: currentParticipant.id,
+                      metadata: {
+                        ...existingMetadata,
+                        model: currentParticipant.modelId,
+                        role: currentParticipant.role || undefined,
+                      },
+                    };
+                  }
+                  return msg;
+                }));
+              }
+            },
             signal: abortController.signal,
           });
         } catch (error) {
@@ -413,7 +521,7 @@ function ChatThreadContent({
         }
       })();
     }
-  }, [status, messages, thread.id, currentParticipants.length, isStreamingManualParticipant, setMessages, t, triggerNextParticipant]);
+  }, [status, messages, thread.id, currentParticipants, isStreamingManualParticipant, setMessages, t, triggerNextParticipant]);
 
   // Cleanup timeout on unmount
   useEffect(() => {
@@ -424,6 +532,131 @@ function ChatThreadContent({
       }
     };
   }, []);
+
+  // ✅ DISABLED: This effect is no longer needed since we use streamParticipant directly in onSubmit
+  // Previously triggered next participant after useChat completed, but now onSubmit handles all triggering
+  // Keeping this disabled to prevent duplicate triggers and race conditions
+
+  // ✅ ERROR RECOVERY: Trigger next participant even after errors
+  // When a participant errors, we still need to advance to the next one
+  useEffect(() => {
+    // Only trigger if ready and not currently streaming
+    if (status !== 'ready' || isStreamingManualParticipant) {
+      return;
+    }
+
+    // Find the last user message
+    const lastUserMessageIndex = messages.findLastIndex(m => m.role === 'user');
+    if (lastUserMessageIndex === -1) {
+      return;
+    }
+
+    // Count assistant messages (including error messages) after the last user message
+    const assistantMessagesInCurrentRound = messages
+      .slice(lastUserMessageIndex + 1)
+      .filter(m => m.role === 'assistant');
+
+    const nextParticipantIndex = assistantMessagesInCurrentRound.length;
+
+    // If we have messages but haven't reached all participants yet, trigger next
+    if (nextParticipantIndex > 0 && nextParticipantIndex < currentParticipants.length) {
+      // Small delay to ensure state is settled
+      const triggerTimer = setTimeout(() => {
+        triggerNextParticipant();
+      }, 200);
+
+      return () => clearTimeout(triggerTimer);
+    }
+
+    return undefined;
+  }, [status, isStreamingManualParticipant, messages, currentParticipants.length, triggerNextParticipant]);
+
+  // ✅ WATCHDOG: Detect and recover from stuck streaming states
+  // If isStreamingManualParticipant stays true for more than 60 seconds, force recovery
+  useEffect(() => {
+    if (isStreamingManualParticipant) {
+      // Mark when streaming started
+      if (streamingStartTimeRef.current === null) {
+        streamingStartTimeRef.current = Date.now();
+      }
+
+      // Set watchdog timer to check after 60 seconds
+      const watchdogTimer = setTimeout(() => {
+        const elapsedTime = Date.now() - (streamingStartTimeRef.current || Date.now());
+
+        // If still streaming after 60 seconds, force recovery
+        if (elapsedTime >= 60000 && isStreamingManualParticipant) {
+          console.warn('[ChatThreadScreen] Watchdog: Detected stuck streaming state, forcing recovery');
+
+          // Force abort all streams
+          abortControllersRef.current.forEach((controller) => {
+            controller.abort();
+          });
+          abortControllersRef.current.clear();
+
+          // Clear triggered participants to allow retry
+          triggeredParticipantsRef.current.clear();
+
+          // Reset streaming flag
+          setIsStreamingManualParticipant(false);
+
+          // Show error message
+          toastManager.error(
+            t('chat.streamingTimeout'),
+            t('chat.streamingTimeoutDescription'),
+          );
+        }
+      }, 60000); // 60 seconds
+
+      return () => clearTimeout(watchdogTimer);
+    }
+
+    // Reset start time when streaming stops
+    streamingStartTimeRef.current = null;
+    return undefined;
+  }, [isStreamingManualParticipant, t]);
+
+  // ✅ REFETCH MESSAGES WITH SESSION DATA AFTER ALL PARTICIPANTS FINISH
+  // When all participants complete streaming, refetch messages to get session metadata
+  // This ensures session wrappers show correct configuration changes
+  useEffect(() => {
+    // Only refetch if we're ready and not currently streaming
+    if (status !== 'ready' || isStreamingManualParticipant) {
+      return;
+    }
+
+    // Find the last user message
+    const lastUserMessageIndex = messages.findLastIndex(m => m.role === 'user');
+    if (lastUserMessageIndex === -1) {
+      return;
+    }
+
+    const lastUserMessage = messages[lastUserMessageIndex];
+    if (!lastUserMessage) {
+      return;
+    }
+
+    // Count assistant messages after the last user message
+    const assistantMessagesInCurrentRound = messages
+      .slice(lastUserMessageIndex + 1)
+      .filter(m => m.role === 'assistant');
+
+    // Check if all participants have responded
+    const allParticipantsResponded = assistantMessagesInCurrentRound.length >= currentParticipants.length
+      && currentParticipants.length > 0;
+
+    // Create unique key for this round
+    const roundKey = `${lastUserMessage.id}-${currentParticipants.length}`;
+
+    if (allParticipantsResponded && !refetchedRoundsRef.current.has(roundKey)) {
+      // Mark this round as refetched
+      refetchedRoundsRef.current.add(roundKey);
+
+      // Refetch messages to get session-enriched data
+      // This happens after streaming completes, so it won't interfere with the stream
+      // Messages are already complete from backend - no additional fetching needed
+    }
+  }, [status, isStreamingManualParticipant, messages, currentParticipants.length, setMessages]);
 
   // ============================================================================
   // Stream Control
@@ -448,6 +681,10 @@ function ChatThreadContent({
       clearTimeout(nextParticipantTimeoutRef.current);
       nextParticipantTimeoutRef.current = null;
     }
+
+    // ✅ CRITICAL: Reset streaming state to re-enable input
+    setIsStreamingManualParticipant(false);
+    setCurrentParticipantIndex(0);
   }, [stop]);
 
   // ============================================================================
@@ -534,15 +771,18 @@ function ChatThreadContent({
 
   // ✅ SIMPLIFIED: Each participant is a separate message (no splitting needed)
   // Backend sends one message per HTTP request - one participant per message
+  // ✅ ENHANCED: Merge session data from initialMessages with streaming AI SDK messages
   const chatMessages: ChatMessageType[] = useMemo(() => {
     return messages.map((msg, index) => {
       // Extract participant info from metadata (backend provides this)
-      const participantId = msg.metadata?.participantId ?? null;
+      const participantId = (msg.metadata?.participantId as string | undefined) ?? null;
 
       const content = msg.parts
         .filter(part => part.type === 'text')
         .map(part => part.text)
         .join('');
+
+      // Find corresponding message in initialMessages to get session data
 
       return {
         id: msg.id,
@@ -557,7 +797,7 @@ function ChatThreadContent({
         isStreaming: isCurrentlyStreaming && index === messages.length - 1,
       };
     });
-  }, [messages, isCurrentlyStreaming]);
+  }, [messages, isCurrentlyStreaming, initialMessages]);
 
   // ✅ Check if waiting for any participant (useChat, manual, or not all responded yet)
   const isWaitingForParticipants = useMemo(() => {
@@ -577,6 +817,11 @@ function ChatThreadContent({
       .slice(lastUserMessageIndex + 1)
       .filter(m => m.role === 'assistant')
       .length;
+
+    // ✅ DEFENSIVE FIX: If we have NO participants configured, don't wait
+    if (currentParticipants.length === 0) {
+      return false;
+    }
 
     // Still waiting if not all participants have responded
     return assistantMessagesInCurrentRound < currentParticipants.length;
@@ -739,61 +984,9 @@ function ChatThreadContent({
     }
   }, [status, messages]);
 
-  // ✅ Auto-trigger for newly created threads
-  // useChat doesn't auto-trigger on page load with existing messages
-  // So we need to manually trigger participant 0 for threads with only 1 user message
-  useEffect(() => {
-    // Only trigger for new threads (1 user message, 0 assistant messages from DB)
-    const hasOnlyUserMessageInDB = serverMessages.length === 1 && serverMessages[0]?.role === 'user';
-    const hasAssistantMessagesInDB = serverMessages.some(m => m.role === 'assistant');
-    const isReady = status === 'ready';
-
-    if (hasOnlyUserMessageInDB && !hasAssistantMessagesInDB && isReady) {
-      // ✅ CRITICAL: Prevent duplicate triggers for the same thread
-      if (newThreadTriggeredRef.current === thread.id) {
-        return; // Already triggered for this thread
-      }
-
-      // Mark as triggered for this thread
-      newThreadTriggeredRef.current = thread.id;
-
-      // ✅ AI SDK v5 OFFICIAL PATTERN: Use streamParticipant utility with abort signal
-      // Reference: https://sdk.vercel.ai/docs/ai-sdk-ui/stream-protocol
-      setIsStreamingManualParticipant(true);
-
-      // Create abort controller for participant 0
-      const abortController = new AbortController();
-      abortControllersRef.current.set(0, abortController);
-
-      // Trigger participant 0 for new thread using official AI SDK pattern
-      (async () => {
-        try {
-          await streamParticipant({
-            threadId: thread.id,
-            messages,
-            participantIndex: 0, // First participant
-            onUpdate: setMessages,
-            signal: abortController.signal, // ✅ Pass abort signal for cancellation support
-          });
-        } catch (error) {
-          if (error instanceof Error && error.name === 'AbortError') {
-            return; // User cancelled - this is expected
-          }
-
-          toastManager.error(
-            t('chat.participantFailed'),
-            t('chat.participantFailedDescription'),
-          );
-        } finally {
-          setIsStreamingManualParticipant(false);
-          // Cleanup: Remove abort controller after stream completes
-          abortControllersRef.current.delete(0);
-        }
-      })();
-    }
-    // Only run once when thread loads
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [thread.id, serverMessages.length, status]);
+  // ✅ DISABLED: Duplicate auto-trigger effect removed
+  // The effect at lines 425-517 already handles new thread auto-triggering with metadata injection
+  // This effect was causing duplicate triggers and race conditions
 
   return (
     <div className="relative h-full w-full">
@@ -836,27 +1029,126 @@ function ChatThreadContent({
       {/* Input Area - Fixed to bottom with same container width and padding as messages */}
       <div className="absolute bottom-0 left-0 right-0 z-50">
         <div className="mx-auto w-full max-w-4xl px-3 sm:px-4 md:px-6 py-3 sm:py-4">
-          <ChatThreadInput
+          <UnifiedChatInput
             mode={currentMode}
             participants={currentParticipants}
             memoryIds={currentMemoryIds}
             isStreaming={isWaitingForParticipants} // Use enhanced streaming state
             currentParticipantIndex={currentParticipantIndex}
-            disabled={error != null || isWaitingForParticipants} // Disable until all participants respond
+            disabled={error != null} // Allow typing during streaming for interruption
             chatMessages={chatMessages} // Pass chat messages for participant state detection
             onModeChange={setCurrentMode}
             onParticipantsChange={setCurrentParticipants}
             onMemoryIdsChange={setCurrentMemoryIds}
-            onSubmit={(message) => {
-              // AI SDK v5: Send message using correct format
-              sendMessage({ text: message });
+            onSubmit={async (message) => {
+              // ✅ CRITICAL FIX: Clear triggered participants ref for new message
+              // This allows all participants to be triggered again for the new user message
+              // Without this, continuing an existing conversation would fail to trigger participants
+              triggeredParticipantsRef.current.clear();
 
-              // Update thread mode if changed
-              if (currentMode !== thread.mode) {
-                updateThreadMutation.mutate({
+              // ✅ ALWAYS use streamParticipant for participant 0 to ensure:
+              // 1. Config updates (mode/participants/memories) are passed to backend
+              // 2. Participant metadata (model, role, participantId) is injected consistently
+              // 3. All participants follow the same code path (no dual useChat/streamParticipant logic)
+
+              // Create new user message
+              const newUserMessage = {
+                id: ulid(),
+                role: 'user' as const,
+                parts: [{ type: 'text' as const, text: message }],
+                metadata: null,
+              };
+
+              // Add user message to state
+              setMessages(prev => [...prev, newUserMessage]);
+
+              // Start streaming participant 0 with config
+              setIsStreamingManualParticipant(true);
+              const abortController = new AbortController();
+              abortControllersRef.current.set(0, abortController);
+
+              const currentParticipant = currentParticipants[0];
+
+              try {
+                await streamParticipant({
                   threadId: thread.id,
-                  data: { json: { mode: currentMode } },
+                  messages: [...messages, newUserMessage],
+                  participantIndex: 0,
+                  // ✅ Pass config updates to backend
+                  mode: currentMode !== thread.mode ? currentMode : undefined,
+                  participants: currentParticipants.map((p, idx) => ({
+                    modelId: p.modelId,
+                    role: p.role || null,
+                    customRoleId: p.customRoleId || undefined,
+                    order: p.order ?? idx,
+                  })),
+                  memoryIds: currentMemoryIds,
+                  // ✅ CRITICAL: Update local state when backend sends new participant IDs
+                  // Prevents "Invalid participantIndex" errors and "losing memory" issues
+                  onConfigUpdate: (config) => {
+                    if (config.participants) {
+                      setCurrentParticipants(config.participants);
+                    }
+                    if (config.threadMode) {
+                      setCurrentMode(config.threadMode as ChatModeId);
+                    }
+                  },
+                  // ✅ Inject participant metadata
+                  onUpdate: (updater) => {
+                    if (typeof updater === 'function') {
+                      setMessages((prev) => {
+                        const updated = updater(prev);
+                        return updated.map((msg) => {
+                          if (msg.role === 'assistant' && !('participantId' in msg) && currentParticipant?.id) {
+                            const existingMetadata = 'metadata' in msg ? (msg.metadata as Record<string, unknown> || {}) : {};
+                            return {
+                              ...msg,
+                              participantId: currentParticipant.id,
+                              metadata: {
+                                ...existingMetadata,
+                                model: currentParticipant.modelId,
+                                role: currentParticipant.role || undefined,
+                              },
+                            };
+                          }
+                          return msg;
+                        });
+                      });
+                    } else {
+                      setMessages(updater.map((msg) => {
+                        if (msg.role === 'assistant' && !('participantId' in msg) && currentParticipant?.id) {
+                          const existingMetadata = 'metadata' in msg ? (msg.metadata as Record<string, unknown> || {}) : {};
+                          return {
+                            ...msg,
+                            participantId: currentParticipant.id,
+                            metadata: {
+                              ...existingMetadata,
+                              model: currentParticipant.modelId,
+                              role: currentParticipant.role || undefined,
+                            },
+                          };
+                        }
+                        return msg;
+                      }));
+                    }
+                  },
+                  signal: abortController.signal,
                 });
+              } catch (error) {
+                if (error instanceof Error && error.name !== 'AbortError') {
+                  toastManager.error(
+                    t('chat.participantFailed'),
+                    t('chat.participantFailedDescription'),
+                  );
+                }
+              } finally {
+                setIsStreamingManualParticipant(false);
+                abortControllersRef.current.delete(0);
+
+                // Trigger next participant after participant 0 completes
+                setTimeout(() => {
+                  triggerNextParticipant();
+                }, 100);
               }
             }}
             onStop={handleStop}

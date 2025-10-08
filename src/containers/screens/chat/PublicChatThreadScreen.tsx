@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { BRAND } from '@/constants';
 import { usePublicThreadQuery } from '@/hooks/queries/chat-threads';
-import { AI_MODELS } from '@/lib/ai/models-config';
+import { getModelById } from '@/lib/ai/models-config';
 import { cn } from '@/lib/ui/cn';
 import { glassBadge } from '@/lib/ui/glassmorphism';
 
@@ -132,7 +132,8 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
               {rawParticipants
                 .sort((a, b) => a.priority - b.priority)
                 .map((participant) => {
-                  const model = AI_MODELS.find(m => m.modelId === participant.modelId);
+                  // Use getModelById which handles both full modelId and short id formats
+                  const model = getModelById(participant.modelId);
                   if (!model)
                     return null;
 

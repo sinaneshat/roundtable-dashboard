@@ -3,6 +3,9 @@
  *
  * TanStack Query hooks for chat thread operations
  * Following patterns from TanStack Query v5 infinite query documentation
+ *
+ * IMPORTANT: staleTime values MUST match server-side prefetch values
+ * See: docs/react-query-ssr-patterns.md
  */
 
 'use client';
@@ -11,9 +14,11 @@ import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 
 import { useSession } from '@/lib/auth/client';
 import { queryKeys } from '@/lib/data/query-keys';
+import { STALE_TIMES } from '@/lib/data/stale-times';
 import {
   getPublicThreadService,
   getThreadBySlugService,
+  getThreadMessagesService,
   getThreadService,
   listThreadsService,
 } from '@/services/api';
@@ -49,7 +54,7 @@ export function useThreadsQuery(search?: string) {
     initialPageParam: undefined as string | undefined,
     getNextPageParam: lastPage => lastPage.success ? lastPage.data?.pagination?.nextCursor : undefined,
     enabled: isAuthenticated,
-    staleTime: 30 * 1000,
+    staleTime: STALE_TIMES.threads, // 30 seconds - match server-side prefetch
     retry: false,
   });
 }
@@ -71,7 +76,7 @@ export function useThreadQuery(threadId: string | null | undefined, enabled = tr
   return useQuery({
     queryKey: queryKeys.threads.detail(threadId || ''),
     queryFn: () => getThreadService(threadId!),
-    staleTime: 10 * 1000, // 10 seconds
+    staleTime: STALE_TIMES.threadDetail, // 10 seconds - match server-side prefetch
     enabled: isAuthenticated && !!threadId && enabled, // Only fetch when authenticated and threadId exists
     retry: false,
     throwOnError: false,
@@ -92,7 +97,7 @@ export function usePublicThreadQuery(slug: string | null | undefined, enabled = 
   return useQuery({
     queryKey: queryKeys.threads.public(slug || ''),
     queryFn: () => getPublicThreadService(slug!),
-    staleTime: 1 * 60 * 1000, // 1 minute
+    staleTime: STALE_TIMES.publicThread, // 5 minutes - MUST match server-side prefetch!
     enabled: !!slug && enabled, // Only fetch when slug exists
     retry: false,
     throwOnError: false,
@@ -123,6 +128,30 @@ export function useThreadBySlugQuery(slug: string | null | undefined, enabled = 
     gcTime: 5 * 60 * 1000, // Keep in cache for 5 minutes for back/forward navigation
     refetchOnWindowFocus: false, // Don't refetch on window focus - prevents flashing during navigation
     enabled: isAuthenticated && !!slug && enabled, // Only fetch when authenticated and slug exists
+    retry: false,
+    throwOnError: false,
+  });
+}
+
+/**
+ * Hook to fetch messages for a thread with session tracking data
+ * Returns all messages enriched with session metadata for roundtable display
+ * Protected endpoint - requires authentication and ownership
+ *
+ * @param threadId - Thread ID
+ * @param enabled - Optional control over whether to fetch (default: true when threadId exists)
+ *
+ * Stale time: 10 seconds (messages should be fresh for active conversations)
+ */
+export function useThreadMessagesQuery(threadId: string | null | undefined, enabled = true) {
+  const { data: session, isPending } = useSession();
+  const isAuthenticated = !isPending && !!session?.user?.id;
+
+  return useQuery({
+    queryKey: queryKeys.threads.messages(threadId || ''),
+    queryFn: () => getThreadMessagesService(threadId!),
+    staleTime: STALE_TIMES.messages, // 10 seconds - match server-side prefetch
+    enabled: isAuthenticated && !!threadId && enabled, // Only fetch when authenticated and threadId exists
     retry: false,
     throwOnError: false,
   });

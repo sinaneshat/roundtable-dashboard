@@ -5,7 +5,8 @@ import { BRAND } from '@/constants';
 import { ChatThreadScreen } from '@/containers/screens/chat';
 import { getQueryClient } from '@/lib/data/query-client';
 import { queryKeys } from '@/lib/data/query-keys';
-import { getThreadBySlugService } from '@/services/api';
+import { STALE_TIMES } from '@/lib/data/stale-times';
+import { getThreadBySlugService, getThreadMessagesService } from '@/services/api';
 import { createMetadata } from '@/utils/metadata';
 
 // Force dynamic rendering for user-specific thread data
@@ -32,7 +33,7 @@ export async function generateMetadata({
 
 /**
  * Chat Thread Page - Server Component with Prefetching
- * Prefetches thread data on server for instant hydration
+ * Prefetches thread data AND messages with session data on server for instant hydration
  */
 export default async function ChatThreadPage({
   params,
@@ -44,11 +45,26 @@ export default async function ChatThreadPage({
 
   // Prefetch thread data on server for instant hydration
   // This prevents loading states and provides better UX
-  await queryClient.prefetchQuery({
+  const threadResult = await queryClient.fetchQuery({
     queryKey: queryKeys.threads.bySlug(slug),
     queryFn: () => getThreadBySlugService(slug),
-    staleTime: 10 * 1000, // 10 seconds - match client-side hook
+    staleTime: STALE_TIMES.threadDetail, // 10 seconds - MUST match client-side hook
   });
+
+  // If thread has assistant messages, prefetch messages with session data
+  // This ensures session wrappers render immediately without loading states
+  if (threadResult?.success && threadResult.data?.thread) {
+    const threadId = threadResult.data.thread.id;
+    const hasAssistantMessages = threadResult.data.messages?.some(msg => msg.role === 'assistant');
+
+    if (hasAssistantMessages) {
+      await queryClient.prefetchQuery({
+        queryKey: queryKeys.threads.messages(threadId),
+        queryFn: () => getThreadMessagesService(threadId),
+        staleTime: STALE_TIMES.messages, // 10 seconds - MUST match client-side hook
+      });
+    }
+  }
 
   return (
     <HydrationBoundary state={dehydrate(queryClient)}>

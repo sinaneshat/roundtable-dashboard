@@ -1,12 +1,28 @@
+/**
+ * Unified Chat Input Component
+ *
+ * Single reusable chat input for both:
+ * - Creating new threads (ChatOverviewScreen)
+ * - Sending messages in existing threads (ChatThreadScreen)
+ *
+ * Following AI SDK v5 patterns from official documentation:
+ * - Simple state management with useState
+ * - Parent component handles business logic
+ * - Clean separation of concerns
+ * - No duplicate code
+ *
+ * Based on:
+ * - https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot
+ * - /docs/frontend-patterns.md
+ */
+
 'use client';
 
-import { zodResolver } from '@hookform/resolvers/zod';
 import { ArrowUp, Square, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useTranslations } from 'next-intl';
-import type { KeyboardEventHandler } from 'react';
-import { useEffect, useRef, useState } from 'react';
-import { useForm } from 'react-hook-form';
+import type { FormEvent, KeyboardEventHandler } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import type { ParticipantConfig } from '@/components/chat/chat-config-sheet';
 import { ChatMemoriesList } from '@/components/chat/chat-memories-list';
@@ -21,8 +37,6 @@ import {
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { getChatModeOptions } from '@/lib/config/chat-modes';
-import type { ThreadInputFormData } from '@/lib/schemas/chat-forms';
-import { ThreadInputFormSchema } from '@/lib/schemas/chat-forms';
 import { cn } from '@/lib/ui/cn';
 import { chatGlass } from '@/lib/ui/glassmorphism';
 import type { ThreadMode } from '@/services/api';
@@ -31,20 +45,34 @@ import type { ThreadMode } from '@/services/api';
 // Component Props
 // ============================================================================
 
-type ChatThreadInputProps = {
+type UnifiedChatInputProps = {
+  // Core props
   mode: ThreadMode;
   participants: ParticipantConfig[];
   memoryIds: string[];
-  isStreaming: boolean;
-  currentParticipantIndex?: number;
-  disabled?: boolean; // Disable input (e.g., when error occurs)
-  chatMessages?: Array<{ participantId?: string | null; [key: string]: unknown }>; // For participant state detection
+
+  // State flags
+  isStreaming?: boolean; // Only for existing threads
+  isCreating?: boolean; // Only for creating new threads
+  currentParticipantIndex?: number; // For multi-participant streaming display
+  disabled?: boolean;
+
+  // Callbacks
+  onSubmit: (message: string) => void | Promise<void>;
+  onStop?: () => void; // Only needed for streaming in existing threads
   onModeChange: (mode: ThreadMode) => void;
   onParticipantsChange: (participants: ParticipantConfig[]) => void;
   onMemoryIdsChange: (memoryIds: string[]) => void;
-  onSubmit: (message: string) => void;
-  onStop: () => void;
+
+  // Optional controlled message state
+  message?: string;
+  onMessageChange?: (message: string) => void;
+
+  // Optional
+  chatMessages?: Array<{ participantId?: string | null; [key: string]: unknown }>; // For participant state detection
   className?: string;
+  autoFocus?: boolean;
+  placeholder?: string;
 };
 
 // ============================================================================
@@ -52,57 +80,55 @@ type ChatThreadInputProps = {
 // ============================================================================
 
 /**
- * Chat Thread Input Component
+ * Unified Chat Input Component
  *
- * Identical UI to ChatInput but for existing threads:
- * - Same rounded input box design
- * - Dynamic mode selector (can be changed during conversation)
- * - Dynamic participant management (can add/remove/reorder at any time)
- * - Dynamic memory attachment (can attach/detach during conversation)
- * - Streaming support with stop button
- *
- * Design matches ChatGPT-style interface
- * Following patterns from /docs/frontend-patterns.md
+ * ChatGPT-style input following AI SDK v5 patterns:
+ * - Simple state management (no heavy form library for input)
+ * - Auto-expanding textarea with Enter/Shift+Enter handling
+ * - Dynamic mode selector, participant, and memory management
+ * - Streaming support with stop button (for existing threads)
+ * - Loading support (for creating new threads)
+ * - Reusable across both ChatOverviewScreen and ChatThreadScreen
  */
-export function ChatThreadInput({
+export function UnifiedChatInput({
   mode,
   participants,
   memoryIds,
-  isStreaming,
+  isStreaming = false,
+  isCreating = false,
   currentParticipantIndex,
   disabled = false,
-  chatMessages,
+  onSubmit,
+  onStop,
   onModeChange,
   onParticipantsChange,
   onMemoryIdsChange,
-  onSubmit,
-  onStop,
+  message: controlledMessage,
+  onMessageChange,
+  chatMessages,
   className,
-}: ChatThreadInputProps) {
+  autoFocus = false,
+  placeholder,
+}: UnifiedChatInputProps) {
   const t = useTranslations();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [isFocused, setIsFocused] = useState(false);
 
-  const {
-    register,
-    handleSubmit,
-    reset,
-    watch,
-    setValue,
-    formState: { errors },
-  } = useForm<ThreadInputFormData>({
-    resolver: zodResolver(ThreadInputFormSchema),
-    defaultValues: {
-      message: '',
-    },
-    mode: 'all',
-  });
+  // ✅ AI SDK v5 Pattern: Simple useState for input management
+  // Ref: https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot
+  // Support both controlled and uncontrolled modes
+  const [internalMessage, setInternalMessage] = useState('');
+  const isControlled = controlledMessage !== undefined;
+  const message = isControlled ? controlledMessage : internalMessage;
+  const setMessage = isControlled ? (onMessageChange || (() => {})) : setInternalMessage;
 
-  const messageRegistration = register('message');
-  const messageValue = watch('message') ?? '';
-  const hasMessage = Boolean(messageValue && messageValue.trim().length > 0);
+  const hasMessage = Boolean(message && message.trim().length > 0);
   const hasParticipants = participants.length > 0;
-  const isDisabled = disabled || isStreaming || !hasMessage || !hasParticipants;
+  const isBusy = isStreaming || isCreating;
+
+  // Allow typing during streaming for interruption, but disable submit
+  const isTextareaDisabled = disabled; // Only disable if explicitly disabled (errors)
+  const isSubmitDisabled = disabled || isBusy || !hasMessage || !hasParticipants;
 
   const chatModeOptions = getChatModeOptions();
 
@@ -114,44 +140,80 @@ export function ChatThreadInput({
       const newHeight = Math.min(textarea.scrollHeight, 144);
       textarea.style.height = `${newHeight}px`;
     }
-  }, [messageValue]);
+  }, [message]);
 
-  // ============================================================================
-  // Handlers
-  // ============================================================================
-
-  const handleFormSubmit = async (data: ThreadInputFormData) => {
-    // Call parent's onSubmit with the message content
-    onSubmit(data.message);
-    // Clear the form after submission
-    reset();
-  };
-
-  const handleKeyDown: KeyboardEventHandler<HTMLTextAreaElement> = (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      if (!isStreaming) {
-        handleSubmit(handleFormSubmit)();
-      }
+  // Auto-focus on mount (conditional)
+  useEffect(() => {
+    if (autoFocus && textareaRef.current) {
+      const timeoutId = setTimeout(() => {
+        textareaRef.current?.focus();
+      }, 100);
+      return () => {
+        clearTimeout(timeoutId);
+      };
     }
-  };
+    return undefined;
+  }, [autoFocus]);
 
-  const handleClear = () => {
-    setValue('message', '');
+  // ============================================================================
+  // Handlers - Following AI SDK v5 Patterns
+  // ============================================================================
+
+  const handleSubmit = useCallback(
+    async (e: FormEvent) => {
+      e.preventDefault();
+
+      if (isSubmitDisabled || !hasMessage)
+        return;
+
+      const messageToSend = message.trim();
+
+      // ✅ AI SDK v5 Pattern: Clear input immediately before sending
+      setMessage('');
+
+      // Call parent's onSubmit
+      await onSubmit(messageToSend);
+    },
+    [isSubmitDisabled, hasMessage, message, onSubmit, setMessage],
+  );
+
+  const handleKeyDown: KeyboardEventHandler<HTMLTextAreaElement> = useCallback(
+    (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        if (!isBusy && textareaRef.current) {
+          const form = textareaRef.current.form;
+          if (form) {
+            form.requestSubmit();
+          }
+        }
+      }
+    },
+    [isBusy],
+  );
+
+  const handleClear = useCallback(() => {
+    setMessage('');
     textareaRef.current?.focus();
-  };
+  }, []);
 
-  const handleStopStreaming = () => {
-    onStop();
-  };
+  const handleStopStreaming = useCallback(() => {
+    if (onStop) {
+      onStop();
+    }
+  }, [onStop]);
 
   // ============================================================================
   // Render
   // ============================================================================
 
+  const effectivePlaceholder = placeholder || (isStreaming || isCreating
+    ? t('chat.input.threadPlaceholder')
+    : t('chat.input.placeholder'));
+
   return (
     <div className={cn('w-full space-y-3', className)}>
-      {/* Participants Preview - Above Chat Box - Shows streaming status */}
+      {/* Participants Preview - Above Chat Box */}
       {participants.length > 0 && (
         <ParticipantsPreview
           participants={participants}
@@ -162,8 +224,8 @@ export function ChatThreadInput({
         />
       )}
 
-      <form onSubmit={handleSubmit(handleFormSubmit)}>
-        {/* Main Input Container - No blur on container, blur on individual elements */}
+      <form onSubmit={handleSubmit}>
+        {/* Main Input Container */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -172,18 +234,16 @@ export function ChatThreadInput({
             'relative flex flex-col gap-2 rounded-3xl p-2.5 sm:p-3',
             chatGlass.inputBox,
             isFocused && 'ring-2 ring-ring/20',
-            isStreaming && 'opacity-75',
+            isBusy && 'opacity-75',
           )}
         >
-          {/* Textarea - Full Width with Auto-resize */}
+          {/* Textarea - Auto-resize with Enter/Shift+Enter handling */}
           <Textarea
-            {...messageRegistration}
-            ref={(e) => {
-              messageRegistration.ref(e);
-              textareaRef.current = e;
-            }}
-            placeholder={t('chat.input.threadPlaceholder')}
-            disabled={disabled || isStreaming}
+            ref={textareaRef}
+            value={message}
+            onChange={e => setMessage(e.target.value)}
+            placeholder={effectivePlaceholder}
+            disabled={isTextareaDisabled}
             onFocus={() => setIsFocused(true)}
             onBlur={() => setIsFocused(false)}
             onKeyDown={handleKeyDown}
@@ -193,6 +253,7 @@ export function ChatThreadInput({
               'placeholder:text-muted-foreground/60 text-sm sm:text-base w-full',
             )}
             rows={2}
+            aria-label={effectivePlaceholder}
           />
 
           {/* Bottom Controls Row */}
@@ -201,16 +262,16 @@ export function ChatThreadInput({
             <ChatParticipantsList
               participants={participants}
               onParticipantsChange={onParticipantsChange}
-              isStreaming={isStreaming}
+              isStreaming={isBusy}
             />
 
             <ChatMemoriesList
               selectedMemoryIds={memoryIds}
               onMemoryIdsChange={onMemoryIdsChange}
-              isStreaming={isStreaming}
+              isStreaming={isBusy}
             />
 
-            {/* Mode Selector - Dynamic, can be changed during conversation */}
+            {/* Mode Selector - Always enabled to allow mode changes in existing threads */}
             <Select value={mode} onValueChange={onModeChange}>
               <SelectTrigger
                 size="sm"
@@ -248,9 +309,9 @@ export function ChatThreadInput({
 
             {/* Right: Clear Button and Send/Stop Button */}
             <div className="flex items-center gap-1.5 sm:gap-2 ml-auto">
-              {/* Clear Button (when typing and not streaming) */}
+              {/* Clear Button (when typing and not busy) */}
               <AnimatePresence>
-                {messageValue && !isStreaming && (
+                {message && !isBusy && (
                   <motion.div
                     initial={{ opacity: 0, scale: 0.8 }}
                     animate={{ opacity: 1, scale: 1 }}
@@ -270,7 +331,7 @@ export function ChatThreadInput({
                 )}
               </AnimatePresence>
 
-              {/* Send Button (when not streaming) / Stop Button (when streaming) */}
+              {/* Send Button (when not busy) / Stop Button (when streaming) */}
               {isStreaming
                 ? (
                     <Button
@@ -286,10 +347,10 @@ export function ChatThreadInput({
                     <Button
                       type="submit"
                       size="icon"
-                      disabled={isDisabled}
+                      disabled={isSubmitDisabled}
                       className={cn(
                         'rounded-full size-9 sm:size-10 transition-all active:scale-95',
-                        isDisabled
+                        isSubmitDisabled
                           ? 'bg-muted text-muted-foreground pointer-events-none'
                           : 'bg-primary text-primary-foreground hover:bg-primary/90',
                       )}
@@ -372,24 +433,14 @@ export function ChatThreadInput({
 
         {/* Error Display */}
         <AnimatePresence>
-          {errors.message && (
-            <motion.p
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              className="mt-2 text-xs text-center text-destructive"
-            >
-              {errors.message.message}
-            </motion.p>
-          )}
-          {!hasParticipants && !isStreaming && (
+          {!hasParticipants && !isBusy && (
             <motion.p
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
               className="mt-2 text-xs text-center text-muted-foreground"
             >
-              Please select at least one AI model to continue
+              {t('chat.input.noParticipants') || 'Please select at least one AI model to continue'}
             </motion.p>
           )}
         </AnimatePresence>

@@ -14,7 +14,7 @@ import { apiLogger } from '@/api/middleware/hono-logger';
 import type { ApiEnv } from '@/api/types';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db/schema';
-import { AI_MODELS } from '@/lib/ai/models-config';
+import { AI_MODELS, AllowedModelId } from '@/lib/ai/models-config';
 
 import { initializeOpenRouter, openRouterService } from './openrouter.service';
 import { updateThreadSlug } from './slug-generator.service';
@@ -28,13 +28,15 @@ const TITLE_GENERATION_PROMPT = `Generate a 5-word title from this message. Titl
 /**
  * Get the best model for title generation
  * Prioritizes fast, cost-effective models from the configuration
+ * ✅ Uses AllowedModelId enum for type safety
  */
 function getTitleGenerationModel(): string {
-  // Priority order: cheapest/fastest models first
+  // Priority order: cheapest/fastest models first (from AI_MODELS config)
   const preferredModels = [
-    'anthropic/claude-3-haiku', // $0.25/Mtok - cheapest Claude
-    'deepseek/deepseek-chat', // $0.14/Mtok - very cheap
-    'anthropic/claude-3.5-sonnet', // Fallback to primary model
+    AllowedModelId.GEMINI_2_5_FLASH, // $0.075/Mtok - ultra cheap
+    AllowedModelId.CLAUDE_3_HAIKU, // $0.25/Mtok - fast and cheap
+    AllowedModelId.DEEPSEEK_R1_FREE, // FREE - reasoning model
+    AllowedModelId.CLAUDE_SONNET_4_5, // Fallback to premium model
   ];
 
   // Find first available enabled model from preferences

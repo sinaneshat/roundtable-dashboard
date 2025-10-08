@@ -5,7 +5,11 @@ import type { Metadata, Viewport } from 'next';
 import { getMessages } from 'next-intl/server';
 import React from 'react';
 
-import { StructuredData } from '@/components/seo/structured-data';
+import {
+  AeoMetaTags,
+  SoftwareApplicationSchema,
+  StructuredData,
+} from '@/components/seo';
 import { BRAND } from '@/constants/brand';
 import { RootLayout } from '@/containers/layouts/root';
 import { createMetadata } from '@/utils/metadata';
@@ -22,6 +26,18 @@ export async function generateMetadata(): Promise<Metadata> {
   return createMetadata({
     title: BRAND.fullName,
     description: BRAND.description,
+    keywords: [
+      'AI collaboration',
+      'multiple AI models',
+      'brainstorming',
+      'ChatGPT',
+      'Claude',
+      'Gemini',
+      'roundtable discussion',
+      'AI chat',
+      'collaborative AI',
+      'team productivity',
+    ],
   });
 }
 
@@ -40,8 +56,44 @@ export default async function Layout({ children, modal }: RootLayoutProps) {
       dir="ltr"
       className="dark"
     >
+      <head>
+        {/* 2025 AI Search Optimization - Answer Engine Optimization */}
+        <AeoMetaTags
+          primaryQuestion="What is Roundtable?"
+          primaryAnswer="A collaborative AI platform where multiple AI models work together to brainstorm, solve problems, and generate ideas in real-time conversations."
+          contentType="guide"
+          entities={[
+            'AI collaboration',
+            'ChatGPT',
+            'Claude',
+            'Gemini',
+            'artificial intelligence',
+            'brainstorming',
+            'productivity',
+          ]}
+          relatedQuestions={[
+            'How does AI collaboration work?',
+            'What are the benefits of multiple AI models?',
+            'How to use Roundtable for brainstorming?',
+          ]}
+        />
+      </head>
       <body>
+        {/* Core structured data for web application */}
         <StructuredData type="WebApplication" />
+
+        {/* Enhanced SoftwareApplication schema for AI search engines */}
+        <SoftwareApplicationSchema
+          features={[
+            'Multi-model AI collaboration',
+            'Real-time chat interface',
+            'Session management',
+            'Public sharing capabilities',
+            'Usage tracking and analytics',
+            'Multiple AI participants per conversation',
+          ]}
+        />
+
         <RootLayout
           locale="en"
           translations={translations as Record<string, unknown>}

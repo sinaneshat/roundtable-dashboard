@@ -3,6 +3,9 @@
  *
  * TanStack Query hooks for chat usage tracking and quotas
  * Following patterns from subscriptions.ts
+ *
+ * IMPORTANT: staleTime values MUST match server-side prefetch values
+ * See: docs/react-query-ssr-patterns.md
  */
 
 'use client';
@@ -11,6 +14,7 @@ import { useQuery } from '@tanstack/react-query';
 
 import { useSession } from '@/lib/auth/client';
 import { queryKeys } from '@/lib/data/query-keys';
+import { STALE_TIMES } from '@/lib/data/stale-times';
 import {
   checkMessageQuotaService,
   checkThreadQuotaService,
@@ -31,7 +35,7 @@ export function useUsageStatsQuery() {
   return useQuery({
     queryKey: queryKeys.usage.stats(),
     queryFn: getUserUsageStatsService,
-    staleTime: 1 * 60 * 1000, // 1 minute
+    staleTime: STALE_TIMES.usage, // 1 minute - match server-side prefetch
     retry: false,
     enabled: isAuthenticated, // Only fetch when authenticated
     throwOnError: false,
@@ -52,7 +56,7 @@ export function useThreadQuotaQuery() {
   return useQuery({
     queryKey: queryKeys.usage.threadQuota(),
     queryFn: checkThreadQuotaService,
-    staleTime: 30 * 1000, // 30 seconds
+    staleTime: STALE_TIMES.quota, // 1 minute - consistent with usage stats
     retry: false,
     enabled: isAuthenticated,
     throwOnError: false,
@@ -73,7 +77,7 @@ export function useMessageQuotaQuery() {
   return useQuery({
     queryKey: queryKeys.usage.messageQuota(),
     queryFn: checkMessageQuotaService,
-    staleTime: 30 * 1000, // 30 seconds
+    staleTime: STALE_TIMES.quota, // 1 minute - consistent with usage stats
     retry: false,
     enabled: isAuthenticated,
     throwOnError: false,

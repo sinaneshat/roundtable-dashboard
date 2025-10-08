@@ -259,7 +259,7 @@ class OpenRouterService {
    * @example
    * ```typescript
    * return openRouterService.streamUIMessages({
-   *   modelId: 'anthropic/claude-3-5-sonnet',
+   *   modelId: 'anthropic/claude-sonnet-4.5',
    *   messages: uiMessages,
    *   system: 'You are a helpful assistant',
    *   temperature: 0.7,

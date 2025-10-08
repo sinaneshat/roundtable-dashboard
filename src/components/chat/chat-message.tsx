@@ -368,8 +368,7 @@ type ChatMessageListProps = {
 /**
  * ChatMessageList Component
  *
- * Renders a list of chat messages with proper spacing and grouping
- * Optionally displays mode separators when conversation mode changes
+ * Renders a list of chat messages with proper spacing
  */
 export function ChatMessageList({
   messages,
@@ -392,7 +391,7 @@ export function ChatMessageList({
     );
   }
 
-  // Find the first user message index
+  // Simple rendering without session wrappers
   const firstUserMessageIndex = messages.findIndex(msg => msg.role === 'user');
 
   return (

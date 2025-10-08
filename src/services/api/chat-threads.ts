@@ -181,3 +181,23 @@ export async function getThreadBySlugService(slug: string) {
     }),
   );
 }
+
+/**
+ * Get messages for a thread with session tracking data
+ * Protected endpoint - requires authentication (ownership check)
+ *
+ * Returns all messages for a thread enriched with session metadata:
+ * - sessionId, sessionNumber, sessionMode
+ * - sessionParticipants (models involved in the session)
+ * - sessionMemories (memories attached to the session)
+ *
+ * @param threadId - Thread ID
+ */
+export async function getThreadMessagesService(threadId: string) {
+  const client = await createApiClient();
+  return parseResponse(
+    client.chat.threads[':id'].messages.$get({
+      param: { id: threadId },
+    }),
+  );
+}

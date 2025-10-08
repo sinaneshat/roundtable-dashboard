@@ -13,7 +13,7 @@ import { z } from 'zod';
 
 import type { CreateThreadRequestSchema } from '@/api/routes/chat/schema';
 import { MessageContentSchema, ThreadModeSchema } from '@/api/routes/chat/schema';
-import { isValidModelId } from '@/lib/ai/models-config';
+import { AllowedModelId, isValidModelId } from '@/lib/ai/models-config';
 import type { ChatModeId } from '@/lib/config/chat-modes';
 import { getDefaultChatMode } from '@/lib/config/chat-modes';
 
@@ -51,8 +51,9 @@ export type ParticipantConfig = z.infer<typeof ParticipantConfigSchema>;
 
 /**
  * Default model ID for new chats (cheapest free-tier model)
+ * ✅ Uses AllowedModelId enum for type safety
  */
-export const DEFAULT_MODEL_ID = 'google/gemini-2.5-flash';
+export const DEFAULT_MODEL_ID = AllowedModelId.GEMINI_2_5_FLASH;
 
 /**
  * Default participant configuration

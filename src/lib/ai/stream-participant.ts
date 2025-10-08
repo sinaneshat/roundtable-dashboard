@@ -8,6 +8,8 @@
  * - Follows AI SDK v5 error handling patterns (graceful error events, no throwing)
  */
 
+import type { ParticipantConfig } from '@/lib/schemas/chat-forms';
+
 /**
  * Message part compatible with AI SDK UIMessage
  * Allows any part with type and text to match actual AI SDK hook return types
@@ -39,6 +41,24 @@ type MessageUpdater<T extends StreamMessage = StreamMessage> = (
 ) => T[];
 
 /**
+ * Participant configuration for sending to backend (matches API schema)
+ */
+type ParticipantConfigRequest = {
+  modelId: string;
+  role?: string | null;
+  customRoleId?: string | null;
+  order?: number;
+};
+
+/**
+ * Updated config data from backend after participant updates
+ */
+type ConfigUpdateData = {
+  participants: ParticipantConfig[];
+  threadMode?: string;
+};
+
+/**
  * Options for streaming a participant response
  * Generic type T allows compatibility with different message types from AI SDK hooks
  */
@@ -56,6 +76,17 @@ export type StreamParticipantOptions<T extends StreamMessage = StreamMessage> = 
   onUpdate: (updater: MessageUpdater<T> | T[]) => void;
   /** Optional abort signal to cancel the stream */
   signal?: AbortSignal;
+  /** Optional: Update thread mode for this round */
+  mode?: string;
+  /** Optional: Update thread participants for this round (sent to backend) */
+  participants?: ParticipantConfigRequest[];
+  /** Optional: Update thread memories for this round */
+  memoryIds?: string[];
+  /**
+   * Optional: Callback when backend sends updated config (participant IDs, mode)
+   * Called when backend processes participant/mode changes and returns new IDs
+   */
+  onConfigUpdate?: (config: ConfigUpdateData) => void;
 };
 
 /**
@@ -69,6 +100,10 @@ export async function streamParticipant<T extends StreamMessage = StreamMessage>
   participantIndex,
   onUpdate,
   signal,
+  mode,
+  participants,
+  memoryIds,
+  onConfigUpdate,
 }: StreamParticipantOptions<T>): Promise<void> {
   const response = await fetch(`/api/v1/chat/threads/${threadId}/stream`, {
     method: 'POST',
@@ -82,6 +117,10 @@ export async function streamParticipant<T extends StreamMessage = StreamMessage>
         parts: m.parts,
       })),
       participantIndex,
+      // ✅ Include config updates if provided (backend will update thread)
+      ...(mode && { mode }),
+      ...(participants && { participants }),
+      ...(memoryIds !== undefined && { memoryIds }),
     }),
     signal,
   });
@@ -128,6 +167,21 @@ export async function streamParticipant<T extends StreamMessage = StreamMessage>
               messageId = event.messageId;
               messageMetadata = event.messageMetadata || null;
               content = '';
+
+              // ✅ CRITICAL: Extract updated config from metadata and notify caller
+              // When backend processes participant/mode updates, it returns new IDs
+              // Frontend must update its state to prevent "Invalid participantIndex" errors
+              if (messageMetadata && onConfigUpdate) {
+                const updatedParticipants = (messageMetadata as Record<string, unknown>).participants as ParticipantConfig[] | undefined;
+                const updatedMode = (messageMetadata as Record<string, unknown>).threadMode as string | undefined;
+
+                if (updatedParticipants && updatedParticipants.length > 0) {
+                  onConfigUpdate({
+                    participants: updatedParticipants,
+                    threadMode: updatedMode,
+                  });
+                }
+              }
 
               onUpdate((prev: T[]): T[] => [
                 ...prev,

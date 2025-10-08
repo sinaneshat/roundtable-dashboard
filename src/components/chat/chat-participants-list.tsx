@@ -35,7 +35,7 @@ import { useCreateCustomRoleMutation, useDeleteCustomRoleMutation } from '@/hook
 import { useCustomRolesQuery } from '@/hooks/queries/chat-roles';
 import { useUsageStatsQuery } from '@/hooks/queries/usage';
 import type { AIModel } from '@/lib/ai/models-config';
-import { AI_MODELS, canAccessModel, DEFAULT_ROLES, getTierDisplayName } from '@/lib/ai/models-config';
+import { AI_MODELS, canAccessModel, DEFAULT_ROLES, getModelById, getTierDisplayName } from '@/lib/ai/models-config';
 import { toastManager } from '@/lib/toast/toast-manager';
 import { cn } from '@/lib/ui/cn';
 import { getApiErrorMessage } from '@/lib/utils/error-handling';
@@ -771,7 +771,8 @@ export function ChatParticipantsList({
                   {participants
                     .sort((a, b) => a.order - b.order)
                     .map((participant) => {
-                      const model = AI_MODELS.find(m => m.modelId === participant.modelId);
+                      // Use getModelById which handles both full modelId and short id formats
+                      const model = getModelById(participant.modelId);
                       if (!model)
                         return null;
 
@@ -907,7 +908,8 @@ export function ParticipantsPreview({
         {participants
           .sort((a, b) => a.order - b.order)
           .map((participant, index) => {
-            const model = AI_MODELS.find(m => m.modelId === participant.modelId);
+            // Use getModelById which handles both full modelId and short id formats
+            const model = getModelById(participant.modelId);
             if (!model)
               return null;
 
@@ -924,145 +926,114 @@ export function ParticipantsPreview({
               <motion.div
                 key={participant.id}
                 initial={{ opacity: 0, scale: 0.95 }}
-                animate={{
-                  opacity: 1,
-                  scale: 1,
-                  // Smooth pulsing animation for currently streaming badge
-                  ...(isCurrentlyStreaming && {
-                    boxShadow: [
-                      '0 0 0 0px rgba(var(--primary-rgb, 59, 130, 246), 0.4)',
-                      '0 0 0 8px rgba(var(--primary-rgb, 59, 130, 246), 0)',
-                      '0 0 0 0px rgba(var(--primary-rgb, 59, 130, 246), 0)',
-                    ],
-                  }),
-                  // Green flash animation for just completed
-                  ...(isJustCompleted && {
-                    boxShadow: [
-                      '0 0 0 0px rgba(34, 197, 94, 0.4)',
-                      '0 0 0 6px rgba(34, 197, 94, 0)',
-                    ],
-                  }),
-                }}
+                animate={{ opacity: 1, scale: 1 }}
                 transition={{
                   duration: 0.3,
                   ease: [0.25, 0.1, 0.25, 1],
-                  ...(isCurrentlyStreaming && {
-                    boxShadow: {
-                      duration: 2,
-                      repeat: Number.POSITIVE_INFINITY,
-                      ease: 'easeInOut',
-                    },
-                  }),
-                  ...(isJustCompleted && {
-                    boxShadow: {
-                      duration: 1,
-                      ease: 'easeOut',
-                    },
-                  }),
                 }}
                 className={cn(
-                  'flex items-center gap-1.5 sm:gap-2 px-2 sm:px-2.5 py-1 sm:py-1.5 transition-colors duration-300 shrink-0',
-                  'backdrop-blur-md bg-background/10 border border-white/30 dark:border-white/20 rounded-full shadow-md',
-                  isCurrentlyStreaming && 'bg-primary/10 border-primary ring-1 ring-primary/30',
-                  isNextInQueue && 'bg-primary/5 border-primary/50',
-                  isWaitingInQueue && 'bg-background/10 opacity-60',
-                  isJustCompleted && 'bg-green-500/10 border-green-500 ring-1 ring-green-500/30',
-                  // Normal state when not streaming and has messages (no special styling)
+                  'relative flex items-center gap-1.5 sm:gap-2 px-2 sm:px-2.5 py-1 sm:py-1.5 shrink-0',
+                  'backdrop-blur-md border rounded-full shadow-md overflow-hidden',
+                  // Default state
+                  'bg-background/10 border-white/30 dark:border-white/20',
+                  // Waiting states
+                  isNextInQueue && 'border-primary/40',
+                  isWaitingInQueue && 'opacity-60',
+                  // Normal completed state
                   !isCurrentlyStreaming && !isNextInQueue && !isWaitingInQueue && !isJustCompleted && hasMessages && 'bg-background/10',
                 )}
               >
-                <Avatar className="size-4 sm:size-5 shrink-0">
-                  <AvatarImage src={model.metadata.icon} alt={model.name} />
-                  <AvatarFallback className="text-[8px] sm:text-[10px]">
-                    {model.name.slice(0, 2).toUpperCase()}
-                  </AvatarFallback>
-                </Avatar>
-                <div className="flex flex-col gap-0.5 min-w-0 flex-1">
-                  <div className="flex items-center gap-1 sm:gap-1.5">
-                    <span className="text-[10px] sm:text-xs font-medium truncate whitespace-nowrap">{model.name}</span>
+                {/* Streaming background gradient animation */}
+                {isCurrentlyStreaming && (
+                  <motion.div
+                    className="absolute inset-0 bg-gradient-to-br from-primary/20 via-primary/10 to-primary/5"
+                    animate={{
+                      opacity: [0.5, 1, 0.5],
+                    }}
+                    transition={{
+                      duration: 2,
+                      repeat: Number.POSITIVE_INFINITY,
+                      ease: 'easeInOut',
+                    }}
+                  />
+                )}
 
-                    {/* Currently Streaming Indicator - Smooth pulsing dot */}
-                    {isCurrentlyStreaming && (
-                      <motion.div
-                        initial={{ opacity: 0, scale: 0 }}
-                        animate={{
-                          opacity: [0.5, 1, 0.5],
-                          scale: [0.9, 1, 0.9],
-                        }}
-                        transition={{
-                          duration: 1.5,
-                          repeat: Number.POSITIVE_INFINITY,
-                          ease: 'easeInOut',
-                        }}
-                        className="flex items-center gap-1 shrink-0"
-                      >
+                {/* Completed flash - single green gradient pulse */}
+                {isJustCompleted && (
+                  <motion.div
+                    className="absolute inset-0 bg-gradient-to-br from-green-500/30 via-green-500/20 to-green-500/10"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: [0, 1, 0] }}
+                    transition={{
+                      duration: 0.8,
+                      ease: 'easeOut',
+                    }}
+                  />
+                )}
+                {/* Content layer (above background animations) */}
+                <div className="relative z-10 flex items-center gap-1.5 sm:gap-2 w-full">
+                  <Avatar className="size-4 sm:size-5 shrink-0">
+                    <AvatarImage src={model.metadata.icon} alt={model.name} />
+                    <AvatarFallback className="text-[8px] sm:text-[10px]">
+                      {model.name.slice(0, 2).toUpperCase()}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="flex flex-col gap-0.5 min-w-0 flex-1">
+                    <div className="flex items-center gap-1 sm:gap-1.5">
+                      <span className="text-[10px] sm:text-xs font-medium truncate whitespace-nowrap">{model.name}</span>
+
+                      {/* Currently Streaming - Simple text */}
+                      {isCurrentlyStreaming && (
+                        <motion.span
+                          initial={{ opacity: 0, x: -5 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          className="text-[10px] sm:text-xs text-primary font-medium whitespace-nowrap hidden sm:inline"
+                        >
+                          Streaming
+                        </motion.span>
+                      )}
+
+                      {/* Next in Queue */}
+                      {isNextInQueue && (
+                        <motion.span
+                          initial={{ opacity: 0, x: -5 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{ duration: 0.3 }}
+                          className="text-[10px] sm:text-xs text-primary/70 font-medium whitespace-nowrap hidden sm:inline"
+                        >
+                          Next
+                        </motion.span>
+                      )}
+
+                      {/* Waiting in Queue */}
+                      {isWaitingInQueue && !isNextInQueue && (
+                        <motion.span
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          transition={{ duration: 0.3 }}
+                          className="text-[10px] sm:text-xs text-muted-foreground whitespace-nowrap hidden sm:inline"
+                        >
+                          Waiting
+                        </motion.span>
+                      )}
+
+                      {/* Just Completed - Brief green checkmark */}
+                      {isJustCompleted && (
                         <motion.div
-                          animate={{
-                            opacity: [0.6, 1, 0.6],
-                          }}
-                          transition={{
-                            duration: 1.2,
-                            repeat: Number.POSITIVE_INFINITY,
-                            ease: 'easeInOut',
-                          }}
-                          className="size-1.5 sm:size-2 rounded-full bg-primary"
-                        />
-                        <span className="text-[10px] sm:text-xs text-primary font-medium whitespace-nowrap hidden sm:inline">Streaming</span>
-                      </motion.div>
-                    )}
-
-                    {/* Next in Queue Indicator */}
-                    {isNextInQueue && (
-                      <motion.div
-                        initial={{ opacity: 0, x: -5 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ duration: 0.3 }}
-                        className="flex items-center gap-1 shrink-0"
-                      >
-                        <motion.div
-                          animate={{
-                            opacity: [0.3, 0.7, 0.3],
-                          }}
-                          transition={{
-                            duration: 2,
-                            repeat: Number.POSITIVE_INFINITY,
-                            ease: 'easeInOut',
-                          }}
-                          className="size-1.5 sm:size-2 rounded-full bg-primary/70"
-                        />
-                        <span className="text-[10px] sm:text-xs text-primary/70 font-medium whitespace-nowrap hidden sm:inline">Next</span>
-                      </motion.div>
-                    )}
-
-                    {/* Waiting in Queue Indicator */}
-                    {isWaitingInQueue && !isNextInQueue && (
-                      <motion.span
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        transition={{ duration: 0.3 }}
-                        className="text-[10px] sm:text-xs text-muted-foreground whitespace-nowrap hidden sm:inline"
-                      >
-                        Waiting
-                      </motion.span>
-                    )}
-
-                    {/* Just Completed Flash Animation - Brief green checkmark */}
-                    {isJustCompleted && (
-                      <motion.div
-                        initial={{ opacity: 0, scale: 0 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        exit={{ opacity: 0, scale: 0 }}
-                        transition={{ duration: 0.3, ease: 'backOut' }}
-                        className="flex items-center gap-1 shrink-0"
-                      >
-                        <Check className="size-3 sm:size-3.5 text-green-500" />
-                        <span className="text-[10px] sm:text-xs text-green-500 font-medium whitespace-nowrap hidden sm:inline">Complete</span>
-                      </motion.div>
+                          initial={{ opacity: 0, scale: 0.8 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          transition={{ duration: 0.3, ease: [0.34, 1.56, 0.64, 1] }}
+                          className="flex items-center gap-1 shrink-0"
+                        >
+                          <Check className="size-3 sm:size-3.5 text-green-500" />
+                          <span className="text-[10px] sm:text-xs text-green-500 font-medium whitespace-nowrap hidden sm:inline">Complete</span>
+                        </motion.div>
+                      )}
+                    </div>
+                    {participant.role && (
+                      <span className="text-[9px] sm:text-[10px] text-muted-foreground truncate whitespace-nowrap">{participant.role}</span>
                     )}
                   </div>
-                  {participant.role && (
-                    <span className="text-[9px] sm:text-[10px] text-muted-foreground truncate whitespace-nowrap">{participant.role}</span>
-                  )}
                 </div>
               </motion.div>
             );

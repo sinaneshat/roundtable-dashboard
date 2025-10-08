@@ -87,6 +87,7 @@ import {
   getPublicThreadHandler,
   getThreadBySlugHandler,
   getThreadHandler,
+  getThreadMessagesHandler,
   listCustomRolesHandler,
   listMemoriesHandler,
   listThreadsHandler,
@@ -109,6 +110,7 @@ import {
   getMemoryRoute,
   getPublicThreadRoute,
   getThreadBySlugRoute,
+  getThreadMessagesRoute,
   getThreadRoute,
   listCustomRolesRoute,
   listMemoriesRoute,
@@ -283,8 +285,8 @@ app.use('/chat/threads/:id', protectMutations);
 // GET /chat/threads/slug/:slug - get thread by slug (requires auth)
 app.use('/chat/threads/slug/:slug', requireSession);
 
-// POST /chat/threads/:id/messages - send message (requires auth + CSRF)
-app.use('/chat/threads/:id/messages', csrfProtection, requireSession);
+// GET /chat/threads/:id/messages - get messages (requires auth)
+app.use('/chat/threads/:id/messages', requireSession);
 
 // POST /chat/threads/:id/stream - stream AI response (requires auth + CSRF)
 app.use('/chat/threads/:id/stream', csrfProtection, requireSession);
@@ -338,6 +340,7 @@ const appRoutes = app
   .openapi(getThreadBySlugRoute, getThreadBySlugHandler) // Get thread by slug (authenticated)
   .openapi(updateThreadRoute, updateThreadHandler) // Update thread (title, favorite, public, etc.)
   .openapi(deleteThreadRoute, deleteThreadHandler) // Delete thread
+  .openapi(getThreadMessagesRoute, getThreadMessagesHandler) // Get messages with session data
   .openapi(streamChatRoute, streamChatHandler) // Stream AI response via SSE (replaces sendMessage)
   .openapi(getPublicThreadRoute, getPublicThreadHandler) // Get public thread by slug (no auth)
   // Chat routes - Participant management

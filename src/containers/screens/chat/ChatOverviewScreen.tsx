@@ -3,27 +3,36 @@
 import { AnimatePresence, motion } from 'motion/react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { ChatInput } from '@/components/chat/chat-input';
 import { ChatMessageList } from '@/components/chat/chat-message';
 import { ChatQuickStart } from '@/components/chat/chat-quick-start';
+import { UnifiedChatInput } from '@/components/chat/unified-chat-input';
+import { toast } from '@/components/ui/use-toast';
 import { WavyBackground } from '@/components/ui/wavy-background';
+import { useCreateThreadMutation } from '@/hooks/mutations/chat-mutations';
 import { streamParticipant } from '@/lib/ai/stream-participant';
 import type { ChatModeId } from '@/lib/config/chat-modes';
 import type { ParticipantConfig } from '@/lib/schemas/chat-forms';
-import { chatInputFormDefaults } from '@/lib/schemas/chat-forms';
+import { chatInputFormDefaults, chatInputFormToCreateThreadRequest } from '@/lib/schemas/chat-forms';
+import { getApiErrorMessage } from '@/lib/utils/error-handling';
 
 export default function ChatOverviewScreen() {
   const router = useRouter();
-  const [selectedPrompt, setSelectedPrompt] = useState<string>('');
+  const t = useTranslations();
   const [selectedMode, setSelectedMode] = useState<ChatModeId>(chatInputFormDefaults.mode);
   const [selectedParticipants, setSelectedParticipants] = useState<ParticipantConfig[]>(chatInputFormDefaults.participants);
+  const [selectedMemoryIds, setSelectedMemoryIds] = useState<string[]>(chatInputFormDefaults.memoryIds);
+  const [message, setMessage] = useState('');
 
   // Thread state
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
   const [activeThreadSlug, setActiveThreadSlug] = useState<string | null>(null);
   const [totalParticipants, setTotalParticipants] = useState(0);
+
+  // Thread creation mutation
+  const createThreadMutation = useCreateThreadMutation();
 
   // Messages state (manual management like AI SDK's useChat)
   const [messages, setMessages] = useState<Array<{
@@ -31,6 +40,7 @@ export default function ChatOverviewScreen() {
     role: 'user' | 'assistant';
     parts: Array<{ type: string; text: string }>;
     metadata?: Record<string, unknown> | null;
+    participantId?: string; // Track which participant generated this message
   }>>([]);
 
   // Sequential streaming state
@@ -39,33 +49,83 @@ export default function ChatOverviewScreen() {
 
   // Refs for cleanup
   const titlePollingIntervalRef = useRef<NodeJS.Timeout | undefined>(undefined);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
-  // Start streaming first participant after thread creation
-  const handleThreadCreated = useCallback(
+  // Handle thread creation and start streaming
+  // Accepts optional overrides for mode, participants, memoryIds (used by quick start)
+  const handleSubmit = useCallback(
     async (
-      threadId: string,
-      threadSlug: string,
-      firstMessage: string,
-      participantCount: number,
-      createdMessage: { id: string; content: string },
+      message: string,
+      overrides?: {
+        mode?: ChatModeId;
+        participants?: ParticipantConfig[];
+        memoryIds?: string[];
+      },
     ) => {
-      // Reset state for new thread
-      setActiveThreadId(threadId);
-      setActiveThreadSlug(threadSlug);
-      setTotalParticipants(participantCount);
-      setCurrentParticipantIndex(0);
-      setIsStreamingParticipant(false);
+      try {
+        // Use overrides if provided, otherwise use current state
+        const mode = overrides?.mode ?? selectedMode;
+        const participants = overrides?.participants ?? selectedParticipants;
+        const memoryIds = overrides?.memoryIds ?? selectedMemoryIds;
 
-      // Use the actual user message created by backend (prevents duplicates)
-      setMessages([
-        {
-          id: createdMessage.id,
-          role: 'user',
-          parts: [{ type: 'text', text: createdMessage.content }],
-        },
-      ]);
+        // Create thread with configuration
+        const requestData = chatInputFormToCreateThreadRequest({
+          message,
+          mode,
+          participants,
+          memoryIds,
+        });
+
+        const result = await createThreadMutation.mutateAsync({
+          json: requestData,
+        });
+
+        if (result.success && result.data) {
+          const thread = result.data.thread;
+          const threadParticipants = result.data.participants;
+          const backendMessages = result.data.messages;
+          const firstMessage = backendMessages?.[0];
+
+          // Reset state for new thread
+          setActiveThreadId(thread.id);
+          setActiveThreadSlug(thread.slug);
+          setTotalParticipants(threadParticipants?.length || 1);
+          setCurrentParticipantIndex(0);
+          setIsStreamingParticipant(false);
+
+          // Update selectedParticipants with actual backend IDs for proper participant tracking
+          if (threadParticipants && threadParticipants.length > 0) {
+            setSelectedParticipants(
+              threadParticipants.map(p => ({
+                id: p.id,
+                modelId: p.modelId,
+                role: p.role || '',
+                order: p.priority,
+              })),
+            );
+          }
+
+          // Use the actual user message created by backend (prevents duplicates)
+          if (firstMessage) {
+            setMessages([
+              {
+                id: firstMessage.id,
+                role: 'user',
+                parts: [{ type: 'text', text: firstMessage.content }],
+              },
+            ]);
+          }
+        }
+      } catch (error) {
+        const errorMessage = getApiErrorMessage(error, t('chat.threadCreationFailed'));
+        toast({
+          variant: 'destructive',
+          title: t('notifications.error.createFailed'),
+          description: errorMessage,
+        });
+      }
     },
-    [],
+    [selectedMode, selectedParticipants, selectedMemoryIds, createThreadMutation, t],
   );
 
   // Sequential participant streaming effect
@@ -83,8 +143,15 @@ export default function ChatOverviewScreen() {
     if (assistantMessageCount < totalParticipants && assistantMessageCount === currentParticipantIndex) {
       setIsStreamingParticipant(true);
 
+      // Create abort controller for this stream
+      const abortController = new AbortController();
+      abortControllerRef.current = abortController;
+
       (async () => {
         try {
+          // Get the current participant for this streaming
+          const currentParticipant = selectedParticipants[currentParticipantIndex];
+
           // Stream this participant with full conversation history
           await streamParticipant({
             threadId: activeThreadId,
@@ -97,19 +164,71 @@ export default function ChatOverviewScreen() {
               })),
             })),
             participantIndex: currentParticipantIndex,
-            onUpdate: setMessages,
+            // ✅ CRITICAL: Update local state when backend sends new participant IDs
+            // For new threads, backend creates participants and sends back real IDs
+            onConfigUpdate: (config) => {
+              if (config.participants) {
+                setSelectedParticipants(config.participants);
+              }
+            },
+            onUpdate: (updater) => {
+              // Wrap the updater to inject participantId and model metadata into new assistant messages
+              if (typeof updater === 'function') {
+                setMessages((prev) => {
+                  const updated = updater(prev);
+                  // Add participantId and model metadata to any new assistant messages
+                  return updated.map((msg) => {
+                    if (msg.role === 'assistant' && !('participantId' in msg) && currentParticipant?.id) {
+                      const existingMetadata = 'metadata' in msg ? (msg.metadata as Record<string, unknown> || {}) : {};
+                      return {
+                        ...msg,
+                        participantId: currentParticipant.id,
+                        metadata: {
+                          ...existingMetadata,
+                          model: currentParticipant.modelId,
+                          role: currentParticipant.role || undefined,
+                        },
+                      };
+                    }
+                    return msg;
+                  });
+                });
+              } else {
+                // Direct array update
+                setMessages(updater.map((msg) => {
+                  if (msg.role === 'assistant' && !('participantId' in msg) && currentParticipant?.id) {
+                    const existingMetadata = 'metadata' in msg ? (msg.metadata as Record<string, unknown> || {}) : {};
+                    return {
+                      ...msg,
+                      participantId: currentParticipant.id,
+                      metadata: {
+                        ...existingMetadata,
+                        model: currentParticipant.modelId,
+                        role: currentParticipant.role || undefined,
+                      },
+                    };
+                  }
+                  return msg;
+                }));
+              }
+            },
+            signal: abortController.signal,
           });
 
           // Move to next participant
           setCurrentParticipantIndex(prev => prev + 1);
-        } catch {
-          // Silently handle participant streaming errors
+        } catch (error) {
+          // Silently handle participant streaming errors and aborts
+          if (error instanceof Error && error.name === 'AbortError') {
+            return;
+          }
         } finally {
           setIsStreamingParticipant(false);
+          abortControllerRef.current = null;
         }
       })();
     }
-  }, [activeThreadId, messages, currentParticipantIndex, totalParticipants, isStreamingParticipant]);
+  }, [activeThreadId, messages, currentParticipantIndex, totalParticipants, isStreamingParticipant, selectedParticipants]);
 
   // Navigate after first round completes
   useEffect(() => {
@@ -152,19 +271,35 @@ export default function ChatOverviewScreen() {
   }, [activeThreadId, activeThreadSlug, messages, totalParticipants, isStreamingParticipant, router]);
 
   // Handler for quick start suggestion click
+  // Populates the form with suggestion but does NOT submit automatically
   const handleSuggestionClick = (
     prompt: string,
     mode: ChatModeId,
     participants: ParticipantConfig[],
   ) => {
-    setSelectedPrompt(prompt);
+    // Set mode, participants, and message in state for UI
     setSelectedMode(mode);
     setSelectedParticipants(participants);
-    const inputElement = document.querySelector('[data-chat-input]');
-    if (inputElement) {
-      inputElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }
+    setMessage(prompt);
+
+    // Scroll to input and focus so user can review and submit
+    setTimeout(() => {
+      const inputElement = document.querySelector('textarea');
+      if (inputElement) {
+        inputElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        inputElement.focus();
+      }
+    }, 100);
   };
+
+  // Stop streaming handler
+  const handleStop = useCallback(() => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    setIsStreamingParticipant(false);
+  }, []);
 
   // Show streaming view when we have messages
   const showStreamingView = activeThreadId && messages.length > 0;
@@ -264,12 +399,23 @@ export default function ChatOverviewScreen() {
         {/* Sticky Chat Input - Always visible */}
         <div className="sticky bottom-0 flex-shrink-0 w-full pb-4 pt-1 lg:pt-3">
           <div className="mx-auto max-w-4xl px-4 lg:px-6">
-            <ChatInput
-              onThreadCreated={handleThreadCreated}
-              initialMessage={selectedPrompt}
-              initialMode={selectedMode}
-              initialParticipants={selectedParticipants}
-              data-chat-input
+            <UnifiedChatInput
+              mode={selectedMode}
+              participants={selectedParticipants}
+              memoryIds={selectedMemoryIds}
+              message={message}
+              onMessageChange={setMessage}
+              isCreating={createThreadMutation.isPending}
+              isStreaming={isStreamingParticipant}
+              currentParticipantIndex={currentParticipantIndex}
+              chatMessages={messages}
+              onSubmit={handleSubmit}
+              onStop={handleStop}
+              onModeChange={setSelectedMode}
+              onParticipantsChange={setSelectedParticipants}
+              onMemoryIdsChange={setSelectedMemoryIds}
+              // eslint-disable-next-line jsx-a11y/no-autofocus -- Intentional UX for chat input on overview page
+              autoFocus
             />
           </div>
         </div>

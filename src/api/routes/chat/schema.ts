@@ -91,8 +91,8 @@ const ChatParticipantSchema = z.object({
     example: 'thread_abc123',
   }),
   modelId: z.string().openapi({
-    description: 'Model ID (e.g., anthropic/claude-3.5-sonnet, openai/gpt-4o)',
-    example: 'anthropic/claude-3.5-sonnet',
+    description: 'Model ID (e.g., anthropic/claude-sonnet-4.5, openai/gpt-5)',
+    example: 'anthropic/claude-sonnet-4.5',
   }),
   role: z.string().openapi({
     description: 'Assigned role for this model',
@@ -247,11 +247,11 @@ export const CreateThreadRequestSchema = z.object({
       description: 'Model ID (e.g., anthropic/claude-3.5-sonnet, openai/gpt-4o)',
       example: 'anthropic/claude-3.5-sonnet',
     }),
-    role: z.string().optional().openapi({
+    role: z.string().nullish().openapi({ // ✅ Allow null, undefined, or string
       description: 'Optional assigned role for this model (immutable)',
       example: 'The Ideator',
     }),
-    customRoleId: z.string().optional().openapi({
+    customRoleId: z.string().nullish().openapi({ // ✅ Allow null, undefined, or string
       description: 'Optional custom role ID to load system prompt from',
       example: '01HXYZ123ABC',
     }),
@@ -354,8 +354,8 @@ export const AddParticipantRequestSchema = z.object({
     description: 'Model ID to add (e.g., anthropic/claude-3.5-sonnet, openai/gpt-4o)',
     example: 'anthropic/claude-3.5-sonnet',
   }),
-  role: z.string().min(1).max(100).openapi({
-    description: 'Assigned role',
+  role: z.string().min(1).max(100).nullish().openapi({ // ✅ Optional: Allow null, undefined, or string
+    description: 'Optional assigned role',
     example: 'The Ideator',
   }),
   priority: z.number().int().nonnegative().optional().default(0).openapi({
@@ -372,8 +372,8 @@ export const AddParticipantRequestSchema = z.object({
 }).openapi('AddParticipantRequest');
 
 export const UpdateParticipantRequestSchema = z.object({
-  role: z.string().min(1).max(100).optional().openapi({
-    description: 'Updated role',
+  role: z.string().min(1).max(100).nullish().openapi({ // ✅ Optional: Allow null, undefined, or string
+    description: 'Optional updated role',
     example: 'Devil\'s Advocate',
   }),
   priority: z.number().int().nonnegative().optional().openapi({
@@ -418,6 +418,50 @@ export const ParticipantDetailResponseSchema = createApiResponseSchema(Participa
 // Note: SendMessageRequestSchema removed - use StreamChatRequestSchema for all chat operations
 
 /**
+ * Session participant schema
+ * Subset of participant data attached to messages
+ */
+const MessageSessionParticipantSchema = z.object({
+  modelId: z.string().openapi({
+    description: 'Model ID',
+    example: 'anthropic/claude-3.5-sonnet',
+  }),
+  role: z.string().nullable().openapi({
+    description: 'Participant role',
+    example: 'The Ideator',
+  }),
+  priority: z.number().int().nonnegative().openapi({
+    description: 'Response priority',
+    example: 0,
+  }),
+}).openapi('MessageSessionParticipant');
+
+/**
+ * Message with session data
+ * Extends ChatMessage with session tracking fields
+ */
+const ChatMessageWithSessionSchema = ChatMessageSchema.extend({
+  sessionId: z.string().nullable().openapi({
+    description: 'Session ID for roundtable tracking',
+    example: 'session_abc123',
+  }),
+  sessionNumber: z.number().int().positive().nullable().openapi({
+    description: 'Session number within thread',
+    example: 1,
+  }),
+  sessionMode: z.string().nullable().openapi({
+    description: 'Chat mode for this session',
+    example: 'brainstorming',
+  }),
+  sessionParticipants: z.array(MessageSessionParticipantSchema).nullable().openapi({
+    description: 'Participants involved in this session',
+  }),
+  sessionMemories: z.array(z.string()).nullable().openapi({
+    description: 'Memory titles attached to this session',
+  }),
+}).openapi('ChatMessageWithSession');
+
+/**
  * ✅ AI SDK v5 UIMessage Part Schema - OFFICIAL FLEXIBLE PATTERN
  * Use passthrough() to accept ALL official AI SDK part types without strict validation
  * Reference: https://sdk.vercel.ai/docs/reference/ai-sdk-core/ui-message
@@ -451,8 +495,8 @@ export const StreamChatRequestSchema = z.object({
   }),
   participants: z.array(z.object({
     modelId: z.string(),
-    role: z.string().optional(),
-    customRoleId: z.string().optional(),
+    role: z.string().nullish(), // ✅ Allow null, undefined, or string
+    customRoleId: z.string().nullish(), // ✅ Allow null, undefined, or string
     order: z.number().int().nonnegative(),
   })).optional().openapi({
     description: 'Updated participant configuration',
@@ -466,6 +510,19 @@ export const StreamChatRequestSchema = z.object({
     example: 0,
   }),
 }).openapi('StreamChatRequest');
+
+// Message list response with session data
+const MessagesListPayloadSchema = z.object({
+  messages: z.array(ChatMessageWithSessionSchema).openapi({
+    description: 'List of messages with session data',
+  }),
+  count: z.number().int().nonnegative().openapi({
+    description: 'Total number of messages',
+    example: 10,
+  }),
+}).openapi('MessagesListPayload');
+
+export const MessagesListResponseSchema = createApiResponseSchema(MessagesListPayloadSchema).openapi('MessagesListResponse');
 
 // ============================================================================
 // Memory Schemas
@@ -689,6 +746,7 @@ export type AddParticipantRequest = z.infer<typeof AddParticipantRequestSchema>;
 export type UpdateParticipantRequest = z.infer<typeof UpdateParticipantRequestSchema>;
 
 export type ChatMessage = z.infer<typeof ChatMessageSchema>;
+export type ChatMessageWithSession = z.infer<typeof ChatMessageWithSessionSchema>;
 export type StreamChatRequest = z.infer<typeof StreamChatRequestSchema>;
 
 export type ChatMemory = z.infer<typeof ChatMemorySchema>;

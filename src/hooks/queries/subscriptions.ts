@@ -3,6 +3,9 @@
  *
  * TanStack Query hooks for Stripe subscriptions
  * Following patterns from commit a24d1f67d90381a2e181818f93b6a7ad63c062cc
+ *
+ * IMPORTANT: staleTime values MUST match server-side prefetch values
+ * See: docs/react-query-ssr-patterns.md
  */
 
 'use client';
@@ -11,6 +14,7 @@ import { useQuery } from '@tanstack/react-query';
 
 import { useSession } from '@/lib/auth/client';
 import { queryKeys } from '@/lib/data/query-keys';
+import { STALE_TIMES } from '@/lib/data/stale-times';
 import { getSubscriptionService, getSubscriptionsService } from '@/services/api';
 
 /**
@@ -26,7 +30,7 @@ export function useSubscriptionsQuery() {
   return useQuery({
     queryKey: queryKeys.subscriptions.list(),
     queryFn: getSubscriptionsService,
-    staleTime: 2 * 60 * 1000, // 2 minutes
+    staleTime: STALE_TIMES.subscriptions, // 2 minutes - match server-side prefetch
     retry: false,
     enabled: isAuthenticated, // Only fetch when authenticated
     throwOnError: false,
@@ -46,7 +50,7 @@ export function useSubscriptionQuery(subscriptionId: string) {
   return useQuery({
     queryKey: queryKeys.subscriptions.detail(subscriptionId),
     queryFn: () => getSubscriptionService(subscriptionId),
-    staleTime: 2 * 60 * 1000, // 2 minutes
+    staleTime: STALE_TIMES.subscriptions, // 2 minutes - match server-side prefetch
     enabled: isAuthenticated && !!subscriptionId,
     retry: false,
     throwOnError: false,
@@ -67,7 +71,7 @@ export function useCurrentSubscriptionQuery() {
   return useQuery({
     queryKey: queryKeys.subscriptions.list(), // Reuse list cache
     queryFn: getSubscriptionsService,
-    staleTime: 2 * 60 * 1000,
+    staleTime: STALE_TIMES.subscriptions, // 2 minutes - match server-side prefetch
     enabled: isAuthenticated,
     retry: false,
     throwOnError: false,

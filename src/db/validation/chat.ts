@@ -5,6 +5,9 @@ import {
   chatMemory,
   chatMessage,
   chatParticipant,
+  chatSession,
+  chatSessionMemory,
+  chatSessionParticipant,
   chatThread,
   modelConfiguration,
 } from '@/db/tables/chat';
@@ -90,6 +93,40 @@ export const modelConfigurationUpdateSchema = createUpdateSchema(modelConfigurat
 });
 
 /**
+ * Chat Session Schemas
+ * ✅ Following Drizzle ORM + Zod best practices for normalized session tracking
+ */
+export const chatSessionSelectSchema = createSelectSchema(chatSession);
+export const chatSessionInsertSchema = createInsertSchema(chatSession, {
+  sessionNumber: schema => schema.min(1).describe('Session number must be positive'),
+  mode: () => z.enum(ALLOWED_CHAT_MODES as [string, ...string[]]).describe('Must be a valid chat mode'),
+  userPrompt: schema => schema.min(1).describe('User prompt cannot be empty'),
+});
+export const chatSessionUpdateSchema = createUpdateSchema(chatSession);
+
+/**
+ * Chat Session Participant Schemas
+ * ✅ Junction table for tracking which models participated in each session
+ */
+export const chatSessionParticipantSelectSchema = createSelectSchema(chatSessionParticipant);
+export const chatSessionParticipantInsertSchema = createInsertSchema(chatSessionParticipant, {
+  modelId: () => z.enum(ALLOWED_MODEL_IDS as unknown as readonly [OpenRouterModelId, ...OpenRouterModelId[]])
+    .describe('Must be a valid OpenRouter model ID'),
+  priority: schema => schema.min(0).describe('Priority must be non-negative'),
+});
+export const chatSessionParticipantUpdateSchema = createUpdateSchema(chatSessionParticipant);
+
+/**
+ * Chat Session Memory Schemas
+ * ✅ Junction table for tracking which memories were attached to each session
+ */
+export const chatSessionMemorySelectSchema = createSelectSchema(chatSessionMemory);
+export const chatSessionMemoryInsertSchema = createInsertSchema(chatSessionMemory, {
+  memoryTitle: schema => schema.min(1).max(200).describe('Memory title must be between 1-200 characters'),
+});
+export const chatSessionMemoryUpdateSchema = createUpdateSchema(chatSessionMemory);
+
+/**
  * Type exports
  */
 export type ChatThread = z.infer<typeof chatThreadSelectSchema>;
@@ -111,3 +148,15 @@ export type ChatMemoryUpdate = z.infer<typeof chatMemoryUpdateSchema>;
 export type ModelConfiguration = z.infer<typeof modelConfigurationSelectSchema>;
 export type ModelConfigurationInsert = z.infer<typeof modelConfigurationInsertSchema>;
 export type ModelConfigurationUpdate = z.infer<typeof modelConfigurationUpdateSchema>;
+
+export type ChatSession = z.infer<typeof chatSessionSelectSchema>;
+export type ChatSessionInsert = z.infer<typeof chatSessionInsertSchema>;
+export type ChatSessionUpdate = z.infer<typeof chatSessionUpdateSchema>;
+
+export type ChatSessionParticipant = z.infer<typeof chatSessionParticipantSelectSchema>;
+export type ChatSessionParticipantInsert = z.infer<typeof chatSessionParticipantInsertSchema>;
+export type ChatSessionParticipantUpdate = z.infer<typeof chatSessionParticipantUpdateSchema>;
+
+export type ChatSessionMemory = z.infer<typeof chatSessionMemorySelectSchema>;
+export type ChatSessionMemoryInsert = z.infer<typeof chatSessionMemoryInsertSchema>;
+export type ChatSessionMemoryUpdate = z.infer<typeof chatSessionMemoryUpdateSchema>;
