@@ -121,38 +121,39 @@ export const mockChats: Chat[] = [
 
 /**
  * Group chats by time periods for sidebar organization
+ * Groups by: Today, Yesterday, X days ago, X weeks ago
+ * Max grouping is weeks (no months/years)
  */
 export function groupChatsByPeriod(chats: Chat[]): ChatGroup[] {
   const now = Date.now();
-  const today: Chat[] = [];
-  const yesterday: Chat[] = [];
-  const previous7Days: Chat[] = [];
-  const previous30Days: Chat[] = [];
-  const older: Chat[] = [];
+  const groups = new Map<string, Chat[]>();
 
   chats.forEach((chat) => {
-    const chatTime = chat.createdAt.getTime();
+    const chatTime = chat.updatedAt.getTime();
     const diffMs = now - chatTime;
-    const diffDays = diffMs / (1000 * 60 * 60 * 24);
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+    let label: string;
 
     if (diffDays < 1) {
-      today.push(chat);
-    } else if (diffDays < 2) {
-      yesterday.push(chat);
+      label = 'chat.today';
+    } else if (diffDays === 1) {
+      label = 'chat.yesterday';
     } else if (diffDays < 7) {
-      previous7Days.push(chat);
-    } else if (diffDays < 30) {
-      previous30Days.push(chat);
+      label = `chat.daysAgo:${diffDays}`;
     } else {
-      older.push(chat);
+      const weeks = Math.floor(diffDays / 7);
+      label = `chat.weeksAgo:${weeks}`;
     }
+
+    if (!groups.has(label)) {
+      groups.set(label, []);
+    }
+    groups.get(label)!.push(chat);
   });
 
-  return [
-    { label: 'chat.today', chats: today },
-    { label: 'chat.yesterday', chats: yesterday },
-    { label: 'chat.previous7Days', chats: previous7Days },
-    { label: 'chat.previous30Days', chats: previous30Days },
-    { label: 'chat.older', chats: older },
-  ].filter(group => group.chats.length > 0);
+  return Array.from(groups.entries()).map(([label, chats]) => ({
+    label,
+    chats,
+  }));
 }

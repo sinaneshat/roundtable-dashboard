@@ -600,8 +600,8 @@ export function ChatParticipantsList({
   const [open, setOpen] = useState(false);
   const [modelSearchQuery, setModelSearchQuery] = useState('');
 
-  // Disable queries during streaming to prevent excessive refetches and flashing
-  const { data: customRolesData } = useCustomRolesQuery(!isStreaming);
+  // Only fetch when popover is open (not on page load)
+  const { data: customRolesData } = useCustomRolesQuery(open && !isStreaming);
   const { data: usageData } = useUsageStatsQuery();
 
   const customRoles = customRolesData?.pages.flatMap(page =>

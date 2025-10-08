@@ -18,15 +18,16 @@ import { getApiKeyService, listApiKeysService } from '@/services/api';
 
 /**
  * Query hook for fetching all API keys
- * Prefetches and caches results for instant modal display
+ * Only fetches when explicitly enabled (e.g., when modal is open)
  */
-export function useApiKeysQuery() {
+export function useApiKeysQuery(enabled = true) {
   return useQuery({
     queryKey: queryKeys.apiKeys.list(),
     queryFn: async () => listApiKeysService(),
     staleTime: 1000 * 60 * 5, // 5 minutes - API keys don't change frequently
-    refetchOnMount: 'always', // Always refetch when component mounts
+    refetchOnMount: true, // Refetch when component mounts to ensure fresh data
     refetchOnWindowFocus: false, // Don't refetch on window focus
+    enabled, // Only fetch when enabled (e.g., modal is open)
     retry: false,
   });
 }

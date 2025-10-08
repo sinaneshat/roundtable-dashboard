@@ -60,7 +60,10 @@ export const queryKeys = {
   // Chat Threads
   threads: {
     all: QueryKeyFactory.base('threads'),
-    lists: () => [...queryKeys.threads.all, 'list'] as const,
+    lists: (search?: string) =>
+      search
+        ? [...queryKeys.threads.all, 'list', 'search', search] as const
+        : [...queryKeys.threads.all, 'list'] as const,
     list: (cursor?: string) =>
       cursor
         ? QueryKeyFactory.action('threads', 'list', cursor)
@@ -153,11 +156,11 @@ export const invalidationPatterns = {
     queryKeys.usage.messageQuota(),
   ],
 
-  // Thread operations
+  // Thread operations - only invalidate thread list and quota, not full stats
+  // Stats are only updated when messages are sent (actual usage), not when threads are created/deleted
   threads: [
     queryKeys.threads.lists(),
-    queryKeys.usage.stats(),
-    queryKeys.usage.threadQuota(),
+    queryKeys.usage.threadQuota(), // Only quota needs update, not full stats
   ],
 
   threadDetail: (threadId: string) => [

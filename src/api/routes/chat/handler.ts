@@ -1,6 +1,7 @@
 import type { RouteHandler } from '@hono/zod-openapi';
 import { consumeStream, convertToModelMessages, createUIMessageStream, createUIMessageStreamResponse, streamText, validateUIMessages } from 'ai';
-import { and, eq, ne } from 'drizzle-orm';
+import type { SQL } from 'drizzle-orm';
+import { and, eq, like, ne } from 'drizzle-orm';
 import { ulid } from 'ulid';
 
 import { createError } from '@/api/common/error-handling';
@@ -16,6 +17,10 @@ import { createHandler, Responses } from '@/api/core';
 import { CursorPaginationQuerySchema } from '@/api/core/schemas';
 import { apiLogger } from '@/api/middleware/hono-logger';
 import { initializeOpenRouter, openRouterService } from '@/api/services/openrouter.service';
+import {
+  classifyOpenRouterError,
+  formatErrorForDatabase,
+} from '@/api/services/openrouter-error-handler';
 import { generateUniqueSlug } from '@/api/services/slug-generator.service';
 import { generateTitleFromMessage } from '@/api/services/title-generator.service';
 import {
@@ -75,6 +80,7 @@ import {
   ParticipantIdParamSchema,
   StreamChatRequestSchema,
   ThreadIdParamSchema,
+  ThreadListQuerySchema,
   ThreadSlugParamSchema,
   UpdateCustomRoleRequestSchema,
   UpdateMemoryRequestSchema,
@@ -208,21 +214,28 @@ export const listThreadsHandler: RouteHandler<typeof listThreadsRoute, ApiEnv> =
     // With auth: 'session', c.auth() provides type-safe access to user and session
     const { user } = c.auth();
 
-    // Parse cursor pagination query parameters
-    const query = CursorPaginationQuerySchema.parse(c.req.query());
+    // Parse query parameters including search
+    const query = ThreadListQuerySchema.parse(c.req.query());
     const db = await getDbAsync();
 
+    // Build filters for thread query
+    const filters: SQL[] = [
+      eq(tables.chatThread.userId, user.id),
+      ne(tables.chatThread.status, 'deleted'), // Exclude deleted threads
+    ];
+
+    // Add search filter if search query is provided
+    if (query.search && query.search.trim().length > 0) {
+      filters.push(like(tables.chatThread.title, `%${query.search.trim()}%`));
+    }
+
     // Fetch threads with cursor-based pagination (limit + 1 to check hasMore)
-    // Exclude deleted threads from the list (show active and archived only)
     const threads = await db.query.chatThread.findMany({
       where: buildCursorWhereWithFilters(
         tables.chatThread.updatedAt,
         query.cursor,
         'desc',
-        [
-          eq(tables.chatThread.userId, user.id),
-          ne(tables.chatThread.status, 'deleted'), // Exclude deleted threads
-        ],
+        filters,
       ),
       orderBy: getCursorOrderBy(tables.chatThread.updatedAt, 'desc'),
       limit: query.limit + 1,
@@ -1150,6 +1163,8 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
     }
 
     const stream = createUIMessageStream({
+      // ❌ REMOVED: originalMessages parameter was causing stream to re-emit previous messages
+      // We only need to stream the NEW participant response, not the entire conversation
       execute: async ({ writer }) => {
         // Use all messages as context for this participant
         const currentHistory = [...uiMessages];
@@ -1173,13 +1188,15 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
           customSystemPrompt: participant.settings?.systemPrompt,
           otherParticipants: participants
             .slice(0, participantIndex)
-            .map(p => ({
-              index: p.priority, // Use actual priority, not map index
+            .map((p, idx) => ({
+              index: idx, // ✅ FIXED: Use array index (0, 1, 2...) not priority field
               role: p.role,
             })),
         });
 
         const messageId = ulid();
+        let streamError: unknown = null; // Track streaming errors
+        let messageSaved = false; // Track if message was saved to prevent duplicates
 
         apiLogger.info('Stream starting', {
           threadId,
@@ -1188,33 +1205,272 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
           model: participant.modelId,
         });
 
-        const result = streamText({
-          model: client.chat(participant.modelId),
-          messages: convertToModelMessages(currentHistory),
-          system: systemPrompt,
-          temperature: participant.settings?.temperature || 0.7,
+        try {
+          const result = streamText({
+            model: client.chat(participant.modelId),
+            messages: convertToModelMessages(currentHistory),
+            system: systemPrompt,
+            temperature: participant.settings?.temperature || 0.7,
 
-          abortSignal: c.req.raw.signal,
+            abortSignal: c.req.raw.signal,
 
-          onFinish: async ({ text, usage }) => {
+            onFinish: async ({ text, usage, response }) => {
+              try {
+                const now = new Date();
+
+                // 🔍 DEBUG: Log what we received
+                apiLogger.info('onFinish callback data', {
+                  threadId,
+                  participantId: participant.id,
+                  textLength: text?.length || 0,
+                  text: text || '(empty)',
+                  hasResponse: !!response,
+                  responseMessages: response?.messages?.length || 0,
+                  totalTokens: usage?.totalTokens || 0,
+                });
+
+                // Extract text from response.messages if text is empty
+                let finalText = text || '';
+
+                // Fallback: Extract from response.messages if text is empty/undefined
+                if (!finalText && response?.messages) {
+                  const assistantMessages = response.messages.filter(m => m.role === 'assistant');
+                  const extractedParts: string[] = [];
+
+                  for (const msg of assistantMessages) {
+                    if (typeof msg.content === 'string') {
+                    // Content is a string
+                      extractedParts.push(msg.content);
+                    } else if (Array.isArray(msg.content)) {
+                    // Content is an array of parts (TextPart, ImagePart, etc.)
+                      for (const part of msg.content) {
+                        if (typeof part === 'string') {
+                          extractedParts.push(part);
+                        } else if (part && typeof part === 'object' && 'type' in part && part.type === 'text' && 'text' in part) {
+                          extractedParts.push(part.text);
+                        }
+                      }
+                    }
+                  }
+
+                  finalText = extractedParts.join('');
+                }
+
+                // Validate we have content before saving
+                if (!finalText || finalText.trim().length === 0) {
+                // Classify the error for better user feedback
+                  const errorToClassify = streamError || new Error('Model generated no content');
+                  const errorMetadata = formatErrorForDatabase(errorToClassify, participant.modelId);
+
+                  apiLogger.error('Empty content in onFinish - saving error message', {
+                    threadId,
+                    participantId: participant.id,
+                    messageId,
+                    hasText: !!text,
+                    hasResponse: !!response,
+                    totalTokens: usage?.totalTokens || 0,
+                    model: participant.modelId,
+                    errorType: errorMetadata.errorType,
+                    isTransient: errorMetadata.isTransient,
+                  });
+
+                  // Save error message with detailed metadata for frontend display
+                  await db.insert(tables.chatMessage).values({
+                    id: messageId,
+                    threadId,
+                    participantId: participant.id,
+                    role: 'assistant',
+                    content: '', // Keep content empty - error component will display instead
+                    metadata: {
+                      model: participant.modelId,
+                      role: participant.role,
+                      mode: thread.mode,
+                      participantId: participant.id,
+                      participantIndex,
+                      ...errorMetadata, // Includes error, errorMessage, errorType, errorDetails, isTransient
+                      totalTokens: usage?.totalTokens || 0,
+                    },
+                    createdAt: now,
+                  });
+
+                  await db.update(tables.chatThread)
+                    .set({
+                      lastMessageAt: now,
+                      updatedAt: now,
+                    })
+                    .where(eq(tables.chatThread.id, threadId));
+
+                  return; // Don't continue with normal save flow
+                }
+
+                // Save message and update thread metadata
+                await db.insert(tables.chatMessage).values({
+                  id: messageId,
+                  threadId,
+                  participantId: participant.id,
+                  role: 'assistant',
+                  content: finalText,
+                  metadata: {
+                    model: participant.modelId,
+                    role: participant.role,
+                    mode: thread.mode,
+                    participantId: participant.id,
+                    participantIndex,
+                    // Store usage if available
+                    ...(usage && { totalTokens: usage.totalTokens }),
+                  },
+                  createdAt: now,
+                });
+
+                await db.update(tables.chatThread)
+                  .set({
+                    lastMessageAt: now,
+                    updatedAt: now,
+                  })
+                  .where(eq(tables.chatThread.id, threadId));
+
+                const totalNewMessages = isNewMessage ? 2 : 1;
+                await incrementMessageUsage(user.id, totalNewMessages);
+
+                // Generate title if needed
+                if (thread.title === 'New Chat' && messages.length > 0) {
+                  const firstUserMessage = messages.find(m => m.role === 'user');
+                  if (firstUserMessage) {
+                    const generatedTitle = await generateTitleFromMessage(
+                      firstUserMessage.content,
+                      c.env,
+                    );
+                    await db
+                      .update(tables.chatThread)
+                      .set({ title: generatedTitle })
+                      .where(eq(tables.chatThread.id, threadId));
+                  }
+                }
+
+                apiLogger.info('Participant response completed', {
+                  participantId: participant.id,
+                  participantIndex,
+                  messageId,
+                  textLength: text.length,
+                  totalTokens: usage?.totalTokens || 0,
+                });
+              } catch (error) {
+                apiLogger.error('Failed to save participant response', {
+                  threadId,
+                  participantId: participant.id,
+                  participantIndex,
+                  messageId,
+                  error: error instanceof Error ? error.message : String(error),
+                  stack: error instanceof Error ? error.stack : undefined,
+                });
+              // Don't throw - allow stream to complete for user
+              }
+            },
+
+            onError: (error) => {
+            // Classify error for better logging and handling
+              const classified = classifyOpenRouterError(error);
+              streamError = error; // Store for use in onFinish
+
+              apiLogger.error('Streaming error', {
+                threadId,
+                participantId: participant.id,
+                participantIndex,
+                model: participant.modelId,
+                errorType: classified.type,
+                userMessage: classified.message,
+                technicalMessage: classified.technicalMessage,
+                isTransient: classified.isTransient,
+                shouldRetry: classified.shouldRetry,
+                error: error instanceof Error ? error.message : String(error),
+                stack: error instanceof Error ? error.stack : undefined,
+              });
+            },
+
+            onAbort: () => {
+              apiLogger.warn('Stream aborted by client', {
+                threadId,
+                participantId: participant.id,
+                participantIndex,
+                messageId,
+              });
+            },
+          });
+
+          const uiStream = result.toUIMessageStream({
+            generateMessageId: () => messageId,
+            messageMetadata: () => ({
+              participantId: participant.id,
+              model: participant.modelId,
+              role: participant.role,
+            }),
+            onError: (error) => {
+            // Send user-friendly error message to client
+            // Following AI SDK v5 pattern: return custom error string instead of raw error
+              const classified = classifyOpenRouterError(error);
+              return classified.message;
+            },
+          });
+
+          // ✅ AI SDK v5 Pattern: Consume stream to guarantee onFinish runs even on disconnect
+          // This ensures error messages are ALWAYS saved to database
+          // Reference: https://sdk.vercel.ai/docs/04-ai-sdk-ui/03-chatbot-message-persistence
+          result.consumeStream(); // no await
+
+          writer.merge(uiStream);
+
+          // CRITICAL: Wait for stream to complete before returning
+          // This ensures backend doesn't move faster than frontend can display
+          // Following official AI SDK pattern for sequential coordination
+          await result.response;
+
+          apiLogger.info('Participant stream fully completed', {
+            threadId,
+            participantId: participant.id,
+            participantIndex,
+            messageId,
+          });
+
+          // Mark message as saved if onFinish succeeded
+          messageSaved = true;
+        } catch (error) {
+        // ✅ CRITICAL SAFETY NET: Handle errors that occur before onFinish is called
+        // This ensures error messages are ALWAYS saved to database for sequential chain to continue
+        // Without this, failed participants break the chain because message count doesn't increment
+
+          streamError = error;
+
+          apiLogger.error('Stream execution failed before onFinish', {
+            threadId,
+            participantId: participant.id,
+            participantIndex,
+            messageId,
+            model: participant.modelId,
+            error: error instanceof Error ? error.message : String(error),
+            stack: error instanceof Error ? error.stack : undefined,
+          });
+
+          // Only save error message if onFinish didn't already save it
+          if (!messageSaved) {
             try {
               const now = new Date();
+              const errorMetadata = formatErrorForDatabase(error, participant.modelId);
 
-              // Save message and update thread metadata
+              // Save error message with metadata for frontend display
               await db.insert(tables.chatMessage).values({
                 id: messageId,
                 threadId,
                 participantId: participant.id,
                 role: 'assistant',
-                content: text,
+                content: '', // Empty content - ChatMessageError component will display error
                 metadata: {
                   model: participant.modelId,
                   role: participant.role,
                   mode: thread.mode,
                   participantId: participant.id,
                   participantIndex,
-                  // Store usage if available
-                  ...(usage && { totalTokens: usage.totalTokens }),
+                  ...errorMetadata, // Includes error, errorMessage, errorType, errorDetails, isTransient
+                  totalTokens: 0,
                 },
                 createdAt: now,
               });
@@ -1226,75 +1482,55 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
                 })
                 .where(eq(tables.chatThread.id, threadId));
 
-              const totalNewMessages = isNewMessage ? 2 : 1;
-              await incrementMessageUsage(user.id, totalNewMessages);
+              messageSaved = true;
 
-              // Generate title if needed
-              if (thread.title === 'New Chat' && messages.length > 0) {
-                const firstUserMessage = messages.find(m => m.role === 'user');
-                if (firstUserMessage) {
-                  const generatedTitle = await generateTitleFromMessage(
-                    firstUserMessage.content,
-                    c.env,
-                  );
-                  await db
-                    .update(tables.chatThread)
-                    .set({ title: generatedTitle })
-                    .where(eq(tables.chatThread.id, threadId));
-                }
-              }
-
-              apiLogger.info('Participant response completed', {
-                participantId: participant.id,
-                participantIndex,
-                messageId,
-                textLength: text.length,
-                totalTokens: usage?.totalTokens || 0,
-              });
-            } catch (error) {
-              apiLogger.error('Failed to save participant response', {
+              apiLogger.info('Error message saved to database', {
                 threadId,
                 participantId: participant.id,
                 participantIndex,
                 messageId,
-                error: error instanceof Error ? error.message : String(error),
-                stack: error instanceof Error ? error.stack : undefined,
+                errorType: errorMetadata.errorType,
+                isTransient: errorMetadata.isTransient,
               });
-              // Don't throw - allow stream to complete for user
+            } catch (dbError) {
+              apiLogger.error('Failed to save error message to database', {
+                threadId,
+                participantId: participant.id,
+                participantIndex,
+                messageId,
+                originalError: error instanceof Error ? error.message : String(error),
+                dbError: dbError instanceof Error ? dbError.message : String(dbError),
+              });
             }
-          },
+          }
 
-          onError: (error) => {
-            apiLogger.error('Streaming error', {
-              threadId,
-              participantId: participant.id,
-              participantIndex,
-              model: participant.modelId,
-              error: error instanceof Error ? error.message : String(error),
-              stack: error instanceof Error ? error.stack : undefined,
-            });
-          },
+        // Don't throw - allow stream to return and next participant to trigger
+        // The error message in database will be displayed in frontend
+        }
+      },
+      // ✅ AI SDK v5 Pattern: onError on createUIMessageStream (not on response)
+      onError: (error) => {
+      // Send user-friendly error message to client
+      // Following AI SDK v5 pattern: sanitize errors before sending to prevent information leakage
+        const classified = classifyOpenRouterError(error);
 
-          onAbort: () => {
-            apiLogger.warn('Stream aborted by client', {
-              threadId,
-              participantId: participant.id,
-              participantIndex,
-              messageId,
-            });
-          },
+        apiLogger.error('Stream error', {
+          threadId,
+          errorType: classified.type,
+          userMessage: classified.message,
+          technicalMessage: classified.technicalMessage,
         });
 
-        const uiStream = result.toUIMessageStream({
-          generateMessageId: () => messageId,
-          messageMetadata: () => ({
-            participantId: participant.id,
-            model: participant.modelId,
-            role: participant.role,
-          }),
+        return classified.message;
+      },
+      // ✅ AI SDK v5 Pattern: onFinish for logging and cleanup
+      onFinish: ({ messages }) => {
+        apiLogger.info('Stream finished successfully', {
+          threadId,
+          participantId: participants[requestedParticipantIndex]?.id,
+          participantIndex: requestedParticipantIndex,
+          messageCount: messages.length,
         });
-
-        writer.merge(uiStream);
       },
     });
 

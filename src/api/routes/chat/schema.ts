@@ -319,8 +319,13 @@ export const ThreadSlugParamSchema = z.object({
   }),
 }).openapi('ThreadSlugParam');
 
-// Query parameters for cursor-based pagination (reuse shared schema)
-export const ThreadListQuerySchema = CursorPaginationQuerySchema.openapi('ThreadListQuery');
+// Query parameters for cursor-based pagination with search support
+export const ThreadListQuerySchema = CursorPaginationQuerySchema.extend({
+  search: z.string().optional().openapi({
+    description: 'Search query to filter threads by title',
+    example: 'product strategy',
+  }),
+}).openapi('ThreadListQuery');
 
 // Thread detail with participants and messages
 const ThreadDetailPayloadSchema = z.object({

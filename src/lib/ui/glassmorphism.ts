@@ -86,11 +86,11 @@ export function glassCard(variant: keyof typeof glassVariants = 'medium'): strin
 
 /**
  * Glass overlay for dialogs and modals
- * Enhanced backdrop blur for overlay elements
+ * Subtle backdrop blur following shadcn patterns (minimal blur, reduced opacity)
  */
 export const glassOverlay = cn(
-  'backdrop-blur-2xl',
-  'bg-black/50',
+  'backdrop-blur-sm',
+  'bg-black/30',
 );
 
 /**

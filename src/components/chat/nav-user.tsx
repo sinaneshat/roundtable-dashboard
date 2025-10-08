@@ -2,6 +2,7 @@
 
 import { BadgeCheck, ChevronsUpDown, CreditCard, Key, Loader2, LogOut, Sparkles, X } from 'lucide-react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 
@@ -40,6 +41,7 @@ import { toastManager } from '@/lib/toast/toast-manager';
 import { getApiErrorMessage } from '@/lib/utils/error-handling';
 
 export function NavUser() {
+  const router = useRouter();
   const { data: session } = useSession();
   const { isMobile } = useSidebar();
   const t = useTranslations();
@@ -69,6 +71,7 @@ export function NavUser() {
 
   const handleSignOut = async () => {
     await signOut();
+    router.push('/auth/sign-in');
   };
 
   const handleManageBilling = async () => {

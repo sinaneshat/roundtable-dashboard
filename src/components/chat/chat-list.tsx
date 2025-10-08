@@ -5,8 +5,18 @@ import { motion } from 'motion/react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import {
   SidebarGroup,
   SidebarGroupLabel,
@@ -15,12 +25,6 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from '@/components/ui/sidebar';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
 import type { Chat, ChatGroup } from '@/lib/types/chat';
 import { cn } from '@/lib/ui/cn';
 
@@ -39,26 +43,6 @@ type StickyHeaderProps = {
 
 // Stable default value to avoid infinite render loop
 const EMPTY_FAVORITES: Chat[] = [];
-
-// Helper to check if text would overflow (for tooltip)
-// This is only used for determining if tooltip is needed, not for rendering
-function wouldTextOverflow(text: string, maxWidth: number): boolean {
-  // Always show tooltip on server-side to avoid hydration mismatch
-  if (typeof window === 'undefined') {
-    return true;
-  }
-
-  const canvas = document.createElement('canvas');
-  const context = canvas.getContext('2d');
-  if (!context) {
-    return true;
-  }
-
-  context.font = '14px Inter, system-ui, sans-serif';
-  const textWidth = context.measureText(text).width;
-
-  return textWidth > maxWidth;
-}
 
 function StickyHeader({ children, zIndex = 10 }: StickyHeaderProps) {
   const headerRef = useRef<HTMLDivElement>(null);
@@ -93,64 +77,85 @@ export function ChatList({
   deletingChatId,
 }: ChatListProps) {
   const pathname = usePathname();
-  const t = useTranslations('chat');
+  const t = useTranslations();
+  const [chatToDelete, setChatToDelete] = useState<Chat | null>(null);
 
-  const renderChatItem = (chat: Chat) => {
+  const handleDeleteClick = (chat: Chat) => {
+    setChatToDelete(chat);
+  };
+
+  const handleConfirmDelete = () => {
+    if (chatToDelete) {
+      onDeleteChat(chatToDelete.id);
+      setChatToDelete(null);
+    }
+  };
+
+  const handleCancelDelete = () => {
+    setChatToDelete(null);
+  };
+
+  // Helper to format group labels (handles dynamic labels like "daysAgo:3")
+  const formatGroupLabel = (label: string) => {
+    if (label.includes(':')) {
+      const [key, value] = label.split(':');
+      if (!key || !value) {
+        return t(label.replace('chat.', 'chat.'));
+      }
+
+      const translationKey = key.replace('chat.', '');
+
+      if (translationKey === 'daysAgo') {
+        return `${value} days ago`;
+      }
+      if (translationKey === 'weeksAgo') {
+        const weeks = Number.parseInt(value, 10);
+        return weeks === 1 ? '1 week ago' : `${weeks} weeks ago`;
+      }
+    }
+
+    return t(label.replace('chat.', 'chat.'));
+  };
+
+  const renderChatItem = (chat: Chat, globalIndex: number) => {
     const chatUrl = `/chat/${chat.slug}`;
     const isActive = pathname === chatUrl;
     const isDeleting = deletingChatId === chat.id;
-
-    // Check if text would overflow for tooltip (approximate check)
-    // We use hardcoded max-width (11.5rem = 184px) for consistent truncation
-    const isTruncated = chat.title.length > 25 || wouldTextOverflow(chat.title, 184);
+    // Only prefetch first 3 chats to prevent memory leaks
+    const shouldPrefetch = globalIndex < 3;
 
     return (
       <SidebarMenuItem key={chat.id}>
-        <Tooltip delayDuration={300}>
-          <TooltipTrigger asChild>
-            <SidebarMenuButton asChild isActive={isActive} disabled={isDeleting}>
-              <Link
-                href={chatUrl}
-                className={cn(
-                  'min-w-0',
-                  isDeleting && 'pointer-events-none opacity-60',
-                )}
-              >
-                <span className="truncate block max-w-[11.5rem]">{chat.title}</span>
-              </Link>
-            </SidebarMenuButton>
-          </TooltipTrigger>
-          {isTruncated && (
-            <TooltipContent side="right" className="max-w-xs">
-              <p className="break-words">{chat.title}</p>
-            </TooltipContent>
-          )}
-        </Tooltip>
-        <Tooltip delayDuration={300}>
-          <TooltipTrigger asChild>
-            <SidebarMenuAction
-              showOnHover
-              disabled={isDeleting}
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                onDeleteChat(chat.id);
-              }}
-            >
-              {isDeleting
-                ? (
-                    <Loader2 className="size-4 animate-spin" />
-                  )
-                : (
-                    <Trash2 className="size-4" />
-                  )}
-              <span className="sr-only">{t('deleteChat')}</span>
-            </SidebarMenuAction>
-          </TooltipTrigger>
-          <TooltipContent side="right">
-            <p>{t('deleteChat')}</p>
-          </TooltipContent>
-        </Tooltip>
+        <SidebarMenuButton asChild isActive={isActive} disabled={isDeleting}>
+          <Link
+            href={chatUrl}
+            prefetch={shouldPrefetch}
+            className={cn(
+              'min-w-0',
+              isDeleting && 'pointer-events-none opacity-60',
+            )}
+          >
+            <span className="truncate block max-w-[180px]">{chat.title}</span>
+          </Link>
+        </SidebarMenuButton>
+        <SidebarMenuAction
+          showOnHover
+          disabled={isDeleting}
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            handleDeleteClick(chat);
+          }}
+        >
+          {isDeleting
+            ? (
+                <Loader2 className="size-4 animate-spin" />
+              )
+            : (
+                <Trash2 className="size-4" />
+              )}
+          <span className="sr-only">{t('chat.deleteChat')}</span>
+        </SidebarMenuAction>
       </SidebarMenuItem>
     );
   };
@@ -160,15 +165,18 @@ export function ChatList({
     return (
       <SidebarGroup className="group-data-[collapsible=icon]:hidden">
         <div className="flex flex-col items-center justify-center gap-2 py-8 text-center">
-          <p className="text-sm text-muted-foreground">{t('noResults')}</p>
-          <p className="text-xs text-muted-foreground">{t('noResultsDescription')}</p>
+          <p className="text-sm text-muted-foreground">{t('chat.noResults')}</p>
+          <p className="text-xs text-muted-foreground">{t('chat.noResultsDescription')}</p>
         </div>
       </SidebarGroup>
     );
   }
 
+  // Track global index for prefetching (only first 3 items total)
+  let globalIndex = 0;
+
   return (
-    <TooltipProvider>
+    <>
       {/* Favorites Section */}
       {favorites.length > 0 && (
         <SidebarGroup className="group-data-[collapsible=icon]:hidden">
@@ -196,12 +204,16 @@ export function ChatList({
                   delay: 0.1,
                 }}
               >
-                {t('favorites')}
+                {t('chat.favorites')}
               </motion.span>
             </SidebarGroupLabel>
           </StickyHeader>
           <SidebarMenu>
-            {favorites.map(chat => renderChatItem(chat))}
+            {favorites.map((chat) => {
+              const item = renderChatItem(chat, globalIndex);
+              globalIndex++;
+              return item;
+            })}
           </SidebarMenu>
         </SidebarGroup>
       )}
@@ -227,16 +239,40 @@ export function ChatList({
                     delay: (groupIndex * 0.05) + 0.1,
                   }}
                 >
-                  {t(group.label.replace('chat.', ''))}
+                  {formatGroupLabel(group.label)}
                 </motion.span>
               </SidebarGroupLabel>
             </StickyHeader>
             <SidebarMenu>
-              {group.chats.map(chat => renderChatItem(chat))}
+              {group.chats.map((chat) => {
+                const item = renderChatItem(chat, globalIndex);
+                globalIndex++;
+                return item;
+              })}
             </SidebarMenu>
           </SidebarGroup>
         );
       })}
-    </TooltipProvider>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={!!chatToDelete} onOpenChange={open => !open && handleCancelDelete()}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('chat.deleteThreadConfirmTitle')}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t('chat.deleteThreadConfirmDescription')}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={handleCancelDelete}>
+              {t('actions.cancel')}
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              {t('chat.deleteThread')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }

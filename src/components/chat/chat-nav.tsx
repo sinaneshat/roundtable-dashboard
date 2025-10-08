@@ -5,7 +5,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { ChatList } from '@/components/chat/chat-list';
 import { CommandSearch } from '@/components/chat/command-search';
@@ -23,6 +23,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarRail,
+  useSidebar,
 } from '@/components/ui/sidebar';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { BRAND } from '@/constants/brand';
@@ -36,9 +37,16 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const router = useRouter();
   const t = useTranslations();
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const { isMobile, setOpenMobile } = useSidebar();
 
-  // Fetch real threads from API
-  const { data: threadsData } = useThreadsQuery();
+  // Fetch real threads from API with infinite scroll (50 items initially, 20 per page after)
+  const {
+    data: threadsData,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useThreadsQuery();
 
   // Mutations
   const deleteThreadMutation = useDeleteThreadMutation();
@@ -70,12 +78,16 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
         e.preventDefault();
         setIsSearchOpen(true);
+        // Close mobile sidebar when search opens
+        if (isMobile) {
+          setOpenMobile(false);
+        }
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  }, [isMobile, setOpenMobile]);
 
   const handleNewChat = () => {
     router.push('/chat');
@@ -118,6 +130,31 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   // Extract loading states from mutations
   const deletingChatId = deleteThreadMutation.isPending ? deleteThreadMutation.variables : null;
 
+  // Infinite scroll handler - Following TanStack Query official patterns
+  const handleScroll = useCallback(() => {
+    if (!scrollAreaRef.current || !hasNextPage || isFetchingNextPage)
+      return;
+
+    const { scrollTop, scrollHeight, clientHeight } = scrollAreaRef.current;
+    const scrollPercentage = (scrollTop + clientHeight) / scrollHeight;
+
+    // Load more when scrolled to 80% of the content
+    // Following official TanStack Query pattern: hasNextPage && !isFetchingNextPage && fetchNextPage()
+    if (scrollPercentage > 0.8) {
+      fetchNextPage();
+    }
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
+
+  // Attach scroll listener
+  useEffect(() => {
+    const scrollArea = scrollAreaRef.current;
+    if (!scrollArea)
+      return;
+
+    scrollArea.addEventListener('scroll', handleScroll);
+    return () => scrollArea.removeEventListener('scroll', handleScroll);
+  }, [handleScroll]);
+
   return (
     <>
       <TooltipProvider>
@@ -158,7 +195,13 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               <Button
                 variant="outline"
                 className="w-full justify-start text-sm text-muted-foreground h-9"
-                onClick={() => setIsSearchOpen(true)}
+                onClick={() => {
+                  setIsSearchOpen(true);
+                  // Close mobile sidebar when search opens
+                  if (isMobile) {
+                    setOpenMobile(false);
+                  }
+                }}
               >
                 <Search className="size-4 mr-2" />
                 <span className="flex-1 text-left">{t('chat.searchChats')}</span>
@@ -171,7 +214,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           </SidebarHeader>
 
           <SidebarContent className="p-0">
-            <ScrollArea className="h-full w-full">
+            <ScrollArea ref={scrollAreaRef} className="h-full w-full">
               <div className="px-2 py-2">
                 <ChatList
                   chatGroups={chatGroups}
@@ -180,6 +223,22 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                   searchTerm=""
                   deletingChatId={deletingChatId}
                 />
+
+                {/* Loading skeleton for next page */}
+                {isFetchingNextPage && (
+                  <div className="px-2 space-y-1 my-2">
+                    <div className="h-10 bg-accent animate-pulse rounded-md" />
+                    <div className="h-10 bg-accent animate-pulse rounded-md" />
+                    <div className="h-10 bg-accent animate-pulse rounded-md" />
+                  </div>
+                )}
+
+                {/* Show end message when no more pages */}
+                {!hasNextPage && !isFetchingNextPage && chats.length > 0 && (
+                  <div className="px-2 py-4 text-center text-xs text-muted-foreground">
+                    That's all for now
+                  </div>
+                )}
               </div>
             </ScrollArea>
           </SidebarContent>
@@ -194,7 +253,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
         {/* Command Search Modal */}
         <CommandSearch
-          chats={chats}
           isOpen={isSearchOpen}
           onClose={() => setIsSearchOpen(false)}
         />

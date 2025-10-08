@@ -254,6 +254,32 @@
     "error": {
       "generic": "An error occurred. Please try again."
     },
+    "errors": {
+      "rateLimitTitle": "Rate Limit Exceeded",
+      "rateLimitSolution": "This model is experiencing high demand. Wait a moment and try again, or select a different model.",
+      "modelUnavailableTitle": "Model Unavailable",
+      "modelUnavailableSolution": "This model is temporarily unavailable. Retrying automatically or try selecting a different model.",
+      "timeoutTitle": "Request Timeout",
+      "timeoutSolution": "The request took too long. This might be a temporary issue. Try again or use a different model.",
+      "networkTitle": "Network Error",
+      "networkSolution": "Check your internet connection and try again.",
+      "emptyResponseTitle": "No Response",
+      "emptyResponseSolution": "The model didn't generate any content. This is usually temporary. Try regenerating the response.",
+      "modelErrorTitle": "Model Error",
+      "modelErrorSolution": "The model encountered an error processing your request. This may be due to content filters or input length limits.",
+      "invalidRequestTitle": "Invalid Request",
+      "invalidRequestSolution": "The request couldn't be processed. Check your input and try again.",
+      "authenticationTitle": "Authentication Error",
+      "authenticationSolution": "There's an issue with the API authentication. Please contact support.",
+      "unknownTitle": "Unexpected Error",
+      "unknownSolution": "An unexpected error occurred. Try again, and contact support if the issue persists.",
+      "defaultDescription": "The AI model encountered an error while processing your request.",
+      "retryAction": "Retry",
+      "nonRetryableHint": "This error cannot be automatically retried. Please try a different approach.",
+      "modelLabel": "Model",
+      "technicalDetails": "Technical Details",
+      "howToFix": "How to fix"
+    },
     "public": {
       "threadNotFound": "Thread Not Found",
       "threadNotFoundDescription": "This public chat thread doesn't exist or has been made private.",

@@ -106,9 +106,13 @@ export function buildCursorWhere(
     return undefined;
   }
 
+  // Parse cursor string into Date for timestamp columns
+  // Cursor is ISO timestamp string like "2025-10-06T19:43:09.000Z"
+  const cursorDate = new Date(cursor);
+
   // For descending order: get items less than cursor (older items)
   // For ascending order: get items greater than cursor (newer items)
-  return direction === 'desc' ? lt(cursorColumn, cursor) : gt(cursorColumn, cursor);
+  return direction === 'desc' ? lt(cursorColumn, cursorDate) : gt(cursorColumn, cursorDate);
 }
 
 /**

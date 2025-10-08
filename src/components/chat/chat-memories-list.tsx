@@ -93,8 +93,8 @@ export function ChatMemoriesList({
   const [searchQuery, setSearchQuery] = useState('');
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
 
-  // Disable queries during streaming to prevent excessive refetches and flashing
-  const { data: memoriesData } = useMemoriesQuery(!isStreaming);
+  // Only fetch when popover is open (not on page load)
+  const { data: memoriesData } = useMemoriesQuery(open && !isStreaming);
   const createMemoryMutation = useCreateMemoryMutation();
   const deleteMemoryMutation = useDeleteMemoryMutation();
 

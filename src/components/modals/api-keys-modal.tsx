@@ -13,10 +13,9 @@
 
 'use client';
 
-import { useQueryClient } from '@tanstack/react-query';
 import { Book, ExternalLink, FileJson, FileText } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 
 import { BaseModal } from '@/components/modals/base-modal';
 import { ApiKeyForm } from '@/components/settings/api-key-form';
@@ -30,8 +29,6 @@ import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import type { ApiKeyResponse } from '@/db/validation/api-keys';
 import { useApiKeysQuery } from '@/hooks';
-import { queryKeys } from '@/lib/data/query-keys';
-import { listApiKeysService } from '@/services/api';
 
 import { ApiKeysList } from '../settings/api-keys-list';
 
@@ -42,21 +39,8 @@ type ApiKeysModalProps = {
 
 export function ApiKeysModal({ open, onOpenChange }: ApiKeysModalProps) {
   const [activeTab, setActiveTab] = useState<'list' | 'create'>('list');
-  const { data: apiKeysResponse, isLoading, isFetching } = useApiKeysQuery();
-  const queryClient = useQueryClient();
+  const { data: apiKeysResponse, isLoading, isFetching } = useApiKeysQuery(open);
   const t = useTranslations();
-
-  // Prefetch API keys when modal opens
-  useEffect(() => {
-    if (open) {
-      // Prefetch to ensure fresh data
-      void queryClient.prefetchQuery({
-        queryKey: queryKeys.apiKeys.list(),
-        queryFn: async () => listApiKeysService(),
-        staleTime: 1000 * 60 * 5, // 5 minutes
-      });
-    }
-  }, [open, queryClient]);
 
   // Extract API keys from response
   const apiKeys = apiKeysResponse?.success && apiKeysResponse.data?.apiKeys

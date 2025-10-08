@@ -20,53 +20,37 @@ import {
 
 /**
  * Hook to fetch chat threads with cursor-based infinite scrolling
- * Uses TanStack Query useInfiniteQuery for seamless pagination
- * Protected endpoint - requires authentication
+ * Following TanStack Query v5 official patterns
  *
- * Following AI SDK v5 and TanStack Query v5 official patterns:
- * - Cursor-based pagination for infinite scroll
- * - Automatic page management via data.pages
- * - Built-in hasNextPage and fetchNextPage
+ * Initial page loads 50 items, subsequent pages load 20 items
+ * Search queries load 10 items per page
  *
- * @example
- * ```tsx
- * const { data, fetchNextPage, hasNextPage, isFetchingNextPage } = useThreadsQuery();
- *
- * // Render pages
- * data?.pages.map((page) =>
- *   page.data.items.map((thread) => <ThreadCard key={thread.id} thread={thread} />)
- * )
- *
- * // Load more button
- * <button onClick={() => fetchNextPage()} disabled={!hasNextPage}>
- *   {isFetchingNextPage ? 'Loading...' : 'Load More'}
- * </button>
- * ```
- *
- * Stale time: 30 seconds (thread list should be relatively fresh)
+ * @param search - Optional search query to filter threads by title
  */
-export function useThreadsQuery() {
+export function useThreadsQuery(search?: string) {
   const { data: session, isPending } = useSession();
   const isAuthenticated = !isPending && !!session?.user?.id;
 
   return useInfiniteQuery({
-    queryKey: queryKeys.threads.lists(),
-    queryFn: ({ pageParam }) =>
-      listThreadsService(
-        pageParam ? { query: { cursor: pageParam } } : undefined,
-      ),
-    initialPageParam: undefined as string | undefined,
-    getNextPageParam: (lastPage) => {
-      // Return nextCursor from pagination metadata, or undefined if no more pages
-      if (lastPage.success && lastPage.data?.pagination?.nextCursor) {
-        return lastPage.data.pagination.nextCursor;
-      }
-      return undefined;
+    queryKey: [...queryKeys.threads.lists(search)],
+    queryFn: async ({ pageParam }) => {
+      // First page: 50 items for sidebar, 10 for search
+      // Subsequent pages: 20 items for sidebar, 10 for search
+      const limit = search ? 10 : (pageParam ? 20 : 50);
+
+      const params: { cursor?: string; search?: string; limit: number } = { limit };
+      if (pageParam)
+        params.cursor = pageParam;
+      if (search)
+        params.search = search;
+
+      return listThreadsService({ query: params });
     },
-    staleTime: 30 * 1000, // 30 seconds
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: lastPage => lastPage.success ? lastPage.data?.pagination?.nextCursor : undefined,
+    enabled: isAuthenticated,
+    staleTime: 30 * 1000,
     retry: false,
-    enabled: isAuthenticated, // Only fetch when authenticated
-    throwOnError: false,
   });
 }
 
@@ -123,7 +107,10 @@ export function usePublicThreadQuery(slug: string | null | undefined, enabled = 
  * @param slug - Thread slug
  * @param enabled - Optional control over whether to fetch (default: true when slug exists)
  *
- * Stale time: 10 seconds (thread details should be fresh for active conversations)
+ * Cache strategy:
+ * - staleTime: 0 (always fetch fresh to prevent cache leaking between threads)
+ * - gcTime: 5 minutes (keep for back/forward navigation)
+ * - refetchOnWindowFocus: false (prevent flashing during navigation)
  */
 export function useThreadBySlugQuery(slug: string | null | undefined, enabled = true) {
   const { data: session, isPending } = useSession();
@@ -132,7 +119,9 @@ export function useThreadBySlugQuery(slug: string | null | undefined, enabled = 
   return useQuery({
     queryKey: queryKeys.threads.bySlug(slug || ''),
     queryFn: () => getThreadBySlugService(slug!),
-    staleTime: 10 * 1000, // 10 seconds
+    staleTime: 0, // Always fetch fresh data to prevent cache leaking between threads
+    gcTime: 5 * 60 * 1000, // Keep in cache for 5 minutes for back/forward navigation
+    refetchOnWindowFocus: false, // Don't refetch on window focus - prevents flashing during navigation
     enabled: isAuthenticated && !!slug && enabled, // Only fetch when authenticated and slug exists
     retry: false,
     throwOnError: false,

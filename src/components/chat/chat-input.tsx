@@ -44,7 +44,13 @@ import type { ThreadMode } from '@/services/api';
 
 type ChatInputProps = {
   className?: string;
-  onThreadCreated?: (threadId: string, threadSlug: string, firstMessage: string) => void;
+  onThreadCreated?: (
+    threadId: string,
+    threadSlug: string,
+    firstMessage: string,
+    participantCount: number,
+    createdMessage: { id: string; content: string }
+  ) => void;
   autoFocus?: boolean;
   disabled?: boolean;
   initialMessage?: string;
@@ -75,26 +81,6 @@ function ChatInputInner({
 
   // Button should be disabled if: loading, no message, no participants, or form invalid
   const isButtonDisabled = disabled || isSubmitting || !canSubmit;
-
-  // Debug validation state (development only)
-  useEffect(() => {
-    if (process.env.NODE_ENV === 'development') {
-      const messageLen = typeof messageValue === 'string' ? messageValue.length : 0;
-      const participantsCount = Array.isArray(participantsValue) ? participantsValue.length : 0;
-
-      // eslint-disable-next-line no-console
-      console.log('[ChatInput] Validation state:', {
-        hasMessage,
-        hasParticipants,
-        canSubmit,
-        isButtonDisabled,
-        messageLength: messageLen,
-        participantsCount,
-        messageValue,
-      });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hasMessage, hasParticipants, canSubmit, isButtonDisabled]);
 
   // Get full registration from RHF (includes onChange, onBlur, ref, name)
   const messageRegistration = register('message');
@@ -298,8 +284,18 @@ export function ChatInput({
 
         if (result.success && result.data) {
           const thread = result.data.thread;
-          if (onThreadCreated) {
-            onThreadCreated(thread.id, thread.slug, data.message);
+          const participants = result.data.participants;
+          const messages = result.data.messages;
+          const firstMessage = messages?.[0];
+
+          if (onThreadCreated && firstMessage) {
+            onThreadCreated(
+              thread.id,
+              thread.slug,
+              data.message,
+              participants?.length || 1,
+              { id: firstMessage.id, content: firstMessage.content },
+            );
           }
         }
       } catch (error) {
