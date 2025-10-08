@@ -114,6 +114,7 @@
     "i18n:audit": "tsx scripts/i18n-audit.ts",
     "i18n:fix": "tsx scripts/fix-translations.ts",
     "i18n:full-check": "npm run i18n:validate && npm run i18n:check-unused && npm run i18n:find-hardcoded && npm run i18n:check-missing"
+
   },
   "dependencies": {
     "@ai-sdk/react": "^2.0.60",
@@ -224,6 +225,7 @@
     "rimraf": "^6.0.1",
     "shadcn": "^3.2.1",
     "sharp": "^0.34.4",
+    "svgo": "^4.0.0",
     "tailwindcss": "^4.1.7",
     "tsx": "^4.19.4",
     "typescript": "5.8.3",

@@ -27,40 +27,56 @@ import { CHAT_MODE_SYSTEM_PROMPTS } from '@/lib/config/chat-modes';
  * ✅ No typos possible - compile-time safety
  */
 export const AllowedModelId = {
-  // Anthropic Claude Models (verified from OpenRouter API)
+  // Anthropic Claude Models (verified from OpenRouter API - October 2025)
   CLAUDE_3_HAIKU: 'anthropic/claude-3-haiku',
   CLAUDE_3_OPUS: 'anthropic/claude-3-opus',
   CLAUDE_3_5_SONNET: 'anthropic/claude-3.5-sonnet',
   CLAUDE_3_5_HAIKU: 'anthropic/claude-3.5-haiku',
   CLAUDE_3_7_SONNET: 'anthropic/claude-3.7-sonnet',
   CLAUDE_SONNET_4: 'anthropic/claude-sonnet-4',
+  CLAUDE_SONNET_4_5: 'anthropic/claude-sonnet-4.5',
   CLAUDE_OPUS_4: 'anthropic/claude-opus-4',
+  CLAUDE_OPUS_4_1: 'anthropic/claude-opus-4.1',
 
-  // OpenAI GPT Models (verified from OpenRouter API)
+  // OpenAI GPT Models (verified from OpenRouter API - October 2025)
   GPT_4O: 'openai/gpt-4o',
   GPT_4_TURBO: 'openai/gpt-4-turbo',
-  O1_MINI: 'openai/o1-mini',
   GPT_4O_MINI: 'openai/gpt-4o-mini',
+  GPT_4O_SEARCH: 'openai/gpt-4o-search-preview',
+  O1_MINI: 'openai/o1-mini',
+  O3: 'openai/o3',
+  O3_MINI: 'openai/o3-mini',
+  GPT_5: 'openai/gpt-5',
+  GPT_5_MINI: 'openai/gpt-5-mini',
 
-  // Google Gemini Models (verified from OpenRouter API - January 2025)
+  // Google Gemini Models (verified from OpenRouter API - October 2025)
   GEMINI_2_5_PRO: 'google/gemini-2.5-pro',
   GEMINI_2_5_FLASH: 'google/gemini-2.5-flash',
   GEMINI_2_0_FLASH: 'google/gemini-2.0-flash-001',
   GEMINI_2_0_FLASH_EXP: 'google/gemini-2.0-flash-exp:free',
 
-  // Meta Llama Models (verified from OpenRouter API)
+  // Meta Llama Models (verified from OpenRouter API - October 2025)
   LLAMA_3_1_405B: 'meta-llama/llama-3.1-405b-instruct',
   LLAMA_3_1_70B: 'meta-llama/llama-3.1-70b-instruct',
   LLAMA_3_1_8B: 'meta-llama/llama-3.1-8b-instruct',
+  LLAMA_4_MAVERICK: 'meta-llama/llama-4-maverick',
+  LLAMA_4_MAVERICK_FREE: 'meta-llama/llama-4-maverick:free',
 
-  // DeepSeek Models (verified from OpenRouter API)
+  // DeepSeek Models (verified from OpenRouter API - October 2025)
   DEEPSEEK_CHAT: 'deepseek/deepseek-chat',
   DEEPSEEK_R1: 'deepseek/deepseek-r1',
+  DEEPSEEK_R1_FREE: 'deepseek/deepseek-r1:free',
   DEEPSEEK_CHAT_V3: 'deepseek/deepseek-chat-v3-0324',
 
-  // Perplexity Models (verified from OpenRouter API)
+  // xAI Grok Models (verified from OpenRouter API - October 2025)
+  GROK_4: 'x-ai/grok-4',
+  GROK_4_FAST: 'x-ai/grok-4-fast',
+
+  // Perplexity Models (verified from OpenRouter API - October 2025)
   PERPLEXITY_SONAR_LARGE: 'perplexity/llama-3.1-sonar-large-128k-online',
   PERPLEXITY_SONAR_SMALL: 'perplexity/llama-3.1-sonar-small-128k-online',
+  PERPLEXITY_SONAR_REASONING_PRO: 'perplexity/sonar-reasoning-pro',
+  PERPLEXITY_SONAR_DEEP_RESEARCH: 'perplexity/sonar-deep-research',
 } as const;
 
 /**
@@ -145,6 +161,365 @@ export type AIModel = {
  * ✅ Compile-time validation of all model IDs
  */
 export const AI_MODELS: AIModel[] = [
+  // ============================================================================
+  // SMARTEST MODELS - Latest & Most Capable (October 2025)
+  // ============================================================================
+
+  // GPT-5 - OpenAI's Latest
+  {
+    id: 'gpt-5',
+    provider: 'openrouter',
+    modelId: AllowedModelId.GPT_5,
+    name: 'GPT-5',
+    description: 'OpenAI\'s latest flagship model with advanced reasoning, web search, and 400K context',
+    capabilities: {
+      streaming: true,
+      tools: true,
+      vision: true,
+      reasoning: true,
+    },
+    defaultSettings: {
+      temperature: 0.7,
+      maxTokens: 8192,
+      topP: 0.9,
+    },
+    isEnabled: true,
+    order: 1,
+    minTier: 'power',
+    metadata: {
+      icon: '/static/icons/ai-models/openai.png',
+      color: '#10A37F',
+      category: 'reasoning',
+      contextWindow: 400000,
+      strengths: [
+        'Latest OpenAI technology',
+        '400K token context',
+        'Web search capabilities',
+        'Advanced reasoning',
+      ],
+      pricing: {
+        input: '$1.25/M tokens',
+        output: '$10/M tokens',
+      },
+    },
+  },
+
+  // Claude 4.1 Opus - Anthropic's Flagship
+  {
+    id: 'claude-opus-4.1',
+    provider: 'openrouter',
+    modelId: AllowedModelId.CLAUDE_OPUS_4_1,
+    name: 'Claude 4.1 Opus',
+    description: 'Anthropic\'s flagship model with 74.5% SWE-bench score and extended thinking up to 64K tokens',
+    capabilities: {
+      streaming: true,
+      tools: true,
+      vision: true,
+      reasoning: true,
+    },
+    defaultSettings: {
+      temperature: 0.7,
+      maxTokens: 8192,
+      topP: 0.9,
+    },
+    isEnabled: true,
+    order: 2,
+    minTier: 'power',
+    metadata: {
+      icon: '/static/icons/ai-models/claude.png',
+      color: '#C87544',
+      category: 'reasoning',
+      contextWindow: 200000,
+      strengths: [
+        '74.5% on SWE-bench Verified',
+        'Extended thinking (64K tokens)',
+        'Exceptional coding and reasoning',
+        'Best for agentic tasks',
+      ],
+      pricing: {
+        input: '$15/M tokens',
+        output: '$75/M tokens',
+      },
+    },
+  },
+
+  // Claude 4.5 Sonnet - Best Coding
+  {
+    id: 'claude-sonnet-4.5',
+    provider: 'openrouter',
+    modelId: AllowedModelId.CLAUDE_SONNET_4_5,
+    name: 'Claude 4.5 Sonnet',
+    description: 'Latest Sonnet with 1M context, 72.7% SWE-bench, and exceptional coding performance',
+    capabilities: {
+      streaming: true,
+      tools: true,
+      vision: true,
+      reasoning: true,
+    },
+    defaultSettings: {
+      temperature: 0.7,
+      maxTokens: 8192,
+      topP: 0.9,
+    },
+    isEnabled: true,
+    order: 3,
+    minTier: 'pro',
+    metadata: {
+      icon: '/static/icons/ai-models/claude.png',
+      color: '#C87544',
+      category: 'reasoning',
+      contextWindow: 1000000,
+      strengths: [
+        '1M token context window',
+        '72.7% on SWE-bench',
+        'Best for complex agents',
+        'Superior coding abilities',
+      ],
+      pricing: {
+        input: '$3/M tokens',
+        output: '$15/M tokens',
+      },
+    },
+  },
+
+  // Gemini 2.5 Pro - Long Context Champion
+  {
+    id: 'gemini-2.5-pro',
+    provider: 'openrouter',
+    modelId: AllowedModelId.GEMINI_2_5_PRO,
+    name: 'Gemini 2.5 Pro',
+    description: 'Google\'s state-of-the-art AI with 1M+ context, advanced reasoning, coding, and scientific tasks',
+    capabilities: {
+      streaming: true,
+      tools: true,
+      vision: true,
+      reasoning: true,
+    },
+    defaultSettings: {
+      temperature: 0.7,
+      maxTokens: 8192,
+      topP: 0.95,
+    },
+    isEnabled: true,
+    order: 4,
+    minTier: 'pro',
+    metadata: {
+      icon: '/static/icons/ai-models/gemini.png',
+      color: '#4285F4',
+      category: 'reasoning',
+      contextWindow: 1048576,
+      strengths: [
+        '1M+ token context',
+        'Advanced reasoning',
+        'Excellent coding',
+        'Strong mathematical abilities',
+      ],
+      pricing: {
+        input: '$1.25/M tokens',
+        output: '$10/M tokens',
+      },
+    },
+  },
+
+  // OpenAI O3 - Advanced Reasoning
+  {
+    id: 'o3',
+    provider: 'openrouter',
+    modelId: AllowedModelId.O3,
+    name: 'OpenAI O3',
+    description: 'Advanced reasoning model with 200K context and multimodal support',
+    capabilities: {
+      streaming: true,
+      tools: true,
+      vision: true,
+      reasoning: true,
+    },
+    defaultSettings: {
+      temperature: 1.0,
+      maxTokens: 16384,
+      topP: 1.0,
+    },
+    isEnabled: true,
+    order: 5,
+    minTier: 'pro',
+    metadata: {
+      icon: '/static/icons/ai-models/openai.png',
+      color: '#10A37F',
+      category: 'reasoning',
+      contextWindow: 200000,
+      strengths: [
+        'Advanced reasoning',
+        'Multimodal support',
+        'Input caching',
+        'Web search available',
+      ],
+      pricing: {
+        input: '$2/M tokens',
+        output: '$8/M tokens',
+      },
+    },
+  },
+
+  // DeepSeek R1 - Best Free Reasoning Model
+  {
+    id: 'deepseek-r1',
+    provider: 'openrouter',
+    modelId: AllowedModelId.DEEPSEEK_R1_FREE,
+    name: 'DeepSeek R1 (Free)',
+    description: 'FREE powerful reasoning model with 671B parameters, on par with O1, MIT licensed',
+    capabilities: {
+      streaming: true,
+      tools: true,
+      vision: false,
+      reasoning: true,
+    },
+    defaultSettings: {
+      temperature: 0.6,
+      maxTokens: 8192,
+      topP: 0.95,
+    },
+    isEnabled: true,
+    order: 6,
+    minTier: 'free',
+    metadata: {
+      icon: '/static/icons/ai-models/deepseek.png',
+      color: '#1E90FF',
+      category: 'reasoning',
+      contextWindow: 163840,
+      strengths: [
+        'FREE tier available',
+        'Performance on par with O1',
+        '671B params (37B active)',
+        'MIT licensed, open-source',
+      ],
+      pricing: {
+        input: 'FREE',
+        output: 'FREE',
+      },
+    },
+  },
+
+  // Llama 4 Maverick - Best Free General Model
+  {
+    id: 'llama-4-maverick-free',
+    provider: 'openrouter',
+    modelId: AllowedModelId.LLAMA_4_MAVERICK_FREE,
+    name: 'Llama 4 Maverick (Free)',
+    description: 'FREE 400B parameter MoE model with 128K context and multimodal support',
+    capabilities: {
+      streaming: true,
+      tools: true,
+      vision: true,
+      reasoning: true,
+    },
+    defaultSettings: {
+      temperature: 0.7,
+      maxTokens: 4096,
+      topP: 0.9,
+    },
+    isEnabled: true,
+    order: 7,
+    minTier: 'free',
+    metadata: {
+      icon: '/static/icons/ai-models/meta.png',
+      color: '#0081FB',
+      category: 'general',
+      contextWindow: 128000,
+      strengths: [
+        'FREE tier available',
+        '400B params (17B active MoE)',
+        'Multimodal support',
+        '128 expert architecture',
+      ],
+      pricing: {
+        input: 'FREE',
+        output: 'FREE',
+      },
+    },
+  },
+
+  // Grok 4 Fast - 2M Context Reasoning
+  {
+    id: 'grok-4-fast',
+    provider: 'openrouter',
+    modelId: AllowedModelId.GROK_4_FAST,
+    name: 'Grok 4 Fast',
+    description: 'xAI\'s fast reasoning model with 2M token context and multimodal support',
+    capabilities: {
+      streaming: true,
+      tools: true,
+      vision: true,
+      reasoning: true,
+    },
+    defaultSettings: {
+      temperature: 0.7,
+      maxTokens: 8192,
+      topP: 0.9,
+    },
+    isEnabled: true,
+    order: 8,
+    minTier: 'starter',
+    metadata: {
+      icon: '/static/icons/ai-models/xai.png',
+      color: '#000000',
+      category: 'reasoning',
+      contextWindow: 2000000,
+      strengths: [
+        '2M token context',
+        'Fast reasoning',
+        'Multimodal support',
+        'Ultra-low cost',
+      ],
+      pricing: {
+        input: '$0.20/M tokens',
+        output: '$0.50/M tokens',
+      },
+    },
+  },
+
+  // Sonar Deep Research - Multi-step Research
+  {
+    id: 'sonar-deep-research',
+    provider: 'openrouter',
+    modelId: AllowedModelId.PERPLEXITY_SONAR_DEEP_RESEARCH,
+    name: 'Sonar Deep Research',
+    description: 'Multi-step research model with autonomous searching, reading, and source evaluation',
+    capabilities: {
+      streaming: true,
+      tools: true,
+      vision: false,
+      reasoning: true,
+    },
+    defaultSettings: {
+      temperature: 0.7,
+      maxTokens: 4096,
+      topP: 0.9,
+    },
+    isEnabled: true,
+    order: 9,
+    minTier: 'starter',
+    metadata: {
+      icon: '/static/icons/ai-models/perplexity.png',
+      color: '#20808D',
+      category: 'research',
+      contextWindow: 128000,
+      strengths: [
+        'Multi-step retrieval',
+        'Autonomous research',
+        'Source evaluation',
+        'Ideal for complex topics',
+      ],
+      pricing: {
+        input: '$2/M tokens',
+        output: '$8/M tokens',
+      },
+    },
+  },
+
+  // ============================================================================
+  // EXISTING MODELS (Kept for backward compatibility)
+  // ============================================================================
+
   // Anthropic Claude Models
   {
     id: 'claude-3.5-sonnet',
@@ -164,7 +539,7 @@ export const AI_MODELS: AIModel[] = [
       topP: 0.9,
     },
     isEnabled: true,
-    order: 1,
+    order: 10,
     minTier: 'pro', // Advanced reasoning model - requires Pro
     metadata: {
       icon: '/static/icons/ai-models/claude.png',
@@ -201,7 +576,7 @@ export const AI_MODELS: AIModel[] = [
       topP: 0.9,
     },
     isEnabled: true,
-    order: 2,
+    order: 11,
     minTier: 'power', // Premium model - most expensive
     metadata: {
       icon: '/static/icons/ai-models/claude.png',
@@ -238,7 +613,7 @@ export const AI_MODELS: AIModel[] = [
       topP: 0.9,
     },
     isEnabled: true,
-    order: 3,
+    order: 12,
     minTier: 'free', // Basic, cost-effective model
     metadata: {
       icon: '/static/icons/ai-models/claude.png',
@@ -277,7 +652,7 @@ export const AI_MODELS: AIModel[] = [
       topP: 1.0,
     },
     isEnabled: true,
-    order: 4,
+    order: 13,
     minTier: 'pro', // Advanced multimodal model
     metadata: {
       icon: '/static/icons/ai-models/openai.png',
@@ -314,7 +689,7 @@ export const AI_MODELS: AIModel[] = [
       topP: 1.0,
     },
     isEnabled: true,
-    order: 5,
+    order: 14,
     minTier: 'power', // Premium tier - expensive
     metadata: {
       icon: '/static/icons/ai-models/openai.png',
@@ -351,7 +726,7 @@ export const AI_MODELS: AIModel[] = [
       topP: 1.0,
     },
     isEnabled: true,
-    order: 6,
+    order: 15,
     minTier: 'pro', // Reasoning model
     metadata: {
       icon: '/static/icons/ai-models/openai.png',
@@ -373,43 +748,6 @@ export const AI_MODELS: AIModel[] = [
 
   // Google Gemini Models
   {
-    id: 'gemini-2.5-pro',
-    provider: 'openrouter',
-    modelId: AllowedModelId.GEMINI_2_5_PRO,
-    name: 'Gemini 2.5 Pro',
-    description: 'Google\'s state-of-the-art AI model for advanced reasoning, coding, and scientific tasks',
-    capabilities: {
-      streaming: true,
-      tools: true,
-      vision: true,
-      reasoning: true,
-    },
-    defaultSettings: {
-      temperature: 0.7,
-      maxTokens: 8192,
-      topP: 0.95,
-    },
-    isEnabled: true,
-    order: 7,
-    minTier: 'starter', // Mid-tier pricing
-    metadata: {
-      icon: '/static/icons/ai-models/gemini.png',
-      color: '#4285F4',
-      category: 'reasoning',
-      contextWindow: 1000000,
-      strengths: [
-        'Advanced reasoning capabilities',
-        'Excellent coding performance',
-        'Multimodal support',
-        'Strong mathematical abilities',
-      ],
-      pricing: {
-        input: '$1.25/M tokens',
-        output: '$5/M tokens',
-      },
-    },
-  },
-  {
     id: 'gemini-2.5-flash',
     provider: 'openrouter',
     modelId: AllowedModelId.GEMINI_2_5_FLASH,
@@ -427,7 +765,7 @@ export const AI_MODELS: AIModel[] = [
       topP: 0.95,
     },
     isEnabled: true,
-    order: 8,
+    order: 16,
     minTier: 'free', // Most cost-effective model
     metadata: {
       icon: '/static/icons/ai-models/gemini.png',
@@ -466,7 +804,7 @@ export const AI_MODELS: AIModel[] = [
       topP: 0.9,
     },
     isEnabled: true,
-    order: 9,
+    order: 17,
     minTier: 'power', // Large, resource-intensive model
     metadata: {
       icon: '/static/icons/ai-models/meta.png',
@@ -505,7 +843,7 @@ export const AI_MODELS: AIModel[] = [
       topP: 0.95,
     },
     isEnabled: true,
-    order: 10,
+    order: 18,
     minTier: 'free', // Very cost-effective
     metadata: {
       icon: '/static/icons/ai-models/deepseek.png',
@@ -544,7 +882,7 @@ export const AI_MODELS: AIModel[] = [
       topP: 0.9,
     },
     isEnabled: true,
-    order: 11,
+    order: 19,
     minTier: 'starter', // Research capability
     metadata: {
       icon: '/static/icons/ai-models/perplexity.png',

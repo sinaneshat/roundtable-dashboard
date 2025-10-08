@@ -110,9 +110,11 @@ export default function ChatThreadScreen({ slug }: { slug: string }) {
 
   // ✅ CRITICAL FIX: Only render chat content after data loads
   // This ensures useChat initializes with correct initialMessages from server
+  // Key by slug (not thread.id) to force complete remount when navigating between threads
+  // This prevents AI SDK's useChat from showing cached messages from previous thread
   return (
     <ChatThreadContent
-      key={thread.id} // Force remount when thread changes
+      key={slug} // Force remount when slug changes (prevents cache leaking between threads)
       thread={thread}
       participants={participants}
       serverMessages={serverMessages}
@@ -268,16 +270,22 @@ function ChatThreadContent({
   // Track if we're currently streaming a manual participant (participants 1+)
   const [isStreamingManualParticipant, setIsStreamingManualParticipant] = useState(false);
 
+  // Track if we've auto-triggered participant 0 for this thread
+  const participant0TriggeredRef = useRef<string | null>(null);
+
   // ✅ AI SDK v5 OFFICIAL PATTERN: Track abort controllers for manual participant streams
   // Reference: https://sdk.vercel.ai/docs/ai-sdk-ui/stream-protocol
   // Allows canceling streams when user clicks stop
   const abortControllersRef = useRef<Map<number, AbortController>>(new Map());
 
-  // ✅ AUTO-TRIGGER SUBSEQUENT PARTICIPANTS
-  // Automatically trigger remaining participants in sequence for each user message
-  useEffect(() => {
-    // Only auto-trigger if ready and have multiple participants
-    if (status !== 'ready' || isStreamingManualParticipant || currentParticipants.length <= 1) {
+  // Track pending next participant trigger timeouts for cleanup
+  const nextParticipantTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // ✅ SEQUENTIAL PARTICIPANT TRIGGER: Helper function to trigger next participant
+  // Called after each participant finishes to ensure sequential execution
+  const triggerNextParticipant = useCallback(() => {
+    // Only trigger if ready and not already streaming
+    if (status !== 'ready' || isStreamingManualParticipant) {
       return;
     }
 
@@ -289,7 +297,7 @@ function ChatThreadContent({
 
     const lastUserMessage = messages[lastUserMessageIndex];
     if (!lastUserMessage) {
-      return; // Safety check
+      return;
     }
 
     // Count assistant messages AFTER the last user message (current round only)
@@ -297,21 +305,14 @@ function ChatThreadContent({
       .slice(lastUserMessageIndex + 1)
       .filter(m => m.role === 'assistant');
 
-    const participantsRespondedCount = assistantMessagesInCurrentRound.length;
-    const nextParticipantIndex = participantsRespondedCount;
+    const nextParticipantIndex = assistantMessagesInCurrentRound.length;
 
-    // ✅ CRITICAL: Auto-trigger only handles participants 1+ (useChat handles participant 0)
-    // Skip if we're waiting for participant 0 (useChat's responsibility)
-    if (nextParticipantIndex === 0) {
-      return; // Participant 0 is handled by useChat
-    }
-
-    // Check if all participants have responded to this user message
+    // Check if all participants have responded
     if (nextParticipantIndex >= currentParticipants.length) {
-      return; // All participants responded to current round
+      return; // All participants responded
     }
 
-    // Prevent duplicate triggers for the same participant in same round
+    // Prevent duplicate triggers
     const triggerKey = `${lastUserMessage.id}-${nextParticipantIndex}`;
     if (triggeredParticipantsRef.current.has(triggerKey)) {
       return;
@@ -319,16 +320,13 @@ function ChatThreadContent({
 
     // Mark as triggered
     triggeredParticipantsRef.current.add(triggerKey);
-
-    // ✅ AI SDK v5 OFFICIAL PATTERN: Use streamParticipant utility with abort signal
-    // Reference: https://sdk.vercel.ai/docs/ai-sdk-ui/stream-protocol
     setIsStreamingManualParticipant(true);
 
-    // Create abort controller for this participant
+    // Create abort controller
     const abortController = new AbortController();
     abortControllersRef.current.set(nextParticipantIndex, abortController);
 
-    // Trigger the next participant using official AI SDK pattern
+    // Trigger the participant
     (async () => {
       try {
         await streamParticipant({
@@ -336,11 +334,11 @@ function ChatThreadContent({
           messages,
           participantIndex: nextParticipantIndex,
           onUpdate: setMessages,
-          signal: abortController.signal, // ✅ Pass abort signal for cancellation support
+          signal: abortController.signal,
         });
       } catch (error) {
         if (error instanceof Error && error.name === 'AbortError') {
-          return; // User cancelled - this is expected
+          return;
         }
 
         console.error(`Failed to trigger participant ${nextParticipantIndex}:`, error);
@@ -350,12 +348,84 @@ function ChatThreadContent({
         );
       } finally {
         setIsStreamingManualParticipant(false);
-        // Cleanup: Remove abort controller after stream completes
         abortControllersRef.current.delete(nextParticipantIndex);
+
+        // ✅ CRITICAL: Trigger next participant AFTER this one finishes
+        // This ensures sequential execution without race conditions
+        nextParticipantTimeoutRef.current = setTimeout(() => {
+          nextParticipantTimeoutRef.current = null;
+          triggerNextParticipant();
+        }, 100);
       }
     })();
-    // Dependencies: status, messages, currentParticipants (for length check), thread.id, setMessages, t
-  }, [status, messages, currentParticipants, thread.id, setMessages, t, isStreamingManualParticipant]);
+  }, [status, isStreamingManualParticipant, messages, currentParticipants.length, thread.id, setMessages, t]);
+
+  // ✅ AUTO-TRIGGER FIRST PARTICIPANT FOR NEW THREADS
+  // When a new thread is created, the first user message is saved but no assistant response exists
+  // This effect detects that scenario and auto-triggers participant 0
+  useEffect(() => {
+    // Only trigger if ready and not already triggered for this thread
+    if (status !== 'ready' || participant0TriggeredRef.current === thread.id || isStreamingManualParticipant) {
+      return;
+    }
+
+    // Check if this is a new thread: only user messages, no assistant messages
+    const hasUserMessages = messages.some(m => m.role === 'user');
+    const hasAssistantMessages = messages.some(m => m.role === 'assistant');
+
+    if (hasUserMessages && !hasAssistantMessages && currentParticipants.length > 0) {
+      // Mark as triggered for this thread
+      participant0TriggeredRef.current = thread.id;
+      setIsStreamingManualParticipant(true);
+
+      // Create abort controller for participant 0
+      const abortController = new AbortController();
+      abortControllersRef.current.set(0, abortController);
+
+      // Auto-trigger participant 0 manually (similar to subsequent participants)
+      (async () => {
+        try {
+          await streamParticipant({
+            threadId: thread.id,
+            messages,
+            participantIndex: 0,
+            onUpdate: setMessages,
+            signal: abortController.signal,
+          });
+        } catch (error) {
+          if (error instanceof Error && error.name === 'AbortError') {
+            return; // User cancelled - this is expected
+          }
+
+          console.error('Failed to trigger first participant:', error);
+          toastManager.error(
+            t('chat.participantFailed'),
+            t('chat.participantFailedDescription'),
+          );
+        } finally {
+          setIsStreamingManualParticipant(false);
+          abortControllersRef.current.delete(0);
+
+          // ✅ CRITICAL: Trigger next participant AFTER participant 0 finishes
+          // This ensures sequential execution without race conditions
+          nextParticipantTimeoutRef.current = setTimeout(() => {
+            nextParticipantTimeoutRef.current = null;
+            triggerNextParticipant();
+          }, 100);
+        }
+      })();
+    }
+  }, [status, messages, thread.id, currentParticipants.length, isStreamingManualParticipant, setMessages, t, triggerNextParticipant]);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (nextParticipantTimeoutRef.current) {
+        clearTimeout(nextParticipantTimeoutRef.current);
+        nextParticipantTimeoutRef.current = null;
+      }
+    };
+  }, []);
 
   // ============================================================================
   // Stream Control
@@ -374,6 +444,12 @@ function ChatThreadContent({
 
     // Cleanup: Clear all abort controllers
     abortControllersRef.current.clear();
+
+    // Clear any pending next participant trigger
+    if (nextParticipantTimeoutRef.current) {
+      clearTimeout(nextParticipantTimeoutRef.current);
+      nextParticipantTimeoutRef.current = null;
+    }
   }, [stop]);
 
   // ============================================================================
@@ -387,10 +463,29 @@ function ChatThreadContent({
   }, []);
 
   // Regenerate responses from the first user message
-  // Following AI SDK v5 docs: simply call regenerate() without manual message manipulation
+  // ✅ FIX: Multi-participant regeneration - clear ALL assistant messages from all participants
+  // AI SDK's regenerate() only handles participant 0, so we need to clear all manually
   const handleRegenerateMessage = useCallback(() => {
-    regenerate();
-  }, [regenerate]);
+    // Find first user message index
+    const firstUserMessageIndex = messages.findIndex(m => m.role === 'user');
+    if (firstUserMessageIndex === -1)
+      return;
+
+    // ✅ CRITICAL FIX: Remove ALL assistant messages (all participants)
+    // This ensures all participants regenerate, not just participant 0
+    setMessages(prev => prev.slice(0, firstUserMessageIndex + 1));
+
+    // ✅ CRITICAL FIX: Reset triggered participants
+    // This allows all participants to be triggered again
+    triggeredParticipantsRef.current.clear();
+    participant0TriggeredRef.current = null;
+
+    // Trigger regeneration with a small delay to ensure state is updated
+    setTimeout(() => {
+      regenerate(); // AI SDK handles participant 0
+      // triggerNextParticipant useEffect will auto-handle participants 1+
+    }, 50);
+  }, [messages, setMessages, regenerate]);
 
   // Open edit dialog for the first user message
   const handleEditMessage = useCallback((messageId: string, currentContent: string) => {

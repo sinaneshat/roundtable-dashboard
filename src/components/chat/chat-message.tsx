@@ -5,11 +5,12 @@ import { AnimatePresence, motion } from 'motion/react';
 import { useTranslations } from 'next-intl';
 import { memo, useState } from 'react';
 
+import type { MessageError } from '@/components/chat/chat-message-error';
+import { ChatMessageError } from '@/components/chat/chat-message-error';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { FadeIn } from '@/components/ui/motion';
-import { useTypingEffect } from '@/hooks/utils/use-typing-effect';
 import { getModelById } from '@/lib/ai/models-config';
 import { useSession } from '@/lib/auth/client';
 import { cn } from '@/lib/ui/cn';
@@ -73,12 +74,7 @@ export const ChatMessage = memo(({
   const isUser = message.role === 'user';
   const isAssistant = message.role === 'assistant';
 
-  // Typing effect for streaming messages
-  const displayedContent = useTypingEffect(
-    message.content,
-    message.isStreaming || false,
-    15, // 15ms per character - fast and subtle
-  );
+  const displayedContent = message.content;
 
   // Show actions only for user messages
   const showActions = isUser && (onRegenerate || onCopy || onEdit);
@@ -86,6 +82,18 @@ export const ChatMessage = memo(({
   // Get model config for AI messages
   const modelConfig = isAssistant && message.metadata?.model
     ? getModelById(message.metadata.model)
+    : null;
+
+  // Check if this message has an error (matching backend error metadata format from OpenRouter error handler)
+  const messageError: MessageError | null = isAssistant && (message.metadata?.error || message.metadata?.errorType)
+    ? {
+        error: message.metadata.error as string | undefined,
+        errorMessage: message.metadata.errorMessage as string | undefined,
+        errorType: message.metadata.errorType as MessageError['errorType'] | undefined,
+        errorDetails: message.metadata.errorDetails as string | undefined,
+        isTransient: message.metadata.isTransient as boolean | undefined,
+        model: message.metadata.model as string | undefined,
+      }
     : null;
 
   // Get user info for user messages
@@ -250,20 +258,32 @@ export const ChatMessage = memo(({
             )}
         </div>
 
-        {/* Message text */}
+        {/* Message text or error */}
         <div className="relative">
-          <div className={cn(
-            'rounded-2xl transition-colors',
-            isUser
-              ? 'bg-accent/80 dark:bg-accent/60 border border-accent px-4 py-3 text-accent-foreground'
-              : 'prose prose-sm dark:prose-invert max-w-none',
-          )}
-          >
-            <span className="whitespace-pre-wrap">{displayedContent}</span>
-            {message.isStreaming && (
-              <span className="ml-1 inline-block size-1 animate-pulse rounded-full bg-current" />
-            )}
-          </div>
+          {messageError
+            ? (
+              // Show error component for failed responses
+                <ChatMessageError
+                  error={messageError}
+                  modelName={modelConfig?.name}
+                  onRetry={onRegenerate}
+                />
+              )
+            : (
+              // Show normal message content
+                <div className={cn(
+                  'rounded-2xl transition-colors',
+                  isUser
+                    ? 'bg-accent/80 dark:bg-accent/60 border border-accent px-4 py-3 text-accent-foreground'
+                    : 'prose prose-sm dark:prose-invert max-w-none',
+                )}
+                >
+                  <span className="whitespace-pre-wrap">{displayedContent}</span>
+                  {message.isStreaming && (
+                    <span className="ml-1 inline-block size-1 animate-pulse rounded-full bg-current" />
+                  )}
+                </div>
+              )}
 
           {/* Hover Actions - Animate in from the side */}
           <AnimatePresence>
