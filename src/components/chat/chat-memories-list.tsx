@@ -164,7 +164,6 @@ export function ChatMemoriesList({
         // Success is obvious from the memory appearing in the list - no toast needed
       }
     } catch (error) {
-      console.error('Failed to create memory:', error);
       const errorMessage = getApiErrorMessage(error, 'Failed to create memory');
       toastManager.error('Failed to create memory', errorMessage);
     }
@@ -185,7 +184,6 @@ export function ChatMemoriesList({
         // Mutation auto-invalidates query - no manual refetch needed
       }
     } catch (error) {
-      console.error('Failed to delete memory:', error);
       const errorMessage = getApiErrorMessage(error, 'Failed to delete memory');
       toastManager.error('Failed to delete memory', errorMessage);
     }

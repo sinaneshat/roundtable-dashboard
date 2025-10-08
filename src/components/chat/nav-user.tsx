@@ -86,7 +86,6 @@ export function NavUser() {
         window.open(result.data.url, '_blank', 'noopener,noreferrer');
       }
     } catch (error) {
-      console.error('Error creating portal session:', error);
       const errorMessage = getApiErrorMessage(error, 'Failed to open customer portal');
       toastManager.error('Portal Error', errorMessage);
     }
@@ -111,7 +110,6 @@ export function NavUser() {
         // Success is obvious from the dialog closing and UI update - no toast needed
       }
     } catch (error) {
-      console.error('Error canceling subscription:', error);
       const errorMessage = getApiErrorMessage(error, 'Failed to cancel subscription');
       toastManager.error('Cancellation Failed', errorMessage);
     }

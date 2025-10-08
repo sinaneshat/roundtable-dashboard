@@ -42,6 +42,9 @@ import type { SessionTypeMode } from '@/lib/ai/models-config';
 import {
   buildRoundtableSystemPrompt,
   canAccessModel,
+  canAddMoreModels,
+  getMaxModelsErrorMessage,
+  getMaxOutputTokens,
   getModelById,
   getTierDisplayName,
 } from '@/lib/ai/models-config';
@@ -433,11 +436,6 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
             updatedAt: new Date(),
           })
           .where(eq(tables.chatThread.id, threadId));
-
-        apiLogger.info('Thread title updated asynchronously', {
-          threadId,
-          title: aiTitle,
-        });
       } catch (error) {
         // Log error but don't fail the request since thread is already created
         apiLogger.error('Failed to generate async title for thread', {
@@ -803,6 +801,21 @@ export const addParticipantHandler: RouteHandler<typeof addParticipantRoute, Api
       );
     }
 
+    // Validate maxConcurrentModels limit for user's tier
+    const existingParticipants = await db.query.chatParticipant.findMany({
+      where: eq(tables.chatParticipant.threadId, id),
+    });
+
+    const currentModelCount = existingParticipants.length;
+
+    if (!canAddMoreModels(currentModelCount, userTier)) {
+      const errorMessage = getMaxModelsErrorMessage(userTier);
+      throw createError.badRequest(errorMessage, {
+        errorType: 'validation',
+        field: 'modelId',
+      });
+    }
+
     const participantId = ulid();
     const now = new Date();
 
@@ -946,6 +959,10 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
     // Verify thread ownership and get participants
     let thread = await verifyThreadOwnership(threadId, user.id, db, { includeParticipants: true });
 
+    // Get user's subscription tier (used for model access validation and output token limits)
+    const usageStats = await getUserUsageStats(user.id);
+    const userTier = usageStats.subscription.tier as SubscriptionTier;
+
     // ==================================================
     // DYNAMIC CONFIGURATION UPDATES
     // Update thread mode/participants/memories if provided
@@ -959,15 +976,10 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
         .where(eq(tables.chatThread.id, threadId));
 
       thread.mode = newMode as ChatModeId; // Update local reference
-      apiLogger.info('Thread mode updated', { threadId, oldMode: thread.mode, newMode });
     }
 
     // Update participants if provided
     if (newParticipants && newParticipants.length > 0) {
-      // Get user's subscription tier to validate model access
-      const usageStats = await getUserUsageStats(user.id);
-      const userTier = usageStats.subscription.tier as SubscriptionTier;
-
       // Validate that user can access all requested models
       for (const participant of newParticipants) {
         const model = getModelById(participant.modelId);
@@ -1014,11 +1026,6 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
 
       // Reload thread with new participants
       thread = await verifyThreadOwnership(threadId, user.id, db, { includeParticipants: true });
-      apiLogger.info('Thread participants updated', {
-        threadId,
-        participantCount: newParticipants.length,
-        models: newParticipants.map(p => p.modelId),
-      });
     }
 
     // Update memories if provided
@@ -1038,11 +1045,6 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
 
         await db.insert(tables.chatThreadMemory).values(memoriesToAttach);
       }
-
-      apiLogger.info('Thread memories updated', {
-        threadId,
-        memoryCount: newMemoryIds.length,
-      });
     }
 
     // Load existing messages from database
@@ -1136,17 +1138,6 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
     // and ordered by priority in the database query - no need to filter/sort again
     const participants = thread.participants;
 
-    apiLogger.info('Participants loaded for streaming', {
-      threadId,
-      totalParticipants: participants.length,
-      participants: participants.map(p => ({
-        id: p.id,
-        modelId: p.modelId,
-        priority: p.priority,
-        isEnabled: p.isEnabled,
-      })),
-    });
-
     // One participant per HTTP request (N requests for N participants)
     initializeOpenRouter(c.env);
     const client = openRouterService.getClient();
@@ -1173,14 +1164,6 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
     const participantIndex = requestedParticipantIndex;
     const participant = participants[participantIndex]!;
 
-    apiLogger.info('Streaming participant response', {
-      threadId,
-      participantIndex,
-      participantId: participant.id,
-      model: participant.modelId,
-      historyLength: currentHistory.length,
-    });
-
     // Build system prompt (only includes previous participants)
     const systemPrompt = buildRoundtableSystemPrompt({
       mode: thread.mode as SessionTypeMode,
@@ -1202,13 +1185,20 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
     // 🛡️ Guard against duplicate onFinish calls
     let onFinishExecuted = false;
 
-    apiLogger.info('Stream starting', {
-      threadId,
-      participantId: participant.id,
-      participantIndex,
-      model: participant.modelId,
-      messageId,
-    });
+    // 🛡️ Track error for metadata in onFinish
+    // When onError returns a message, that text becomes content
+    // We need to track the error separately to include metadata in database
+    let streamError: Error | null = null;
+
+    // ✅ Cost Control: Calculate max output tokens based on tier and model
+    const modelConfig = getModelById(participant.modelId);
+    const tierMaxOutputTokens = getMaxOutputTokens(userTier);
+    const modelSpecificLimit = modelConfig?.defaultSettings?.maxOutputTokens;
+
+    // Use the most restrictive limit:
+    // 1. Model-specific limit (if set) - for expensive models
+    // 2. Tier-level limit (from subscription config)
+    const maxOutputTokensLimit = modelSpecificLimit || tierMaxOutputTokens;
 
     // ✅ AI SDK v5: streamText with official configuration
     const result = streamText({
@@ -1217,6 +1207,9 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
       system: systemPrompt,
       temperature: participant.settings?.temperature || 0.7,
       abortSignal: c.req.raw.signal,
+
+      // ✅ Cost Control: Enforce output token limit based on subscription tier
+      maxOutputTokens: maxOutputTokensLimit,
 
       // ✅ AI SDK v5: Built-in retry (replaced 120 lines of manual retry)
       maxRetries: 3,
@@ -1268,15 +1261,6 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
         const textPart = responseMessage.parts.find(p => p.type === 'text');
         const content = textPart?.type === 'text' ? textPart.text : '';
 
-        apiLogger.info('Stream finished', {
-          threadId,
-          participantId: participant.id,
-          participantIndex,
-          messageId: responseMessage.id,
-          isAborted,
-          contentLength: content.length,
-        });
-
         // Validate we have content
         if (!content || content.trim().length === 0) {
           const errorMetadata = formatErrorForDatabase(
@@ -1318,6 +1302,13 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
           return;
         }
 
+        // ✅ Prepare metadata - include error info if error occurred
+        // When onError returns a message, content is the error text
+        // We need to include error metadata so frontend can display error UI
+        const errorMetadata = streamError
+          ? formatErrorForDatabase(streamError, participant.modelId)
+          : null;
+
         // Save message (idempotent - prevents duplicate inserts if onFinish called multiple times)
         await db.insert(tables.chatMessage).values({
           id: responseMessage.id,
@@ -1333,6 +1324,8 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
             participantIndex,
             aborted: isAborted,
             partialResponse: isAborted,
+            // ✅ Include error metadata if error occurred
+            ...(errorMetadata || {}),
           },
           createdAt: now,
         }).onConflictDoNothing();
@@ -1364,18 +1357,14 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
             }
           }
         }
-
-        apiLogger.info('Participant response saved', {
-          participantId: participant.id,
-          participantIndex,
-          messageId: responseMessage.id,
-          contentLength: content.length,
-          isAborted,
-        });
       },
 
       // ✅ AI SDK: Simplified error handling
+      // Store error for metadata in onFinish so UI can display error state
       onError: (error) => {
+        // Track error for metadata
+        streamError = error instanceof Error ? error : new Error(String(error));
+
         const classified = classifyOpenRouterError(error);
 
         apiLogger.error('Stream error', {
@@ -1387,6 +1376,8 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
           userMessage: classified.message,
         });
 
+        // Return user-friendly error message
+        // This becomes the content text streamed to the client
         return classified.message;
       },
     });

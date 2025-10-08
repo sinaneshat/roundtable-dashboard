@@ -5,8 +5,6 @@
  * for OpenRouter API failures during AI model streaming
  */
 
-import { apiLogger } from '@/api/middleware/hono-logger';
-
 /**
  * Error classification types for different failure scenarios
  */
@@ -231,64 +229,6 @@ export function shouldRetryError(
 ): boolean {
   const config = RETRY_CONFIG[errorType];
   return config.shouldRetry && retryAttempt < config.maxRetries;
-}
-
-/**
- * Sleep utility for retry delays
- */
-export function sleep(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-/**
- * Retry wrapper with exponential backoff
- */
-export async function retryWithBackoff<T>(
-  operation: () => Promise<T>,
-  context: {
-    modelId: string;
-    threadId: string;
-    participantId: string;
-  },
-): Promise<T> {
-  let retryAttempt = 0;
-
-  while (true) {
-    try {
-      return await operation();
-    } catch (error) {
-      const classified = classifyOpenRouterError(error);
-
-      apiLogger.warn('Retry attempt for model streaming', {
-        ...context,
-        errorType: classified.type,
-        retryAttempt,
-        maxRetries: RETRY_CONFIG[classified.type].maxRetries,
-        technicalMessage: classified.technicalMessage,
-      });
-
-      if (!shouldRetryError(classified.type, retryAttempt)) {
-        apiLogger.error('Max retries exceeded or non-retryable error', {
-          ...context,
-          errorType: classified.type,
-          retryAttempt,
-          finalError: classified.technicalMessage,
-        });
-        throw error; // Re-throw after exhausting retries
-      }
-
-      const delayMs = calculateRetryDelay(classified.type, retryAttempt);
-      apiLogger.info('Retrying after delay', {
-        ...context,
-        errorType: classified.type,
-        retryAttempt: retryAttempt + 1,
-        delayMs,
-      });
-
-      await sleep(delayMs);
-      retryAttempt++;
-    }
-  }
 }
 
 /**

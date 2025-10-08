@@ -1474,11 +1474,6 @@ async function processWebhookEvent(
 ): Promise<void> {
   // Skip if event type not tracked
   if (!TRACKED_WEBHOOK_EVENTS.includes(event.type)) {
-    apiLogger.info('Skipping untracked webhook event', {
-      logType: 'operation',
-      operationName: 'webhookSkipped',
-      resource: `${event.type}-${event.id}`,
-    });
     return;
   }
 
@@ -1510,10 +1505,4 @@ async function processWebhookEvent(
 
   // Single sync function - fetches fresh data from Stripe API (Theo's pattern)
   await syncStripeDataFromStripe(customerId);
-
-  apiLogger.info('Webhook event processed via sync', {
-    logType: 'operation',
-    operationName: 'webhookSynced',
-    resource: `${event.type}-${customerId}`,
-  });
 }

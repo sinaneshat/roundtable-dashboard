@@ -115,7 +115,6 @@ export function ChatPromptForm({ className, onThreadCreated }: ChatPromptFormPro
         router.push(`/chat/${threadSlug}`);
       }
     } catch (error) {
-      console.error('Failed to create thread:', error);
       const errorMessage = getApiErrorMessage(error, t('chat.threadCreationFailed'));
       toast({
         title: t('notifications.error.createFailed'),

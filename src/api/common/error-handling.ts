@@ -5,8 +5,11 @@
  * across all API routes with consistent error formatting, logging, and
  * response structures.
  *
+ * Uses Zod for schema validation and type inference to avoid hard-coded types.
+ *
  * Features:
- * - Standardized error types and codes
+ * - Zod-based error schemas and validation
+ * - Type inference instead of manual type definitions
  * - Consistent error response formatting
  * - Proper error logging without sensitive data
  * - HTTP status code mapping
@@ -16,72 +19,113 @@
 
 // Using Stoker's HttpStatusCodes for maximum reusability
 import * as HttpStatusCodes from 'stoker/http-status-codes';
+import { z } from 'zod';
 
 // Import our unified type-safe error context instead of generic Record
 import type { ErrorContext } from '@/api/core';
 
 // ============================================================================
-// ERROR TYPE DEFINITIONS
+// ZOD SCHEMAS FOR ERROR TYPES
 // ============================================================================
 
 /**
- * Standard error codes used throughout the application
+ * Standard error codes schema - Zod enum for validation
  */
-const ERROR_CODES = {
+export const ErrorCodeSchema = z.enum([
   // Authentication & Authorization
-  UNAUTHENTICATED: 'UNAUTHENTICATED',
-  UNAUTHORIZED: 'UNAUTHORIZED',
-  TOKEN_EXPIRED: 'TOKEN_EXPIRED',
-  TOKEN_INVALID: 'TOKEN_INVALID',
-  INSUFFICIENT_PERMISSIONS: 'INSUFFICIENT_PERMISSIONS',
+  'UNAUTHENTICATED',
+  'UNAUTHORIZED',
+  'TOKEN_EXPIRED',
+  'TOKEN_INVALID',
+  'INSUFFICIENT_PERMISSIONS',
 
   // Validation & Input
-  VALIDATION_ERROR: 'VALIDATION_ERROR',
-  INVALID_INPUT: 'INVALID_INPUT',
-  MISSING_REQUIRED_FIELD: 'MISSING_REQUIRED_FIELD',
-  INVALID_FORMAT: 'INVALID_FORMAT',
-  INVALID_ENUM_VALUE: 'INVALID_ENUM_VALUE',
+  'VALIDATION_ERROR',
+  'INVALID_INPUT',
+  'MISSING_REQUIRED_FIELD',
+  'INVALID_FORMAT',
+  'INVALID_ENUM_VALUE',
 
   // Resource Management
-  RESOURCE_NOT_FOUND: 'RESOURCE_NOT_FOUND',
-  RESOURCE_ALREADY_EXISTS: 'RESOURCE_ALREADY_EXISTS',
-  RESOURCE_CONFLICT: 'RESOURCE_CONFLICT',
-  RESOURCE_LOCKED: 'RESOURCE_LOCKED',
-  RESOURCE_EXPIRED: 'RESOURCE_EXPIRED',
+  'RESOURCE_NOT_FOUND',
+  'RESOURCE_ALREADY_EXISTS',
+  'RESOURCE_CONFLICT',
+  'RESOURCE_LOCKED',
+  'RESOURCE_EXPIRED',
 
   // Business Logic
-  BUSINESS_RULE_VIOLATION: 'BUSINESS_RULE_VIOLATION',
+  'BUSINESS_RULE_VIOLATION',
 
   // External Services
-  EXTERNAL_SERVICE_ERROR: 'EXTERNAL_SERVICE_ERROR',
-  EMAIL_SERVICE_ERROR: 'EMAIL_SERVICE_ERROR',
-  STORAGE_SERVICE_ERROR: 'STORAGE_SERVICE_ERROR',
+  'EXTERNAL_SERVICE_ERROR',
+  'EMAIL_SERVICE_ERROR',
+  'STORAGE_SERVICE_ERROR',
 
   // System & Infrastructure
-  INTERNAL_SERVER_ERROR: 'INTERNAL_SERVER_ERROR',
-  DATABASE_ERROR: 'DATABASE_ERROR',
-  NETWORK_ERROR: 'NETWORK_ERROR',
-  TIMEOUT_ERROR: 'TIMEOUT_ERROR',
-  RATE_LIMIT_EXCEEDED: 'RATE_LIMIT_EXCEEDED',
-  SERVICE_UNAVAILABLE: 'SERVICE_UNAVAILABLE',
-  MAINTENANCE_MODE: 'MAINTENANCE_MODE',
-  BATCH_FAILED: 'BATCH_FAILED',
-  BATCH_SIZE_EXCEEDED: 'BATCH_SIZE_EXCEEDED',
-} as const;
-
-export type ErrorCode = typeof ERROR_CODES[keyof typeof ERROR_CODES];
+  'INTERNAL_SERVER_ERROR',
+  'DATABASE_ERROR',
+  'NETWORK_ERROR',
+  'TIMEOUT_ERROR',
+  'RATE_LIMIT_EXCEEDED',
+  'SERVICE_UNAVAILABLE',
+  'MAINTENANCE_MODE',
+  'BATCH_FAILED',
+  'BATCH_SIZE_EXCEEDED',
+]);
 
 /**
- * Error severity levels for logging and monitoring
+ * Inferred type from Zod schema - replaces hard-coded type
  */
-const ERROR_SEVERITY = {
-  LOW: 'low',
-  MEDIUM: 'medium',
-  HIGH: 'high',
-  CRITICAL: 'critical',
-} as const;
+export type ErrorCode = z.infer<typeof ErrorCodeSchema>;
 
-export type ErrorSeverity = typeof ERROR_SEVERITY[keyof typeof ERROR_SEVERITY];
+/**
+ * Error codes constant for easy access (derived from schema)
+ */
+export const ERROR_CODES = ErrorCodeSchema.enum;
+
+/**
+ * Error severity levels schema - Zod enum for validation
+ */
+export const ErrorSeveritySchema = z.enum(['low', 'medium', 'high', 'critical']);
+
+/**
+ * Inferred type from Zod schema - replaces hard-coded type
+ */
+export type ErrorSeverity = z.infer<typeof ErrorSeveritySchema>;
+
+/**
+ * Error severity constant for easy access (derived from schema)
+ */
+export const ERROR_SEVERITY = {
+  LOW: 'low' as const,
+  MEDIUM: 'medium' as const,
+  HIGH: 'high' as const,
+  CRITICAL: 'critical' as const,
+} satisfies Record<string, ErrorSeverity>;
+
+// ============================================================================
+// ERROR CONFIGURATION SCHEMA
+// ============================================================================
+
+/**
+ * Schema for AppError constructor parameters
+ * Uses Zod for validation and type inference
+ */
+export const AppErrorConfigSchema = z.object({
+  message: z.string().min(1),
+  code: ErrorCodeSchema,
+  statusCode: z.number().int().min(100).max(599),
+  severity: ErrorSeveritySchema.optional().default('medium'),
+  details: z.unknown().optional(),
+  context: z.any().optional(), // ErrorContext type is complex, use any for now
+  correlationId: z.string().optional(),
+});
+
+/**
+ * Inferred type from schema - replaces hard-coded interface
+ * Note: severity is optional due to default value
+ */
+export type AppErrorConfig = z.input<typeof AppErrorConfigSchema>;
 
 // ============================================================================
 // ERROR CLASSES
@@ -89,6 +133,7 @@ export type ErrorSeverity = typeof ERROR_SEVERITY[keyof typeof ERROR_SEVERITY];
 
 /**
  * Base application error class with enhanced metadata
+ * Constructor parameters validated via Zod schema
  */
 class AppError extends Error {
   public readonly code: ErrorCode;
@@ -99,32 +144,19 @@ class AppError extends Error {
   public readonly timestamp: Date;
   public readonly correlationId?: string;
 
-  constructor({
-    message,
-    code,
-    statusCode,
-    severity = ERROR_SEVERITY.MEDIUM,
-    details,
-    context,
-    correlationId,
-  }: {
-    message: string;
-    code: ErrorCode;
-    statusCode: number;
-    severity?: ErrorSeverity;
-    details?: unknown;
-    context?: ErrorContext;
-    correlationId?: string;
-  }) {
-    super(message);
+  constructor(config: AppErrorConfig) {
+    // Validate configuration via Zod schema (runtime validation)
+    const validated = AppErrorConfigSchema.parse(config);
+
+    super(validated.message);
     this.name = this.constructor.name;
-    this.code = code;
-    this.statusCode = statusCode;
-    this.severity = severity;
-    this.details = details;
-    this.context = context;
+    this.code = validated.code;
+    this.statusCode = validated.statusCode;
+    this.severity = validated.severity;
+    this.details = validated.details;
+    this.context = validated.context;
     this.timestamp = new Date();
-    this.correlationId = correlationId;
+    this.correlationId = validated.correlationId;
 
     // Maintain proper stack trace
     if (Error.captureStackTrace) {
@@ -393,11 +425,9 @@ export function normalizeError(error: unknown): Error {
 
 export {
   AppError,
-  ERROR_CODES,
-  ERROR_SEVERITY,
   ExternalServiceError,
 };
 
-// ErrorCode and ErrorSeverity are already exported above where they are defined
+// ERROR_CODES, ERROR_SEVERITY, ErrorCode, ErrorSeverity are already exported above
 
 export default createError;

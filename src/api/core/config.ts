@@ -401,6 +401,77 @@ export function getEnvironment(): 'development' | 'preview' | 'production' | 'te
   return getConfigValue('NEXT_PUBLIC_WEBAPP_ENV');
 }
 
+/**
+ * Check if we're in a non-production environment (local or preview)
+ */
+export function isNonProduction(): boolean {
+  const env = getEnvironment();
+  return env === 'development' || env === 'local' || env === 'preview';
+}
+
+// ============================================================================
+// LOGGING CONFIGURATION
+// ============================================================================
+
+/**
+ * Log levels in priority order
+ */
+export type LogLevel = 'DEBUG' | 'INFO' | 'WARN' | 'ERROR';
+
+/**
+ * Logging configuration by environment
+ * Automatically adjusts verbosity based on deployment environment
+ */
+export const LOGGING_CONFIG = {
+  local: {
+    enabled: true,
+    levels: ['DEBUG', 'INFO', 'WARN', 'ERROR'] as LogLevel[],
+    prettyPrint: true,
+    includeStack: true,
+  },
+  development: {
+    enabled: true,
+    levels: ['DEBUG', 'INFO', 'WARN', 'ERROR'] as LogLevel[],
+    prettyPrint: true,
+    includeStack: true,
+  },
+  preview: {
+    enabled: true,
+    levels: ['INFO', 'WARN', 'ERROR'] as LogLevel[],
+    prettyPrint: false,
+    includeStack: true,
+  },
+  production: {
+    enabled: true,
+    levels: ['ERROR'] as LogLevel[], // Only critical errors
+    prettyPrint: false,
+    includeStack: false, // No stack traces in production
+  },
+  test: {
+    enabled: false,
+    levels: [] as LogLevel[],
+    prettyPrint: false,
+    includeStack: false,
+  },
+} as const;
+
+/**
+ * Get current logging configuration based on environment
+ */
+export function getLoggingConfig() {
+  const env = getEnvironment();
+  return LOGGING_CONFIG[env];
+}
+
+/**
+ * Check if a specific log level should be logged in current environment
+ * Returns true if the log should be output, false otherwise
+ */
+export function shouldLog(level: LogLevel): boolean {
+  const config = getLoggingConfig();
+  return config.enabled && config.levels.includes(level);
+}
+
 // ============================================================================
 // CONFIGURATION UTILITIES
 // ============================================================================

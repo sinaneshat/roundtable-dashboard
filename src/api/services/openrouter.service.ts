@@ -72,10 +72,6 @@ class OpenRouterService {
         'X-Title': config.appName || 'Roundtable AI Chat',
       },
     });
-
-    apiLogger.info('OpenRouter service initialized', {
-      appName: config.appName,
-    });
   }
 
   /**

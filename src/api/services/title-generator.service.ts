@@ -111,12 +111,6 @@ export async function generateTitleFromMessage(
       title = 'New Chat';
     }
 
-    apiLogger.info('Generated title from message', {
-      originalMessage: firstMessage.substring(0, 100),
-      generatedTitle: title,
-      usage: result.usage,
-    });
-
     return title;
   } catch (error) {
     apiLogger.error('Title generation failed, using fallback', {
@@ -151,12 +145,6 @@ export async function updateThreadTitleAndSlug(
     })
     .where(eq(tables.chatThread.id, threadId));
 
-  apiLogger.info('Updated thread title and slug', {
-    threadId,
-    newTitle,
-    newSlug,
-  });
-
   return { title: newTitle, slug: newSlug };
 }
 
@@ -187,10 +175,6 @@ export async function autoGenerateThreadTitle(
 
   // Only auto-generate if thread still has default "New Chat" title
   if (thread.title !== 'New Chat') {
-    apiLogger.info('Thread already has custom title, skipping auto-generation', {
-      threadId,
-      existingTitle: thread.title,
-    });
     return { title: thread.title, slug: thread.slug };
   }
 

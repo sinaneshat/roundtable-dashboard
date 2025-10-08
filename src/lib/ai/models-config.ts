@@ -98,6 +98,176 @@ export function isValidOpenRouterModelId(modelId: string): modelId is OpenRouter
   return ALLOWED_MODEL_IDS.includes(modelId as OpenRouterModelId);
 }
 
+// ============================================================================
+// SUBSCRIPTION TIER CONFIGURATION - SINGLE SOURCE OF TRUTH
+// ============================================================================
+
+/**
+ * Comprehensive Subscription Tier Quotas
+ *
+ * 🚨 SINGLE SOURCE OF TRUTH for ALL tier limits and quotas
+ * This configuration defines:
+ * - Message and thread quotas per billing period
+ * - Max concurrent AI models per chat session
+ * - Feature access (memories, custom roles, exports)
+ * - Output token limits for cost control
+ *
+ * All backend services, database seeds, and UI must reference this config.
+ * DO NOT hardcode these values elsewhere.
+ */
+export const SUBSCRIPTION_TIER_CONFIG = {
+  free: {
+    name: 'Free',
+    description: 'Basic access to 2 cheapest models',
+    displayOrder: 1,
+
+    // Chat quotas per billing period
+    quotas: {
+      threadsPerMonth: 10,
+      messagesPerMonth: 100,
+      memoriesPerMonth: 5,
+      customRolesPerMonth: 2,
+    },
+
+    // Model access limits
+    models: {
+      maxConcurrentModels: 2, // Max 2 AI models in a single chat session
+      maxOutputTokens: 2048, // Max output tokens per model response (cost control)
+    },
+
+    // Feature flags
+    features: {
+      allowCustomRoles: true,
+      allowMemories: true,
+      allowThreadExport: false,
+    },
+  },
+
+  starter: {
+    name: 'Starter',
+    description: 'Budget-friendly models with better performance',
+    displayOrder: 2,
+
+    quotas: {
+      threadsPerMonth: 50,
+      messagesPerMonth: 1000,
+      memoriesPerMonth: 20,
+      customRolesPerMonth: 5,
+    },
+
+    models: {
+      maxConcurrentModels: 3,
+      maxOutputTokens: 4096,
+    },
+
+    features: {
+      allowCustomRoles: true,
+      allowMemories: true,
+      allowThreadExport: true,
+    },
+  },
+
+  pro: {
+    name: 'Pro',
+    description: 'Professional-grade models with excellent quality',
+    displayOrder: 3,
+
+    quotas: {
+      threadsPerMonth: 200,
+      messagesPerMonth: 5000,
+      memoriesPerMonth: 100,
+      customRolesPerMonth: 20,
+    },
+
+    models: {
+      maxConcurrentModels: 5,
+      maxOutputTokens: 8192,
+    },
+
+    features: {
+      allowCustomRoles: true,
+      allowMemories: true,
+      allowThreadExport: true,
+    },
+  },
+
+  power: {
+    name: 'Power',
+    description: 'Flagship models with maximum capabilities',
+    displayOrder: 4,
+
+    quotas: {
+      threadsPerMonth: 1000,
+      messagesPerMonth: 50000,
+      memoriesPerMonth: 500,
+      customRolesPerMonth: 100,
+    },
+
+    models: {
+      maxConcurrentModels: 8,
+      maxOutputTokens: 16384,
+    },
+
+    features: {
+      allowCustomRoles: true,
+      allowMemories: true,
+      allowThreadExport: true,
+    },
+  },
+} as const;
+
+/**
+ * Type-safe access to tier configuration
+ */
+export type SubscriptionTierConfig = typeof SUBSCRIPTION_TIER_CONFIG[keyof typeof SUBSCRIPTION_TIER_CONFIG];
+
+/**
+ * Get tier configuration by tier name
+ */
+export function getTierConfig(tier: SubscriptionTier): SubscriptionTierConfig {
+  return SUBSCRIPTION_TIER_CONFIG[tier];
+}
+
+/**
+ * Get max concurrent models for a tier
+ */
+export function getMaxConcurrentModels(tier: SubscriptionTier): number {
+  return SUBSCRIPTION_TIER_CONFIG[tier].models.maxConcurrentModels;
+}
+
+/**
+ * Get max output tokens for a tier (cost control)
+ */
+export function getMaxOutputTokens(tier: SubscriptionTier): number {
+  return SUBSCRIPTION_TIER_CONFIG[tier].models.maxOutputTokens;
+}
+
+/**
+ * Check if user can add more models to their chat session
+ */
+export function canAddMoreModels(currentModelCount: number, userTier: SubscriptionTier): boolean {
+  return currentModelCount < SUBSCRIPTION_TIER_CONFIG[userTier].models.maxConcurrentModels;
+}
+
+/**
+ * Get user-friendly error message when max models exceeded
+ */
+export function getMaxModelsErrorMessage(userTier: SubscriptionTier): string {
+  const limit = SUBSCRIPTION_TIER_CONFIG[userTier].models.maxConcurrentModels;
+  const tierName = SUBSCRIPTION_TIER_CONFIG[userTier].name;
+
+  if (userTier === 'free') {
+    return `Your ${tierName} plan allows up to ${limit} models per chat. Upgrade to Starter for 3 models.`;
+  }
+  if (userTier === 'starter') {
+    return `Your ${tierName} plan allows up to ${limit} models per chat. Upgrade to Pro for 5 models.`;
+  }
+  if (userTier === 'pro') {
+    return `Your ${tierName} plan allows up to ${limit} models per chat. Upgrade to Power for 8 models.`;
+  }
+  return `Your ${tierName} plan allows up to ${limit} models per chat.`;
+}
+
 /**
  * Assert that a model ID is valid (throws if not)
  * Use for runtime validation when receiving model IDs from external sources
@@ -125,6 +295,12 @@ export type ModelDefaultSettings = {
   temperature: number;
   maxTokens: number;
   topP?: number;
+  /**
+   * Max output tokens for cost control
+   * Overrides tier-level maxOutputTokens if set
+   * Use this to cap expensive models even further
+   */
+  maxOutputTokens?: number;
 };
 
 export type ModelMetadata = {
@@ -159,19 +335,33 @@ export type AIModel = {
  *
  * ✅ Uses AllowedModelId enum for type safety
  * ✅ Compile-time validation of all model IDs
+ * ✅ Optimized based on cost-performance analysis (Jan 2025)
+ * ✅ Tiered access with max concurrent model limits per subscription
+ *
+ * Model Selection Criteria:
+ * - Cost-effectiveness (quality per dollar)
+ * - Benchmark performance (SWE-bench, GPQA, etc.)
+ * - Speed and latency
+ * - No redundant/superseded models
+ *
+ * Tier Structure:
+ * - Free: 2 cheapest models only
+ * - Starter: 3 budget-friendly models
+ * - Pro: 5 professional-grade models
+ * - Power: 8 flagship models
  */
 export const AI_MODELS: AIModel[] = [
   // ============================================================================
-  // SMARTEST MODELS - Latest & Most Capable (October 2025)
+  // FREE TIER - Cheapest Models (Max 2 concurrent)
   // ============================================================================
 
-  // GPT-5 - OpenAI's Latest
+  // Gemini 2.5 Flash - Ultra Cheap & Fast
   {
-    id: 'gpt-5',
+    id: 'gemini-2.5-flash',
     provider: 'openrouter',
-    modelId: AllowedModelId.GPT_5,
-    name: 'GPT-5',
-    description: 'OpenAI\'s latest flagship model with advanced reasoning, web search, and 400K context',
+    modelId: AllowedModelId.GEMINI_2_5_FLASH,
+    name: 'Gemini 2.5 Flash',
+    description: 'Ultra-fast, cost-effective model with 1M context. Best price-performance ratio.',
     capabilities: {
       streaming: true,
       tools: true,
@@ -181,75 +371,122 @@ export const AI_MODELS: AIModel[] = [
     defaultSettings: {
       temperature: 0.7,
       maxTokens: 8192,
-      topP: 0.9,
+      topP: 0.95,
     },
     isEnabled: true,
     order: 1,
-    minTier: 'power',
+    minTier: 'free',
     metadata: {
-      icon: '/static/icons/ai-models/openai.png',
-      color: '#10A37F',
-      category: 'reasoning',
-      contextWindow: 400000,
+      icon: '/static/icons/ai-models/gemini.png',
+      color: '#4285F4',
+      category: 'general',
+      contextWindow: 1000000,
       strengths: [
-        'Latest OpenAI technology',
-        '400K token context',
-        'Web search capabilities',
-        'Advanced reasoning',
+        'Ultra-fast responses (160 tokens/sec)',
+        'Cheapest option ($0.075/M in, $0.30/M out)',
+        'Multimodal capabilities',
+        '1M token context window',
       ],
       pricing: {
-        input: '$1.25/M tokens',
-        output: '$10/M tokens',
+        input: '$0.075/M tokens',
+        output: '$0.30/M tokens',
       },
     },
   },
 
-  // Claude 4.1 Opus - Anthropic's Flagship
+  // Claude 3 Haiku - Fast & Affordable
   {
-    id: 'claude-opus-4.1',
+    id: 'claude-3-haiku',
     provider: 'openrouter',
-    modelId: AllowedModelId.CLAUDE_OPUS_4_1,
-    name: 'Claude 4.1 Opus',
-    description: 'Anthropic\'s flagship model with 74.5% SWE-bench score and extended thinking up to 64K tokens',
+    modelId: AllowedModelId.CLAUDE_3_HAIKU,
+    name: 'Claude 3 Haiku',
+    description: 'Fastest Claude model for near-instant responsiveness. Excellent for simple tasks.',
     capabilities: {
       streaming: true,
       tools: true,
       vision: true,
-      reasoning: true,
+      reasoning: false,
     },
     defaultSettings: {
       temperature: 0.7,
-      maxTokens: 8192,
+      maxTokens: 4096,
       topP: 0.9,
     },
     isEnabled: true,
     order: 2,
-    minTier: 'power',
+    minTier: 'free',
     metadata: {
       icon: '/static/icons/ai-models/claude.png',
       color: '#C87544',
-      category: 'reasoning',
+      category: 'general',
       contextWindow: 200000,
       strengths: [
-        '74.5% on SWE-bench Verified',
-        'Extended thinking (64K tokens)',
-        'Exceptional coding and reasoning',
-        'Best for agentic tasks',
+        'Near-instant responsiveness',
+        'Very cost-effective ($0.25/M in, $1.25/M out)',
+        'Quick targeted performance',
+        'Multimodal support',
       ],
       pricing: {
-        input: '$15/M tokens',
-        output: '$75/M tokens',
+        input: '$0.25/M tokens',
+        output: '$1.25/M tokens',
       },
     },
   },
 
-  // Claude 4.5 Sonnet - Best Coding
+  // ============================================================================
+  // STARTER TIER - Budget-Friendly (Max 3 concurrent)
+  // ============================================================================
+
+  // DeepSeek R1 - Best Free Reasoning
+  {
+    id: 'deepseek-r1',
+    provider: 'openrouter',
+    modelId: AllowedModelId.DEEPSEEK_R1_FREE,
+    name: 'DeepSeek R1 (Free)',
+    description: 'Powerful reasoning model with 671B parameters. MIT licensed, open-source.',
+    capabilities: {
+      streaming: true,
+      tools: true,
+      vision: false,
+      reasoning: true,
+    },
+    defaultSettings: {
+      temperature: 0.6,
+      maxTokens: 8192,
+      topP: 0.95,
+    },
+    isEnabled: true,
+    order: 3,
+    minTier: 'starter',
+    metadata: {
+      icon: '/static/icons/ai-models/deepseek.png',
+      color: '#1E90FF',
+      category: 'reasoning',
+      contextWindow: 163840,
+      strengths: [
+        'FREE tier available',
+        'Performance on par with O1',
+        '671B params (37B active)',
+        '90% debugging accuracy',
+      ],
+      pricing: {
+        input: 'FREE',
+        output: 'FREE',
+      },
+    },
+  },
+
+  // ============================================================================
+  // PRO TIER - Professional Grade (Max 5 concurrent)
+  // ============================================================================
+
+  // Claude 4.5 Sonnet - Best Coding Model
   {
     id: 'claude-sonnet-4.5',
     provider: 'openrouter',
     modelId: AllowedModelId.CLAUDE_SONNET_4_5,
     name: 'Claude 4.5 Sonnet',
-    description: 'Latest Sonnet with 1M context, 72.7% SWE-bench, and exceptional coding performance',
+    description: 'Best coding model with 77.2% SWE-bench and 1M context. Industry-leading performance.',
     capabilities: {
       streaming: true,
       tools: true,
@@ -262,7 +499,7 @@ export const AI_MODELS: AIModel[] = [
       topP: 0.9,
     },
     isEnabled: true,
-    order: 3,
+    order: 4,
     minTier: 'pro',
     metadata: {
       icon: '/static/icons/ai-models/claude.png',
@@ -270,10 +507,10 @@ export const AI_MODELS: AIModel[] = [
       category: 'reasoning',
       contextWindow: 1000000,
       strengths: [
+        '77.2% on SWE-bench Verified',
         '1M token context window',
-        '72.7% on SWE-bench',
-        'Best for complex agents',
-        'Superior coding abilities',
+        'Best for complex coding tasks',
+        'Superior reasoning abilities',
       ],
       pricing: {
         input: '$3/M tokens',
@@ -288,7 +525,7 @@ export const AI_MODELS: AIModel[] = [
     provider: 'openrouter',
     modelId: AllowedModelId.GEMINI_2_5_PRO,
     name: 'Gemini 2.5 Pro',
-    description: 'Google\'s state-of-the-art AI with 1M+ context, advanced reasoning, coding, and scientific tasks',
+    description: 'Google\'s state-of-the-art with 1M+ context, advanced reasoning and scientific tasks.',
     capabilities: {
       streaming: true,
       tools: true,
@@ -301,7 +538,7 @@ export const AI_MODELS: AIModel[] = [
       topP: 0.95,
     },
     isEnabled: true,
-    order: 4,
+    order: 5,
     minTier: 'pro',
     metadata: {
       icon: '/static/icons/ai-models/gemini.png',
@@ -310,7 +547,7 @@ export const AI_MODELS: AIModel[] = [
       contextWindow: 1048576,
       strengths: [
         '1M+ token context',
-        'Advanced reasoning',
+        'Advanced reasoning (Index: 60)',
         'Excellent coding',
         'Strong mathematical abilities',
       ],
@@ -321,325 +558,13 @@ export const AI_MODELS: AIModel[] = [
     },
   },
 
-  // OpenAI O3 - Advanced Reasoning
-  {
-    id: 'o3',
-    provider: 'openrouter',
-    modelId: AllowedModelId.O3,
-    name: 'OpenAI O3',
-    description: 'Advanced reasoning model with 200K context and multimodal support',
-    capabilities: {
-      streaming: true,
-      tools: true,
-      vision: true,
-      reasoning: true,
-    },
-    defaultSettings: {
-      temperature: 1.0,
-      maxTokens: 16384,
-      topP: 1.0,
-    },
-    isEnabled: true,
-    order: 5,
-    minTier: 'pro',
-    metadata: {
-      icon: '/static/icons/ai-models/openai.png',
-      color: '#10A37F',
-      category: 'reasoning',
-      contextWindow: 200000,
-      strengths: [
-        'Advanced reasoning',
-        'Multimodal support',
-        'Input caching',
-        'Web search available',
-      ],
-      pricing: {
-        input: '$2/M tokens',
-        output: '$8/M tokens',
-      },
-    },
-  },
-
-  // DeepSeek R1 - Best Free Reasoning Model
-  {
-    id: 'deepseek-r1',
-    provider: 'openrouter',
-    modelId: AllowedModelId.DEEPSEEK_R1_FREE,
-    name: 'DeepSeek R1 (Free)',
-    description: 'FREE powerful reasoning model with 671B parameters, on par with O1, MIT licensed',
-    capabilities: {
-      streaming: true,
-      tools: true,
-      vision: false,
-      reasoning: true,
-    },
-    defaultSettings: {
-      temperature: 0.6,
-      maxTokens: 8192,
-      topP: 0.95,
-    },
-    isEnabled: true,
-    order: 6,
-    minTier: 'free',
-    metadata: {
-      icon: '/static/icons/ai-models/deepseek.png',
-      color: '#1E90FF',
-      category: 'reasoning',
-      contextWindow: 163840,
-      strengths: [
-        'FREE tier available',
-        'Performance on par with O1',
-        '671B params (37B active)',
-        'MIT licensed, open-source',
-      ],
-      pricing: {
-        input: 'FREE',
-        output: 'FREE',
-      },
-    },
-  },
-
-  // Llama 4 Maverick - Best Free General Model
-  {
-    id: 'llama-4-maverick-free',
-    provider: 'openrouter',
-    modelId: AllowedModelId.LLAMA_4_MAVERICK_FREE,
-    name: 'Llama 4 Maverick (Free)',
-    description: 'FREE 400B parameter MoE model with 128K context and multimodal support',
-    capabilities: {
-      streaming: true,
-      tools: true,
-      vision: true,
-      reasoning: true,
-    },
-    defaultSettings: {
-      temperature: 0.7,
-      maxTokens: 4096,
-      topP: 0.9,
-    },
-    isEnabled: true,
-    order: 7,
-    minTier: 'free',
-    metadata: {
-      icon: '/static/icons/ai-models/meta.png',
-      color: '#0081FB',
-      category: 'general',
-      contextWindow: 128000,
-      strengths: [
-        'FREE tier available',
-        '400B params (17B active MoE)',
-        'Multimodal support',
-        '128 expert architecture',
-      ],
-      pricing: {
-        input: 'FREE',
-        output: 'FREE',
-      },
-    },
-  },
-
-  // Grok 4 Fast - 2M Context Reasoning
-  {
-    id: 'grok-4-fast',
-    provider: 'openrouter',
-    modelId: AllowedModelId.GROK_4_FAST,
-    name: 'Grok 4 Fast',
-    description: 'xAI\'s fast reasoning model with 2M token context and multimodal support',
-    capabilities: {
-      streaming: true,
-      tools: true,
-      vision: true,
-      reasoning: true,
-    },
-    defaultSettings: {
-      temperature: 0.7,
-      maxTokens: 8192,
-      topP: 0.9,
-    },
-    isEnabled: true,
-    order: 8,
-    minTier: 'starter',
-    metadata: {
-      icon: '/static/icons/ai-models/xai.png',
-      color: '#000000',
-      category: 'reasoning',
-      contextWindow: 2000000,
-      strengths: [
-        '2M token context',
-        'Fast reasoning',
-        'Multimodal support',
-        'Ultra-low cost',
-      ],
-      pricing: {
-        input: '$0.20/M tokens',
-        output: '$0.50/M tokens',
-      },
-    },
-  },
-
-  // Sonar Deep Research - Multi-step Research
-  {
-    id: 'sonar-deep-research',
-    provider: 'openrouter',
-    modelId: AllowedModelId.PERPLEXITY_SONAR_DEEP_RESEARCH,
-    name: 'Sonar Deep Research',
-    description: 'Multi-step research model with autonomous searching, reading, and source evaluation',
-    capabilities: {
-      streaming: true,
-      tools: true,
-      vision: false,
-      reasoning: true,
-    },
-    defaultSettings: {
-      temperature: 0.7,
-      maxTokens: 4096,
-      topP: 0.9,
-    },
-    isEnabled: true,
-    order: 9,
-    minTier: 'starter',
-    metadata: {
-      icon: '/static/icons/ai-models/perplexity.png',
-      color: '#20808D',
-      category: 'research',
-      contextWindow: 128000,
-      strengths: [
-        'Multi-step retrieval',
-        'Autonomous research',
-        'Source evaluation',
-        'Ideal for complex topics',
-      ],
-      pricing: {
-        input: '$2/M tokens',
-        output: '$8/M tokens',
-      },
-    },
-  },
-
-  // ============================================================================
-  // EXISTING MODELS (Kept for backward compatibility)
-  // ============================================================================
-
-  // Anthropic Claude Models
-  {
-    id: 'claude-3.5-sonnet',
-    provider: 'openrouter',
-    modelId: AllowedModelId.CLAUDE_3_5_SONNET,
-    name: 'Claude 3.5 Sonnet',
-    description: 'Most intelligent Claude model with best-in-class coding, vision, and reasoning',
-    capabilities: {
-      streaming: true,
-      tools: true,
-      vision: true,
-      reasoning: true,
-    },
-    defaultSettings: {
-      temperature: 0.7,
-      maxTokens: 8192,
-      topP: 0.9,
-    },
-    isEnabled: true,
-    order: 10,
-    minTier: 'pro', // Advanced reasoning model - requires Pro
-    metadata: {
-      icon: '/static/icons/ai-models/claude.png',
-      color: '#C87544',
-      category: 'reasoning',
-      contextWindow: 200000,
-      strengths: [
-        'Best-in-class coding performance',
-        'Advanced vision capabilities',
-        'Superior reasoning abilities',
-        'Tool use and function calling',
-      ],
-      pricing: {
-        input: '$3/M tokens',
-        output: '$15/M tokens',
-      },
-    },
-  },
-  {
-    id: 'claude-3-opus',
-    provider: 'openrouter',
-    modelId: AllowedModelId.CLAUDE_3_OPUS,
-    name: 'Claude 3 Opus',
-    description: 'Most capable Claude model for complex tasks requiring deep understanding',
-    capabilities: {
-      streaming: true,
-      tools: true,
-      vision: true,
-      reasoning: true,
-    },
-    defaultSettings: {
-      temperature: 0.7,
-      maxTokens: 4096,
-      topP: 0.9,
-    },
-    isEnabled: true,
-    order: 11,
-    minTier: 'power', // Premium model - most expensive
-    metadata: {
-      icon: '/static/icons/ai-models/claude.png',
-      color: '#C87544',
-      category: 'reasoning',
-      contextWindow: 200000,
-      strengths: [
-        'Exceptional complex task handling',
-        'Multimodal understanding',
-        'Sustained performance on long tasks',
-        'Tool use during extended thinking',
-      ],
-      pricing: {
-        input: '$15/M tokens',
-        output: '$75/M tokens',
-      },
-    },
-  },
-  {
-    id: 'claude-3-haiku',
-    provider: 'openrouter',
-    modelId: AllowedModelId.CLAUDE_3_HAIKU,
-    name: 'Claude 3 Haiku',
-    description: 'Fastest Claude model for near-instant responsiveness and cost efficiency',
-    capabilities: {
-      streaming: true,
-      tools: true,
-      vision: true,
-      reasoning: false,
-    },
-    defaultSettings: {
-      temperature: 0.7,
-      maxTokens: 4096,
-      topP: 0.9,
-    },
-    isEnabled: true,
-    order: 12,
-    minTier: 'free', // Basic, cost-effective model
-    metadata: {
-      icon: '/static/icons/ai-models/claude.png',
-      color: '#C87544',
-      category: 'general',
-      contextWindow: 200000,
-      strengths: [
-        'Near-instant responsiveness',
-        'Cost-effective',
-        'Quick targeted performance',
-        'Multimodal support',
-      ],
-      pricing: {
-        input: '$0.25/M tokens',
-        output: '$1.25/M tokens',
-      },
-    },
-  },
-
-  // OpenAI GPT Models
+  // GPT-4o - Proven Multimodal
   {
     id: 'gpt-4o',
     provider: 'openrouter',
     modelId: AllowedModelId.GPT_4O,
     name: 'GPT-4o',
-    description: 'OpenAI\'s most advanced multimodal model with vision, voice, and text capabilities',
+    description: 'OpenAI\'s proven multimodal model with vision, voice, and text capabilities.',
     capabilities: {
       streaming: true,
       tools: true,
@@ -652,8 +577,8 @@ export const AI_MODELS: AIModel[] = [
       topP: 1.0,
     },
     isEnabled: true,
-    order: 13,
-    minTier: 'pro', // Advanced multimodal model
+    order: 6,
+    minTier: 'pro',
     metadata: {
       icon: '/static/icons/ai-models/openai.png',
       color: '#10A37F',
@@ -671,233 +596,126 @@ export const AI_MODELS: AIModel[] = [
       },
     },
   },
+
+  // ============================================================================
+  // POWER TIER - Flagship Models (Max 8 concurrent)
+  // ============================================================================
+
+  // GPT-5 - OpenAI's Latest Flagship
   {
-    id: 'gpt-4-turbo',
+    id: 'gpt-5',
     provider: 'openrouter',
-    modelId: AllowedModelId.GPT_4_TURBO,
-    name: 'GPT-4 Turbo',
-    description: 'Powerful GPT-4 variant optimized for speed and longer context',
+    modelId: AllowedModelId.GPT_5,
+    name: 'GPT-5',
+    description: 'OpenAI\'s latest flagship with advanced reasoning, web search, and 400K context.',
     capabilities: {
       streaming: true,
       tools: true,
       vision: true,
-      reasoning: false,
+      reasoning: true,
     },
     defaultSettings: {
       temperature: 0.7,
-      maxTokens: 4096,
-      topP: 1.0,
+      maxTokens: 8192,
+      topP: 0.9,
+      maxOutputTokens: 4096, // Cost control: $10/M output tokens
     },
     isEnabled: true,
-    order: 14,
-    minTier: 'power', // Premium tier - expensive
+    order: 7,
+    minTier: 'power',
     metadata: {
       icon: '/static/icons/ai-models/openai.png',
       color: '#10A37F',
       category: 'reasoning',
-      contextWindow: 128000,
+      contextWindow: 400000,
       strengths: [
-        'Enhanced reasoning',
-        'Larger context window',
-        'Vision capabilities',
-        'Tool calling support',
+        'Intelligence Index: 68.47',
+        '400K token context',
+        'Web search capabilities',
+        'Advanced reasoning',
       ],
       pricing: {
-        input: '$10/M tokens',
-        output: '$30/M tokens',
+        input: '$1.25/M tokens',
+        output: '$10/M tokens',
       },
     },
   },
+
+  // Claude 4.1 Opus - Anthropic's Ultimate
   {
-    id: 'o1-mini',
+    id: 'claude-opus-4.1',
     provider: 'openrouter',
-    modelId: AllowedModelId.O1_MINI,
-    name: 'OpenAI o1-mini',
-    description: 'Fast reasoning model optimized for coding and STEM tasks',
+    modelId: AllowedModelId.CLAUDE_OPUS_4_1,
+    name: 'Claude 4.1 Opus',
+    description: 'Anthropic\'s ultimate flagship with 74.5% SWE-bench and 64K extended thinking.',
     capabilities: {
       streaming: true,
-      tools: false,
-      vision: false,
+      tools: true,
+      vision: true,
+      reasoning: true,
+    },
+    defaultSettings: {
+      temperature: 0.7,
+      maxTokens: 8192,
+      topP: 0.9,
+      maxOutputTokens: 3072, // Cost control: $75/M output tokens (most expensive!)
+    },
+    isEnabled: true,
+    order: 8,
+    minTier: 'power',
+    metadata: {
+      icon: '/static/icons/ai-models/claude.png',
+      color: '#C87544',
+      category: 'reasoning',
+      contextWindow: 200000,
+      strengths: [
+        '74.5% on SWE-bench Verified',
+        'Extended thinking (64K tokens)',
+        'Exceptional agentic tasks',
+        'Premium quality',
+      ],
+      pricing: {
+        input: '$15/M tokens',
+        output: '$75/M tokens',
+      },
+    },
+  },
+
+  // OpenAI O3 - Premium Reasoning
+  {
+    id: 'o3',
+    provider: 'openrouter',
+    modelId: AllowedModelId.O3,
+    name: 'OpenAI O3',
+    description: 'Advanced reasoning model with 200K context. Intelligence Index: 65.45.',
+    capabilities: {
+      streaming: true,
+      tools: true,
+      vision: true,
       reasoning: true,
     },
     defaultSettings: {
       temperature: 1.0,
-      maxTokens: 65536,
+      maxTokens: 16384,
       topP: 1.0,
     },
     isEnabled: true,
-    order: 15,
-    minTier: 'pro', // Reasoning model
+    order: 9,
+    minTier: 'power',
     metadata: {
       icon: '/static/icons/ai-models/openai.png',
       color: '#10A37F',
       category: 'reasoning',
-      contextWindow: 128000,
+      contextWindow: 200000,
       strengths: [
-        'Extended reasoning for coding',
-        'STEM problem solving',
-        'Cost-effective reasoning',
-        'Fast inference',
+        'Intelligence Index: 65.45',
+        'Advanced reasoning',
+        'Multimodal support',
+        'Input caching',
       ],
       pricing: {
-        input: '$3/M tokens',
-        output: '$12/M tokens',
-      },
-    },
-  },
-
-  // Google Gemini Models
-  {
-    id: 'gemini-2.5-flash',
-    provider: 'openrouter',
-    modelId: AllowedModelId.GEMINI_2_5_FLASH,
-    name: 'Gemini 2.5 Flash',
-    description: 'Fast and efficient Gemini model optimized for speed and cost',
-    capabilities: {
-      streaming: true,
-      tools: true,
-      vision: true,
-      reasoning: true,
-    },
-    defaultSettings: {
-      temperature: 0.7,
-      maxTokens: 8192,
-      topP: 0.95,
-    },
-    isEnabled: true,
-    order: 16,
-    minTier: 'free', // Most cost-effective model
-    metadata: {
-      icon: '/static/icons/ai-models/gemini.png',
-      color: '#4285F4',
-      category: 'general',
-      contextWindow: 1000000,
-      strengths: [
-        'Ultra-fast responses',
-        'Cost-effective',
-        'Multimodal capabilities',
-        'Good reasoning abilities',
-      ],
-      pricing: {
-        input: '$0.075/M tokens',
-        output: '$0.30/M tokens',
-      },
-    },
-  },
-
-  // Meta Llama Models
-  {
-    id: 'llama-3.1-405b',
-    provider: 'openrouter',
-    modelId: AllowedModelId.LLAMA_3_1_405B,
-    name: 'Llama 3.1 405B',
-    description: 'Meta\'s largest open-weight model with exceptional capabilities',
-    capabilities: {
-      streaming: true,
-      tools: true,
-      vision: false,
-      reasoning: true,
-    },
-    defaultSettings: {
-      temperature: 0.7,
-      maxTokens: 4096,
-      topP: 0.9,
-    },
-    isEnabled: true,
-    order: 17,
-    minTier: 'power', // Large, resource-intensive model
-    metadata: {
-      icon: '/static/icons/ai-models/meta.png',
-      color: '#0081FB',
-      category: 'reasoning',
-      contextWindow: 128000,
-      strengths: [
-        'Open-weight model',
-        'Competitive with proprietary models',
-        'Strong tool use',
-        'Multilingual support',
-      ],
-      pricing: {
-        input: '$2.70/M tokens',
-        output: '$2.70/M tokens',
-      },
-    },
-  },
-
-  // DeepSeek Models
-  {
-    id: 'deepseek-chat',
-    provider: 'openrouter',
-    modelId: AllowedModelId.DEEPSEEK_CHAT,
-    name: 'DeepSeek Chat',
-    description: 'Cost-effective reasoning model with strong coding capabilities',
-    capabilities: {
-      streaming: true,
-      tools: true,
-      vision: false,
-      reasoning: true,
-    },
-    defaultSettings: {
-      temperature: 0.6,
-      maxTokens: 8192,
-      topP: 0.95,
-    },
-    isEnabled: true,
-    order: 18,
-    minTier: 'free', // Very cost-effective
-    metadata: {
-      icon: '/static/icons/ai-models/deepseek.png',
-      color: '#1E90FF',
-      category: 'reasoning',
-      contextWindow: 64000,
-      strengths: [
-        'Cost-effective',
-        'Strong coding abilities',
-        'Reasoning capabilities',
-        'Efficient inference',
-      ],
-      pricing: {
-        input: '$0.14/M tokens',
-        output: '$0.28/M tokens',
-      },
-    },
-  },
-
-  // Perplexity Models
-  {
-    id: 'perplexity-sonar-large',
-    provider: 'openrouter',
-    modelId: AllowedModelId.PERPLEXITY_SONAR_LARGE,
-    name: 'Perplexity Sonar Large',
-    description: 'Fast real-time search model with AI-driven insights and web access',
-    capabilities: {
-      streaming: true,
-      tools: true,
-      vision: false,
-      reasoning: true,
-    },
-    defaultSettings: {
-      temperature: 0.7,
-      maxTokens: 4096,
-      topP: 0.9,
-    },
-    isEnabled: true,
-    order: 19,
-    minTier: 'starter', // Research capability
-    metadata: {
-      icon: '/static/icons/ai-models/perplexity.png',
-      color: '#20808D',
-      category: 'research',
-      contextWindow: 127072,
-      strengths: [
-        'Real-time web search',
-        'Fast response times',
-        'AI-driven insights',
-        'Cost-effective research',
-      ],
-      pricing: {
-        input: '$1/M tokens',
-        output: '$1/M tokens',
+        input: '$2/M tokens',
+        output: '$8/M tokens',
       },
     },
   },

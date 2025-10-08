@@ -23,6 +23,31 @@ import { getDbAsync } from '@/db';
 import * as tables from '@/db/schema';
 
 /**
+ * Calculate period end date based on start date and interval
+ * Helper to avoid duplicate logic in period extraction
+ */
+function calculatePeriodEnd(
+  startTimestamp: number,
+  interval: 'month' | 'year' | 'week' | 'day' = 'month',
+  intervalCount: number = 1,
+): number {
+  const startDate = new Date(startTimestamp * 1000);
+  const endDate = new Date(startDate);
+
+  if (interval === 'month') {
+    endDate.setMonth(endDate.getMonth() + intervalCount);
+  } else if (interval === 'year') {
+    endDate.setFullYear(endDate.getFullYear() + intervalCount);
+  } else if (interval === 'week') {
+    endDate.setDate(endDate.getDate() + (7 * intervalCount));
+  } else if (interval === 'day') {
+    endDate.setDate(endDate.getDate() + intervalCount);
+  }
+
+  return Math.floor(endDate.getTime() / 1000);
+}
+
+/**
  * Synced subscription state type (similar to Theo's STRIPE_SUB_CACHE)
  */
 export type SyncedSubscriptionState =
@@ -113,11 +138,6 @@ export async function syncStripeDataFromStripe(
   if (subscriptions.data.length === 0) {
     // Ensure user usage exists and will be on free tier
     // The rolloverBillingPeriod will handle downgrade when period expires
-    apiLogger.info('No active subscription found for customer', {
-      customerId,
-      userId: customer.userId,
-    });
-
     return { status: 'none' };
   }
 
@@ -191,44 +211,16 @@ export async function syncStripeDataFromStripe(
     } else {
       // Fallback to billing_cycle_anchor and calculate end date
       const billingCycleAnchor = (subscription as typeof subscription & { billing_cycle_anchor?: number }).billing_cycle_anchor;
+      const interval = price.recurring?.interval || 'month';
+      const intervalCount = price.recurring?.interval_count || 1;
+
       if (billingCycleAnchor) {
         currentPeriodStart = billingCycleAnchor;
-        // Calculate end date based on price interval
-        const interval = price.recurring?.interval || 'month';
-        const intervalCount = price.recurring?.interval_count || 1;
-        const startDate = new Date(billingCycleAnchor * 1000);
-        const endDate = new Date(startDate);
-
-        if (interval === 'month') {
-          endDate.setMonth(endDate.getMonth() + intervalCount);
-        } else if (interval === 'year') {
-          endDate.setFullYear(endDate.getFullYear() + intervalCount);
-        } else if (interval === 'week') {
-          endDate.setDate(endDate.getDate() + (7 * intervalCount));
-        } else if (interval === 'day') {
-          endDate.setDate(endDate.getDate() + intervalCount);
-        }
-
-        currentPeriodEnd = Math.floor(endDate.getTime() / 1000);
+        currentPeriodEnd = calculatePeriodEnd(billingCycleAnchor, interval, intervalCount);
       } else {
         // Last resort: use subscription creation date
         currentPeriodStart = subscription.created;
-        const startDate = new Date(subscription.created * 1000);
-        const endDate = new Date(startDate);
-        const interval = price.recurring?.interval || 'month';
-        const intervalCount = price.recurring?.interval_count || 1;
-
-        if (interval === 'month') {
-          endDate.setMonth(endDate.getMonth() + intervalCount);
-        } else if (interval === 'year') {
-          endDate.setFullYear(endDate.getFullYear() + intervalCount);
-        } else if (interval === 'week') {
-          endDate.setDate(endDate.getDate() + (7 * intervalCount));
-        } else if (interval === 'day') {
-          endDate.setDate(endDate.getDate() + intervalCount);
-        }
-
-        currentPeriodEnd = Math.floor(endDate.getTime() / 1000);
+        currentPeriodEnd = calculatePeriodEnd(subscription.created, interval, intervalCount);
       }
     }
   }

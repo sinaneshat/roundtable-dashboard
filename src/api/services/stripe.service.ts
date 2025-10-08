@@ -53,10 +53,6 @@ class StripeService {
 
     this.webhookSecret = config.webhookSecret;
     this.portalConfigId = config.portalConfigId || null;
-
-    apiLogger.info('Stripe service initialized', {
-      apiVersion: config.apiVersion || '2025-09-30.clover',
-    });
   }
 
   /**

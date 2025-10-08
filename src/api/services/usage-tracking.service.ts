@@ -7,6 +7,8 @@
  * - Enforces limits based on subscription tier
  * - Handles billing period rollover
  * - Provides usage statistics for UI display
+ *
+ * 🚨 Uses SUBSCRIPTION_TIER_CONFIG from models-config.ts as single source of truth
  */
 
 import { and, eq } from 'drizzle-orm';
@@ -22,6 +24,7 @@ import type {
   SubscriptionTier,
   UsageStats,
 } from '@/db/validation/usage';
+import { SUBSCRIPTION_TIER_CONFIG } from '@/lib/ai/models-config';
 
 /**
  * Get or create user usage record
@@ -37,10 +40,12 @@ async function ensureUserUsageRecord(userId: string): Promise<typeof tables.user
 
   const now = new Date();
 
-  // If no usage record exists, create one with free tier defaults
+  // If no usage record exists, create one with free tier defaults from SUBSCRIPTION_TIER_CONFIG
   if (!usage) {
     const periodStart = new Date(now.getFullYear(), now.getMonth(), 1); // First day of current month
     const periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59); // Last day of current month
+
+    const freeTierConfig = SUBSCRIPTION_TIER_CONFIG.free;
 
     const [newUsage] = await db
       .insert(tables.userChatUsage)
@@ -50,13 +55,13 @@ async function ensureUserUsageRecord(userId: string): Promise<typeof tables.user
         currentPeriodStart: periodStart,
         currentPeriodEnd: periodEnd,
         threadsCreated: 0,
-        threadsLimit: 2, // Free tier default
+        threadsLimit: freeTierConfig.quotas.threadsPerMonth,
         messagesCreated: 0,
-        messagesLimit: 20, // Free tier default
+        messagesLimit: freeTierConfig.quotas.messagesPerMonth,
         memoriesCreated: 0,
-        memoriesLimit: 5, // Free tier default - basic memories
+        memoriesLimit: freeTierConfig.quotas.memoriesPerMonth,
         customRolesCreated: 0,
-        customRolesLimit: 5, // Free tier default - basic custom roles
+        customRolesLimit: freeTierConfig.quotas.customRolesPerMonth,
         subscriptionTier: 'free',
         isAnnual: false,
         createdAt: now,
@@ -65,7 +70,6 @@ async function ensureUserUsageRecord(userId: string): Promise<typeof tables.user
       .returning();
 
     usage = newUsage;
-    apiLogger.info('Created new usage record for user', { userId, tier: 'free' });
   }
 
   // At this point, usage is guaranteed to be defined
@@ -218,20 +222,6 @@ async function rolloverBillingPeriod(
           updatedAt: now,
         })
         .where(eq(tables.userChatUsage.userId, userId));
-
-      apiLogger.info('Rolled over billing period - applied scheduled downgrade', {
-        userId,
-        oldTier: currentUsage.subscriptionTier,
-        newTier: pendingTier,
-        oldPeriod: { start: currentUsage.currentPeriodStart, end: currentUsage.currentPeriodEnd },
-        newPeriod: { start: periodStart, end: periodEnd },
-        newLimits: {
-          threads: pendingTierQuota.threadsPerMonth,
-          messages: pendingTierQuota.messagesPerMonth,
-          memories: pendingTierQuota.memoriesPerMonth,
-          customRoles: pendingTierQuota.customRolesPerMonth,
-        },
-      });
     } else {
       apiLogger.error('Pending tier quota not found, falling back to free tier', {
         userId,
@@ -280,19 +270,6 @@ async function rolloverBillingPeriod(
         updatedAt: now,
       })
       .where(eq(tables.userChatUsage.userId, userId));
-
-    apiLogger.info('Rolled over billing period - downgraded to free tier', {
-      userId,
-      oldTier: currentUsage.subscriptionTier,
-      oldPeriod: { start: currentUsage.currentPeriodStart, end: currentUsage.currentPeriodEnd },
-      newPeriod: { start: periodStart, end: periodEnd },
-      freeLimits: {
-        threads: freeLimits.threadsPerMonth,
-        messages: freeLimits.messagesPerMonth,
-        memories: freeLimits.memoriesPerMonth,
-        customRoles: freeLimits.customRolesPerMonth,
-      },
-    });
   } else if (!hasPendingTierChange) {
     // Active subscription exists but period expired
     // This shouldn't normally happen (Stripe sync should handle it)
@@ -416,12 +393,6 @@ export async function incrementThreadUsage(userId: string): Promise<void> {
       updatedAt: new Date(),
     })
     .where(eq(tables.userChatUsage.userId, userId));
-
-  apiLogger.info('Incremented thread usage for user', {
-    userId,
-    newCount: usage.threadsCreated + 1,
-    limit: usage.threadsLimit,
-  });
 }
 
 /**
@@ -440,13 +411,6 @@ export async function incrementMessageUsage(userId: string, count = 1): Promise<
       updatedAt: new Date(),
     })
     .where(eq(tables.userChatUsage.userId, userId));
-
-  apiLogger.info('Incremented message usage for user', {
-    userId,
-    count,
-    newCount: usage.messagesCreated + count,
-    limit: usage.messagesLimit,
-  });
 }
 
 /**
@@ -465,13 +429,6 @@ export async function incrementMemoryUsage(userId: string, count = 1): Promise<v
       updatedAt: new Date(),
     })
     .where(eq(tables.userChatUsage.userId, userId));
-
-  apiLogger.info('Incremented memory usage for user', {
-    userId,
-    count,
-    newCount: usage.memoriesCreated + count,
-    limit: usage.memoriesLimit,
-  });
 }
 
 /**
@@ -490,13 +447,6 @@ export async function incrementCustomRoleUsage(userId: string, count = 1): Promi
       updatedAt: new Date(),
     })
     .where(eq(tables.userChatUsage.userId, userId));
-
-  apiLogger.info('Incremented custom role usage for user', {
-    userId,
-    count,
-    newCount: usage.customRolesCreated + count,
-    limit: usage.customRolesLimit,
-  });
 }
 
 /**
@@ -613,16 +563,6 @@ export async function updateUserSubscriptionTier(
       updatedAt: new Date(),
     })
     .where(eq(tables.userChatUsage.userId, userId));
-
-  apiLogger.info('Updated user subscription tier', {
-    userId,
-    tier,
-    isAnnual,
-    newLimits: {
-      threads: quotaConfig.threadsPerMonth,
-      messages: quotaConfig.messagesPerMonth,
-    },
-  });
 }
 
 /**
@@ -776,12 +716,6 @@ export async function syncUserQuotaFromSubscription(
       })
       .where(eq(tables.userChatUsage.userId, userId));
 
-    apiLogger.info('Subscription not active - updated period tracking, preserving quotas', {
-      userId,
-      tier,
-      subscriptionStatus,
-      currentPeriodEnd,
-    });
     return;
   }
 
@@ -845,12 +779,6 @@ export async function syncUserQuotaFromSubscription(
       memoriesCreated: 0,
       customRolesCreated: 0,
     };
-
-    apiLogger.info('Billing period reset - archived old period and resetting usage', {
-      userId,
-      oldPeriod: { start: currentUsage.currentPeriodStart, end: currentUsage.currentPeriodEnd },
-      newPeriod: { start: currentPeriodStart, end: currentPeriodEnd },
-    });
   }
 
   if (isUpgrade && !isPeriodReset) {
@@ -861,16 +789,6 @@ export async function syncUserQuotaFromSubscription(
 
     updatedThreadsLimit = currentUsage.threadsLimit + threadsDifference;
     updatedMessagesLimit = currentUsage.messagesLimit + messagesDifference;
-
-    apiLogger.info('Upgrading subscription - applying quota increase immediately', {
-      userId,
-      oldTier: currentUsage.subscriptionTier,
-      newTier: tier,
-      threadsDifference,
-      messagesDifference,
-      oldLimits: { threads: oldThreadsLimit, messages: oldMessagesLimit },
-      newLimits: { threads: updatedThreadsLimit, messages: updatedMessagesLimit },
-    });
   } else if (isDowngrade && !isPeriodReset) {
     // DOWNGRADE MID-PERIOD: Schedule change for period end
     // Keep current quotas, set pending tier change to apply at currentPeriodEnd
@@ -893,37 +811,7 @@ export async function syncUserQuotaFromSubscription(
       })
       .where(eq(tables.userChatUsage.userId, userId));
 
-    apiLogger.info('Downgrade scheduled for period end - preserving current quotas', {
-      userId,
-      currentTier: currentUsage.subscriptionTier,
-      pendingTier: tier,
-      effectiveDate: currentPeriodEnd,
-      currentLimits: { threads: oldThreadsLimit, messages: oldMessagesLimit },
-      pendingLimits: { threads: newThreadsLimit, messages: newMessagesLimit },
-    });
-
     return; // Exit early - don't update tier or limits yet
-  } else if (isPeriodReset) {
-    // Period reset: Use new tier limits from config
-    apiLogger.info('Period reset - applying tier quotas', {
-      userId,
-      tier,
-      isAnnual,
-      newLimits: {
-        threads: updatedThreadsLimit,
-        messages: updatedMessagesLimit,
-        memories: updatedMemoriesLimit,
-        customRoles: updatedCustomRolesLimit,
-      },
-    });
-  } else {
-    // Same tier, same period (e.g., switching between monthly/annual or resuming)
-    apiLogger.info('Subscription updated - applying quota changes', {
-      userId,
-      tier,
-      isAnnual,
-      subscriptionStatus,
-    });
   }
 
   // Update user usage record with new subscription tier, limits, and billing period
@@ -946,22 +834,4 @@ export async function syncUserQuotaFromSubscription(
       updatedAt: new Date(),
     })
     .where(eq(tables.userChatUsage.userId, userId));
-
-  apiLogger.info('User quota synced successfully', {
-    userId,
-    tier,
-    isAnnual,
-    subscriptionStatus,
-    limits: {
-      threads: updatedThreadsLimit,
-      messages: updatedMessagesLimit,
-      memories: updatedMemoriesLimit,
-      customRoles: updatedCustomRolesLimit,
-    },
-    currentUsage: {
-      threads: isPeriodReset ? 0 : currentUsage.threadsCreated,
-      messages: isPeriodReset ? 0 : currentUsage.messagesCreated,
-    },
-    billingPeriod: { start: currentPeriodStart, end: currentPeriodEnd },
-  });
 }

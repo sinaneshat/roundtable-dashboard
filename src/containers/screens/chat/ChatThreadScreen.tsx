@@ -341,7 +341,6 @@ function ChatThreadContent({
           return;
         }
 
-        console.error(`Failed to trigger participant ${nextParticipantIndex}:`, error);
         toastManager.error(
           t('chat.participantFailed'),
           t('chat.participantFailedDescription'),
@@ -397,7 +396,6 @@ function ChatThreadContent({
             return; // User cancelled - this is expected
           }
 
-          console.error('Failed to trigger first participant:', error);
           toastManager.error(
             t('chat.participantFailed'),
             t('chat.participantFailedDescription'),
@@ -540,8 +538,6 @@ function ChatThreadContent({
     return messages.map((msg, index) => {
       // Extract participant info from metadata (backend provides this)
       const participantId = msg.metadata?.participantId ?? null;
-      const model = msg.metadata?.model;
-      const role = msg.metadata?.role;
 
       const content = msg.parts
         .filter(part => part.type === 'text')
@@ -553,7 +549,10 @@ function ChatThreadContent({
         role: msg.role as 'user' | 'assistant',
         content,
         participantId,
-        metadata: model ? { model, role } : null,
+        // ✅ CRITICAL: Pass through ALL metadata including error fields
+        // Backend saves error metadata (errorType, errorMessage, etc.) to database
+        // ChatMessage component checks for these fields to display errors
+        metadata: msg.metadata as ChatMessageType['metadata'],
         createdAt: new Date().toISOString(),
         isStreaming: isCurrentlyStreaming && index === messages.length - 1,
       };
@@ -713,8 +712,8 @@ function ChatThreadContent({
             // React Query will automatically refetch on next stale check
           }
         }
-      } catch (error) {
-        console.error('Error polling for title update:', error);
+      } catch {
+        // Silently ignore polling errors - not critical to user experience
       }
     }, 2000); // Poll every 2 seconds
 
@@ -731,26 +730,6 @@ function ChatThreadContent({
       const assistantCount = messages.filter(m => m.role === 'assistant').length;
       // Current participant index is zero-based: 0 for first model, 1 for second, etc.
       // Since assistantCount includes the currently streaming message, subtract 1
-
-      // DEBUG: Log message state during streaming to detect issues
-      if (process.env.NODE_ENV === 'development') {
-        const lastMessage = messages[messages.length - 1];
-        // eslint-disable-next-line no-console -- Debug logging for development
-        console.debug('[ChatThread] Streaming state:', {
-          totalMessages: messages.length,
-          assistantCount,
-          currentParticipantIndex: assistantCount > 0 ? assistantCount - 1 : 0,
-          lastMessage: lastMessage
-            ? {
-                id: lastMessage.id,
-                metadata: lastMessage.metadata,
-                contentLength: lastMessage.parts
-                  .filter(p => p.type === 'text')
-                  .reduce((sum, p) => sum + p.text.length, 0),
-              }
-            : null,
-        });
-      }
 
       // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- Tracking streaming progress
       setCurrentParticipantIndex(assistantCount > 0 ? assistantCount - 1 : 0);
@@ -801,7 +780,6 @@ function ChatThreadContent({
             return; // User cancelled - this is expected
           }
 
-          console.error('Failed to trigger participant 0 for new thread:', error);
           toastManager.error(
             t('chat.participantFailed'),
             t('chat.participantFailedDescription'),

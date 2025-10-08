@@ -102,8 +102,8 @@ export default function ChatOverviewScreen() {
 
           // Move to next participant
           setCurrentParticipantIndex(prev => prev + 1);
-        } catch (error) {
-          console.error(`Failed to stream participant ${currentParticipantIndex}:`, error);
+        } catch {
+          // Silently handle participant streaming errors
         } finally {
           setIsStreamingParticipant(false);
         }

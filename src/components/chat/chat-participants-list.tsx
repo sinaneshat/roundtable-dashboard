@@ -114,7 +114,6 @@ function RoleSelector({
         // Success is obvious from the role appearing in the list - no toast needed
       }
     } catch (error) {
-      console.error('Failed to create custom role:', error);
       const errorMessage = getApiErrorMessage(error, 'Failed to create custom role');
       toastManager.error('Failed to create role', errorMessage);
     }
@@ -135,7 +134,6 @@ function RoleSelector({
         // Mutation auto-invalidates query - no manual refetch needed
       }
     } catch (error) {
-      console.error('Failed to delete custom role:', error);
       const errorMessage = getApiErrorMessage(error, 'Failed to delete custom role');
       toastManager.error('Failed to delete role', errorMessage);
     }

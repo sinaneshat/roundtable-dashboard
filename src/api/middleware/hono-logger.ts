@@ -1,17 +1,18 @@
 /**
- * Centralized Hono Logger Middleware
- * Provides structured logging for all API requests and responses
- * Uses Hono's official logger middleware with custom PrintFunc
+ * Environment-Aware Centralized Hono Logger Middleware
+ *
+ * Logging behavior by environment:
+ * - local/development: All logs (DEBUG, INFO, WARN, ERROR)
+ * - preview: INFO, WARN, ERROR
+ * - production: ERROR only
  */
 
 import type { Context } from 'hono';
 import { logger } from 'hono/logger';
 
+import type { LogLevel } from '@/api/core/config';
+import { getLoggingConfig, shouldLog } from '@/api/core/config';
 import type { LogContext, TypedLogger } from '@/api/types/logger';
-import type { LogLevel } from '@/lib/utils/safe-logger';
-
-// Environment detection for Cloudflare Workers
-const isDevelopment = typeof process !== 'undefined' && process.env?.NODE_ENV === 'development';
 
 /**
  * Custom structured logger for Hono API
@@ -30,9 +31,16 @@ export class HonoLogger implements TypedLogger {
   }
 
   /**
-   * Safe logging that works in both development and Cloudflare Workers
+   * Environment-aware logging
+   * Respects LOGGING_CONFIG based on environment
    */
   private log(level: LogLevel, message: string, context?: LogContext): void {
+    // ✅ Check if this log level should be logged in current environment
+    if (!shouldLog(level)) {
+      return; // Silently skip - zero overhead in production
+    }
+
+    const config = getLoggingConfig();
     const timestamp = new Date().toISOString();
     const logEntry = {
       timestamp,
@@ -41,16 +49,14 @@ export class HonoLogger implements TypedLogger {
       ...(context && { context }),
     };
 
-    const formattedMessage = isDevelopment
+    const formattedMessage = config.prettyPrint
       ? JSON.stringify(logEntry, null, 2)
       : JSON.stringify(logEntry);
 
     // Use appropriate console method based on level
     switch (level) {
       case 'DEBUG':
-        if (isDevelopment) {
-          console.warn(`[DEBUG] ${formattedMessage}`);
-        }
+        console.warn(`[DEBUG] ${formattedMessage}`);
         break;
       case 'INFO':
         console.warn(`[INFO] ${formattedMessage}`);
@@ -89,14 +95,16 @@ export class HonoLogger implements TypedLogger {
 
   /**
    * Log API errors with request context
+   * Always logged (even in production for critical errors)
    */
   apiError(c: Context, message: string, error?: unknown): void {
+    const config = getLoggingConfig();
     const errorContext = {
       method: c.req.method,
       path: c.req.path,
       userAgent: c.req.header('User-Agent'),
       error: error instanceof Error
-        ? { name: error.name, message: error.message, stack: isDevelopment ? error.stack : undefined }
+        ? { name: error.name, message: error.message, stack: config.includeStack ? error.stack : undefined }
         : error,
     };
 
@@ -105,6 +113,7 @@ export class HonoLogger implements TypedLogger {
 
   /**
    * Log API success with request context
+   * Only logged in non-production environments
    */
   apiSuccess(c: Context, message: string, data?: LogContext): void {
     const successContext = {
@@ -124,18 +133,21 @@ export class HonoLogger implements TypedLogger {
 export const apiLogger = HonoLogger.getInstance();
 
 /**
- * Custom PrintFunc for Hono's logger middleware
- * Handles the spacing issue mentioned in GitHub issue #3328
+ * Environment-aware PrintFunc for Hono's logger middleware
+ * Only logs HTTP requests in non-production environments
  */
 function customPrintFunc(message: string, ...rest: string[]) {
-  // Trim message to handle spacing issue in Cloudflare Workers
-  const trimmedMessage = message.trim();
+  // ✅ Skip HTTP request logging in production
+  if (!shouldLog('INFO')) {
+    return;
+  }
 
-  // Parse the log message to extract structured data
+  const config = getLoggingConfig();
+  const trimmedMessage = message.trim();
   const timestamp = new Date().toISOString();
 
   // Enhanced formatting for API logs
-  const formattedLog = isDevelopment
+  const formattedLog = config.prettyPrint
     ? `[API] ${timestamp} ${trimmedMessage} ${rest.join(' ')}`
     : JSON.stringify({
         timestamp,
@@ -149,7 +161,7 @@ function customPrintFunc(message: string, ...rest: string[]) {
 
 /**
  * Configured Hono logger middleware
- * Ready to use with app.use()
+ * Disabled in production, enabled in dev/preview
  */
 export const honoLoggerMiddleware = logger(customPrintFunc);
 
