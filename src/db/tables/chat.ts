@@ -164,6 +164,7 @@ export const chatThreadChangelog = sqliteTable('chat_thread_changelog', {
 /**
  * Chat Messages
  * Individual messages in threads (user input + model responses)
+ * Supports message variants for regeneration and branching conversations
  */
 export const chatMessage = sqliteTable('chat_message', {
   id: text('id').primaryKey(),
@@ -200,6 +201,12 @@ export const chatMessage = sqliteTable('chat_message', {
     .references((): ReturnType<typeof text> => chatMessage.id as ReturnType<typeof text>, {
       onDelete: 'set null',
     }),
+  variantIndex: integer('variant_index')
+    .notNull()
+    .default(0), // 0 = original message, 1+ = regenerated variants
+  isActiveVariant: integer('is_active_variant', { mode: 'boolean' })
+    .notNull()
+    .default(true), // Which variant is currently displayed/active
   createdAt: integer('created_at', { mode: 'timestamp_ms' })
     .defaultNow()
     .notNull(),
@@ -207,6 +214,8 @@ export const chatMessage = sqliteTable('chat_message', {
   index('chat_message_thread_idx').on(table.threadId),
   index('chat_message_created_idx').on(table.createdAt),
   index('chat_message_participant_idx').on(table.participantId),
+  index('chat_message_parent_idx').on(table.parentMessageId),
+  index('chat_message_variant_idx').on(table.parentMessageId, table.variantIndex), // Query all variants of a message
 ]);
 
 /**

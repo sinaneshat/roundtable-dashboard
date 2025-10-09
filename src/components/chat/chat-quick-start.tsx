@@ -3,7 +3,6 @@
 import { motion } from 'motion/react';
 import { useMemo } from 'react';
 
-import type { ParticipantConfig } from '@/components/chat/chat-config-sheet';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
@@ -12,6 +11,7 @@ import type { SubscriptionTier } from '@/db/tables/usage';
 import { useUsageStatsQuery } from '@/hooks/queries/usage';
 import { AllowedModelId, canAccessModel, getAccessibleModels, getModelById, getTierDisplayName } from '@/lib/ai/models-config';
 import type { ChatModeId } from '@/lib/config/chat-modes';
+import type { ParticipantConfig } from '@/lib/schemas/chat-forms';
 import { cn } from '@/lib/ui/cn';
 import { glassBadge } from '@/lib/ui/glassmorphism';
 
@@ -227,8 +227,8 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
   }, [userTier, accessibleModelIds]);
 
   return (
-    <div className={cn('w-full relative z-20 overflow-hidden', className)}>
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-1.5 lg:gap-4 overflow-hidden">
+    <div className={cn('w-full relative z-20', className)}>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3 md:gap-4">
         {suggestions.map((suggestion) => {
           return (
             <motion.div
@@ -243,13 +243,13 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
             >
               <Card
                 variant="glass"
-                className="gap-1 cursor-pointer p-1.5 lg:p-4 hover:shadow-2xl transition-all group flex-1 flex flex-col min-w-0 overflow-hidden"
+                className="cursor-pointer p-3 sm:p-4 hover:shadow-2xl transition-all group flex-1 flex flex-col min-w-0 gap-2 sm:gap-3"
                 onClick={() => onSuggestionClick(suggestion.prompt, suggestion.mode, suggestion.participants)}
               >
-                {/* Title - Full text visible with line breaks */}
-                <div className="font-semibold text-xs lg:text-sm text-white/90 mb-1 lg:mb-3 line-clamp-3 lg:line-clamp-2 drop-shadow-md leading-relaxed">
+                {/* Title - Responsive text sizing */}
+                <h3 className="font-semibold text-xs sm:text-sm text-white/90 line-clamp-3 sm:line-clamp-2 drop-shadow-md leading-relaxed">
                   {suggestion.title}
-                </div>
+                </h3>
 
                 {/* Model Participants */}
                 <div className="flex items-center gap-1.5 min-w-0 w-full">

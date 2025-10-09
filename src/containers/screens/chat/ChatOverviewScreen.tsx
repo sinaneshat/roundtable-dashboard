@@ -1,98 +1,247 @@
 'use client';
 
-import { CopyIcon, Square } from 'lucide-react';
+/**
+ * ChatOverviewScreen - Fixed Stale Closure Issues
+ *
+ * ✅ Manual SSE streaming (multi-participant requirement)
+ * ✅ Uses refs to avoid stale closures
+ * ✅ Follows AI SDK state management patterns
+ * ✅ Callback-driven, minimal useEffect
+ *
+ * Why not pure useChat:
+ * - Multi-participant sequential streaming is not a standard AI SDK pattern
+ * - Backend streams one participant at a time
+ * - Need custom logic to handle multiple sequential streams
+ */
+
+import type { UIMessage } from 'ai';
 import { AnimatePresence, motion } from 'motion/react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
 
-import { Action, Actions } from '@/components/ai-elements/actions';
-import {
-  Conversation,
-  ConversationContent,
-  ConversationScrollButton,
-} from '@/components/ai-elements/conversation';
 import { Loader } from '@/components/ai-elements/loader';
-import { Message, MessageContent } from '@/components/ai-elements/message';
-import type { PromptInputMessage } from '@/components/ai-elements/prompt-input';
-import {
-  PromptInput,
-  PromptInputBody,
-  PromptInputSubmit,
-  PromptInputTextarea,
-  PromptInputToolbar,
-  PromptInputTools,
-} from '@/components/ai-elements/prompt-input';
+import { Message, MessageAvatar, MessageContent } from '@/components/ai-elements/message';
 import { Response } from '@/components/ai-elements/response';
+import { ChatInput } from '@/components/chat/chat-input';
 import { ChatMemoriesList } from '@/components/chat/chat-memories-list';
+import { ChatModeSelector } from '@/components/chat/chat-mode-selector';
 import { ChatParticipantsList, ParticipantsPreview } from '@/components/chat/chat-participants-list';
 import { ChatQuickStart } from '@/components/chat/chat-quick-start';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { ModelMessageCard } from '@/components/chat/model-message-card';
 import { toast } from '@/components/ui/use-toast';
 import { WavyBackground } from '@/components/ui/wavy-background';
 import { useCreateThreadMutation } from '@/hooks/mutations/chat-mutations';
-import { streamParticipant } from '@/lib/ai/stream-participant';
+import { getAvatarProps } from '@/lib/ai/avatar-helpers';
+import { AllowedModelId, getModelById } from '@/lib/ai/models-config';
+import { useSession } from '@/lib/auth/client';
 import type { ChatModeId } from '@/lib/config/chat-modes';
-import { getChatModeOptions } from '@/lib/config/chat-modes';
 import type { ParticipantConfig } from '@/lib/schemas/chat-forms';
 import { chatInputFormDefaults, chatInputFormToCreateThreadRequest } from '@/lib/schemas/chat-forms';
-import { cn } from '@/lib/ui/cn';
-import { chatGlass } from '@/lib/ui/glassmorphism';
 import { getApiErrorMessage } from '@/lib/utils/error-handling';
+
+type ChatMessage = UIMessage;
 
 export default function ChatOverviewScreen() {
   const router = useRouter();
   const t = useTranslations();
+  const { data: session } = useSession();
+
+  // Chat configuration state
   const [selectedMode, setSelectedMode] = useState<ChatModeId>(chatInputFormDefaults.mode);
-  const [selectedParticipants, setSelectedParticipants] = useState<ParticipantConfig[]>(chatInputFormDefaults.participants);
-  const [selectedMemoryIds, setSelectedMemoryIds] = useState<string[]>(chatInputFormDefaults.memoryIds);
+  const [selectedParticipants, setSelectedParticipants] = useState<ParticipantConfig[]>([
+    // Default to cheapest model: Gemini 2.5 Flash ($0.075/M in, $0.30/M out)
+    { id: 'temp-1', modelId: AllowedModelId.GEMINI_2_5_FLASH, role: '', order: 0 },
+  ]);
+  const [selectedMemoryIds, setSelectedMemoryIds] = useState<string[]>([]);
   const [inputValue, setInputValue] = useState('');
 
   // Thread state
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
   const [activeThreadSlug, setActiveThreadSlug] = useState<string | null>(null);
-  const [totalParticipants, setTotalParticipants] = useState(0);
+
+  // Streaming state (following AI SDK patterns)
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [status, setStatus] = useState<'ready' | 'submitted' | 'streaming' | 'error'>('ready');
+
+  // Use refs to avoid stale closures
+  const messagesRef = useRef<ChatMessage[]>([]);
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const participantsRef = useRef<ParticipantConfig[]>(selectedParticipants);
+
+  // Keep refs in sync with state
+  messagesRef.current = messages;
+  participantsRef.current = selectedParticipants;
 
   // Thread creation mutation
   const createThreadMutation = useCreateThreadMutation();
 
-  // Messages state following AI SDK pattern
-  const [messages, setMessages] = useState<Array<{
-    id: string;
-    role: 'user' | 'assistant';
-    parts: Array<{ type: string; text: string }>;
-    metadata?: Record<string, unknown> | null;
-    participantId?: string;
-  }>>([]);
+  // ✅ CALLBACK-DRIVEN: Stream all participants
+  const streamAllParticipants = useCallback(
+    async (threadId: string, initialMessages: ChatMessage[], participantCount: number) => {
+      for (let participantIndex = 0; participantIndex < participantCount; participantIndex++) {
+        setStatus('streaming');
 
-  // Sequential streaming state
-  const [currentParticipantIndex, setCurrentParticipantIndex] = useState(0);
-  const [isStreamingParticipant, setIsStreamingParticipant] = useState(false);
-  const [status, setStatus] = useState<'ready' | 'submitted' | 'streaming' | 'error'>('ready');
+        const abortController = new AbortController();
+        abortControllerRef.current = abortController;
 
-  // Refs for cleanup
-  const titlePollingIntervalRef = useRef<NodeJS.Timeout | undefined>(undefined);
-  const abortControllerRef = useRef<AbortController | null>(null);
+        try {
+          const currentMessages = messagesRef.current; // Use ref for latest value
 
-  const chatModeOptions = getChatModeOptions();
+          const response = await fetch(`/api/v1/chat/threads/${threadId}/stream`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              messages: currentMessages.map(m => ({
+                id: m.id,
+                role: m.role,
+                parts: m.parts,
+              })),
+              participantIndex,
+            }),
+            signal: abortController.signal,
+          });
 
-  // Handle PromptInput submission
-  const handlePromptSubmit = useCallback(
-    async (promptMessage: PromptInputMessage) => {
-      const hasText = Boolean(promptMessage.text);
-      const hasAttachments = Boolean(promptMessage.files?.length);
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+          }
 
-      if (!(hasText || hasAttachments)) {
-        return;
+          const reader = response.body?.getReader();
+          if (!reader) {
+            throw new Error('No response body');
+          }
+
+          const decoder = new TextDecoder();
+          let buffer = '';
+          let messageId = '';
+          let content = '';
+          let messageMetadata: Record<string, unknown> | null = null;
+
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done)
+              break;
+
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || '';
+
+            for (const line of lines) {
+              if (!line.trim() || line.startsWith(':'))
+                continue;
+
+              if (line.startsWith('data: ')) {
+                const data = line.slice(6);
+                if (data === '[DONE]')
+                  continue;
+
+                try {
+                  const event = JSON.parse(data);
+                  console.log('[STREAM EVENT]', event); // DEBUG
+
+                  if (event.type === 'start') {
+                    messageId = event.messageId;
+                    messageMetadata = event.messageMetadata || null;
+                    content = '';
+
+                    // Update participants if backend sent new data
+                    if (messageMetadata) {
+                      const updatedParticipants = (messageMetadata as Record<string, unknown>)
+                        .participants as Array<{ id: string; modelId: string; role: string; order: number }> | undefined;
+                      if (updatedParticipants && updatedParticipants.length > 0) {
+                        setSelectedParticipants(updatedParticipants);
+                        participantsRef.current = updatedParticipants;
+                      }
+                    }
+
+                    // ✅ flushSync forces immediate render
+                    // eslint-disable-next-line react-dom/no-flush-sync -- Required for real-time streaming display
+                    flushSync(() => {
+                      setMessages((prev) => {
+                        const updated = [
+                          ...prev,
+                          {
+                            id: messageId,
+                            role: 'assistant' as const,
+                            parts: [{ type: 'text' as const, text: '' }],
+                            metadata: messageMetadata || undefined,
+                          },
+                        ];
+                        messagesRef.current = updated; // Keep ref in sync
+                        return updated;
+                      });
+                    });
+                  } else if (event.type === 'text-delta' && event.delta) {
+                    content += event.delta;
+                    console.log('[TEXT DELTA]', { messageId, content }); // DEBUG
+
+                    // ✅ flushSync for streaming text
+                    // eslint-disable-next-line react-dom/no-flush-sync -- Required for real-time streaming display
+                    flushSync(() => {
+                      setMessages((prev) => {
+                        const updated = prev.map(m =>
+                          m.id === messageId
+                            ? { ...m, parts: [{ type: 'text' as const, text: content }] }
+                            : m,
+                        );
+                        messagesRef.current = updated; // Keep ref in sync
+                        console.log('[MESSAGES UPDATED]', updated.length); // DEBUG
+                        return updated;
+                      });
+                    });
+                  } else if (event.type === 'error') {
+                    console.error('Stream error:', event.error);
+                    setStatus('error');
+                    return;
+                  }
+                } catch (parseError) {
+                  console.error('Failed to parse SSE:', parseError);
+                }
+              }
+            }
+          }
+
+          reader.releaseLock();
+        } catch (error) {
+          if (error instanceof Error && error.name === 'AbortError') {
+            setStatus('ready');
+            return;
+          }
+          console.error('Streaming error:', error);
+          setStatus('error');
+          return;
+        } finally {
+          abortControllerRef.current = null;
+        }
       }
 
-      const messageText = promptMessage.text || 'Sent with attachments';
+      setStatus('ready');
+
+      // Navigate to thread page after all participants complete
+      if (activeThreadSlug) {
+        setTimeout(() => {
+          router.push(`/chat/${activeThreadSlug}`);
+        }, 500);
+      }
+    },
+    [activeThreadSlug, router],
+  );
+
+  // ✅ CALLBACK-DRIVEN: Handle form submission
+  const handlePromptSubmit = useCallback(
+    async (e: React.FormEvent) => {
+      e.preventDefault();
+
+      const messageText = inputValue.trim();
+      if (!messageText || status !== 'ready')
+        return;
 
       try {
         setStatus('submitted');
 
-        // Create thread with configuration
+        // Create thread
         const requestData = chatInputFormToCreateThreadRequest({
           message: messageText,
           mode: selectedMode,
@@ -105,43 +254,39 @@ export default function ChatOverviewScreen() {
         });
 
         if (result.success && result.data) {
-          const thread = result.data.thread;
-          const threadParticipants = result.data.participants;
-          const backendMessages = result.data.messages;
+          const { thread, participants: threadParticipants, messages: backendMessages } = result.data;
           const firstMessage = backendMessages?.[0];
 
-          // Reset state for new thread
+          // Set thread state
           setActiveThreadId(thread.id);
           setActiveThreadSlug(thread.slug);
-          setTotalParticipants(threadParticipants?.length || 1);
-          setCurrentParticipantIndex(0);
-          setIsStreamingParticipant(false);
-          setStatus('ready');
-
-          // Clear input after successful submit (official AI SDK pattern)
           setInputValue('');
 
-          // Update selectedParticipants with actual backend IDs
+          // Update participants with backend IDs
           if (threadParticipants && threadParticipants.length > 0) {
-            setSelectedParticipants(
-              threadParticipants.map(p => ({
-                id: p.id,
-                modelId: p.modelId,
-                role: p.role || '',
-                order: p.priority,
-              })),
-            );
+            const updatedParticipants = threadParticipants.map((p, index) => ({
+              id: p.id,
+              modelId: p.modelId,
+              role: p.role || '',
+              order: index,
+            }));
+            setSelectedParticipants(updatedParticipants);
+            participantsRef.current = updatedParticipants;
           }
 
-          // Use the actual user message created by backend
+          // Set initial user message
           if (firstMessage) {
-            setMessages([
-              {
-                id: firstMessage.id,
-                role: 'user',
-                parts: [{ type: 'text', text: firstMessage.content }],
-              },
-            ]);
+            const userMessage: ChatMessage = {
+              id: firstMessage.id,
+              role: 'user',
+              parts: [{ type: 'text', text: firstMessage.content }],
+            };
+
+            setMessages([userMessage]);
+            messagesRef.current = [userMessage];
+
+            // ✅ Start streaming all participants
+            await streamAllParticipants(thread.id, [userMessage], threadParticipants?.length || 1);
           }
         }
       } catch (error) {
@@ -154,187 +299,54 @@ export default function ChatOverviewScreen() {
         setStatus('error');
       }
     },
-    [selectedMode, selectedParticipants, selectedMemoryIds, createThreadMutation, t],
+    [
+      inputValue,
+      status,
+      selectedMode,
+      selectedParticipants,
+      selectedMemoryIds,
+      createThreadMutation,
+      t,
+      toast,
+      streamAllParticipants,
+    ],
   );
 
-  // Sequential participant streaming effect
-  useEffect(() => {
-    if (!activeThreadId || isStreamingParticipant || messages.length === 0) {
-      return;
-    }
+  // Handle quick start suggestion click
+  const handleSuggestionClick = useCallback(
+    (prompt: string, mode: ChatModeId, participants: ParticipantConfig[]) => {
+      setSelectedMode(mode);
+      setSelectedParticipants(participants);
+      setInputValue(prompt);
 
-    const assistantMessageCount = messages.filter(m => m.role === 'assistant').length;
+      setTimeout(() => {
+        const inputElement = document.querySelector('textarea');
+        inputElement?.focus();
+      }, 100);
+    },
+    [],
+  );
 
-    if (assistantMessageCount < totalParticipants && assistantMessageCount === currentParticipantIndex) {
-      setIsStreamingParticipant(true);
-      setStatus('streaming');
-
-      const abortController = new AbortController();
-      abortControllerRef.current = abortController;
-
-      (async () => {
-        try {
-          const currentParticipant = selectedParticipants[currentParticipantIndex];
-
-          await streamParticipant({
-            threadId: activeThreadId,
-            messages: messages.map(m => ({
-              id: m.id,
-              role: m.role,
-              parts: m.parts.map(p => ({
-                type: p.type,
-                text: p.type === 'text' ? p.text : '',
-              })),
-            })),
-            participantIndex: currentParticipantIndex,
-            onConfigUpdate: (config) => {
-              if (config.participants) {
-                setSelectedParticipants(config.participants);
-              }
-            },
-            onUpdate: (updater) => {
-              if (typeof updater === 'function') {
-                setMessages((prev) => {
-                  const updated = updater(prev);
-                  return updated.map((msg) => {
-                    if (msg.role === 'assistant' && !('participantId' in msg) && currentParticipant?.id) {
-                      const existingMetadata = 'metadata' in msg ? (msg.metadata as Record<string, unknown> || {}) : {};
-                      return {
-                        ...msg,
-                        participantId: currentParticipant.id,
-                        metadata: {
-                          ...existingMetadata,
-                          model: currentParticipant.modelId,
-                          role: currentParticipant.role || undefined,
-                        },
-                      };
-                    }
-                    return msg;
-                  });
-                });
-              } else {
-                setMessages(updater.map((msg) => {
-                  if (msg.role === 'assistant' && !('participantId' in msg) && currentParticipant?.id) {
-                    const existingMetadata = 'metadata' in msg ? (msg.metadata as Record<string, unknown> || {}) : {};
-                    return {
-                      ...msg,
-                      participantId: currentParticipant.id,
-                      metadata: {
-                        ...existingMetadata,
-                        model: currentParticipant.modelId,
-                        role: currentParticipant.role || undefined,
-                      },
-                    };
-                  }
-                  return msg;
-                }));
-              }
-            },
-            signal: abortController.signal,
-          });
-
-          setCurrentParticipantIndex(prev => prev + 1);
-        } catch (error) {
-          if (error instanceof Error && error.name === 'AbortError') {
-            return;
-          }
-        } finally {
-          setIsStreamingParticipant(false);
-          setStatus('ready');
-          abortControllerRef.current = null;
-        }
-      })();
-    }
-  }, [activeThreadId, messages, currentParticipantIndex, totalParticipants, isStreamingParticipant, selectedParticipants]);
-
-  // Navigate after first round completes
-  useEffect(() => {
-    if (!activeThreadId || !activeThreadSlug) {
-      return;
-    }
-
-    const assistantMessageCount = messages.filter(m => m.role === 'assistant').length;
-    const allParticipantsComplete = assistantMessageCount >= totalParticipants && totalParticipants > 0;
-
-    if (allParticipantsComplete && !isStreamingParticipant) {
-      titlePollingIntervalRef.current = setInterval(async () => {
-        try {
-          const response = await fetch(`/api/v1/chat/threads/${activeThreadId}`);
-          if (response.ok) {
-            const data = (await response.json()) as { data: { thread: { title: string } } };
-            const title = data.data.thread.title;
-
-            if (title && title !== 'New Chat') {
-              if (titlePollingIntervalRef.current) {
-                clearInterval(titlePollingIntervalRef.current);
-              }
-              router.prefetch(`/chat/${activeThreadSlug}`);
-              router.push(`/chat/${activeThreadSlug}`);
-            }
-          }
-        } catch (error) {
-          console.error('Error polling for title:', error);
-        }
-      }, 500);
-
-      return () => {
-        if (titlePollingIntervalRef.current) {
-          clearInterval(titlePollingIntervalRef.current);
-        }
-      };
-    }
-    return undefined;
-  }, [activeThreadId, activeThreadSlug, messages, totalParticipants, isStreamingParticipant, router]);
-
-  // Handler for quick start suggestion click
-  const handleSuggestionClick = (
-    prompt: string,
-    mode: ChatModeId,
-    participants: ParticipantConfig[],
-  ) => {
-    setSelectedMode(mode);
-    setSelectedParticipants(participants);
-
-    setTimeout(() => {
-      const inputElement = document.querySelector('textarea');
-      if (inputElement) {
-        inputElement.value = prompt;
-        inputElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        inputElement.focus();
-
-        // Trigger change event
-        const event = new Event('input', { bubbles: true });
-        inputElement.dispatchEvent(event);
-      }
-    }, 100);
-  };
-
-  // Stop streaming handler
+  // Handle stop streaming
   const handleStop = useCallback(() => {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
       abortControllerRef.current = null;
     }
-    setIsStreamingParticipant(false);
     setStatus('ready');
-  }, []);
-
-  // Message actions
-  const handleCopyMessage = useCallback((content: string) => {
-    navigator.clipboard.writeText(content);
   }, []);
 
   const showStreamingView = activeThreadId && messages.length > 0;
 
   return (
-    <div className="relative flex flex-1 flex-col min-h-0">
+    <div className="relative flex flex-1 flex-col min-h-0 overflow-x-hidden">
       {/* Wavy Background */}
       <div className="absolute inset-0 -mx-4 lg:-mx-6 z-0 overflow-hidden">
         <WavyBackground containerClassName="h-full w-full" />
       </div>
 
-      {/* Content Layer */}
-      <div className="relative z-10 flex flex-1 flex-col min-h-0">
+      {/* Content Layer - Switches layout based on mode */}
+      <div className="relative z-10 flex flex-1 flex-col overflow-x-hidden">
         <AnimatePresence mode="wait">
           {!showStreamingView
             ? (
@@ -343,49 +355,50 @@ export default function ChatOverviewScreen() {
                   initial={{ opacity: 1 }}
                   exit={{ opacity: 0, scale: 0.95 }}
                   transition={{ duration: 0.3 }}
-                  className="flex flex-1 flex-col min-h-0"
+                  className="w-full flex-1 flex flex-col justify-center"
                 >
-                  {/* Hero Section */}
-                  <div className="flex-shrink-0 pt-16 pb-12">
-                    <div className="mx-auto max-w-4xl px-4 lg:px-6">
-                      <motion.div
-                        initial={{ opacity: 0, scale: 0.9 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        transition={{ duration: 0.8 }}
-                        className="flex flex-col items-center gap-6 text-center"
-                      >
-                        <div className="relative h-28 w-28 md:h-36 md:w-36">
-                          <Image
-                            src="/static/logo.png"
-                            alt="Roundtable Logo"
-                            fill
-                            sizes="(max-width: 768px) 112px, 144px"
-                            className="object-contain drop-shadow-2xl"
-                            priority
-                          />
-                        </div>
-                        <p className="text-3xl font-bold text-white drop-shadow-2xl md:text-5xl lg:text-6xl">
-                          roundtable.now
-                        </p>
-                        <p className="text-base font-normal text-white/90 drop-shadow-lg md:text-lg lg:text-xl">
-                          Where AI models collaborate together
-                        </p>
-                      </motion.div>
-                    </div>
+                  {/* Hero Section - Aligned with chat layout */}
+                  <div className="w-full max-w-4xl mx-auto px-4 sm:px-6 md:px-8 py-6 sm:py-8">
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.9 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ duration: 0.8 }}
+                      className="flex flex-col items-center gap-4 sm:gap-5 md:gap-6 text-center"
+                    >
+                      {/* Logo - Smooth scaling across breakpoints */}
+                      <div className="relative h-20 w-20 xs:h-24 xs:w-24 sm:h-28 sm:w-28 md:h-32 md:w-32 lg:h-36 lg:w-36">
+                        <Image
+                          src="/static/logo.png"
+                          alt="Roundtable Logo"
+                          fill
+                          sizes="(max-width: 480px) 80px, (max-width: 640px) 96px, (max-width: 768px) 112px, (max-width: 1024px) 128px, 144px"
+                          className="object-contain drop-shadow-2xl"
+                          priority
+                        />
+                      </div>
+
+                      {/* Title - Smooth text scaling */}
+                      <h1 className="font-bold text-white drop-shadow-2xl text-2xl xs:text-3xl sm:text-4xl md:text-5xl lg:text-6xl">
+                        roundtable.now
+                      </h1>
+
+                      {/* Subtitle - Smooth text scaling with max-width */}
+                      <p className="font-normal text-white/90 drop-shadow-lg text-sm xs:text-base sm:text-lg md:text-xl max-w-2xl">
+                        Where AI models collaborate together
+                      </p>
+                    </motion.div>
                   </div>
 
-                  {/* Quick Start Cards */}
-                  <div className="flex-1 overflow-y-auto">
-                    <div className="mx-auto max-w-4xl px-4 lg:px-6 pb-1.5 lg:pb-6">
-                      <motion.div
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.4, delay: 0.5 }}
-                        className="w-full"
-                      >
-                        <ChatQuickStart onSuggestionClick={handleSuggestionClick} />
-                      </motion.div>
-                    </div>
+                  {/* Quick Start Cards - Aligned with chat layout */}
+                  <div className="w-full max-w-4xl mx-auto px-4 sm:px-6 md:px-8 py-4">
+                    <motion.div
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.4, delay: 0.5 }}
+                      className="w-full"
+                    >
+                      <ChatQuickStart onSuggestionClick={handleSuggestionClick} />
+                    </motion.div>
                   </div>
                 </motion.div>
               )
@@ -395,155 +408,120 @@ export default function ChatOverviewScreen() {
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.4 }}
-                  className="flex-1 overflow-hidden"
+                  className="w-full max-w-4xl mx-auto px-4 sm:px-6 md:px-8 pt-4 space-y-4"
                 >
-                  <div className="mx-auto max-w-4xl h-full">
-                    <Conversation className="h-full">
-                      <ConversationContent>
-                        {messages.map(message => (
-                          <div key={message.id}>
-                            <Message from={message.role}>
-                              <MessageContent>
-                                {message.parts.map((part, i) => {
-                                  if (part.type === 'text') {
-                                    return (
-                                      <Response key={`${message.id}-${i}`}>
-                                        {part.text}
-                                      </Response>
-                                    );
-                                  }
-                                  return null;
-                                })}
-                              </MessageContent>
-                            </Message>
-                            {message.role === 'assistant' && (
-                              <Actions className="mt-2">
-                                <Action
-                                  onClick={() => {
-                                    const textPart = message.parts.find(p => p.type === 'text');
-                                    if (textPart && 'text' in textPart) {
-                                      handleCopyMessage(textPart.text);
-                                    }
-                                  }}
-                                  label="Copy"
-                                >
-                                  <CopyIcon className="size-3" />
-                                </Action>
-                              </Actions>
-                            )}
-                          </div>
-                        ))}
-                        {status === 'submitted' && <Loader />}
-                      </ConversationContent>
-                      <ConversationScrollButton />
-                    </Conversation>
-                  </div>
+                  {/* Message list - Center-based chat layout */}
+                  {messages.map((message) => {
+                    const participantIndex
+                      = message.metadata && typeof message.metadata === 'object' && 'participantIndex' in message.metadata
+                        ? (message.metadata as { participantIndex?: number }).participantIndex
+                        : undefined;
+
+                    const avatarProps = getAvatarProps(
+                      message.role as 'user' | 'assistant',
+                      selectedParticipants,
+                      session?.user?.image,
+                      session?.user?.name,
+                      participantIndex,
+                    );
+
+                    if (message.role === 'user') {
+                      return (
+                        <Message key={message.id} from="user">
+                          <MessageContent>
+                            {message.parts.map((part, partIndex) => {
+                              if (part.type === 'text') {
+                                return (
+                                  <Response key={`${message.id}-part-${partIndex}`}>
+                                    {part.text}
+                                  </Response>
+                                );
+                              }
+                              return null;
+                            })}
+                          </MessageContent>
+                          <MessageAvatar src={avatarProps.src} name={avatarProps.name} />
+                        </Message>
+                      );
+                    }
+
+                    // Assistant message
+                    const participant
+                      = participantIndex !== undefined ? selectedParticipants[participantIndex] : undefined;
+                    const model = participant ? getModelById(participant.modelId) : undefined;
+
+                    if (!model || !participant)
+                      return null;
+
+                    const hasError
+                      = message.metadata && typeof message.metadata === 'object' && 'error' in message.metadata;
+                    const messageStatus: 'completed' | 'streaming' | 'error'
+                      = hasError
+                        ? 'error'
+                        : status === 'streaming' && message.parts[0]?.type === 'text' && message.parts[0].text === ''
+                          ? 'streaming'
+                          : 'completed';
+
+                    return (
+                      <ModelMessageCard
+                        key={message.id}
+                        model={model}
+                        role={participant.role}
+                        participantIndex={participantIndex ?? 0}
+                        status={messageStatus}
+                        parts={message.parts as Array<{ type: 'text'; text: string } | { type: 'reasoning'; text: string }>}
+                        avatarSrc={avatarProps.src}
+                        avatarName={avatarProps.name}
+                      />
+                    );
+                  })}
+
+                  {/* Show loader during streaming */}
+                  {status === 'streaming' && <Loader />}
                 </motion.div>
               )}
         </AnimatePresence>
+      </div>
 
-        {/* AI Elements Prompt Input - Sticky */}
-        <div className="sticky bottom-0 flex-shrink-0 w-full pb-4 pt-1 lg:pt-3">
-          <div className="mx-auto max-w-4xl px-4 lg:px-6">
-            <div className="space-y-3">
-              {/* Participants Preview */}
-              {selectedParticipants.length > 0 && (
-                <ParticipantsPreview
+      {/* ✅ STICKY INPUT - Stays at bottom, no background wrapper */}
+      <div className="sticky bottom-0 left-0 right-0 z-50 mt-auto">
+        <div className="w-full max-w-4xl mx-auto px-4 sm:px-6 md:px-8 py-4">
+          {/* Participants Preview - shows status during streaming */}
+          {selectedParticipants.length > 0 && (
+            <ParticipantsPreview
+              participants={selectedParticipants}
+              isStreaming={status === 'streaming'}
+              currentParticipantIndex={undefined}
+              chatMessages={messages as unknown as Array<{ participantId?: string | null; [key: string]: unknown }>}
+              className="mb-4"
+            />
+          )}
+
+          {/* Chat Input - Glass design, fixed to bottom */}
+          <ChatInput
+            value={inputValue}
+            onChange={setInputValue}
+            onSubmit={handlePromptSubmit}
+            onStop={handleStop}
+            status={status === 'streaming' ? 'streaming' : status === 'error' ? 'error' : 'ready'}
+            placeholder={t('chat.input.placeholder')}
+            toolbar={(
+              <>
+                <ChatParticipantsList
                   participants={selectedParticipants}
-                  isStreaming={isStreamingParticipant}
-                  currentParticipantIndex={currentParticipantIndex}
-                  chatMessages={messages}
-                  className="mb-2"
+                  onParticipantsChange={setSelectedParticipants}
                 />
-              )}
-
-              <div className="space-y-2">
-                <PromptInput onSubmit={handlePromptSubmit} className={chatGlass.inputBox}>
-                  <PromptInputBody>
-                    <PromptInputTextarea
-                      placeholder={t('chat.input.placeholder')}
-                      value={inputValue}
-                      onChange={e => setInputValue(e.target.value)}
-                      // eslint-disable-next-line jsx-a11y/no-autofocus -- Intentional UX for chat input on overview page
-                      autoFocus
-                    />
-                  </PromptInputBody>
-                  <PromptInputToolbar>
-                    <PromptInputTools>
-                      <ChatParticipantsList
-                        participants={selectedParticipants}
-                        onParticipantsChange={setSelectedParticipants}
-                        isStreaming={isStreamingParticipant}
-                      />
-
-                      <ChatMemoriesList
-                        selectedMemoryIds={selectedMemoryIds}
-                        onMemoryIdsChange={setSelectedMemoryIds}
-                        isStreaming={isStreamingParticipant}
-                      />
-
-                      <Select value={selectedMode} onValueChange={value => setSelectedMode(value as ChatModeId)}>
-                        <SelectTrigger
-                          size="sm"
-                          className="h-8 sm:h-9 w-fit gap-1.5 sm:gap-2 rounded-lg border px-3 sm:px-4 text-xs"
-                        >
-                          <SelectValue>
-                            <div className="flex items-center gap-1.5 sm:gap-2">
-                              {(() => {
-                                const ModeIcon = chatModeOptions.find(m => m.value === selectedMode)?.icon;
-                                return ModeIcon ? <ModeIcon className="size-3 sm:size-3.5" /> : null;
-                              })()}
-                              <span className="text-xs font-medium hidden xs:inline sm:inline">
-                                {chatModeOptions.find(m => m.value === selectedMode)?.label}
-                              </span>
-                            </div>
-                          </SelectValue>
-                        </SelectTrigger>
-                        <SelectContent>
-                          {chatModeOptions.map((chatMode) => {
-                            const ModeIcon = chatMode.icon;
-                            return (
-                              <SelectItem key={chatMode.value} value={chatMode.value}>
-                                <div className="flex items-center gap-2">
-                                  <ModeIcon className="size-4" />
-                                  <span className="text-sm">{chatMode.label}</span>
-                                </div>
-                              </SelectItem>
-                            );
-                          })}
-                        </SelectContent>
-                      </Select>
-                    </PromptInputTools>
-
-                    {isStreamingParticipant
-                      ? (
-                          <button
-                            type="button"
-                            onClick={handleStop}
-                            className={cn(
-                              'rounded-lg size-9 sm:size-10 bg-destructive text-destructive-foreground',
-                              'hover:bg-destructive/90 active:scale-95 transition-transform',
-                              'flex items-center justify-center',
-                            )}
-                          >
-                            <Square className="size-4 sm:size-4.5" />
-                          </button>
-                        )
-                      : (
-                          <PromptInputSubmit
-                            disabled={!inputValue.trim() || selectedParticipants.length === 0 || status === 'submitted'}
-                            status={status}
-                            className="rounded-lg"
-                          />
-                        )}
-                  </PromptInputToolbar>
-                </PromptInput>
-                <p className="text-xs text-center text-muted-foreground">
-                  {t('chat.input.helpText', { defaultValue: 'Press Enter to send, Shift + Enter for new line' })}
-                </p>
-              </div>
-            </div>
-          </div>
+                <ChatMemoriesList
+                  selectedMemoryIds={selectedMemoryIds}
+                  onMemoryIdsChange={setSelectedMemoryIds}
+                />
+                <ChatModeSelector
+                  selectedMode={selectedMode}
+                  onModeChange={setSelectedMode}
+                />
+              </>
+            )}
+          />
         </div>
       </div>
     </div>

@@ -1,12 +1,9 @@
-import { dehydrate, HydrationBoundary } from '@tanstack/react-query';
 import type { Metadata } from 'next';
+import { redirect } from 'next/navigation';
 
 import { BRAND } from '@/constants';
 import { ChatThreadScreen } from '@/containers/screens/chat';
-import { getQueryClient } from '@/lib/data/query-client';
-import { queryKeys } from '@/lib/data/query-keys';
-import { STALE_TIMES } from '@/lib/data/stale-times';
-import { getThreadBySlugService, getThreadMessagesService } from '@/services/api';
+import { getThreadBySlugService } from '@/services/api';
 import { createMetadata } from '@/utils/metadata';
 
 // Force dynamic rendering for user-specific thread data
@@ -32,8 +29,16 @@ export async function generateMetadata({
 }
 
 /**
- * Chat Thread Page - Server Component with Prefetching
- * Prefetches thread data and messages on server for instant hydration
+ * Chat Thread Page - OFFICIAL NEXT.JS APP ROUTER PATTERN
+ *
+ * SERVER COMPONENT: Fetches data directly on server
+ * - No TanStack Query hydration (prevents hydration mismatches)
+ * - Passes raw data as props to Client Component
+ * - Client Component uses useChat with initialMessages
+ *
+ * This pattern follows official Next.js + AI SDK best practices:
+ * https://nextjs.org/docs/app/building-your-application/rendering/server-components
+ * https://sdk.vercel.ai/docs/getting-started/nextjs-app-router
  */
 export default async function ChatThreadPage({
   params,
@@ -41,34 +46,26 @@ export default async function ChatThreadPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const queryClient = getQueryClient();
 
-  // Prefetch thread data on server for instant hydration
-  // This prevents loading states and provides better UX
-  const threadResult = await queryClient.fetchQuery({
-    queryKey: queryKeys.threads.bySlug(slug),
-    queryFn: () => getThreadBySlugService(slug),
-    staleTime: STALE_TIMES.threadDetail, // 10 seconds - MUST match client-side hook
-  });
+  // OFFICIAL PATTERN: Fetch data directly in Server Component
+  // No QueryClient, no prefetch, no hydration - just raw data fetching
+  const threadResult = await getThreadBySlugService(slug);
 
-  // If thread has assistant messages, prefetch messages with session data
-  // This ensures session wrappers render immediately without loading states
-  if (threadResult?.success && threadResult.data?.thread) {
-    const threadId = threadResult.data.thread.id;
-    const hasAssistantMessages = threadResult.data.messages?.some(msg => msg.role === 'assistant');
-
-    if (hasAssistantMessages) {
-      await queryClient.prefetchQuery({
-        queryKey: queryKeys.threads.messages(threadId),
-        queryFn: () => getThreadMessagesService(threadId),
-        staleTime: STALE_TIMES.messages, // 10 seconds - MUST match client-side hook
-      });
-    }
+  // Handle error states
+  if (!threadResult?.success || !threadResult.data?.thread) {
+    redirect('/chat');
   }
 
+  const { thread, participants, messages } = threadResult.data;
+
+  // OFFICIAL PATTERN: Pass raw data as props to Client Component
+  // Client Component will use useChat with initialMessages
   return (
-    <HydrationBoundary state={dehydrate(queryClient)}>
-      <ChatThreadScreen slug={slug} />
-    </HydrationBoundary>
+    <ChatThreadScreen
+      thread={thread}
+      participants={participants}
+      initialMessages={messages}
+      slug={slug}
+    />
   );
 }

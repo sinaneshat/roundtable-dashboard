@@ -1,539 +1,280 @@
 'use client';
 
-import { useChat } from '@ai-sdk/react';
-import { DefaultChatTransport } from 'ai';
-import { CopyIcon, Globe, Link2, Loader2, Lock, RefreshCcwIcon, Star, Trash2 } from 'lucide-react';
-import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 
-import { Action, Actions } from '@/components/ai-elements/actions';
-import {
-  Conversation,
-  ConversationContent,
-  ConversationScrollButton,
-} from '@/components/ai-elements/conversation';
 import { Loader } from '@/components/ai-elements/loader';
-import { Message, MessageContent } from '@/components/ai-elements/message';
-import type { PromptInputMessage } from '@/components/ai-elements/prompt-input';
-import {
-  PromptInput,
-  PromptInputActionAddAttachments,
-  PromptInputActionMenu,
-  PromptInputActionMenuContent,
-  PromptInputActionMenuTrigger,
-  PromptInputAttachment,
-  PromptInputAttachments,
-  PromptInputBody,
-  PromptInputSubmit,
-  PromptInputTextarea,
-  PromptInputToolbar,
-  PromptInputTools,
-} from '@/components/ai-elements/prompt-input';
+import { Message, MessageAvatar, MessageContent } from '@/components/ai-elements/message';
 import { Response } from '@/components/ai-elements/response';
-import type { ParticipantConfig } from '@/components/chat/chat-config-sheet';
-import { ChatDeleteDialog } from '@/components/chat/chat-delete-dialog';
+import { ChatInput } from '@/components/chat/chat-input';
 import { ChatMemoriesList } from '@/components/chat/chat-memories-list';
+import { ChatModeSelector } from '@/components/chat/chat-mode-selector';
 import { ChatParticipantsList, ParticipantsPreview } from '@/components/chat/chat-participants-list';
-import { ChatShareDialog } from '@/components/chat/chat-share-dialog';
-import { useBreadcrumb } from '@/components/chat/use-breadcrumb';
-import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useToggleFavoriteMutation, useTogglePublicMutation } from '@/hooks/mutations/chat-mutations';
-import { useThreadBySlugQuery } from '@/hooks/queries/chat-threads';
+import { ModelMessageCard } from '@/components/chat/model-message-card';
+import { useSequentialStreaming } from '@/hooks/utils/use-sequential-streaming';
+import { getAvatarProps } from '@/lib/ai/avatar-helpers';
+import { serverMessagesToUIMessages } from '@/lib/ai/message-helpers';
+import { getModelById } from '@/lib/ai/models-config';
+import { useSession } from '@/lib/auth/client';
 import type { ChatModeId } from '@/lib/config/chat-modes';
-import { getChatModeOptions, getDefaultChatMode } from '@/lib/config/chat-modes';
+import type { ParticipantConfig } from '@/lib/schemas/chat-forms';
 import { toastManager } from '@/lib/toast/toast-manager';
-import { cn } from '@/lib/ui/cn';
-import { chatGlass } from '@/lib/ui/glassmorphism';
 
 // ============================================================================
 // Types
 // ============================================================================
 
-export type ThreadParticipant = {
+type ThreadData = {
   id: string;
-  threadId: string;
-  modelId: string;
-  role: string | null;
-  customRoleId: string | null;
-  priority: number;
+  title: string;
+  mode: string;
+  isFavorite: boolean;
+  isPublic: boolean;
   createdAt: string;
 };
 
+type ParticipantData = {
+  id: string;
+  threadId: string;
+  modelId: string;
+  role: string;
+  priority: number;
+  isEnabled: boolean;
+  settings: Record<string, unknown> | null;
+  customRoleId?: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+type MessageData = {
+  id: string;
+  threadId: string;
+  role: 'user' | 'assistant';
+  content: string;
+  reasoning?: string | null;
+  metadata?: Record<string, unknown> | string | null;
+  createdAt: string;
+};
+
+// ✅ OFFICIAL AI SDK PATTERN: UIMessage format
+type ChatMessage = {
+  id: string;
+  role: 'user' | 'assistant';
+  parts: Array<
+    | { type: 'text'; text: string }
+    | { type: 'reasoning'; text: string }
+  >;
+  metadata?: Record<string, unknown>;
+};
+
+type ChatThreadScreenProps = {
+  thread: ThreadData;
+  participants: ParticipantData[];
+  initialMessages: MessageData[];
+  slug: string;
+};
+
+// ============================================================================
+// Main Component - ✅ OFFICIAL AI SDK PATTERN
+// ============================================================================
+
 /**
- * Chat Thread Screen - Client Component
- * Main screen for displaying and interacting with a chat thread
- * Now using AI Elements components from Vercel AI SDK
+ * ChatThreadScreen - Following OFFICIAL AI SDK Elements Pattern
+ *
+ * ✅ Simple message mapping - no complex grouping
+ * ✅ Messages appear immediately as they're added to state
+ * ✅ Direct rendering following AI SDK docs exactly
+ *
+ * See: https://ai-sdk.dev/elements/components/message
  */
-export default function ChatThreadScreen({ slug }: { slug: string }) {
-  const t = useTranslations();
-  const router = useRouter();
-
-  // Fetch thread details by slug
-  const { data: threadData, isLoading: isLoadingThread, error: threadError } = useThreadBySlugQuery(slug);
-  const threadResponse = threadData?.success ? threadData.data : null;
-  const thread = threadResponse?.thread || null;
-  const rawParticipants = threadResponse?.participants || [];
-  const serverMessages = threadResponse?.messages || [];
-
-  // Convert participants
-  const participants: ThreadParticipant[] = rawParticipants.map(p => ({
-    id: p.id,
-    threadId: p.threadId,
-    modelId: p.modelId,
-    role: p.role,
-    customRoleId: null,
-    priority: p.priority,
-    createdAt: p.createdAt,
-  }));
-
-  // Loading state
-  if (isLoadingThread) {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="text-center space-y-2">
-          <div className="size-8 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto" />
-          <div className="text-muted-foreground text-sm">{t('actions.loading')}</div>
-        </div>
-      </div>
-    );
-  }
-
-  // Error state
-  if (threadError || !thread) {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="text-center space-y-4 max-w-md px-6">
-          <div className="text-destructive">
-            <svg
-              className="size-16 mx-auto mb-4"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-              />
-            </svg>
-          </div>
-          <h2 className="text-2xl font-semibold">{t('chat.threadNotFound')}</h2>
-          <p className="text-muted-foreground">{t('chat.threadNotFoundDescription')}</p>
-          <Button onClick={() => router.push('/chat')}>
-            {t('actions.back')}
-          </Button>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <ChatThreadContent
-      key={slug}
-      thread={thread}
-      participants={participants}
-      serverMessages={serverMessages}
-      slug={slug}
-    />
-  );
-}
-
-// ============================================================================
-// Chat Thread Content Component
-// ============================================================================
-
-function ChatThreadContent({
+export default function ChatThreadScreen({
   thread,
   participants,
-  serverMessages,
-  slug,
-}: {
-  thread: NonNullable<ReturnType<typeof useThreadBySlugQuery>['data']>['data']['thread'];
-  participants: ThreadParticipant[];
-  serverMessages: NonNullable<ReturnType<typeof useThreadBySlugQuery>['data']>['data']['messages'];
-  slug: string;
-}) {
-  const t = useTranslations();
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
-  const { setDynamicBreadcrumb } = useBreadcrumb();
+  initialMessages,
+}: ChatThreadScreenProps) {
+  const t = useTranslations('chat');
+  const { data: session } = useSession();
 
-  // Convert serverMessages to AI SDK format
-  const initialMessages = serverMessages.map(msg => ({
-    id: msg.id,
-    role: msg.role as 'user' | 'assistant',
-    parts: [{ type: 'text' as const, text: msg.content }],
-    metadata: msg.metadata,
-  }));
+  // ✅ Transform server data to AI SDK format using helper
+  const [messages, setMessages] = useState<ChatMessage[]>(() => serverMessagesToUIMessages(initialMessages));
 
-  // Mutations
-  const toggleFavoriteMutation = useToggleFavoriteMutation();
-  const togglePublicMutation = useTogglePublicMutation();
-
-  // Configuration state
-  const [currentMode, setCurrentMode] = useState<ChatModeId>(() => (thread?.mode as ChatModeId) || getDefaultChatMode());
-  const [currentParticipants, setCurrentParticipants] = useState<ParticipantConfig[]>(() =>
-    participants
+  // ✅ Participants state
+  const [selectedParticipants, setSelectedParticipants] = useState<ParticipantConfig[]>(() => {
+    return participants
+      .filter(p => p.isEnabled)
       .sort((a, b) => a.priority - b.priority)
-      .map(p => ({
+      .map((p, index) => ({
         id: p.id,
         modelId: p.modelId,
-        role: p.role || '',
+        role: p.role,
         customRoleId: p.customRoleId || undefined,
-        order: p.priority,
-      })),
-  );
-  const [currentMemoryIds, setCurrentMemoryIds] = useState<string[]>([]);
-
-  // Edit dialog state
-
-  // AI SDK useChat hook
-  const {
-    messages,
-    status,
-    regenerate,
-    sendMessage,
-  } = useChat({
-    id: thread.id,
-    messages: initialMessages,
-    transport: new DefaultChatTransport({
-      api: `/api/v1/chat/threads/${thread.id}/stream`,
-    }),
+        order: index,
+      }));
   });
 
-  // Mutation handlers
-  const handleToggleFavorite = useCallback(() => {
-    const newFavoriteStatus = !thread?.isFavorite;
-    toggleFavoriteMutation.mutate(
-      { threadId: thread.id, isFavorite: newFavoriteStatus, slug },
-      {
-        onSuccess: () => {},
-        onError: () => {
-          toastManager.error(
-            t('chat.favoriteFailed'),
-            t('chat.favoriteFailedDescription'),
-          );
-        },
+  const [selectedMemoryIds, setSelectedMemoryIds] = useState<string[]>([]);
+  const [selectedMode, setSelectedMode] = useState<ChatModeId>(thread.mode as ChatModeId);
+  const [inputValue, setInputValue] = useState('');
+
+  // ✅ OFFICIAL AI SDK PATTERN: Sequential streaming hook
+  const { status, streamingState, streamAllParticipants, stopStreaming } = useSequentialStreaming(
+    {
+      threadId: thread.id,
+      selectedMode,
+      selectedParticipants,
+      selectedMemoryIds,
+      onError: (error) => {
+        toastManager.error(t('error.generic'), error.message);
       },
-    );
-  }, [thread.id, thread.isFavorite, slug, t, toggleFavoriteMutation]);
+    },
+    setMessages,
+    setSelectedParticipants,
+  );
 
-  const handleDeleteClick = useCallback(() => {
-    setIsDeleteDialogOpen(true);
-  }, []);
+  // ✅ Handle sending new message
+  const handleSubmit = useCallback(
+    async (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!inputValue.trim() || status !== 'ready')
+        return;
 
-  const handleTogglePublic = useCallback(() => {
-    const newPublicStatus = !thread?.isPublic;
-    togglePublicMutation.mutate(
-      { threadId: thread.id, isPublic: newPublicStatus, slug },
-      {
-        onSuccess: () => {},
-        onError: () => {
-          toastManager.error(
-            t('chat.publicToggleFailed'),
-            t('chat.publicToggleFailedDescription'),
-          );
-        },
-      },
-    );
-  }, [thread.id, thread.isPublic, slug, t, togglePublicMutation]);
+      const userMessage: ChatMessage = {
+        id: `temp-${Date.now()}`,
+        role: 'user',
+        parts: [{ type: 'text', text: inputValue }],
+      };
 
-  const handleCopyLink = useCallback(async () => {
-    const shareUrl = `${window.location.origin}/public/chat/${slug}`;
-    try {
-      await navigator.clipboard.writeText(shareUrl);
-    } catch {
-      toastManager.error(t('chat.copyFailed'), t('chat.copyFailedDescription'));
-    }
-  }, [slug, t]);
-
-  // Message actions
-  const handleCopyMessage = useCallback((content: string) => {
-    navigator.clipboard.writeText(content);
-  }, []);
-
-  const handleRegenerateMessage = useCallback(() => {
-    regenerate();
-  }, [regenerate]);
-
-  // Submit handler for AI Elements PromptInput
-  const handleSubmit = useCallback((message: PromptInputMessage) => {
-    const hasText = Boolean(message.text);
-    const hasAttachments = Boolean(message.files?.length);
-
-    if (!(hasText || hasAttachments)) {
-      return;
-    }
-
-    sendMessage(
-      {
-        text: message.text || 'Sent with attachments',
-        files: message.files,
-      },
-      {
-        body: {
-          mode: currentMode,
-          participants: currentParticipants.map((p, idx) => ({
-            modelId: p.modelId,
-            role: p.role || null,
-            customRoleId: p.customRoleId || undefined,
-            order: p.order ?? idx,
-          })),
-          memoryIds: currentMemoryIds,
-          participantIndex: 0,
-        },
-      },
-    );
-  }, [sendMessage, currentMode, currentParticipants, currentMemoryIds]);
-
-  const chatModeOptions = getChatModeOptions();
-
-  // Set breadcrumb
-  useEffect(() => {
-    setDynamicBreadcrumb({
-      title: thread.title,
-      parent: '/chat',
-      actions: (
-        <>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={handleToggleFavorite}
-            disabled={toggleFavoriteMutation.isPending}
-            className="size-8"
-            title={thread.isFavorite ? t('chat.removeFromFavorites') : t('chat.addToFavorites')}
-          >
-            {toggleFavoriteMutation.isPending
-              ? (
-                  <Loader2 className="size-4 animate-spin" />
-                )
-              : (
-                  <Star
-                    className={cn(
-                      'size-4 transition-colors',
-                      thread.isFavorite && 'fill-yellow-500 text-yellow-500',
-                    )}
-                  />
-                )}
-          </Button>
-
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={handleTogglePublic}
-            disabled={togglePublicMutation.isPending}
-            className="size-8"
-            title={thread.isPublic ? t('chat.makePrivate') : t('chat.makePublic')}
-          >
-            {togglePublicMutation.isPending
-              ? (
-                  <Loader2 className="size-4 animate-spin" />
-                )
-              : thread.isPublic
-                ? (
-                    <Lock className="size-4" />
-                  )
-                : (
-                    <Globe className="size-4" />
-                  )}
-          </Button>
-
-          {thread.isPublic && (
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={handleCopyLink}
-              className="size-8 text-muted-foreground hover:text-foreground"
-              title={t('chat.copyLink')}
-            >
-              <Link2 className="size-4" />
-            </Button>
-          )}
-
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={handleDeleteClick}
-            className="size-8 text-muted-foreground hover:text-destructive"
-            title={t('chat.deleteThread')}
-          >
-            <Trash2 className="size-4" />
-          </Button>
-        </>
-      ),
-    });
-
-    return () => {
-      setDynamicBreadcrumb(null);
-    };
-  }, [thread.title, thread.isFavorite, thread.isPublic, handleToggleFavorite, handleTogglePublic, handleCopyLink, handleDeleteClick, setDynamicBreadcrumb, t, toggleFavoriteMutation.isPending, togglePublicMutation.isPending]);
+      setInputValue('');
+      setMessages(prev => [...prev, userMessage]);
+      await streamAllParticipants([...messages, userMessage]);
+    },
+    [inputValue, messages, status, streamAllParticipants],
+  );
 
   return (
-    <div className="max-w-4xl mx-auto p-6 relative size-full h-screen">
-      <div className="flex flex-col h-full">
-        <Conversation className="h-full">
-          <ConversationContent>
-            {messages.map(message => (
-              <div key={message.id}>
-                <Message from={message.role}>
-                  <MessageContent>
-                    {message.parts.map((part, i) => {
-                      if (part.type === 'text') {
-                        return (
-                          <Response key={`${message.id}-${i}`}>
-                            {part.text}
-                          </Response>
-                        );
-                      }
-                      return null;
-                    })}
-                  </MessageContent>
-                </Message>
-                {message.role === 'assistant' && (
-                  <Actions className="mt-2">
-                    <Action
-                      onClick={() => handleRegenerateMessage()}
-                      label="Retry"
-                    >
-                      <RefreshCcwIcon className="size-3" />
-                    </Action>
-                    <Action
-                      onClick={() => {
-                        const textPart = message.parts.find(p => p.type === 'text');
-                        if (textPart && 'text' in textPart) {
-                          handleCopyMessage(textPart.text);
-                        }
-                      }}
-                      label="Copy"
-                    >
-                      <CopyIcon className="size-3" />
-                    </Action>
-                  </Actions>
-                )}
-              </div>
-            ))}
-            {status === 'submitted' && <Loader />}
-          </ConversationContent>
-          <ConversationScrollButton />
-        </Conversation>
+    <div className="relative flex flex-1 flex-col">
+      {/* ✅ Message list - Center-based chat layout */}
+      <div className="w-full max-w-4xl mx-auto px-4 sm:px-6 md:px-8 pt-4 space-y-4">
+        {/* ✅ OFFICIAL AI SDK PATTERN: Simple message mapping */}
+        {messages.map((message) => {
+          if (message.role === 'user') {
+            // ✅ User message
+            return (
+              <Message from="user" key={message.id}>
+                <MessageContent>
+                  {message.parts.map((part, partIndex) => {
+                    if (part.type === 'text') {
+                      return (
+                        <Response key={`${message.id}-${partIndex}`}>
+                          {part.text}
+                        </Response>
+                      );
+                    }
+                    return null;
+                  })}
+                </MessageContent>
+                <MessageAvatar
+                  src={session?.user?.image || ''}
+                  name={session?.user?.name || 'User'}
+                />
+              </Message>
+            );
+          }
 
-        <div className="space-y-3 mt-4">
-          {/* Participants Preview */}
-          {currentParticipants.length > 0 && (
+          // ✅ Assistant message
+          const participantIndex = message.metadata && typeof message.metadata === 'object' && 'participantIndex' in message.metadata
+            ? (message.metadata as { participantIndex?: number }).participantIndex
+            : undefined;
+
+          const avatarProps = getAvatarProps(
+            message.role,
+            selectedParticipants,
+            session?.user?.image,
+            session?.user?.name,
+            participantIndex,
+          );
+
+          const participant = participantIndex !== undefined
+            ? selectedParticipants[participantIndex]
+            : undefined;
+
+          const model = participant ? getModelById(participant.modelId) : undefined;
+
+          if (!model || !participant) {
+            return null;
+          }
+
+          const hasError = message.metadata && typeof message.metadata === 'object' && 'error' in message.metadata;
+          const isCurrentlyStreaming = streamingState.messageId === message.id;
+          const hasContent = message.parts.some(p => p.type === 'text' && p.text.trim().length > 0);
+
+          const messageStatus: 'thinking' | 'streaming' | 'completed' | 'error' = hasError
+            ? 'error'
+            : isCurrentlyStreaming && !hasContent
+              ? 'thinking'
+              : isCurrentlyStreaming
+                ? 'streaming'
+                : 'completed';
+
+          return (
+            <ModelMessageCard
+              key={message.id}
+              model={model}
+              role={participant.role}
+              participantIndex={participantIndex ?? 0}
+              status={messageStatus}
+              parts={message.parts}
+              avatarSrc={avatarProps.src}
+              avatarName={avatarProps.name}
+            />
+          );
+        })}
+
+        {/* ✅ OFFICIAL AI SDK PATTERN: Show loader during streaming */}
+        {status === 'streaming' && <Loader />}
+      </div>
+
+      {/* ✅ STICKY INPUT - Stays at bottom, no background wrapper */}
+      <div className="sticky bottom-0 left-0 right-0 z-50 mt-auto">
+        <div className="w-full max-w-4xl mx-auto px-4 sm:px-6 md:px-8 py-4">
+          {/* Participants Preview - shows status during streaming */}
+          {selectedParticipants.length > 0 && (
             <ParticipantsPreview
-              participants={currentParticipants}
+              participants={selectedParticipants}
               isStreaming={status === 'streaming'}
-              currentParticipantIndex={0}
-              chatMessages={messages}
-              className="mb-2"
+              currentParticipantIndex={streamingState.participantIndex ?? undefined}
+              chatMessages={messages as unknown as Array<{ participantId?: string | null; [key: string]: unknown }>}
+              className="mb-4"
             />
           )}
 
-          {/* AI Elements Prompt Input */}
-          <div className="space-y-2">
-            <PromptInput onSubmit={handleSubmit} globalDrop multiple className={chatGlass.inputBox}>
-              <PromptInputBody>
-                <PromptInputAttachments>
-                  {attachment => <PromptInputAttachment data={attachment} />}
-                </PromptInputAttachments>
-                <PromptInputTextarea
-                  placeholder={t('chat.input.placeholder')}
+          {/* ✅ Chat input with mode selector in toolbar - Glass design */}
+          <ChatInput
+            value={inputValue}
+            onChange={setInputValue}
+            onSubmit={handleSubmit}
+            onStop={stopStreaming}
+            status={status === 'streaming' ? 'streaming' : status === 'error' ? 'error' : 'ready'}
+            placeholder={t('input.placeholder')}
+            toolbar={(
+              <>
+                <ChatParticipantsList
+                  participants={selectedParticipants}
+                  onParticipantsChange={setSelectedParticipants}
                 />
-              </PromptInputBody>
-              <PromptInputToolbar>
-                <PromptInputTools>
-                  <PromptInputActionMenu>
-                    <PromptInputActionMenuTrigger className="rounded-lg" />
-                    <PromptInputActionMenuContent>
-                      <PromptInputActionAddAttachments />
-                    </PromptInputActionMenuContent>
-                  </PromptInputActionMenu>
-
-                  {/* Participants Button */}
-                  <ChatParticipantsList
-                    participants={currentParticipants}
-                    onParticipantsChange={setCurrentParticipants}
-                    isStreaming={status === 'streaming'}
-                  />
-
-                  {/* Memories Button */}
-                  <ChatMemoriesList
-                    selectedMemoryIds={currentMemoryIds}
-                    onMemoryIdsChange={setCurrentMemoryIds}
-                    isStreaming={status === 'streaming'}
-                  />
-
-                  {/* Mode Selector */}
-                  <Select value={currentMode} onValueChange={value => setCurrentMode(value as ChatModeId)}>
-                    <SelectTrigger
-                      size="sm"
-                      className="h-8 sm:h-9 w-fit gap-1.5 sm:gap-2 rounded-lg border px-3 sm:px-4 text-xs"
-                    >
-                      <SelectValue>
-                        <div className="flex items-center gap-1.5 sm:gap-2">
-                          {(() => {
-                            const ModeIcon = chatModeOptions.find(m => m.value === currentMode)?.icon;
-                            return ModeIcon ? <ModeIcon className="size-3 sm:size-3.5" /> : null;
-                          })()}
-                          <span className="text-xs font-medium hidden xs:inline sm:inline">
-                            {chatModeOptions.find(m => m.value === currentMode)?.label}
-                          </span>
-                        </div>
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectContent>
-                      {chatModeOptions.map((chatMode) => {
-                        const ModeIcon = chatMode.icon;
-                        return (
-                          <SelectItem key={chatMode.value} value={chatMode.value}>
-                            <div className="flex items-center gap-2">
-                              <ModeIcon className="size-4" />
-                              <span className="text-sm">{chatMode.label}</span>
-                            </div>
-                          </SelectItem>
-                        );
-                      })}
-                    </SelectContent>
-                  </Select>
-                </PromptInputTools>
-                <PromptInputSubmit
-                  disabled={currentParticipants.length === 0 || status === 'streaming'}
-                  status={status}
-                  className="rounded-lg"
+                <ChatMemoriesList
+                  selectedMemoryIds={selectedMemoryIds}
+                  onMemoryIdsChange={setSelectedMemoryIds}
                 />
-              </PromptInputToolbar>
-            </PromptInput>
-            <p className="text-xs text-center text-muted-foreground">
-              {t('chat.input.helpText', { defaultValue: 'Press Enter to send, Shift + Enter for new line' })}
-            </p>
-          </div>
+                <ChatModeSelector
+                  selectedMode={selectedMode}
+                  onModeChange={setSelectedMode}
+                />
+              </>
+            )}
+          />
         </div>
       </div>
-
-      {/* Dialogs */}
-      {thread && (
-        <>
-          <ChatDeleteDialog
-            isOpen={isDeleteDialogOpen}
-            onOpenChange={setIsDeleteDialogOpen}
-            threadId={thread.id}
-            threadSlug={slug}
-            redirectIfCurrent
-          />
-
-          <ChatShareDialog
-            isOpen={isShareDialogOpen}
-            onOpenChange={setIsShareDialogOpen}
-            threadId={thread.id}
-            threadSlug={slug}
-            isPublic={thread.isPublic}
-          />
-        </>
-      )}
-
     </div>
   );
 }

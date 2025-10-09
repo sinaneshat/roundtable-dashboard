@@ -8,7 +8,7 @@ import {
   Conversation,
   ConversationContent,
 } from '@/components/ai-elements/conversation';
-import { Message, MessageContent } from '@/components/ai-elements/message';
+import { Message, MessageAvatar, MessageContent } from '@/components/ai-elements/message';
 import { Response } from '@/components/ai-elements/response';
 import { Logo } from '@/components/logo';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -16,9 +16,47 @@ import { Button } from '@/components/ui/button';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { BRAND } from '@/constants';
 import { usePublicThreadQuery } from '@/hooks/queries/chat-threads';
+import { serverMessagesToUIMessages } from '@/lib/ai/message-helpers';
 import { getModelById } from '@/lib/ai/models-config';
 import { cn } from '@/lib/ui/cn';
 import { glassBadge } from '@/lib/ui/glassmorphism';
+
+// ============================================================================
+// Helpers
+// ============================================================================
+
+/**
+ * Get avatar props for a participant based on model configuration
+ * Falls back to user avatar for user messages
+ */
+function getAvatarProps(role: 'user' | 'assistant', participants: Array<{ id: string; modelId: string }>, participantId?: string | null) {
+  if (role === 'user') {
+    return {
+      src: '/static/icons/user-avatar.png',
+      name: 'User',
+    };
+  }
+
+  // For assistant messages, find the participant by ID and get model info
+  if (participantId) {
+    const participant = participants.find(p => p.id === participantId);
+    if (participant) {
+      const model = getModelById(participant.modelId);
+      if (model) {
+        return {
+          src: model.metadata.icon || '/static/icons/ai-models/default.png',
+          name: model.name,
+        };
+      }
+    }
+  }
+
+  // Fallback for assistant messages without participant info
+  return {
+    src: '/static/icons/ai-models/default.png',
+    name: 'AI',
+  };
+}
 
 /**
  * Public Chat Thread Screen - Client Component
@@ -38,13 +76,10 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
   const rawParticipants = useMemo(() => threadResponse?.participants || [], [threadResponse]);
   const serverMessages = useMemo(() => threadResponse?.messages || [], [threadResponse]);
 
-  // Convert server messages to AI SDK format
-  const messages = useMemo(() => serverMessages.map(msg => ({
-    id: msg.id,
-    role: msg.role as 'user' | 'assistant',
-    parts: [{ type: 'text' as const, text: msg.content }],
-    metadata: msg.metadata,
-    participantId: msg.participantId,
+  // Convert server messages to AI SDK format using helper, preserving participantId
+  const messages = useMemo(() => serverMessagesToUIMessages(serverMessages).map((msg, index) => ({
+    ...msg,
+    participantId: serverMessages[index]?.participantId,
   })), [serverMessages]);
 
   // Show loading state
@@ -207,22 +242,28 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
                 <>
                   <Conversation>
                     <ConversationContent>
-                      {messages.map(message => (
-                        <Message key={message.id} from={message.role}>
-                          <MessageContent>
-                            {message.parts.map((part, i) => {
-                              if (part.type === 'text') {
-                                return (
-                                  <Response key={`${message.id}-${i}`}>
-                                    {part.text}
-                                  </Response>
-                                );
-                              }
-                              return null;
-                            })}
-                          </MessageContent>
-                        </Message>
-                      ))}
+                      {messages.map((message) => {
+                        // Get avatar props based on role and participant info
+                        const avatarProps = getAvatarProps(message.role, rawParticipants, message.participantId);
+
+                        return (
+                          <Message key={message.id} from={message.role}>
+                            <MessageContent>
+                              {message.parts.map((part, partIndex) => {
+                                if (part.type === 'text') {
+                                  return (
+                                    <Response key={`${message.id}-part-${partIndex}`}>
+                                      {part.text}
+                                    </Response>
+                                  );
+                                }
+                                return null;
+                              })}
+                            </MessageContent>
+                            <MessageAvatar src={avatarProps.src} name={avatarProps.name} />
+                          </Message>
+                        );
+                      })}
                     </ConversationContent>
                   </Conversation>
 

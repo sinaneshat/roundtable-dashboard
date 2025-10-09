@@ -172,6 +172,14 @@ const ChatMessageSchema = z.object({
     description: 'Parent message ID (for threading)',
     example: null,
   }),
+  variantIndex: z.number().int().nonnegative().openapi({
+    description: 'Variant index (0 = original, 1+ = regenerations)',
+    example: 0,
+  }),
+  isActiveVariant: z.boolean().openapi({
+    description: 'Whether this is the currently active/displayed variant',
+    example: true,
+  }),
   createdAt: CoreSchemas.timestamp().openapi({
     description: 'Message creation timestamp',
   }),
@@ -418,32 +426,21 @@ export const ParticipantDetailResponseSchema = createApiResponseSchema(Participa
 // Note: SendMessageRequestSchema removed - use StreamChatRequestSchema for all chat operations
 
 /**
- * ✅ AI SDK v5 UIMessage Part Schema - OFFICIAL FLEXIBLE PATTERN
- * Use passthrough() to accept ALL official AI SDK part types without strict validation
- * Reference: https://sdk.vercel.ai/docs/reference/ai-sdk-core/ui-message
+ * ✅ AI SDK v5 Streaming Request - OFFICIAL PATTERN
+ * Following https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot
  *
- * Official part types include: text, reasoning, file, source-url, source-document,
- * tool-*, data-*, step-start, etc.
- */
-const UIMessagePartSchema = z.object({
-  type: z.string(), // Accept any type string from AI SDK
-}).passthrough().openapi('UIMessagePart'); // Allow all additional fields
-
-/**
- * AI SDK v5 Standard Streaming Request
- * Following https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot exactly
+ * AI SDK uses runtime validation with validateUIMessages(), not compile-time schemas.
+ * We accept messages as unknown and validate with AI SDK's validateUIMessages() in the handler.
+ * This avoids type conflicts between Zod inference and AI SDK's UIMessage type.
  *
- * Server receives ALL messages from client
- * Also accepts optional configuration updates for dynamic mode/participant changes
+ * Pattern from AI SDK examples:
+ * const { messages }: { messages: UIMessage[] } = await req.json();
+ * validateUIMessages({ messages });
  */
 export const StreamChatRequestSchema = z.object({
-  // AI SDK v5 Standard: Array of all messages including the new one
-  messages: z.array(z.object({
-    id: z.string(),
-    role: z.enum(['user', 'assistant']),
-    parts: z.array(UIMessagePartSchema).min(1),
-  }).passthrough()).min(1).openapi({
-    description: 'All conversation messages (UIMessage[] from AI SDK v5)',
+  // ✅ AI SDK v5: Accept messages as unknown array, validate with validateUIMessages() in handler
+  messages: z.array(z.unknown()).min(1).openapi({
+    description: 'All conversation messages in AI SDK UIMessage format (validated at runtime)',
   }),
   // Dynamic configuration updates (optional)
   mode: ThreadModeSchema.optional().openapi({
@@ -461,8 +458,9 @@ export const StreamChatRequestSchema = z.object({
     description: 'Updated memory IDs to attach',
   }),
   // ✅ OFFICIAL AI SDK PATTERN: One participant per HTTP request
-  participantIndex: z.number().int().nonnegative().openapi({
-    description: 'Which participant to stream in this request (0-based). Frontend sends separate requests for each participant.',
+  // Optional: Only required when streaming a response (not for config-only updates)
+  participantIndex: z.number().int().nonnegative().optional().openapi({
+    description: 'Which participant to stream in this request (0-based). Omit when only updating configuration without streaming.',
     example: 0,
   }),
 }).openapi('StreamChatRequest');
@@ -739,6 +737,53 @@ const ChangelogListPayloadSchema = z.object({
 export const ChangelogListResponseSchema = createApiResponseSchema(ChangelogListPayloadSchema).openapi('ChangelogListResponse');
 
 // ============================================================================
+// Message Variant Schemas
+// ============================================================================
+
+/**
+ * Schema for getting all variants of a message
+ * Returns all variants (active and inactive) for a specific message parent
+ */
+const MessageVariantsPayloadSchema = z.object({
+  variants: z.array(ChatMessageSchema).openapi({
+    description: 'All variants of the message (original + regenerations)',
+  }),
+  activeVariantIndex: z.number().int().nonnegative().openapi({
+    description: 'Index of the currently active variant',
+    example: 0,
+  }),
+  totalVariants: z.number().int().nonnegative().openapi({
+    description: 'Total number of variants',
+    example: 2,
+  }),
+}).openapi('MessageVariantsPayload');
+
+export const MessageVariantsResponseSchema = createApiResponseSchema(MessageVariantsPayloadSchema).openapi('MessageVariantsResponse');
+
+/**
+ * Schema for switching active variant
+ * Marks the specified variant as active and others as inactive
+ */
+export const SwitchVariantRequestSchema = z.object({
+  variantIndex: z.number().int().nonnegative().openapi({
+    description: 'Index of the variant to make active',
+    example: 1,
+  }),
+}).openapi('SwitchVariantRequest');
+
+const SwitchVariantPayloadSchema = z.object({
+  success: z.boolean().openapi({
+    description: 'Whether the variant was successfully switched',
+    example: true,
+  }),
+  activeVariant: ChatMessageSchema.openapi({
+    description: 'The newly active variant',
+  }),
+}).openapi('SwitchVariantPayload');
+
+export const SwitchVariantResponseSchema = createApiResponseSchema(SwitchVariantPayloadSchema).openapi('SwitchVariantResponse');
+
+// ============================================================================
 // TYPE EXPORTS FOR FRONTEND & BACKEND
 // ============================================================================
 
@@ -752,6 +797,7 @@ export type UpdateParticipantRequest = z.infer<typeof UpdateParticipantRequestSc
 
 export type ChatMessage = z.infer<typeof ChatMessageSchema>;
 export type StreamChatRequest = z.infer<typeof StreamChatRequestSchema>;
+export type SwitchVariantRequest = z.infer<typeof SwitchVariantRequestSchema>;
 
 export type ChatMemory = z.infer<typeof ChatMemorySchema>;
 export type CreateMemoryRequest = z.infer<typeof CreateMemoryRequestSchema>;

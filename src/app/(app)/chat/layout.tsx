@@ -3,7 +3,6 @@ import type { Metadata } from 'next';
 import type React from 'react';
 
 import { BreadcrumbProvider } from '@/components/chat/breadcrumb-context';
-import { ChatContentWrapper } from '@/components/chat/chat-content-wrapper';
 import { NavigationHeader } from '@/components/chat/chat-header';
 import { AppSidebar } from '@/components/chat/chat-nav';
 import { BreadcrumbStructuredData } from '@/components/seo';
@@ -75,13 +74,11 @@ export default async function ChatLayout({
       <BreadcrumbProvider>
         <SidebarProvider>
           <AppSidebar />
-          <SidebarInset className="h-svh">
+          <SidebarInset className="h-svh flex flex-col">
             <NavigationHeader />
-            <ChatContentWrapper>
-              <div className="flex flex-1 flex-col w-full min-w-0 overflow-hidden">
-                {children}
-              </div>
-            </ChatContentWrapper>
+            <div className="flex flex-1 flex-col w-full min-w-0 overflow-y-auto relative">
+              {children}
+            </div>
           </SidebarInset>
         </SidebarProvider>
       </BreadcrumbProvider>

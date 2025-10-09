@@ -114,9 +114,10 @@ export function usePublicThreadQuery(slug: string | null | undefined, enabled = 
  * @param enabled - Optional control over whether to fetch (default: true when slug exists)
  *
  * Cache strategy:
- * - staleTime: 0 (always fetch fresh to prevent cache leaking between threads)
+ * - staleTime: 10 seconds (fresh enough for active conversations, prevents excessive refetching)
  * - gcTime: 5 minutes (keep for back/forward navigation)
  * - refetchOnWindowFocus: false (prevent flashing during navigation)
+ * - refetchOnMount: false (rely on staleTime for refetch logic)
  */
 export function useThreadBySlugQuery(slug: string | null | undefined, enabled = true) {
   const { data: session, isPending } = useSession();
@@ -125,9 +126,10 @@ export function useThreadBySlugQuery(slug: string | null | undefined, enabled = 
   return useQuery({
     queryKey: queryKeys.threads.bySlug(slug || ''),
     queryFn: () => getThreadBySlugService(slug!),
-    staleTime: 0, // Always fetch fresh data to prevent cache leaking between threads
+    staleTime: STALE_TIMES.threadDetail, // 10 seconds - prevents excessive refetching while staying fresh
     gcTime: 5 * 60 * 1000, // Keep in cache for 5 minutes for back/forward navigation
     refetchOnWindowFocus: false, // Don't refetch on window focus - prevents flashing during navigation
+    refetchOnMount: false, // Don't refetch on component mount - rely on staleTime
     enabled: isAuthenticated && !!slug && enabled, // Only fetch when authenticated and slug exists
     retry: false,
     throwOnError: false,
@@ -165,7 +167,10 @@ export function useThreadMessagesQuery(threadId: string | null | undefined, enab
  * @param threadId - Thread ID
  * @param enabled - Optional control over whether to fetch (default: true when threadId exists)
  *
- * Stale time: 30 seconds (changelog updates less frequently than messages)
+ * Cache strategy:
+ * - staleTime: 30 seconds (changelog updates less frequently than messages)
+ * - refetchOnWindowFocus: false (prevent unnecessary refetches)
+ * - refetchOnMount: false (rely on staleTime for refetch logic)
  */
 export function useThreadChangelogQuery(threadId: string | null | undefined, enabled = true) {
   const { data: session, isPending } = useSession();
@@ -175,6 +180,8 @@ export function useThreadChangelogQuery(threadId: string | null | undefined, ena
     queryKey: queryKeys.threads.changelog(threadId || ''),
     queryFn: () => getThreadChangelogService(threadId!),
     staleTime: STALE_TIMES.changelog, // 30 seconds - match server-side prefetch
+    refetchOnWindowFocus: false, // Don't refetch on window focus - prevents excessive network calls
+    refetchOnMount: false, // Don't refetch on component mount - rely on staleTime
     enabled: isAuthenticated && !!threadId && enabled, // Only fetch when authenticated and threadId exists
     retry: false,
     throwOnError: false,

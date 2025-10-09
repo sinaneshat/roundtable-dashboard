@@ -1,7 +1,7 @@
 import { createRoute, z } from '@hono/zod-openapi';
 import * as HttpStatusCodes from 'stoker/http-status-codes';
 
-import { createApiResponseSchema } from '@/api/core/schemas';
+import { CoreSchemas, createApiResponseSchema } from '@/api/core/schemas';
 
 import {
   AddParticipantRequestSchema,
@@ -16,9 +16,12 @@ import {
   MemoryIdParamSchema,
   MemoryListResponseSchema,
   MessagesListResponseSchema,
+  MessageVariantsResponseSchema,
   ParticipantDetailResponseSchema,
   ParticipantIdParamSchema,
   StreamChatRequestSchema,
+  SwitchVariantRequestSchema,
+  SwitchVariantResponseSchema,
   ThreadDetailResponseSchema,
   ThreadIdParamSchema,
   ThreadListQuerySchema,
@@ -668,6 +671,68 @@ export const deleteCustomRoleRoute = createRoute({
     },
     [HttpStatusCodes.UNAUTHORIZED]: { description: 'Authentication required' },
     [HttpStatusCodes.NOT_FOUND]: { description: 'Custom role not found' },
+    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: { description: 'Internal Server Error' },
+  },
+});
+
+// ============================================================================
+// Message Variant Routes
+// ============================================================================
+
+export const getMessageVariantsRoute = createRoute({
+  method: 'get',
+  path: '/chat/threads/:threadId/messages/:id/variants',
+  tags: ['chat'],
+  summary: 'Get message variants',
+  description: 'Get all variants (original + regenerations) for a specific message',
+  request: {
+    params: z.object({
+      threadId: CoreSchemas.id().openapi({ description: 'Thread ID', example: 'thread_abc123' }),
+      id: CoreSchemas.id().openapi({ description: 'Message ID (parent message)', example: 'msg_abc123' }),
+    }),
+  },
+  responses: {
+    [HttpStatusCodes.OK]: {
+      description: 'Message variants retrieved successfully',
+      content: {
+        'application/json': { schema: MessageVariantsResponseSchema },
+      },
+    },
+    [HttpStatusCodes.UNAUTHORIZED]: { description: 'Authentication required' },
+    [HttpStatusCodes.NOT_FOUND]: { description: 'Message not found' },
+    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: { description: 'Internal Server Error' },
+  },
+});
+
+export const switchMessageVariantRoute = createRoute({
+  method: 'post',
+  path: '/chat/threads/:threadId/messages/:id/variants/switch',
+  tags: ['chat'],
+  summary: 'Switch active variant',
+  description: 'Switch which variant is currently active/displayed for a message',
+  request: {
+    params: z.object({
+      threadId: CoreSchemas.id().openapi({ description: 'Thread ID', example: 'thread_abc123' }),
+      id: CoreSchemas.id().openapi({ description: 'Message ID (parent message)', example: 'msg_abc123' }),
+    }),
+    body: {
+      content: {
+        'application/json': {
+          schema: SwitchVariantRequestSchema,
+        },
+      },
+    },
+  },
+  responses: {
+    [HttpStatusCodes.OK]: {
+      description: 'Variant switched successfully',
+      content: {
+        'application/json': { schema: SwitchVariantResponseSchema },
+      },
+    },
+    [HttpStatusCodes.UNAUTHORIZED]: { description: 'Authentication required' },
+    [HttpStatusCodes.NOT_FOUND]: { description: 'Message or variant not found' },
+    [HttpStatusCodes.BAD_REQUEST]: { description: 'Invalid variant index' },
     [HttpStatusCodes.INTERNAL_SERVER_ERROR]: { description: 'Internal Server Error' },
   },
 });

@@ -10,9 +10,13 @@
  * Based on AI SDK v5 patterns from official documentation
  */
 
+/**
+ * OFFICIAL AI SDK IMPORTS
+ * Following patterns from: https://sdk.vercel.ai/docs
+ */
 import { createOpenRouter } from '@openrouter/ai-sdk-provider';
 import type { UIMessage } from 'ai';
-import { convertToModelMessages, generateText, streamText } from 'ai';
+import { convertToModelMessages, generateText } from 'ai';
 
 import { createError } from '@/api/common/error-handling';
 import type { ErrorContext } from '@/api/core';
@@ -32,6 +36,9 @@ type OpenRouterServiceConfig = {
 
 /**
  * Text generation parameters using AI SDK v5 UIMessage format
+ *
+ * OFFICIAL AI SDK PATTERN: Accept UIMessage[] and use convertToModelMessages()
+ * See: https://sdk.vercel.ai/docs/ai-sdk-core/generating-text
  */
 export type GenerateTextParams = {
   modelId: string;
@@ -40,13 +47,6 @@ export type GenerateTextParams = {
   temperature?: number;
   maxTokens?: number;
   topP?: number;
-};
-
-/**
- * Streaming text generation parameters
- */
-export type StreamTextParams = GenerateTextParams & {
-  onFinish?: (result: { text: string; usage?: { totalTokens: number } }) => void;
 };
 
 /**
@@ -203,118 +203,36 @@ class OpenRouterService {
   }
 
   /**
-   * Generate streaming text completion from a single model
-   * Following AI SDK v5 patterns - uses UIMessage format and convertToModelMessages()
-   */
-  streamText(params: StreamTextParams): ReadableStream {
-    const client = this.getClient();
-    const modelConfig = this.getModelConfig(params.modelId);
-
-    // Build system prompt with simplified plain text guidance
-    const systemPrompt = params.system
-      ? `${this.PLAIN_TEXT_INSTRUCTION}\n\n${params.system}`
-      : this.PLAIN_TEXT_INSTRUCTION;
-
-    try {
-      const result = streamText({
-        model: client.chat(modelConfig.modelId),
-        messages: convertToModelMessages(params.messages),
-        system: systemPrompt,
-        temperature: params.temperature ?? modelConfig.defaultSettings.temperature,
-        maxOutputTokens: params.maxTokens ?? modelConfig.defaultSettings.maxTokens,
-        topP: params.topP ?? modelConfig.defaultSettings.topP,
-        onFinish: params.onFinish
-          ? ({ text, usage }) => {
-              params.onFinish?.({ text, usage: { totalTokens: usage.totalTokens ?? 0 } });
-            }
-          : undefined,
-      });
-
-      return result.toTextStreamResponse().body as ReadableStream;
-    } catch (error) {
-      apiLogger.error('OpenRouter streaming failed', {
-        modelId: params.modelId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-
-      const context: ErrorContext = {
-        errorType: 'external_service',
-        service: 'openrouter',
-        operation: 'stream_text',
-        resourceId: params.modelId,
-      };
-      throw createError.internal('Failed to stream text from OpenRouter', context);
-    }
-  }
-
-  /**
-   * Stream UI messages using AI SDK v5
-   * Returns Response suitable for Hono route handlers with automatic SSE streaming
+   * ❌ REMOVED: streamText() and streamUIMessages() methods
    *
-   * This method follows AI SDK v5 patterns:
-   * - Accepts UIMessage[] format for seamless integration with useChat
-   * - Uses convertToModelMessages() for type-safe conversion
-   * - Returns Response with .toUIMessageStreamResponse() for automatic SSE handling
+   * RATIONALE: These methods are redundant. For streaming operations, handlers should:
+   * 1. Get the client with `openRouterService.getClient()`
+   * 2. Use AI SDK's `streamText()` directly for full control
+   * 3. Use `toUIMessageStreamResponse()` for proper SSE streaming
    *
-   * @example
+   * This gives handlers complete control over:
+   * - Abort signals (timeout + client disconnect)
+   * - Stream transformations (smoothStream, etc.)
+   * - Callbacks (onFinish, onError, onChunk)
+   * - Message metadata
+   *
+   * OFFICIAL AI SDK PATTERN: Direct usage of streamText() from 'ai' package
+   * See: https://sdk.vercel.ai/docs/ai-sdk-core/generating-text
+   *
+   * Example (from handler.ts:1341-1557):
    * ```typescript
-   * return openRouterService.streamUIMessages({
-   *   modelId: 'anthropic/claude-sonnet-4.5',
-   *   messages: uiMessages,
-   *   system: 'You are a helpful assistant',
+   * const client = openRouterService.getClient();
+   * const result = streamText({
+   *   model: client.chat(modelId),
+   *   messages: convertToModelMessages(uiMessages),
+   *   system: systemPrompt,
    *   temperature: 0.7,
-   *   onFinish: async ({ text }) => {
-   *     await saveToDatabase(text);
-   *   },
+   *   experimental_transform: smoothStream(),
+   *   abortSignal: combinedSignal,
    * });
+   * return result.toUIMessageStreamResponse({ onFinish, onError });
    * ```
    */
-  streamUIMessages(params: {
-    modelId: string;
-    messages: UIMessage[];
-    system?: string;
-    temperature?: number;
-    topP?: number;
-    onFinish?: (result: { text: string; usage?: { totalTokens: number } }) => Promise<void> | void;
-  }): Response {
-    const client = this.getClient();
-    const modelConfig = this.getModelConfig(params.modelId);
-
-    // Build system prompt with simplified plain text guidance
-    const systemPrompt = params.system
-      ? `${this.PLAIN_TEXT_INSTRUCTION}\n\n${params.system}`
-      : this.PLAIN_TEXT_INSTRUCTION;
-
-    try {
-      const result = streamText({
-        model: client.chat(modelConfig.modelId),
-        messages: convertToModelMessages(params.messages),
-        system: systemPrompt,
-        temperature: params.temperature ?? modelConfig.defaultSettings.temperature,
-        topP: params.topP ?? modelConfig.defaultSettings.topP,
-        onFinish: params.onFinish
-          ? ({ text, usage }) => {
-              params.onFinish?.({ text, usage: { totalTokens: usage.totalTokens ?? 0 } });
-            }
-          : undefined,
-      });
-
-      return result.toUIMessageStreamResponse();
-    } catch (error) {
-      apiLogger.error('OpenRouter UI message streaming failed', {
-        modelId: params.modelId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-
-      const context: ErrorContext = {
-        errorType: 'external_service',
-        service: 'openrouter',
-        operation: 'stream_ui_messages',
-        resourceId: params.modelId,
-      };
-      throw createError.internal('Failed to stream UI messages from OpenRouter', context);
-    }
-  }
 
   // ============================================================================
   // Helper Methods

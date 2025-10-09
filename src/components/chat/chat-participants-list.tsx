@@ -4,7 +4,6 @@ import { Bot, Check, GripVertical, Plus, Trash2 } from 'lucide-react';
 import { motion, Reorder, useDragControls } from 'motion/react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import type { ParticipantConfig } from '@/components/chat/chat-config-sheet';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -36,6 +35,7 @@ import { useCustomRolesQuery } from '@/hooks/queries/chat-roles';
 import { useUsageStatsQuery } from '@/hooks/queries/usage';
 import type { AIModel } from '@/lib/ai/models-config';
 import { AI_MODELS, canAccessModel, DEFAULT_ROLES, getModelById, getTierDisplayName } from '@/lib/ai/models-config';
+import type { ParticipantConfig } from '@/lib/schemas/chat-forms';
 import { toastManager } from '@/lib/toast/toast-manager';
 import { cn } from '@/lib/ui/cn';
 import { getApiErrorMessage } from '@/lib/utils/error-handling';
@@ -640,31 +640,53 @@ export function ChatParticipantsList({
 
   // Sync orderedModels when participants change externally
   // Preserve existing order to allow dragging unselected models
-  const updateOrderedModels = useCallback((currentOrder: OrderedModel[]) => {
+  // OFFICIAL AI SDK PATTERN: Only update state when data actually changes (not just reference)
+  // CRITICAL FIX: Check for changes BEFORE creating new objects to prevent infinite re-renders
+  useEffect(() => {
     const participantMap = new Map(participants.map(p => [p.modelId, p]));
 
-    // Update existing models with new participant references
-    const updatedModels = currentOrder.map(om => ({
-      ...om,
-      participant: participantMap.get(om.model.modelId) || null,
-    }));
+    setOrderedModels((currentOrder) => {
+      // STEP 1: Check if any participant references changed (efficient check first)
+      let hasParticipantChanges = false;
+      for (const om of currentOrder) {
+        const newParticipant = participantMap.get(om.model.modelId) || null;
+        if (om.participant !== newParticipant) {
+          hasParticipantChanges = true;
+          break;
+        }
+      }
 
-    // Find any new enabled models that aren't in currentOrder yet
-    const existingIds = new Set(updatedModels.map(om => om.model.modelId));
-    const newModels = allEnabledModels
-      .filter(m => !existingIds.has(m.modelId))
-      .map(m => ({
-        model: m,
-        participant: participantMap.get(m.modelId) || null,
-        order: updatedModels.length,
+      // STEP 2: Check for new models that need to be added
+      const existingIds = new Set(currentOrder.map(om => om.model.modelId));
+      const hasNewModels = allEnabledModels.some(m => !existingIds.has(m.modelId));
+
+      // STEP 3: If nothing changed, return same reference (prevents re-render)
+      if (!hasParticipantChanges && !hasNewModels) {
+        return currentOrder;
+      }
+
+      // STEP 4: Only now create new objects since we know something changed
+      const updatedModels = currentOrder.map(om => ({
+        ...om,
+        participant: participantMap.get(om.model.modelId) || null,
       }));
 
-    return [...updatedModels, ...newModels];
-  }, [participants, allEnabledModels]);
+      // STEP 5: Add new models if any exist
+      if (!hasNewModels) {
+        return updatedModels;
+      }
 
-  useEffect(() => {
-    setOrderedModels(updateOrderedModels);
-  }, [updateOrderedModels]);
+      const newModels = allEnabledModels
+        .filter(m => !existingIds.has(m.modelId))
+        .map((m, index) => ({
+          model: m,
+          participant: participantMap.get(m.modelId) || null,
+          order: updatedModels.length + index,
+        }));
+
+      return [...updatedModels, ...newModels];
+    });
+  }, [participants, allEnabledModels]);
 
   // Toggle model selection
   const handleToggleModel = (modelId: string) => {

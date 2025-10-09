@@ -84,6 +84,7 @@ import {
   deleteThreadHandler,
   getCustomRoleHandler,
   getMemoryHandler,
+  getMessageVariantsHandler,
   getPublicThreadHandler,
   getThreadBySlugHandler,
   getThreadChangelogHandler,
@@ -93,6 +94,7 @@ import {
   listMemoriesHandler,
   listThreadsHandler,
   streamChatHandler,
+  switchMessageVariantHandler,
   updateCustomRoleHandler,
   updateMemoryHandler,
   updateParticipantHandler,
@@ -109,6 +111,7 @@ import {
   deleteThreadRoute,
   getCustomRoleRoute,
   getMemoryRoute,
+  getMessageVariantsRoute,
   getPublicThreadRoute,
   getThreadBySlugRoute,
   getThreadChangelogRoute,
@@ -118,6 +121,7 @@ import {
   listMemoriesRoute,
   listThreadsRoute,
   streamChatRoute,
+  switchMessageVariantRoute,
   updateCustomRoleRoute,
   updateMemoryRoute,
   updateParticipantRoute,
@@ -346,6 +350,9 @@ const appRoutes = app
   .openapi(getThreadChangelogRoute, getThreadChangelogHandler) // Get configuration changelog
   .openapi(streamChatRoute, streamChatHandler) // Stream AI response via SSE (replaces sendMessage)
   .openapi(getPublicThreadRoute, getPublicThreadHandler) // Get public thread by slug (no auth)
+  // Chat routes - Message variants (regeneration support)
+  .openapi(getMessageVariantsRoute, getMessageVariantsHandler) // Get all variants for a message
+  .openapi(switchMessageVariantRoute, switchMessageVariantHandler) // Switch active variant
   // Chat routes - Participant management
   .openapi(addParticipantRoute, addParticipantHandler) // Add model to thread
   .openapi(updateParticipantRoute, updateParticipantHandler) // Update participant role/priority/settings

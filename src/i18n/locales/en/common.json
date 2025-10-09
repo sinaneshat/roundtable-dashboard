@@ -323,6 +323,7 @@
     "favoriteFailedDescription": "Could not update favorite status. Please try again.",
     "input": {
       "helperText": "Press Enter to send, Shift + Enter for new line",
+      "helpText": "Press Enter to send, Shift + Enter for new line",
       "placeholder": "Message Roundtable...",
       "streamingHelperText": "AI is responding... Click stop button to interrupt",
       "streamingPlaceholder": "Waiting for AI response...",

@@ -1,7 +1,8 @@
 import type { RouteHandler } from '@hono/zod-openapi';
+import type { UIMessage } from 'ai';
 import { consumeStream, convertToModelMessages, smoothStream, streamText, validateUIMessages } from 'ai';
 import type { SQL } from 'drizzle-orm';
-import { and, desc, eq, like, ne } from 'drizzle-orm';
+import { and, desc, eq, isNull, like, ne } from 'drizzle-orm';
 import { ulid } from 'ulid';
 
 import { createError } from '@/api/common/error-handling';
@@ -11,7 +12,6 @@ import {
   createTimestampCursor,
   getCursorOrderBy,
 } from '@/api/common/pagination';
-import { buildUIMessages } from '@/api/common/streaming';
 import type { ErrorContext } from '@/api/core';
 import { createHandler, Responses } from '@/api/core';
 import { CursorPaginationQuerySchema } from '@/api/core/schemas';
@@ -67,6 +67,7 @@ import type {
   deleteThreadRoute,
   getCustomRoleRoute,
   getMemoryRoute,
+  getMessageVariantsRoute,
   getPublicThreadRoute,
   getThreadBySlugRoute,
   getThreadChangelogRoute,
@@ -76,6 +77,7 @@ import type {
   listMemoriesRoute,
   listThreadsRoute,
   streamChatRoute,
+  switchMessageVariantRoute,
   updateCustomRoleRoute,
   updateMemoryRoute,
   updateParticipantRoute,
@@ -90,6 +92,7 @@ import {
   MemoryIdParamSchema,
   ParticipantIdParamSchema,
   StreamChatRequestSchema,
+  SwitchVariantRequestSchema,
   ThreadIdParamSchema,
   ThreadListQuerySchema,
   ThreadSlugParamSchema,
@@ -417,6 +420,9 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
         // Omit participantId for user messages (it's nullable in schema)
         role: 'user',
         content: body.firstMessage,
+        parentMessageId: null, // User messages have no parent
+        variantIndex: 0, // User messages always have variantIndex 0
+        isActiveVariant: true, // User messages are always active
         createdAt: now,
       })
       .returning();
@@ -548,9 +554,12 @@ export const getThreadHandler: RouteHandler<typeof getThreadRoute, ApiEnv> = cre
       orderBy: [tables.chatParticipant.priority],
     });
 
-    // Fetch messages (ordered by creation time)
+    // Fetch messages (ordered by creation time) - only active variants
     const messages = await db.query.chatMessage.findMany({
-      where: eq(tables.chatMessage.threadId, id),
+      where: and(
+        eq(tables.chatMessage.threadId, id),
+        eq(tables.chatMessage.isActiveVariant, true),
+      ),
       orderBy: [tables.chatMessage.createdAt],
     });
 
@@ -685,9 +694,12 @@ export const getPublicThreadHandler: RouteHandler<typeof getPublicThreadRoute, A
       orderBy: [tables.chatParticipant.priority],
     });
 
-    // Fetch messages (ordered by creation time) - same as private handler
+    // Fetch messages (ordered by creation time) - same as private handler, only active variants
     const messages = await db.query.chatMessage.findMany({
-      where: eq(tables.chatMessage.threadId, thread.id),
+      where: and(
+        eq(tables.chatMessage.threadId, thread.id),
+        eq(tables.chatMessage.isActiveVariant, true),
+      ),
       orderBy: [tables.chatMessage.createdAt],
     });
 
@@ -733,9 +745,12 @@ export const getThreadBySlugHandler: RouteHandler<typeof getThreadBySlugRoute, A
       orderBy: [tables.chatParticipant.priority],
     });
 
-    // Fetch messages (ordered by creation time)
+    // Fetch messages (ordered by creation time) - only active variants
     const messages = await db.query.chatMessage.findMany({
-      where: eq(tables.chatMessage.threadId, thread.id),
+      where: and(
+        eq(tables.chatMessage.threadId, thread.id),
+        eq(tables.chatMessage.isActiveVariant, true),
+      ),
       orderBy: [tables.chatMessage.createdAt],
     });
 
@@ -949,9 +964,12 @@ export const getThreadMessagesHandler: RouteHandler<typeof getThreadMessagesRout
     // Verify thread ownership
     await verifyThreadOwnership(threadId, user.id, db);
 
-    // Fetch messages
+    // Fetch messages - only active variants
     const messages = await db.query.chatMessage.findMany({
-      where: eq(tables.chatMessage.threadId, threadId),
+      where: and(
+        eq(tables.chatMessage.threadId, threadId),
+        eq(tables.chatMessage.isActiveVariant, true),
+      ),
       orderBy: [tables.chatMessage.createdAt],
     });
 
@@ -994,15 +1012,34 @@ export const getThreadChangelogHandler: RouteHandler<typeof getThreadChangelogRo
 );
 
 /**
- * Stream chat handler using AI SDK v5 Standard Pattern
+ * ✅ OFFICIAL AI SDK v5 STREAMING PATTERN
  * Reference: https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot
  *
- * AI SDK v5 Standard Pattern:
- * 1. Receive ALL messages from frontend (including new message)
- * 2. Identify new message by comparing with database
- * 3. Save new message to database
- * 4. Stream responses from participants
- * 5. Save responses to database
+ * This handler demonstrates the EXACT patterns from AI SDK documentation:
+ *
+ * 1. MESSAGE VALIDATION (Lines 1190-1210):
+ *    - Accept messages as `z.array(z.unknown())` in schema
+ *    - Runtime validation with `validateUIMessages()`
+ *    - Type assertion to `UIMessage[]` after validation
+ *    Pattern: https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot#validating-messages
+ *
+ * 2. STREAMING CONFIGURATION (Lines 1341-1365):
+ *    - Use `streamText()` from 'ai' package
+ *    - Convert UIMessages with `convertToModelMessages()`
+ *    - Apply transformations with `experimental_transform`
+ *    - Handle abort signals (timeout + client disconnect)
+ *    Pattern: https://sdk.vercel.ai/docs/ai-sdk-core/generating-text
+ *
+ * 3. RESPONSE STREAMING (Lines 1368-1557):
+ *    - Use `toUIMessageStreamResponse()` for SSE streaming
+ *    - Use `consumeSseStream` for client disconnect handling
+ *    - Use `onFinish` callback for database persistence
+ *    - Use `onError` callback for error handling
+ *    Pattern: https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot#streaming-responses
+ *
+ * 🚫 NO CUSTOM TYPES: All types inferred from AI SDK
+ * 🚫 NO CUSTOM STREAMING: All streaming via AI SDK built-ins
+ * 🚫 NO MANUAL SSE: toUIMessageStreamResponse() handles everything
  */
 export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = createHandler(
   {
@@ -1016,7 +1053,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
     const { id: threadId } = c.validated.params;
     const {
       messages: clientMessages,
-      participantIndex: requestedParticipantIndex,
+      participantIndex: requestedParticipantIndex, // Optional - undefined for config-only updates
       mode: newMode,
       participants: newParticipants,
       memoryIds: newMemoryIds,
@@ -1181,22 +1218,52 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
       }
     }
 
-    // Load existing messages from database
+    // Load existing messages from database - only active variants
     const dbMessages = await db.query.chatMessage.findMany({
-      where: eq(tables.chatMessage.threadId, threadId),
+      where: and(
+        eq(tables.chatMessage.threadId, threadId),
+        eq(tables.chatMessage.isActiveVariant, true),
+      ),
       orderBy: [tables.chatMessage.createdAt],
     });
 
-    // Identify new message: last client message not in database
-    const lastClientMessage = clientMessages[clientMessages.length - 1];
-    const existsInDb = dbMessages.some(m => m.id === lastClientMessage?.id);
+    // ✅ OFFICIAL AI SDK PATTERN: Runtime Validation + Type Assertion
+    // Documentation: https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot#validating-messages
+    //
+    // Why this pattern?
+    // - AI SDK types are complex (UIMessage<METADATA, DATA, TOOLS>)
+    // - Zod cannot accurately represent AI SDK's recursive generic types
+    // - Runtime validation ensures messages match AI SDK's expected structure
+    // - Type assertion after validation is safe and recommended by AI SDK team
+    //
+    // Pattern:
+    // 1. Accept messages as `z.array(z.unknown())` in schema (schema.ts:434)
+    // 2. Runtime validate with `validateUIMessages()` (below)
+    // 3. Type assert to `UIMessage[]` after validation passes
+    const uiMessages = clientMessages as UIMessage[];
 
-    // Prepare messages for AI processing
-    let messages: Array<{ id: string; role: 'user' | 'assistant'; content: string }>;
+    try {
+      validateUIMessages({ messages: uiMessages });
+    } catch (error) {
+      apiLogger.error('Invalid UI messages from client', {
+        threadId,
+        userId: user.id,
+        messageCount: uiMessages.length,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw createError.badRequest('Invalid message format', {
+        errorType: 'validation',
+        field: 'messages',
+      });
+    }
+
+    // Identify new message: last client message not in database
+    const lastClientMessage = uiMessages[uiMessages.length - 1];
+    const existsInDb = dbMessages.some(m => m.id === lastClientMessage?.id);
     let isNewMessage = false;
 
     if (!existsInDb && lastClientMessage && lastClientMessage.role === 'user') {
-      // New user message - save to database
+      // New user message - extract text and save to database
       const textParts = lastClientMessage.parts.filter(part => part.type === 'text');
       if (textParts.length === 0) {
         throw createError.badRequest('Message must contain at least one text part');
@@ -1218,55 +1285,44 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
       // Enforce quota
       await enforceMessageQuota(user.id);
 
-      // Save user message
+      // Save user message to database
       await db.insert(tables.chatMessage).values({
         id: lastClientMessage.id,
         threadId,
         role: 'user',
         content,
+        parentMessageId: null, // User messages have no parent
+        variantIndex: 0, // User messages always have variantIndex 0
+        isActiveVariant: true, // User messages are always active
         createdAt: new Date(),
       });
 
-      // Use all client messages for context
-      messages = clientMessages.map(msg => ({
-        id: msg.id,
-        role: msg.role,
-        content: msg.parts
-          .filter(part => part.type === 'text')
-          .map(part => part.text)
-          .join(''),
-      }));
       isNewMessage = true;
-    } else {
-      // Use client messages as-is (regenerate or auto-trigger)
-      messages = clientMessages.map(msg => ({
-        id: msg.id,
-        role: msg.role,
-        content: msg.parts
-          .filter(part => part.type === 'text')
-          .map(part => part.text)
-          .join(''),
-      }));
     }
 
-    // Build UI messages for AI SDK
-    const uiMessages = buildUIMessages(messages);
-
-    // Validate UI messages before streaming
-    try {
-      validateUIMessages({ messages: uiMessages });
-    } catch (error) {
-      apiLogger.error('Invalid UI messages', {
+    // ==================================================
+    // CONFIG-ONLY UPDATE: Return early if no streaming requested
+    // ==================================================
+    if (requestedParticipantIndex === undefined) {
+      // Configuration was updated but no streaming response requested
+      // This happens when user updates participants/mode/memories without sending a message
+      apiLogger.info('Configuration update only - no streaming', {
         threadId,
         userId: user.id,
-        messageCount: uiMessages.length,
-        error: error instanceof Error ? error.message : String(error),
+        modeUpdated: !!newMode,
+        participantsUpdated: !!newParticipants,
+        memoriesUpdated: newMemoryIds !== undefined,
       });
-      throw createError.badRequest('Invalid message format', {
-        errorType: 'validation',
-        field: 'messages',
+
+      return Responses.ok(c, {
+        success: true,
+        message: 'Configuration updated successfully',
       });
     }
+
+    // ==================================================
+    // STREAMING RESPONSE: Validate and stream participant
+    // ==================================================
 
     // Participants are already filtered for isEnabled=true by verifyThreadOwnership
     // and ordered by priority in the database query - no need to filter/sort again
@@ -1288,7 +1344,20 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
     }
 
     // ====================================================================
-    // ✅ AI SDK v5 OFFICIAL PATTERN (Replaces 420 lines with ~80 lines)
+    // ✅ OFFICIAL AI SDK PATTERN: Direct streamText() Usage
+    // Documentation: https://sdk.vercel.ai/docs/ai-sdk-core/generating-text
+    //
+    // Why direct usage instead of service wrapper?
+    // - Full control over abort signals (timeout + client disconnect)
+    // - Full control over stream transformations (smoothStream)
+    // - Full control over callbacks (onFinish, onError, onChunk)
+    // - Full control over message metadata
+    // - This is the RECOMMENDED pattern from AI SDK documentation
+    //
+    // Alternative (not used): Service wrapper
+    // - Less control, more abstraction
+    // - Only useful for simple non-streaming operations
+    // - See openrouter.service.ts for non-streaming example
     // ====================================================================
 
     // Use all messages as context for this participant
@@ -1356,7 +1425,14 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
       timeoutController.signal, // Timeout
     ]);
 
-    // ✅ AI SDK v5: streamText with official configuration
+    // ✅ OFFICIAL AI SDK PATTERN: streamText() Configuration
+    // Documentation: https://sdk.vercel.ai/docs/ai-sdk-core/generating-text#streaming
+    //
+    // Key features from AI SDK:
+    // - Built-in retry with `maxRetries` (replaces custom retry logic)
+    // - Built-in transformations with `experimental_transform`
+    // - Built-in telemetry with `experimental_telemetry`
+    // - Built-in abort handling with `abortSignal`
     const result = streamText({
       model: client.chat(participant.modelId),
       messages: convertToModelMessages(currentHistory),
@@ -1383,7 +1459,20 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
       },
     });
 
-    // ✅ AI SDK v5 CRITICAL: toUIMessageStreamResponse with official patterns
+    // ✅ OFFICIAL AI SDK PATTERN: toUIMessageStreamResponse()
+    // Documentation: https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot#streaming-responses
+    //
+    // This single method handles:
+    // - SSE (Server-Sent Events) formatting
+    // - Message ID generation
+    // - Message metadata
+    // - Client disconnect detection
+    // - onFinish callback for persistence
+    // - onError callback for error handling
+    //
+    // 🚫 NO MANUAL SSE FORMATTING
+    // 🚫 NO MANUAL STREAM HANDLING
+    // 🚫 NO CUSTOM STREAMING UTILITIES
     return result.toUIMessageStreamResponse({
       // ✅ CRITICAL FIX: Only pass USER messages in originalMessages for roundtable scenarios
       // Including previous assistant messages causes ID reuse across participants
@@ -1442,46 +1531,32 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
 
         // Extract text content from the assistant message
         const textPart = responseMessage.parts.find(p => p.type === 'text');
-        const content = textPart?.type === 'text' ? textPart.text : '';
+        let content = textPart?.type === 'text' ? textPart.text : '';
 
-        // Validate we have content
+        // ✅ OFFICIAL AI SDK PATTERN: When onError returns a string, it's sent as error SSE event
+        // But onFinish still runs with empty content - use error message as content
+        // See: https://github.com/vercel/ai/blob/main/content/docs/04-ai-sdk-ui/50-stream-protocol.mdx
+        if ((!content || content.trim().length === 0) && streamError) {
+          const classified = classifyOpenRouterError(streamError);
+          content = `⚠️ ${classified.message}`;
+
+          apiLogger.warn('Empty content from error - using error message', {
+            threadId,
+            participantId: participant.id,
+            messageId: responseMessage.id,
+            model: participant.modelId,
+            errorMessage: classified.message,
+          });
+        }
+
+        // If still no content after error handling, log and skip
         if (!content || content.trim().length === 0) {
-          const errorMetadata = formatErrorForDatabase(
-            new Error('Model generated no content'),
-            participant.modelId,
-          );
-
-          apiLogger.error('Empty content - saving error message', {
+          apiLogger.error('Empty content with no error - skipping message save', {
             threadId,
             participantId: participant.id,
             messageId: responseMessage.id,
             model: participant.modelId,
           });
-
-          await db.insert(tables.chatMessage).values({
-            id: responseMessage.id,
-            threadId,
-            participantId: participant.id,
-            role: 'assistant',
-            content: '',
-            metadata: {
-              model: participant.modelId,
-              role: participant.role,
-              mode: thread.mode,
-              participantId: participant.id,
-              participantIndex,
-              ...errorMetadata,
-            },
-            createdAt: now,
-          }).onConflictDoNothing();
-
-          await db.update(tables.chatThread)
-            .set({
-              lastMessageAt: now,
-              updatedAt: now,
-            })
-            .where(eq(tables.chatThread.id, threadId));
-
           return;
         }
 
@@ -1492,13 +1567,56 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
           ? formatErrorForDatabase(streamError, participant.modelId)
           : null;
 
-        // Save message (idempotent - prevents duplicate inserts if onFinish called multiple times)
+        // ✅ VARIANTS SUPPORT: Handle message variants for regeneration
+        // Find the parent user message (last user message in conversation)
+        const userMessages = await db.query.chatMessage.findMany({
+          where: and(
+            eq(tables.chatMessage.threadId, threadId),
+            eq(tables.chatMessage.role, 'user'),
+          ),
+          orderBy: [desc(tables.chatMessage.createdAt)],
+          limit: 1,
+        });
+
+        const parentUserMessage = userMessages[0];
+
+        // Check for existing assistant messages with this parent (variants)
+        const existingVariants = parentUserMessage
+          ? await db.query.chatMessage.findMany({
+            where: and(
+              eq(tables.chatMessage.threadId, threadId),
+              eq(tables.chatMessage.role, 'assistant'),
+              eq(tables.chatMessage.parentMessageId, parentUserMessage.id),
+              eq(tables.chatMessage.participantId, participant.id),
+            ),
+          })
+          : [];
+
+        // Calculate variant index (0 for first message, 1+ for regenerations)
+        const variantIndex = existingVariants.length;
+
+        // If this is a regeneration (variantIndex > 0), mark all previous variants as inactive
+        if (variantIndex > 0 && parentUserMessage) {
+          await db
+            .update(tables.chatMessage)
+            .set({ isActiveVariant: false })
+            .where(and(
+              eq(tables.chatMessage.threadId, threadId),
+              eq(tables.chatMessage.parentMessageId, parentUserMessage.id),
+              eq(tables.chatMessage.participantId, participant.id),
+            ));
+        }
+
+        // Save message with variant support (idempotent - prevents duplicate inserts if onFinish called multiple times)
         await db.insert(tables.chatMessage).values({
           id: responseMessage.id,
           threadId,
           participantId: participant.id,
           role: 'assistant',
           content,
+          parentMessageId: parentUserMessage?.id || null, // Link to parent user message
+          variantIndex, // Track which variant this is
+          isActiveVariant: true, // This is now the active variant
           metadata: {
             model: participant.modelId,
             role: participant.role,
@@ -1573,6 +1691,214 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
         // This becomes the content text streamed to the client
         return classified.message;
       },
+    });
+  },
+);
+
+// ============================================================================
+// Message Variant Handlers
+// ============================================================================
+
+/**
+ * Get all variants for a message
+ * Returns original message + all regenerated variants
+ */
+export const getMessageVariantsHandler: RouteHandler<typeof getMessageVariantsRoute, ApiEnv> = createHandler(
+  {
+    auth: 'session',
+    operationName: 'getMessageVariants',
+  },
+  async (c) => {
+    const { user } = c.auth();
+    const threadId = c.req.param('threadId');
+    const messageId = c.req.param('id');
+    const db = await getDbAsync();
+
+    if (!threadId || !messageId) {
+      throw createError.badRequest('Missing required parameters');
+    }
+
+    // Verify thread ownership
+    await verifyThreadOwnership(threadId, user.id, db);
+
+    // Find the message (could be user message or assistant message)
+    const message = await db.query.chatMessage.findFirst({
+      where: eq(tables.chatMessage.id, messageId),
+    });
+
+    if (!message) {
+      throw createError.notFound('Message not found', createResourceNotFoundContext('message', messageId));
+    }
+
+    // For assistant messages, find all variants with the same parent
+    // For user messages, they don't have variants (always return just the message itself)
+    let variants: Array<typeof tables.chatMessage.$inferSelect>;
+    let activeVariantIndex = 0;
+
+    if (message.role === 'user') {
+      // User messages don't have variants
+      variants = [message];
+      activeVariantIndex = 0;
+    } else {
+      // Assistant message - find all variants with the same parent and participant
+      // Build where conditions, handling nullable fields
+      const whereConditions = [
+        eq(tables.chatMessage.threadId, threadId),
+        eq(tables.chatMessage.role, 'assistant'),
+      ];
+
+      // Add parent message filter - must match (including null)
+      if (message.parentMessageId) {
+        whereConditions.push(eq(tables.chatMessage.parentMessageId, message.parentMessageId));
+      } else {
+        whereConditions.push(isNull(tables.chatMessage.parentMessageId));
+      }
+
+      // Add participant filter - must match (including null)
+      if (message.participantId) {
+        whereConditions.push(eq(tables.chatMessage.participantId, message.participantId));
+      } else {
+        whereConditions.push(isNull(tables.chatMessage.participantId));
+      }
+
+      variants = await db.query.chatMessage.findMany({
+        where: and(...whereConditions),
+        orderBy: [tables.chatMessage.variantIndex],
+      });
+
+      // Find which variant is currently active
+      const activeVariant = variants.find(v => v.isActiveVariant);
+      activeVariantIndex = activeVariant ? activeVariant.variantIndex : 0;
+    }
+
+    return Responses.ok(c, {
+      variants,
+      activeVariantIndex,
+      totalVariants: variants.length,
+    });
+  },
+);
+
+/**
+ * Switch which variant is active for a message
+ * Marks the specified variant as active and others as inactive
+ */
+export const switchMessageVariantHandler: RouteHandler<typeof switchMessageVariantRoute, ApiEnv> = createHandler(
+  {
+    auth: 'session',
+    validateBody: SwitchVariantRequestSchema,
+    operationName: 'switchMessageVariant',
+  },
+  async (c) => {
+    const { user } = c.auth();
+    const threadId = c.req.param('threadId');
+    const messageId = c.req.param('id');
+    const { variantIndex } = c.validated.body;
+    const db = await getDbAsync();
+
+    if (!threadId || !messageId) {
+      throw createError.badRequest('Missing required parameters');
+    }
+
+    // Verify thread ownership
+    await verifyThreadOwnership(threadId, user.id, db);
+
+    // Find the message
+    const message = await db.query.chatMessage.findFirst({
+      where: eq(tables.chatMessage.id, messageId),
+    });
+
+    if (!message) {
+      throw createError.notFound('Message not found', createResourceNotFoundContext('message', messageId));
+    }
+
+    if (message.role === 'user') {
+      throw createError.badRequest('User messages do not have variants', {
+        errorType: 'validation',
+        field: 'messageId',
+      });
+    }
+
+    // Find all variants with the same parent and participant
+    // Build where conditions, handling nullable fields
+    const whereConditions = [
+      eq(tables.chatMessage.threadId, threadId),
+      eq(tables.chatMessage.role, 'assistant'),
+    ];
+
+    // Add parent message filter - must match (including null)
+    if (message.parentMessageId) {
+      whereConditions.push(eq(tables.chatMessage.parentMessageId, message.parentMessageId));
+    } else {
+      whereConditions.push(isNull(tables.chatMessage.parentMessageId));
+    }
+
+    // Add participant filter - must match (including null)
+    if (message.participantId) {
+      whereConditions.push(eq(tables.chatMessage.participantId, message.participantId));
+    } else {
+      whereConditions.push(isNull(tables.chatMessage.participantId));
+    }
+
+    const variants = await db.query.chatMessage.findMany({
+      where: and(...whereConditions),
+      orderBy: [tables.chatMessage.variantIndex],
+    });
+
+    // Validate variant index
+    if (variantIndex < 0 || variantIndex >= variants.length) {
+      throw createError.badRequest(
+        `Invalid variant index ${variantIndex}. Must be between 0 and ${variants.length - 1}`,
+        {
+          errorType: 'validation',
+          field: 'variantIndex',
+        },
+      );
+    }
+
+    // Mark all variants as inactive
+    // Build where conditions using the same pattern as the query above
+    const updateWhereConditions = [
+      eq(tables.chatMessage.threadId, threadId),
+      eq(tables.chatMessage.role, 'assistant'),
+    ];
+
+    if (message.parentMessageId) {
+      updateWhereConditions.push(eq(tables.chatMessage.parentMessageId, message.parentMessageId));
+    } else {
+      updateWhereConditions.push(isNull(tables.chatMessage.parentMessageId));
+    }
+
+    if (message.participantId) {
+      updateWhereConditions.push(eq(tables.chatMessage.participantId, message.participantId));
+    } else {
+      updateWhereConditions.push(isNull(tables.chatMessage.participantId));
+    }
+
+    await db
+      .update(tables.chatMessage)
+      .set({ isActiveVariant: false })
+      .where(and(...updateWhereConditions));
+
+    // Mark the selected variant as active
+    const targetVariant = variants[variantIndex];
+    if (!targetVariant) {
+      throw createError.notFound('Variant not found', createResourceNotFoundContext('variant', String(variantIndex)));
+    }
+
+    const [activeVariant] = await db
+      .update(tables.chatMessage)
+      .set({ isActiveVariant: true })
+      .where(eq(tables.chatMessage.id, targetVariant.id))
+      .returning();
+
+    if (!activeVariant) {
+      throw createError.internal('Failed to activate variant');
+    }
+
+    return Responses.ok(c, {
+      success: true,
+      activeVariant,
     });
   },
 );
