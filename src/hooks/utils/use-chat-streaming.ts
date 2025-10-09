@@ -174,7 +174,7 @@ export function useChatStreaming(
 
                 // Handle text delta - update message content
                 if (event.type === 'text-delta' && event.textDelta) {
-                  currentContent += data.textDelta;
+                  currentContent += event.textDelta;
 
                   // Update message with accumulated content
                   setMessages(prev =>
@@ -190,7 +190,7 @@ export function useChatStreaming(
                 }
 
                 // Handle finish - update with metadata from backend
-                if (data.type === 'finish') {
+                if (event.type === 'finish') {
                   setMessages(prev =>
                     prev.map(msg =>
                       msg.id === messageId
@@ -198,7 +198,7 @@ export function useChatStreaming(
                             ...msg,
                             metadata: {
                               ...(msg.metadata || {}),
-                              ...(data.metadata || {}),
+                              ...(event.metadata || {}),
                             },
                           }
                         : msg,
@@ -206,14 +206,14 @@ export function useChatStreaming(
                   );
 
                   // Sync participants if backend sent updates
-                  if (data.metadata?.participants) {
-                    setSelectedParticipants(data.metadata.participants);
+                  if (event.metadata?.participants) {
+                    setSelectedParticipants(event.metadata.participants);
                   }
                 }
 
                 // Handle error
-                if (data.type === 'error') {
-                  throw new Error(data.error?.message || 'Stream error');
+                if (event.type === 'error') {
+                  throw new Error(event.error?.message || 'Stream error');
                 }
               } catch (parseError) {
                 console.error('Failed to parse SSE event:', parseError);

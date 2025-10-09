@@ -16,47 +16,11 @@ import { Button } from '@/components/ui/button';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { BRAND } from '@/constants';
 import { usePublicThreadQuery } from '@/hooks/queries/chat-threads';
+import { getAvatarPropsFromModelId } from '@/lib/ai/avatar-helpers';
 import { chatMessagesToUIMessages } from '@/lib/ai/message-helpers';
 import { getModelById } from '@/lib/ai/models-config';
 import { cn } from '@/lib/ui/cn';
 import { glassBadge } from '@/lib/ui/glassmorphism';
-
-// ============================================================================
-// Helpers
-// ============================================================================
-
-/**
- * Get avatar props for a participant based on model configuration
- * Falls back to user avatar for user messages
- */
-function getAvatarProps(role: 'user' | 'assistant', participants: Array<{ id: string; modelId: string }>, participantId?: string | null) {
-  if (role === 'user') {
-    return {
-      src: '/static/icons/user-avatar.png',
-      name: 'User',
-    };
-  }
-
-  // For assistant messages, find the participant by ID and get model info
-  if (participantId) {
-    const participant = participants.find(p => p.id === participantId);
-    if (participant) {
-      const model = getModelById(participant.modelId);
-      if (model) {
-        return {
-          src: model.metadata.icon || '/static/icons/ai-models/default.png',
-          name: model.name,
-        };
-      }
-    }
-  }
-
-  // Fallback for assistant messages without participant info
-  return {
-    src: '/static/icons/ai-models/default.png',
-    name: 'AI',
-  };
-}
 
 /**
  * Public Chat Thread Screen - Client Component
@@ -76,11 +40,9 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
   const rawParticipants = useMemo(() => threadResponse?.participants || [], [threadResponse]);
   const serverMessages = useMemo(() => threadResponse?.messages || [], [threadResponse]);
 
-  // Convert server messages to AI SDK format using helper, preserving participantId
-  const messages = useMemo(() => chatMessagesToUIMessages(serverMessages).map((msg, index) => ({
-    ...msg,
-    participantId: serverMessages[index]?.participantId,
-  })), [serverMessages]);
+  // Convert server messages to AI SDK format using helper
+  // ✅ Metadata already includes model/role information for avatar rendering
+  const messages = useMemo(() => chatMessagesToUIMessages(serverMessages), [serverMessages]);
 
   // Show loading state
   if (isLoadingThread) {
@@ -243,12 +205,15 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
                   <Conversation>
                     <ConversationContent>
                       {messages.map((message) => {
-                        // Get avatar props based on role and participant info
-                        // Handle edge case: 'system' role should be treated as 'assistant'
-                        const avatarProps = getAvatarProps(
+                        // ✅ CRITICAL: Use stored modelId from metadata (independent of current participants)
+                        // When participants are reordered/added/removed, avatars should show the model that generated the message
+                        const metadata = message.metadata as Record<string, unknown> | undefined;
+                        const storedModelId = metadata?.model as string | undefined;
+
+                        // Get avatar props directly from stored modelId
+                        const avatarProps = getAvatarPropsFromModelId(
                           message.role === 'system' ? 'assistant' : message.role,
-                          rawParticipants,
-                          message.participantId,
+                          storedModelId,
                         );
 
                         return (
