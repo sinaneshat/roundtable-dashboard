@@ -86,6 +86,7 @@ import {
   getMemoryHandler,
   getPublicThreadHandler,
   getThreadBySlugHandler,
+  getThreadChangelogHandler,
   getThreadHandler,
   getThreadMessagesHandler,
   listCustomRolesHandler,
@@ -110,6 +111,7 @@ import {
   getMemoryRoute,
   getPublicThreadRoute,
   getThreadBySlugRoute,
+  getThreadChangelogRoute,
   getThreadMessagesRoute,
   getThreadRoute,
   listCustomRolesRoute,
@@ -340,7 +342,8 @@ const appRoutes = app
   .openapi(getThreadBySlugRoute, getThreadBySlugHandler) // Get thread by slug (authenticated)
   .openapi(updateThreadRoute, updateThreadHandler) // Update thread (title, favorite, public, etc.)
   .openapi(deleteThreadRoute, deleteThreadHandler) // Delete thread
-  .openapi(getThreadMessagesRoute, getThreadMessagesHandler) // Get messages with session data
+  .openapi(getThreadMessagesRoute, getThreadMessagesHandler) // Get messages
+  .openapi(getThreadChangelogRoute, getThreadChangelogHandler) // Get configuration changelog
   .openapi(streamChatRoute, streamChatHandler) // Stream AI response via SSE (replaces sendMessage)
   .openapi(getPublicThreadRoute, getPublicThreadHandler) // Get public thread by slug (no auth)
   // Chat routes - Participant management

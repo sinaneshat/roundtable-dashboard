@@ -33,7 +33,7 @@ export async function generateMetadata({
 
 /**
  * Chat Thread Page - Server Component with Prefetching
- * Prefetches thread data AND messages with session data on server for instant hydration
+ * Prefetches thread data and messages on server for instant hydration
  */
 export default async function ChatThreadPage({
   params,

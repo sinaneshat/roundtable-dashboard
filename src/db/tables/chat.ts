@@ -1,7 +1,6 @@
 import { relations } from 'drizzle-orm';
 import { index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 
-import type { ChatModeId } from '@/lib/config/chat-modes';
 import { CHAT_MODE_ENUM_VALUES, THREAD_STATUS_ENUM_VALUES } from '@/lib/config/chat-modes';
 
 import { user } from './auth';
@@ -120,86 +119,57 @@ export const chatParticipant = sqliteTable('chat_participant', {
 ]);
 
 /**
- * Chat Sessions
- * Represents one roundtable session = 1 user prompt + all participant responses
- * Normalized for queryability and referential integrity
+ * Chat Thread Changelog
+ * Tracks configuration changes to threads (participants, memories, mode)
+ * Provides audit trail without the overhead of denormalized junction tables
  */
-export const chatSession = sqliteTable('chat_session', {
+export const chatThreadChangelog = sqliteTable('chat_thread_changelog', {
   id: text('id').primaryKey(),
   threadId: text('thread_id')
     .notNull()
     .references(() => chatThread.id, { onDelete: 'cascade' }),
-  sessionNumber: integer('session_number').notNull(), // Sequential: 1, 2, 3...
-  mode: text('mode', { enum: CHAT_MODE_ENUM_VALUES })
-    .notNull()
-    .$type<ChatModeId>(), // Mode active during this session
-  userPrompt: text('user_prompt').notNull(), // The user message that started this session
-  userMessageId: text('user_message_id').notNull(), // Reference to the user message
+  changeType: text('change_type', {
+    enum: [
+      'mode_change',
+      'participant_added',
+      'participant_removed',
+      'participant_updated',
+      'memory_added',
+      'memory_removed',
+    ],
+  }).notNull(),
+  changeSummary: text('change_summary').notNull(), // Human-readable summary
+  changeData: text('change_data', { mode: 'json' }).$type<{
+    // For mode_change
+    oldMode?: string;
+    newMode?: string;
+    // For participant changes
+    participantId?: string;
+    modelId?: string;
+    role?: string | null;
+    // For memory changes
+    memoryId?: string;
+    memoryTitle?: string;
+    [key: string]: unknown;
+  }>(),
   createdAt: integer('created_at', { mode: 'timestamp' })
     .defaultNow()
     .notNull(),
-  completedAt: integer('completed_at', { mode: 'timestamp' }), // When all participants responded
 }, table => [
-  index('chat_session_thread_idx').on(table.threadId),
-  index('chat_session_number_idx').on(table.threadId, table.sessionNumber), // Fast session queries
-  index('chat_session_mode_idx').on(table.mode), // Query sessions by mode
-]);
-
-/**
- * Chat Session Participants
- * Junction table tracking which participants were active in each session
- * Enables querying: "Which sessions used Claude Opus?" or "What models participated together?"
- */
-export const chatSessionParticipant = sqliteTable('chat_session_participant', {
-  id: text('id').primaryKey(),
-  sessionId: text('session_id')
-    .notNull()
-    .references(() => chatSession.id, { onDelete: 'cascade' }),
-  participantId: text('participant_id')
-    .notNull()
-    .references(() => chatParticipant.id, { onDelete: 'cascade' }),
-  modelId: text('model_id').notNull(), // Denormalized for fast queries without joining
-  role: text('role'), // Participant role during this session
-  priority: integer('priority').notNull(), // Order in which this participant responded
-  responded: integer('responded', { mode: 'boolean' })
-    .notNull()
-    .default(false), // Did this participant complete their response?
-}, table => [
-  index('chat_session_participant_session_idx').on(table.sessionId),
-  index('chat_session_participant_model_idx').on(table.modelId), // Query by model
-  index('chat_session_participant_priority_idx').on(table.sessionId, table.priority), // Response order
-]);
-
-/**
- * Chat Session Memories
- * Junction table tracking which memories were attached during each session
- * Enables querying: "Which sessions used memory X?" or "What memories were used together?"
- * Forward reference to chatMemory using function pattern
- */
-export const chatSessionMemory = sqliteTable('chat_session_memory', {
-  id: text('id').primaryKey(),
-  sessionId: text('session_id')
-    .notNull()
-    .references(() => chatSession.id, { onDelete: 'cascade' }),
-  memoryId: text('memory_id').notNull(), // FK to chat_memory.id (enforced at DB level)
-  memoryTitle: text('memory_title').notNull(), // Denormalized for display without joins
-}, table => [
-  index('chat_session_memory_session_idx').on(table.sessionId),
-  index('chat_session_memory_memory_idx').on(table.memoryId),
+  index('chat_thread_changelog_thread_idx').on(table.threadId),
+  index('chat_thread_changelog_type_idx').on(table.changeType),
+  index('chat_thread_changelog_created_idx').on(table.createdAt),
 ]);
 
 /**
  * Chat Messages
  * Individual messages in threads (user input + model responses)
- * Now references chat_session for proper normalization
  */
 export const chatMessage = sqliteTable('chat_message', {
   id: text('id').primaryKey(),
   threadId: text('thread_id')
     .notNull()
     .references(() => chatThread.id, { onDelete: 'cascade' }),
-  sessionId: text('session_id')
-    .references(() => chatSession.id, { onDelete: 'set null' }), // ✅ FK to session
   participantId: text('participant_id')
     .references(() => chatParticipant.id, { onDelete: 'set null' }), // null for user messages
   role: text('role', { enum: ['user', 'assistant'] })
@@ -235,7 +205,6 @@ export const chatMessage = sqliteTable('chat_message', {
     .notNull(),
 }, table => [
   index('chat_message_thread_idx').on(table.threadId),
-  index('chat_message_session_idx').on(table.sessionId), // ✅ Fast session message queries
   index('chat_message_created_idx').on(table.createdAt),
   index('chat_message_participant_idx').on(table.participantId),
 ]);
@@ -358,6 +327,7 @@ export const chatThreadRelations = relations(chatThread, ({ one, many }) => ({
   messages: many(chatMessage),
   memories: many(chatMemory), // Thread-specific memories (threadId is set)
   threadMemories: many(chatThreadMemory), // Attached reusable memories via junction table
+  changelog: many(chatThreadChangelog), // Configuration change history
 }));
 
 export const chatCustomRoleRelations = relations(chatCustomRole, ({ one, many }) => ({
@@ -384,10 +354,6 @@ export const chatMessageRelations = relations(chatMessage, ({ one }) => ({
   thread: one(chatThread, {
     fields: [chatMessage.threadId],
     references: [chatThread.id],
-  }),
-  session: one(chatSession, {
-    fields: [chatMessage.sessionId],
-    references: [chatSession.id],
   }),
   participant: one(chatParticipant, {
     fields: [chatMessage.participantId],
@@ -424,36 +390,11 @@ export const chatThreadMemoryRelations = relations(chatThreadMemory, ({ one }) =
 }));
 
 /**
- * Session Relations
+ * Changelog Relations
  */
-export const chatSessionRelations = relations(chatSession, ({ one, many }) => ({
+export const chatThreadChangelogRelations = relations(chatThreadChangelog, ({ one }) => ({
   thread: one(chatThread, {
-    fields: [chatSession.threadId],
+    fields: [chatThreadChangelog.threadId],
     references: [chatThread.id],
-  }),
-  messages: many(chatMessage),
-  sessionParticipants: many(chatSessionParticipant),
-  sessionMemories: many(chatSessionMemory),
-}));
-
-export const chatSessionParticipantRelations = relations(chatSessionParticipant, ({ one }) => ({
-  session: one(chatSession, {
-    fields: [chatSessionParticipant.sessionId],
-    references: [chatSession.id],
-  }),
-  participant: one(chatParticipant, {
-    fields: [chatSessionParticipant.participantId],
-    references: [chatParticipant.id],
-  }),
-}));
-
-export const chatSessionMemoryRelations = relations(chatSessionMemory, ({ one }) => ({
-  session: one(chatSession, {
-    fields: [chatSessionMemory.sessionId],
-    references: [chatSession.id],
-  }),
-  memory: one(chatMemory, {
-    fields: [chatSessionMemory.memoryId],
-    references: [chatMemory.id],
   }),
 }));

@@ -5,6 +5,7 @@ import { createApiResponseSchema } from '@/api/core/schemas';
 
 import {
   AddParticipantRequestSchema,
+  ChangelogListResponseSchema,
   CreateCustomRoleRequestSchema,
   CreateMemoryRequestSchema,
   CreateThreadRequestSchema,
@@ -299,23 +300,49 @@ export const deleteParticipantRoute = createRoute({
 // ============================================================================
 
 /**
- * Get messages for a thread with session data
- * Returns messages with session tracking metadata for UI display
+ * Get messages for a thread
+ * Returns all messages ordered by creation time
  */
 export const getThreadMessagesRoute = createRoute({
   method: 'get',
   path: '/chat/threads/:id/messages',
   tags: ['chat'],
-  summary: 'Get thread messages with session data',
-  description: 'Retrieve all messages for a thread with session tracking metadata for roundtable display',
+  summary: 'Get thread messages',
+  description: 'Retrieve all messages for a thread ordered by creation time',
   request: {
     params: ThreadIdParamSchema,
   },
   responses: {
     [HttpStatusCodes.OK]: {
-      description: 'Messages retrieved successfully with session data',
+      description: 'Messages retrieved successfully',
       content: {
         'application/json': { schema: MessagesListResponseSchema },
+      },
+    },
+    [HttpStatusCodes.UNAUTHORIZED]: { description: 'Authentication required' },
+    [HttpStatusCodes.NOT_FOUND]: { description: 'Thread not found' },
+    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: { description: 'Internal Server Error' },
+  },
+});
+
+/**
+ * Get changelog for a thread
+ * Returns configuration change history for display between messages
+ */
+export const getThreadChangelogRoute = createRoute({
+  method: 'get',
+  path: '/chat/threads/:id/changelog',
+  tags: ['chat'],
+  summary: 'Get thread configuration changelog',
+  description: 'Retrieve configuration changes (mode, participants, memories) for a thread',
+  request: {
+    params: ThreadIdParamSchema,
+  },
+  responses: {
+    [HttpStatusCodes.OK]: {
+      description: 'Changelog retrieved successfully',
+      content: {
+        'application/json': { schema: ChangelogListResponseSchema },
       },
     },
     [HttpStatusCodes.UNAUTHORIZED]: { description: 'Authentication required' },

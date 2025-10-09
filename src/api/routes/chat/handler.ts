@@ -1,7 +1,7 @@
 import type { RouteHandler } from '@hono/zod-openapi';
 import { consumeStream, convertToModelMessages, smoothStream, streamText, validateUIMessages } from 'ai';
 import type { SQL } from 'drizzle-orm';
-import { and, eq, like, ne } from 'drizzle-orm';
+import { and, desc, eq, like, ne } from 'drizzle-orm';
 import { ulid } from 'ulid';
 
 import { createError } from '@/api/common/error-handling';
@@ -21,13 +21,14 @@ import {
   classifyOpenRouterError,
   formatErrorForDatabase,
 } from '@/api/services/openrouter-error-handler';
-import {
-  createSession,
-  getCurrentSession,
-  getNextSessionNumber,
-  markParticipantResponded,
-} from '@/api/services/session-tracking.service';
 import { generateUniqueSlug } from '@/api/services/slug-generator.service';
+import {
+  logMemoryAdded,
+  logMemoryRemoved,
+  logModeChange,
+  logParticipantAdded,
+  logParticipantRemoved,
+} from '@/api/services/thread-changelog.service';
 import { generateTitleFromMessage } from '@/api/services/title-generator.service';
 import {
   enforceCustomRoleQuota,
@@ -68,6 +69,7 @@ import type {
   getMemoryRoute,
   getPublicThreadRoute,
   getThreadBySlugRoute,
+  getThreadChangelogRoute,
   getThreadMessagesRoute,
   getThreadRoute,
   listCustomRolesRoute,
@@ -930,8 +932,8 @@ export const deleteParticipantHandler: RouteHandler<typeof deleteParticipantRout
 // ============================================================================
 
 /**
- * Get messages for a thread with session data
- * Fetches all messages and enriches them with session tracking metadata
+ * Get messages for a thread
+ * Fetches all messages ordered by creation time
  */
 export const getThreadMessagesHandler: RouteHandler<typeof getThreadMessagesRoute, ApiEnv> = createHandler(
   {
@@ -947,58 +949,46 @@ export const getThreadMessagesHandler: RouteHandler<typeof getThreadMessagesRout
     // Verify thread ownership
     await verifyThreadOwnership(threadId, user.id, db);
 
-    // Fetch messages with session data using Drizzle relational queries
+    // Fetch messages
     const messages = await db.query.chatMessage.findMany({
       where: eq(tables.chatMessage.threadId, threadId),
       orderBy: [tables.chatMessage.createdAt],
-      with: {
-        session: {
-          with: {
-            sessionParticipants: {
-              columns: {
-                modelId: true,
-                role: true,
-                priority: true,
-              },
-              orderBy: [tables.chatSessionParticipant.priority],
-            },
-            sessionMemories: {
-              columns: {
-                memoryTitle: true,
-              },
-            },
-          },
-        },
-      },
     });
 
-    // Map messages to response format with session data
-    const messagesWithSession = messages.map(msg => ({
-      id: msg.id,
-      threadId: msg.threadId,
-      participantId: msg.participantId,
-      role: msg.role,
-      content: msg.content,
-      reasoning: msg.reasoning,
-      toolCalls: msg.toolCalls,
-      metadata: msg.metadata,
-      parentMessageId: msg.parentMessageId,
-      createdAt: msg.createdAt,
-      // Session data
-      sessionId: msg.sessionId,
-      sessionNumber: msg.session?.sessionNumber ?? null,
-      sessionMode: msg.session?.mode ?? null,
-      sessionParticipants: msg.session?.sessionParticipants.map(sp => ({
-        modelId: sp.modelId,
-        role: sp.role,
-        priority: sp.priority,
-      })) ?? null,
-      sessionMemories: msg.session?.sessionMemories.map(sm => sm.memoryTitle) ?? null,
-    }));
+    return Responses.ok(c, {
+      messages,
+      count: messages.length,
+    });
+  },
+);
+
+/**
+ * Get changelog for a thread
+ * Returns configuration change history ordered by creation time (newest first)
+ */
+export const getThreadChangelogHandler: RouteHandler<typeof getThreadChangelogRoute, ApiEnv> = createHandler(
+  {
+    auth: 'session',
+    validateParams: ThreadIdParamSchema,
+    operationName: 'getThreadChangelog',
+  },
+  async (c) => {
+    const { user } = c.auth();
+    const { id: threadId } = c.validated.params;
+    const db = await getDbAsync();
+
+    // Verify thread ownership
+    await verifyThreadOwnership(threadId, user.id, db);
+
+    // Fetch changelog entries
+    const changelog = await db.query.chatThreadChangelog.findMany({
+      where: eq(tables.chatThreadChangelog.threadId, threadId),
+      orderBy: [desc(tables.chatThreadChangelog.createdAt)],
+    });
 
     return Responses.ok(c, {
-      messages: messagesWithSession,
-      count: messagesWithSession.length,
+      changelog,
+      count: changelog.length,
     });
   },
 );
@@ -1033,9 +1023,6 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
     } = c.validated.body;
     const db = await getDbAsync();
 
-    // Track current session ID for linking messages
-    let currentSessionId: string | null = null;
-
     // Verify thread ownership and get participants
     let thread = await verifyThreadOwnership(threadId, user.id, db, { includeParticipants: true });
 
@@ -1050,10 +1037,15 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
 
     // Update thread mode if changed
     if (newMode && newMode !== thread.mode) {
+      const oldMode = thread.mode;
+
       await db
         .update(tables.chatThread)
         .set({ mode: newMode as ChatModeId, updatedAt: new Date() })
         .where(eq(tables.chatThread.id, threadId));
+
+      // Log mode change to changelog
+      await logModeChange(threadId, oldMode, newMode);
 
       thread.mode = newMode as ChatModeId; // Update local reference
     }
@@ -1086,6 +1078,11 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
         }
       }
 
+      // Get existing participants before deletion for changelog
+      const oldParticipants = await db.query.chatParticipant.findMany({
+        where: eq(tables.chatParticipant.threadId, threadId),
+      });
+
       // Delete existing participants
       await db
         .delete(tables.chatParticipant)
@@ -1104,12 +1101,41 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
 
       await db.insert(tables.chatParticipant).values(participantsToCreate);
 
+      // Log participant changes to changelog
+      // Find removed participants (in old but not in new)
+      for (const oldP of oldParticipants) {
+        const stillExists = newParticipants.some(newP => newP.modelId === oldP.modelId);
+        if (!stillExists) {
+          await logParticipantRemoved(threadId, oldP.id, oldP.modelId, oldP.role);
+        }
+      }
+
+      // Find added participants (in new but not in old)
+      for (const newP of newParticipants) {
+        const wasExisting = oldParticipants.some(oldP => oldP.modelId === newP.modelId);
+        if (!wasExisting) {
+          // Use a placeholder ID since we don't have the real ID yet (it's generated above)
+          // The ID isn't critical for the changelog display
+          await logParticipantAdded(threadId, 'pending', newP.modelId, newP.role || null);
+        }
+      }
+
       // Reload thread with new participants
       thread = await verifyThreadOwnership(threadId, user.id, db, { includeParticipants: true });
     }
 
     // Update memories if provided
     if (newMemoryIds !== undefined) {
+      // Get existing memory attachments before deletion for changelog
+      const oldMemoryAttachments = await db.query.chatThreadMemory.findMany({
+        where: eq(tables.chatThreadMemory.threadId, threadId),
+        with: {
+          memory: {
+            columns: { id: true, title: true },
+          },
+        },
+      });
+
       // Delete existing memory attachments
       await db
         .delete(tables.chatThreadMemory)
@@ -1124,6 +1150,34 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
         }));
 
         await db.insert(tables.chatThreadMemory).values(memoriesToAttach);
+
+        // Fetch the newly attached memories for changelog
+        const newMemories = await db.query.chatMemory.findMany({
+          where: (fields, { inArray }) => inArray(fields.id, newMemoryIds),
+          columns: { id: true, title: true },
+        });
+
+        // Log memory changes to changelog
+        // Find removed memories (in old but not in new)
+        for (const oldM of oldMemoryAttachments) {
+          const stillExists = newMemoryIds.includes(oldM.memoryId);
+          if (!stillExists) {
+            await logMemoryRemoved(threadId, oldM.memory.id, oldM.memory.title);
+          }
+        }
+
+        // Find added memories (in new but not in old)
+        for (const newM of newMemories) {
+          const wasExisting = oldMemoryAttachments.some(oldM => oldM.memoryId === newM.id);
+          if (!wasExisting) {
+            await logMemoryAdded(threadId, newM.id, newM.title);
+          }
+        }
+      } else {
+        // All memories removed
+        for (const oldM of oldMemoryAttachments) {
+          await logMemoryRemoved(threadId, oldM.memory.id, oldM.memory.title);
+        }
       }
     }
 
@@ -1164,46 +1218,10 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
       // Enforce quota
       await enforceMessageQuota(user.id);
 
-      // ✅ SESSION TRACKING: Create session for this roundtable
-      const sessionNumber = await getNextSessionNumber(threadId);
-
-      // Get memories attached to this thread
-      const threadMemories = await db.query.chatThreadMemory.findMany({
-        where: eq(tables.chatThreadMemory.threadId, threadId),
-        with: {
-          memory: {
-            columns: { id: true, title: true },
-          },
-        },
-      });
-
-      // Create session with all junction table entries
-      const sessionId = await createSession({
-        threadId,
-        sessionNumber,
-        mode: thread.mode,
-        userMessageId: lastClientMessage.id,
-        userPrompt: content,
-        participants: thread.participants.map(p => ({
-          id: p.id,
-          modelId: p.modelId,
-          role: p.role,
-          priority: p.priority,
-        })),
-        memories: threadMemories.map(tm => ({
-          id: tm.memory.id,
-          title: tm.memory.title,
-        })),
-      });
-
-      // Store session ID for use in onFinish
-      currentSessionId = sessionId;
-
-      // Save user message linked to session
+      // Save user message
       await db.insert(tables.chatMessage).values({
         id: lastClientMessage.id,
         threadId,
-        sessionId, // ✅ Link to session
         role: 'user',
         content,
         createdAt: new Date(),
@@ -1229,10 +1247,6 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
           .map(part => part.text)
           .join(''),
       }));
-
-      // ✅ Get current session for regenerate
-      const currentSession = await getCurrentSession(threadId);
-      currentSessionId = currentSession?.id || null;
     }
 
     // Build UI messages for AI SDK
@@ -1447,7 +1461,6 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
           await db.insert(tables.chatMessage).values({
             id: responseMessage.id,
             threadId,
-            sessionId: currentSessionId, // ✅ Link to session
             participantId: participant.id,
             role: 'assistant',
             content: '',
@@ -1461,11 +1474,6 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
             },
             createdAt: now,
           }).onConflictDoNothing();
-
-          // ✅ Mark participant as responded in session
-          if (currentSessionId) {
-            await markParticipantResponded(currentSessionId, participant.id);
-          }
 
           await db.update(tables.chatThread)
             .set({
@@ -1488,7 +1496,6 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
         await db.insert(tables.chatMessage).values({
           id: responseMessage.id,
           threadId,
-          sessionId: currentSessionId, // ✅ Link to session
           participantId: participant.id,
           role: 'assistant',
           content,
@@ -1505,11 +1512,6 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
           },
           createdAt: now,
         }).onConflictDoNothing();
-
-        // ✅ Mark participant as responded in session
-        if (currentSessionId) {
-          await markParticipantResponded(currentSessionId, participant.id);
-        }
 
         await db.update(tables.chatThread)
           .set({

@@ -73,6 +73,7 @@ export const queryKeys = {
     public: (slug: string) => QueryKeyFactory.action('threads', 'public', slug),
     bySlug: (slug: string) => QueryKeyFactory.action('threads', 'slug', slug),
     messages: (id: string) => QueryKeyFactory.action('threads', 'messages', id),
+    changelog: (id: string) => QueryKeyFactory.action('threads', 'changelog', id),
   },
 
   // Chat Memories

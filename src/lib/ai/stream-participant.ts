@@ -207,7 +207,7 @@ export async function streamParticipant<T extends StreamMessage = StreamMessage>
               // Following official docs: https://sdk.vercel.ai/docs/ai-sdk-core/error-handling
               // Error events should be handled gracefully without throwing
               // The backend saves error metadata to database in onFinish callback
-              // Frontend displays ChatMessageError component based on metadata
+              // Frontend displays errors inline using AI Elements Message component
               // Not throwing ensures sequential participant chain continues
               console.error('Stream error event received:', event.error || 'Unknown error');
 

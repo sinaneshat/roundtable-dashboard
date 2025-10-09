@@ -210,7 +210,7 @@ export function ChatMemoriesList({
             type="button"
             variant="outline"
             size="sm"
-            className="h-8 sm:h-9 rounded-full gap-1.5 sm:gap-2 text-xs relative px-3 sm:px-4"
+            className="h-8 sm:h-9 rounded-lg gap-1.5 sm:gap-2 text-xs relative px-3 sm:px-4"
           >
             <Sparkles className="size-3.5 sm:size-4" />
             <span className="hidden xs:inline sm:inline">{selectedCount > 0 ? 'Memories' : 'Add Memory'}</span>

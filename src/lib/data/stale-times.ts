@@ -60,6 +60,7 @@ export const STALE_TIMES = {
   // ============================================================================
   chatRoles: 10 * 60 * 1000, // 10 minutes - roles are fairly static
   chatMemories: 2 * 60 * 1000, // 2 minutes - memories can be added during chat
+  changelog: 30 * 1000, // 30 seconds - configuration changes tracked in real-time
 
   // ============================================================================
   // Special Cases

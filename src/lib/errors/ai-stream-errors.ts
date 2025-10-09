@@ -5,7 +5,7 @@
  * Uses Zod schemas for type safety and validation.
  *
  * @see /src/api/services/openrouter.service.ts - Backend error handling
- * @see /src/components/chat/chat-message-error.tsx - Frontend error display
+ * @see /src/containers/screens/chat/ChatThreadScreen.tsx - Frontend error display with AI Elements
  */
 
 import { z } from 'zod';

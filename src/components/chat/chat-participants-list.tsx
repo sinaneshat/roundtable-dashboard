@@ -148,7 +148,7 @@ function RoleSelector({
             <Button
               variant="ghost"
               size="sm"
-              className="h-6 text-xs px-2 text-muted-foreground hover:text-foreground"
+              className="h-6 text-xs px-2 text-muted-foreground hover:text-foreground rounded-lg"
             >
               + Role
             </Button>
@@ -281,7 +281,7 @@ function RoleSelector({
           <Button
             variant="secondary"
             size="sm"
-            className="h-6 text-xs px-2 pr-1 rounded-full gap-1 hover:bg-secondary"
+            className="h-6 text-xs px-2 pr-1 rounded-lg gap-1 hover:bg-secondary"
           >
             <span>{participant.role}</span>
             <button
@@ -750,7 +750,7 @@ export function ChatParticipantsList({
                   type="button"
                   variant="outline"
                   size="sm"
-                  className="h-8 sm:h-9 rounded-full gap-1.5 sm:gap-2 text-xs relative px-3 sm:px-4"
+                  className="h-8 sm:h-9 rounded-lg gap-1.5 sm:gap-2 text-xs relative px-3 sm:px-4"
                 >
                   <Bot className="size-3.5 sm:size-4" />
                   <span className="hidden xs:inline sm:inline">AI Models</span>
@@ -933,7 +933,7 @@ export function ParticipantsPreview({
                 }}
                 className={cn(
                   'relative flex items-center gap-1.5 sm:gap-2 px-2 sm:px-2.5 py-1 sm:py-1.5 shrink-0',
-                  'backdrop-blur-md border rounded-full shadow-md overflow-hidden',
+                  'backdrop-blur-md border rounded-lg shadow-md overflow-hidden',
                   // Default state
                   'bg-background/10 border-white/30 dark:border-white/20',
                   // Waiting states

@@ -113,6 +113,7 @@ export {
   type GetPublicThreadResponse,
   getPublicThreadService,
   getThreadBySlugService,
+  getThreadChangelogService,
   getThreadMessagesService,
   type GetThreadRequest,
   type GetThreadResponse,

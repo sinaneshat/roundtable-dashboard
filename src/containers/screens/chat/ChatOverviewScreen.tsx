@@ -1,21 +1,44 @@
 'use client';
 
+import { CopyIcon, Square } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { ChatMessageList } from '@/components/chat/chat-message';
+import { Action, Actions } from '@/components/ai-elements/actions';
+import {
+  Conversation,
+  ConversationContent,
+  ConversationScrollButton,
+} from '@/components/ai-elements/conversation';
+import { Loader } from '@/components/ai-elements/loader';
+import { Message, MessageContent } from '@/components/ai-elements/message';
+import type { PromptInputMessage } from '@/components/ai-elements/prompt-input';
+import {
+  PromptInput,
+  PromptInputBody,
+  PromptInputSubmit,
+  PromptInputTextarea,
+  PromptInputToolbar,
+  PromptInputTools,
+} from '@/components/ai-elements/prompt-input';
+import { Response } from '@/components/ai-elements/response';
+import { ChatMemoriesList } from '@/components/chat/chat-memories-list';
+import { ChatParticipantsList, ParticipantsPreview } from '@/components/chat/chat-participants-list';
 import { ChatQuickStart } from '@/components/chat/chat-quick-start';
-import { UnifiedChatInput } from '@/components/chat/unified-chat-input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from '@/components/ui/use-toast';
 import { WavyBackground } from '@/components/ui/wavy-background';
 import { useCreateThreadMutation } from '@/hooks/mutations/chat-mutations';
 import { streamParticipant } from '@/lib/ai/stream-participant';
 import type { ChatModeId } from '@/lib/config/chat-modes';
+import { getChatModeOptions } from '@/lib/config/chat-modes';
 import type { ParticipantConfig } from '@/lib/schemas/chat-forms';
 import { chatInputFormDefaults, chatInputFormToCreateThreadRequest } from '@/lib/schemas/chat-forms';
+import { cn } from '@/lib/ui/cn';
+import { chatGlass } from '@/lib/ui/glassmorphism';
 import { getApiErrorMessage } from '@/lib/utils/error-handling';
 
 export default function ChatOverviewScreen() {
@@ -24,7 +47,7 @@ export default function ChatOverviewScreen() {
   const [selectedMode, setSelectedMode] = useState<ChatModeId>(chatInputFormDefaults.mode);
   const [selectedParticipants, setSelectedParticipants] = useState<ParticipantConfig[]>(chatInputFormDefaults.participants);
   const [selectedMemoryIds, setSelectedMemoryIds] = useState<string[]>(chatInputFormDefaults.memoryIds);
-  const [message, setMessage] = useState('');
+  const [inputValue, setInputValue] = useState('');
 
   // Thread state
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
@@ -34,46 +57,47 @@ export default function ChatOverviewScreen() {
   // Thread creation mutation
   const createThreadMutation = useCreateThreadMutation();
 
-  // Messages state (manual management like AI SDK's useChat)
+  // Messages state following AI SDK pattern
   const [messages, setMessages] = useState<Array<{
     id: string;
     role: 'user' | 'assistant';
     parts: Array<{ type: string; text: string }>;
     metadata?: Record<string, unknown> | null;
-    participantId?: string; // Track which participant generated this message
+    participantId?: string;
   }>>([]);
 
   // Sequential streaming state
   const [currentParticipantIndex, setCurrentParticipantIndex] = useState(0);
   const [isStreamingParticipant, setIsStreamingParticipant] = useState(false);
+  const [status, setStatus] = useState<'ready' | 'submitted' | 'streaming' | 'error'>('ready');
 
   // Refs for cleanup
   const titlePollingIntervalRef = useRef<NodeJS.Timeout | undefined>(undefined);
   const abortControllerRef = useRef<AbortController | null>(null);
 
-  // Handle thread creation and start streaming
-  // Accepts optional overrides for mode, participants, memoryIds (used by quick start)
-  const handleSubmit = useCallback(
-    async (
-      message: string,
-      overrides?: {
-        mode?: ChatModeId;
-        participants?: ParticipantConfig[];
-        memoryIds?: string[];
-      },
-    ) => {
+  const chatModeOptions = getChatModeOptions();
+
+  // Handle PromptInput submission
+  const handlePromptSubmit = useCallback(
+    async (promptMessage: PromptInputMessage) => {
+      const hasText = Boolean(promptMessage.text);
+      const hasAttachments = Boolean(promptMessage.files?.length);
+
+      if (!(hasText || hasAttachments)) {
+        return;
+      }
+
+      const messageText = promptMessage.text || 'Sent with attachments';
+
       try {
-        // Use overrides if provided, otherwise use current state
-        const mode = overrides?.mode ?? selectedMode;
-        const participants = overrides?.participants ?? selectedParticipants;
-        const memoryIds = overrides?.memoryIds ?? selectedMemoryIds;
+        setStatus('submitted');
 
         // Create thread with configuration
         const requestData = chatInputFormToCreateThreadRequest({
-          message,
-          mode,
-          participants,
-          memoryIds,
+          message: messageText,
+          mode: selectedMode,
+          participants: selectedParticipants,
+          memoryIds: selectedMemoryIds,
         });
 
         const result = await createThreadMutation.mutateAsync({
@@ -92,8 +116,12 @@ export default function ChatOverviewScreen() {
           setTotalParticipants(threadParticipants?.length || 1);
           setCurrentParticipantIndex(0);
           setIsStreamingParticipant(false);
+          setStatus('ready');
 
-          // Update selectedParticipants with actual backend IDs for proper participant tracking
+          // Clear input after successful submit (official AI SDK pattern)
+          setInputValue('');
+
+          // Update selectedParticipants with actual backend IDs
           if (threadParticipants && threadParticipants.length > 0) {
             setSelectedParticipants(
               threadParticipants.map(p => ({
@@ -105,7 +133,7 @@ export default function ChatOverviewScreen() {
             );
           }
 
-          // Use the actual user message created by backend (prevents duplicates)
+          // Use the actual user message created by backend
           if (firstMessage) {
             setMessages([
               {
@@ -123,6 +151,7 @@ export default function ChatOverviewScreen() {
           title: t('notifications.error.createFailed'),
           description: errorMessage,
         });
+        setStatus('error');
       }
     },
     [selectedMode, selectedParticipants, selectedMemoryIds, createThreadMutation, t],
@@ -130,29 +159,23 @@ export default function ChatOverviewScreen() {
 
   // Sequential participant streaming effect
   useEffect(() => {
-    // Don't start if no active thread, already streaming, or no messages
     if (!activeThreadId || isStreamingParticipant || messages.length === 0) {
       return;
     }
 
-    // Count how many participants have responded
     const assistantMessageCount = messages.filter(m => m.role === 'assistant').length;
 
-    // Check if we need to stream the next participant
-    // Only stream if: we haven't reached total participants AND current index matches assistant count
     if (assistantMessageCount < totalParticipants && assistantMessageCount === currentParticipantIndex) {
       setIsStreamingParticipant(true);
+      setStatus('streaming');
 
-      // Create abort controller for this stream
       const abortController = new AbortController();
       abortControllerRef.current = abortController;
 
       (async () => {
         try {
-          // Get the current participant for this streaming
           const currentParticipant = selectedParticipants[currentParticipantIndex];
 
-          // Stream this participant with full conversation history
           await streamParticipant({
             threadId: activeThreadId,
             messages: messages.map(m => ({
@@ -164,19 +187,15 @@ export default function ChatOverviewScreen() {
               })),
             })),
             participantIndex: currentParticipantIndex,
-            // ✅ CRITICAL: Update local state when backend sends new participant IDs
-            // For new threads, backend creates participants and sends back real IDs
             onConfigUpdate: (config) => {
               if (config.participants) {
                 setSelectedParticipants(config.participants);
               }
             },
             onUpdate: (updater) => {
-              // Wrap the updater to inject participantId and model metadata into new assistant messages
               if (typeof updater === 'function') {
                 setMessages((prev) => {
                   const updated = updater(prev);
-                  // Add participantId and model metadata to any new assistant messages
                   return updated.map((msg) => {
                     if (msg.role === 'assistant' && !('participantId' in msg) && currentParticipant?.id) {
                       const existingMetadata = 'metadata' in msg ? (msg.metadata as Record<string, unknown> || {}) : {};
@@ -194,7 +213,6 @@ export default function ChatOverviewScreen() {
                   });
                 });
               } else {
-                // Direct array update
                 setMessages(updater.map((msg) => {
                   if (msg.role === 'assistant' && !('participantId' in msg) && currentParticipant?.id) {
                     const existingMetadata = 'metadata' in msg ? (msg.metadata as Record<string, unknown> || {}) : {};
@@ -215,15 +233,14 @@ export default function ChatOverviewScreen() {
             signal: abortController.signal,
           });
 
-          // Move to next participant
           setCurrentParticipantIndex(prev => prev + 1);
         } catch (error) {
-          // Silently handle participant streaming errors and aborts
           if (error instanceof Error && error.name === 'AbortError') {
             return;
           }
         } finally {
           setIsStreamingParticipant(false);
+          setStatus('ready');
           abortControllerRef.current = null;
         }
       })();
@@ -240,7 +257,6 @@ export default function ChatOverviewScreen() {
     const allParticipantsComplete = assistantMessageCount >= totalParticipants && totalParticipants > 0;
 
     if (allParticipantsComplete && !isStreamingParticipant) {
-      // Start polling for title, then navigate
       titlePollingIntervalRef.current = setInterval(async () => {
         try {
           const response = await fetch(`/api/v1/chat/threads/${activeThreadId}`);
@@ -271,23 +287,24 @@ export default function ChatOverviewScreen() {
   }, [activeThreadId, activeThreadSlug, messages, totalParticipants, isStreamingParticipant, router]);
 
   // Handler for quick start suggestion click
-  // Populates the form with suggestion but does NOT submit automatically
   const handleSuggestionClick = (
     prompt: string,
     mode: ChatModeId,
     participants: ParticipantConfig[],
   ) => {
-    // Set mode, participants, and message in state for UI
     setSelectedMode(mode);
     setSelectedParticipants(participants);
-    setMessage(prompt);
 
-    // Scroll to input and focus so user can review and submit
     setTimeout(() => {
       const inputElement = document.querySelector('textarea');
       if (inputElement) {
+        inputElement.value = prompt;
         inputElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
         inputElement.focus();
+
+        // Trigger change event
+        const event = new Event('input', { bubbles: true });
+        inputElement.dispatchEvent(event);
       }
     }, 100);
   };
@@ -299,24 +316,28 @@ export default function ChatOverviewScreen() {
       abortControllerRef.current = null;
     }
     setIsStreamingParticipant(false);
+    setStatus('ready');
   }, []);
 
-  // Show streaming view when we have messages
+  // Message actions
+  const handleCopyMessage = useCallback((content: string) => {
+    navigator.clipboard.writeText(content);
+  }, []);
+
   const showStreamingView = activeThreadId && messages.length > 0;
 
   return (
     <div className="relative flex flex-1 flex-col min-h-0">
-      {/* Wavy Background - Edge-to-edge, breaking out of parent padding */}
+      {/* Wavy Background */}
       <div className="absolute inset-0 -mx-4 lg:-mx-6 z-0 overflow-hidden">
         <WavyBackground containerClassName="h-full w-full" />
       </div>
 
-      {/* Content Layer - Above wavy background */}
+      {/* Content Layer */}
       <div className="relative z-10 flex flex-1 flex-col min-h-0">
         <AnimatePresence mode="wait">
           {!showStreamingView
             ? (
-              // Hero + Quick Start View
                 <motion.div
                   key="hero-view"
                   initial={{ opacity: 1 }}
@@ -324,7 +345,7 @@ export default function ChatOverviewScreen() {
                   transition={{ duration: 0.3 }}
                   className="flex flex-1 flex-col min-h-0"
                 >
-                  {/* Hero Section with Logo */}
+                  {/* Hero Section */}
                   <div className="flex-shrink-0 pt-16 pb-12">
                     <div className="mx-auto max-w-4xl px-4 lg:px-6">
                       <motion.div
@@ -369,54 +390,159 @@ export default function ChatOverviewScreen() {
                 </motion.div>
               )
             : (
-              // Streaming Messages View
                 <motion.div
                   key="streaming-view"
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.4 }}
-                  className="flex-1 overflow-y-auto pt-6"
+                  className="flex-1 overflow-hidden"
                 >
-                  <div className="mx-auto max-w-4xl px-4 lg:px-6">
-                    <ChatMessageList
-                      messages={messages.map(m => ({
-                        id: m.id,
-                        role: m.role,
-                        content: m.parts.find(p => p.type === 'text')?.text || '',
-                        parts: m.parts,
-                        participantId: null,
-                        metadata: m.metadata || null,
-                        createdAt: new Date().toISOString(),
-                        isStreaming: isStreamingParticipant && messages.indexOf(m) === messages.length - 1,
-                      }))}
-                      showModeSeparators={false}
-                    />
+                  <div className="mx-auto max-w-4xl h-full">
+                    <Conversation className="h-full">
+                      <ConversationContent>
+                        {messages.map(message => (
+                          <div key={message.id}>
+                            <Message from={message.role}>
+                              <MessageContent>
+                                {message.parts.map((part, i) => {
+                                  if (part.type === 'text') {
+                                    return (
+                                      <Response key={`${message.id}-${i}`}>
+                                        {part.text}
+                                      </Response>
+                                    );
+                                  }
+                                  return null;
+                                })}
+                              </MessageContent>
+                            </Message>
+                            {message.role === 'assistant' && (
+                              <Actions className="mt-2">
+                                <Action
+                                  onClick={() => {
+                                    const textPart = message.parts.find(p => p.type === 'text');
+                                    if (textPart && 'text' in textPart) {
+                                      handleCopyMessage(textPart.text);
+                                    }
+                                  }}
+                                  label="Copy"
+                                >
+                                  <CopyIcon className="size-3" />
+                                </Action>
+                              </Actions>
+                            )}
+                          </div>
+                        ))}
+                        {status === 'submitted' && <Loader />}
+                      </ConversationContent>
+                      <ConversationScrollButton />
+                    </Conversation>
                   </div>
                 </motion.div>
               )}
         </AnimatePresence>
 
-        {/* Sticky Chat Input - Always visible */}
+        {/* AI Elements Prompt Input - Sticky */}
         <div className="sticky bottom-0 flex-shrink-0 w-full pb-4 pt-1 lg:pt-3">
           <div className="mx-auto max-w-4xl px-4 lg:px-6">
-            <UnifiedChatInput
-              mode={selectedMode}
-              participants={selectedParticipants}
-              memoryIds={selectedMemoryIds}
-              message={message}
-              onMessageChange={setMessage}
-              isCreating={createThreadMutation.isPending}
-              isStreaming={isStreamingParticipant}
-              currentParticipantIndex={currentParticipantIndex}
-              chatMessages={messages}
-              onSubmit={handleSubmit}
-              onStop={handleStop}
-              onModeChange={setSelectedMode}
-              onParticipantsChange={setSelectedParticipants}
-              onMemoryIdsChange={setSelectedMemoryIds}
-              // eslint-disable-next-line jsx-a11y/no-autofocus -- Intentional UX for chat input on overview page
-              autoFocus
-            />
+            <div className="space-y-3">
+              {/* Participants Preview */}
+              {selectedParticipants.length > 0 && (
+                <ParticipantsPreview
+                  participants={selectedParticipants}
+                  isStreaming={isStreamingParticipant}
+                  currentParticipantIndex={currentParticipantIndex}
+                  chatMessages={messages}
+                  className="mb-2"
+                />
+              )}
+
+              <div className="space-y-2">
+                <PromptInput onSubmit={handlePromptSubmit} className={chatGlass.inputBox}>
+                  <PromptInputBody>
+                    <PromptInputTextarea
+                      placeholder={t('chat.input.placeholder')}
+                      value={inputValue}
+                      onChange={e => setInputValue(e.target.value)}
+                      // eslint-disable-next-line jsx-a11y/no-autofocus -- Intentional UX for chat input on overview page
+                      autoFocus
+                    />
+                  </PromptInputBody>
+                  <PromptInputToolbar>
+                    <PromptInputTools>
+                      <ChatParticipantsList
+                        participants={selectedParticipants}
+                        onParticipantsChange={setSelectedParticipants}
+                        isStreaming={isStreamingParticipant}
+                      />
+
+                      <ChatMemoriesList
+                        selectedMemoryIds={selectedMemoryIds}
+                        onMemoryIdsChange={setSelectedMemoryIds}
+                        isStreaming={isStreamingParticipant}
+                      />
+
+                      <Select value={selectedMode} onValueChange={value => setSelectedMode(value as ChatModeId)}>
+                        <SelectTrigger
+                          size="sm"
+                          className="h-8 sm:h-9 w-fit gap-1.5 sm:gap-2 rounded-lg border px-3 sm:px-4 text-xs"
+                        >
+                          <SelectValue>
+                            <div className="flex items-center gap-1.5 sm:gap-2">
+                              {(() => {
+                                const ModeIcon = chatModeOptions.find(m => m.value === selectedMode)?.icon;
+                                return ModeIcon ? <ModeIcon className="size-3 sm:size-3.5" /> : null;
+                              })()}
+                              <span className="text-xs font-medium hidden xs:inline sm:inline">
+                                {chatModeOptions.find(m => m.value === selectedMode)?.label}
+                              </span>
+                            </div>
+                          </SelectValue>
+                        </SelectTrigger>
+                        <SelectContent>
+                          {chatModeOptions.map((chatMode) => {
+                            const ModeIcon = chatMode.icon;
+                            return (
+                              <SelectItem key={chatMode.value} value={chatMode.value}>
+                                <div className="flex items-center gap-2">
+                                  <ModeIcon className="size-4" />
+                                  <span className="text-sm">{chatMode.label}</span>
+                                </div>
+                              </SelectItem>
+                            );
+                          })}
+                        </SelectContent>
+                      </Select>
+                    </PromptInputTools>
+
+                    {isStreamingParticipant
+                      ? (
+                          <button
+                            type="button"
+                            onClick={handleStop}
+                            className={cn(
+                              'rounded-lg size-9 sm:size-10 bg-destructive text-destructive-foreground',
+                              'hover:bg-destructive/90 active:scale-95 transition-transform',
+                              'flex items-center justify-center',
+                            )}
+                          >
+                            <Square className="size-4 sm:size-4.5" />
+                          </button>
+                        )
+                      : (
+                          <PromptInputSubmit
+                            disabled={!inputValue.trim() || selectedParticipants.length === 0 || status === 'submitted'}
+                            status={status}
+                            className="rounded-lg"
+                          />
+                        )}
+                  </PromptInputToolbar>
+                </PromptInput>
+                <p className="text-xs text-center text-muted-foreground">
+                  {t('chat.input.helpText', { defaultValue: 'Press Enter to send, Shift + Enter for new line' })}
+                </p>
+              </div>
+            </div>
           </div>
         </div>
       </div>

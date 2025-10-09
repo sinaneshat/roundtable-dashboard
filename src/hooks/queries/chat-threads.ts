@@ -18,6 +18,7 @@ import { STALE_TIMES } from '@/lib/data/stale-times';
 import {
   getPublicThreadService,
   getThreadBySlugService,
+  getThreadChangelogService,
   getThreadMessagesService,
   getThreadService,
   listThreadsService,
@@ -134,8 +135,8 @@ export function useThreadBySlugQuery(slug: string | null | undefined, enabled = 
 }
 
 /**
- * Hook to fetch messages for a thread with session tracking data
- * Returns all messages enriched with session metadata for roundtable display
+ * Hook to fetch messages for a thread
+ * Returns all messages ordered by creation time
  * Protected endpoint - requires authentication and ownership
  *
  * @param threadId - Thread ID
@@ -151,6 +152,29 @@ export function useThreadMessagesQuery(threadId: string | null | undefined, enab
     queryKey: queryKeys.threads.messages(threadId || ''),
     queryFn: () => getThreadMessagesService(threadId!),
     staleTime: STALE_TIMES.messages, // 10 seconds - match server-side prefetch
+    enabled: isAuthenticated && !!threadId && enabled, // Only fetch when authenticated and threadId exists
+    retry: false,
+    throwOnError: false,
+  });
+}
+
+/**
+ * Hook to fetch configuration changelog for a thread
+ * Protected endpoint - requires authentication and ownership
+ *
+ * @param threadId - Thread ID
+ * @param enabled - Optional control over whether to fetch (default: true when threadId exists)
+ *
+ * Stale time: 30 seconds (changelog updates less frequently than messages)
+ */
+export function useThreadChangelogQuery(threadId: string | null | undefined, enabled = true) {
+  const { data: session, isPending } = useSession();
+  const isAuthenticated = !isPending && !!session?.user?.id;
+
+  return useQuery({
+    queryKey: queryKeys.threads.changelog(threadId || ''),
+    queryFn: () => getThreadChangelogService(threadId!),
+    staleTime: STALE_TIMES.changelog, // 30 seconds - match server-side prefetch
     enabled: isAuthenticated && !!threadId && enabled, // Only fetch when authenticated and threadId exists
     retry: false,
     throwOnError: false,

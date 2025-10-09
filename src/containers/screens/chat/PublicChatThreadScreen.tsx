@@ -4,8 +4,12 @@ import { ArrowRight, Lock, Sparkles } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useMemo } from 'react';
 
-import type { ChatMessageType } from '@/components/chat/chat-message';
-import { ChatMessageList } from '@/components/chat/chat-message';
+import {
+  Conversation,
+  ConversationContent,
+} from '@/components/ai-elements/conversation';
+import { Message, MessageContent } from '@/components/ai-elements/message';
+import { Response } from '@/components/ai-elements/response';
 import { Logo } from '@/components/logo';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -19,7 +23,7 @@ import { glassBadge } from '@/lib/ui/glassmorphism';
 /**
  * Public Chat Thread Screen - Client Component
  * Read-only view of publicly shared chat threads (no authentication required)
- * Reuses the same message display components as the private chat view
+ * Now using AI Elements components
  * Does not show sidebar, chat input, or editing capabilities
  */
 export default function PublicChatThreadScreen({ slug }: { slug: string }) {
@@ -34,15 +38,13 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
   const rawParticipants = useMemo(() => threadResponse?.participants || [], [threadResponse]);
   const serverMessages = useMemo(() => threadResponse?.messages || [], [threadResponse]);
 
-  // Convert server messages to chat message format (same as ChatThreadScreen)
-  const chatMessages: ChatMessageType[] = useMemo(() => serverMessages.map(msg => ({
+  // Convert server messages to AI SDK format
+  const messages = useMemo(() => serverMessages.map(msg => ({
     id: msg.id,
     role: msg.role as 'user' | 'assistant',
-    content: msg.content,
-    createdAt: msg.createdAt,
+    parts: [{ type: 'text' as const, text: msg.content }],
     metadata: msg.metadata,
     participantId: msg.participantId,
-    reasoning: msg.reasoning,
   })), [serverMessages]);
 
   // Show loading state
@@ -132,7 +134,6 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
               {rawParticipants
                 .sort((a, b) => a.priority - b.priority)
                 .map((participant) => {
-                  // Use getModelById which handles both full modelId and short id formats
                   const model = getModelById(participant.modelId);
                   if (!model)
                     return null;
@@ -183,73 +184,88 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
         </div>
       </div>
 
-      {/* Messages Area - Full height with bottom padding for CTA */}
+      {/* Messages Area using AI Elements */}
       <ScrollArea className="h-[calc(100vh-140px)]">
         <div className="mx-auto max-w-4xl px-3 sm:px-4 md:px-6 py-6 sm:py-8">
-          {/* eslint-disable-next-line style/multiline-ternary */}
-          {chatMessages.length === 0 ? (
-            <div className="flex items-center justify-center min-h-[50vh]">
-              <div className="text-center space-y-4 max-w-md">
-                <div className="w-16 h-16 rounded-full bg-muted/50 flex items-center justify-center mx-auto">
-                  <Sparkles className="w-8 h-8 text-muted-foreground" />
+          {messages.length === 0
+            ? (
+                <div className="flex items-center justify-center min-h-[50vh]">
+                  <div className="text-center space-y-4 max-w-md">
+                    <div className="w-16 h-16 rounded-full bg-muted/50 flex items-center justify-center mx-auto">
+                      <Sparkles className="w-8 h-8 text-muted-foreground" />
+                    </div>
+                    <div className="space-y-2">
+                      <h3 className="text-lg font-semibold">{t('chat.public.noMessagesYet')}</h3>
+                      <p className="text-sm text-muted-foreground">
+                        {t('chat.public.noMessagesDescription')}
+                      </p>
+                    </div>
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <h3 className="text-lg font-semibold">{t('chat.public.noMessagesYet')}</h3>
-                  <p className="text-sm text-muted-foreground">
-                    {t('chat.public.noMessagesDescription')}
-                  </p>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <>
-              <ChatMessageList
-                messages={chatMessages}
-                onRegenerate={undefined}
-                onCopy={undefined}
-                onEdit={undefined}
-              />
+              )
+            : (
+                <>
+                  <Conversation>
+                    <ConversationContent>
+                      {messages.map(message => (
+                        <Message key={message.id} from={message.role}>
+                          <MessageContent>
+                            {message.parts.map((part, i) => {
+                              if (part.type === 'text') {
+                                return (
+                                  <Response key={`${message.id}-${i}`}>
+                                    {part.text}
+                                  </Response>
+                                );
+                              }
+                              return null;
+                            })}
+                          </MessageContent>
+                        </Message>
+                      ))}
+                    </ConversationContent>
+                  </Conversation>
 
-              {/* Inline CTA Card - The main conversion point */}
-              <div className="mt-16 mb-8">
-                <div className="rounded-xl border bg-gradient-to-br from-primary/5 via-primary/3 to-background p-8 sm:p-10 text-center space-y-6">
-                  <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-primary/10 mb-2">
-                    <Sparkles className="w-7 h-7 text-primary" />
+                  {/* Inline CTA Card */}
+                  <div className="mt-16 mb-8">
+                    <div className="rounded-xl border bg-gradient-to-br from-primary/5 via-primary/3 to-background p-8 sm:p-10 text-center space-y-6">
+                      <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-primary/10 mb-2">
+                        <Sparkles className="w-7 h-7 text-primary" />
+                      </div>
+                      <div className="space-y-3">
+                        <h3 className="text-2xl sm:text-3xl font-bold">
+                          {t('chat.public.tryRoundtable')}
+                        </h3>
+                        <p className="text-muted-foreground max-w-xl mx-auto text-base">
+                          Experience the power of multi-AI collaboration.
+                          {' '}
+                          {BRAND.name}
+                          {' '}
+                          {t('chat.public.description')}
+                        </p>
+                      </div>
+                      <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-4">
+                        <Button
+                          size="lg"
+                          onClick={() => window.location.href = signUpUrl}
+                          className="gap-2 w-full sm:w-auto text-base px-8"
+                        >
+                          {t('chat.public.tryRoundtable')}
+                          <ArrowRight className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="lg"
+                          onClick={() => window.location.href = '/?utm_source=public_chat&utm_medium=cta&utm_campaign=learn_more'}
+                          className="w-full sm:w-auto text-base px-8"
+                        >
+                          {t('chat.public.learnMore')}
+                        </Button>
+                      </div>
+                    </div>
                   </div>
-                  <div className="space-y-3">
-                    <h3 className="text-2xl sm:text-3xl font-bold">
-                      {t('chat.public.tryRoundtable')}
-                    </h3>
-                    <p className="text-muted-foreground max-w-xl mx-auto text-base">
-                      Experience the power of multi-AI collaboration.
-                      {' '}
-                      {BRAND.name}
-                      {' '}
-                      {t('chat.public.description')}
-                    </p>
-                  </div>
-                  <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-4">
-                    <Button
-                      size="lg"
-                      onClick={() => window.location.href = signUpUrl}
-                      className="gap-2 w-full sm:w-auto text-base px-8"
-                    >
-                      {t('chat.public.tryRoundtable')}
-                      <ArrowRight className="w-4 h-4" />
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="lg"
-                      onClick={() => window.location.href = '/?utm_source=public_chat&utm_medium=cta&utm_campaign=learn_more'}
-                      className="w-full sm:w-auto text-base px-8"
-                    >
-                      {t('chat.public.learnMore')}
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            </>
-          )}
+                </>
+              )}
         </div>
       </ScrollArea>
     </div>

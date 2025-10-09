@@ -418,50 +418,6 @@ export const ParticipantDetailResponseSchema = createApiResponseSchema(Participa
 // Note: SendMessageRequestSchema removed - use StreamChatRequestSchema for all chat operations
 
 /**
- * Session participant schema
- * Subset of participant data attached to messages
- */
-const MessageSessionParticipantSchema = z.object({
-  modelId: z.string().openapi({
-    description: 'Model ID',
-    example: 'anthropic/claude-3.5-sonnet',
-  }),
-  role: z.string().nullable().openapi({
-    description: 'Participant role',
-    example: 'The Ideator',
-  }),
-  priority: z.number().int().nonnegative().openapi({
-    description: 'Response priority',
-    example: 0,
-  }),
-}).openapi('MessageSessionParticipant');
-
-/**
- * Message with session data
- * Extends ChatMessage with session tracking fields
- */
-const ChatMessageWithSessionSchema = ChatMessageSchema.extend({
-  sessionId: z.string().nullable().openapi({
-    description: 'Session ID for roundtable tracking',
-    example: 'session_abc123',
-  }),
-  sessionNumber: z.number().int().positive().nullable().openapi({
-    description: 'Session number within thread',
-    example: 1,
-  }),
-  sessionMode: z.string().nullable().openapi({
-    description: 'Chat mode for this session',
-    example: 'brainstorming',
-  }),
-  sessionParticipants: z.array(MessageSessionParticipantSchema).nullable().openapi({
-    description: 'Participants involved in this session',
-  }),
-  sessionMemories: z.array(z.string()).nullable().openapi({
-    description: 'Memory titles attached to this session',
-  }),
-}).openapi('ChatMessageWithSession');
-
-/**
  * ✅ AI SDK v5 UIMessage Part Schema - OFFICIAL FLEXIBLE PATTERN
  * Use passthrough() to accept ALL official AI SDK part types without strict validation
  * Reference: https://sdk.vercel.ai/docs/reference/ai-sdk-core/ui-message
@@ -511,10 +467,10 @@ export const StreamChatRequestSchema = z.object({
   }),
 }).openapi('StreamChatRequest');
 
-// Message list response with session data
+// Message list response
 const MessagesListPayloadSchema = z.object({
-  messages: z.array(ChatMessageWithSessionSchema).openapi({
-    description: 'List of messages with session data',
+  messages: z.array(ChatMessageSchema).openapi({
+    description: 'List of messages',
   }),
   count: z.number().int().nonnegative().openapi({
     description: 'Total number of messages',
@@ -734,6 +690,55 @@ export const CustomRoleListResponseSchema = createCursorPaginatedResponseSchema(
 export const CustomRoleDetailResponseSchema = createApiResponseSchema(CustomRoleDetailPayloadSchema).openapi('CustomRoleDetailResponse');
 
 // ============================================================================
+// Changelog Schemas
+// ============================================================================
+
+const ChatThreadChangelogSchema = z.object({
+  id: z.string().openapi({
+    description: 'Changelog entry ID',
+    example: 'changelog_abc123',
+  }),
+  threadId: z.string().openapi({
+    description: 'Thread ID',
+    example: 'thread_abc123',
+  }),
+  changeType: z.enum([
+    'mode_change',
+    'participant_added',
+    'participant_removed',
+    'participant_updated',
+    'memory_added',
+    'memory_removed',
+  ]).openapi({
+    description: 'Type of configuration change',
+    example: 'participant_added',
+  }),
+  changeSummary: z.string().openapi({
+    description: 'Human-readable summary of the change',
+    example: 'Added Claude 3.5 Sonnet as The Ideator',
+  }),
+  changeData: z.record(z.string(), z.unknown()).nullable().openapi({
+    description: 'Additional structured data about the change',
+  }),
+  createdAt: CoreSchemas.timestamp().openapi({
+    description: 'When the change was made',
+    example: '2024-01-15T10:30:00Z',
+  }),
+}).openapi('ChatThreadChangelog');
+
+const ChangelogListPayloadSchema = z.object({
+  changelog: z.array(ChatThreadChangelogSchema).openapi({
+    description: 'List of configuration changes',
+  }),
+  count: z.number().int().nonnegative().openapi({
+    description: 'Total number of changelog entries',
+    example: 5,
+  }),
+}).openapi('ChangelogListPayload');
+
+export const ChangelogListResponseSchema = createApiResponseSchema(ChangelogListPayloadSchema).openapi('ChangelogListResponse');
+
+// ============================================================================
 // TYPE EXPORTS FOR FRONTEND & BACKEND
 // ============================================================================
 
@@ -746,9 +751,10 @@ export type AddParticipantRequest = z.infer<typeof AddParticipantRequestSchema>;
 export type UpdateParticipantRequest = z.infer<typeof UpdateParticipantRequestSchema>;
 
 export type ChatMessage = z.infer<typeof ChatMessageSchema>;
-export type ChatMessageWithSession = z.infer<typeof ChatMessageWithSessionSchema>;
 export type StreamChatRequest = z.infer<typeof StreamChatRequestSchema>;
 
 export type ChatMemory = z.infer<typeof ChatMemorySchema>;
 export type CreateMemoryRequest = z.infer<typeof CreateMemoryRequestSchema>;
 export type UpdateMemoryRequest = z.infer<typeof UpdateMemoryRequestSchema>;
+
+export type ChatThreadChangelog = z.infer<typeof ChatThreadChangelogSchema>;
