@@ -16,7 +16,7 @@ import { Button } from '@/components/ui/button';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { BRAND } from '@/constants';
 import { usePublicThreadQuery } from '@/hooks/queries/chat-threads';
-import { serverMessagesToUIMessages } from '@/lib/ai/message-helpers';
+import { chatMessagesToUIMessages } from '@/lib/ai/message-helpers';
 import { getModelById } from '@/lib/ai/models-config';
 import { cn } from '@/lib/ui/cn';
 import { glassBadge } from '@/lib/ui/glassmorphism';
@@ -77,7 +77,7 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
   const serverMessages = useMemo(() => threadResponse?.messages || [], [threadResponse]);
 
   // Convert server messages to AI SDK format using helper, preserving participantId
-  const messages = useMemo(() => serverMessagesToUIMessages(serverMessages).map((msg, index) => ({
+  const messages = useMemo(() => chatMessagesToUIMessages(serverMessages).map((msg, index) => ({
     ...msg,
     participantId: serverMessages[index]?.participantId,
   })), [serverMessages]);
@@ -244,7 +244,12 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
                     <ConversationContent>
                       {messages.map((message) => {
                         // Get avatar props based on role and participant info
-                        const avatarProps = getAvatarProps(message.role, rawParticipants, message.participantId);
+                        // Handle edge case: 'system' role should be treated as 'assistant'
+                        const avatarProps = getAvatarProps(
+                          message.role === 'system' ? 'assistant' : message.role,
+                          rawParticipants,
+                          message.participantId,
+                        );
 
                         return (
                           <Message key={message.id} from={message.role}>

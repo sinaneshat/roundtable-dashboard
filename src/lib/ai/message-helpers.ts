@@ -1,71 +1,27 @@
 /**
  * Message Transformation Helpers
  *
- * ✅ OFFICIAL AI SDK PATTERN: Server message → UIMessage transformation
+ * ✅ OFFICIAL AI SDK PATTERN: ChatMessage → UIMessage transformation
  * Centralizes the logic for converting backend message format to AI SDK UIMessage format
  *
  * See: https://github.com/vercel/ai/blob/main/content/docs/04-ai-sdk-ui/02-chatbot.mdx
  */
 
-// ============================================================================
-// Types
-// ============================================================================
+import type { UIMessage } from 'ai';
 
-/**
- * Server message format from database
- */
-export type ServerMessage = {
-  id: string;
-  role: 'user' | 'assistant';
-  content: string;
-  reasoning?: string | null;
-  metadata?: Record<string, unknown> | string | null;
-  createdAt?: string;
-};
-
-/**
- * ✅ OFFICIAL AI SDK PATTERN: UIMessage format with reasoning support
- */
-export type UIMessage = {
-  id: string;
-  role: 'user' | 'assistant';
-  parts: Array<
-    | { type: 'text'; text: string }
-    | { type: 'reasoning'; text: string }
-  >;
-  metadata?: Record<string, unknown>;
-};
+import type { ChatMessage } from '@/api/routes/chat/schema';
 
 // ============================================================================
 // Transformation Functions
 // ============================================================================
 
 /**
- * Parse metadata from server format (handles both string and object)
- */
-function parseMetadata(metadata: Record<string, unknown> | string | null | undefined): Record<string, unknown> | undefined {
-  if (!metadata) {
-    return undefined;
-  }
-
-  if (typeof metadata === 'string') {
-    try {
-      return JSON.parse(metadata);
-    } catch {
-      return undefined;
-    }
-  }
-
-  return metadata;
-}
-
-/**
- * Convert server message to AI SDK UIMessage format
+ * Convert backend ChatMessage to AI SDK UIMessage format
  *
- * @param message - Server message from database
+ * @param message - ChatMessage from backend schema
  * @returns UIMessage in AI SDK format
  */
-export function serverMessageToUIMessage(message: ServerMessage): UIMessage {
+export function chatMessageToUIMessage(message: ChatMessage): UIMessage {
   const parts: UIMessage['parts'] = [];
 
   // Add text content part
@@ -82,16 +38,17 @@ export function serverMessageToUIMessage(message: ServerMessage): UIMessage {
     id: message.id,
     role: message.role,
     parts,
-    metadata: parseMetadata(message.metadata),
+    // ✅ Pass through backend metadata as-is (already typed correctly from schema)
+    metadata: message.metadata || undefined,
   };
 }
 
 /**
- * Convert array of server messages to AI SDK UIMessage format
+ * Convert array of backend ChatMessages to AI SDK UIMessage format
  *
- * @param messages - Array of server messages from database
+ * @param messages - Array of ChatMessage from backend schema
  * @returns Array of UIMessages in AI SDK format
  */
-export function serverMessagesToUIMessages(messages: ServerMessage[]): UIMessage[] {
-  return messages.map(serverMessageToUIMessage);
+export function chatMessagesToUIMessages(messages: ChatMessage[]): UIMessage[] {
+  return messages.map(chatMessageToUIMessage);
 }

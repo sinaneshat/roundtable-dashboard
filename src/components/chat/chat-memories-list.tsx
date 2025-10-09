@@ -6,6 +6,10 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
+// ============================================================================
+// Types & Schema - ✅ Inferred from Backend Schema (Zero Hardcoding)
+// ============================================================================
+import { CreateMemoryRequestSchema } from '@/api/routes/chat/schema';
 import RHFSelect from '@/components/forms/rhf-select';
 import RHFTextField from '@/components/forms/rhf-text-field';
 import RHFTextarea from '@/components/forms/rhf-textarea';
@@ -40,10 +44,6 @@ import { toastManager } from '@/lib/toast/toast-manager';
 import { cn } from '@/lib/ui/cn';
 import { getApiErrorMessage } from '@/lib/utils/error-handling';
 
-// ============================================================================
-// Types & Schema - Reusing Backend Validation
-// ============================================================================
-
 type ChatMemoriesListProps = {
   selectedMemoryIds: string[];
   onMemoryIdsChange: (memoryIds: string[]) => void;
@@ -53,16 +53,13 @@ type ChatMemoriesListProps = {
 
 /**
  * Memory creation form data
- * Uses a stricter schema than the backend to ensure all fields are filled in the form
+ * ✅ Extends backend schema with required fields for form UI
+ * Backend schema has defaults (.default()), but forms need explicit required fields
+ * This ensures form validation while maintaining backend compatibility
  */
-const CreateMemoryFormSchema = z.object({
+const CreateMemoryFormSchema = CreateMemoryRequestSchema.extend({
   type: z.enum(['personal', 'topic', 'instruction', 'fact']),
-  title: z.string().min(1).max(200),
-  content: z.string().min(1),
-  description: z.string().max(500).optional(),
-  threadId: z.string().optional(),
   isGlobal: z.boolean(),
-  metadata: z.record(z.string(), z.unknown()).optional(),
 });
 
 type CreateMemoryFormData = z.infer<typeof CreateMemoryFormSchema>;

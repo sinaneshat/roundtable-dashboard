@@ -4,6 +4,10 @@ import { Bot, Check, GripVertical, Plus, Trash2 } from 'lucide-react';
 import { motion, Reorder, useDragControls } from 'motion/react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+// ============================================================================
+// Types - ✅ Inferred from Backend Schema (Zero Hardcoding)
+// ============================================================================
+import type { ChatCustomRole } from '@/api/routes/chat/schema';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -40,10 +44,6 @@ import { toastManager } from '@/lib/toast/toast-manager';
 import { cn } from '@/lib/ui/cn';
 import { getApiErrorMessage } from '@/lib/utils/error-handling';
 
-// ============================================================================
-// Types
-// ============================================================================
-
 type ChatParticipantsListProps = {
   participants: ParticipantConfig[];
   onParticipantsChange: (participants: ParticipantConfig[]) => void;
@@ -69,7 +69,7 @@ function RoleSelector({
   onClearRole,
 }: {
   participant: ParticipantConfig;
-  customRoles: Array<{ id: string; name: string; description: string | null }>;
+  customRoles: ChatCustomRole[]; // ✅ Using backend schema type
   onRoleChange: (role: string, customRoleId?: string) => void;
   onClearRole: () => void;
 }) {
@@ -430,7 +430,7 @@ function ModelItem({
   userTier,
 }: {
   orderedModel: OrderedModel;
-  customRoles: Array<{ id: string; name: string; description: string | null }>;
+  customRoles: ChatCustomRole[]; // ✅ Using backend schema type
   onToggle: () => void;
   onRoleChange: (role: string, customRoleId?: string) => void;
   onClearRole: () => void;

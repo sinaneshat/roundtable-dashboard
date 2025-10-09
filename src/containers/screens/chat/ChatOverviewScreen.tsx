@@ -20,7 +20,6 @@ import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useCallback, useRef, useState } from 'react';
-import { flushSync } from 'react-dom';
 
 import { Loader } from '@/components/ai-elements/loader';
 import { Message, MessageAvatar, MessageContent } from '@/components/ai-elements/message';
@@ -34,15 +33,13 @@ import { ModelMessageCard } from '@/components/chat/model-message-card';
 import { toast } from '@/components/ui/use-toast';
 import { WavyBackground } from '@/components/ui/wavy-background';
 import { useCreateThreadMutation } from '@/hooks/mutations/chat-mutations';
-import { getAvatarProps } from '@/lib/ai/avatar-helpers';
+import { getAvatarPropsFromModelId } from '@/lib/ai/avatar-helpers';
 import { AllowedModelId, getModelById } from '@/lib/ai/models-config';
 import { useSession } from '@/lib/auth/client';
 import type { ChatModeId } from '@/lib/config/chat-modes';
 import type { ParticipantConfig } from '@/lib/schemas/chat-forms';
 import { chatInputFormDefaults, chatInputFormToCreateThreadRequest } from '@/lib/schemas/chat-forms';
 import { getApiErrorMessage } from '@/lib/utils/error-handling';
-
-type ChatMessage = UIMessage;
 
 export default function ChatOverviewScreen() {
   const router = useRouter();
@@ -60,14 +57,13 @@ export default function ChatOverviewScreen() {
 
   // Thread state
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
-  const [activeThreadSlug, setActiveThreadSlug] = useState<string | null>(null);
 
   // Streaming state (following AI SDK patterns)
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [messages, setMessages] = useState<UIMessage[]>([]);
   const [status, setStatus] = useState<'ready' | 'submitted' | 'streaming' | 'error'>('ready');
 
   // Use refs to avoid stale closures
-  const messagesRef = useRef<ChatMessage[]>([]);
+  const messagesRef = useRef<UIMessage[]>([]);
   const abortControllerRef = useRef<AbortController | null>(null);
   const participantsRef = useRef<ParticipantConfig[]>(selectedParticipants);
 
@@ -80,12 +76,18 @@ export default function ChatOverviewScreen() {
 
   // ✅ CALLBACK-DRIVEN: Stream all participants
   const streamAllParticipants = useCallback(
-    async (threadId: string, initialMessages: ChatMessage[], participantCount: number) => {
+    async (threadId: string, initialMessages: UIMessage[], participantCount: number, threadSlug: string) => {
+      // ✅ Prefetch the thread page immediately so navigation is instant
+      router.prefetch(`/chat/${threadSlug}`);
+
       for (let participantIndex = 0; participantIndex < participantCount; participantIndex++) {
         setStatus('streaming');
 
         const abortController = new AbortController();
         abortControllerRef.current = abortController;
+
+        // Declare messageId outside try block so catch block can access it
+        let messageId = '';
 
         try {
           const currentMessages = messagesRef.current; // Use ref for latest value
@@ -115,7 +117,6 @@ export default function ChatOverviewScreen() {
 
           const decoder = new TextDecoder();
           let buffer = '';
-          let messageId = '';
           let content = '';
           let messageMetadata: Record<string, unknown> | null = null;
 
@@ -156,45 +157,60 @@ export default function ChatOverviewScreen() {
                       }
                     }
 
-                    // ✅ flushSync forces immediate render
-                    // eslint-disable-next-line react-dom/no-flush-sync -- Required for real-time streaming display
-                    flushSync(() => {
-                      setMessages((prev) => {
-                        const updated = [
-                          ...prev,
-                          {
-                            id: messageId,
-                            role: 'assistant' as const,
-                            parts: [{ type: 'text' as const, text: '' }],
-                            metadata: messageMetadata || undefined,
-                          },
-                        ];
-                        messagesRef.current = updated; // Keep ref in sync
-                        return updated;
-                      });
+                    // ✅ Add placeholder message
+                    setMessages((prev) => {
+                      const updated = [
+                        ...prev,
+                        {
+                          id: messageId,
+                          role: 'assistant' as const,
+                          parts: [{ type: 'text' as const, text: '' }],
+                          metadata: messageMetadata || undefined,
+                        },
+                      ];
+                      messagesRef.current = updated; // Keep ref in sync
+                      return updated;
                     });
                   } else if (event.type === 'text-delta' && event.delta) {
                     content += event.delta;
                     console.log('[TEXT DELTA]', { messageId, content }); // DEBUG
 
-                    // ✅ flushSync for streaming text
-                    // eslint-disable-next-line react-dom/no-flush-sync -- Required for real-time streaming display
-                    flushSync(() => {
-                      setMessages((prev) => {
-                        const updated = prev.map(m =>
-                          m.id === messageId
-                            ? { ...m, parts: [{ type: 'text' as const, text: content }] }
-                            : m,
-                        );
-                        messagesRef.current = updated; // Keep ref in sync
-                        console.log('[MESSAGES UPDATED]', updated.length); // DEBUG
-                        return updated;
-                      });
+                    // ✅ Update message with streamed content
+                    setMessages((prev) => {
+                      const updated = prev.map(m =>
+                        m.id === messageId
+                          ? { ...m, parts: [{ type: 'text' as const, text: content }] }
+                          : m,
+                      );
+                      messagesRef.current = updated; // Keep ref in sync
+                      console.log('[MESSAGES UPDATED]', updated.length); // DEBUG
+                      return updated;
                     });
                   } else if (event.type === 'error') {
-                    console.error('Stream error:', event.error);
-                    setStatus('error');
-                    return;
+                    // ✅ Handle error without exiting the loop - mark message as error
+                    const errorMessage = event.error?.message || 'Unknown error occurred';
+                    console.error('[STREAM ERROR]', errorMessage);
+
+                    // Update the message with error content
+                    setMessages((prev) => {
+                      const updated = prev.map(m =>
+                        m.id === messageId
+                          ? {
+                              ...m,
+                              parts: [{ type: 'text' as const, text: `⚠️ ${errorMessage}` }],
+                              metadata: {
+                                ...(m.metadata || {}),
+                                error: errorMessage,
+                              },
+                            }
+                          : m,
+                      );
+                      messagesRef.current = updated;
+                      return updated;
+                    });
+
+                    // Exit this participant's stream but continue to next participant
+                    break; // Break the inner while loop, not return
                   }
                 } catch (parseError) {
                   console.error('Failed to parse SSE:', parseError);
@@ -206,12 +222,37 @@ export default function ChatOverviewScreen() {
           reader.releaseLock();
         } catch (error) {
           if (error instanceof Error && error.name === 'AbortError') {
+            // User manually stopped streaming - exit entire flow
             setStatus('ready');
             return;
           }
-          console.error('Streaming error:', error);
-          setStatus('error');
-          return;
+
+          // ✅ Network/parsing errors - show error in current message, continue to next participant
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+          console.error('[NETWORK ERROR]', errorMessage, error);
+
+          // Update message with error if we have a messageId
+          if (messageId) {
+            setMessages((prev) => {
+              const updated = prev.map(m =>
+                m.id === messageId
+                  ? {
+                      ...m,
+                      parts: [{ type: 'text' as const, text: `⚠️ ${errorMessage}` }],
+                      metadata: {
+                        ...(m.metadata || {}),
+                        error: errorMessage,
+                      },
+                    }
+                  : m,
+              );
+              messagesRef.current = updated;
+              return updated;
+            });
+          }
+
+          // Don't exit the participant loop - continue to next participant
+          // (Fall through to finally block and then continue loop)
         } finally {
           abortControllerRef.current = null;
         }
@@ -219,14 +260,11 @@ export default function ChatOverviewScreen() {
 
       setStatus('ready');
 
-      // Navigate to thread page after all participants complete
-      if (activeThreadSlug) {
-        setTimeout(() => {
-          router.push(`/chat/${activeThreadSlug}`);
-        }, 500);
-      }
+      // ✅ Navigate immediately to thread page after all participants complete
+      // Data is already prefetched, so navigation will be instant
+      router.push(`/chat/${threadSlug}`);
     },
-    [activeThreadSlug, router],
+    [router],
   );
 
   // ✅ CALLBACK-DRIVEN: Handle form submission
@@ -259,7 +297,6 @@ export default function ChatOverviewScreen() {
 
           // Set thread state
           setActiveThreadId(thread.id);
-          setActiveThreadSlug(thread.slug);
           setInputValue('');
 
           // Update participants with backend IDs
@@ -276,7 +313,7 @@ export default function ChatOverviewScreen() {
 
           // Set initial user message
           if (firstMessage) {
-            const userMessage: ChatMessage = {
+            const userMessage: UIMessage = {
               id: firstMessage.id,
               role: 'user',
               parts: [{ type: 'text', text: firstMessage.content }],
@@ -286,7 +323,7 @@ export default function ChatOverviewScreen() {
             messagesRef.current = [userMessage];
 
             // ✅ Start streaming all participants
-            await streamAllParticipants(thread.id, [userMessage], threadParticipants?.length || 1);
+            await streamAllParticipants(thread.id, [userMessage], threadParticipants?.length || 1, thread.slug);
           }
         }
       } catch (error) {
@@ -412,17 +449,19 @@ export default function ChatOverviewScreen() {
                 >
                   {/* Message list - Center-based chat layout */}
                   {messages.map((message) => {
-                    const participantIndex
-                      = message.metadata && typeof message.metadata === 'object' && 'participantIndex' in message.metadata
-                        ? (message.metadata as { participantIndex?: number }).participantIndex
-                        : undefined;
+                    // ✅ CRITICAL: Extract participant data from message metadata (stored at generation time)
+                    // This makes historical messages independent of current participant configuration
+                    const metadata = message.metadata as Record<string, unknown> | undefined;
+                    const participantIndex = metadata?.participantIndex as number | undefined;
+                    const storedModelId = metadata?.model as string | undefined; // ✅ Matches DB schema
+                    const storedRole = metadata?.role as string | undefined; // ✅ Matches DB schema
 
-                    const avatarProps = getAvatarProps(
+                    // ✅ CRITICAL: Use stored modelId directly for avatar (independent of current participants)
+                    const avatarProps = getAvatarPropsFromModelId(
                       message.role as 'user' | 'assistant',
-                      selectedParticipants,
+                      storedModelId,
                       session?.user?.image,
                       session?.user?.name,
-                      participantIndex,
                     );
 
                     if (message.role === 'user') {
@@ -445,12 +484,12 @@ export default function ChatOverviewScreen() {
                       );
                     }
 
-                    // Assistant message
-                    const participant
-                      = participantIndex !== undefined ? selectedParticipants[participantIndex] : undefined;
-                    const model = participant ? getModelById(participant.modelId) : undefined;
+                    // ✅ Assistant message: Use stored modelId from metadata (NOT current participants)
+                    // Historical messages must remain associated with the model that generated them,
+                    // regardless of current participant changes (reorder/add/remove)
+                    const model = storedModelId ? getModelById(storedModelId) : undefined;
 
-                    if (!model || !participant)
+                    if (!model)
                       return null;
 
                     const hasError
@@ -466,7 +505,7 @@ export default function ChatOverviewScreen() {
                       <ModelMessageCard
                         key={message.id}
                         model={model}
-                        role={participant.role}
+                        role={storedRole || ''} // ✅ Use stored role from metadata, not current participants
                         participantIndex={participantIndex ?? 0}
                         status={messageStatus}
                         parts={message.parts as Array<{ type: 'text'; text: string } | { type: 'reasoning'; text: string }>}

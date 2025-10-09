@@ -778,23 +778,10 @@ export function getEnabledModels(): AIModel[] {
 }
 
 /**
- * Type-safe model ID
- * Derived from AllowedModelId enum for compile-time validation
- * Only model IDs defined in the enum are allowed
- */
-export type ValidModelId = OpenRouterModelId;
-
-/**
- * Type-safe model short ID
- * Derived from AI_MODELS configuration
- */
-export type ValidModelShortId = typeof AI_MODELS[number]['id'];
-
-/**
  * Validate if a model ID exists in configuration
  * This checks both the OpenRouter model ID list AND the enabled models in AI_MODELS
  */
-export function isValidModelId(modelId: string): modelId is ValidModelId {
+export function isValidModelId(modelId: string): modelId is OpenRouterModelId {
   // First check if it's a valid OpenRouter model ID (compile-time type safety)
   if (!isValidOpenRouterModelId(modelId)) {
     return false;
@@ -849,23 +836,6 @@ export function getMessageAttribution(participantIndex: number, role?: string | 
 // ============================================================================
 
 /**
- * Session type instructions with participant awareness
- * Models know they are participants and can reference each other
- *
- * @deprecated Use CHAT_MODE_SYSTEM_PROMPTS from @/lib/config/chat-modes instead
- * Kept for backward compatibility during migration
- */
-export const SESSION_TYPE_DESCRIPTIONS = CHAT_MODE_SYSTEM_PROMPTS;
-
-/**
- * Type for session mode keys
- *
- * @deprecated Use ChatModeId from @/lib/config/chat-modes instead
- * Kept for backward compatibility during migration
- */
-export type SessionTypeMode = ChatModeId;
-
-/**
  * Plain text guidance for all responses
  * Encourages natural language without heavy formatting
  */
@@ -883,7 +853,7 @@ export const PLAIN_TEXT_GUIDANCE = '\n\nPlease respond in clear, natural languag
  * @param params.otherParticipants - Array of other participants in the session
  */
 export function buildRoundtableSystemPrompt(params: {
-  mode: SessionTypeMode;
+  mode: ChatModeId;
   participantIndex: number;
   participantRole?: string | null;
   customSystemPrompt?: string | null;
@@ -892,7 +862,7 @@ export function buildRoundtableSystemPrompt(params: {
   const { mode, participantIndex, participantRole, customSystemPrompt, otherParticipants } = params;
 
   // Start with mode-specific instruction that includes participant awareness
-  let systemPrompt = SESSION_TYPE_DESCRIPTIONS[mode] + PLAIN_TEXT_GUIDANCE;
+  let systemPrompt = CHAT_MODE_SYSTEM_PROMPTS[mode] + PLAIN_TEXT_GUIDANCE;
 
   // Add participant's identity with number
   const participantLabel = getParticipantLabel(participantIndex, participantRole);

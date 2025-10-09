@@ -68,3 +68,47 @@ export function getAvatarProps(
     name: 'AI',
   };
 }
+
+/**
+ * Get avatar props directly from modelId (for historical messages)
+ *
+ * ✅ CRITICAL: Use this for historical messages to remain independent of current participant config
+ * When participants are reordered/added/removed, avatars should show the model that generated the message
+ *
+ * @param role - Message role ('user' or 'assistant')
+ * @param modelId - Direct model ID from message metadata
+ * @param userImage - Authenticated user's image URL (optional)
+ * @param userName - Authenticated user's name (optional)
+ * @returns Avatar props with src and name
+ */
+export function getAvatarPropsFromModelId(
+  role: 'user' | 'assistant',
+  modelId?: string,
+  userImage?: string | null,
+  userName?: string | null,
+): AvatarProps {
+  if (role === 'user') {
+    return {
+      src: userImage || '/static/icons/user-avatar.png',
+      name: userName || 'User',
+    };
+  }
+
+  // For assistant messages, get model info directly from modelId
+  if (modelId) {
+    const model = getModelById(modelId);
+
+    if (model) {
+      return {
+        src: model.metadata.icon || '/static/icons/ai-models/default.png',
+        name: model.name,
+      };
+    }
+  }
+
+  // Fallback for assistant messages without model info
+  return {
+    src: '/static/icons/ai-models/default.png',
+    name: 'AI',
+  };
+}

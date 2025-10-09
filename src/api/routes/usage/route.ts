@@ -2,9 +2,10 @@ import { createRoute } from '@hono/zod-openapi';
 import * as HttpStatusCodes from 'stoker/http-status-codes';
 import * as HttpStatusPhrases from 'stoker/http-status-phrases';
 
+import { ApiErrorResponseSchema } from '@/api/core/schemas';
+
 import {
   QuotaCheckResponseSchema,
-  UsageErrorResponseSchema,
   UsageStatsResponseSchema,
 } from './schema';
 
@@ -31,7 +32,7 @@ export const getUserUsageStatsRoute = createRoute({
       description: HttpStatusPhrases.UNAUTHORIZED,
       content: {
         'application/json': {
-          schema: UsageErrorResponseSchema,
+          schema: ApiErrorResponseSchema,
         },
       },
     },
@@ -39,7 +40,7 @@ export const getUserUsageStatsRoute = createRoute({
       description: HttpStatusPhrases.INTERNAL_SERVER_ERROR,
       content: {
         'application/json': {
-          schema: UsageErrorResponseSchema,
+          schema: ApiErrorResponseSchema,
         },
       },
     },
@@ -69,7 +70,7 @@ export const checkThreadQuotaRoute = createRoute({
       description: HttpStatusPhrases.UNAUTHORIZED,
       content: {
         'application/json': {
-          schema: UsageErrorResponseSchema,
+          schema: ApiErrorResponseSchema,
         },
       },
     },
@@ -77,7 +78,7 @@ export const checkThreadQuotaRoute = createRoute({
       description: HttpStatusPhrases.INTERNAL_SERVER_ERROR,
       content: {
         'application/json': {
-          schema: UsageErrorResponseSchema,
+          schema: ApiErrorResponseSchema,
         },
       },
     },
@@ -107,7 +108,7 @@ export const checkMessageQuotaRoute = createRoute({
       description: HttpStatusPhrases.UNAUTHORIZED,
       content: {
         'application/json': {
-          schema: UsageErrorResponseSchema,
+          schema: ApiErrorResponseSchema,
         },
       },
     },
@@ -115,7 +116,7 @@ export const checkMessageQuotaRoute = createRoute({
       description: HttpStatusPhrases.INTERNAL_SERVER_ERROR,
       content: {
         'application/json': {
-          schema: UsageErrorResponseSchema,
+          schema: ApiErrorResponseSchema,
         },
       },
     },
@@ -145,7 +146,7 @@ export const checkMemoryQuotaRoute = createRoute({
       description: HttpStatusPhrases.UNAUTHORIZED,
       content: {
         'application/json': {
-          schema: UsageErrorResponseSchema,
+          schema: ApiErrorResponseSchema,
         },
       },
     },
@@ -153,7 +154,7 @@ export const checkMemoryQuotaRoute = createRoute({
       description: HttpStatusPhrases.INTERNAL_SERVER_ERROR,
       content: {
         'application/json': {
-          schema: UsageErrorResponseSchema,
+          schema: ApiErrorResponseSchema,
         },
       },
     },
@@ -183,7 +184,7 @@ export const checkCustomRoleQuotaRoute = createRoute({
       description: HttpStatusPhrases.UNAUTHORIZED,
       content: {
         'application/json': {
-          schema: UsageErrorResponseSchema,
+          schema: ApiErrorResponseSchema,
         },
       },
     },
@@ -191,7 +192,7 @@ export const checkCustomRoleQuotaRoute = createRoute({
       description: HttpStatusPhrases.INTERNAL_SERVER_ERROR,
       content: {
         'application/json': {
-          schema: UsageErrorResponseSchema,
+          schema: ApiErrorResponseSchema,
         },
       },
     },

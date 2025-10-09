@@ -8,6 +8,10 @@ import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { ChatList } from '@/components/chat/chat-list';
+import {
+  ChatSidebarPaginationSkeleton,
+  ChatSidebarSkeleton,
+} from '@/components/chat/chat-sidebar-skeleton';
 import { CommandSearch } from '@/components/chat/command-search';
 import { NavUser } from '@/components/chat/nav-user';
 import { UsageMetrics } from '@/components/chat/usage-metrics';
@@ -41,11 +45,15 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { isMobile, setOpenMobile } = useSidebar();
 
   // Fetch real threads from API with infinite scroll (50 items initially, 20 per page after)
+  // Following React Query v5 best practices: handle isLoading, isError, isFetchingNextPage
   const {
     data: threadsData,
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage,
+    isLoading,
+    isError,
+    error,
   } = useThreadsQuery();
 
   // Mutations
@@ -216,28 +224,42 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           <SidebarContent className="p-0">
             <ScrollArea ref={scrollAreaRef} className="h-full w-full">
               <div className="px-2 py-2">
-                <ChatList
-                  chatGroups={chatGroups}
-                  favorites={favorites}
-                  onDeleteChat={handleDeleteChat}
-                  searchTerm=""
-                  deletingChatId={deletingChatId}
-                />
+                {/* Initial Loading State - Following React Query v5 pattern */}
+                {isLoading && <ChatSidebarSkeleton count={15} showFavorites={false} />}
 
-                {/* Loading skeleton for next page */}
-                {isFetchingNextPage && (
-                  <div className="px-2 space-y-1 my-2">
-                    <div className="h-10 bg-accent animate-pulse rounded-md" />
-                    <div className="h-10 bg-accent animate-pulse rounded-md" />
-                    <div className="h-10 bg-accent animate-pulse rounded-md" />
+                {/* Error State - Following React Query v5 pattern */}
+                {isError && (
+                  <div className="px-2 py-4 text-center">
+                    <p className="text-sm text-destructive mb-2">
+                      {t('states.error.default')}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {error?.message || t('states.error.description')}
+                    </p>
                   </div>
                 )}
 
-                {/* Show end message when no more pages */}
-                {!hasNextPage && !isFetchingNextPage && chats.length > 0 && (
-                  <div className="px-2 py-4 text-center text-xs text-muted-foreground">
-                    That's all for now
-                  </div>
+                {/* Data Loaded - Show Chat List */}
+                {!isLoading && !isError && (
+                  <>
+                    <ChatList
+                      chatGroups={chatGroups}
+                      favorites={favorites}
+                      onDeleteChat={handleDeleteChat}
+                      searchTerm=""
+                      deletingChatId={deletingChatId}
+                    />
+
+                    {/* Pagination Loading Skeleton - Following React Query v5 pattern */}
+                    {isFetchingNextPage && <ChatSidebarPaginationSkeleton count={20} />}
+
+                    {/* Show end message when no more pages */}
+                    {!hasNextPage && !isFetchingNextPage && chats.length > 0 && (
+                      <div className="px-2 py-4 text-center text-xs text-muted-foreground">
+                        {t('chat.noMoreThreads')}
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             </ScrollArea>

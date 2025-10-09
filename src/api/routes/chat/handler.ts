@@ -16,6 +16,7 @@ import type { ErrorContext } from '@/api/core';
 import { createHandler, Responses } from '@/api/core';
 import { CursorPaginationQuerySchema } from '@/api/core/schemas';
 import { apiLogger } from '@/api/middleware/hono-logger';
+import { saveAssistantMessageWithVariants } from '@/api/services/message-variant.service';
 import { initializeOpenRouter, openRouterService } from '@/api/services/openrouter.service';
 import {
   classifyOpenRouterError,
@@ -1386,11 +1387,24 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
     const messageId = ulid();
 
     // 🛡️ Guard against duplicate onFinish calls
+    // NOTE: AI SDK Behavior with consumeSseStream (observed but not explicitly documented):
+    // - consumeSseStream ensures onFinish runs even on client disconnect
+    // - However, in some cases onFinish may be called multiple times
+    // - This guard prevents:
+    //   1. Duplicate database inserts (though onConflictDoNothing provides backup)
+    //   2. Multiple usage counter increments (would cause billing issues)
+    //   3. Multiple title generation calls (unnecessary API calls)
+    // Without this guard, we've observed duplicate processing in production
     let onFinishExecuted = false;
 
     // 🛡️ Track error for metadata in onFinish
-    // When onError returns a message, that text becomes content
-    // We need to track the error separately to include metadata in database
+    // NOTE: AI SDK Behavior (not explicitly documented):
+    // - When onError returns a string, it's sent to client as error SSE event
+    // - onFinish still runs afterward (due to consumeSseStream)
+    // - However, responseMessage.parts may be empty in this case
+    // - We track the error here to:
+    //   1. Use error message as content if parts are empty
+    //   2. Include error metadata in database for UI error state display
     let streamError: Error | null = null;
 
     // ✅ Cost Control: Calculate max output tokens based on tier and model
@@ -1403,26 +1417,12 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
     // 2. Tier-level limit (from subscription config)
     const maxOutputTokensLimit = modelSpecificLimit || tierMaxOutputTokens;
 
-    // ✅ TIMEOUT PROTECTION: Create abort controller with 60s timeout
+    // ✅ OFFICIAL AI SDK PATTERN: Timeout Protection with AbortSignal.timeout()
+    // Documentation: https://sdk.vercel.ai/docs/ai-sdk-core/settings#abortsignal
     // Prevents streams from hanging indefinitely if AI provider doesn't respond
-    const STREAM_TIMEOUT_MS = 60000; // 60 seconds
-    const timeoutController = new AbortController();
-    const timeoutId = setTimeout(() => {
-      apiLogger.error('Stream timeout - aborting after 60s', {
-        threadId,
-        participantId: participant.id,
-        participantIndex,
-        model: participant.modelId,
-        timeoutMs: STREAM_TIMEOUT_MS,
-      });
-      timeoutController.abort();
-    }, STREAM_TIMEOUT_MS);
-
-    // ✅ Combine request abort signal with timeout
-    // AbortSignal.any() triggers when either signal aborts (client disconnect OR timeout)
     const combinedSignal = AbortSignal.any([
       c.req.raw.signal, // Client disconnect
-      timeoutController.signal, // Timeout
+      AbortSignal.timeout(60000), // 60s timeout (built-in)
     ]);
 
     // ✅ OFFICIAL AI SDK PATTERN: streamText() Configuration
@@ -1456,6 +1456,20 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
       experimental_telemetry: {
         isEnabled: true,
         functionId: `chat-participant-${participant.id}-${participantIndex}`,
+      },
+
+      // ✅ OFFICIAL AI SDK PATTERN: onAbort callback
+      // Documentation: https://sdk.vercel.ai/docs/ai-sdk-core/error-handling#handling-stream-aborts
+      // Called when stream is aborted via AbortSignal (timeout or client disconnect)
+      onAbort: ({ steps }) => {
+        apiLogger.info('Stream aborted', {
+          threadId,
+          participantId: participant.id,
+          participantIndex,
+          model: participant.modelId,
+          stepsCompleted: steps.length,
+          timestamp: new Date().toISOString(),
+        });
       },
     });
 
@@ -1505,6 +1519,13 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
           return {
             participants: updatedParticipants,
             threadMode: thread.mode,
+            participantIndex, // ✅ For current participant preview during streaming
+            // ✅ CRITICAL: Store actual participant data so historical messages are independent
+            // When participants change (reorder/add/remove), historical messages must not be affected
+            // Field names match database schema for consistency
+            participantId: participant.id,
+            model: participant.modelId, // ✅ Matches DB schema (not "modelId")
+            role: participant.role || '', // ✅ Matches DB schema (not "participantRole")
           };
         }
         // Return undefined for non-start parts (required by TypeScript)
@@ -1513,9 +1534,6 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
 
       // ✅ AI SDK: Simplified onFinish with formatted UIMessage[] ready to save
       onFinish: async ({ messages, responseMessage, isAborted }) => {
-        // ✅ CLEANUP: Clear timeout immediately when stream finishes
-        clearTimeout(timeoutId);
-
         // 🛡️ Prevent duplicate execution (consumeSseStream can cause multiple calls)
         if (onFinishExecuted) {
           apiLogger.warn('onFinish called multiple times - skipping duplicate', {
@@ -1567,56 +1585,17 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
           ? formatErrorForDatabase(streamError, participant.modelId)
           : null;
 
-        // ✅ VARIANTS SUPPORT: Handle message variants for regeneration
-        // Find the parent user message (last user message in conversation)
-        const userMessages = await db.query.chatMessage.findMany({
-          where: and(
-            eq(tables.chatMessage.threadId, threadId),
-            eq(tables.chatMessage.role, 'user'),
-          ),
-          orderBy: [desc(tables.chatMessage.createdAt)],
-          limit: 1,
-        });
-
-        const parentUserMessage = userMessages[0];
-
-        // Check for existing assistant messages with this parent (variants)
-        const existingVariants = parentUserMessage
-          ? await db.query.chatMessage.findMany({
-            where: and(
-              eq(tables.chatMessage.threadId, threadId),
-              eq(tables.chatMessage.role, 'assistant'),
-              eq(tables.chatMessage.parentMessageId, parentUserMessage.id),
-              eq(tables.chatMessage.participantId, participant.id),
-            ),
-          })
-          : [];
-
-        // Calculate variant index (0 for first message, 1+ for regenerations)
-        const variantIndex = existingVariants.length;
-
-        // If this is a regeneration (variantIndex > 0), mark all previous variants as inactive
-        if (variantIndex > 0 && parentUserMessage) {
-          await db
-            .update(tables.chatMessage)
-            .set({ isActiveVariant: false })
-            .where(and(
-              eq(tables.chatMessage.threadId, threadId),
-              eq(tables.chatMessage.parentMessageId, parentUserMessage.id),
-              eq(tables.chatMessage.participantId, participant.id),
-            ));
-        }
-
-        // Save message with variant support (idempotent - prevents duplicate inserts if onFinish called multiple times)
-        await db.insert(tables.chatMessage).values({
-          id: responseMessage.id,
+        // ✅ Save message with variant support using service function
+        // This service handles all the complexity of variant tracking:
+        // - Links to parent user message
+        // - Tracks variant index (0 for original, 1+ for regenerations)
+        // - Marks active variant (only one active at a time)
+        // - Idempotent saves to prevent duplicates
+        await saveAssistantMessageWithVariants({
+          messageId: responseMessage.id,
           threadId,
           participantId: participant.id,
-          role: 'assistant',
           content,
-          parentMessageId: parentUserMessage?.id || null, // Link to parent user message
-          variantIndex, // Track which variant this is
-          isActiveVariant: true, // This is now the active variant
           metadata: {
             model: participant.modelId,
             role: participant.role,
@@ -1625,11 +1604,11 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
             participantIndex,
             aborted: isAborted,
             partialResponse: isAborted,
-            // ✅ Include error metadata if error occurred
+            // Include error metadata if error occurred
             ...(errorMetadata || {}),
           },
           createdAt: now,
-        }).onConflictDoNothing();
+        });
 
         await db.update(tables.chatThread)
           .set({
@@ -1663,15 +1642,12 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
       // ✅ AI SDK: Simplified error handling
       // Store error for metadata in onFinish so UI can display error state
       onError: (error) => {
-        // ✅ CLEANUP: Clear timeout on error
-        clearTimeout(timeoutId);
-
         // Track error for metadata
         streamError = error instanceof Error ? error : new Error(String(error));
 
         const classified = classifyOpenRouterError(error);
 
-        // ✅ Enhanced error context with timeout and abort detection
+        // ✅ Enhanced error context
         const errorContext = {
           threadId,
           participantId: participant.id,
@@ -1679,9 +1655,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
           model: participant.modelId,
           errorType: classified.type,
           userMessage: classified.message,
-          // Detect the specific abort reason
-          isTimeout: timeoutController.signal.aborted && !c.req.raw.signal.aborted,
-          isClientAbort: c.req.raw.signal.aborted,
+          isAborted: c.req.raw.signal.aborted,
           timestamp: new Date().toISOString(),
         };
 

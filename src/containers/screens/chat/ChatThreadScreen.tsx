@@ -1,8 +1,13 @@
 'use client';
 
+import type { UIMessage } from 'ai';
 import { useTranslations } from 'next-intl';
 import { useCallback, useState } from 'react';
 
+// ============================================================================
+// Types - ✅ Inferred from Backend Schema (Zero Hardcoding)
+// ============================================================================
+import type { ChatMessage, ChatParticipant, ChatThread } from '@/api/routes/chat/schema';
 import { Loader } from '@/components/ai-elements/loader';
 import { Message, MessageAvatar, MessageContent } from '@/components/ai-elements/message';
 import { Response } from '@/components/ai-elements/response';
@@ -11,66 +16,19 @@ import { ChatMemoriesList } from '@/components/chat/chat-memories-list';
 import { ChatModeSelector } from '@/components/chat/chat-mode-selector';
 import { ChatParticipantsList, ParticipantsPreview } from '@/components/chat/chat-participants-list';
 import { ModelMessageCard } from '@/components/chat/model-message-card';
-import { useSequentialStreaming } from '@/hooks/utils/use-sequential-streaming';
-import { getAvatarProps } from '@/lib/ai/avatar-helpers';
-import { serverMessagesToUIMessages } from '@/lib/ai/message-helpers';
+import { useChatStreaming } from '@/hooks/utils/use-chat-streaming';
+import { getAvatarPropsFromModelId } from '@/lib/ai/avatar-helpers';
+import { chatMessagesToUIMessages } from '@/lib/ai/message-helpers';
 import { getModelById } from '@/lib/ai/models-config';
 import { useSession } from '@/lib/auth/client';
 import type { ChatModeId } from '@/lib/config/chat-modes';
 import type { ParticipantConfig } from '@/lib/schemas/chat-forms';
 import { toastManager } from '@/lib/toast/toast-manager';
 
-// ============================================================================
-// Types
-// ============================================================================
-
-type ThreadData = {
-  id: string;
-  title: string;
-  mode: string;
-  isFavorite: boolean;
-  isPublic: boolean;
-  createdAt: string;
-};
-
-type ParticipantData = {
-  id: string;
-  threadId: string;
-  modelId: string;
-  role: string;
-  priority: number;
-  isEnabled: boolean;
-  settings: Record<string, unknown> | null;
-  customRoleId?: string | null;
-  createdAt: string;
-  updatedAt: string;
-};
-
-type MessageData = {
-  id: string;
-  threadId: string;
-  role: 'user' | 'assistant';
-  content: string;
-  reasoning?: string | null;
-  metadata?: Record<string, unknown> | string | null;
-  createdAt: string;
-};
-
-// ✅ OFFICIAL AI SDK PATTERN: UIMessage format
-type ChatMessage = {
-  id: string;
-  role: 'user' | 'assistant';
-  parts: Array<
-    | { type: 'text'; text: string }
-    | { type: 'reasoning'; text: string }
-  >;
-  metadata?: Record<string, unknown>;
-};
-
 type ChatThreadScreenProps = {
-  thread: ThreadData;
-  participants: ParticipantData[];
-  initialMessages: MessageData[];
+  thread: ChatThread;
+  participants: ChatParticipant[];
+  initialMessages: ChatMessage[];
   slug: string;
 };
 
@@ -95,8 +53,8 @@ export default function ChatThreadScreen({
   const t = useTranslations('chat');
   const { data: session } = useSession();
 
-  // ✅ Transform server data to AI SDK format using helper
-  const [messages, setMessages] = useState<ChatMessage[]>(() => serverMessagesToUIMessages(initialMessages));
+  // ✅ Transform backend ChatMessage to AI SDK format using helper
+  const [messages, setMessages] = useState<UIMessage[]>(() => chatMessagesToUIMessages(initialMessages));
 
   // ✅ Participants state
   const [selectedParticipants, setSelectedParticipants] = useState<ParticipantConfig[]>(() => {
@@ -116,8 +74,8 @@ export default function ChatThreadScreen({
   const [selectedMode, setSelectedMode] = useState<ChatModeId>(thread.mode as ChatModeId);
   const [inputValue, setInputValue] = useState('');
 
-  // ✅ OFFICIAL AI SDK PATTERN: Sequential streaming hook
-  const { status, streamingState, streamAllParticipants, stopStreaming } = useSequentialStreaming(
+  // ✅ Simplified streaming hook - Following AI SDK patterns
+  const { status, streamingState, streamMessage, stopStreaming } = useChatStreaming(
     {
       threadId: thread.id,
       selectedMode,
@@ -138,7 +96,7 @@ export default function ChatThreadScreen({
       if (!inputValue.trim() || status !== 'ready')
         return;
 
-      const userMessage: ChatMessage = {
+      const userMessage: UIMessage = {
         id: `temp-${Date.now()}`,
         role: 'user',
         parts: [{ type: 'text', text: inputValue }],
@@ -146,9 +104,9 @@ export default function ChatThreadScreen({
 
       setInputValue('');
       setMessages(prev => [...prev, userMessage]);
-      await streamAllParticipants([...messages, userMessage]);
+      await streamMessage([...messages, userMessage]);
     },
-    [inputValue, messages, status, streamAllParticipants],
+    [inputValue, messages, status, streamMessage],
   );
 
   return (
@@ -181,26 +139,26 @@ export default function ChatThreadScreen({
             );
           }
 
-          // ✅ Assistant message
-          const participantIndex = message.metadata && typeof message.metadata === 'object' && 'participantIndex' in message.metadata
-            ? (message.metadata as { participantIndex?: number }).participantIndex
-            : undefined;
+          // ✅ Assistant message: Extract participant data from message metadata
+          // CRITICAL: Use stored model/role from metadata (NOT current participants)
+          // Historical messages must remain independent of current participant configuration
+          const metadata = message.metadata as Record<string, unknown> | undefined;
+          const participantIndex = metadata?.participantIndex as number | undefined;
+          const storedModelId = metadata?.model as string | undefined; // ✅ Matches DB schema
+          const storedRole = metadata?.role as string | undefined; // ✅ Matches DB schema
 
-          const avatarProps = getAvatarProps(
-            message.role,
-            selectedParticipants,
+          // ✅ CRITICAL: Use stored modelId directly for avatar (independent of current participants)
+          const avatarProps = getAvatarPropsFromModelId(
+            message.role === 'system' ? 'assistant' : message.role,
+            storedModelId,
             session?.user?.image,
             session?.user?.name,
-            participantIndex,
           );
 
-          const participant = participantIndex !== undefined
-            ? selectedParticipants[participantIndex]
-            : undefined;
+          // Use stored modelId from metadata, not current participants array
+          const model = storedModelId ? getModelById(storedModelId) : undefined;
 
-          const model = participant ? getModelById(participant.modelId) : undefined;
-
-          if (!model || !participant) {
+          if (!model) {
             return null;
           }
 
@@ -216,14 +174,20 @@ export default function ChatThreadScreen({
                 ? 'streaming'
                 : 'completed';
 
+          // Filter message parts to only text and reasoning (ModelMessageCard types)
+          const filteredParts = message.parts.filter(
+            (p): p is { type: 'text'; text: string } | { type: 'reasoning'; text: string } =>
+              p.type === 'text' || p.type === 'reasoning',
+          );
+
           return (
             <ModelMessageCard
               key={message.id}
               model={model}
-              role={participant.role}
+              role={storedRole || ''} // ✅ Use stored role from metadata
               participantIndex={participantIndex ?? 0}
               status={messageStatus}
-              parts={message.parts}
+              parts={filteredParts}
               avatarSrc={avatarProps.src}
               avatarName={avatarProps.name}
             />

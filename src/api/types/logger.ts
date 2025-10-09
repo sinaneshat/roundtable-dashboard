@@ -74,9 +74,6 @@ export const LogContextSchema = z.discriminatedUnion('logType', [
 // Flexible: Discriminated union with Record fallback for custom logging needs
 export type LogContext = z.infer<typeof LogContextSchema> | Record<string, unknown>;
 
-// Logger data type for handler contexts
-export type LoggerData = LogContext;
-
 // Logger interface with proper typing
 export type TypedLogger = {
   debug: (message: string, context?: LogContext) => void;

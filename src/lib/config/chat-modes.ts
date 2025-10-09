@@ -268,14 +268,8 @@ export function isValidThreadStatus(status: string): status is ThreadStatus {
 }
 
 // ============================================================================
-// Backward Compatibility Exports
+// UI Component Types
 // ============================================================================
-
-/**
- * Re-export as ThreadMode for backward compatibility with existing code
- * This allows gradual migration from ThreadMode to ChatModeId
- */
-export type ThreadMode = ChatModeId;
 
 /**
  * Chat mode selection option for UI components

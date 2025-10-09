@@ -94,6 +94,10 @@ const ChatParticipantSchema = z.object({
     description: 'Model ID (e.g., anthropic/claude-sonnet-4.5, openai/gpt-5)',
     example: 'anthropic/claude-sonnet-4.5',
   }),
+  customRoleId: z.string().nullable().openapi({
+    description: 'Custom role ID (references saved role template)',
+    example: 'role_abc123',
+  }),
   role: z.string().openapi({
     description: 'Assigned role for this model',
     example: 'The Ideator',
@@ -802,5 +806,9 @@ export type SwitchVariantRequest = z.infer<typeof SwitchVariantRequestSchema>;
 export type ChatMemory = z.infer<typeof ChatMemorySchema>;
 export type CreateMemoryRequest = z.infer<typeof CreateMemoryRequestSchema>;
 export type UpdateMemoryRequest = z.infer<typeof UpdateMemoryRequestSchema>;
+
+export type ChatCustomRole = z.infer<typeof ChatCustomRoleSchema>;
+export type CreateCustomRoleRequest = z.infer<typeof CreateCustomRoleRequestSchema>;
+export type UpdateCustomRoleRequest = z.infer<typeof UpdateCustomRoleRequestSchema>;
 
 export type ChatThreadChangelog = z.infer<typeof ChatThreadChangelogSchema>;

@@ -341,6 +341,7 @@
     "makePublicConfirmDescription": "Anyone with the link will be able to view this thread and its messages.",
     "makePublicConfirmTitle": "Make this thread public?",
     "noMessages": "No messages",
+    "noMoreThreads": "That's all your chats for now",
     "noResults": "No chats found",
     "noResultsDescription": "Try a different search term",
     "older": "Older",

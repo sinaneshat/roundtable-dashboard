@@ -1,6 +1,6 @@
 import { z } from '@hono/zod-openapi';
 
-import { ApiErrorResponseSchema, createApiResponseSchema } from '@/api/core/schemas';
+import { createApiResponseSchema } from '@/api/core/schemas';
 import { subscriptionTierSchema } from '@/db/validation/usage';
 
 // ============================================================================
@@ -154,5 +154,4 @@ export const QuotaCheckResponseSchema = createApiResponseSchema(
 // ============================================================================
 // Error Response
 // ============================================================================
-
-export const UsageErrorResponseSchema = ApiErrorResponseSchema;
+// Use ApiErrorResponseSchema from @/api/core/schemas directly
