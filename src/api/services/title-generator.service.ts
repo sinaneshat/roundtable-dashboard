@@ -35,7 +35,7 @@ function getTitleGenerationModel(): string {
   const preferredModels = [
     AllowedModelId.GEMINI_2_5_FLASH, // $0.075/Mtok - ultra cheap
     AllowedModelId.CLAUDE_3_HAIKU, // $0.25/Mtok - fast and cheap
-    AllowedModelId.DEEPSEEK_R1_FREE, // FREE - reasoning model
+    AllowedModelId.DEEPSEEK_R1, // $0.55/Mtok - reasoning model
     AllowedModelId.CLAUDE_SONNET_4_5, // Fallback to premium model
   ];
 

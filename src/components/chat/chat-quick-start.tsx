@@ -99,7 +99,7 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
         prompt: 'Is Mars colonization humanity\'s backup plan or escapism? Should we fix Earth first, or hedge our bets across multiple planets?',
         mode: 'debating',
         participants: [
-          { id: 'p1', modelId: AllowedModelId.DEEPSEEK_R1_FREE, role: 'Space Futurist', order: 0 },
+          { id: 'p1', modelId: AllowedModelId.DEEPSEEK_R1, role: 'Space Futurist', order: 0 },
           { id: 'p2', modelId: AllowedModelId.GEMINI_2_5_FLASH, role: 'Climate Scientist', order: 1 },
           { id: 'p3', modelId: AllowedModelId.CLAUDE_3_HAIKU, role: 'Resource Economist', order: 2 },
         ],
@@ -110,7 +110,7 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
         mode: 'analyzing',
         participants: [
           { id: 'p1', modelId: AllowedModelId.GEMINI_2_5_FLASH, role: 'Animal Ethicist', order: 0 },
-          { id: 'p2', modelId: AllowedModelId.DEEPSEEK_R1_FREE, role: 'Agronomist', order: 1 },
+          { id: 'p2', modelId: AllowedModelId.DEEPSEEK_R1, role: 'Agronomist', order: 1 },
           { id: 'p3', modelId: AllowedModelId.CLAUDE_3_HAIKU, role: 'Cultural Anthropologist', order: 2 },
         ],
       },
@@ -119,7 +119,7 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
         prompt: 'Nuclear power could solve climate change but carries catastrophic risks. Can we trust ourselves with this technology long-term?',
         mode: 'debating',
         participants: [
-          { id: 'p1', modelId: AllowedModelId.DEEPSEEK_R1_FREE, role: 'Energy Policy Expert', order: 0 },
+          { id: 'p1', modelId: AllowedModelId.DEEPSEEK_R1, role: 'Energy Policy Expert', order: 0 },
           { id: 'p2', modelId: AllowedModelId.GEMINI_2_5_FLASH, role: 'Nuclear Physicist', order: 1 },
           { id: 'p3', modelId: AllowedModelId.CLAUDE_3_HAIKU, role: 'Environmental Activist', order: 2 },
         ],
@@ -136,7 +136,7 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
           { id: 'p1', modelId: AllowedModelId.CLAUDE_SONNET_4_5, role: 'Bioethicist', order: 0 },
           { id: 'p2', modelId: AllowedModelId.GPT_4O, role: 'Geneticist', order: 1 },
           { id: 'p3', modelId: AllowedModelId.GEMINI_2_5_PRO, role: 'Disability Rights Advocate', order: 2 },
-          { id: 'p4', modelId: AllowedModelId.DEEPSEEK_R1_FREE, role: 'Medical Ethicist', order: 3 },
+          { id: 'p4', modelId: AllowedModelId.DEEPSEEK_R1, role: 'Medical Ethicist', order: 3 },
         ],
       },
       {
@@ -147,7 +147,7 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
           { id: 'p1', modelId: AllowedModelId.CLAUDE_SONNET_4_5, role: 'AI Safety Researcher', order: 0 },
           { id: 'p2', modelId: AllowedModelId.GPT_4O, role: 'Machine Learning Engineer', order: 1 },
           { id: 'p3', modelId: AllowedModelId.GEMINI_2_5_PRO, role: 'Ethics Philosopher', order: 2 },
-          { id: 'p4', modelId: AllowedModelId.DEEPSEEK_R1_FREE, role: 'Systems Architect', order: 3 },
+          { id: 'p4', modelId: AllowedModelId.DEEPSEEK_R1, role: 'Systems Architect', order: 3 },
         ],
       },
       {

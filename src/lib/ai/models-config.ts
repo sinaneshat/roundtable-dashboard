@@ -437,12 +437,12 @@ export const AI_MODELS: AIModel[] = [
   // STARTER TIER - Budget-Friendly (Max 3 concurrent)
   // ============================================================================
 
-  // DeepSeek R1 - Best Free Reasoning
+  // DeepSeek R1 - Premium Reasoning Model
   {
     id: 'deepseek-r1',
     provider: 'openrouter',
-    modelId: AllowedModelId.DEEPSEEK_R1_FREE,
-    name: 'DeepSeek R1 (Free)',
+    modelId: AllowedModelId.DEEPSEEK_R1,
+    name: 'DeepSeek R1',
     description: 'Powerful reasoning model with 671B parameters. MIT licensed, open-source.',
     capabilities: {
       streaming: true,
@@ -464,14 +464,14 @@ export const AI_MODELS: AIModel[] = [
       category: 'reasoning',
       contextWindow: 163840,
       strengths: [
-        'FREE tier available',
         'Performance on par with O1',
         '671B params (37B active)',
         '90% debugging accuracy',
+        'Premium quality reasoning',
       ],
       pricing: {
-        input: 'FREE',
-        output: 'FREE',
+        input: '$0.55/M tokens',
+        output: '$2.19/M tokens',
       },
     },
   },
