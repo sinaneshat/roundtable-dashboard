@@ -1,6 +1,6 @@
 import type { RouteHandler } from '@hono/zod-openapi';
 import type { UIMessage } from 'ai';
-import { consumeStream, convertToModelMessages, smoothStream, streamText, validateUIMessages } from 'ai';
+import { APICallError, consumeStream, convertToModelMessages, smoothStream, streamText, validateUIMessages } from 'ai';
 import type { SQL } from 'drizzle-orm';
 import { and, desc, eq, like, ne } from 'drizzle-orm';
 import { ulid } from 'ulid';
@@ -18,8 +18,10 @@ import { CursorPaginationQuerySchema } from '@/api/core/schemas';
 import { apiLogger } from '@/api/middleware/hono-logger';
 import { getMessageVariantsForStream, saveAssistantMessageWithVariants } from '@/api/services/message-variant.service';
 import { initializeOpenRouter, openRouterService } from '@/api/services/openrouter.service';
+import type { ClassifiedError } from '@/api/services/openrouter-error-handler';
 import {
   classifyOpenRouterError,
+  extractErrorDetails,
   formatErrorForDatabase,
 } from '@/api/services/openrouter-error-handler';
 import { generateUniqueSlug } from '@/api/services/slug-generator.service';
@@ -1766,6 +1768,12 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
     //   2. Include error metadata in database for UI error state display
     let streamError: Error | null = null;
 
+    // ✅ CRITICAL: Store classified error to prevent double classification
+    // When onError returns a string, AI SDK creates a NEW Error with that string.
+    // If we reclassify that new error, we lose the HTTP context (statusCode, etc.)
+    // and it gets misclassified as "unknown" instead of the correct type (rate_limit, etc.)
+    let classifiedError: ClassifiedError | null = null;
+
     // ✅ Cost Control: Calculate max output tokens based on tier and model
     const modelConfig = getModelById(participant.modelId);
     const tierMaxOutputTokens = getMaxOutputTokens(userTier);
@@ -1945,6 +1953,51 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
           const currentVariantIndex = variants.length;
           const activeVariantIndex = variants.findIndex(v => v.isActive);
 
+          // ✅ Include error information if error occurred during streaming
+          // This allows frontend to display detailed error messages immediately
+          const errorInfo = streamError
+            ? (() => {
+                const classified = classifyOpenRouterError(streamError);
+                const errorData: Record<string, unknown> = {
+                  hasError: true,
+                  error: classified.message,
+                  errorMessage: classified.message,
+                  errorType: classified.type,
+                  isTransient: classified.isTransient,
+                };
+
+                // Add API error details if available
+                if (APICallError.isInstance(streamError)) {
+                  const { statusCode, url, responseBody } = streamError;
+                  errorData.statusCode = statusCode;
+                  errorData.url = url;
+
+                  // Extract provider message from response body
+                  try {
+                    if (responseBody && typeof responseBody === 'object') {
+                      const body = responseBody as Record<string, unknown>;
+                      if (body.error && typeof body.error === 'object') {
+                        const errorObj = body.error as Record<string, unknown>;
+                        if (typeof errorObj.message === 'string') {
+                          errorData.providerMessage = errorObj.message;
+                        }
+                        // ✅ Extract metadata.raw for upstream provider messages
+                        if (errorObj.metadata && typeof errorObj.metadata === 'object') {
+                          const metadata = errorObj.metadata as Record<string, unknown>;
+                          if (typeof metadata.raw === 'string') {
+                            errorData.providerMessage = metadata.raw;
+                          }
+                        }
+                      }
+                      errorData.responseBody = JSON.stringify(responseBody).substring(0, 500);
+                    }
+                  } catch {}
+                }
+
+                return errorData;
+              })()
+            : {};
+
           return {
             // ✅ NEW: Variant metadata following AI SDK patterns
             variants, // All existing variants (previous regenerations)
@@ -1954,6 +2007,8 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
             hasVariants: variants.length > 0, // Whether regenerations exist
             roundId: messageId, // Matches start event roundId
             parentMessageId: parentUserMessage?.id || null, // For variant grouping
+            // ✅ Include error information for frontend display
+            ...errorInfo,
           };
         }
 
@@ -2006,23 +2061,94 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
         // ✅ If still no content after error handling, use a fallback message
         // Never skip saving - always persist the message for error display
         if (!content || content.trim().length === 0) {
-          content = 'Error: No response generated';
           hasError = true;
 
-          apiLogger.error('Empty content with no error - saving fallback message', {
+          // If we don't have a streamError but got empty content, create synthetic error
+          if (!streamError) {
+            const emptyResponseError = new Error('Model generated empty response - this usually indicates an API failure that did not trigger the error handler');
+            streamError = emptyResponseError;
+
+            apiLogger.error('Empty content with no streamError - model silently failed', {
+              threadId,
+              participantId: participant.id,
+              messageId: responseMessage.id,
+              model: participant.modelId,
+              note: 'This indicates the AI SDK did not trigger onError callback despite generation failure',
+            });
+          }
+
+          // ✅ Use stored classified error or classify if not available
+          // This should rarely happen (only if empty response without error callback)
+          const classified = classifiedError || classifyOpenRouterError(streamError);
+          content = `Error: ${classified.message}`;
+
+          apiLogger.warn('Setting error content from classification', {
             threadId,
             participantId: participant.id,
-            messageId: responseMessage.id,
-            model: participant.modelId,
+            errorType: classified.type,
+            errorMessage: classified.message,
+            usedStoredClassification: !!classifiedError,
           });
         }
 
         // ✅ Prepare metadata - include error info if error occurred
         // When onError returns a message, content is the error text
         // We need to include error metadata so frontend can display error UI
-        const errorMetadata = streamError
-          ? formatErrorForDatabase(streamError, participant.modelId)
-          : null;
+
+        // ✅ CRITICAL: Use stored classifiedError to prevent double classification
+        // If we call formatErrorForDatabase(streamError), it will reclassify the error
+        // and lose the HTTP context, resulting in "unknown" error type
+        let errorMetadata = null;
+        if (streamError && classifiedError) {
+          // Build error metadata from the already-classified error
+          const errorDetailsObj: Record<string, unknown> = {
+            technicalMessage: classifiedError.technicalMessage,
+            userMessage: classifiedError.message,
+            modelId: participant.modelId,
+            timestamp: new Date().toISOString(),
+            isTransient: classifiedError.isTransient,
+            shouldRetry: classifiedError.shouldRetry,
+          };
+
+          // ✅ Add APICallError-specific details if available from original error
+          if (APICallError.isInstance(streamError)) {
+            const { statusCode, url, responseBody, isRetryable } = streamError;
+            errorDetailsObj.statusCode = statusCode;
+            errorDetailsObj.url = url;
+            errorDetailsObj.isRetryable = isRetryable;
+
+            // Extract provider-specific error details
+            const { providerMessage, providerCode } = extractErrorDetails(responseBody);
+            if (providerMessage) {
+              errorDetailsObj.providerMessage = providerMessage;
+            }
+            if (providerCode) {
+              errorDetailsObj.providerCode = providerCode;
+            }
+
+            // Include raw response body for debugging (truncate if too large)
+            const responseBodyStr = JSON.stringify(responseBody);
+            errorDetailsObj.responseBody = responseBodyStr.length > 1000
+              ? `${responseBodyStr.substring(0, 1000)}... (truncated)`
+              : responseBodyStr;
+          } else if (streamError instanceof Error) {
+            // Include Error-specific details
+            errorDetailsObj.errorName = streamError.name;
+            errorDetailsObj.errorStack = streamError.stack;
+          }
+
+          errorMetadata = {
+            error: classifiedError.type,
+            errorMessage: classifiedError.message,
+            errorType: classifiedError.type,
+            errorDetails: JSON.stringify(errorDetailsObj, null, 2),
+            isTransient: classifiedError.isTransient,
+          };
+        } else if (streamError) {
+          // Fallback: If we don't have classifiedError, use formatErrorForDatabase
+          // This should only happen in edge cases
+          errorMetadata = formatErrorForDatabase(streamError, participant.modelId);
+        }
 
         // ✅ Add hasError flag to metadata for frontend error detection
         const baseMetadata = {
@@ -2090,21 +2216,73 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
         // Track error for metadata
         streamError = error instanceof Error ? error : new Error(String(error));
 
+        // ✅ CRITICAL: Classify and store the error BEFORE returning
+        // This prevents double classification that loses HTTP context
         const classified = classifyOpenRouterError(error);
+        classifiedError = classified; // Store for use in onFinish
 
-        // ✅ Enhanced error context
-        const errorContext = {
+        // ✅ Extract detailed error information for logging
+        const errorDetails: Record<string, unknown> = {
           threadId,
           participantId: participant.id,
           participantIndex,
           model: participant.modelId,
           errorType: classified.type,
           userMessage: classified.message,
+          technicalMessage: classified.technicalMessage,
           isAborted: c.req.raw.signal.aborted,
           timestamp: new Date().toISOString(),
         };
 
-        apiLogger.error('Stream error with context', errorContext);
+        // ✅ Add AI SDK error details if available
+        if (error && typeof error === 'object') {
+          const errorObj = error as Record<string, unknown>;
+          if ('statusCode' in errorObj)
+            errorDetails.statusCode = errorObj.statusCode;
+          if ('url' in errorObj)
+            errorDetails.url = errorObj.url;
+          if ('responseBody' in errorObj) {
+            try {
+              errorDetails.responseBody = JSON.stringify(errorObj.responseBody).substring(0, 500);
+            } catch {
+              errorDetails.responseBody = String(errorObj.responseBody).substring(0, 500);
+            }
+          }
+        }
+
+        // ✅ Add error stack for debugging
+        if (error instanceof Error && error.stack) {
+          errorDetails.errorStack = error.stack.split('\n').slice(0, 5).join('\n'); // First 5 lines
+        }
+
+        // ✅ Check for error.cause (AI SDK retry errors often have underlying cause)
+        if (error && typeof error === 'object' && 'cause' in error) {
+          const cause = (error as { cause: unknown }).cause;
+          if (cause && typeof cause === 'object') {
+            errorDetails.errorCause = cause instanceof Error
+              ? { message: cause.message, name: cause.name, stack: cause.stack?.split('\n').slice(0, 3).join('\n') }
+              : JSON.stringify(cause).substring(0, 500);
+          }
+        }
+
+        // ✅ Dump full error object structure for debugging (in dev mode)
+        if (process.env.NODE_ENV === 'development') {
+          try {
+            errorDetails.fullErrorObject = JSON.stringify(error, Object.getOwnPropertyNames(error), 2).substring(0, 1000);
+          } catch {
+            errorDetails.fullErrorObject = '[Could not serialize error object]';
+          }
+        }
+
+        apiLogger.error('Stream error with full context', errorDetails);
+
+        // Log what we're returning to verify it's the correct message
+        apiLogger.warn('onError returning classified message', {
+          classifiedType: classified.type,
+          classifiedMessage: classified.message,
+          classifiedTechnical: classified.technicalMessage,
+          isTransient: classified.isTransient,
+        });
 
         // Return user-friendly error message
         // This becomes the content text streamed to the client

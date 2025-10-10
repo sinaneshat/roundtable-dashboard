@@ -22,9 +22,11 @@
 
 'use client';
 
+import { useQueryClient } from '@tanstack/react-query';
 import type { UIMessage } from 'ai';
 import { useCallback, useRef, useState } from 'react';
 
+import { invalidationPatterns, queryKeys } from '@/lib/data/query-keys';
 import type { ParticipantConfig } from '@/lib/schemas/chat-forms';
 
 // ============================================================================
@@ -63,6 +65,9 @@ export function useChatStreaming(
   setSelectedParticipants: React.Dispatch<React.SetStateAction<ParticipantConfig[]>>,
 ): UseChatStreamingResult {
   const { threadId, selectedMode, selectedParticipants, selectedMemoryIds, onError } = options;
+
+  // ✅ Get QueryClient for invalidating usage stats after messages are sent
+  const queryClient = useQueryClient();
 
   const [status, setStatus] = useState<StreamStatus>('ready');
   const [streamingState, setStreamingState] = useState<StreamingState>({
@@ -189,24 +194,59 @@ export function useChatStreaming(
             });
 
             // ✅ Handle empty response case (model failed silently)
+            // The backend should have sent error details in the finish event's metadata
+            // If we have no content, it means the error prevented any generation
             if (currentContent.length === 0) {
-              console.warn('[STREAMING] Stream completed with no content - marking as error');
+              console.warn('[STREAMING] Stream completed with no content - checking for error in metadata');
+
               setMessages(prev =>
-                prev.map(msg =>
-                  msg.id === messageId
-                    ? {
-                        ...msg,
-                        parts: [{ type: 'text' as const, text: '⚠️ An unexpected error occurred. Retrying...' }],
-                        metadata: {
-                          ...(msg.metadata || {}),
-                          error: 'unknown',
-                          errorMessage: 'An unexpected error occurred. Retrying...',
-                          errorType: 'unknown',
-                          isTransient: true,
-                        },
-                      }
-                    : msg,
-                ),
+                prev.map((msg) => {
+                  if (msg.id !== messageId)
+                    return msg;
+
+                  const metadata = (msg.metadata || {}) as Record<string, unknown>;
+
+                  // Check if backend sent error details in metadata (from finish event)
+                  const hasErrorMetadata = metadata.error || metadata.errorMessage || metadata.hasError;
+
+                  if (hasErrorMetadata) {
+                    console.warn('[STREAMING] Using error details from backend metadata:', {
+                      error: metadata.error,
+                      errorMessage: metadata.errorMessage,
+                      errorType: metadata.errorType,
+                    });
+
+                    // Backend sent error details - use them
+                    return {
+                      ...msg,
+                      parts: msg.parts.length > 0
+                        ? msg.parts
+                        : [{
+                            type: 'text' as const,
+                            text: String(metadata.errorMessage || metadata.error || 'Generation failed'),
+                          }],
+                      metadata: msg.metadata, // Use original metadata
+                    };
+                  }
+
+                  // No error metadata from backend - this is truly an unknown error
+                  console.error('[STREAMING] No content and no error metadata - unknown failure');
+                  return {
+                    ...msg,
+                    parts: [{
+                      type: 'text' as const,
+                      text: 'Generation failed with no error details. Check server logs.',
+                    }],
+                    metadata: {
+                      ...metadata,
+                      error: 'unknown',
+                      errorMessage: 'Generation failed with no error details. Check server logs.',
+                      errorType: 'unknown',
+                      hasError: true,
+                      isTransient: true,
+                    },
+                  };
+                }),
               );
             }
 
@@ -290,13 +330,16 @@ export function useChatStreaming(
                   const finishMetadata = event.metadata || {};
 
                   // Check if backend sent error information in metadata
-                  const hasBackendError = finishMetadata.error || finishMetadata.errorMessage;
+                  const hasBackendError = finishMetadata.hasError || finishMetadata.error || finishMetadata.errorMessage;
 
                   if (hasBackendError) {
                     console.warn('[STREAMING] Backend reported error in finish event:', {
+                      hasError: finishMetadata.hasError,
                       error: finishMetadata.error,
                       errorMessage: finishMetadata.errorMessage,
                       errorType: finishMetadata.errorType,
+                      statusCode: finishMetadata.statusCode,
+                      providerMessage: finishMetadata.providerMessage,
                       isTransient: finishMetadata.isTransient,
                       hasContent: currentContent.length > 0,
                     });
@@ -334,11 +377,15 @@ export function useChatStreaming(
                               parentMessageId: finishMetadata.parentMessageId,
                             },
                             // If backend sent error but no content, show error message
+                            // Prioritize providerMessage for most accurate error details
                             ...(hasBackendError && currentContent.length === 0
                               ? {
                                   parts: [{
                                     type: 'text' as const,
-                                    text: finishMetadata.errorMessage || '⚠️ An unexpected error occurred. Retrying...',
+                                    text: finishMetadata.providerMessage
+                                      || finishMetadata.errorMessage
+                                      || finishMetadata.error
+                                      || '⚠️ An unexpected error occurred. Retrying...',
                                   }],
                                 }
                               : {}),
@@ -353,9 +400,56 @@ export function useChatStreaming(
                   }
                 }
 
-                // Handle error
+                // Handle error - extract detailed error information
+                // ✅ AI SDK Error Event Handling
+                // AI SDK can send errors in multiple formats:
+                // 1. event.error as string (when onError returns a string)
+                // 2. event.error as object with message field
+                // 3. event.error as Error object
                 if (event.type === 'error') {
-                  throw new Error(event.error?.message || 'Stream error');
+                  let errorMessage = 'Stream error';
+                  let errorType = 'unknown';
+                  const rawError = event.error || {};
+
+                  // Extract error message from various formats
+                  if (typeof rawError === 'string') {
+                    // Error is a string directly (AI SDK onError returned a string)
+                    errorMessage = rawError;
+                  } else if (rawError && typeof rawError === 'object') {
+                    // Error is an object - check for message field
+                    const errObj = rawError as Record<string, unknown>;
+                    errorMessage = String(errObj.message || errObj.error || 'Stream error');
+                    errorType = String(errObj.type || errObj.errorType || 'unknown');
+                  }
+
+                  console.error('[STREAMING] SSE error event received:', {
+                    errorMessage,
+                    errorType,
+                    rawError,
+                    errorStructure: typeof rawError,
+                  });
+
+                  // Update message with error details
+                  setMessages(prev =>
+                    prev.map(msg =>
+                      msg.id === messageId
+                        ? {
+                            ...msg,
+                            parts: [{ type: 'text' as const, text: errorMessage }],
+                            metadata: {
+                              ...(msg.metadata || {}),
+                              error: errorMessage,
+                              errorMessage,
+                              errorType,
+                              hasError: true,
+                              isTransient: true,
+                            },
+                          }
+                        : msg,
+                    ),
+                  );
+
+                  throw new Error(errorMessage);
                 }
               } catch (parseError) {
                 console.error('[STREAMING] Failed to parse SSE event:', {
@@ -374,23 +468,63 @@ export function useChatStreaming(
           return; // Graceful abort - don't throw
         }
 
-        // Handle other errors
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        console.error('[STREAMING] Fatal error:', {
-          error,
+        // Handle other errors - extract as much detail as possible
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        const errorName = error instanceof Error ? error.name : 'Error';
+        const errorStack = error instanceof Error ? error.stack : undefined;
+
+        // Try to extract additional error details (API errors often have extra fields)
+        const errorObj = error as Record<string, unknown>;
+        const statusCode = typeof errorObj.statusCode === 'number' ? errorObj.statusCode : undefined;
+        const errorType = typeof errorObj.type === 'string' ? errorObj.type : undefined;
+        const responseBody = errorObj.responseBody;
+
+        console.error('[STREAMING] Fatal error with full context:', {
+          errorName,
           errorMessage,
+          errorType,
+          statusCode,
+          responseBody,
+          errorStack,
           messageId,
+          fullError: error,
         });
+
+        // Build comprehensive error metadata
+        const errorMetadata: Record<string, unknown> = {
+          error: errorMessage,
+          errorMessage,
+          errorType: errorType || errorName.toLowerCase(),
+          hasError: true,
+          isTransient: true, // Default to transient for retry
+        };
+
+        // Add status code if available (helps with classification)
+        if (statusCode) {
+          errorMetadata.statusCode = statusCode;
+        }
+
+        // Add response body details if available
+        if (responseBody) {
+          try {
+            const bodyStr = typeof responseBody === 'string'
+              ? responseBody
+              : JSON.stringify(responseBody);
+            errorMetadata.responseBody = bodyStr.substring(0, 500); // Truncate for metadata
+          } catch {
+            // Ignore serialization errors
+          }
+        }
 
         setMessages(prev =>
           prev.map(msg =>
             msg.id === messageId
               ? {
                   ...msg,
-                  parts: [{ type: 'text' as const, text: `Error: ${errorMessage}` }],
+                  parts: [{ type: 'text' as const, text: errorMessage }],
                   metadata: {
                     ...(msg.metadata || {}),
-                    error: errorMessage,
+                    ...errorMetadata,
                   },
                 }
               : msg,
@@ -419,6 +553,46 @@ export function useChatStreaming(
       // Create abort controller for this stream session
       const abortController = new AbortController();
       abortControllerRef.current = abortController;
+
+      // ✅ OPTIMISTIC UPDATE: Immediately decrement message quota for instant UI feedback
+      // This makes the sidebar usage metrics update instantly before the server responds
+      queryClient.setQueryData(
+        queryKeys.usage.stats(),
+        (oldData: unknown) => {
+          if (!oldData || typeof oldData !== 'object')
+            return oldData;
+          if (!('success' in oldData) || !oldData.success)
+            return oldData;
+          if (!('data' in oldData) || !oldData.data || typeof oldData.data !== 'object')
+            return oldData;
+
+          const data = oldData.data as {
+            messages: { used: number; limit: number; remaining: number; percentage: number };
+            threads: { used: number; limit: number; remaining: number; percentage: number };
+            subscription: unknown;
+            period: unknown;
+          };
+
+          // Calculate expected message count increase (user message + participant responses)
+          const messageCount = 1 + selectedParticipants.length;
+
+          return {
+            ...oldData,
+            data: {
+              ...data,
+              messages: {
+                ...data.messages,
+                used: data.messages.used + messageCount,
+                remaining: Math.max(0, data.messages.remaining - messageCount),
+                percentage: Math.min(
+                  100,
+                  ((data.messages.used + messageCount) / data.messages.limit) * 100,
+                ),
+              },
+            },
+          };
+        },
+      );
 
       setStatus('streaming');
 
@@ -457,6 +631,13 @@ export function useChatStreaming(
           await streamSingleParticipant(i, currentMessages, abortController.signal);
         }
 
+        // ✅ CRITICAL: Invalidate usage stats after successful message streaming
+        // This ensures the sidebar usage metrics update in real-time as users send/receive messages
+        console.warn('[STREAMING] Stream completed successfully - invalidating usage stats');
+        invalidationPatterns.afterThreadMessage(threadId).forEach((key) => {
+          queryClient.invalidateQueries({ queryKey: key });
+        });
+
         setStatus('ready');
       } catch {
         // Error already handled in streamSingleParticipant
@@ -467,7 +648,7 @@ export function useChatStreaming(
         setStreamingState({ participantIndex: null, messageId: null });
       }
     },
-    [status, selectedParticipants, streamSingleParticipant, setMessages],
+    [status, selectedParticipants, streamSingleParticipant, setMessages, threadId, queryClient],
   );
 
   return {

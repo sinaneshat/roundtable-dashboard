@@ -40,16 +40,70 @@ export function useCreateThreadMutation() {
 
   return useMutation({
     mutationFn: createThreadService,
-    onSuccess: () => {
-      // Invalidate thread lists and usage stats
-      invalidationPatterns.threads.forEach((key) => {
-        queryClient.invalidateQueries({ queryKey: key });
-      });
+    // ✅ OPTIMISTIC UPDATE: Immediately increment thread count for instant UI feedback
+    onMutate: async () => {
+      // Cancel any outgoing refetches to prevent overwriting optimistic update
+      await queryClient.cancelQueries({ queryKey: queryKeys.usage.stats() });
+
+      // Snapshot the previous value for rollback
+      const previousUsage = queryClient.getQueryData(queryKeys.usage.stats());
+
+      // Optimistically update thread count
+      queryClient.setQueryData(
+        queryKeys.usage.stats(),
+        (oldData: unknown) => {
+          if (!oldData || typeof oldData !== 'object')
+            return oldData;
+          if (!('success' in oldData) || !oldData.success)
+            return oldData;
+          if (!('data' in oldData) || !oldData.data || typeof oldData.data !== 'object')
+            return oldData;
+
+          const data = oldData.data as {
+            messages: { used: number; limit: number; remaining: number; percentage: number };
+            threads: { used: number; limit: number; remaining: number; percentage: number };
+            subscription: unknown;
+            period: unknown;
+          };
+
+          return {
+            ...oldData,
+            data: {
+              ...data,
+              threads: {
+                ...data.threads,
+                used: data.threads.used + 1,
+                remaining: Math.max(0, data.threads.remaining - 1),
+                percentage: Math.min(
+                  100,
+                  ((data.threads.used + 1) / data.threads.limit) * 100,
+                ),
+              },
+            },
+          };
+        },
+      );
+
+      // Return context with previous value for rollback
+      return { previousUsage };
     },
-    onError: (error) => {
+    // On error, rollback to previous value
+    onError: (error, _variables, context) => {
+      if (context?.previousUsage) {
+        queryClient.setQueryData(queryKeys.usage.stats(), context.previousUsage);
+      }
       if (process.env.NODE_ENV === 'development') {
         console.error('Failed to create thread', error);
       }
+    },
+    onSuccess: () => {
+      // Invalidate thread lists and usage stats (including quotas)
+      // Note: Full usage stats are invalidated because thread creation counts toward quota
+      invalidationPatterns.threads.forEach((key) => {
+        queryClient.invalidateQueries({ queryKey: key });
+      });
+      // Also invalidate full usage stats for real-time sidebar update
+      queryClient.invalidateQueries({ queryKey: queryKeys.usage.stats() });
     },
     retry: false,
     throwOnError: false,
@@ -96,10 +150,12 @@ export function useDeleteThreadMutation() {
   return useMutation({
     mutationFn: deleteThreadService,
     onSuccess: () => {
-      // Invalidate thread lists and usage stats
+      // Invalidate thread lists and usage stats (including quotas)
       invalidationPatterns.threads.forEach((key) => {
         queryClient.invalidateQueries({ queryKey: key });
       });
+      // Also invalidate full usage stats for real-time sidebar update
+      queryClient.invalidateQueries({ queryKey: queryKeys.usage.stats() });
     },
     onError: (error) => {
       if (process.env.NODE_ENV === 'development') {

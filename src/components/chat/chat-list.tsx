@@ -34,6 +34,8 @@ type ChatListProps = {
   onDeleteChat: (chatId: string) => void;
   searchTerm: string;
   deletingChatId?: string | null;
+  isMobile?: boolean;
+  onNavigate?: () => void;
 };
 
 type StickyHeaderProps = {
@@ -75,6 +77,8 @@ export function ChatList({
   onDeleteChat,
   searchTerm = '',
   deletingChatId,
+  isMobile = false,
+  onNavigate,
 }: ChatListProps) {
   const pathname = usePathname();
   const t = useTranslations();
@@ -134,6 +138,11 @@ export function ChatList({
               'min-w-0',
               isDeleting && 'pointer-events-none opacity-60',
             )}
+            onClick={() => {
+              if (isMobile && onNavigate) {
+                onNavigate();
+              }
+            }}
           >
             <span className="truncate block max-w-[180px]">{chat.title}</span>
           </Link>

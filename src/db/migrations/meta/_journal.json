@@ -5,43 +5,8 @@
     {
       "idx": 0,
       "version": "6",
-      "when": 1759761593736,
-      "tag": "0000_spicy_psylocke",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "6",
-      "when": 1759924423929,
-      "tag": "0001_serious_eternals",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "6",
-      "when": 1759924500000,
-      "tag": "0002_session_tracking_normalized",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "6",
-      "when": 1736400000000,
-      "tag": "0003_remove_sessions_add_changelog",
-      "breakpoints": true
-    },
-    {
-      "idx": 4,
-      "version": "6",
-      "when": 1728450000000,
-      "tag": "0004_add_message_variants",
-      "breakpoints": true
-    },
-    {
-      "idx": 5,
-      "version": "6",
-      "when": 1760127495398,
-      "tag": "0005_aberrant_hairball",
+      "when": 1760134544025,
+      "tag": "0000_rich_lila_cheney",
       "breakpoints": true
     }
   ]

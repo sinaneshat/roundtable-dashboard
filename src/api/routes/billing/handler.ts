@@ -452,7 +452,7 @@ export const createCheckoutSessionHandler: RouteHandler<typeof createCheckoutSes
       // Theo's pattern: Do NOT use CHECKOUT_SESSION_ID (ignore it)
       // Success page will eagerly sync fresh data from Stripe API
       const successUrl = body.successUrl || `${appUrl}/chat/billing/success`;
-      const cancelUrl = body.cancelUrl || `${appUrl}/chat/billing`;
+      const cancelUrl = body.cancelUrl || `${appUrl}/chat/pricing`;
 
       const session = await stripeService.createCheckoutSession({
         priceId: body.priceId,

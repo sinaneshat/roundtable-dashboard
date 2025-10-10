@@ -148,6 +148,10 @@ export const UIMessageMetadataSchema = z.object({
   errorType: z.string().optional(),
   errorMessage: z.string().optional(),
   isTransient: z.boolean().optional(),
+  // ✅ Additional error details for debugging
+  statusCode: z.number().optional(), // HTTP status code from API errors
+  responseBody: z.string().optional(), // Truncated response body for debugging
+  errorDetails: z.string().optional(), // JSON string with full error context
 }).passthrough(); // ✅ Allow additional fields (matches backend pattern)
 
 /**

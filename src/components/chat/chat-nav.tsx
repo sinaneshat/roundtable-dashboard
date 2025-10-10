@@ -99,6 +99,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
   const handleNewChat = () => {
     router.push('/chat');
+    if (isMobile) {
+      setOpenMobile(false);
+    }
   };
 
   const handleDeleteChat = (chatId: string) => {
@@ -171,7 +174,15 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             <SidebarMenu>
               <SidebarMenuItem>
                 <SidebarMenuButton size="lg" asChild>
-                  <Link href="/chat" prefetch={false}>
+                  <Link
+                    href="/chat"
+                    prefetch={false}
+                    onClick={() => {
+                      if (isMobile) {
+                        setOpenMobile(false);
+                      }
+                    }}
+                  >
                     <div className="flex aspect-square size-8 items-center justify-center rounded-lg">
                       <Image
                         src="/static/logo.png"
@@ -232,8 +243,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 <span className="flex-1 text-left">{t('chat.searchChats')}</span>
                 <kbd className="pointer-events-none inline-flex h-5 select-none items-center gap-0.5 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground opacity-100">
                   <span className="text-xs">⌘</span>
-                  <span className="text-xs">/Ctrl</span>
-                  <span>+</span>
                   K
                 </kbd>
               </Button>
@@ -267,6 +276,12 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                       onDeleteChat={handleDeleteChat}
                       searchTerm=""
                       deletingChatId={deletingChatId}
+                      isMobile={isMobile}
+                      onNavigate={() => {
+                        if (isMobile) {
+                          setOpenMobile(false);
+                        }
+                      }}
                     />
 
                     {/* Pagination Loading Skeleton - Following React Query v5 pattern */}

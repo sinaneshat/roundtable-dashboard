@@ -120,25 +120,30 @@ export const auth = betterAuth({
     nextCookies(),
     magicLink({
       sendMagicLink: async ({ email, url }) => {
-        const { emailService } = await import('@/lib/email/ses-service');
-        await emailService.sendMagicLink(email, url);
+        try {
+          const { emailService } = await import('@/lib/email/ses-service');
+          await emailService.sendMagicLink(email, url);
+        } catch (error) {
+          // Better Auth will show this error to the user
+          const errorMessage = error instanceof Error ? error.message : 'Failed to send magic link email';
+          throw new Error(`Unable to send login email: ${errorMessage}`);
+        }
       },
     }),
     apiKey({
-      // CRITICAL: Sessions from API keys feature
-      // By default, API keys can create sessions. Use disableSessionForAPIKeys: true to disable.
-      // This allows getSession() to recognize and validate API keys automatically
-      // @see https://www.better-auth.com/docs/plugins/api-key#sessions-from-api-keys
-      // NOTE: In Better Auth v1.3.11, this is enabled by default
+      // API Key Headers - specify which headers to check for API keys
+      // Default is 'x-api-key', but can specify multiple headers
+      // @see https://www.better-auth.com/docs/plugins/api-key#configure-api-key-headers
+      apiKeyHeaders: 'x-api-key', // Can also be array: ['x-api-key', 'authorization']
 
-      // Custom prefix for API keys
-      defaultPrefix: 'rpnd_', // roundtable prefix
+      // Custom prefix for API keys (e.g., rpnd_abc123...)
+      defaultPrefix: 'rpnd_',
 
       // Key configuration
       defaultKeyLength: 64,
       requireName: true,
 
-      // Metadata support
+      // Metadata support - allows storing custom data with API keys
       enableMetadata: true,
 
       // Expiration settings
@@ -155,6 +160,13 @@ export const auth = betterAuth({
         timeWindow: 1000 * 60 * 60 * 24, // 24 hours
         maxRequests: 1000, // 1000 requests per day by default
       },
+
+      // Sessions from API keys - enabled by default in Better Auth
+      // When a valid API key is found in the specified headers, Better Auth automatically
+      // creates a mock session for the user. This allows endpoints using getSession() to
+      // work seamlessly with both session cookies and API keys.
+      // To disable this behavior, set: disableSessionForAPIKeys: true
+      // @see https://www.better-auth.com/docs/plugins/api-key#sessions-from-api-keys
     }),
   ],
 });

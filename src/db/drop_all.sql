@@ -16,6 +16,7 @@ DROP TABLE IF EXISTS api_key;
 DROP TABLE IF EXISTS chat_message;
 DROP TABLE IF EXISTS chat_participant;
 DROP TABLE IF EXISTS chat_thread_memory;
+DROP TABLE IF EXISTS chat_thread_changelog;
 DROP TABLE IF EXISTS chat_custom_role;
 DROP TABLE IF EXISTS chat_memory;
 DROP TABLE IF EXISTS chat_thread;

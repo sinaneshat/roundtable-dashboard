@@ -17,6 +17,15 @@ const nextConfig: NextConfig = {
     removeConsole: process.env.NEXT_PUBLIC_WEBAPP_ENV === 'prod',
   },
 
+  // External packages for Server Components bundling
+  // Required for React Email to work in edge runtime and Cloudflare Workers
+  // @see https://github.com/resend/react-email/issues/977
+  serverExternalPackages: [
+    '@react-email/components',
+    '@react-email/render',
+    'react-email',
+  ],
+
   // Cache optimization headers
   async headers() {
     return [

@@ -249,11 +249,9 @@ CREATE TABLE `chat_message` (
 	`reasoning` text,
 	`tool_calls` text,
 	`metadata` text,
-	`parent_message_id` text,
 	`created_at` integer DEFAULT (cast((julianday('now') - 2440587.5)*86400000 as integer)) NOT NULL,
 	FOREIGN KEY (`thread_id`) REFERENCES `chat_thread`(`id`) ON UPDATE no action ON DELETE cascade,
-	FOREIGN KEY (`participant_id`) REFERENCES `chat_participant`(`id`) ON UPDATE no action ON DELETE set null,
-	FOREIGN KEY (`parent_message_id`) REFERENCES `chat_message`(`id`) ON UPDATE no action ON DELETE set null
+	FOREIGN KEY (`participant_id`) REFERENCES `chat_participant`(`id`) ON UPDATE no action ON DELETE set null
 );
 --> statement-breakpoint
 CREATE INDEX `chat_message_thread_idx` ON `chat_message` (`thread_id`);--> statement-breakpoint
@@ -300,6 +298,19 @@ CREATE INDEX `chat_thread_updated_idx` ON `chat_thread` (`updated_at`);--> state
 CREATE INDEX `chat_thread_slug_idx` ON `chat_thread` (`slug`);--> statement-breakpoint
 CREATE INDEX `chat_thread_favorite_idx` ON `chat_thread` (`is_favorite`);--> statement-breakpoint
 CREATE INDEX `chat_thread_public_idx` ON `chat_thread` (`is_public`);--> statement-breakpoint
+CREATE TABLE `chat_thread_changelog` (
+	`id` text PRIMARY KEY NOT NULL,
+	`thread_id` text NOT NULL,
+	`change_type` text NOT NULL,
+	`change_summary` text NOT NULL,
+	`change_data` text,
+	`created_at` integer DEFAULT (cast((julianday('now') - 2440587.5)*86400000 as integer)) NOT NULL,
+	FOREIGN KEY (`thread_id`) REFERENCES `chat_thread`(`id`) ON UPDATE no action ON DELETE cascade
+);
+--> statement-breakpoint
+CREATE INDEX `chat_thread_changelog_thread_idx` ON `chat_thread_changelog` (`thread_id`);--> statement-breakpoint
+CREATE INDEX `chat_thread_changelog_type_idx` ON `chat_thread_changelog` (`change_type`);--> statement-breakpoint
+CREATE INDEX `chat_thread_changelog_created_idx` ON `chat_thread_changelog` (`created_at`);--> statement-breakpoint
 CREATE TABLE `chat_thread_memory` (
 	`id` text PRIMARY KEY NOT NULL,
 	`thread_id` text NOT NULL,

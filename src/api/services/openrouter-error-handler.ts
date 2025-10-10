@@ -1,9 +1,15 @@
 /**
  * OpenRouter Error Handler Service
  *
+ * ✅ AI SDK v5 COMPLIANT: Uses APICallError and proper error type checking
  * Provides error classification, retry logic, and user-friendly error messages
  * for OpenRouter API failures during AI model streaming
+ *
+ * Following AI SDK error handling best practices:
+ * https://ai-sdk.dev/docs/ai-sdk-core/error-handling
  */
+
+import { APICallError } from 'ai';
 
 /**
  * Error classification types for different failure scenarios
@@ -112,47 +118,289 @@ const ERROR_MESSAGES: Record<OpenRouterErrorType, string> = {
 };
 
 /**
- * Classify error from OpenRouter/AI SDK
+ * Extract error details from OpenRouter/AI provider response body
+ *
+ * OpenRouter error format hierarchy (prioritize most detailed):
+ * 1. error.metadata.raw - Actual upstream provider message (MOST DETAILED)
+ * 2. error.message - OpenRouter's wrapper message
+ * 3. message - Fallback top-level message
+ */
+export function extractErrorDetails(responseBody: unknown): {
+  providerMessage: string | null;
+  providerCode: string | null;
+} {
+  try {
+    if (!responseBody || typeof responseBody !== 'object') {
+      return { providerMessage: null, providerCode: null };
+    }
+
+    const body = responseBody as Record<string, unknown>;
+
+    // OpenRouter error format: { error: { message: string, code?: string, metadata?: { raw: string } } }
+    if (body.error && typeof body.error === 'object') {
+      const errorObj = body.error as Record<string, unknown>;
+
+      // ✅ PRIORITY 1: Check metadata.raw for upstream provider's actual message
+      // This contains the REAL error from the model provider (e.g., "deepseek/deepseek-r1:free is temporarily rate-limited upstream...")
+      if (errorObj.metadata && typeof errorObj.metadata === 'object') {
+        const metadata = errorObj.metadata as Record<string, unknown>;
+        if (typeof metadata.raw === 'string' && metadata.raw.trim()) {
+          return {
+            providerMessage: metadata.raw,
+            providerCode: typeof errorObj.code === 'string' ? errorObj.code : null,
+          };
+        }
+      }
+
+      // ✅ PRIORITY 2: Fall back to error.message (usually generic like "Provider returned error")
+      if (typeof errorObj.message === 'string' && errorObj.message.trim()) {
+        return {
+          providerMessage: errorObj.message,
+          providerCode: typeof errorObj.code === 'string' ? errorObj.code : null,
+        };
+      }
+
+      return {
+        providerMessage: null,
+        providerCode: typeof errorObj.code === 'string' ? errorObj.code : null,
+      };
+    }
+
+    // Alternative format: { message: string, code?: string }
+    if (body.message) {
+      return {
+        providerMessage: typeof body.message === 'string' ? body.message : null,
+        providerCode: typeof body.code === 'string' ? body.code : null,
+      };
+    }
+
+    return { providerMessage: null, providerCode: null };
+  } catch {
+    return { providerMessage: null, providerCode: null };
+  }
+}
+
+/**
+ * ✅ AI SDK v5 COMPLIANT: Classify error using APICallError
+ *
+ * Following AI SDK error handling patterns:
+ * - Uses APICallError.isInstance() for type checking
+ * - Extracts statusCode for accurate classification
+ * - Parses responseBody for provider-specific error messages
+ * - Falls back to error.message for non-API errors
+ *
+ * @see https://ai-sdk.dev/docs/reference/ai-sdk-errors/ai-api-call-error
  */
 export function classifyOpenRouterError(error: unknown): ClassifiedError {
-  const errorString = String(error);
-  const errorMessage = error instanceof Error ? error.message : errorString;
+  // ✅ STEP 0: Check for AI SDK retry wrapper errors
+  // AI SDK wraps errors like: "Failed after 3 attempts. Last error: <actual error>"
+  // The ACTUAL error with all details is in error.lastError or error.errors[last]
+  if (error instanceof Error) {
+    const retryMatch = error.message.match(/Failed after \d+ attempts\. Last error: (.+)/);
+    if (retryMatch) {
+      const actualErrorMessage = retryMatch[1];
+
+      // ✅ CRITICAL: Extract the actual APICallError from the retry wrapper
+      // AI SDK stores the last error in error.lastError or error.errors array
+      const errorObj = error as Error & {
+        cause?: unknown;
+        lastError?: unknown;
+        errors?: unknown[];
+      };
+
+      // Try to get the underlying error with full details
+      let underlyingError: unknown = error;
+
+      // Priority 1: Check lastError property (AI SDK retry pattern)
+      if (errorObj.lastError) {
+        underlyingError = errorObj.lastError;
+      } else if (Array.isArray(errorObj.errors) && errorObj.errors.length > 0) {
+        // Priority 2: Check errors array (get the last error)
+        underlyingError = errorObj.errors[errorObj.errors.length - 1];
+      } else if (errorObj.cause) {
+        // Priority 3: Check cause property
+        underlyingError = errorObj.cause;
+      }
+
+      console.warn('[Error Classifier] Detected AI SDK retry wrapper, extracting underlying error:', {
+        wrapperMessage: error.message,
+        actualErrorMessage,
+        hasLastError: !!errorObj.lastError,
+        hasErrors: Array.isArray(errorObj.errors),
+        errorsCount: Array.isArray(errorObj.errors) ? errorObj.errors.length : 0,
+        hasCause: !!errorObj.cause,
+        underlyingErrorType: underlyingError instanceof Error ? underlyingError.constructor.name : typeof underlyingError,
+        isAPICallError: APICallError.isInstance(underlyingError),
+      });
+
+      // If we found an underlying error (not the same as the wrapper), classify that
+      if (underlyingError !== error) {
+        return classifyOpenRouterError(underlyingError);
+      }
+
+      // If no underlying error found, create one with the extracted message
+      // This should rarely happen - it means AI SDK changed their error structure
+      console.warn('[Error Classifier] No underlying error found in retry wrapper, using extracted message');
+      const extractedError = new Error(actualErrorMessage);
+      return classifyOpenRouterError(extractedError);
+    }
+  }
+
+  // ✅ STEP 1: Check if this is an AI SDK APICallError
+  if (APICallError.isInstance(error)) {
+    const { statusCode, responseBody, isRetryable, url } = error;
+
+    // Extract detailed error message from response body
+    const { providerMessage, providerCode } = extractErrorDetails(responseBody);
+
+    // Build detailed technical message for logging
+    const technicalParts: string[] = [
+      `HTTP ${statusCode}`,
+      `URL: ${url}`,
+    ];
+
+    if (providerCode) {
+      technicalParts.push(`Code: ${providerCode}`);
+    }
+
+    if (providerMessage) {
+      technicalParts.push(`Provider: ${providerMessage}`);
+    } else {
+      // Include raw response body for debugging if no structured message
+      technicalParts.push(`Body: ${JSON.stringify(responseBody)}`);
+    }
+
+    const technicalMessage = technicalParts.join(' | ');
+
+    // ✅ STEP 2: Classify based on HTTP status code (most reliable)
+    switch (statusCode) {
+      case 429: {
+        // Rate limit - ALWAYS use provider message if available for max detail
+        // Provider message contains specific info like "deepseek/deepseek-r1:free is temporarily rate-limited upstream..."
+        const userMessage = providerMessage || ERROR_MESSAGES.rate_limit;
+
+        // Log the actual provider message to verify extraction
+        if (providerMessage) {
+          console.warn('[Error Classifier] Rate limit with provider message:', {
+            statusCode,
+            providerMessage,
+            technicalMessage,
+          });
+        }
+
+        return {
+          type: 'rate_limit',
+          message: userMessage,
+          technicalMessage,
+          ...RETRY_CONFIG.rate_limit,
+        };
+      }
+
+      case 503: {
+        // Service unavailable / model unavailable
+        const userMessage = providerMessage || ERROR_MESSAGES.model_unavailable;
+        return {
+          type: 'model_unavailable',
+          message: userMessage,
+          technicalMessage,
+          ...RETRY_CONFIG.model_unavailable,
+        };
+      }
+
+      case 400: {
+        // Bad request - show provider's specific error
+        const userMessage = providerMessage || ERROR_MESSAGES.invalid_request;
+        return {
+          type: 'invalid_request',
+          message: userMessage,
+          technicalMessage,
+          ...RETRY_CONFIG.invalid_request,
+        };
+      }
+
+      case 401:
+      case 403: {
+        // Authentication error
+        const userMessage = providerMessage || ERROR_MESSAGES.authentication;
+        return {
+          type: 'authentication',
+          message: userMessage,
+          technicalMessage,
+          ...RETRY_CONFIG.authentication,
+        };
+      }
+
+      case 500:
+      case 502:
+      case 504: {
+        // Server errors
+        const userMessage = providerMessage || 'The AI service encountered a server error. Retrying...';
+        return {
+          type: 'model_unavailable',
+          message: userMessage,
+          technicalMessage,
+          ...RETRY_CONFIG.model_unavailable,
+        };
+      }
+
+      default: {
+        // ✅ STEP 3: Check provider message for specific error types
+        if (providerMessage) {
+          const messageLower = providerMessage.toLowerCase();
+
+          // Check for context length / token limit errors
+          if (messageLower.includes('context') || messageLower.includes('token') || messageLower.includes('length')) {
+            return {
+              type: 'model_error',
+              message: `Context length exceeded: ${providerMessage}`,
+              technicalMessage,
+              ...RETRY_CONFIG.model_error,
+            };
+          }
+
+          // Check for safety/content filter errors
+          if (messageLower.includes('safety') || messageLower.includes('filter') || messageLower.includes('policy')) {
+            return {
+              type: 'model_error',
+              message: `Content filtered: ${providerMessage}`,
+              technicalMessage,
+              ...RETRY_CONFIG.model_error,
+            };
+          }
+
+          // Use provider message directly for unknown status codes
+          return {
+            type: 'unknown',
+            message: providerMessage,
+            technicalMessage,
+            shouldRetry: isRetryable,
+            isTransient: isRetryable,
+          };
+        }
+
+        // No provider message, use generic error
+        return {
+          type: 'unknown',
+          message: ERROR_MESSAGES.unknown,
+          technicalMessage,
+          shouldRetry: isRetryable,
+          isTransient: isRetryable,
+        };
+      }
+    }
+  }
+
+  // ✅ STEP 4: Handle non-API errors (network, timeout, etc.)
+  const errorMessage = error instanceof Error ? error.message : String(error);
   const errorLower = errorMessage.toLowerCase();
 
-  // Check for HTTP status code patterns
-  if (errorLower.includes('429') || errorLower.includes('rate limit')) {
+  // Check error message for specific patterns
+  if (error instanceof Error && error.name === 'AbortError') {
     return {
-      type: 'rate_limit',
-      message: ERROR_MESSAGES.rate_limit,
+      type: 'timeout',
+      message: ERROR_MESSAGES.timeout,
       technicalMessage: errorMessage,
-      ...RETRY_CONFIG.rate_limit,
-    };
-  }
-
-  if (errorLower.includes('503') || errorLower.includes('service unavailable') || errorLower.includes('model unavailable')) {
-    return {
-      type: 'model_unavailable',
-      message: ERROR_MESSAGES.model_unavailable,
-      technicalMessage: errorMessage,
-      ...RETRY_CONFIG.model_unavailable,
-    };
-  }
-
-  if (errorLower.includes('400') || errorLower.includes('bad request') || errorLower.includes('invalid')) {
-    return {
-      type: 'invalid_request',
-      message: ERROR_MESSAGES.invalid_request,
-      technicalMessage: errorMessage,
-      ...RETRY_CONFIG.invalid_request,
-    };
-  }
-
-  if (errorLower.includes('401') || errorLower.includes('403') || errorLower.includes('unauthorized') || errorLower.includes('forbidden')) {
-    return {
-      type: 'authentication',
-      message: ERROR_MESSAGES.authentication,
-      technicalMessage: errorMessage,
-      ...RETRY_CONFIG.authentication,
+      ...RETRY_CONFIG.timeout,
     };
   }
 
@@ -165,7 +413,7 @@ export function classifyOpenRouterError(error: unknown): ClassifiedError {
     };
   }
 
-  if (errorLower.includes('network') || errorLower.includes('connection') || errorLower.includes('econnrefused') || errorLower.includes('enotfound')) {
+  if (errorLower.includes('network') || errorLower.includes('connection') || errorLower.includes('econnrefused') || errorLower.includes('enotfound') || errorLower.includes('fetch')) {
     return {
       type: 'network',
       message: ERROR_MESSAGES.network,
@@ -183,19 +431,10 @@ export function classifyOpenRouterError(error: unknown): ClassifiedError {
     };
   }
 
-  if (errorLower.includes('safety') || errorLower.includes('content filter') || errorLower.includes('context length') || errorLower.includes('token limit')) {
-    return {
-      type: 'model_error',
-      message: ERROR_MESSAGES.model_error,
-      technicalMessage: errorMessage,
-      ...RETRY_CONFIG.model_error,
-    };
-  }
-
-  // Default to unknown error
+  // Default to unknown error with the actual error message
   return {
     type: 'unknown',
-    message: ERROR_MESSAGES.unknown,
+    message: errorMessage || ERROR_MESSAGES.unknown,
     technicalMessage: errorMessage,
     ...RETRY_CONFIG.unknown,
   };
@@ -232,7 +471,14 @@ export function shouldRetryError(
 }
 
 /**
- * Format error for database storage
+ * ✅ AI SDK v5 COMPLIANT: Format error for database storage with full context
+ *
+ * Includes all available error details from APICallError for debugging:
+ * - HTTP status code
+ * - Provider error message and code
+ * - Request URL
+ * - Response body (for debugging)
+ * - Retry information
  */
 export function formatErrorForDatabase(error: unknown, modelId: string): {
   error: string;
@@ -243,16 +489,49 @@ export function formatErrorForDatabase(error: unknown, modelId: string): {
 } {
   const classified = classifyOpenRouterError(error);
 
+  // Build comprehensive error details object
+  const errorDetailsObj: Record<string, unknown> = {
+    technicalMessage: classified.technicalMessage,
+    userMessage: classified.message,
+    modelId,
+    timestamp: new Date().toISOString(),
+    isTransient: classified.isTransient,
+    shouldRetry: classified.shouldRetry,
+  };
+
+  // ✅ Add APICallError-specific details if available
+  if (APICallError.isInstance(error)) {
+    const { statusCode, url, responseBody, isRetryable } = error;
+
+    errorDetailsObj.statusCode = statusCode;
+    errorDetailsObj.url = url;
+    errorDetailsObj.isRetryable = isRetryable;
+
+    // Extract provider-specific error details
+    const { providerMessage, providerCode } = extractErrorDetails(responseBody);
+    if (providerMessage) {
+      errorDetailsObj.providerMessage = providerMessage;
+    }
+    if (providerCode) {
+      errorDetailsObj.providerCode = providerCode;
+    }
+
+    // Include raw response body for debugging (truncate if too large)
+    const responseBodyStr = JSON.stringify(responseBody);
+    errorDetailsObj.responseBody = responseBodyStr.length > 1000
+      ? `${responseBodyStr.substring(0, 1000)}... (truncated)`
+      : responseBodyStr;
+  } else if (error instanceof Error) {
+    // Include Error-specific details
+    errorDetailsObj.errorName = error.name;
+    errorDetailsObj.errorStack = error.stack;
+  }
+
   return {
     error: classified.type,
     errorMessage: classified.message,
     errorType: classified.type,
-    errorDetails: JSON.stringify({
-      technicalMessage: classified.technicalMessage,
-      modelId,
-      timestamp: new Date().toISOString(),
-      isTransient: classified.isTransient,
-    }),
+    errorDetails: JSON.stringify(errorDetailsObj, null, 2),
     isTransient: classified.isTransient,
   };
 }

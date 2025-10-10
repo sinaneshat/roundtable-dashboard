@@ -220,10 +220,19 @@
       "activatingSubscription": "Activating your subscription...",
       "confirmingPayment": "Please wait while we confirm your payment",
       "description": "Your subscription has been activated",
-      "redirecting": "Redirecting in {count} seconds",
+      "autoRedirect": "Redirecting to chat in {seconds} seconds...",
       "startChat": "Start Your First Chat",
       "title": "Payment Successful!",
-      "viewPlan": "View My Plan"
+      "viewPricing": "View Pricing Plans",
+      "planLimits": {
+        "concurrentModels": "Concurrent Models",
+        "maxThreads": "Max Threads",
+        "maxMessages": "Max Messages",
+        "maxMemories": "Max Memories",
+        "customRoles": "Custom Roles",
+        "status": "Status",
+        "activeUntilLabel": "Active until"
+      }
     },
     "failure": {
       "title": "Payment Failed",

@@ -3,7 +3,9 @@
 import { Message, MessageAvatar, MessageContent } from '@/components/ai-elements/message';
 import { Reasoning, ReasoningContent, ReasoningTrigger } from '@/components/ai-elements/reasoning';
 import { Response } from '@/components/ai-elements/response';
+import { MessageErrorDetails } from '@/components/chat/message-error-details';
 import type { AIModel } from '@/lib/ai/models-config';
+import type { UIMessageMetadata } from '@/lib/schemas/message-metadata';
 
 /**
  * ✅ OFFICIAL AI SDK PATTERN: Message part types
@@ -26,6 +28,8 @@ type ModelMessageCardProps = {
   className?: string;
   /** Message ID for generating stable React keys */
   messageId?: string;
+  /** Message metadata with error information */
+  metadata?: UIMessageMetadata | null;
 };
 
 /**
@@ -51,72 +55,84 @@ export function ModelMessageCard({
   avatarName,
   className,
   messageId,
+  metadata,
 }: ModelMessageCardProps) {
   const showStatusIndicator = status === 'thinking' || status === 'streaming';
   const isError = status === 'error';
+  const hasError = isError || metadata?.hasError || metadata?.error;
 
   return (
     <div className={`space-y-1 ${className || ''}`}>
       {/* ✅ OFFICIAL AI SDK PATTERN: ALWAYS render message once created */}
       <Message from="assistant">
-        <MessageContent className={isError ? 'text-destructive' : undefined}>
+        <MessageContent className={hasError ? 'text-destructive' : undefined}>
           {/* ✅ MODEL HEADER: Always visible */}
-          <div className="flex items-center gap-2 mb-2 -mt-1">
-            {/* Model Name - subtle, no special color */}
-            <span className="text-sm font-medium text-foreground/90">
-              {model.name}
-            </span>
+          <>
+            <div className="flex items-center gap-2 mb-2 -mt-1">
+              {/* Model Name - subtle, no special color */}
+              <span className="text-sm font-medium text-foreground/90">
+                {model.name}
+              </span>
 
-            {/* Role - subtle differentiation */}
-            {role && (
-              <>
-                <span className="text-muted-foreground/50 text-xs">•</span>
-                <span className="text-muted-foreground/70 text-xs">
-                  {role}
-                </span>
-              </>
+              {/* Role - subtle differentiation */}
+              {role && (
+                <>
+                  <span className="text-muted-foreground/50 text-xs">•</span>
+                  <span className="text-muted-foreground/70 text-xs">
+                    {String(role)}
+                  </span>
+                </>
+              )}
+
+              {/* Status Indicator - very subtle, no text */}
+              {showStatusIndicator && (
+                <span className="ml-1 size-1.5 rounded-full bg-primary/60 animate-pulse" />
+              )}
+
+              {/* Error Indicator - subtle red dot */}
+              {hasError && (
+                <span className="ml-1 size-1.5 rounded-full bg-destructive/80" />
+              )}
+            </div>
+
+            {/* ✅ ERROR DETAILS: Show comprehensive error information */}
+            {hasError && (
+              <MessageErrorDetails
+                metadata={metadata}
+                className="mb-2"
+              />
             )}
 
-            {/* Status Indicator - very subtle, no text */}
-            {showStatusIndicator && (
-              <span className="ml-1 size-1.5 rounded-full bg-primary/60 animate-pulse" />
-            )}
-
-            {/* Error Indicator - subtle red dot */}
-            {isError && (
-              <span className="ml-1 size-1.5 rounded-full bg-destructive/80" />
-            )}
-          </div>
-
-          {/* ✅ OFFICIAL AI SDK PATTERN: Just render parts directly, NO placeholder logic */}
-          {parts.map((part, partIndex) => {
-            if (part.type === 'text') {
+            {/* ✅ OFFICIAL AI SDK PATTERN: Just render parts directly, NO placeholder logic */}
+            {parts.map((part, partIndex) => {
+              if (part.type === 'text') {
               // ✅ OFFICIAL AI SDK: Always render Response, even with empty text
               // Use stable key combining messageId and partIndex
-              return (
-                <Response key={messageId ? `${messageId}-text-${partIndex}` : `text-${partIndex}`}>
-                  {part.text}
-                </Response>
-              );
-            }
+                return (
+                  <Response key={messageId ? `${messageId}-text-${partIndex}` : `text-${partIndex}`}>
+                    {part.text}
+                  </Response>
+                );
+              }
 
-            if (part.type === 'reasoning') {
+              if (part.type === 'reasoning') {
               // ✅ OFFICIAL AI SDK: Always render reasoning if part exists
               // Following AI Elements pattern from chatbot example
-              return (
-                <Reasoning
-                  key={messageId ? `${messageId}-reasoning-${partIndex}` : `reasoning-${partIndex}`}
-                  isStreaming={status === 'streaming'}
-                  className="w-full"
-                >
-                  <ReasoningTrigger />
-                  <ReasoningContent>{part.text}</ReasoningContent>
-                </Reasoning>
-              );
-            }
+                return (
+                  <Reasoning
+                    key={messageId ? `${messageId}-reasoning-${partIndex}` : `reasoning-${partIndex}`}
+                    isStreaming={status === 'streaming'}
+                    className="w-full"
+                  >
+                    <ReasoningTrigger />
+                    <ReasoningContent>{part.text}</ReasoningContent>
+                  </Reasoning>
+                );
+              }
 
-            return null;
-          })}
+              return null;
+            })}
+          </>
         </MessageContent>
         <MessageAvatar src={avatarSrc} name={avatarName} />
       </Message>

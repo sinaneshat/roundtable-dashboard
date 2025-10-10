@@ -67,15 +67,23 @@ export type CreateChangelogParams = z.infer<typeof createChangelogParamsSchema>;
 export async function createChangelogEntry(params: CreateChangelogParams): Promise<string> {
   const db = await getDbAsync();
   const changelogId = ulid();
+  const now = new Date();
 
+  // Insert changelog entry
   await db.insert(tables.chatThreadChangelog).values({
     id: changelogId,
     threadId: params.threadId,
     changeType: params.changeType,
     changeSummary: params.changeSummary,
     changeData: params.changeData,
-    createdAt: new Date(),
+    createdAt: now,
   });
+
+  // Update thread.updatedAt to trigger ISR revalidation for public pages
+  // This ensures sitemap reflects changelog updates and ISR revalidates public pages
+  await db.update(tables.chatThread)
+    .set({ updatedAt: now })
+    .where(eq(tables.chatThread.id, params.threadId));
 
   return changelogId;
 }

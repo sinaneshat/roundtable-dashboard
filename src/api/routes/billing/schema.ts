@@ -116,8 +116,8 @@ export const CheckoutRequestSchema = z.object({
     example: 'https://app.example.com/chat/billing/success',
   }),
   cancelUrl: CoreSchemas.url().optional().openapi({
-    description: 'URL to redirect to if checkout is canceled (defaults to /chat/billing)',
-    example: 'https://app.example.com/chat/billing',
+    description: 'URL to redirect to if checkout is canceled (defaults to /chat/pricing)',
+    example: 'https://app.example.com/chat/pricing',
   }),
 }).openapi('CheckoutRequest');
 

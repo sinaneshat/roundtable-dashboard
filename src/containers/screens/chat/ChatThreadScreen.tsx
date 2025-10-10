@@ -600,12 +600,13 @@ export default function ChatThreadScreen({
               <ModelMessageCard
                 messageId={message.id}
                 model={model}
-                role={storedRole || ''} // ✅ Use stored role from metadata
+                role={String(storedRole || '')} // ✅ Use stored role from metadata
                 participantIndex={participantIndex ?? 0}
                 status={messageStatus}
                 parts={filteredParts}
                 avatarSrc={avatarProps.src}
                 avatarName={avatarProps.name}
+                metadata={metadata ?? null}
               />
 
               {/* ✅ Show round actions (regenerate + branch selector) after the last message in a round */}

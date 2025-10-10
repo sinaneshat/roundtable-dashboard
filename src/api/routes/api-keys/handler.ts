@@ -8,7 +8,6 @@
 
 import type { RouteHandler } from '@hono/zod-openapi';
 import { eq } from 'drizzle-orm';
-import { ulid } from 'ulid';
 
 import { createError } from '@/api/common/error-handling';
 import type { ErrorContext } from '@/api/core';
@@ -16,6 +15,7 @@ import { createHandler, Responses } from '@/api/core';
 import type { ApiEnv } from '@/api/types';
 import { getDbAsync } from '@/db';
 import { apiKey as apiKeyTable } from '@/db/tables/auth';
+import { auth } from '@/lib/auth/server';
 
 import type {
   createApiKeyRoute,
@@ -51,42 +51,8 @@ function createResourceNotFoundContext(
   };
 }
 
-function createAuthorizationErrorContext(
-  resource: string,
-  resourceId?: string,
-): ErrorContext {
-  return {
-    errorType: 'authorization',
-    resource: resourceId,
-    resourceId,
-  };
-}
-
-/**
- * Generate a secure random API key
- * Follows Better Auth's API key format: prefix + random string
- */
-function generateApiKey(prefix = 'rpnd_', length = 64): string {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-  const randomBytes = crypto.getRandomValues(new Uint8Array(length));
-  const randomChars = Array.from(randomBytes)
-    .map(byte => chars[byte % chars.length])
-    .join('');
-
-  return `${prefix}${randomChars}`;
-}
-
-/**
- * Hash API key using SHA-256
- * Async function to be compatible with Web Crypto API
- */
-async function hashApiKey(key: string): Promise<string> {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(key);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-}
+// Removed custom generateApiKey and hashApiKey functions
+// Now using Better Auth's official API which handles key generation and hashing internally
 
 // ============================================================================
 // API Key Handlers
@@ -94,6 +60,7 @@ async function hashApiKey(key: string): Promise<string> {
 
 /**
  * List all API keys for the authenticated user
+ * Uses Better Auth's official API for consistency
  */
 export const listApiKeysHandler: RouteHandler<typeof listApiKeysRoute, ApiEnv> = createHandler(
   {
@@ -113,28 +80,25 @@ export const listApiKeysHandler: RouteHandler<typeof listApiKeysRoute, ApiEnv> =
       userId: user.id,
     });
 
-    const db = await getDbAsync();
-
-    // Query API keys for the user (exclude the hashed key field)
-    const apiKeys = await db.query.apiKey.findMany({
-      where: eq(apiKeyTable.userId, user.id),
-      columns: {
-        key: false, // Exclude hashed key from response
-      },
+    // Use Better Auth's official API to list API keys
+    // This ensures consistent response format and excludes sensitive key values
+    const apiKeys = await auth.api.listApiKeys({
+      headers: c.req.raw.headers, // Include headers for user context
     });
 
     c.logger.info('API keys listed successfully', {
       logType: 'operation',
       operationName: 'listApiKeys',
-      resource: `${apiKeys.length} keys`,
+      resource: `${apiKeys?.length || 0} keys`,
     });
 
-    return Responses.ok(c, { apiKeys });
+    return Responses.ok(c, { apiKeys: apiKeys || [] });
   },
 );
 
 /**
  * Get a specific API key by ID
+ * Uses Better Auth's official API for ownership validation
  */
 export const getApiKeyHandler: RouteHandler<typeof getApiKeyRoute, ApiEnv> = createHandler(
   {
@@ -164,23 +128,15 @@ export const getApiKeyHandler: RouteHandler<typeof getApiKeyRoute, ApiEnv> = cre
       resource: keyId,
     });
 
-    const db = await getDbAsync();
-
-    // Query API key (exclude hashed key)
-    const apiKey = await db.query.apiKey.findFirst({
-      where: eq(apiKeyTable.id, keyId),
-      columns: {
-        key: false, // Exclude hashed key
-      },
+    // Use Better Auth's official API to get the API key
+    // This ensures ownership validation and excludes sensitive key values
+    const apiKey = await auth.api.getApiKey({
+      query: { id: keyId },
+      headers: c.req.raw.headers, // Include headers for user context
     });
 
     if (!apiKey) {
       throw createError.notFound('API key not found', createResourceNotFoundContext('apiKey', keyId));
-    }
-
-    // Verify ownership
-    if (apiKey.userId !== user.id) {
-      throw createError.unauthenticated('Access denied to this API key', createAuthorizationErrorContext('apiKey', keyId));
     }
 
     c.logger.info('API key retrieved successfully', {
@@ -228,81 +184,46 @@ export const createApiKeyHandler: RouteHandler<typeof createApiKeyRoute, ApiEnv>
       });
     }
 
-    // Generate API key
-    const prefix = 'rpnd_';
-    const apiKeyValue = generateApiKey(prefix, 64);
-    const start = apiKeyValue.substring(0, 10); // First 10 chars for display
-
-    // Hash the API key using SHA-256
-    const hashedKey = await hashApiKey(apiKeyValue);
-
-    // Calculate expiration date if provided
-    const expiresAt = body.expiresIn
-      ? new Date(Date.now() + body.expiresIn * 24 * 60 * 60 * 1000)
-      : null;
-
-    // Create API key record
-    const [createdApiKey] = await db
-      .insert(apiKeyTable)
-      .values({
-        id: ulid(),
+    // Use Better Auth's official API to create the API key
+    // This ensures proper hashing and compatibility with Better Auth's validation
+    const result = await auth.api.createApiKey({
+      body: {
         name: body.name,
-        start,
-        prefix,
-        key: hashedKey,
         userId: user.id,
-        enabled: true,
-        remaining: body.remaining || null,
+        expiresIn: body.expiresIn ? body.expiresIn * 24 * 60 * 60 : undefined, // Convert days to seconds
+        remaining: body.remaining || undefined,
+        metadata: body.metadata || undefined,
+        prefix: 'rpnd_',
         rateLimitEnabled: true,
         rateLimitTimeWindow: 1000 * 60 * 60 * 24, // 24 hours
         rateLimitMax: 1000, // 1000 requests per day
-        requestCount: 0,
-        expiresAt,
-        metadata: body.metadata ? JSON.stringify(body.metadata) : null,
-        permissions: null,
-        refillInterval: null,
-        refillAmount: null,
-        lastRefillAt: null,
-        lastRequest: null,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .returning();
+      },
+    });
 
-    if (!createdApiKey) {
+    if (!result) {
       throw createError.internal('Failed to create API key', {
-        errorType: 'database',
-        operation: 'insert',
+        errorType: 'external_service',
+        operation: 'createApiKey',
       });
     }
 
     c.logger.info('API key created successfully', {
       logType: 'operation',
       operationName: 'createApiKey',
-      resource: createdApiKey.id,
+      resource: result.id,
     });
 
-    // Return the created key WITH the raw key value (only time we return it)
-    // Exclude the hashed key and include the unhashed key
-    const apiKeyResponse = {
-      ...createdApiKey,
-      key: apiKeyValue, // Return unhashed key (only time we do this)
-    };
-
-    // Remove the hashed key from response
-    delete (apiKeyResponse as { key?: string }).key;
-
+    // Better Auth returns the full API key object with the unhashed key value
+    // This is the only time the key value is exposed
     return Responses.created(c, {
-      apiKey: {
-        ...apiKeyResponse,
-        key: apiKeyValue, // Explicitly set the unhashed key
-      },
+      apiKey: result,
     });
   },
 );
 
 /**
  * Update an existing API key
+ * Uses Better Auth's official API for proper validation and consistency
  */
 export const updateApiKeyHandler: RouteHandler<typeof updateApiKeyRoute, ApiEnv> = createHandler(
   {
@@ -333,36 +254,28 @@ export const updateApiKeyHandler: RouteHandler<typeof updateApiKeyRoute, ApiEnv>
       resource: keyId,
     });
 
-    const db = await getDbAsync();
-
-    // Check if key exists and verify ownership
-    const existingKey = await db.query.apiKey.findFirst({
-      where: eq(apiKeyTable.id, keyId),
+    // Use Better Auth's official API to update the API key
+    // This ensures proper validation and maintains consistency
+    const result = await auth.api.updateApiKey({
+      body: {
+        keyId,
+        userId: user.id, // Server-only field for ownership verification
+        name: body.name,
+        enabled: body.enabled,
+        remaining: body.remaining,
+        refillAmount: body.refillAmount,
+        refillInterval: body.refillInterval,
+        metadata: body.metadata,
+        rateLimitEnabled: body.rateLimitEnabled,
+        rateLimitTimeWindow: body.rateLimitTimeWindow,
+        rateLimitMax: body.rateLimitMax,
+      },
     });
 
-    if (!existingKey) {
-      throw createError.notFound('API key not found', createResourceNotFoundContext('apiKey', keyId));
-    }
-
-    if (existingKey.userId !== user.id) {
-      throw createError.unauthenticated('Access denied to this API key', createAuthorizationErrorContext('apiKey', keyId));
-    }
-
-    // Update the key
-    const [updatedApiKey] = await db
-      .update(apiKeyTable)
-      .set({
-        ...body,
-        metadata: body.metadata ? JSON.stringify(body.metadata) : undefined,
-        updatedAt: new Date(),
-      })
-      .where(eq(apiKeyTable.id, keyId))
-      .returning();
-
-    if (!updatedApiKey) {
+    if (!result) {
       throw createError.internal('Failed to update API key', {
-        errorType: 'database',
-        operation: 'update',
+        errorType: 'external_service',
+        operation: 'updateApiKey',
       });
     }
 
@@ -372,14 +285,13 @@ export const updateApiKeyHandler: RouteHandler<typeof updateApiKeyRoute, ApiEnv>
       resource: keyId,
     });
 
-    // Return updated key without the hashed key field
-    const { key: _, ...apiKeyWithoutHash } = updatedApiKey;
-    return Responses.ok(c, { apiKey: apiKeyWithoutHash });
+    return Responses.ok(c, { apiKey: result });
   },
 );
 
 /**
  * Delete an API key
+ * Uses Better Auth's official API for proper ownership validation
  */
 export const deleteApiKeyHandler: RouteHandler<typeof deleteApiKeyRoute, ApiEnv> = createHandler(
   {
@@ -409,25 +321,21 @@ export const deleteApiKeyHandler: RouteHandler<typeof deleteApiKeyRoute, ApiEnv>
       resource: keyId,
     });
 
-    const db = await getDbAsync();
-
-    // Check if key exists and verify ownership
-    const existingKey = await db.query.apiKey.findFirst({
-      where: eq(apiKeyTable.id, keyId),
+    // Use Better Auth's official API to delete the API key
+    // This ensures ownership validation and maintains consistency
+    const result = await auth.api.deleteApiKey({
+      body: {
+        keyId,
+      },
+      headers: c.req.raw.headers, // Include headers for user context
     });
 
-    if (!existingKey) {
-      throw createError.notFound('API key not found', createResourceNotFoundContext('apiKey', keyId));
+    if (!result?.success) {
+      throw createError.internal('Failed to delete API key', {
+        errorType: 'external_service',
+        operation: 'deleteApiKey',
+      });
     }
-
-    if (existingKey.userId !== user.id) {
-      throw createError.unauthenticated('Access denied to this API key', createAuthorizationErrorContext('apiKey', keyId));
-    }
-
-    // Delete the key
-    await db
-      .delete(apiKeyTable)
-      .where(eq(apiKeyTable.id, keyId));
 
     c.logger.info('API key deleted successfully', {
       logType: 'operation',

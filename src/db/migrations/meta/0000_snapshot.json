@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "53922e00-1bec-4c99-8b5f-d88a20fcc9a6",
+  "id": "250bd7bf-9563-4640-98d3-fc50d4f0a7ac",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "account": {
@@ -1740,13 +1740,6 @@
           "notNull": false,
           "autoincrement": false
         },
-        "parent_message_id": {
-          "name": "parent_message_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
         "created_at": {
           "name": "created_at",
           "type": "integer",
@@ -1799,19 +1792,6 @@
           "tableTo": "chat_participant",
           "columnsFrom": [
             "participant_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        },
-        "chat_message_parent_message_id_chat_message_id_fk": {
-          "name": "chat_message_parent_message_id_chat_message_id_fk",
-          "tableFrom": "chat_message",
-          "tableTo": "chat_message",
-          "columnsFrom": [
-            "parent_message_id"
           ],
           "columnsTo": [
             "id"
@@ -2109,6 +2089,95 @@
           "tableTo": "user",
           "columnsFrom": [
             "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "chat_thread_changelog": {
+      "name": "chat_thread_changelog",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "thread_id": {
+          "name": "thread_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "change_type": {
+          "name": "change_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "change_summary": {
+          "name": "change_summary",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "change_data": {
+          "name": "change_data",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(cast((julianday('now') - 2440587.5)*86400000 as integer))"
+        }
+      },
+      "indexes": {
+        "chat_thread_changelog_thread_idx": {
+          "name": "chat_thread_changelog_thread_idx",
+          "columns": [
+            "thread_id"
+          ],
+          "isUnique": false
+        },
+        "chat_thread_changelog_type_idx": {
+          "name": "chat_thread_changelog_type_idx",
+          "columns": [
+            "change_type"
+          ],
+          "isUnique": false
+        },
+        "chat_thread_changelog_created_idx": {
+          "name": "chat_thread_changelog_created_idx",
+          "columns": [
+            "created_at"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "chat_thread_changelog_thread_id_chat_thread_id_fk": {
+          "name": "chat_thread_changelog_thread_id_chat_thread_id_fk",
+          "tableFrom": "chat_thread_changelog",
+          "tableTo": "chat_thread",
+          "columnsFrom": [
+            "thread_id"
           ],
           "columnsTo": [
             "id"
