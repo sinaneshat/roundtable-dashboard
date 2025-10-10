@@ -2,7 +2,7 @@ import type { RouteHandler } from '@hono/zod-openapi';
 import type { UIMessage } from 'ai';
 import { consumeStream, convertToModelMessages, smoothStream, streamText, validateUIMessages } from 'ai';
 import type { SQL } from 'drizzle-orm';
-import { and, desc, eq, isNull, like, ne } from 'drizzle-orm';
+import { and, desc, eq, like, ne } from 'drizzle-orm';
 import { ulid } from 'ulid';
 
 import { createError } from '@/api/common/error-handling';
@@ -16,7 +16,7 @@ import type { ErrorContext } from '@/api/core';
 import { createHandler, Responses } from '@/api/core';
 import { CursorPaginationQuerySchema } from '@/api/core/schemas';
 import { apiLogger } from '@/api/middleware/hono-logger';
-import { saveAssistantMessageWithVariants } from '@/api/services/message-variant.service';
+import { getMessageVariantsForStream, saveAssistantMessageWithVariants } from '@/api/services/message-variant.service';
 import { initializeOpenRouter, openRouterService } from '@/api/services/openrouter.service';
 import {
   classifyOpenRouterError,
@@ -29,6 +29,8 @@ import {
   logModeChange,
   logParticipantAdded,
   logParticipantRemoved,
+  logParticipantsReordered,
+  logParticipantUpdated,
 } from '@/api/services/thread-changelog.service';
 import { generateTitleFromMessage } from '@/api/services/title-generator.service';
 import {
@@ -56,6 +58,7 @@ import {
   getTierDisplayName,
 } from '@/lib/ai/models-config';
 import type { ChatModeId, ThreadStatus } from '@/lib/config/chat-modes';
+import type { MessageMetadata } from '@/lib/schemas/message-metadata';
 
 import type {
   addParticipantRoute,
@@ -68,7 +71,6 @@ import type {
   deleteThreadRoute,
   getCustomRoleRoute,
   getMemoryRoute,
-  getMessageVariantsRoute,
   getPublicThreadRoute,
   getThreadBySlugRoute,
   getThreadChangelogRoute,
@@ -78,7 +80,6 @@ import type {
   listMemoriesRoute,
   listThreadsRoute,
   streamChatRoute,
-  switchMessageVariantRoute,
   updateCustomRoleRoute,
   updateMemoryRoute,
   updateParticipantRoute,
@@ -93,7 +94,6 @@ import {
   MemoryIdParamSchema,
   ParticipantIdParamSchema,
   StreamChatRequestSchema,
-  SwitchVariantRequestSchema,
   ThreadIdParamSchema,
   ThreadListQuerySchema,
   ThreadSlugParamSchema,
@@ -421,9 +421,7 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
         // Omit participantId for user messages (it's nullable in schema)
         role: 'user',
         content: body.firstMessage,
-        parentMessageId: null, // User messages have no parent
-        variantIndex: 0, // User messages always have variantIndex 0
-        isActiveVariant: true, // User messages are always active
+        // ✅ User messages don't need variant tracking
         createdAt: now,
       })
       .returning();
@@ -555,14 +553,79 @@ export const getThreadHandler: RouteHandler<typeof getThreadRoute, ApiEnv> = cre
       orderBy: [tables.chatParticipant.priority],
     });
 
-    // Fetch messages (ordered by creation time) - only active variants
-    const messages = await db.query.chatMessage.findMany({
-      where: and(
-        eq(tables.chatMessage.threadId, id),
-        eq(tables.chatMessage.isActiveVariant, true),
-      ),
+    // ✅ UPDATED: Fetch ALL messages (including inactive variants)
+    // ✅ Fetch ALL messages (no filtering by isActiveVariant - that's now in metadata)
+    const allMessages = await db.query.chatMessage.findMany({
+      where: eq(tables.chatMessage.threadId, id),
       orderBy: [tables.chatMessage.createdAt],
     });
+
+    // ✅ Get active messages for display using metadata.isActiveVariant
+    const activeMessages = allMessages.filter((msg) => {
+      const metadata = msg.metadata as MessageMetadata;
+      // User messages are always active, assistant messages check metadata
+      return msg.role === 'user' || (metadata?.isActiveVariant === true);
+    });
+
+    // ✅ Enrich active messages with ALL their variant siblings
+    const messages = await Promise.all(
+      activeMessages.map(async (message) => {
+        if (message.role !== 'assistant' || !message.participantId) {
+          return message;
+        }
+
+        try {
+          const messageMetadata = message.metadata as MessageMetadata;
+          const parentMsgId = messageMetadata?.parentMessageId as string || null;
+
+          // ✅ Filter variant siblings using metadata.parentMessageId
+          const variantSiblings = allMessages.filter((msg) => {
+            const msgMetadata = msg.metadata as MessageMetadata;
+            return msg.role === 'assistant'
+              && msg.participantId === message.participantId
+              && msgMetadata?.parentMessageId === parentMsgId;
+          });
+
+          // ✅ Map variants reading from metadata
+          const variants = variantSiblings.map((v) => {
+            const vMetadata = v.metadata as MessageMetadata;
+            return {
+              id: v.id,
+              content: v.content,
+              variantIndex: (vMetadata?.variantIndex as number) || 0,
+              isActive: (vMetadata?.isActiveVariant as boolean) || false,
+              createdAt: v.createdAt.toISOString(),
+              metadata: v.metadata,
+              participantId: v.participantId,
+              reasoning: v.reasoning || undefined,
+            };
+          });
+
+          const currentVariantIndex = (messageMetadata?.variantIndex as number) || 0;
+          const activeVariantIndex = variants.findIndex(v => v.isActive);
+
+          return {
+            ...message,
+            metadata: {
+              ...(typeof message.metadata === 'object' && message.metadata !== null ? message.metadata : {}),
+              variants,
+              currentVariantIndex,
+              activeVariantIndex: activeVariantIndex >= 0 ? activeVariantIndex : currentVariantIndex,
+              totalVariants: variants.length,
+              hasVariants: variants.length > 1,
+              roundId: message.id,
+              parentMessageId: parentMsgId,
+            },
+          };
+        } catch (error) {
+          apiLogger.error('[getThread] Failed to process variants for message', {
+            messageId: message.id,
+            error: error instanceof Error ? error.message : String(error),
+          });
+          return message;
+        }
+      }),
+    );
 
     // Fetch attached memories via junction table
     const threadMemories = await db.query.chatThreadMemory.findMany({
@@ -575,12 +638,40 @@ export const getThreadHandler: RouteHandler<typeof getThreadRoute, ApiEnv> = cre
     // Extract just the memory objects from the junction records
     const memories = threadMemories.map(tm => tm.memory);
 
+    // Fetch changelog entries (ordered by creation time, newest first)
+    const changelog = await db.query.chatThreadChangelog.findMany({
+      where: eq(tables.chatThreadChangelog.threadId, id),
+      orderBy: [desc(tables.chatThreadChangelog.createdAt)],
+    });
+
+    // Fetch thread owner information (only safe public fields: name and image)
+    const threadOwner = await db.query.user.findFirst({
+      where: eq(tables.user.id, thread.userId),
+      columns: {
+        name: true,
+        image: true,
+      },
+    });
+
+    // This should never happen due to foreign key constraints, but guard for type safety
+    if (!threadOwner) {
+      throw createError.internal(
+        'Thread owner not found',
+        createResourceNotFoundContext('user', thread.userId),
+      );
+    }
+
     // Return everything in one response (ChatGPT pattern)
     return Responses.ok(c, {
       thread,
       participants,
       messages,
       memories,
+      changelog,
+      user: {
+        name: threadOwner.name,
+        image: threadOwner.image,
+      },
     });
   },
 );
@@ -699,26 +790,58 @@ export const getPublicThreadHandler: RouteHandler<typeof getPublicThreadRoute, A
       );
     }
 
+    // Fetch thread owner information (only safe public fields: name and image)
+    const threadOwner = await db.query.user.findFirst({
+      where: eq(tables.user.id, thread.userId),
+      columns: {
+        name: true,
+        image: true,
+      },
+    });
+
+    // This should never happen due to foreign key constraints, but guard for type safety
+    if (!threadOwner) {
+      throw createError.internal(
+        'Thread owner not found',
+        createResourceNotFoundContext('user', thread.userId),
+      );
+    }
+
     // Fetch participants (ordered by priority) - same as private handler
     const participants = await db.query.chatParticipant.findMany({
       where: eq(tables.chatParticipant.threadId, thread.id),
       orderBy: [tables.chatParticipant.priority],
     });
 
-    // Fetch messages (ordered by creation time) - same as private handler, only active variants
-    const messages = await db.query.chatMessage.findMany({
-      where: and(
-        eq(tables.chatMessage.threadId, thread.id),
-        eq(tables.chatMessage.isActiveVariant, true),
-      ),
+    // ✅ Fetch messages using metadata-based approach (no isActiveVariant column)
+    const allMessages = await db.query.chatMessage.findMany({
+      where: eq(tables.chatMessage.threadId, thread.id),
       orderBy: [tables.chatMessage.createdAt],
     });
 
-    // Return same structure as private thread handler for consistency
+    // ✅ Filter active messages using metadata.isActiveVariant
+    const messages = allMessages.filter((msg) => {
+      const metadata = msg.metadata as MessageMetadata;
+      return msg.role === 'user' || (metadata?.isActiveVariant === true);
+    });
+
+    // Fetch changelog entries (ordered by creation time, newest first)
+    // Following the pattern from getThreadChangelog service
+    const changelog = await db.query.chatThreadChangelog.findMany({
+      where: eq(tables.chatThreadChangelog.threadId, thread.id),
+      orderBy: [desc(tables.chatThreadChangelog.createdAt)],
+    });
+
+    // Return expanded structure with user info and changelog
     return Responses.ok(c, {
       thread,
       participants,
       messages,
+      changelog,
+      user: {
+        name: threadOwner.name,
+        image: threadOwner.image,
+      },
     });
   },
 );
@@ -756,14 +879,78 @@ export const getThreadBySlugHandler: RouteHandler<typeof getThreadBySlugRoute, A
       orderBy: [tables.chatParticipant.priority],
     });
 
-    // Fetch messages (ordered by creation time) - only active variants
-    const messages = await db.query.chatMessage.findMany({
-      where: and(
-        eq(tables.chatMessage.threadId, thread.id),
-        eq(tables.chatMessage.isActiveVariant, true),
-      ),
+    // ✅ UPDATED: Fetch ALL messages (including inactive variants) using metadata-based approach
+    const allMessages = await db.query.chatMessage.findMany({
+      where: eq(tables.chatMessage.threadId, thread.id),
       orderBy: [tables.chatMessage.createdAt],
     });
+
+    // ✅ Get active messages for display using metadata.isActiveVariant
+    const activeMessages = allMessages.filter((msg) => {
+      const metadata = msg.metadata as MessageMetadata;
+      // User messages are always active, assistant messages check metadata
+      return msg.role === 'user' || (metadata?.isActiveVariant === true);
+    });
+
+    // ✅ Enrich active messages with ALL their variant siblings
+    const messagesWithVariants = await Promise.all(
+      activeMessages.map(async (message) => {
+        if (message.role !== 'assistant' || !message.participantId) {
+          return message;
+        }
+
+        try {
+          const messageMetadata = message.metadata as MessageMetadata;
+          const parentMsgId = messageMetadata?.parentMessageId as string || null;
+
+          // ✅ Filter variant siblings using metadata.parentMessageId
+          const variantSiblings = allMessages.filter((msg) => {
+            const msgMetadata = msg.metadata as MessageMetadata;
+            return msg.role === 'assistant'
+              && msg.participantId === message.participantId
+              && msgMetadata?.parentMessageId === parentMsgId;
+          });
+
+          // ✅ Map variants reading from metadata
+          const variants = variantSiblings.map((v) => {
+            const vMetadata = v.metadata as MessageMetadata;
+            return {
+              id: v.id,
+              content: v.content,
+              variantIndex: (vMetadata?.variantIndex as number) || 0,
+              isActive: (vMetadata?.isActiveVariant as boolean) || false,
+              createdAt: v.createdAt.toISOString(),
+              metadata: v.metadata,
+              participantId: v.participantId,
+              reasoning: v.reasoning || undefined,
+            };
+          });
+
+          const currentVariantIndex = (messageMetadata?.variantIndex as number) || 0;
+          const activeVariantIndex = variants.findIndex(v => v.isActive);
+
+          return {
+            ...message,
+            metadata: {
+              ...(typeof message.metadata === 'object' && message.metadata !== null ? message.metadata : {}),
+              variants,
+              currentVariantIndex,
+              activeVariantIndex: activeVariantIndex >= 0 ? activeVariantIndex : currentVariantIndex,
+              totalVariants: variants.length,
+              hasVariants: variants.length > 1,
+              roundId: message.id,
+              parentMessageId: parentMsgId,
+            },
+          };
+        } catch (error) {
+          apiLogger.error('[getThreadBySlug] Failed to process variants for message', {
+            messageId: message.id,
+            error: error instanceof Error ? error.message : String(error),
+          });
+          return message;
+        }
+      }),
+    );
 
     // Fetch attached memories via junction table
     const threadMemories = await db.query.chatThreadMemory.findMany({
@@ -780,7 +967,7 @@ export const getThreadBySlugHandler: RouteHandler<typeof getThreadBySlugRoute, A
     return Responses.ok(c, {
       thread,
       participants,
-      messages,
+      messages: messagesWithVariants, // ✅ Return messages with variant metadata
       memories,
     });
   },
@@ -975,13 +1162,16 @@ export const getThreadMessagesHandler: RouteHandler<typeof getThreadMessagesRout
     // Verify thread ownership
     await verifyThreadOwnership(threadId, user.id, db);
 
-    // Fetch messages - only active variants
-    const messages = await db.query.chatMessage.findMany({
-      where: and(
-        eq(tables.chatMessage.threadId, threadId),
-        eq(tables.chatMessage.isActiveVariant, true),
-      ),
+    // ✅ Fetch messages using metadata-based filtering
+    const allMessages = await db.query.chatMessage.findMany({
+      where: eq(tables.chatMessage.threadId, threadId),
       orderBy: [tables.chatMessage.createdAt],
+    });
+
+    // ✅ Filter active messages using metadata.isActiveVariant
+    const messages = allMessages.filter((msg) => {
+      const metadata = msg.metadata as MessageMetadata;
+      return msg.role === 'user' || (metadata?.isActiveVariant === true);
     });
 
     return Responses.ok(c, {
@@ -1131,45 +1321,144 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
         where: eq(tables.chatParticipant.threadId, threadId),
       });
 
+      // ✅ CRITICAL: Check if participants have actually changed before recreating
+      // Prevents breaking variant tracking on regeneration
+      // Compare: modelId, role, customRoleId, and priority
+      const participantsChanged
+        = oldParticipants.length !== newParticipants.length
+          || newParticipants.some((newP, idx) => {
+            const oldP = oldParticipants.find(op => op.priority === (newP.order ?? idx));
+            if (!oldP)
+              return true; // New participant
+            // Check if any field changed
+            return (
+              oldP.modelId !== newP.modelId
+              || (oldP.role || null) !== (newP.role || null)
+              || (oldP.customRoleId || null) !== (newP.customRoleId || null)
+              || oldP.priority !== (newP.order ?? idx)
+            );
+          });
+
+      // Skip recreation if participants haven't changed
+      if (!participantsChanged) {
+        apiLogger.info('Participants unchanged - skipping recreation', {
+          threadId,
+          participantCount: oldParticipants.length,
+        });
+        // No need to reload thread since participants didn't change
+      } else {
       // Delete existing participants
-      await db
-        .delete(tables.chatParticipant)
-        .where(eq(tables.chatParticipant.threadId, threadId));
+        await db
+          .delete(tables.chatParticipant)
+          .where(eq(tables.chatParticipant.threadId, threadId));
 
-      // Create new participants
-      const participantsToCreate = newParticipants.map((p, index) => ({
-        id: ulid(),
-        threadId,
-        modelId: p.modelId,
-        role: p.role || null,
-        customRoleId: p.customRoleId || null,
-        priority: p.order ?? index,
-        isEnabled: true,
-      }));
+        // Create new participants
+        const participantsToCreate = newParticipants.map((p, index) => ({
+          id: ulid(),
+          threadId,
+          modelId: p.modelId,
+          role: p.role || null,
+          customRoleId: p.customRoleId || null,
+          priority: p.order ?? index,
+          isEnabled: true,
+        }));
 
-      await db.insert(tables.chatParticipant).values(participantsToCreate);
+        await db.insert(tables.chatParticipant).values(participantsToCreate);
 
-      // Log participant changes to changelog
-      // Find removed participants (in old but not in new)
-      for (const oldP of oldParticipants) {
-        const stillExists = newParticipants.some(newP => newP.modelId === oldP.modelId);
-        if (!stillExists) {
-          await logParticipantRemoved(threadId, oldP.id, oldP.modelId, oldP.role);
-        }
-      }
+        // ========================================
+        // ENHANCED CHANGELOG DETECTION
+        // Detects additions, removals, reordering, and role changes
+        // ========================================
 
-      // Find added participants (in new but not in old)
-      for (const newP of newParticipants) {
-        const wasExisting = oldParticipants.some(oldP => oldP.modelId === newP.modelId);
-        if (!wasExisting) {
+        // Build sets for comparison
+        const oldModelIds = new Set(oldParticipants.map(p => p.modelId));
+        const newModelIds = new Set(newParticipants.map(p => p.modelId));
+
+        // Detect additions and removals
+        const addedParticipants = newParticipants.filter(p => !oldModelIds.has(p.modelId));
+        const removedParticipants = oldParticipants.filter(p => !newModelIds.has(p.modelId));
+
+        // If no additions/removals, check for reordering or role changes
+        if (addedParticipants.length === 0 && removedParticipants.length === 0) {
+        // Same set of models - check for reordering or role changes
+
+          // Check for reordering (different priorities) and role changes
+          let hasReordering = false;
+          const roleChanges: Array<{
+            old: typeof oldParticipants[0];
+            new: NonNullable<typeof newParticipants[0]>;
+          }> = [];
+
+          for (let i = 0; i < newParticipants.length; i++) {
+            const newP = newParticipants[i];
+            if (!newP)
+              continue; // Type guard: skip if undefined
+
+            const oldP = oldParticipants.find(op => op.modelId === newP.modelId);
+
+            if (oldP) {
+            // Check priority change (reordering)
+              const newPriority = newP.order ?? i;
+              if (oldP.priority !== newPriority) {
+                hasReordering = true;
+              }
+
+              // Check role change
+              const normalizedOldRole = oldP.role || null;
+              const normalizedNewRole = newP.role || null;
+              if (normalizedOldRole !== normalizedNewRole) {
+                roleChanges.push({ old: oldP, new: newP });
+              }
+            }
+          }
+
+          // Log reordering if detected (takes precedence over role changes in UI)
+          if (hasReordering) {
+            const reorderedParticipants = newParticipants
+              .map((p, idx) => {
+                if (!p)
+                  return null; // Type guard
+                return {
+                  id: participantsToCreate[idx]!.id, // Use the newly created participant IDs
+                  modelId: p.modelId,
+                  role: p.role || null,
+                  order: p.order ?? idx,
+                };
+              })
+              .filter((p): p is NonNullable<typeof p> => p !== null); // Filter out nulls and narrow type
+
+            await logParticipantsReordered(threadId, reorderedParticipants);
+          }
+
+          // Log role changes if detected and no reordering
+          // (If both reordering and role changes happen, reordering takes precedence)
+          if (!hasReordering && roleChanges.length > 0) {
+            for (const { old: oldP, new: newP } of roleChanges) {
+              await logParticipantUpdated(
+                threadId,
+                oldP.id,
+                oldP.modelId,
+                oldP.role,
+                newP.role || null,
+              );
+            }
+          }
+        } else {
+        // Has additions or removals - log them
+          for (const oldP of removedParticipants) {
+            await logParticipantRemoved(threadId, oldP.id, oldP.modelId, oldP.role);
+          }
+
+          for (const newP of addedParticipants) {
           // Use a placeholder ID since we don't have the real ID yet (it's generated above)
           // The ID isn't critical for the changelog display
-          await logParticipantAdded(threadId, 'pending', newP.modelId, newP.role || null);
+            await logParticipantAdded(threadId, 'pending', newP.modelId, newP.role || null);
+          }
         }
-      }
 
-      // Reload thread with new participants
-      thread = await verifyThreadOwnership(threadId, user.id, db, { includeParticipants: true });
+        // Reload thread with new participants
+        thread = await verifyThreadOwnership(threadId, user.id, db, { includeParticipants: true });
+      } // end of participantsChanged check
     }
 
     // Update memories if provided
@@ -1229,13 +1518,16 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
       }
     }
 
-    // Load existing messages from database - only active variants
-    const dbMessages = await db.query.chatMessage.findMany({
-      where: and(
-        eq(tables.chatMessage.threadId, threadId),
-        eq(tables.chatMessage.isActiveVariant, true),
-      ),
+    // ✅ Load existing messages from database using metadata-based filtering
+    const allDbMessages = await db.query.chatMessage.findMany({
+      where: eq(tables.chatMessage.threadId, threadId),
       orderBy: [tables.chatMessage.createdAt],
+    });
+
+    // ✅ Filter active messages using metadata.isActiveVariant
+    const dbMessages = allDbMessages.filter((msg) => {
+      const metadata = msg.metadata as MessageMetadata;
+      return msg.role === 'user' || (metadata?.isActiveVariant === true);
     });
 
     // ✅ OFFICIAL AI SDK PATTERN: Runtime Validation + Type Assertion
@@ -1296,15 +1588,12 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
       // Enforce quota
       await enforceMessageQuota(user.id);
 
-      // Save user message to database
+      // ✅ Save user message to database (no variant tracking needed for user messages)
       await db.insert(tables.chatMessage).values({
         id: lastClientMessage.id,
         threadId,
         role: 'user',
         content,
-        parentMessageId: null, // User messages have no parent
-        variantIndex: 0, // User messages always have variantIndex 0
-        isActiveVariant: true, // User messages are always active
         createdAt: new Date(),
       });
 
@@ -1514,7 +1803,8 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
       // ✅ CRITICAL: Send updated participant data when config changes
       // When participants are updated (reordered/added/removed), frontend needs new IDs
       // This prevents "Invalid participantIndex" errors and "losing memory" issues
-      messageMetadata: ({ part }) => {
+      // ✅ NEW: Now async to fetch variant data in finish event
+      messageMetadata: async ({ part }) => {
         if (part.type === 'start') {
           // Include updated participant data so frontend can sync state
           // Map to match frontend ParticipantConfig type exactly
@@ -1536,9 +1826,78 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
             participantId: participant.id,
             model: participant.modelId, // ✅ Matches DB schema (not "modelId")
             role: participant.role || '', // ✅ Matches DB schema (not "participantRole")
+            // ✅ NEW: Add roundId for variant tracking (AI SDK pattern)
+            roundId: messageId, // Unique identifier for this generation round
           };
         }
-        // Return undefined for non-start parts (required by TypeScript)
+
+        // ✅ NEW: Include variant metadata in finish event
+        if (part.type === 'finish') {
+          // Find the parent user message (last user message before this assistant response)
+          const userMessages = await db.query.chatMessage.findMany({
+            where: and(
+              eq(tables.chatMessage.threadId, threadId),
+              eq(tables.chatMessage.role, 'user'),
+            ),
+            orderBy: [desc(tables.chatMessage.createdAt)],
+            limit: 1,
+          });
+
+          const parentUserMessage = userMessages[0];
+
+          // Fetch existing variants (previous regenerations) for this parent/participant
+          // The current streaming message will be added to this list when saved in onFinish
+          let variants: Array<{
+            id: string;
+            content: string;
+            variantIndex: number;
+            isActive: boolean;
+            createdAt: string;
+            metadata: Record<string, unknown> | null;
+          }> = [];
+
+          if (parentUserMessage) {
+            try {
+              variants = await getMessageVariantsForStream({
+                threadId,
+                parentMessageId: parentUserMessage.id,
+                participantId: participant.id,
+              });
+
+              apiLogger.info('[Stream Handler] Fetched variants for finish metadata', {
+                threadId,
+                participantId: participant.id,
+                parentMessageId: parentUserMessage.id,
+                variantCount: variants.length,
+              });
+            } catch (error) {
+              apiLogger.error('[Stream Handler] Failed to fetch variants for metadata', {
+                threadId,
+                participantId: participant.id,
+                error: error instanceof Error ? error.message : String(error),
+              });
+              // Continue without variants - don't fail the stream
+            }
+          }
+
+          // Calculate variant index for the current message
+          // It will be variants.length (0 for first, 1 for second, etc.)
+          const currentVariantIndex = variants.length;
+          const activeVariantIndex = variants.findIndex(v => v.isActive);
+
+          return {
+            // ✅ NEW: Variant metadata following AI SDK patterns
+            variants, // All existing variants (previous regenerations)
+            currentVariantIndex, // Index of the message being streamed
+            activeVariantIndex: activeVariantIndex >= 0 ? activeVariantIndex : currentVariantIndex, // Which variant is active
+            totalVariants: variants.length + 1, // Total including current
+            hasVariants: variants.length > 0, // Whether regenerations exist
+            roundId: messageId, // Matches start event roundId
+            parentMessageId: parentUserMessage?.id || null, // For variant grouping
+          };
+        }
+
+        // Return undefined for other part types (required by TypeScript)
         return undefined;
       },
 
@@ -1561,31 +1920,41 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
         const textPart = responseMessage.parts.find(p => p.type === 'text');
         let content = textPart?.type === 'text' ? textPart.text : '';
 
-        // ✅ OFFICIAL AI SDK PATTERN: When onError returns a string, it's sent as error SSE event
-        // But onFinish still runs with empty content - use error message as content
-        // See: https://github.com/vercel/ai/blob/main/content/docs/04-ai-sdk-ui/50-stream-protocol.mdx
-        if ((!content || content.trim().length === 0) && streamError) {
+        // ✅ CRITICAL: Always save error messages to database for UI display
+        // Following AI SDK error handling pattern: errors should be persisted
+        // See: https://sdk.vercel.ai/docs/ai-sdk-core/error-handling
+        let hasError = false;
+        if (streamError) {
           const classified = classifyOpenRouterError(streamError);
-          content = `⚠️ ${classified.message}`;
+          hasError = true;
 
-          apiLogger.warn('Empty content from error - using error message', {
+          // If no content, use error message as content
+          if (!content || content.trim().length === 0) {
+            content = `Error: ${classified.message}`;
+          }
+
+          apiLogger.warn('Error occurred during streaming - saving with error metadata', {
             threadId,
             participantId: participant.id,
             messageId: responseMessage.id,
             model: participant.modelId,
             errorMessage: classified.message,
+            errorType: classified.type,
           });
         }
 
-        // If still no content after error handling, log and skip
+        // ✅ If still no content after error handling, use a fallback message
+        // Never skip saving - always persist the message for error display
         if (!content || content.trim().length === 0) {
-          apiLogger.error('Empty content with no error - skipping message save', {
+          content = 'Error: No response generated';
+          hasError = true;
+
+          apiLogger.error('Empty content with no error - saving fallback message', {
             threadId,
             participantId: participant.id,
             messageId: responseMessage.id,
             model: participant.modelId,
           });
-          return;
         }
 
         // ✅ Prepare metadata - include error info if error occurred
@@ -1594,6 +1963,18 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
         const errorMetadata = streamError
           ? formatErrorForDatabase(streamError, participant.modelId)
           : null;
+
+        // ✅ Add hasError flag to metadata for frontend error detection
+        const baseMetadata = {
+          model: participant.modelId,
+          role: participant.role,
+          mode: thread.mode,
+          participantId: participant.id,
+          participantIndex,
+          aborted: isAborted,
+          partialResponse: isAborted,
+          hasError, // ✅ Flag for frontend error display
+        };
 
         // ✅ Save message with variant support using service function
         // This service handles all the complexity of variant tracking:
@@ -1607,13 +1988,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
           participantId: participant.id,
           content,
           metadata: {
-            model: participant.modelId,
-            role: participant.role,
-            mode: thread.mode,
-            participantId: participant.id,
-            participantIndex,
-            aborted: isAborted,
-            partialResponse: isAborted,
+            ...baseMetadata,
             // Include error metadata if error occurred
             ...(errorMetadata || {}),
           },
@@ -1675,214 +2050,6 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
         // This becomes the content text streamed to the client
         return classified.message;
       },
-    });
-  },
-);
-
-// ============================================================================
-// Message Variant Handlers
-// ============================================================================
-
-/**
- * Get all variants for a message
- * Returns original message + all regenerated variants
- */
-export const getMessageVariantsHandler: RouteHandler<typeof getMessageVariantsRoute, ApiEnv> = createHandler(
-  {
-    auth: 'session',
-    operationName: 'getMessageVariants',
-  },
-  async (c) => {
-    const { user } = c.auth();
-    const threadId = c.req.param('threadId');
-    const messageId = c.req.param('id');
-    const db = await getDbAsync();
-
-    if (!threadId || !messageId) {
-      throw createError.badRequest('Missing required parameters');
-    }
-
-    // Verify thread ownership
-    await verifyThreadOwnership(threadId, user.id, db);
-
-    // Find the message (could be user message or assistant message)
-    const message = await db.query.chatMessage.findFirst({
-      where: eq(tables.chatMessage.id, messageId),
-    });
-
-    if (!message) {
-      throw createError.notFound('Message not found', createResourceNotFoundContext('message', messageId));
-    }
-
-    // For assistant messages, find all variants with the same parent
-    // For user messages, they don't have variants (always return just the message itself)
-    let variants: Array<typeof tables.chatMessage.$inferSelect>;
-    let activeVariantIndex = 0;
-
-    if (message.role === 'user') {
-      // User messages don't have variants
-      variants = [message];
-      activeVariantIndex = 0;
-    } else {
-      // Assistant message - find all variants with the same parent and participant
-      // Build where conditions, handling nullable fields
-      const whereConditions = [
-        eq(tables.chatMessage.threadId, threadId),
-        eq(tables.chatMessage.role, 'assistant'),
-      ];
-
-      // Add parent message filter - must match (including null)
-      if (message.parentMessageId) {
-        whereConditions.push(eq(tables.chatMessage.parentMessageId, message.parentMessageId));
-      } else {
-        whereConditions.push(isNull(tables.chatMessage.parentMessageId));
-      }
-
-      // Add participant filter - must match (including null)
-      if (message.participantId) {
-        whereConditions.push(eq(tables.chatMessage.participantId, message.participantId));
-      } else {
-        whereConditions.push(isNull(tables.chatMessage.participantId));
-      }
-
-      variants = await db.query.chatMessage.findMany({
-        where: and(...whereConditions),
-        orderBy: [tables.chatMessage.variantIndex],
-      });
-
-      // Find which variant is currently active
-      const activeVariant = variants.find(v => v.isActiveVariant);
-      activeVariantIndex = activeVariant ? activeVariant.variantIndex : 0;
-    }
-
-    return Responses.ok(c, {
-      variants,
-      activeVariantIndex,
-      totalVariants: variants.length,
-    });
-  },
-);
-
-/**
- * Switch which variant is active for a message
- * Marks the specified variant as active and others as inactive
- */
-export const switchMessageVariantHandler: RouteHandler<typeof switchMessageVariantRoute, ApiEnv> = createHandler(
-  {
-    auth: 'session',
-    validateBody: SwitchVariantRequestSchema,
-    operationName: 'switchMessageVariant',
-  },
-  async (c) => {
-    const { user } = c.auth();
-    const threadId = c.req.param('threadId');
-    const messageId = c.req.param('id');
-    const { variantIndex } = c.validated.body;
-    const db = await getDbAsync();
-
-    if (!threadId || !messageId) {
-      throw createError.badRequest('Missing required parameters');
-    }
-
-    // Verify thread ownership
-    await verifyThreadOwnership(threadId, user.id, db);
-
-    // Find the message
-    const message = await db.query.chatMessage.findFirst({
-      where: eq(tables.chatMessage.id, messageId),
-    });
-
-    if (!message) {
-      throw createError.notFound('Message not found', createResourceNotFoundContext('message', messageId));
-    }
-
-    if (message.role === 'user') {
-      throw createError.badRequest('User messages do not have variants', {
-        errorType: 'validation',
-        field: 'messageId',
-      });
-    }
-
-    // Find all variants with the same parent and participant
-    // Build where conditions, handling nullable fields
-    const whereConditions = [
-      eq(tables.chatMessage.threadId, threadId),
-      eq(tables.chatMessage.role, 'assistant'),
-    ];
-
-    // Add parent message filter - must match (including null)
-    if (message.parentMessageId) {
-      whereConditions.push(eq(tables.chatMessage.parentMessageId, message.parentMessageId));
-    } else {
-      whereConditions.push(isNull(tables.chatMessage.parentMessageId));
-    }
-
-    // Add participant filter - must match (including null)
-    if (message.participantId) {
-      whereConditions.push(eq(tables.chatMessage.participantId, message.participantId));
-    } else {
-      whereConditions.push(isNull(tables.chatMessage.participantId));
-    }
-
-    const variants = await db.query.chatMessage.findMany({
-      where: and(...whereConditions),
-      orderBy: [tables.chatMessage.variantIndex],
-    });
-
-    // Validate variant index
-    if (variantIndex < 0 || variantIndex >= variants.length) {
-      throw createError.badRequest(
-        `Invalid variant index ${variantIndex}. Must be between 0 and ${variants.length - 1}`,
-        {
-          errorType: 'validation',
-          field: 'variantIndex',
-        },
-      );
-    }
-
-    // Mark all variants as inactive
-    // Build where conditions using the same pattern as the query above
-    const updateWhereConditions = [
-      eq(tables.chatMessage.threadId, threadId),
-      eq(tables.chatMessage.role, 'assistant'),
-    ];
-
-    if (message.parentMessageId) {
-      updateWhereConditions.push(eq(tables.chatMessage.parentMessageId, message.parentMessageId));
-    } else {
-      updateWhereConditions.push(isNull(tables.chatMessage.parentMessageId));
-    }
-
-    if (message.participantId) {
-      updateWhereConditions.push(eq(tables.chatMessage.participantId, message.participantId));
-    } else {
-      updateWhereConditions.push(isNull(tables.chatMessage.participantId));
-    }
-
-    await db
-      .update(tables.chatMessage)
-      .set({ isActiveVariant: false })
-      .where(and(...updateWhereConditions));
-
-    // Mark the selected variant as active
-    const targetVariant = variants[variantIndex];
-    if (!targetVariant) {
-      throw createError.notFound('Variant not found', createResourceNotFoundContext('variant', String(variantIndex)));
-    }
-
-    const [activeVariant] = await db
-      .update(tables.chatMessage)
-      .set({ isActiveVariant: true })
-      .where(eq(tables.chatMessage.id, targetVariant.id))
-      .returning();
-
-    if (!activeVariant) {
-      throw createError.internal('Failed to activate variant');
-    }
-
-    return Responses.ok(c, {
-      success: true,
-      activeVariant,
     });
   },
 );

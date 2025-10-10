@@ -3,37 +3,75 @@
  * Utilities for creating beautiful, branded OG images with Next.js ImageResponse
  *
  * Features:
- * - Base64 encoding for local assets (logo, model icons)
+ * - Base64 encoding for assets (logo, model icons)
+ * - Works in all environments (local, preview, production)
+ * - HTTP-based asset fetching (compatible with Cloudflare Workers/Pages)
  * - Design system color extraction
  * - Glass-morphism styling helpers
  * - Model icon path resolution
  */
 
-import { readFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { Buffer } from 'node:buffer';
 
 import { BRAND } from '@/constants/brand';
 
 /**
- * Read and base64 encode a local image file
+ * Get the base URL for the application
+ * Works in all environments: local, preview, and production
+ */
+function getBaseUrl(): string {
+  // In browser/client-side
+  if (typeof window !== 'undefined') {
+    return window.location.origin;
+  }
+
+  // Server-side: use environment variable
+  if (process.env.NEXT_PUBLIC_APP_URL) {
+    return process.env.NEXT_PUBLIC_APP_URL;
+  }
+
+  // Fallback for local development
+  return 'http://localhost:3000';
+}
+
+/**
+ * Fetch and base64 encode an image from a URL
  * ImageResponse supports base64 data URLs for <img> tags
  *
- * @param relativePath - Path relative to project root (e.g., 'public/static/logo.png')
+ * This uses HTTP fetch instead of file system access, making it compatible
+ * with all deployment environments including Cloudflare Workers/Pages
+ *
+ * @param relativePath - Path relative to public folder (e.g., 'static/logo.png')
  * @returns Base64 data URL string
  */
 export async function getBase64Image(relativePath: string): Promise<string> {
   try {
-    const filePath = join(process.cwd(), relativePath);
-    const imageBuffer = await readFile(filePath);
-    const base64 = imageBuffer.toString('base64');
+    // Remove 'public/' prefix if present, as URLs don't include it
+    const cleanPath = relativePath.replace(/^public\//, '');
+
+    // Construct the full URL to the asset
+    const baseUrl = getBaseUrl();
+    const imageUrl = `${baseUrl}/${cleanPath}`;
+
+    // Fetch the image
+    const response = await fetch(imageUrl);
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch image: ${response.status} ${response.statusText}`);
+    }
+
+    // Convert to buffer and then to base64
+    const arrayBuffer = await response.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    const base64 = buffer.toString('base64');
 
     // Determine MIME type from file extension
-    const ext = relativePath.split('.').pop()?.toLowerCase();
-    const mimeType = ext === 'png' ? 'image/png' : ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : 'image/png';
+    const ext = cleanPath.split('.').pop()?.toLowerCase();
+    const mimeType = ext === 'png' ? 'image/png' : ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : ext === 'svg' ? 'image/svg+xml' : 'image/png';
 
     return `data:${mimeType};base64,${base64}`;
   } catch (error) {
-    console.error(`Failed to read image: ${relativePath}`, error);
+    console.error(`Failed to fetch and encode image: ${relativePath}`, error);
     throw error;
   }
 }
@@ -94,6 +132,30 @@ export function getProviderFromModelId(modelId: string): string {
  */
 export async function getLogoBase64(): Promise<string> {
   return getBase64Image('public/static/logo.png');
+}
+
+/**
+ * Get mode icon as base64 data URL
+ * @param mode - Chat mode ID (analyzing, brainstorming, debating, solving)
+ * @returns Base64 data URL for the mode icon
+ */
+export async function getModeIconBase64(mode: string): Promise<string> {
+  try {
+    return await getBase64Image(`public/static/icons/modes/${mode}.svg`);
+  } catch (error) {
+    console.error(`Failed to load mode icon for: ${mode}`, error);
+    // Fallback to analyzing icon
+    return getBase64Image('public/static/icons/modes/analyzing.svg');
+  }
+}
+
+/**
+ * Get UI icon as base64 data URL
+ * @param iconName - Icon name (robot, message, etc.)
+ * @returns Base64 data URL for the UI icon
+ */
+export async function getUIIconBase64(iconName: string): Promise<string> {
+  return getBase64Image(`public/static/icons/ui/${iconName}.svg`);
 }
 
 /**
@@ -166,6 +228,83 @@ export const glassStyle = {
 export function createGradient(angle: number = 135, start: string = OG_COLORS.backgroundGradientStart, end: string = OG_COLORS.backgroundGradientEnd): string {
   return `linear-gradient(${angle}deg, ${start} 0%, ${end} 100%)`;
 }
+
+/**
+ * Generate SVG path data for wavy lines
+ * Centered and overlapping exactly like the WavyBackground animation
+ *
+ * Canvas code reference (src/components/ui/wavy-background.tsx:95-108):
+ * - Uses simplex noise: noise(x / 800, 0.3 * i, nt) * 80
+ * - Centers at: y + h * 0.5 (vertical center)
+ * - Line width: 40px
+ * - Step: x += 5
+ *
+ * @param width - Canvas width
+ * @param height - Canvas height
+ * @param waveIndex - Wave layer index (0-4)
+ * @returns SVG path data string
+ */
+export function generateWavePath(width: number, height: number, waveIndex: number): string {
+  // Center waves vertically (exactly as in WavyBackground)
+  const centerY = height * 0.5;
+  const amplitude = 80; // Match canvas amplitude exactly
+
+  // Simulate simplex noise with layered sine waves
+  // Simplex noise has organic, flowing characteristics that we approximate with multiple frequencies
+  const path: string[] = [];
+
+  for (let x = 0; x < width; x += 5) {
+    // Approximate simplex noise(x / 800, 0.3 * i, nt=0) using sine waves
+    // Scale x exactly as in the canvas version
+    const scaledX = x / 800;
+    const yOffset = 0.3 * waveIndex;
+
+    // Enhanced multi-octave noise approximation with phase shifts
+    // This creates more organic, varied waves without a visible centerline
+
+    // Layer 1: Base wave (low frequency, high amplitude)
+    const noise1 = Math.sin((scaledX + yOffset) * Math.PI * 2);
+
+    // Layer 2: Mid frequency detail with phase shift
+    const noise2 = Math.sin((scaledX * 3 + yOffset * 1.3) * Math.PI * 2) * 0.4;
+
+    // Layer 3: High frequency texture with different phase
+    const noise3 = Math.sin((scaledX * 5.7 + yOffset * 1.7) * Math.PI * 2) * 0.2;
+
+    // Layer 4: Fine detail with asymmetric frequency
+    const noise4 = Math.sin((scaledX * 8.3 + yOffset * 2.1) * Math.PI * 2) * 0.1;
+
+    // Layer 5: Extra fine detail for smoothness
+    const noise5 = Math.sin((scaledX * 13.1 + yOffset * 2.5) * Math.PI * 2) * 0.05;
+
+    // Combine all layers with proper normalization
+    const noiseValue = (noise1 + noise2 + noise3 + noise4 + noise5) / 1.75;
+
+    // Apply amplitude and center position (matches canvas: y + h * 0.5)
+    const y = noiseValue * amplitude + centerY;
+
+    // Build SVG path (M for first point, L for rest)
+    if (x === 0) {
+      path.push(`M${x},${y.toFixed(2)}`);
+    } else {
+      path.push(`L${x},${y.toFixed(2)}`);
+    }
+  }
+
+  return path.join(' ');
+}
+
+/**
+ * Wavy background colors
+ * Roundtable logo colors - muted/desaturated versions (matching WavyBackground)
+ */
+export const WAVE_COLORS = [
+  'rgba(218, 165, 32, 0.15)', // Muted Gold/Yellow
+  'rgba(154, 205, 50, 0.15)', // Muted Olive Green
+  'rgba(64, 224, 208, 0.15)', // Muted Turquoise
+  'rgba(147, 112, 219, 0.15)', // Muted Purple
+  'rgba(219, 112, 147, 0.15)', // Muted Pink
+] as const;
 
 /**
  * Truncate text with ellipsis

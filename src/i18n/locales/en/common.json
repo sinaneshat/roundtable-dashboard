@@ -264,7 +264,9 @@
       "edit": "Edit and regenerate",
       "messageCopied": "Message copied",
       "messageCopiedDescription": "Message content copied to clipboard",
-      "regenerate": "Regenerate response"
+      "regenerate": "Regenerate response",
+      "regenerateRound": "Regenerate this round",
+      "scrollToBottom": "Scroll to bottom"
     },
     "addToFavorites": "Add to favorites",
     "addingToFavorites": "Adding to favorites...",
@@ -381,7 +383,29 @@
     "streaming": {
       "remaining": "remaining",
       "responding": "responding",
-      "waiting": "waiting"
+      "waiting": "waiting",
+      "thinkingMessages": [
+        "Consulting the neural pathways...",
+        "Pondering the possibilities...",
+        "Weighing all the options...",
+        "Gathering thoughts from the void...",
+        "Channeling digital wisdom...",
+        "Computing clever responses...",
+        "Brewing a fresh batch of words...",
+        "Summoning silicon insights...",
+        "Calibrating wit and wisdom...",
+        "Synthesizing brilliant ideas...",
+        "Excavating knowledge gems...",
+        "Distilling pure intelligence...",
+        "Weaving words with care...",
+        "Crafting the perfect response...",
+        "Thinking deeply about this...",
+        "Consulting the hivemind...",
+        "Tuning the language model...",
+        "Loading profound insights...",
+        "Generating thoughtful prose...",
+        "Awakening dormant neurons..."
+      ]
     },
     "chainOfThought": {
       "viewReasoning": "View reasoning process",
@@ -396,6 +420,17 @@
       "memoryAdded": "Memory Added",
       "memoryRemoved": "Memory Removed",
       "configurationChange": "Configuration Change"
+    },
+    "variants": {
+      "label": "Variant",
+      "previousVariant": "Previous variant",
+      "nextVariant": "Next variant",
+      "branchedConversation": "Branched conversation",
+      "loading": "Loading variants...",
+      "switchingVariant": "Switching variant..."
+    },
+    "user": {
+      "defaultName": "You"
     },
     "streamingTimeout": "Streaming Timeout",
     "streamingTimeoutDescription": "The response took too long. Please try sending your message again.",
@@ -529,6 +564,26 @@
     }
   },
   "light": "Light",
+  "meta": {
+    "signIn": {
+      "title": "Sign In",
+      "description": "Sign in to your account to access AI collaboration tools and manage your conversations."
+    },
+    "signUp": {
+      "title": "Sign Up",
+      "description": "Create an account to start collaborating with multiple AI models in real-time conversations."
+    },
+    "legal": {
+      "privacy": {
+        "title": "Privacy Policy",
+        "description": "Learn how we collect, use, and protect your personal information when you use our AI collaboration platform."
+      },
+      "terms": {
+        "title": "Terms of Service",
+        "description": "Read our terms and conditions for using the AI collaboration platform and managing your account."
+      }
+    }
+  },
   "makePrivate": "Make Private",
   "makePublic": "Make Public",
   "manageBilling": "Manage Billing",

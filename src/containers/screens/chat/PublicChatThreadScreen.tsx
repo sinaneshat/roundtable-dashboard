@@ -13,13 +13,14 @@ import {
 import { Message, MessageAvatar, MessageContent } from '@/components/ai-elements/message';
 import { Response } from '@/components/ai-elements/response';
 import { ParticipantsPreview } from '@/components/chat/chat-participants-list';
+import { ConfigurationChangesGroup } from '@/components/chat/configuration-changes-group';
 import { ModelMessageCard } from '@/components/chat/model-message-card';
 import { Button } from '@/components/ui/button';
 import { BRAND } from '@/constants';
 import { usePublicThreadQuery } from '@/hooks/queries/chat-threads';
 import { getAvatarPropsFromModelId } from '@/lib/ai/avatar-helpers';
-import type { MessageMetadata } from '@/lib/ai/message-helpers';
-import { chatMessagesToUIMessages } from '@/lib/ai/message-helpers';
+import { groupChangelogByTime } from '@/lib/ai/changelog-helpers';
+import { chatMessagesToUIMessages, getMessageMetadata } from '@/lib/ai/message-helpers';
 import { getModelById } from '@/lib/ai/models-config';
 import type { ParticipantConfig } from '@/lib/schemas/chat-forms';
 
@@ -40,6 +41,10 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
   // Memoize derived data to prevent unnecessary re-renders
   const serverMessages = useMemo(() => threadResponse?.messages || [], [threadResponse]);
   const rawParticipants = useMemo(() => threadResponse?.participants || [], [threadResponse]);
+  const changelog = useMemo(() => threadResponse?.changelog || [], [threadResponse]);
+
+  // Thread owner information (available for future use, e.g., displaying author credits)
+  const user = useMemo(() => threadResponse?.user, [threadResponse]);
 
   // Convert server messages to AI SDK format using the same helper as ChatThreadScreen
   const messages: UIMessage[] = useMemo(() => chatMessagesToUIMessages(serverMessages), [serverMessages]);
@@ -57,6 +62,35 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
         order: index,
       }));
   }, [rawParticipants]);
+
+  // Create a merged timeline of messages and grouped changelog entries
+  // Sort by creation time to show configuration changes at the right points
+  // Available for future use to display configuration changes inline with messages
+  const timeline = useMemo(() => {
+    const messageItems = messages.map((msg, index) => {
+      const metadata = getMessageMetadata(msg.metadata);
+      return {
+        type: 'message' as const,
+        data: msg,
+        index, // Store original index
+        timestamp: metadata?.createdAt
+          ? new Date(metadata.createdAt)
+          : new Date(Date.now() + index),
+      };
+    });
+
+    // Group changelog entries by timestamp
+    const changelogGroups = groupChangelogByTime(changelog);
+    const changelogItems = changelogGroups.map(group => ({
+      type: 'changelog_group' as const,
+      data: group,
+      timestamp: group.timestamp,
+    }));
+
+    return [...messageItems, ...changelogItems].sort(
+      (a, b) => a.timestamp.getTime() - b.timestamp.getTime(),
+    );
+  }, [messages, changelog]);
 
   // Show loading state
   if (isLoadingThread) {
@@ -120,15 +154,9 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
   return (
     <div className="relative flex flex-1 flex-col min-h-0">
       {/* ✅ AI Elements Conversation - Same pattern as ChatThreadScreen */}
-      <Conversation className="flex-1 overflow-y-auto">
-        {/* ✅ Scroll to bottom button - positioned in header area, aligned with header */}
-        <ConversationScrollButton
-          placement="header"
-          className="fixed top-[4.5rem] right-4 z-50 sm:right-6 md:right-8 lg:top-20"
-          aria-label={t('chat.actions.scrollToBottom')}
-        />
-        <ConversationContent className="w-full max-w-4xl mx-auto px-4 sm:px-6 md:px-8 pt-4 pb-4 space-y-4">
-          {messages.length === 0
+      <Conversation className="flex-1">
+        <ConversationContent className="w-full max-w-full sm:max-w-3xl lg:max-w-4xl mx-auto px-3 sm:px-4 md:px-6 lg:px-8 pt-4 pb-4 space-y-4">
+          {timeline.length === 0
             ? (
                 <div className="flex items-center justify-center min-h-[50vh]">
                   <div className="text-center space-y-4 max-w-md">
@@ -146,11 +174,22 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
               )
             : (
                 <>
-                  {/* ✅ Messages rendering (same logic as ChatThreadScreen) */}
-                  {messages.map((message) => {
+                  {/* ✅ Timeline: Messages and grouped configuration changes sorted by time */}
+                  {timeline.map((item) => {
+                    // Render grouped configuration changes
+                    if (item.type === 'changelog_group') {
+                      return (
+                        <ConfigurationChangesGroup
+                          key={`changelog-group-${item.data.timestamp.getTime()}`}
+                          group={item.data}
+                        />
+                      );
+                    }
+
+                    // Render message (existing logic)
+                    const message = item.data;
                     if (message.role === 'user') {
-                      // ✅ User message (same as ChatThreadScreen)
-                      // Note: Public threads don't expose user information for privacy
+                      // ✅ User message with proper name and avatar from backend
                       return (
                         <Message from="user" key={message.id}>
                           <MessageContent>
@@ -167,16 +206,15 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
                             })}
                           </MessageContent>
                           <MessageAvatar
-                            src=""
-                            name={t('chat.user.defaultName')}
+                            src={user?.image || ''}
+                            name={user?.name || t('user.defaultName')}
                           />
                         </Message>
                       );
                     }
-
                     // ✅ Assistant message: Extract participant data from message metadata (same as ChatThreadScreen)
                     // CRITICAL: Use stored model/role from metadata (NOT current participants)
-                    const metadata = message.metadata as MessageMetadata | undefined;
+                    const metadata = getMessageMetadata(message.metadata);
                     const participantIndex = metadata?.participantIndex;
                     const storedModelId = metadata?.model; // ✅ Matches DB schema
                     const storedRole = metadata?.role; // ✅ Matches DB schema
@@ -262,12 +300,13 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
                 </>
               )}
         </ConversationContent>
+        <ConversationScrollButton aria-label={t('chat.actions.scrollToBottom')} />
       </Conversation>
 
       {/* ✅ Participants Preview (read-only, no streaming state) - Same as ChatThreadScreen */}
       {participantConfigs.length > 0 && (
         <div className="sticky bottom-0 left-0 right-0 z-10 mt-auto">
-          <div className="w-full max-w-4xl mx-auto px-4 sm:px-6 md:px-8 py-4">
+          <div className="w-full max-w-full sm:max-w-3xl lg:max-w-4xl mx-auto px-3 sm:px-4 md:px-6 lg:px-8 py-4">
             <ParticipantsPreview
               participants={participantConfigs}
               isStreaming={false}

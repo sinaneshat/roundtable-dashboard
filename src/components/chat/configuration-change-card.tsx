@@ -13,6 +13,14 @@ import {
 } from '@/components/ai-elements/chain-of-thought';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
+import {
+  parseMemoryAddedData,
+  parseMemoryRemovedData,
+  parseModeChangeData,
+  parseParticipantAddedData,
+  parseParticipantRemovedData,
+  parseParticipantUpdatedData,
+} from '@/lib/ai/changelog-schemas';
 import { getModelById } from '@/lib/ai/models-config';
 import { formatRelativeTime } from '@/lib/format/date';
 import { cn } from '@/lib/ui/cn';
@@ -52,6 +60,11 @@ export function ConfigurationChangeCard({ change, className }: ConfigurationChan
       color: 'text-blue-500',
       label: 'Participant Updated',
     },
+    participants_reordered: {
+      icon: ArrowRight,
+      color: 'text-blue-500',
+      label: 'Participants Reordered',
+    },
     memory_added: {
       icon: ListPlus,
       color: 'text-cyan-500',
@@ -72,49 +85,36 @@ export function ConfigurationChangeCard({ change, className }: ConfigurationChan
 
   const Icon = config.icon;
 
+  // ✅ ZOD PATTERN: Parse changeData using type-safe schemas (no inline casting)
   // Extract model information from changeData for participant changes
-  const modelId = (change.changeData && typeof change.changeData === 'object' && 'modelId' in change.changeData)
-    ? change.changeData.modelId as string
-    : undefined;
-  const role = (change.changeData && typeof change.changeData === 'object' && 'role' in change.changeData)
-    ? change.changeData.role as string
-    : undefined;
+  const participantAddedData = parseParticipantAddedData(change.changeData);
+  const participantRemovedData = parseParticipantRemovedData(change.changeData);
+  const participantUpdatedData = parseParticipantUpdatedData(change.changeData);
+  const memoryAddedData = parseMemoryAddedData(change.changeData);
+  const memoryRemovedData = parseMemoryRemovedData(change.changeData);
+  const modeChangeData = parseModeChangeData(change.changeData);
+
+  // Extract participant added/removed data
+  const modelId = participantAddedData?.modelId || participantRemovedData?.modelId;
+  const role = participantAddedData?.role || participantRemovedData?.role;
   const model = modelId ? getModelById(modelId) : undefined;
 
-  // Extract models for participant_updated (before/after)
-  const beforeModelId = (change.changeData && typeof change.changeData === 'object' && 'before' in change.changeData && change.changeData.before && typeof change.changeData.before === 'object' && 'modelId' in change.changeData.before)
-    ? change.changeData.before.modelId as string
-    : undefined;
-  const afterModelId = (change.changeData && typeof change.changeData === 'object' && 'after' in change.changeData && change.changeData.after && typeof change.changeData.after === 'object' && 'modelId' in change.changeData.after)
-    ? change.changeData.after.modelId as string
-    : undefined;
+  // Extract participant updated data (before/after)
+  const beforeModelId = participantUpdatedData?.before?.modelId;
+  const afterModelId = participantUpdatedData?.after?.modelId;
   const beforeModel = beforeModelId ? getModelById(beforeModelId) : undefined;
   const afterModel = afterModelId ? getModelById(afterModelId) : undefined;
-  const beforeRole = (change.changeData && typeof change.changeData === 'object' && 'before' in change.changeData && change.changeData.before && typeof change.changeData.before === 'object' && 'role' in change.changeData.before)
-    ? change.changeData.before.role as string
-    : undefined;
-  const afterRole = (change.changeData && typeof change.changeData === 'object' && 'after' in change.changeData && change.changeData.after && typeof change.changeData.after === 'object' && 'role' in change.changeData.after)
-    ? change.changeData.after.role as string
-    : undefined;
+  const beforeRole = participantUpdatedData?.before?.role;
+  const afterRole = participantUpdatedData?.after?.role;
 
   // Extract memory details
-  const memoryTitle = (change.changeData && typeof change.changeData === 'object' && 'title' in change.changeData)
-    ? change.changeData.title as string
-    : undefined;
-  const memoryType = (change.changeData && typeof change.changeData === 'object' && 'type' in change.changeData)
-    ? change.changeData.type as string
-    : undefined;
-  const memoryDescription = (change.changeData && typeof change.changeData === 'object' && 'description' in change.changeData)
-    ? change.changeData.description as string
-    : undefined;
+  const memoryTitle = memoryAddedData?.title || memoryRemovedData?.title;
+  const memoryType = memoryAddedData?.type || memoryRemovedData?.type;
+  const memoryDescription = memoryAddedData?.description;
 
   // Extract mode change details
-  const previousMode = (change.changeData && typeof change.changeData === 'object' && 'previousMode' in change.changeData)
-    ? change.changeData.previousMode as string
-    : undefined;
-  const newMode = (change.changeData && typeof change.changeData === 'object' && 'newMode' in change.changeData)
-    ? change.changeData.newMode as string
-    : undefined;
+  const previousMode = modeChangeData?.previousMode;
+  const newMode = modeChangeData?.newMode;
 
   return (
     <div className={cn('py-2', className)}>

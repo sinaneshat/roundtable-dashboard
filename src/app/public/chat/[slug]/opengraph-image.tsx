@@ -24,7 +24,9 @@ import {
   createGradient,
   getLogoBase64,
   getModeColor,
+  getModeIconBase64,
   getModelIconBase64,
+  getUIIconBase64,
   OG_COLORS,
   truncateText,
 } from '@/lib/utils/og-image-helpers';
@@ -34,18 +36,6 @@ import * as config from './opengraph-image.config';
 
 export { alt, contentType, revalidate, runtime, size } from './opengraph-image.config';
 
-/**
- * Mode icons mapping (using Lucide-style descriptions)
- * Since ImageResponse doesn't support Lucide icons directly,
- * we use Unicode symbols that match the design
- */
-const MODE_ICONS: Record<string, string> = {
-  analyzing: '🔍',
-  brainstorming: '💡',
-  debating: '⚖️',
-  solving: '🎯',
-};
-
 export default async function Image({
   params,
 }: {
@@ -53,13 +43,30 @@ export default async function Image({
 }) {
   const { slug } = await params;
 
-  // Load logo once for all renders
+  // Load all icons and assets
   let logoBase64: string;
+  let robotIconBase64: string;
+  let messageIconBase64: string;
+
   try {
     logoBase64 = await getLogoBase64();
   } catch (error) {
     console.error('Failed to load logo:', error);
     logoBase64 = '';
+  }
+
+  try {
+    robotIconBase64 = await getUIIconBase64('robot');
+  } catch (error) {
+    console.error('Failed to load robot icon:', error);
+    robotIconBase64 = '';
+  }
+
+  try {
+    messageIconBase64 = await getUIIconBase64('message');
+  } catch (error) {
+    console.error('Failed to load message icon:', error);
+    messageIconBase64 = '';
   }
 
   try {
@@ -128,6 +135,15 @@ export default async function Image({
       ? truncateText(firstUserMessage.content, 120)
       : 'View this AI conversation';
 
+    // Load mode icon
+    let modeIconBase64: string;
+    try {
+      modeIconBase64 = await getModeIconBase64(thread.mode);
+    } catch (error) {
+      console.error('Failed to load mode icon:', error);
+      modeIconBase64 = '';
+    }
+
     // Load model icons for participants (up to 4 to avoid clutter)
     const participantIcons = await Promise.all(
       participants.slice(0, 4).map(async (p) => {
@@ -141,7 +157,6 @@ export default async function Image({
     );
 
     const modeColor = getModeColor(thread.mode);
-    const modeIcon = MODE_ICONS[thread.mode] || MODE_ICONS.analyzing;
 
     return new ImageResponse(
       (
@@ -176,7 +191,6 @@ export default async function Image({
             style={{
               display: 'flex',
               alignItems: 'center',
-              justifyContent: 'space-between',
               marginBottom: 40,
               zIndex: 1,
             }}
@@ -206,24 +220,6 @@ export default async function Image({
               >
                 {BRAND.name}
               </div>
-            </div>
-
-            {/* Public Badge - Glass morphism */}
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                padding: '10px 24px',
-                backgroundColor: OG_COLORS.glassBackground,
-                borderRadius: 12,
-                fontSize: 18,
-                color: OG_COLORS.success,
-                fontWeight: 600,
-                border: `1px solid ${OG_COLORS.glassBorder}`,
-                backdropFilter: 'blur(8px)',
-              }}
-            >
-              PUBLIC
             </div>
           </div>
 
@@ -355,7 +351,15 @@ export default async function Image({
                 fontWeight: 600,
               }}
             >
-              <span style={{ fontSize: 24 }}>{modeIcon}</span>
+              {modeIconBase64 && (
+                <img
+                  src={modeIconBase64}
+                  alt="Mode"
+                  width={24}
+                  height={24}
+                  style={{ filter: `drop-shadow(0 0 8px ${modeColor})` }}
+                />
+              )}
               {thread.mode}
             </div>
 
@@ -373,7 +377,14 @@ export default async function Image({
                 border: `1px solid ${OG_COLORS.glassBorder}`,
               }}
             >
-              <span style={{ fontSize: 22 }}>🤖</span>
+              {robotIconBase64 && (
+                <img
+                  src={robotIconBase64}
+                  alt="Models"
+                  width={22}
+                  height={22}
+                />
+              )}
               {participants.length}
               {' '}
               {participants.length === 1 ? 'Model' : 'Models'}
@@ -393,7 +404,14 @@ export default async function Image({
                 border: `1px solid ${OG_COLORS.glassBorder}`,
               }}
             >
-              <span style={{ fontSize: 22 }}>💬</span>
+              {messageIconBase64 && (
+                <img
+                  src={messageIconBase64}
+                  alt="Messages"
+                  width={22}
+                  height={22}
+                />
+              )}
               {messages.length}
               {' '}
               {messages.length === 1 ? 'Message' : 'Messages'}

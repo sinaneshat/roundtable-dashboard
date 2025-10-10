@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/breadcrumb';
 import { Separator } from '@/components/ui/separator';
 import { SidebarTrigger } from '@/components/ui/sidebar';
+import { BRAND } from '@/constants/brand';
 import { cn } from '@/lib/ui/cn';
 
 import { ChatSection } from './chat-states';
@@ -69,7 +70,6 @@ export function NavigationHeader({
   const pathname = usePathname();
   const t = useTranslations();
   const [isScrolled, setIsScrolled] = useState(false);
-  const [isVisible, setIsVisible] = useState(true);
 
   // Get thread data from context (used by child components to pass data up to layout)
   // Use optional version that doesn't throw if provider is missing (for public pages)
@@ -82,7 +82,11 @@ export function NavigationHeader({
   const threadActions = threadActionsProp ?? (showSidebarTrigger ? context.threadActions : null);
 
   // Check if this is a thread page (dynamic route)
-  const isThreadPage = pathname?.startsWith('/chat/') && pathname !== '/chat' && pathname !== '/chat/pricing';
+  // Handles both authenticated (/chat/[slug]) and public (/public/chat/[slug]) thread pages
+  const isThreadPage = (
+    (pathname?.startsWith('/chat/') && pathname !== '/chat' && pathname !== '/chat/pricing')
+    || pathname?.startsWith('/public/chat/')
+  );
 
   // Use thread props for thread pages, otherwise use static map
   const currentPage = isThreadPage && threadTitle
@@ -91,34 +95,19 @@ export function NavigationHeader({
 
   const parentPage = currentPage?.parent ? breadcrumbMap[currentPage.parent] : null;
 
-  // Scroll detection with hide/show behavior
+  // Scroll detection for glass morphism effect only (header stays visible)
   useEffect(() => {
-    let lastScrollY = window.scrollY;
     let ticking = false;
 
     const handleScroll = () => {
       if (!ticking) {
         window.requestAnimationFrame(() => {
           const currentScrollY = window.scrollY;
-          const scrollDifference = currentScrollY - lastScrollY;
 
           // Update scrolled state for glass morphism effect
           const shouldBeScrolled = currentScrollY > 10;
           setIsScrolled(prev => prev !== shouldBeScrolled ? shouldBeScrolled : prev);
 
-          // Hide header when scrolling down, show when scrolling up
-          // Always show when at the top
-          if (currentScrollY <= 10) {
-            setIsVisible(true);
-          } else if (scrollDifference > 0 && currentScrollY > 100) {
-            // Scrolling down & past threshold -> hide
-            setIsVisible(false);
-          } else if (scrollDifference < 0) {
-            // Scrolling up -> show
-            setIsVisible(true);
-          }
-
-          lastScrollY = currentScrollY;
           ticking = false;
         });
 
@@ -140,18 +129,15 @@ export function NavigationHeader({
   return (
     <header
       className={cn(
-        'sticky top-0 z-50 flex h-16 shrink-0 items-center gap-2 transition-all duration-300 ease-in-out group-has-data-[collapsible=icon]/sidebar-wrapper:h-12',
+        'sticky top-0 z-50 flex h-16 shrink-0 items-center gap-2 transition-all duration-200 ease-in-out group-has-data-[collapsible=icon]/sidebar-wrapper:h-12',
         isScrolled && 'bg-background/80 backdrop-blur-md border-b border-border/40 shadow-sm',
         !isScrolled && 'bg-background',
-        // Hide/show based on scroll direction
-        !isVisible && '-translate-y-full',
-        isVisible && 'translate-y-0',
         className,
       )}
     >
       <div className={cn(
-        'flex items-center justify-between gap-2 px-4 sm:px-6 md:px-8',
-        maxWidth ? 'w-full max-w-4xl mx-auto' : 'w-full',
+        'flex items-center justify-between gap-2 px-3 sm:px-4 md:px-6 lg:px-8',
+        maxWidth ? 'w-full max-w-full sm:max-w-3xl lg:max-w-4xl mx-auto' : 'w-full',
       )}
       >
         <div className="flex items-center gap-2 min-w-0 flex-1">
@@ -164,8 +150,11 @@ export function NavigationHeader({
           )}
           {showLogo && (
             <>
-              <Link href="/" className="flex-shrink-0" prefetch={false}>
+              <Link href="/" className="flex items-center gap-2 flex-shrink-0" prefetch={false}>
                 <Logo size="sm" variant="icon" />
+                <span className="text-base font-semibold tracking-tight">
+                  {BRAND.name}
+                </span>
               </Link>
               <Separator orientation="vertical" className="me-2 h-4 flex-shrink-0" />
             </>
@@ -185,8 +174,8 @@ export function NavigationHeader({
                     <BreadcrumbSeparator className="hidden md:block" />
                   </>
                 )}
-                <BreadcrumbItem className="min-w-0">
-                  <BreadcrumbPage className="line-clamp-1 truncate">
+                <BreadcrumbItem className="min-w-0 max-w-md">
+                  <BreadcrumbPage className="line-clamp-1 truncate max-w-full" title={'isDynamic' in currentPage && currentPage.isDynamic ? currentPage.titleKey : t(currentPage.titleKey)}>
                     {'isDynamic' in currentPage && currentPage.isDynamic
                       ? currentPage.titleKey
                       : t(currentPage.titleKey)}
@@ -199,7 +188,7 @@ export function NavigationHeader({
 
         {/* Action buttons at the right end - passed from server as props */}
         {threadActions && (
-          <div className="flex items-center gap-1 flex-shrink-0">
+          <div className="flex items-center gap-2 flex-shrink-0">
             {threadActions}
           </div>
         )}

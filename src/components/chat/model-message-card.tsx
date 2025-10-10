@@ -1,12 +1,7 @@
 'use client';
 
-import {
-  ChainOfThought,
-  ChainOfThoughtContent,
-  ChainOfThoughtHeader,
-  ChainOfThoughtStep,
-} from '@/components/ai-elements/chain-of-thought';
 import { Message, MessageAvatar, MessageContent } from '@/components/ai-elements/message';
+import { Reasoning, ReasoningContent, ReasoningTrigger } from '@/components/ai-elements/reasoning';
 import { Response } from '@/components/ai-elements/response';
 import type { AIModel } from '@/lib/ai/models-config';
 
@@ -107,28 +102,16 @@ export function ModelMessageCard({
 
             if (part.type === 'reasoning') {
               // ✅ OFFICIAL AI SDK: Always render reasoning if part exists
-              // Using Chain of Thought pattern for reasoning display
+              // Following AI Elements pattern from chatbot example
               return (
-                <ChainOfThought
+                <Reasoning
                   key={messageId ? `${messageId}-reasoning-${partIndex}` : `reasoning-${partIndex}`}
-                  defaultOpen={false}
-                  className="mt-2 mb-2"
+                  isStreaming={status === 'streaming'}
+                  className="w-full"
                 >
-                  <ChainOfThoughtHeader>
-                    💭 View reasoning process
-                  </ChainOfThoughtHeader>
-                  <ChainOfThoughtContent>
-                    <ChainOfThoughtStep
-                      label="Model Reasoning"
-                      description="Internal thinking process used to generate this response"
-                      status="complete"
-                    >
-                      <pre className="text-xs text-muted-foreground whitespace-pre-wrap font-mono overflow-x-auto px-3 py-2 rounded-lg bg-muted/50">
-                        {part.text}
-                      </pre>
-                    </ChainOfThoughtStep>
-                  </ChainOfThoughtContent>
-                </ChainOfThought>
+                  <ReasoningTrigger />
+                  <ReasoningContent>{part.text}</ReasoningContent>
+                </Reasoning>
               );
             }
 

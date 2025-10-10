@@ -22,7 +22,6 @@ import { useTranslations } from 'next-intl';
 import { useCallback, useRef, useState } from 'react';
 
 import { Conversation, ConversationContent, ConversationScrollButton } from '@/components/ai-elements/conversation';
-import { Loader } from '@/components/ai-elements/loader';
 import { Message, MessageAvatar, MessageContent } from '@/components/ai-elements/message';
 import { Response } from '@/components/ai-elements/response';
 import { ChatInput } from '@/components/chat/chat-input';
@@ -31,11 +30,12 @@ import { ChatModeSelector } from '@/components/chat/chat-mode-selector';
 import { ChatParticipantsList, ParticipantsPreview } from '@/components/chat/chat-participants-list';
 import { ChatQuickStart } from '@/components/chat/chat-quick-start';
 import { ModelMessageCard } from '@/components/chat/model-message-card';
+import { StreamingParticipantsLoader } from '@/components/chat/streaming-participants-loader';
 import { toast } from '@/components/ui/use-toast';
 import { WavyBackground } from '@/components/ui/wavy-background';
 import { useCreateThreadMutation } from '@/hooks/mutations/chat-mutations';
 import { getAvatarPropsFromModelId } from '@/lib/ai/avatar-helpers';
-import type { MessageMetadata } from '@/lib/ai/message-helpers';
+import { getMessageMetadata } from '@/lib/ai/message-helpers';
 import { AllowedModelId, getModelById } from '@/lib/ai/models-config';
 import { useSession } from '@/lib/auth/client';
 import type { ChatModeId } from '@/lib/config/chat-modes';
@@ -142,7 +142,7 @@ export default function ChatOverviewScreen() {
 
                 try {
                   const event = JSON.parse(data);
-                  console.log('[STREAM EVENT]', event); // DEBUG
+                  console.warn('[STREAM EVENT]', event); // DEBUG
 
                   if (event.type === 'start') {
                     messageId = event.messageId;
@@ -159,7 +159,12 @@ export default function ChatOverviewScreen() {
                       }
                     }
 
-                    // ✅ Add placeholder message
+                    // ✅ Get participant data for metadata
+                    const currentParticipants = participantsRef.current;
+                    const participant = currentParticipants[participantIndex];
+
+                    // ✅ Add placeholder message with CRITICAL metadata fields pre-populated
+                    // Following useChatStreaming pattern (src/hooks/utils/use-chat-streaming.ts:110-124)
                     setMessages((prev) => {
                       const updated = [
                         ...prev,
@@ -167,7 +172,20 @@ export default function ChatOverviewScreen() {
                           id: messageId,
                           role: 'assistant' as const,
                           parts: [{ type: 'text' as const, text: '' }],
-                          metadata: messageMetadata || undefined,
+                          metadata: {
+                            // ✅ CRITICAL: Pre-populate required fields for ModelMessageCard rendering
+                            participantId: participant?.id, // Required for participant lookup
+                            participantIndex, // Required for display
+                            model: participant?.modelId, // Required for avatar rendering
+                            role: participant?.role || '', // Required for display
+                            createdAt: new Date().toISOString(), // Required for timeline sorting
+                            // Merge backend metadata (will contain additional fields from start event)
+                            ...(messageMetadata || {}),
+                            // ✅ Initialize variant metadata (will be populated in finish event)
+                            variants: [],
+                            currentVariantIndex: 0,
+                            hasVariants: false,
+                          },
                         },
                       ];
                       messagesRef.current = updated; // Keep ref in sync
@@ -175,7 +193,7 @@ export default function ChatOverviewScreen() {
                     });
                   } else if (event.type === 'text-delta' && event.delta) {
                     content += event.delta;
-                    console.log('[TEXT DELTA]', { messageId, content }); // DEBUG
+                    console.warn('[TEXT DELTA]', { messageId, content }); // DEBUG
 
                     // ✅ Update message with streamed content
                     setMessages((prev) => {
@@ -185,7 +203,7 @@ export default function ChatOverviewScreen() {
                           : m,
                       );
                       messagesRef.current = updated; // Keep ref in sync
-                      console.log('[MESSAGES UPDATED]', updated.length); // DEBUG
+                      console.warn('[MESSAGES UPDATED]', updated.length); // DEBUG
                       return updated;
                     });
                   } else if (event.type === 'error') {
@@ -194,15 +212,19 @@ export default function ChatOverviewScreen() {
                     console.error('[STREAM ERROR]', errorMessage);
 
                     // Update the message with error content
+                    // ✅ CRITICAL: Preserve existing metadata fields (participantId, model, role, etc.)
                     setMessages((prev) => {
                       const updated = prev.map(m =>
                         m.id === messageId
                           ? {
                               ...m,
-                              parts: [{ type: 'text' as const, text: `⚠️ ${errorMessage}` }],
+                              parts: [{ type: 'text' as const, text: `Error: ${errorMessage}` }],
                               metadata: {
-                                ...(m.metadata || {}),
+                                ...(m.metadata || {}), // ✅ Preserve all existing metadata
+                                hasError: true, // Add hasError flag for consistent error detection
                                 error: errorMessage,
+                                errorType: event.error?.type || 'unknown',
+                                errorMessage,
                               },
                             }
                           : m,
@@ -239,15 +261,17 @@ export default function ChatOverviewScreen() {
           console.error('[NETWORK ERROR]', errorMessage, error);
 
           // Update message with error if we have a messageId
+          // ✅ CRITICAL: Preserve existing metadata fields (participantId, model, role, etc.)
           if (messageId) {
             setMessages((prev) => {
               const updated = prev.map(m =>
                 m.id === messageId
                   ? {
                       ...m,
-                      parts: [{ type: 'text' as const, text: `⚠️ ${errorMessage}` }],
+                      parts: [{ type: 'text' as const, text: `Error: ${errorMessage}` }],
                       metadata: {
                         ...(m.metadata || {}),
+                        hasError: true, // ✅ Add hasError flag for consistent error detection
                         error: errorMessage,
                       },
                     }
@@ -402,7 +426,7 @@ export default function ChatOverviewScreen() {
                   className="w-full flex-1 flex flex-col justify-center"
                 >
                   {/* Hero Section - Aligned with chat layout */}
-                  <div className="w-full max-w-4xl mx-auto px-4 sm:px-6 md:px-8 py-6 sm:py-8">
+                  <div className="w-full max-w-full sm:max-w-3xl lg:max-w-4xl mx-auto px-3 sm:px-4 md:px-6 lg:px-8 py-6 sm:py-8">
                     <motion.div
                       initial={{ opacity: 0, scale: 0.9 }}
                       animate={{ opacity: 1, scale: 1 }}
@@ -434,7 +458,7 @@ export default function ChatOverviewScreen() {
                   </div>
 
                   {/* Quick Start Cards - Aligned with chat layout */}
-                  <div className="w-full max-w-4xl mx-auto px-4 sm:px-6 md:px-8 py-4">
+                  <div className="w-full max-w-full sm:max-w-3xl lg:max-w-4xl mx-auto px-3 sm:px-4 md:px-6 lg:px-8 py-4">
                     <motion.div
                       initial={{ opacity: 0, y: 20 }}
                       animate={{ opacity: 1, y: 0 }}
@@ -456,12 +480,12 @@ export default function ChatOverviewScreen() {
                 >
                   {/* ✅ AI Elements Conversation - Official pattern with auto-scroll */}
                   <Conversation className="flex-1">
-                    <ConversationContent className="w-full max-w-4xl mx-auto px-4 sm:px-6 md:px-8 pt-4 pb-4 space-y-4">
+                    <ConversationContent className="w-full max-w-full sm:max-w-3xl lg:max-w-4xl mx-auto px-3 sm:px-4 md:px-6 lg:px-8 pt-4 pb-4 space-y-4">
                       {/* Message list - Center-based chat layout */}
                       {messages.map((message) => {
                         // ✅ CRITICAL: Extract participant data from message metadata (stored at generation time)
                         // This makes historical messages independent of current participant configuration
-                        const metadata = message.metadata as MessageMetadata | undefined;
+                        const metadata = getMessageMetadata(message.metadata);
                         const participantIndex = metadata?.participantIndex;
                         const storedModelId = metadata?.model; // ✅ Matches DB schema
                         const storedRole = metadata?.role; // ✅ Matches DB schema
@@ -502,14 +526,26 @@ export default function ChatOverviewScreen() {
                         if (!model)
                           return null;
 
-                        const hasError
-                          = message.metadata && typeof message.metadata === 'object' && 'error' in message.metadata;
-                        const messageStatus: 'completed' | 'streaming' | 'error'
+                        // ✅ Check for error using typed metadata (already extracted above at line 466)
+                        // Type-safe error detection following AI SDK error handling pattern
+                        const hasError = metadata?.hasError === true || !!metadata?.error;
+
+                        // ✅ CRITICAL: Detect streaming status correctly
+                        // A message is streaming if:
+                        // 1. Global status is 'streaming' AND
+                        // 2. This is the last message in the array (currently being streamed to)
+                        const isLastMessage = messages.indexOf(message) === messages.length - 1;
+                        const isCurrentlyStreaming = status === 'streaming' && isLastMessage;
+                        const hasContent = message.parts.some(p => p.type === 'text' && p.text.trim().length > 0);
+
+                        const messageStatus: 'thinking' | 'streaming' | 'completed' | 'error'
                           = hasError
                             ? 'error'
-                            : status === 'streaming' && message.parts[0]?.type === 'text' && message.parts[0].text === ''
-                              ? 'streaming'
-                              : 'completed';
+                            : isCurrentlyStreaming && !hasContent
+                              ? 'thinking'
+                              : isCurrentlyStreaming
+                                ? 'streaming'
+                                : 'completed';
 
                         return (
                           <ModelMessageCard
@@ -526,11 +562,14 @@ export default function ChatOverviewScreen() {
                         );
                       })}
 
-                      {/* Show loader during streaming */}
-                      {status === 'streaming' && <Loader />}
+                      {/* ✅ Show reusable streaming loader with funny text */}
+                      {status === 'streaming' && (
+                        <StreamingParticipantsLoader
+                          participants={selectedParticipants}
+                          currentParticipantIndex={null}
+                        />
+                      )}
                     </ConversationContent>
-
-                    {/* ✅ AI Elements ConversationScrollButton - Official pattern */}
                     <ConversationScrollButton />
                   </Conversation>
                 </motion.div>
@@ -540,7 +579,7 @@ export default function ChatOverviewScreen() {
 
       {/* ✅ STICKY INPUT - Relative to dashboard content, not viewport */}
       <div className="sticky bottom-0 left-0 right-0 z-10 mt-auto">
-        <div className="w-full max-w-4xl mx-auto px-4 sm:px-6 md:px-8 py-4">
+        <div className="w-full max-w-full sm:max-w-3xl lg:max-w-4xl mx-auto px-3 sm:px-4 md:px-6 lg:px-8 py-4">
           {/* Participants Preview - shows status during streaming */}
           {selectedParticipants.length > 0 && (
             <ParticipantsPreview

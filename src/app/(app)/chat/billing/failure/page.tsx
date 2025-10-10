@@ -1,17 +1,20 @@
 import { dehydrate, HydrationBoundary } from '@tanstack/react-query';
 import type { Metadata } from 'next';
 
+import { BRAND } from '@/constants/brand';
 import { BillingFailureClient } from '@/containers/screens/chat/billing/BillingFailureClient';
 import { getQueryClient } from '@/lib/data/query-client';
 import { queryKeys } from '@/lib/data/query-keys';
 import { getSubscriptionsService, getUserUsageStatsService } from '@/services/api';
+import { createMetadata } from '@/utils/metadata';
 
 import { capturePaymentFailure } from './actions';
 
-export const metadata: Metadata = {
-  title: 'Payment Failed',
-  description: 'Payment processing encountered an error',
-};
+export const metadata: Metadata = createMetadata({
+  title: `Payment Failed - ${BRAND.fullName}`,
+  description: 'Payment processing encountered an error. Please try again or contact support.',
+  robots: 'noindex, nofollow', // Transient error page - don't index
+});
 
 // Force dynamic rendering to ensure server action runs on each request
 export const dynamic = 'force-dynamic';

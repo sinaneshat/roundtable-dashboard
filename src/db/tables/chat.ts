@@ -134,6 +134,7 @@ export const chatThreadChangelog = sqliteTable('chat_thread_changelog', {
       'participant_added',
       'participant_removed',
       'participant_updated',
+      'participants_reordered',
       'memory_added',
       'memory_removed',
     ],
@@ -147,6 +148,15 @@ export const chatThreadChangelog = sqliteTable('chat_thread_changelog', {
     participantId?: string;
     modelId?: string;
     role?: string | null;
+    oldRole?: string | null;
+    newRole?: string | null;
+    // For participants_reordered
+    participants?: Array<{
+      id: string;
+      modelId: string;
+      role: string | null;
+      order: number;
+    }>;
     // For memory changes
     memoryId?: string;
     memoryTitle?: string;
@@ -194,19 +204,14 @@ export const chatMessage = sqliteTable('chat_message', {
       completionTokens?: number;
       totalTokens?: number;
     };
+    // Variant tracking (moved from columns to metadata)
+    variantIndex?: number; // 0 = original, 1+ = regenerated variants
+    isActiveVariant?: boolean; // Currently displayed variant
+    variantGroupId?: string; // Groups variants of the same response
+    roundId?: string; // Groups messages from same conversation round
+    parentMessageId?: string; // Reference to user message (for threading)
     [key: string]: unknown;
   }>(),
-  parentMessageId: text('parent_message_id')
-    // Self-reference for message threading - TypeScript has issues with circular refs
-    .references((): ReturnType<typeof text> => chatMessage.id as ReturnType<typeof text>, {
-      onDelete: 'set null',
-    }),
-  variantIndex: integer('variant_index')
-    .notNull()
-    .default(0), // 0 = original message, 1+ = regenerated variants
-  isActiveVariant: integer('is_active_variant', { mode: 'boolean' })
-    .notNull()
-    .default(true), // Which variant is currently displayed/active
   createdAt: integer('created_at', { mode: 'timestamp_ms' })
     .defaultNow()
     .notNull(),
@@ -214,8 +219,6 @@ export const chatMessage = sqliteTable('chat_message', {
   index('chat_message_thread_idx').on(table.threadId),
   index('chat_message_created_idx').on(table.createdAt),
   index('chat_message_participant_idx').on(table.participantId),
-  index('chat_message_parent_idx').on(table.parentMessageId),
-  index('chat_message_variant_idx').on(table.parentMessageId, table.variantIndex), // Query all variants of a message
 ]);
 
 /**
@@ -368,11 +371,8 @@ export const chatMessageRelations = relations(chatMessage, ({ one }) => ({
     fields: [chatMessage.participantId],
     references: [chatParticipant.id],
   }),
-  parentMessage: one(chatMessage, {
-    fields: [chatMessage.parentMessageId],
-    references: [chatMessage.id],
-    relationName: 'messageThread',
-  }),
+  // ✅ REMOVED: parentMessage relation (parentMessageId moved to metadata)
+  // Parent message relationship is now tracked via metadata.parentMessageId
 }));
 
 export const chatMemoryRelations = relations(chatMemory, ({ one, many }) => ({

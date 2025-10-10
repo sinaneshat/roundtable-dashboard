@@ -106,7 +106,7 @@ export function useChatStreaming(
       }
 
       // Add placeholder message for this participant
-      // ✅ CRITICAL: Include model, role, and createdAt in metadata for rendering and timeline sorting
+      // ✅ CRITICAL: Include participantId, model, role, and createdAt in metadata for rendering and timeline sorting
       setMessages(prev => [
         ...prev,
         {
@@ -114,6 +114,7 @@ export function useChatStreaming(
           role: 'assistant',
           parts: [],
           metadata: {
+            participantId: participant.id, // ✅ Required for participant lookup during rendering
             participantIndex,
             model: participant.modelId, // ✅ Required for avatar rendering
             role: participant.role, // ✅ Required for display
@@ -124,7 +125,7 @@ export function useChatStreaming(
 
       try {
         // Log streaming request details for debugging
-        console.log('[STREAMING] Starting request:', {
+        console.warn('[STREAMING] Starting request:', {
           threadId,
           participantIndex,
           mode: selectedMode,
@@ -149,7 +150,7 @@ export function useChatStreaming(
           signal: abortSignal,
         });
 
-        console.log('[STREAMING] Response received:', {
+        console.warn('[STREAMING] Response received:', {
           ok: response.ok,
           status: response.status,
           statusText: response.statusText,
@@ -175,13 +176,13 @@ export function useChatStreaming(
         let currentContent = '';
         let eventCount = 0;
 
-        console.log('[STREAMING] Starting SSE stream processing');
+        console.warn('[STREAMING] Starting SSE stream processing');
 
         while (true) {
           const { done, value } = await reader.read();
 
           if (done) {
-            console.log('[STREAMING] Stream completed:', {
+            console.warn('[STREAMING] Stream completed:', {
               totalEvents: eventCount,
               finalContentLength: currentContent.length,
               hasContent: currentContent.length > 0,
@@ -228,14 +229,14 @@ export function useChatStreaming(
 
               // ✅ Skip [DONE] sentinel value (not JSON)
               if (data === '[DONE]') {
-                console.log('[STREAMING] Received [DONE] sentinel');
+                console.warn('[STREAMING] Received [DONE] sentinel');
                 continue;
               }
 
               try {
                 const event = JSON.parse(data);
                 eventCount++;
-                console.log('[STREAMING] SSE event received:', {
+                console.warn('[STREAMING] SSE event received:', {
                   type: event.type,
                   eventNumber: eventCount,
                   hasDelta: !!event.delta,
@@ -247,6 +248,7 @@ export function useChatStreaming(
                 if (event.type === 'start' && event.messageMetadata) {
                   const startMetadata = event.messageMetadata;
                   // Merge start metadata into message immediately
+                  // ✅ NEW: Now includes roundId for variant tracking
                   setMessages(prev =>
                     prev.map(msg =>
                       msg.id === messageId
@@ -255,6 +257,10 @@ export function useChatStreaming(
                             metadata: {
                               ...(msg.metadata || {}),
                               ...startMetadata,
+                              // ✅ Initialize variant metadata (will be populated in finish event)
+                              variants: [],
+                              currentVariantIndex: 0,
+                              hasVariants: false,
                             },
                           }
                         : msg,
@@ -296,6 +302,19 @@ export function useChatStreaming(
                     });
                   }
 
+                  // ✅ NEW: Log variant metadata received from backend
+                  if (finishMetadata.variants) {
+                    console.warn('[STREAMING] Variant metadata received:', {
+                      messageId,
+                      variantCount: finishMetadata.variants.length,
+                      currentVariantIndex: finishMetadata.currentVariantIndex,
+                      activeVariantIndex: finishMetadata.activeVariantIndex,
+                      totalVariants: finishMetadata.totalVariants,
+                      hasVariants: finishMetadata.hasVariants,
+                      roundId: finishMetadata.roundId,
+                    });
+                  }
+
                   setMessages(prev =>
                     prev.map(msg =>
                       msg.id === messageId
@@ -304,6 +323,15 @@ export function useChatStreaming(
                             metadata: {
                               ...(msg.metadata || {}),
                               ...finishMetadata,
+                              // ✅ NEW: Store variant metadata from backend
+                              // This eliminates the need for separate API calls to get variants
+                              variants: finishMetadata.variants || [],
+                              currentVariantIndex: finishMetadata.currentVariantIndex ?? 0,
+                              activeVariantIndex: finishMetadata.activeVariantIndex ?? 0,
+                              totalVariants: finishMetadata.totalVariants ?? 1,
+                              hasVariants: finishMetadata.hasVariants ?? false,
+                              roundId: finishMetadata.roundId || messageId,
+                              parentMessageId: finishMetadata.parentMessageId,
                             },
                             // If backend sent error but no content, show error message
                             ...(hasBackendError && currentContent.length === 0
@@ -342,7 +370,7 @@ export function useChatStreaming(
       } catch (error) {
         // Handle abort
         if (error instanceof Error && error.name === 'AbortError') {
-          console.log('[STREAMING] Aborted by user');
+          console.warn('[STREAMING] Aborted by user');
           return; // Graceful abort - don't throw
         }
 
@@ -414,6 +442,17 @@ export function useChatStreaming(
               return prev;
             });
           }
+
+          // ✅ CRITICAL: Ensure we have at least the user message before streaming
+          if (currentMessages.length === 0) {
+            console.error('[STREAMING] Cannot stream participant - no messages in conversation:', {
+              participantIndex: i,
+              initialMessagesLength: initialMessages.length,
+            });
+            throw new Error('No messages available to stream');
+          }
+
+          console.warn('[STREAMING] Streaming participant', i, 'with', currentMessages.length, 'messages');
 
           await streamSingleParticipant(i, currentMessages, abortController.signal);
         }

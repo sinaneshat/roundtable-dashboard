@@ -151,7 +151,7 @@ export {
 } from './customer-portal';
 
 // ============================================================================
-// Chat Messages Service Exports
+// Chat Participants Service Exports
 // ============================================================================
 
 export {
@@ -164,7 +164,7 @@ export {
 } from './products';
 
 // ============================================================================
-// Chat Participants Service Exports
+// Chat Memories Service Exports
 // ============================================================================
 
 export {
@@ -177,7 +177,7 @@ export {
 } from './subscription-management';
 
 // ============================================================================
-// Chat Memories Service Exports
+// Message Variants Service Exports
 // ============================================================================
 
 export {

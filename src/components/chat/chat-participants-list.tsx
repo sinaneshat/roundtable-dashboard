@@ -37,7 +37,7 @@ import type { SubscriptionTier } from '@/db/tables/usage';
 import { useCreateCustomRoleMutation, useDeleteCustomRoleMutation } from '@/hooks/mutations/chat-mutations';
 import { useCustomRolesQuery } from '@/hooks/queries/chat-roles';
 import { useUsageStatsQuery } from '@/hooks/queries/usage';
-import type { MessageMetadata } from '@/lib/ai/message-helpers';
+import { getMessageMetadata } from '@/lib/ai/message-helpers';
 import type { AIModel } from '@/lib/ai/models-config';
 import { AI_MODELS, canAccessModel, DEFAULT_ROLES, getModelById, getTierDisplayName } from '@/lib/ai/models-config';
 import type { ParticipantConfig } from '@/lib/schemas/chat-forms';
@@ -955,7 +955,7 @@ export function ParticipantsPreview({
             // Check if this model has any messages in the chat
             // participantId is stored in metadata by the message helper
             const hasMessages = chatMessages?.some((msg) => {
-              const metadata = msg.metadata as MessageMetadata | undefined;
+              const metadata = getMessageMetadata(msg.metadata);
               return metadata?.participantId === participant.id;
             }) ?? false;
 

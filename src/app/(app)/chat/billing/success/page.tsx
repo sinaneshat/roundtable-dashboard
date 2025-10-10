@@ -2,17 +2,20 @@ import { dehydrate, HydrationBoundary } from '@tanstack/react-query';
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 
+import { BRAND } from '@/constants/brand';
 import { BillingSuccessClient } from '@/containers/screens/chat/billing/BillingSuccessClient';
 import { getQueryClient } from '@/lib/data/query-client';
 import { queryKeys } from '@/lib/data/query-keys';
 import { getSubscriptionsService, getUserUsageStatsService } from '@/services/api';
+import { createMetadata } from '@/utils/metadata';
 
 import { syncStripeAfterCheckout } from './actions';
 
-export const metadata: Metadata = {
-  title: 'Payment Successful',
-  description: 'Your payment has been processed successfully',
-};
+export const metadata: Metadata = createMetadata({
+  title: `Payment Successful - ${BRAND.fullName}`,
+  description: 'Your payment has been processed successfully. Your subscription is now active.',
+  robots: 'noindex, nofollow', // Transient page - don't index
+});
 
 // Force dynamic rendering to ensure server action runs on each request
 export const dynamic = 'force-dynamic';

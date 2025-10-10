@@ -102,7 +102,7 @@ export function ChainOfThoughtHeader({
       className={cn(
         'flex w-full items-center justify-between px-4 py-3 text-sm font-medium',
         'text-muted-foreground hover:text-foreground transition-colors',
-        'focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2',
+        'focus:outline-none focus-visible:outline-none',
         className,
       )}
       {...props}

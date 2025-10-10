@@ -20,6 +20,7 @@ export type ChangelogType =
   | 'participant_added'
   | 'participant_removed'
   | 'participant_updated'
+  | 'participants_reordered'
   | 'memory_added'
   | 'memory_removed';
 
@@ -33,6 +34,7 @@ export const createChangelogParamsSchema = z.object({
     'participant_added',
     'participant_removed',
     'participant_updated',
+    'participants_reordered',
     'memory_added',
     'memory_removed',
   ]),
@@ -233,6 +235,32 @@ export async function logMemoryRemoved(
     changeData: {
       memoryId,
       memoryTitle,
+    },
+  });
+}
+
+/**
+ * Helper: Create changelog entry for participants reordering
+ */
+export async function logParticipantsReordered(
+  threadId: string,
+  participants: Array<{
+    id: string;
+    modelId: string;
+    role: string | null;
+    order: number;
+  }>,
+): Promise<string> {
+  const participantNames = participants
+    .map(p => p.modelId.split('/').pop() || p.modelId)
+    .join(', ');
+
+  return createChangelogEntry({
+    threadId,
+    changeType: 'participants_reordered',
+    changeSummary: `Reordered participants: ${participantNames}`,
+    changeData: {
+      participants,
     },
   });
 }

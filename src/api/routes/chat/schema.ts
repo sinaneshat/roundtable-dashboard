@@ -390,6 +390,44 @@ const ChatMemorySchema = z.object({
   }),
 }).openapi('ChatMemory');
 
+// ============================================================================
+// Changelog Schemas (moved before ThreadDetailPayloadSchema to fix order)
+// ============================================================================
+
+const ChatThreadChangelogSchema = z.object({
+  id: z.string().openapi({
+    description: 'Changelog entry ID',
+    example: 'changelog_abc123',
+  }),
+  threadId: z.string().openapi({
+    description: 'Thread ID',
+    example: 'thread_abc123',
+  }),
+  changeType: z.enum([
+    'mode_change',
+    'participant_added',
+    'participant_removed',
+    'participant_updated',
+    'participants_reordered',
+    'memory_added',
+    'memory_removed',
+  ]).openapi({
+    description: 'Type of configuration change',
+    example: 'participant_added',
+  }),
+  changeSummary: z.string().openapi({
+    description: 'Human-readable summary of the change',
+    example: 'Added Claude 3.5 Sonnet as The Ideator',
+  }),
+  changeData: z.record(z.string(), z.unknown()).nullable().openapi({
+    description: 'Additional structured data about the change',
+  }),
+  createdAt: CoreSchemas.timestamp().openapi({
+    description: 'When the change was made',
+    example: '2024-01-15T10:30:00Z',
+  }),
+}).openapi('ChatThreadChangelog');
+
 // Thread detail with participants, messages, and memories
 const ThreadDetailPayloadSchema = z.object({
   thread: ChatThreadSchema.openapi({
@@ -403,6 +441,21 @@ const ThreadDetailPayloadSchema = z.object({
   }),
   memories: z.array(ChatMemorySchema).openapi({
     description: 'Attached memories for context',
+  }),
+  changelog: z.array(ChatThreadChangelogSchema).openapi({
+    description: 'Thread configuration change history',
+  }),
+  user: z.object({
+    name: z.string().openapi({
+      description: 'Thread owner name',
+      example: 'John Doe',
+    }),
+    image: z.string().nullable().openapi({
+      description: 'Thread owner profile image URL',
+      example: 'https://example.com/avatar.jpg',
+    }),
+  }).openapi({
+    description: 'Thread owner public information (name and avatar only)',
   }),
 }).openapi('ThreadDetailPayload');
 
@@ -458,6 +511,21 @@ export const UpdateParticipantRequestSchema = z.object({
     description: 'Updated model settings',
   }),
 }).openapi('UpdateParticipantRequest');
+
+export const ReorderParticipantsRequestSchema = z.object({
+  participants: z.array(z.object({
+    id: z.string().openapi({
+      description: 'Participant ID',
+      example: 'participant_abc123',
+    }),
+    priority: z.number().int().nonnegative().openapi({
+      description: 'New priority/order for this participant',
+      example: 0,
+    }),
+  })).min(1).openapi({
+    description: 'Array of participant IDs with their new priorities',
+  }),
+}).openapi('ReorderParticipantsRequest');
 
 const ParticipantListPayloadSchema = z.object({
   participants: z.array(ChatParticipantSchema).openapi({
@@ -700,41 +768,8 @@ export const CustomRoleListResponseSchema = createCursorPaginatedResponseSchema(
 export const CustomRoleDetailResponseSchema = createApiResponseSchema(CustomRoleDetailPayloadSchema).openapi('CustomRoleDetailResponse');
 
 // ============================================================================
-// Changelog Schemas
+// Changelog Response Schemas
 // ============================================================================
-
-const ChatThreadChangelogSchema = z.object({
-  id: z.string().openapi({
-    description: 'Changelog entry ID',
-    example: 'changelog_abc123',
-  }),
-  threadId: z.string().openapi({
-    description: 'Thread ID',
-    example: 'thread_abc123',
-  }),
-  changeType: z.enum([
-    'mode_change',
-    'participant_added',
-    'participant_removed',
-    'participant_updated',
-    'memory_added',
-    'memory_removed',
-  ]).openapi({
-    description: 'Type of configuration change',
-    example: 'participant_added',
-  }),
-  changeSummary: z.string().openapi({
-    description: 'Human-readable summary of the change',
-    example: 'Added Claude 3.5 Sonnet as The Ideator',
-  }),
-  changeData: z.record(z.string(), z.unknown()).nullable().openapi({
-    description: 'Additional structured data about the change',
-  }),
-  createdAt: CoreSchemas.timestamp().openapi({
-    description: 'When the change was made',
-    example: '2024-01-15T10:30:00Z',
-  }),
-}).openapi('ChatThreadChangelog');
 
 const ChangelogListPayloadSchema = z.object({
   changelog: z.array(ChatThreadChangelogSchema).openapi({
@@ -747,53 +782,6 @@ const ChangelogListPayloadSchema = z.object({
 }).openapi('ChangelogListPayload');
 
 export const ChangelogListResponseSchema = createApiResponseSchema(ChangelogListPayloadSchema).openapi('ChangelogListResponse');
-
-// ============================================================================
-// Message Variant Schemas
-// ============================================================================
-
-/**
- * Schema for getting all variants of a message
- * Returns all variants (active and inactive) for a specific message parent
- */
-const MessageVariantsPayloadSchema = z.object({
-  variants: z.array(ChatMessageSchema).openapi({
-    description: 'All variants of the message (original + regenerations)',
-  }),
-  activeVariantIndex: z.number().int().nonnegative().openapi({
-    description: 'Index of the currently active variant',
-    example: 0,
-  }),
-  totalVariants: z.number().int().nonnegative().openapi({
-    description: 'Total number of variants',
-    example: 2,
-  }),
-}).openapi('MessageVariantsPayload');
-
-export const MessageVariantsResponseSchema = createApiResponseSchema(MessageVariantsPayloadSchema).openapi('MessageVariantsResponse');
-
-/**
- * Schema for switching active variant
- * Marks the specified variant as active and others as inactive
- */
-export const SwitchVariantRequestSchema = z.object({
-  variantIndex: z.number().int().nonnegative().openapi({
-    description: 'Index of the variant to make active',
-    example: 1,
-  }),
-}).openapi('SwitchVariantRequest');
-
-const SwitchVariantPayloadSchema = z.object({
-  success: z.boolean().openapi({
-    description: 'Whether the variant was successfully switched',
-    example: true,
-  }),
-  activeVariant: ChatMessageSchema.openapi({
-    description: 'The newly active variant',
-  }),
-}).openapi('SwitchVariantPayload');
-
-export const SwitchVariantResponseSchema = createApiResponseSchema(SwitchVariantPayloadSchema).openapi('SwitchVariantResponse');
 
 // ============================================================================
 // TYPE EXPORTS FOR FRONTEND & BACKEND
@@ -809,7 +797,6 @@ export type UpdateParticipantRequest = z.infer<typeof UpdateParticipantRequestSc
 
 export type ChatMessage = z.infer<typeof ChatMessageSchema>;
 export type StreamChatRequest = z.infer<typeof StreamChatRequestSchema>;
-export type SwitchVariantRequest = z.infer<typeof SwitchVariantRequestSchema>;
 
 export type ChatMemory = z.infer<typeof ChatMemorySchema>;
 export type CreateMemoryRequest = z.infer<typeof CreateMemoryRequestSchema>;

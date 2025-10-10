@@ -9,6 +9,13 @@ import { BreadcrumbStructuredData } from '@/components/seo';
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
 import { BRAND } from '@/constants/brand';
 import { getQueryClient } from '@/lib/data/query-client';
+import { queryKeys } from '@/lib/data/query-keys';
+import { STALE_TIMES } from '@/lib/data/stale-times';
+import {
+  getSubscriptionsService,
+  getUserUsageStatsService,
+  listThreadsService,
+} from '@/services/api';
 import { createMetadata } from '@/utils/metadata';
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -20,13 +27,37 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 /**
- * Chat Layout - Server Component
+ * Chat Layout - Server Component with Optimized Prefetching
  * Provides sidebar navigation and header for all /chat routes
  *
- * Data fetching handled by client-side useQuery hooks in:
- * - AppSidebar (threads list)
- * - UsageMetrics (usage stats)
- * - NavUser (subscriptions)
+ * PERFORMANCE OPTIMIZATION: Server-side prefetching for critical data
+ *
+ * Prefetching strategy:
+ * ✅ Threads list (infinite query) - First 50 items for sidebar
+ * ✅ Usage stats - For usage metrics display
+ * ✅ Subscriptions - For NavUser billing info
+ *
+ * Why this approach:
+ * ✅ Eliminates loading states on initial page load
+ * ✅ Data is immediately available when components mount
+ * ✅ Proper staleTime prevents unnecessary refetches
+ * ✅ Subsequent navigations use cached data (no refetch)
+ * ✅ Provides optimal first-load experience
+ *
+ * Data fetching strategy:
+ * - Threads: prefetchInfiniteQuery with 50 items (staleTime: 30s)
+ * - Usage: prefetchQuery (staleTime: 1min)
+ * - Subscriptions: prefetchQuery (staleTime: 2min)
+ *
+ * First load experience:
+ * - Zero loading states (data pre-hydrated)
+ * - Instant sidebar rendering with full data
+ * - Subsequent navigations: instant (cached)
+ *
+ * Pattern from Next.js 15 + TanStack Query best practices:
+ * - Server Components prefetch and hydrate critical data
+ * - Client Components consume hydrated cache
+ * - Layout prefetching provides optimal UX for user dashboards
  */
 export default async function ChatLayout({
   children,
@@ -37,22 +68,42 @@ export default async function ChatLayout({
 }) {
   const queryClient = getQueryClient();
 
-  // OPTIMIZATION: Removed layout-level prefetching to prevent excessive RSC calls
-  //
-  // Why this is better:
-  // 1. Layout prefetching runs on EVERY navigation within /chat routes
-  // 2. Client components (AppSidebar, UsageMetrics, NavUser) already fetch data with useQuery
-  // 3. Those queries have proper staleTime configured (30s, 60s, 2min)
-  // 4. TanStack Query handles caching automatically
-  //
-  // Result: ~3 fewer RSC calls per navigation, better performance
-  //
-  // Previous prefetching:
-  // - queryClient.prefetchInfiniteQuery({ queryKey: queryKeys.threads.lists(), staleTime: 30s })
-  // - queryClient.prefetchQuery({ queryKey: queryKeys.usage.stats(), staleTime: 60s })
-  // - queryClient.prefetchQuery({ queryKey: queryKeys.subscriptions.list(), staleTime: 2min })
-  //
-  // Now handled by client-side useQuery with same staleTime configuration
+  // Prefetch all critical sidebar data in parallel for optimal performance
+  // This eliminates loading states and provides instant data on first load
+  await Promise.all([
+    // 1. Prefetch threads list (infinite query) - First 50 items for sidebar
+    queryClient.prefetchInfiniteQuery({
+      queryKey: queryKeys.threads.lists(undefined), // No search query for initial load
+      queryFn: async ({ pageParam }) => {
+        // First page: 50 items (matches client-side hook behavior)
+        const limit = pageParam ? 20 : 50;
+        const params: { cursor?: string; limit: number } = { limit };
+        if (pageParam)
+          params.cursor = pageParam;
+
+        return listThreadsService({ query: params });
+      },
+      initialPageParam: undefined as string | undefined,
+      getNextPageParam: lastPage =>
+        lastPage.success ? lastPage.data?.pagination?.nextCursor : undefined,
+      pages: 1, // Only prefetch first page (50 items sufficient for sidebar)
+      staleTime: STALE_TIMES.threads, // 30 seconds - matches client hook
+    }),
+
+    // 2. Prefetch usage stats for UsageMetrics component
+    queryClient.prefetchQuery({
+      queryKey: queryKeys.usage.stats(),
+      queryFn: getUserUsageStatsService,
+      staleTime: STALE_TIMES.usage, // 1 minute - matches client hook
+    }),
+
+    // 3. Prefetch subscriptions for NavUser component
+    queryClient.prefetchQuery({
+      queryKey: queryKeys.subscriptions.list(),
+      queryFn: getSubscriptionsService,
+      staleTime: STALE_TIMES.subscriptions, // 2 minutes - matches client hook
+    }),
+  ]);
 
   return (
     <HydrationBoundary state={dehydrate(queryClient)}>

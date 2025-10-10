@@ -13,7 +13,7 @@ export type ConversationProps = ComponentProps<typeof StickToBottom>;
 export function Conversation({ className, ...props }: ConversationProps) {
   return (
     <StickToBottom
-      className={cn('relative flex-1 overflow-y-auto', className)}
+      className={cn('relative flex-1 min-h-0 overflow-y-auto', className)}
       initial="smooth"
       resize="smooth"
       role="log"
@@ -70,18 +70,10 @@ export function ConversationEmptyState({
   );
 }
 
-export type ConversationScrollButtonProps = ComponentProps<typeof Button> & {
-  /**
-   * Placement of the scroll button
-   * - 'bottom': Default position at the bottom center of the scroll area
-   * - 'header': Fixed position in the header area (top-right)
-   */
-  placement?: 'bottom' | 'header';
-};
+export type ConversationScrollButtonProps = ComponentProps<typeof Button>;
 
 export function ConversationScrollButton({
   className,
-  placement = 'bottom',
   ...props
 }: ConversationScrollButtonProps) {
   const { isAtBottom, scrollToBottom } = useStickToBottomContext();
@@ -98,15 +90,19 @@ export function ConversationScrollButton({
   return (
     <Button
       className={cn(
+        // Glass design positioned at bottom of scroll area
+        'absolute bottom-4 left-[50%] translate-x-[-50%]',
         'rounded-full shadow-lg',
-        placement === 'bottom' && 'absolute bottom-4 left-[50%] translate-x-[-50%]',
-        placement === 'header' && 'flex-shrink-0',
+        'backdrop-blur-xl bg-background/10 border-white/30',
+        'hover:bg-background/20 hover:border-white/40',
+        'transition-all duration-200',
+        'shadow-2xl',
         className,
       )}
       onClick={handleScrollToBottom}
       size="icon"
       type="button"
-      variant="outline"
+      variant="ghost"
       {...props}
     >
       <ArrowDownIcon className="size-4" />

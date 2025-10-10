@@ -36,6 +36,13 @@
       "when": 1728450000000,
       "tag": "0004_add_message_variants",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1760127495398,
+      "tag": "0005_aberrant_hairball",
+      "breakpoints": true
     }
   ]
 }

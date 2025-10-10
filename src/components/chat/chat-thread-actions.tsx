@@ -1,12 +1,11 @@
 'use client';
 
-import { Check, Globe, Link2, Loader2, Lock, Star, Trash2 } from 'lucide-react';
+import { Globe, Loader2, Lock, Star, Trash2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { useState } from 'react';
 
 import type { ChatThread } from '@/api/routes/chat/schema';
+import { SocialShareButton } from '@/components/chat/social-share-button';
 import { Button } from '@/components/ui/button';
-import { Separator } from '@/components/ui/separator';
 import {
   Tooltip,
   TooltipContent,
@@ -44,7 +43,6 @@ export function ChatThreadActions({ thread, slug, onDeleteClick, isPublicMode = 
   const t = useTranslations('chat');
   const toggleFavoriteMutation = useToggleFavoriteMutation();
   const togglePublicMutation = useTogglePublicMutation();
-  const [copySuccess, setCopySuccess] = useState(false);
 
   // Determine current display state with proper priority:
   // 1. If mutation succeeded, use the response data (most accurate)
@@ -84,15 +82,15 @@ export function ChatThreadActions({ thread, slug, onDeleteClick, isPublicMode = 
             >
               {toggleFavoriteMutation.isPending
                 ? (
-                    <Loader2 className="size-4 animate-spin text-yellow-500" />
+                    <Loader2 className="size-4 animate-spin text-muted-foreground" />
                   )
                 : (
                     <Star
                       className={cn(
                         'size-4 transition-all duration-200',
                         displayIsFavorite
-                          ? 'fill-yellow-500 text-yellow-500'
-                          : 'text-muted-foreground hover:text-yellow-500/80 hover:scale-110',
+                          ? 'fill-current text-muted-foreground'
+                          : 'text-muted-foreground hover:text-foreground hover:scale-110',
                       )}
                     />
                   )}
@@ -128,11 +126,11 @@ export function ChatThreadActions({ thread, slug, onDeleteClick, isPublicMode = 
             >
               {togglePublicMutation.isPending
                 ? (
-                    <Loader2 className="size-4 animate-spin text-green-500" />
+                    <Loader2 className="size-4 animate-spin text-muted-foreground" />
                   )
                 : displayIsPublic
                   ? (
-                      <Globe className="size-4 text-green-500 transition-all duration-200 hover:scale-110" />
+                      <Globe className="size-4 text-muted-foreground transition-all duration-200 hover:text-foreground hover:scale-110" />
                     )
                   : (
                       <Lock className="size-4 text-muted-foreground transition-all duration-200 hover:text-foreground hover:scale-110" />
@@ -149,68 +147,33 @@ export function ChatThreadActions({ thread, slug, onDeleteClick, isPublicMode = 
         </Tooltip>
       )}
 
-      {/* Copy Link Button (only shown when public) - uses optimistic state */}
+      {/* Social Share Button (only shown when public) - uses optimistic state */}
       {displayIsPublic && (
+        <SocialShareButton
+          url={`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/public/chat/${slug}`}
+          title={thread.title}
+          description={`Check out this AI collaboration on ${thread.title}`}
+        />
+      )}
+
+      {/* Delete Button - hidden in public mode */}
+      {!isPublicMode && onDeleteClick && (
         <Tooltip delayDuration={300}>
           <TooltipTrigger asChild>
             <Button
               variant="ghost"
               size="icon"
-              onClick={async () => {
-                const publicUrl = `${window.location.origin}/public/chat/${slug}`;
-                try {
-                  await navigator.clipboard.writeText(publicUrl);
-                  setCopySuccess(true);
-                  // Reset success state after 2 seconds
-                  setTimeout(() => setCopySuccess(false), 2000);
-                } catch (error) {
-                  // Silently fail - copy might not be supported in this context
-                  if (process.env.NODE_ENV === 'development') {
-                    console.error('Failed to copy link:', error);
-                  }
-                }
-              }}
-              aria-label={t('copyLink')}
-              className={cn('transition-all duration-200')}
+              onClick={onDeleteClick}
+              aria-label={t('deleteThread')}
+              className="transition-all duration-200"
             >
-              {copySuccess
-                ? (
-                    <Check className="size-4 text-green-500 animate-in zoom-in-75 duration-300" />
-                  )
-                : (
-                    <Link2 className="size-4 text-muted-foreground hover:text-foreground transition-all duration-200 hover:scale-110" />
-                  )}
+              <Trash2 className="size-4 text-muted-foreground transition-all duration-200 hover:text-foreground hover:scale-110" />
             </Button>
           </TooltipTrigger>
           <TooltipContent side="bottom">
-            <p className="text-sm">{copySuccess ? t('linkCopied') : t('copyLink')}</p>
+            <p className="text-sm">{t('deleteThread')}</p>
           </TooltipContent>
         </Tooltip>
-      )}
-
-      {/* Separator and Delete Button - hidden in public mode */}
-      {!isPublicMode && onDeleteClick && (
-        <>
-          <Separator orientation="vertical" className="h-6 mx-1" />
-
-          {/* Delete Thread Button */}
-          <Tooltip delayDuration={300}>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={onDeleteClick}
-                aria-label={t('deleteThread')}
-                className="transition-all duration-200 hover:bg-destructive/10"
-              >
-                <Trash2 className="size-4 text-destructive transition-all duration-200 hover:scale-110" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">
-              <p className="text-sm">{t('deleteThread')}</p>
-            </TooltipContent>
-          </Tooltip>
-        </>
       )}
     </TooltipProvider>
   );
