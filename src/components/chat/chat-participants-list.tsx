@@ -1,5 +1,6 @@
 'use client';
 
+import type { UIMessage } from 'ai';
 import { Bot, Check, GripVertical, Plus, Trash2 } from 'lucide-react';
 import { motion, Reorder, useDragControls } from 'motion/react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -26,7 +27,6 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
-import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import {
   Tooltip,
   TooltipContent,
@@ -37,6 +37,7 @@ import type { SubscriptionTier } from '@/db/tables/usage';
 import { useCreateCustomRoleMutation, useDeleteCustomRoleMutation } from '@/hooks/mutations/chat-mutations';
 import { useCustomRolesQuery } from '@/hooks/queries/chat-roles';
 import { useUsageStatsQuery } from '@/hooks/queries/usage';
+import type { MessageMetadata } from '@/lib/ai/message-helpers';
 import type { AIModel } from '@/lib/ai/models-config';
 import { AI_MODELS, canAccessModel, DEFAULT_ROLES, getModelById, getTierDisplayName } from '@/lib/ai/models-config';
 import type { ParticipantConfig } from '@/lib/schemas/chat-forms';
@@ -879,16 +880,23 @@ export function ParticipantsPreview({
   isStreaming?: boolean;
   currentParticipantIndex?: number;
   className?: string;
-  chatMessages?: Array<{ participantId?: string | null; [key: string]: unknown }>;
+  chatMessages?: UIMessage[];
 }) {
   // Track which participants just completed streaming (for flash animation)
   const [justCompletedSet, setJustCompletedSet] = useState<Set<string>>(() => new Set());
   const previousStreamingRef = useRef(isStreaming);
   const previousParticipantIndexRef = useRef(currentParticipantIndex);
+  const timeoutsRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
 
   // Handle just completed participant
   const handleJustCompleted = useCallback((participantId: string) => {
     setJustCompletedSet(prev => new Set(prev).add(participantId));
+
+    // Clear any existing timeout for this participant
+    const existingTimeout = timeoutsRef.current.get(participantId);
+    if (existingTimeout) {
+      clearTimeout(existingTimeout);
+    }
 
     // Auto-remove from "just completed" after animation duration (1.5s)
     const timeoutId = setTimeout(() => {
@@ -897,9 +905,10 @@ export function ParticipantsPreview({
         next.delete(participantId);
         return next;
       });
+      timeoutsRef.current.delete(participantId);
     }, 1500);
 
-    return () => clearTimeout(timeoutId);
+    timeoutsRef.current.set(participantId, timeoutId);
   }, []);
 
   // Detect when a participant just finished streaming
@@ -920,12 +929,20 @@ export function ParticipantsPreview({
     }
   }, [isStreaming, currentParticipantIndex, participants, handleJustCompleted]);
 
+  // Cleanup all timeouts on unmount
+  useEffect(() => {
+    return () => {
+      timeoutsRef.current.forEach(timeout => clearTimeout(timeout));
+      timeoutsRef.current.clear();
+    };
+  }, []);
+
   if (participants.length === 0) {
     return null;
   }
 
   return (
-    <ScrollArea className={cn('w-full', className)}>
+    <div className={cn('w-full overflow-x-auto', className)}>
       <div className="flex items-center gap-2 pb-2">
         {participants
           .sort((a, b) => a.order - b.order)
@@ -936,7 +953,11 @@ export function ParticipantsPreview({
               return null;
 
             // Check if this model has any messages in the chat
-            const hasMessages = chatMessages?.some(msg => msg.participantId === participant.id) ?? false;
+            // participantId is stored in metadata by the message helper
+            const hasMessages = chatMessages?.some((msg) => {
+              const metadata = msg.metadata as MessageMetadata | undefined;
+              return metadata?.participantId === participant.id;
+            }) ?? false;
 
             // Determine participant status during streaming - sequential turn-taking
             const isCurrentlyStreaming = isStreaming && currentParticipantIndex === index;
@@ -965,30 +986,30 @@ export function ParticipantsPreview({
                   !isCurrentlyStreaming && !isNextInQueue && !isWaitingInQueue && !isJustCompleted && hasMessages && 'bg-background/10',
                 )}
               >
-                {/* Streaming background gradient animation */}
+                {/* Streaming background gradient animation - more subtle */}
                 {isCurrentlyStreaming && (
                   <motion.div
-                    className="absolute inset-0 bg-gradient-to-br from-primary/20 via-primary/10 to-primary/5"
+                    className="absolute inset-0 bg-gradient-to-br from-primary/15 via-primary/8 to-primary/3"
                     animate={{
-                      opacity: [0.5, 1, 0.5],
+                      opacity: [0.4, 0.7, 0.4],
                     }}
                     transition={{
-                      duration: 2,
+                      duration: 2.5,
                       repeat: Number.POSITIVE_INFINITY,
                       ease: 'easeInOut',
                     }}
                   />
                 )}
 
-                {/* Completed flash - single green gradient pulse */}
+                {/* Completed flash - subtle green gradient pulse */}
                 {isJustCompleted && (
                   <motion.div
-                    className="absolute inset-0 bg-gradient-to-br from-green-500/30 via-green-500/20 to-green-500/10"
+                    className="absolute inset-0 bg-gradient-to-br from-green-500/20 via-green-500/12 to-green-500/5"
                     initial={{ opacity: 0 }}
-                    animate={{ opacity: [0, 1, 0] }}
+                    animate={{ opacity: [0, 0.8, 0] }}
                     transition={{
-                      duration: 0.8,
-                      ease: 'easeOut',
+                      duration: 1,
+                      ease: [0.22, 1, 0.36, 1],
                     }}
                   />
                 )}
@@ -1001,59 +1022,11 @@ export function ParticipantsPreview({
                     </AvatarFallback>
                   </Avatar>
                   <div className="flex flex-col gap-0.5 min-w-0 flex-1">
-                    <div className="flex items-center gap-1 sm:gap-1.5">
-                      <span className="text-[10px] sm:text-xs font-medium truncate whitespace-nowrap">{model.name}</span>
-
-                      {/* Currently Streaming - Simple text */}
-                      {isCurrentlyStreaming && (
-                        <motion.span
-                          initial={{ opacity: 0, x: -5 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          className="text-[10px] sm:text-xs text-primary font-medium whitespace-nowrap hidden sm:inline"
-                        >
-                          Streaming
-                        </motion.span>
-                      )}
-
-                      {/* Next in Queue */}
-                      {isNextInQueue && (
-                        <motion.span
-                          initial={{ opacity: 0, x: -5 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          transition={{ duration: 0.3 }}
-                          className="text-[10px] sm:text-xs text-primary/70 font-medium whitespace-nowrap hidden sm:inline"
-                        >
-                          Next
-                        </motion.span>
-                      )}
-
-                      {/* Waiting in Queue */}
-                      {isWaitingInQueue && !isNextInQueue && (
-                        <motion.span
-                          initial={{ opacity: 0 }}
-                          animate={{ opacity: 1 }}
-                          transition={{ duration: 0.3 }}
-                          className="text-[10px] sm:text-xs text-muted-foreground whitespace-nowrap hidden sm:inline"
-                        >
-                          Waiting
-                        </motion.span>
-                      )}
-
-                      {/* Just Completed - Brief green checkmark */}
-                      {isJustCompleted && (
-                        <motion.div
-                          initial={{ opacity: 0, scale: 0.8 }}
-                          animate={{ opacity: 1, scale: 1 }}
-                          transition={{ duration: 0.3, ease: [0.34, 1.56, 0.64, 1] }}
-                          className="flex items-center gap-1 shrink-0"
-                        >
-                          <Check className="size-3 sm:size-3.5 text-green-500" />
-                          <span className="text-[10px] sm:text-xs text-green-500 font-medium whitespace-nowrap hidden sm:inline">Complete</span>
-                        </motion.div>
-                      )}
+                    <div className="flex items-center gap-1.5 sm:gap-2">
+                      <span className="text-[10px] sm:text-xs font-medium truncate whitespace-nowrap text-foreground/90">{model.name}</span>
                     </div>
                     {participant.role && (
-                      <span className="text-[9px] sm:text-[10px] text-muted-foreground truncate whitespace-nowrap">{participant.role}</span>
+                      <span className="text-[9px] sm:text-[10px] text-muted-foreground/70 truncate whitespace-nowrap">{participant.role}</span>
                     )}
                   </div>
                 </div>
@@ -1061,7 +1034,6 @@ export function ParticipantsPreview({
             );
           })}
       </div>
-      <ScrollBar orientation="horizontal" className="h-2" />
-    </ScrollArea>
+    </div>
   );
 }

@@ -1,14 +1,11 @@
 'use client';
 
-import { useQueryClient } from '@tanstack/react-query';
 import { CheckCircle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { useEffect, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { ScaleIn, StaggerContainer, StaggerItem } from '@/components/ui/motion';
-import { queryKeys } from '@/lib/data/query-keys';
 
 /**
  * Billing Success Client Component
@@ -16,11 +13,14 @@ import { queryKeys } from '@/lib/data/query-keys';
  * This component receives pre-synced subscription data from server action.
  * Following Next.js App Router pattern: server-side data fetching → hydrated client component
  *
+ * ✅ NO useEffect - all data is server-hydrated via HydrationBoundary
+ * ✅ No forced redirects - user clicks when ready
+ * ✅ No client-side query invalidation - queries are prefetched on server
+ *
  * Key Features:
  * - Receives synced subscription data as props (no loading states)
- * - Invalidates client-side queries for quota/stats APIs
- * - Shows success animation immediately
- * - Auto-redirects to pricing page after countdown
+ * - Shows success animation immediately with hydrated data
+ * - User-controlled navigation via button (no countdown timer)
  *
  * @param syncedData - Pre-synced subscription data from server action
  */
@@ -37,37 +37,6 @@ type BillingSuccessClientProps = {
 export function BillingSuccessClient({ syncedData }: BillingSuccessClientProps) {
   const router = useRouter();
   const t = useTranslations();
-  const queryClient = useQueryClient();
-  const [redirectCountdown, setRedirectCountdown] = useState(3);
-
-  // Invalidate client-side queries for quota/stats on mount
-  // This ensures UI components refetch with new subscription limits
-  useEffect(() => {
-    if (syncedData?.synced) {
-      // Invalidate all billing-related queries
-      queryClient.invalidateQueries({ queryKey: queryKeys.subscriptions.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.products.all });
-
-      // CRITICAL: Invalidate usage queries to reflect new quota limits
-      queryClient.invalidateQueries({ queryKey: queryKeys.usage.all });
-    }
-  }, [syncedData, queryClient]);
-
-  // Countdown and redirect to chat home
-  useEffect(() => {
-    if (redirectCountdown > 0) {
-      const timer = setTimeout(() => {
-        setRedirectCountdown(prev => prev - 1);
-      }, 1000);
-      return () => clearTimeout(timer);
-    }
-
-    if (redirectCountdown === 0) {
-      router.push('/chat');
-    }
-
-    return undefined;
-  }, [redirectCountdown, router]);
 
   return (
     <div className="flex min-h-screen w-full flex-col items-center justify-start px-4 pt-16 md:pt-20">
@@ -101,10 +70,6 @@ export function BillingSuccessClient({ syncedData }: BillingSuccessClientProps) 
         </StaggerItem>
 
         <StaggerItem className="flex flex-col items-center gap-4">
-          <p className="text-xs text-muted-foreground md:text-sm">
-            {t('billing.success.redirecting', { count: redirectCountdown })}
-          </p>
-
           <Button
             onClick={() => router.push('/chat')}
             size="lg"

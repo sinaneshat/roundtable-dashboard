@@ -21,6 +21,7 @@ import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useCallback, useRef, useState } from 'react';
 
+import { Conversation, ConversationContent, ConversationScrollButton } from '@/components/ai-elements/conversation';
 import { Loader } from '@/components/ai-elements/loader';
 import { Message, MessageAvatar, MessageContent } from '@/components/ai-elements/message';
 import { Response } from '@/components/ai-elements/response';
@@ -34,6 +35,7 @@ import { toast } from '@/components/ui/use-toast';
 import { WavyBackground } from '@/components/ui/wavy-background';
 import { useCreateThreadMutation } from '@/hooks/mutations/chat-mutations';
 import { getAvatarPropsFromModelId } from '@/lib/ai/avatar-helpers';
+import type { MessageMetadata } from '@/lib/ai/message-helpers';
 import { AllowedModelId, getModelById } from '@/lib/ai/models-config';
 import { useSession } from '@/lib/auth/client';
 import type { ChatModeId } from '@/lib/config/chat-modes';
@@ -208,6 +210,11 @@ export default function ChatOverviewScreen() {
                       messagesRef.current = updated;
                       return updated;
                     });
+
+                    // ✅ CRITICAL: Reset state to prevent leak to next participant
+                    messageId = '';
+                    content = '';
+                    messageMetadata = null;
 
                     // Exit this participant's stream but continue to next participant
                     break; // Break the inner while loop, not return
@@ -445,85 +452,94 @@ export default function ChatOverviewScreen() {
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.4 }}
-                  className="w-full max-w-4xl mx-auto px-4 sm:px-6 md:px-8 pt-4 space-y-4"
+                  className="flex-1 flex flex-col min-h-0"
                 >
-                  {/* Message list - Center-based chat layout */}
-                  {messages.map((message) => {
-                    // ✅ CRITICAL: Extract participant data from message metadata (stored at generation time)
-                    // This makes historical messages independent of current participant configuration
-                    const metadata = message.metadata as Record<string, unknown> | undefined;
-                    const participantIndex = metadata?.participantIndex as number | undefined;
-                    const storedModelId = metadata?.model as string | undefined; // ✅ Matches DB schema
-                    const storedRole = metadata?.role as string | undefined; // ✅ Matches DB schema
+                  {/* ✅ AI Elements Conversation - Official pattern with auto-scroll */}
+                  <Conversation className="flex-1">
+                    <ConversationContent className="w-full max-w-4xl mx-auto px-4 sm:px-6 md:px-8 pt-4 pb-4 space-y-4">
+                      {/* Message list - Center-based chat layout */}
+                      {messages.map((message) => {
+                        // ✅ CRITICAL: Extract participant data from message metadata (stored at generation time)
+                        // This makes historical messages independent of current participant configuration
+                        const metadata = message.metadata as MessageMetadata | undefined;
+                        const participantIndex = metadata?.participantIndex;
+                        const storedModelId = metadata?.model; // ✅ Matches DB schema
+                        const storedRole = metadata?.role; // ✅ Matches DB schema
 
-                    // ✅ CRITICAL: Use stored modelId directly for avatar (independent of current participants)
-                    const avatarProps = getAvatarPropsFromModelId(
-                      message.role as 'user' | 'assistant',
-                      storedModelId,
-                      session?.user?.image,
-                      session?.user?.name,
-                    );
+                        // ✅ CRITICAL: Use stored modelId directly for avatar (independent of current participants)
+                        const avatarProps = getAvatarPropsFromModelId(
+                          message.role as 'user' | 'assistant',
+                          storedModelId,
+                          session?.user?.image,
+                          session?.user?.name,
+                        );
 
-                    if (message.role === 'user') {
-                      return (
-                        <Message key={message.id} from="user">
-                          <MessageContent>
-                            {message.parts.map((part, partIndex) => {
-                              if (part.type === 'text') {
-                                return (
-                                  <Response key={`${message.id}-part-${partIndex}`}>
-                                    {part.text}
-                                  </Response>
-                                );
-                              }
-                              return null;
-                            })}
-                          </MessageContent>
-                          <MessageAvatar src={avatarProps.src} name={avatarProps.name} />
-                        </Message>
-                      );
-                    }
+                        if (message.role === 'user') {
+                          return (
+                            <Message key={message.id} from="user">
+                              <MessageContent>
+                                {message.parts.map((part, partIndex) => {
+                                  if (part.type === 'text') {
+                                    return (
+                                      <Response key={`${message.id}-part-${partIndex}`}>
+                                        {part.text}
+                                      </Response>
+                                    );
+                                  }
+                                  return null;
+                                })}
+                              </MessageContent>
+                              <MessageAvatar src={avatarProps.src} name={avatarProps.name} />
+                            </Message>
+                          );
+                        }
 
-                    // ✅ Assistant message: Use stored modelId from metadata (NOT current participants)
-                    // Historical messages must remain associated with the model that generated them,
-                    // regardless of current participant changes (reorder/add/remove)
-                    const model = storedModelId ? getModelById(storedModelId) : undefined;
+                        // ✅ Assistant message: Use stored modelId from metadata (NOT current participants)
+                        // Historical messages must remain associated with the model that generated them,
+                        // regardless of current participant changes (reorder/add/remove)
+                        const model = storedModelId ? getModelById(storedModelId) : undefined;
 
-                    if (!model)
-                      return null;
+                        if (!model)
+                          return null;
 
-                    const hasError
-                      = message.metadata && typeof message.metadata === 'object' && 'error' in message.metadata;
-                    const messageStatus: 'completed' | 'streaming' | 'error'
-                      = hasError
-                        ? 'error'
-                        : status === 'streaming' && message.parts[0]?.type === 'text' && message.parts[0].text === ''
-                          ? 'streaming'
-                          : 'completed';
+                        const hasError
+                          = message.metadata && typeof message.metadata === 'object' && 'error' in message.metadata;
+                        const messageStatus: 'completed' | 'streaming' | 'error'
+                          = hasError
+                            ? 'error'
+                            : status === 'streaming' && message.parts[0]?.type === 'text' && message.parts[0].text === ''
+                              ? 'streaming'
+                              : 'completed';
 
-                    return (
-                      <ModelMessageCard
-                        key={message.id}
-                        model={model}
-                        role={storedRole || ''} // ✅ Use stored role from metadata, not current participants
-                        participantIndex={participantIndex ?? 0}
-                        status={messageStatus}
-                        parts={message.parts as Array<{ type: 'text'; text: string } | { type: 'reasoning'; text: string }>}
-                        avatarSrc={avatarProps.src}
-                        avatarName={avatarProps.name}
-                      />
-                    );
-                  })}
+                        return (
+                          <ModelMessageCard
+                            key={message.id}
+                            messageId={message.id}
+                            model={model}
+                            role={storedRole || ''} // ✅ Use stored role from metadata, not current participants
+                            participantIndex={participantIndex ?? 0}
+                            status={messageStatus}
+                            parts={message.parts as Array<{ type: 'text'; text: string } | { type: 'reasoning'; text: string }>}
+                            avatarSrc={avatarProps.src}
+                            avatarName={avatarProps.name}
+                          />
+                        );
+                      })}
 
-                  {/* Show loader during streaming */}
-                  {status === 'streaming' && <Loader />}
+                      {/* Show loader during streaming */}
+                      {status === 'streaming' && <Loader />}
+                    </ConversationContent>
+
+                    {/* ✅ AI Elements ConversationScrollButton - Official pattern */}
+                    <ConversationScrollButton />
+                  </Conversation>
                 </motion.div>
               )}
         </AnimatePresence>
       </div>
 
-      {/* ✅ STICKY INPUT - Stays at bottom, no background wrapper */}
-      <div className="sticky bottom-0 left-0 right-0 z-50 mt-auto">
+      {/* ✅ STICKY INPUT - Relative to dashboard content, not viewport */}
+      <div className="sticky bottom-0 left-0 right-0 z-10 mt-auto">
         <div className="w-full max-w-4xl mx-auto px-4 sm:px-6 md:px-8 py-4">
           {/* Participants Preview - shows status during streaming */}
           {selectedParticipants.length > 0 && (
@@ -531,7 +547,7 @@ export default function ChatOverviewScreen() {
               participants={selectedParticipants}
               isStreaming={status === 'streaming'}
               currentParticipantIndex={undefined}
-              chatMessages={messages as unknown as Array<{ participantId?: string | null; [key: string]: unknown }>}
+              chatMessages={messages}
               className="mb-4"
             />
           )}

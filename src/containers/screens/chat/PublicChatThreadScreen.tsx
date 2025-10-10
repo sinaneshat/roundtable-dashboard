@@ -1,5 +1,6 @@
 'use client';
 
+import type { UIMessage } from 'ai';
 import { ArrowRight, Lock, Sparkles } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useMemo } from 'react';
@@ -7,26 +8,26 @@ import { useMemo } from 'react';
 import {
   Conversation,
   ConversationContent,
+  ConversationScrollButton,
 } from '@/components/ai-elements/conversation';
 import { Message, MessageAvatar, MessageContent } from '@/components/ai-elements/message';
 import { Response } from '@/components/ai-elements/response';
-import { Logo } from '@/components/logo';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { ParticipantsPreview } from '@/components/chat/chat-participants-list';
+import { ModelMessageCard } from '@/components/chat/model-message-card';
 import { Button } from '@/components/ui/button';
-import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { BRAND } from '@/constants';
 import { usePublicThreadQuery } from '@/hooks/queries/chat-threads';
 import { getAvatarPropsFromModelId } from '@/lib/ai/avatar-helpers';
+import type { MessageMetadata } from '@/lib/ai/message-helpers';
 import { chatMessagesToUIMessages } from '@/lib/ai/message-helpers';
 import { getModelById } from '@/lib/ai/models-config';
-import { cn } from '@/lib/ui/cn';
-import { glassBadge } from '@/lib/ui/glassmorphism';
+import type { ParticipantConfig } from '@/lib/schemas/chat-forms';
 
 /**
  * Public Chat Thread Screen - Client Component
  * Read-only view of publicly shared chat threads (no authentication required)
- * Now using AI Elements components
- * Does not show sidebar, chat input, or editing capabilities
+ * Reuses the exact same components as ChatThreadScreen for consistency
+ * Does not show sidebar, chat input, memories, or editing capabilities
  */
 export default function PublicChatThreadScreen({ slug }: { slug: string }) {
   const t = useTranslations();
@@ -37,12 +38,25 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
   const thread = threadResponse?.thread || null;
 
   // Memoize derived data to prevent unnecessary re-renders
-  const rawParticipants = useMemo(() => threadResponse?.participants || [], [threadResponse]);
   const serverMessages = useMemo(() => threadResponse?.messages || [], [threadResponse]);
+  const rawParticipants = useMemo(() => threadResponse?.participants || [], [threadResponse]);
 
-  // Convert server messages to AI SDK format using helper
-  // ✅ Metadata already includes model/role information for avatar rendering
-  const messages = useMemo(() => chatMessagesToUIMessages(serverMessages), [serverMessages]);
+  // Convert server messages to AI SDK format using the same helper as ChatThreadScreen
+  const messages: UIMessage[] = useMemo(() => chatMessagesToUIMessages(serverMessages), [serverMessages]);
+
+  // Convert participants to ParticipantConfig format for ParticipantsPreview
+  const participantConfigs = useMemo<ParticipantConfig[]>(() => {
+    return rawParticipants
+      .filter(p => p.isEnabled)
+      .sort((a, b) => a.priority - b.priority)
+      .map((p, index) => ({
+        id: p.id,
+        modelId: p.modelId,
+        role: p.role,
+        customRoleId: p.customRoleId || undefined,
+        order: index,
+      }));
+  }, [rawParticipants]);
 
   // Show loading state
   if (isLoadingThread) {
@@ -104,86 +118,16 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
   const signUpUrl = `/auth/sign-up?utm_source=public_chat&utm_medium=cta&utm_campaign=thread_${thread.slug}&utm_content=inline`;
 
   return (
-    <div className="relative h-full w-full bg-background">
-      {/* Elegant Header with Glass Participant Chips */}
-      <div className="sticky top-0 left-0 right-0 z-40 border-b bg-background/95 backdrop-blur-xl">
-        <div className="max-w-4xl mx-auto px-3 sm:px-4 md:px-6 py-3 sm:py-4">
-          <div className="flex items-center justify-between gap-3 mb-3">
-            {/* Title */}
-            <h1 className="text-base sm:text-lg font-semibold leading-tight line-clamp-2 flex-1">
-              {thread.title}
-            </h1>
-
-            {/* Logo - Clickable */}
-            <button
-              type="button"
-              onClick={() => window.location.href = signUpUrl}
-              className="flex-shrink-0 hover:opacity-80 transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-lg"
-              aria-label="Try Roundtable"
-            >
-              <Logo size="sm" variant="icon" />
-            </button>
-          </div>
-
-          {/* AI Participants - Horizontal Scroll with shadcn ScrollArea */}
-          <ScrollArea className="w-full">
-            <div className="flex items-center gap-2 pb-2">
-              {rawParticipants
-                .sort((a, b) => a.priority - b.priority)
-                .map((participant) => {
-                  const model = getModelById(participant.modelId);
-                  if (!model)
-                    return null;
-
-                  return (
-                    <div
-                      key={participant.id}
-                      className={cn(
-                        glassBadge,
-                        'flex items-center gap-1.5 rounded-full px-2.5 py-1 flex-shrink-0',
-                      )}
-                    >
-                      <Avatar className="size-4">
-                        <AvatarImage src={model.metadata.icon} alt={model.name} />
-                        <AvatarFallback className="text-[8px]">
-                          {model.name.slice(0, 2).toUpperCase()}
-                        </AvatarFallback>
-                      </Avatar>
-                      <span className="text-[10px] font-medium text-foreground/90 whitespace-nowrap">
-                        {model.name.split(' ').slice(0, 2).join(' ')}
-                      </span>
-                      {participant.role && (
-                        <>
-                          <span className="text-[8px] text-foreground/50">•</span>
-                          <span className="text-[10px] text-foreground/70 whitespace-nowrap">
-                            {participant.role}
-                          </span>
-                        </>
-                      )}
-                    </div>
-                  );
-                })}
-
-              {/* Mode Badge */}
-              <div className={cn(
-                glassBadge,
-                'flex items-center gap-1 rounded-full px-2.5 py-1 flex-shrink-0',
-              )}
-              >
-                <Sparkles className="w-3 h-3 text-foreground/70" />
-                <span className="text-[10px] font-medium text-foreground/80 capitalize whitespace-nowrap">
-                  {thread.mode}
-                </span>
-              </div>
-            </div>
-            <ScrollBar orientation="horizontal" />
-          </ScrollArea>
-        </div>
-      </div>
-
-      {/* Messages Area using AI Elements */}
-      <ScrollArea className="h-[calc(100vh-140px)]">
-        <div className="mx-auto max-w-4xl px-3 sm:px-4 md:px-6 py-6 sm:py-8">
+    <div className="relative flex flex-1 flex-col min-h-0">
+      {/* ✅ AI Elements Conversation - Same pattern as ChatThreadScreen */}
+      <Conversation className="flex-1 overflow-y-auto">
+        {/* ✅ Scroll to bottom button - positioned in header area, aligned with header */}
+        <ConversationScrollButton
+          placement="header"
+          className="fixed top-[4.5rem] right-4 z-50 sm:right-6 md:right-8 lg:top-20"
+          aria-label={t('chat.actions.scrollToBottom')}
+        />
+        <ConversationContent className="w-full max-w-4xl mx-auto px-4 sm:px-6 md:px-8 pt-4 pb-4 space-y-4">
           {messages.length === 0
             ? (
                 <div className="flex items-center justify-center min-h-[50vh]">
@@ -202,40 +146,80 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
               )
             : (
                 <>
-                  <Conversation>
-                    <ConversationContent>
-                      {messages.map((message) => {
-                        // ✅ CRITICAL: Use stored modelId from metadata (independent of current participants)
-                        // When participants are reordered/added/removed, avatars should show the model that generated the message
-                        const metadata = message.metadata as Record<string, unknown> | undefined;
-                        const storedModelId = metadata?.model as string | undefined;
+                  {/* ✅ Messages rendering (same logic as ChatThreadScreen) */}
+                  {messages.map((message) => {
+                    if (message.role === 'user') {
+                      // ✅ User message (same as ChatThreadScreen)
+                      // Note: Public threads don't expose user information for privacy
+                      return (
+                        <Message from="user" key={message.id}>
+                          <MessageContent>
+                            {message.parts.map((part, partIndex) => {
+                              if (part.type === 'text') {
+                                return (
+                                  // eslint-disable-next-line react/no-array-index-key -- Parts are stable content segments within a message
+                                  <Response key={`${message.id}-${partIndex}`}>
+                                    {part.text}
+                                  </Response>
+                                );
+                              }
+                              return null;
+                            })}
+                          </MessageContent>
+                          <MessageAvatar
+                            src=""
+                            name={t('chat.user.defaultName')}
+                          />
+                        </Message>
+                      );
+                    }
 
-                        // Get avatar props directly from stored modelId
-                        const avatarProps = getAvatarPropsFromModelId(
-                          message.role === 'system' ? 'assistant' : message.role,
-                          storedModelId,
-                        );
+                    // ✅ Assistant message: Extract participant data from message metadata (same as ChatThreadScreen)
+                    // CRITICAL: Use stored model/role from metadata (NOT current participants)
+                    const metadata = message.metadata as MessageMetadata | undefined;
+                    const participantIndex = metadata?.participantIndex;
+                    const storedModelId = metadata?.model; // ✅ Matches DB schema
+                    const storedRole = metadata?.role; // ✅ Matches DB schema
 
-                        return (
-                          <Message key={message.id} from={message.role}>
-                            <MessageContent>
-                              {message.parts.map((part, partIndex) => {
-                                if (part.type === 'text') {
-                                  return (
-                                    <Response key={`${message.id}-part-${partIndex}`}>
-                                      {part.text}
-                                    </Response>
-                                  );
-                                }
-                                return null;
-                              })}
-                            </MessageContent>
-                            <MessageAvatar src={avatarProps.src} name={avatarProps.name} />
-                          </Message>
-                        );
-                      })}
-                    </ConversationContent>
-                  </Conversation>
+                    // ✅ CRITICAL: Use stored modelId directly for avatar (independent of current participants)
+                    const avatarProps = getAvatarPropsFromModelId(
+                      message.role === 'system' ? 'assistant' : message.role,
+                      storedModelId,
+                    );
+
+                    // Use stored modelId from metadata, not current participants array
+                    const model = storedModelId ? getModelById(storedModelId) : undefined;
+
+                    if (!model) {
+                      return null;
+                    }
+
+                    const hasError = message.metadata && typeof message.metadata === 'object' && 'error' in message.metadata;
+
+                    const messageStatus: 'thinking' | 'streaming' | 'completed' | 'error' = hasError
+                      ? 'error'
+                      : 'completed'; // Public threads only show completed messages
+
+                    // Filter message parts to only text and reasoning (ModelMessageCard types)
+                    const filteredParts = message.parts.filter(
+                      (p): p is { type: 'text'; text: string } | { type: 'reasoning'; text: string } =>
+                        p.type === 'text' || p.type === 'reasoning',
+                    );
+
+                    return (
+                      <ModelMessageCard
+                        key={message.id}
+                        messageId={message.id}
+                        model={model}
+                        role={storedRole || ''} // ✅ Use stored role from metadata
+                        participantIndex={participantIndex ?? 0}
+                        status={messageStatus}
+                        parts={filteredParts}
+                        avatarSrc={avatarProps.src}
+                        avatarName={avatarProps.name}
+                      />
+                    );
+                  })}
 
                   {/* Inline CTA Card */}
                   <div className="mt-16 mb-8">
@@ -277,8 +261,21 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
                   </div>
                 </>
               )}
+        </ConversationContent>
+      </Conversation>
+
+      {/* ✅ Participants Preview (read-only, no streaming state) - Same as ChatThreadScreen */}
+      {participantConfigs.length > 0 && (
+        <div className="sticky bottom-0 left-0 right-0 z-10 mt-auto">
+          <div className="w-full max-w-4xl mx-auto px-4 sm:px-6 md:px-8 py-4">
+            <ParticipantsPreview
+              participants={participantConfigs}
+              isStreaming={false}
+              chatMessages={messages}
+            />
+          </div>
         </div>
-      </ScrollArea>
+      )}
     </div>
   );
 }

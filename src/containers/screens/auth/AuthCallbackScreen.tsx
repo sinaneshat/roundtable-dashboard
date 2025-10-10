@@ -1,28 +1,16 @@
 'use client';
 
 import { Loader2 } from 'lucide-react';
-import { useEffect, useState } from 'react';
 
 import { Card, CardContent } from '@/components/ui/card';
 
-const loadingMessages = [
-  'Setting up your account...',
-  'Organizing your workspace...',
-  'Getting everything ready...',
-  'Almost there...',
-];
-
+/**
+ * Auth Callback Screen
+ *
+ * ✅ NO useEffect - simplified to static loading message
+ * Shows loading state during OAuth callback processing
+ */
 export default function AuthCallbackScreen() {
-  const [messageIndex, setMessageIndex] = useState(0);
-
-  useEffect(() => {
-    const messageInterval = setInterval(() => {
-      setMessageIndex(prev => (prev + 1) % loadingMessages.length);
-    }, 2000);
-
-    return () => clearInterval(messageInterval);
-  }, []);
-
   return (
     <Card className="w-full max-w-sm">
       <CardContent className="pt-6">
@@ -33,7 +21,7 @@ export default function AuthCallbackScreen() {
           </div>
           <div className="text-center space-y-2">
             <p className="text-sm font-medium text-foreground animate-pulse">
-              {loadingMessages[messageIndex]}
+              Completing your authentication...
             </p>
             <p className="text-xs text-muted-foreground">
               Please wait while we complete your authentication

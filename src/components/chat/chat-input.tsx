@@ -7,6 +7,7 @@ import type { FormEvent } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/ui/cn';
+import { chatGlass } from '@/lib/ui/glassmorphism';
 
 // ============================================================================
 // OFFICIAL AI SDK PATTERN: Chat Input Component
@@ -45,7 +46,9 @@ type ChatInputProps = {
  * - No custom logic - exactly as AI SDK docs suggest
  *
  * Design:
- * - See-through transparent design (minimal blur, no background)
+ * - Glass design using chatGlass.inputBox from glassmorphism library
+ * - Prominent backdrop blur and shadow for visibility
+ * - Focus states with ring and border highlighting
  * - Consistent border radius (rounded-lg)
  * - ArrowUp icon button instead of text
  * - Reusable between all chat screens
@@ -77,16 +80,12 @@ export function ChatInput({
 
   return (
     <div className={cn('space-y-2', className)}>
-      {/* OFFICIAL PATTERN: Simple HTML form - See-through design */}
+      {/* OFFICIAL PATTERN: Simple HTML form - Glass design */}
       <form
         onSubmit={onSubmit}
         className={cn(
-          'backdrop-blur-sm',
-          'border border-white/10',
+          chatGlass.inputBox,
           'rounded-lg',
-          'transition-all duration-200',
-          'hover:border-white/20',
-          'focus-within:border-white/30',
         )}
       >
         <div className="flex flex-col gap-2">

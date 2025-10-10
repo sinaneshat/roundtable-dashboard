@@ -682,10 +682,20 @@ export const getPublicThreadHandler: RouteHandler<typeof getPublicThreadRoute, A
       where: eq(tables.chatThread.slug, slug),
     });
 
-    if (!thread || !thread.isPublic) {
+    // Thread doesn't exist at all - 404 Not Found (standard HTTP status)
+    if (!thread) {
       throw createError.notFound(
-        'Public thread not found',
-        createResourceNotFoundContext('public_thread', slug),
+        'Thread not found',
+        createResourceNotFoundContext('thread', slug),
+      );
+    }
+
+    // Thread exists but is not public or is archived/deleted - 410 Gone (SEO-friendly)
+    // HTTP 410 tells search engines the resource is permanently gone and should be removed from index
+    if (!thread.isPublic || thread.status === 'archived' || thread.status === 'deleted') {
+      const reason = thread.status === 'deleted' ? 'deleted' : thread.status === 'archived' ? 'archived' : 'private';
+      throw createError.gone(
+        `Thread is no longer publicly available (${reason})`,
       );
     }
 

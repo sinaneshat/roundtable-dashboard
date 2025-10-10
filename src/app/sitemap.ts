@@ -26,17 +26,23 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     const db = await getDbAsync();
 
     // Query all public threads (only active ones, not archived or deleted)
+    // SEO Best Practice: Exclude archived/deleted threads to keep sitemap clean
     const publicThreads = await db
       .select()
       .from(chatThread)
       .where(eq(chatThread.isPublic, true))
-      .limit(1000); // Limit to prevent sitemap from getting too large
+      .limit(50000); // Sitemap limit per Google guidelines
 
-    publicThreadPages = publicThreads.map(thread => ({
+    // Filter out archived and deleted threads for SEO optimization
+    const activeThreads = publicThreads.filter(
+      thread => thread.status === 'active',
+    );
+
+    publicThreadPages = activeThreads.map(thread => ({
       url: `${baseUrl}/public/chat/${thread.slug}`,
       lastModified: thread.updatedAt.toISOString(),
-      changeFrequency: 'daily' as const,
-      priority: 0.7,
+      changeFrequency: 'weekly' as const, // More realistic than 'daily'
+      priority: 0.8, // Higher priority for public content
     }));
   } catch (error) {
     console.error('Error fetching public threads for sitemap:', error);

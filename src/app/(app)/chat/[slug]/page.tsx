@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation';
 
 import { BRAND } from '@/constants';
 import { ChatThreadScreen } from '@/containers/screens/chat';
-import { getThreadBySlugService } from '@/services/api';
+import { getThreadBySlugService, getThreadChangelogService } from '@/services/api';
 import { createMetadata } from '@/utils/metadata';
 
 // Force dynamic rendering for user-specific thread data
@@ -56,15 +56,22 @@ export default async function ChatThreadPage({
     redirect('/chat');
   }
 
-  const { thread, participants, messages } = threadResult.data;
+  const { thread, participants, messages, memories } = threadResult.data;
+
+  // Fetch changelog for configuration changes
+  const changelogResult = await getThreadChangelogService(thread.id);
+  const changelog = changelogResult?.success ? changelogResult.data.changelog : [];
 
   // OFFICIAL PATTERN: Pass raw data as props to Client Component
   // Client Component will use useChat with initialMessages
+  // NavigationHeader in layout will automatically show thread actions for this route
   return (
     <ChatThreadScreen
       thread={thread}
       participants={participants}
       initialMessages={messages}
+      memories={memories}
+      changelog={changelog}
       slug={slug}
     />
   );

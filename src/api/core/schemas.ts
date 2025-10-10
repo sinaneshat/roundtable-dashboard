@@ -327,6 +327,14 @@ export const ErrorContextSchema = z.discriminatedUnion('errorType', [
     service: z.string().optional(),
   }),
   z.object({
+    errorType: z.literal('resource_unavailable'),
+    resource: z.string().optional(),
+    resourceId: z.string().optional(),
+    resourceStatus: z.string().optional(),
+    wasPublic: z.boolean().optional(),
+    unavailabilityReason: z.enum(['deleted', 'archived', 'private', 'expired']).optional(),
+  }),
+  z.object({
     errorType: z.literal('configuration'),
     service: z.string().optional(),
     configKey: z.string().optional(),

@@ -43,6 +43,7 @@
     "next": "Next",
     "previous": "Previous",
     "retry": "Retry",
+    "scrollToBottom": "Scroll to bottom",
     "select": "Select",
     "tryAgain": "Try Again",
     "updating": "Updating"
@@ -266,6 +267,7 @@
       "regenerate": "Regenerate response"
     },
     "addToFavorites": "Add to favorites",
+    "addingToFavorites": "Adding to favorites...",
     "addedToFavorites": "Added to favorites",
     "addedToFavoritesDescription": "Thread has been added to your favorites",
     "copyFailed": "Failed to copy link",
@@ -337,7 +339,9 @@
     "madePublic": "Thread is now public",
     "madePublicDescription": "Anyone with the link can now view this thread",
     "makePrivate": "Make Private",
+    "makingPrivate": "Making private...",
     "makePublic": "Make Public",
+    "makingPublic": "Making public...",
     "makePublicConfirmDescription": "Anyone with the link will be able to view this thread and its messages.",
     "makePublicConfirmTitle": "Make this thread public?",
     "noMessages": "No messages",
@@ -367,6 +371,7 @@
       }
     },
     "removeFromFavorites": "Remove from favorites",
+    "removingFromFavorites": "Removing from favorites...",
     "removedFromFavorites": "Removed from favorites",
     "removedFromFavoritesDescription": "Thread has been removed from your favorites",
     "scrollToBottom": "Scroll to bottom",
@@ -377,6 +382,20 @@
       "remaining": "remaining",
       "responding": "responding",
       "waiting": "waiting"
+    },
+    "chainOfThought": {
+      "viewReasoning": "View reasoning process",
+      "modelReasoning": "Model Reasoning",
+      "reasoningDescription": "Internal thinking process used to generate this response"
+    },
+    "changelog": {
+      "modeChange": "Mode Change",
+      "participantAdded": "Participant Added",
+      "participantRemoved": "Participant Removed",
+      "participantUpdated": "Participant Updated",
+      "memoryAdded": "Memory Added",
+      "memoryRemoved": "Memory Removed",
+      "configurationChange": "Configuration Change"
     },
     "streamingTimeout": "Streaming Timeout",
     "streamingTimeoutDescription": "The response took too long. Please try sending your message again.",

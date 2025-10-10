@@ -2,7 +2,6 @@
 
 import { RefreshCw } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { useEffect } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
@@ -12,12 +11,11 @@ type ErrorScreenProps = {
   reset: () => void;
 };
 
-export default function ErrorScreen({ error, reset }: ErrorScreenProps) {
+export default function ErrorScreen({ error: _error, reset }: ErrorScreenProps) {
   const t = useTranslations();
 
-  useEffect(() => {
-    // Error logging handled by error boundary
-  }, [error]);
+  // Error logging is handled by Next.js error boundary automatically
+  // No need for useEffect here
 
   return (
     <div className="flex min-h-dvh items-center justify-center bg-gradient-to-br from-background via-muted/30 to-background">

@@ -171,7 +171,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             <SidebarMenu>
               <SidebarMenuItem>
                 <SidebarMenuButton size="lg" asChild>
-                  <Link href="/chat">
+                  <Link href="/chat" prefetch={false}>
                     <div className="flex aspect-square size-8 items-center justify-center rounded-lg">
                       <Image
                         src="/static/logo.png"
@@ -196,9 +196,26 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                   <span>{t('navigation.newChat')}</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
+
+              {/* Search Button - Icon only when collapsed */}
+              <SidebarMenuItem className="group-data-[collapsible=icon]:block hidden">
+                <SidebarMenuButton
+                  onClick={() => {
+                    setIsSearchOpen(true);
+                    // Close mobile sidebar when search opens
+                    if (isMobile) {
+                      setOpenMobile(false);
+                    }
+                  }}
+                  tooltip={t('chat.searchChats')}
+                >
+                  <Search className="size-4" />
+                  <span>{t('chat.searchChats')}</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
             </SidebarMenu>
 
-            {/* Search Button - Only visible when expanded */}
+            {/* Search Bar - Only visible when expanded */}
             <SidebarGroup className="py-0 group-data-[collapsible=icon]:hidden">
               <Button
                 variant="outline"
@@ -213,8 +230,10 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               >
                 <Search className="size-4 mr-2" />
                 <span className="flex-1 text-left">{t('chat.searchChats')}</span>
-                <kbd className="pointer-events-none inline-flex h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground opacity-100">
+                <kbd className="pointer-events-none inline-flex h-5 select-none items-center gap-0.5 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground opacity-100">
                   <span className="text-xs">⌘</span>
+                  <span className="text-xs">/Ctrl</span>
+                  <span>+</span>
                   K
                 </kbd>
               </Button>
@@ -227,9 +246,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 {/* Initial Loading State - Following React Query v5 pattern */}
                 {isLoading && <ChatSidebarSkeleton count={15} showFavorites={false} />}
 
-                {/* Error State - Following React Query v5 pattern */}
+                {/* Error State - Following React Query v5 pattern - Hidden when collapsed */}
                 {isError && (
-                  <div className="px-2 py-4 text-center">
+                  <div className="px-2 py-4 text-center group-data-[collapsible=icon]:hidden">
                     <p className="text-sm text-destructive mb-2">
                       {t('states.error.default')}
                     </p>
@@ -253,9 +272,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                     {/* Pagination Loading Skeleton - Following React Query v5 pattern */}
                     {isFetchingNextPage && <ChatSidebarPaginationSkeleton count={20} />}
 
-                    {/* Show end message when no more pages */}
+                    {/* Show end message when no more pages - Hidden when collapsed */}
                     {!hasNextPage && !isFetchingNextPage && chats.length > 0 && (
-                      <div className="px-2 py-4 text-center text-xs text-muted-foreground">
+                      <div className="px-2 py-4 text-center text-xs text-muted-foreground group-data-[collapsible=icon]:hidden">
                         {t('chat.noMoreThreads')}
                       </div>
                     )}

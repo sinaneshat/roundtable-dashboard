@@ -1,6 +1,6 @@
 import { dehydrate, HydrationBoundary } from '@tanstack/react-query';
 import type { Metadata } from 'next';
-import { notFound } from 'next/navigation';
+import { redirect } from 'next/navigation';
 
 import { BRAND } from '@/constants';
 import { PublicChatThreadScreen } from '@/containers/screens/chat';
@@ -67,20 +67,24 @@ export async function generateMetadata({
       // Dynamic OG image with thread content
       image: `/public/chat/${slug}/opengraph-image`,
       type: 'article',
+      publishedTime: thread.createdAt ? new Date(thread.createdAt).toISOString() : undefined,
+      modifiedTime: thread.updatedAt ? new Date(thread.updatedAt).toISOString() : undefined,
     });
-  } catch (error) {
-    // Handle errors gracefully
-    console.error('Error generating metadata for public thread:', error);
+  } catch {
+    // Silently handle errors gracefully - expected for private/deleted threads
+    // The page component will handle the error and show appropriate message
+    // Don't log here as it clutters logs for expected error cases (410/404)
     return createMetadata({
-      title: `Public Chat - ${BRAND.fullName}`,
-      description: 'View this public AI chat conversation.',
+      title: `Chat Unavailable - ${BRAND.fullName}`,
+      description: 'This conversation is not publicly available.',
+      robots: 'noindex, nofollow', // Don't index unavailable threads
     });
   }
 }
 
 /**
  * Public Chat Thread Page - Server Component with ISR
- * Prefetches public thread data on server for instant hydration
+ * Handles unavailable threads with SEO-friendly redirects and user-friendly messages
  * No authentication required - publicly accessible
  */
 export default async function PublicChatThreadPage({
@@ -102,7 +106,13 @@ export default async function PublicChatThreadPage({
     // Verify the thread exists and is public before rendering
     const cachedData = queryClient.getQueryData(queryKeys.threads.public(slug));
     if (!cachedData || typeof cachedData !== 'object' || !('success' in cachedData) || !cachedData.success) {
-      notFound();
+      // SEO-friendly 404: Thread doesn't exist
+      const params = new URLSearchParams({
+        toast: 'error',
+        message: 'This conversation no longer exists. Create your own to get started!',
+        action: 'create',
+      });
+      redirect(`/auth/sign-in?${params.toString()}`);
     }
 
     return (
@@ -110,10 +120,51 @@ export default async function PublicChatThreadPage({
         <PublicChatThreadScreen slug={slug} />
       </HydrationBoundary>
     );
-  } catch (error) {
-    // If fetching fails, show 404
+  } catch (error: unknown) {
     console.error('Error fetching public thread:', error);
-    notFound();
+
+    // Type-safe error handling
+    const isDetailedError = error && typeof error === 'object' && 'detail' in error;
+    const statusCode = isDetailedError && 'statusCode' in error ? (error as { statusCode: number }).statusCode : null;
+    const errorContext = isDetailedError && 'detail' in error ? (error as { detail?: unknown }).detail : null;
+
+    // Extract reason from error context
+    let reason = 'unavailable';
+    if (errorContext && typeof errorContext === 'object' && 'unavailabilityReason' in errorContext) {
+      reason = String((errorContext as { unavailabilityReason: string }).unavailabilityReason);
+    }
+
+    // Determine user-friendly message based on error type
+    let message = 'This conversation is no longer available.';
+    let action = 'create';
+
+    if (statusCode === 410) {
+      // HTTP 410 Gone - Thread existed but is no longer available
+      if (reason === 'deleted') {
+        message = 'This conversation was deleted by its owner. Create your own to get started!';
+        action = 'create';
+      } else if (reason === 'archived') {
+        message = 'This conversation has been archived and is no longer publicly available.';
+        action = 'signin';
+      } else if (reason === 'private') {
+        message = 'This conversation is now private. Sign in if you own it, or create your own!';
+        action = 'signin';
+      }
+    } else if (statusCode === 404) {
+      // HTTP 404 Not Found - Thread never existed
+      message = 'This conversation doesn\'t exist. Create your own to get started!';
+      action = 'create';
+    }
+
+    // SEO-friendly redirect with toast message
+    const params = new URLSearchParams({
+      toast: 'info',
+      message,
+      action,
+      from: `/public/chat/${slug}`,
+    });
+
+    redirect(`/auth/sign-in?${params.toString()}`);
   }
 }
 

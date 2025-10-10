@@ -70,10 +70,18 @@ export function ConversationEmptyState({
   );
 }
 
-export type ConversationScrollButtonProps = ComponentProps<typeof Button>;
+export type ConversationScrollButtonProps = ComponentProps<typeof Button> & {
+  /**
+   * Placement of the scroll button
+   * - 'bottom': Default position at the bottom center of the scroll area
+   * - 'header': Fixed position in the header area (top-right)
+   */
+  placement?: 'bottom' | 'header';
+};
 
 export function ConversationScrollButton({
   className,
+  placement = 'bottom',
   ...props
 }: ConversationScrollButtonProps) {
   const { isAtBottom, scrollToBottom } = useStickToBottomContext();
@@ -82,21 +90,26 @@ export function ConversationScrollButton({
     scrollToBottom();
   }, [scrollToBottom]);
 
+  // Don't render if at bottom
+  if (isAtBottom) {
+    return null;
+  }
+
   return (
-    !isAtBottom && (
-      <Button
-        className={cn(
-          'absolute bottom-4 left-[50%] translate-x-[-50%] rounded-full',
-          className,
-        )}
-        onClick={handleScrollToBottom}
-        size="icon"
-        type="button"
-        variant="outline"
-        {...props}
-      >
-        <ArrowDownIcon className="size-4" />
-      </Button>
-    )
+    <Button
+      className={cn(
+        'rounded-full shadow-lg',
+        placement === 'bottom' && 'absolute bottom-4 left-[50%] translate-x-[-50%]',
+        placement === 'header' && 'flex-shrink-0',
+        className,
+      )}
+      onClick={handleScrollToBottom}
+      size="icon"
+      type="button"
+      variant="outline"
+      {...props}
+    >
+      <ArrowDownIcon className="size-4" />
+    </Button>
   );
 }

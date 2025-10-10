@@ -2,19 +2,13 @@ import { dehydrate, HydrationBoundary } from '@tanstack/react-query';
 import type { Metadata } from 'next';
 import type React from 'react';
 
-import { BreadcrumbProvider } from '@/components/chat/breadcrumb-context';
 import { NavigationHeader } from '@/components/chat/chat-header';
 import { AppSidebar } from '@/components/chat/chat-nav';
+import { ThreadHeaderProvider } from '@/components/chat/thread-header-context';
 import { BreadcrumbStructuredData } from '@/components/seo';
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
 import { BRAND } from '@/constants/brand';
 import { getQueryClient } from '@/lib/data/query-client';
-import { queryKeys } from '@/lib/data/query-keys';
-import {
-  getSubscriptionsService,
-  getUserUsageStatsService,
-  listThreadsService,
-} from '@/services/api';
 import { createMetadata } from '@/utils/metadata';
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -26,9 +20,13 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 /**
- * Chat Layout - Server Component with Prefetching
- * Prefetches data used by sidebar components (AppSidebar, UsageMetrics, NavUser)
- * for instant hydration and optimal UX
+ * Chat Layout - Server Component
+ * Provides sidebar navigation and header for all /chat routes
+ *
+ * Data fetching handled by client-side useQuery hooks in:
+ * - AppSidebar (threads list)
+ * - UsageMetrics (usage stats)
+ * - NavUser (subscriptions)
  */
 export default async function ChatLayout({
   children,
@@ -39,29 +37,22 @@ export default async function ChatLayout({
 }) {
   const queryClient = getQueryClient();
 
-  // Prefetch data for sidebar components
-  // This prevents loading states in AppSidebar, UsageMetrics, and NavUser
-  await Promise.all([
-    // Threads list for AppSidebar
-    queryClient.prefetchInfiniteQuery({
-      queryKey: queryKeys.threads.lists(),
-      queryFn: ({ pageParam }) => listThreadsService(pageParam ? { query: { cursor: pageParam } } : undefined),
-      initialPageParam: undefined,
-      staleTime: 30 * 1000, // 30 seconds
-    }),
-    // Usage stats for UsageMetrics and NavUser
-    queryClient.prefetchQuery({
-      queryKey: queryKeys.usage.stats(),
-      queryFn: () => getUserUsageStatsService(),
-      staleTime: 60 * 1000, // 1 minute
-    }),
-    // Subscriptions for NavUser
-    queryClient.prefetchQuery({
-      queryKey: queryKeys.subscriptions.list(),
-      queryFn: () => getSubscriptionsService(),
-      staleTime: 2 * 60 * 1000, // 2 minutes
-    }),
-  ]);
+  // OPTIMIZATION: Removed layout-level prefetching to prevent excessive RSC calls
+  //
+  // Why this is better:
+  // 1. Layout prefetching runs on EVERY navigation within /chat routes
+  // 2. Client components (AppSidebar, UsageMetrics, NavUser) already fetch data with useQuery
+  // 3. Those queries have proper staleTime configured (30s, 60s, 2min)
+  // 4. TanStack Query handles caching automatically
+  //
+  // Result: ~3 fewer RSC calls per navigation, better performance
+  //
+  // Previous prefetching:
+  // - queryClient.prefetchInfiniteQuery({ queryKey: queryKeys.threads.lists(), staleTime: 30s })
+  // - queryClient.prefetchQuery({ queryKey: queryKeys.usage.stats(), staleTime: 60s })
+  // - queryClient.prefetchQuery({ queryKey: queryKeys.subscriptions.list(), staleTime: 2min })
+  //
+  // Now handled by client-side useQuery with same staleTime configuration
 
   return (
     <HydrationBoundary state={dehydrate(queryClient)}>
@@ -71,17 +62,17 @@ export default async function ChatLayout({
           { name: 'Chat', url: '/chat' },
         ]}
       />
-      <BreadcrumbProvider>
+      <ThreadHeaderProvider>
         <SidebarProvider>
           <AppSidebar />
           <SidebarInset className="h-svh flex flex-col">
             <NavigationHeader />
-            <div className="flex flex-1 flex-col w-full min-w-0 overflow-y-auto relative">
+            <div className="flex flex-1 flex-col w-full min-w-0 relative">
               {children}
             </div>
           </SidebarInset>
         </SidebarProvider>
-      </BreadcrumbProvider>
+      </ThreadHeaderProvider>
       {modal}
     </HydrationBoundary>
   );

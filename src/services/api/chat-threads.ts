@@ -63,6 +63,14 @@ export type GetPublicThreadResponse = InferResponseType<
   ApiClientType['chat']['public'][':slug']['$get']
 >;
 
+export type GetThreadChangelogRequest = InferRequestType<
+  ApiClientType['chat']['threads'][':id']['changelog']['$get']
+>;
+
+export type GetThreadChangelogResponse = InferResponseType<
+  ApiClientType['chat']['threads'][':id']['changelog']['$get']
+>;
+
 // ============================================================================
 // Type Aliases - For convenience
 // ============================================================================

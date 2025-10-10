@@ -339,7 +339,58 @@ export const ThreadListQuerySchema = CursorPaginationQuerySchema.extend({
   }),
 }).openapi('ThreadListQuery');
 
-// Thread detail with participants and messages
+// ============================================================================
+// Memory Schemas (moved before ThreadDetailPayloadSchema to fix order)
+// ============================================================================
+
+const ChatMemorySchema = z.object({
+  id: z.string().openapi({
+    description: 'Memory ID',
+    example: 'memory_abc123',
+  }),
+  userId: z.string().openapi({
+    description: 'User ID who owns the memory',
+    example: 'user_123',
+  }),
+  threadId: z.string().nullable().openapi({
+    description: 'Thread ID (null for global memories)',
+    example: 'thread_abc123',
+  }),
+  type: z.enum(['personal', 'topic', 'instruction', 'fact']).openapi({
+    description: 'Memory type',
+    example: 'topic',
+  }),
+  title: z.string().openapi({
+    description: 'Memory title',
+    example: 'Product development preferences',
+  }),
+  description: z.string().nullable().openapi({
+    description: 'Brief description of the memory',
+    example: 'Key considerations for product development',
+  }),
+  content: z.string().openapi({
+    description: 'Memory content',
+    example: 'Focus on sustainability and eco-friendly solutions',
+  }),
+  isGlobal: z.boolean().openapi({
+    description: 'Whether memory applies to all threads',
+    example: false,
+  }),
+  metadata: z.object({
+    tags: z.array(z.string()).optional(),
+    relevance: z.number().optional(),
+  }).passthrough().nullable().openapi({
+    description: 'Memory metadata',
+  }),
+  createdAt: CoreSchemas.timestamp().openapi({
+    description: 'Memory creation timestamp',
+  }),
+  updatedAt: CoreSchemas.timestamp().openapi({
+    description: 'Memory last update timestamp',
+  }),
+}).openapi('ChatMemory');
+
+// Thread detail with participants, messages, and memories
 const ThreadDetailPayloadSchema = z.object({
   thread: ChatThreadSchema.openapi({
     description: 'Thread details',
@@ -349,6 +400,9 @@ const ThreadDetailPayloadSchema = z.object({
   }),
   messages: z.array(ChatMessageSchema).openapi({
     description: 'Thread messages',
+  }),
+  memories: z.array(ChatMemorySchema).openapi({
+    description: 'Attached memories for context',
   }),
 }).openapi('ThreadDetailPayload');
 
@@ -483,55 +537,9 @@ const MessagesListPayloadSchema = z.object({
 export const MessagesListResponseSchema = createApiResponseSchema(MessagesListPayloadSchema).openapi('MessagesListResponse');
 
 // ============================================================================
-// Memory Schemas
+// Memory Request/Response Schemas
 // ============================================================================
-
-const ChatMemorySchema = z.object({
-  id: z.string().openapi({
-    description: 'Memory ID',
-    example: 'memory_abc123',
-  }),
-  userId: z.string().openapi({
-    description: 'User ID who owns the memory',
-    example: 'user_123',
-  }),
-  threadId: z.string().nullable().openapi({
-    description: 'Thread ID (null for global memories)',
-    example: 'thread_abc123',
-  }),
-  type: z.enum(['personal', 'topic', 'instruction', 'fact']).openapi({
-    description: 'Memory type',
-    example: 'topic',
-  }),
-  title: z.string().openapi({
-    description: 'Memory title',
-    example: 'Product development preferences',
-  }),
-  description: z.string().nullable().openapi({
-    description: 'Brief description of the memory',
-    example: 'Key considerations for product development',
-  }),
-  content: z.string().openapi({
-    description: 'Memory content',
-    example: 'Focus on sustainability and eco-friendly solutions',
-  }),
-  isGlobal: z.boolean().openapi({
-    description: 'Whether memory applies to all threads',
-    example: false,
-  }),
-  metadata: z.object({
-    tags: z.array(z.string()).optional(),
-    relevance: z.number().optional(),
-  }).passthrough().nullable().openapi({
-    description: 'Memory metadata',
-  }),
-  createdAt: CoreSchemas.timestamp().openapi({
-    description: 'Memory creation timestamp',
-  }),
-  updatedAt: CoreSchemas.timestamp().openapi({
-    description: 'Memory last update timestamp',
-  }),
-}).openapi('ChatMemory');
+// Note: ChatMemorySchema moved before ThreadDetailPayloadSchema (line 346)
 
 export const CreateMemoryRequestSchema = z.object({
   threadId: z.string().optional().openapi({

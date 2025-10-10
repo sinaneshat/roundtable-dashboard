@@ -437,7 +437,14 @@ export function createHandler<
 
       return result;
     } catch (error) {
-      logger.error('Handler failed', error as Error);
+      // Don't log expected HTTP errors (404, 410) as ERROR level
+      // These are normal application flow errors (resource not found, gone), not system errors
+      const isExpectedHttpError = error instanceof HTTPException
+        && [404, 410].includes(error.status);
+
+      if (!isExpectedHttpError) {
+        logger.error('Handler failed', error as Error);
+      }
 
       if (error instanceof HTTPException) {
         // Handle validation errors with our unified system

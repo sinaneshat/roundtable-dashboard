@@ -1,11 +1,12 @@
 'use client';
 
-import { motion } from 'motion/react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import type { ReactNode } from 'react';
+import { useEffect, useState } from 'react';
 
+import { Logo } from '@/components/logo';
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -19,12 +20,12 @@ import { SidebarTrigger } from '@/components/ui/sidebar';
 import { cn } from '@/lib/ui/cn';
 
 import { ChatSection } from './chat-states';
-import { useBreadcrumb } from './use-breadcrumb';
+import { useThreadHeaderOptional } from './thread-header-context';
 
 // =============================================================================
 // UNIFIED HEADER SYSTEM FOR CHAT
 // Consolidates: chat-header.tsx + page-header.tsx + chat/chat-header.tsx
-// Eliminates ~128 lines of duplicate code with consistent API
+// Following Next.js best practices: Server components pass data as props
 // =============================================================================
 
 const breadcrumbMap: Record<string, { titleKey: string; parent?: string }> = {
@@ -35,45 +36,148 @@ const breadcrumbMap: Record<string, { titleKey: string; parent?: string }> = {
 // Navigation Header - consolidated navigation component
 type NavigationHeaderProps = {
   className?: string;
+  /**
+   * Dynamic breadcrumb for thread pages - passed from server
+   * Following Next.js pattern: server component passes data as props
+   */
+  threadTitle?: string;
+  threadParent?: string;
+  threadActions?: ReactNode;
+  /**
+   * Show sidebar trigger - set to false for public pages
+   */
+  showSidebarTrigger?: boolean;
+  /**
+   * Show logo instead of sidebar trigger - for public pages
+   */
+  showLogo?: boolean;
+  /**
+   * Constrain header content width to match page content
+   */
+  maxWidth?: boolean;
 };
 
-export function NavigationHeader({ className }: NavigationHeaderProps = {}) {
+export function NavigationHeader({
+  className,
+  threadTitle: threadTitleProp,
+  threadParent: threadParentProp,
+  threadActions: threadActionsProp,
+  showSidebarTrigger = true,
+  showLogo = false,
+  maxWidth = false,
+}: NavigationHeaderProps = {}) {
   const pathname = usePathname();
   const t = useTranslations();
-  const { dynamicBreadcrumb } = useBreadcrumb();
+  const [isScrolled, setIsScrolled] = useState(false);
+  const [isVisible, setIsVisible] = useState(true);
+
+  // Get thread data from context (used by child components to pass data up to layout)
+  // Use optional version that doesn't throw if provider is missing (for public pages)
+  const context = useThreadHeaderOptional();
+
+  // Merge context values with props (props take precedence for backward compatibility)
+  // For public pages (showSidebarTrigger=false), don't use context values
+  const threadTitle = threadTitleProp ?? (showSidebarTrigger ? context.threadTitle : null);
+  const threadParent = threadParentProp ?? '/chat';
+  const threadActions = threadActionsProp ?? (showSidebarTrigger ? context.threadActions : null);
 
   // Check if this is a thread page (dynamic route)
   const isThreadPage = pathname?.startsWith('/chat/') && pathname !== '/chat' && pathname !== '/chat/pricing';
 
-  // Use dynamic breadcrumb for thread pages, otherwise use static map
-  const currentPage = isThreadPage && dynamicBreadcrumb
-    ? { titleKey: dynamicBreadcrumb.title, parent: dynamicBreadcrumb.parent || '/chat', isDynamic: true }
+  // Use thread props for thread pages, otherwise use static map
+  const currentPage = isThreadPage && threadTitle
+    ? { titleKey: threadTitle, parent: threadParent, isDynamic: true }
     : pathname ? breadcrumbMap[pathname] : undefined;
 
   const parentPage = currentPage?.parent ? breadcrumbMap[currentPage.parent] : null;
 
+  // Scroll detection with hide/show behavior
+  useEffect(() => {
+    let lastScrollY = window.scrollY;
+    let ticking = false;
+
+    const handleScroll = () => {
+      if (!ticking) {
+        window.requestAnimationFrame(() => {
+          const currentScrollY = window.scrollY;
+          const scrollDifference = currentScrollY - lastScrollY;
+
+          // Update scrolled state for glass morphism effect
+          const shouldBeScrolled = currentScrollY > 10;
+          setIsScrolled(prev => prev !== shouldBeScrolled ? shouldBeScrolled : prev);
+
+          // Hide header when scrolling down, show when scrolling up
+          // Always show when at the top
+          if (currentScrollY <= 10) {
+            setIsVisible(true);
+          } else if (scrollDifference > 0 && currentScrollY > 100) {
+            // Scrolling down & past threshold -> hide
+            setIsVisible(false);
+          } else if (scrollDifference < 0) {
+            // Scrolling up -> show
+            setIsVisible(true);
+          }
+
+          lastScrollY = currentScrollY;
+          ticking = false;
+        });
+
+        ticking = true;
+      }
+    };
+
+    // Add scroll listener
+    window.addEventListener('scroll', handleScroll, { passive: true });
+
+    // Check initial scroll position
+    handleScroll();
+
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+    };
+  }, []);
+
   return (
-    <motion.header
-      initial={{ opacity: 0, y: -10 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3, delay: 0.1 }}
+    <header
       className={cn(
-        'flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12',
+        'sticky top-0 z-50 flex h-16 shrink-0 items-center gap-2 transition-all duration-300 ease-in-out group-has-data-[collapsible=icon]/sidebar-wrapper:h-12',
+        isScrolled && 'bg-background/80 backdrop-blur-md border-b border-border/40 shadow-sm',
+        !isScrolled && 'bg-background',
+        // Hide/show based on scroll direction
+        !isVisible && '-translate-y-full',
+        isVisible && 'translate-y-0',
         className,
       )}
     >
-      <div className="flex items-center justify-between gap-2 px-4 w-full">
-        <div className="flex items-center gap-2">
-          <SidebarTrigger className="-ms-1" />
-          <Separator orientation="vertical" className="me-2 h-4" />
+      <div className={cn(
+        'flex items-center justify-between gap-2 px-4 sm:px-6 md:px-8',
+        maxWidth ? 'w-full max-w-4xl mx-auto' : 'w-full',
+      )}
+      >
+        <div className="flex items-center gap-2 min-w-0 flex-1">
+          {/* Show either sidebar trigger or logo based on context */}
+          {showSidebarTrigger && (
+            <>
+              <SidebarTrigger className="-ms-1 flex-shrink-0" />
+              <Separator orientation="vertical" className="me-2 h-4 flex-shrink-0" />
+            </>
+          )}
+          {showLogo && (
+            <>
+              <Link href="/" className="flex-shrink-0" prefetch={false}>
+                <Logo size="sm" variant="icon" />
+              </Link>
+              <Separator orientation="vertical" className="me-2 h-4 flex-shrink-0" />
+            </>
+          )}
           {currentPage && (
-            <Breadcrumb>
+            <Breadcrumb className="min-w-0 flex-1">
               <BreadcrumbList>
                 {parentPage && (
                   <>
                     <BreadcrumbItem className="hidden md:block">
                       <BreadcrumbLink asChild>
-                        <Link href={currentPage.parent!}>
+                        <Link href={currentPage.parent!} prefetch={false}>
                           {t(parentPage.titleKey)}
                         </Link>
                       </BreadcrumbLink>
@@ -81,8 +185,8 @@ export function NavigationHeader({ className }: NavigationHeaderProps = {}) {
                     <BreadcrumbSeparator className="hidden md:block" />
                   </>
                 )}
-                <BreadcrumbItem>
-                  <BreadcrumbPage className="line-clamp-1 max-w-[300px]">
+                <BreadcrumbItem className="min-w-0">
+                  <BreadcrumbPage className="line-clamp-1 truncate">
                     {'isDynamic' in currentPage && currentPage.isDynamic
                       ? currentPage.titleKey
                       : t(currentPage.titleKey)}
@@ -93,14 +197,14 @@ export function NavigationHeader({ className }: NavigationHeaderProps = {}) {
           )}
         </div>
 
-        {/* Action buttons at the right end */}
-        {dynamicBreadcrumb?.actions && (
-          <div className="flex items-center gap-1">
-            {dynamicBreadcrumb.actions}
+        {/* Action buttons at the right end - passed from server as props */}
+        {threadActions && (
+          <div className="flex items-center gap-1 flex-shrink-0">
+            {threadActions}
           </div>
         )}
       </div>
-    </motion.header>
+    </header>
   );
 }
 

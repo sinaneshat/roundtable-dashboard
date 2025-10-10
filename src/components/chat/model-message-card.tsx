@@ -1,5 +1,11 @@
 'use client';
 
+import {
+  ChainOfThought,
+  ChainOfThoughtContent,
+  ChainOfThoughtHeader,
+  ChainOfThoughtStep,
+} from '@/components/ai-elements/chain-of-thought';
 import { Message, MessageAvatar, MessageContent } from '@/components/ai-elements/message';
 import { Response } from '@/components/ai-elements/response';
 import type { AIModel } from '@/lib/ai/models-config';
@@ -23,6 +29,8 @@ type ModelMessageCardProps = {
   avatarSrc: string;
   avatarName: string;
   className?: string;
+  /** Message ID for generating stable React keys */
+  messageId?: string;
 };
 
 /**
@@ -47,14 +55,8 @@ export function ModelMessageCard({
   avatarSrc,
   avatarName,
   className,
+  messageId,
 }: ModelMessageCardProps) {
-  const statusText = {
-    thinking: 'thinking...',
-    streaming: 'streaming...',
-    completed: null,
-    error: 'error',
-  }[status];
-
   const showStatusIndicator = status === 'thinking' || status === 'streaming';
   const isError = status === 'error';
 
@@ -65,42 +67,29 @@ export function ModelMessageCard({
         <MessageContent className={isError ? 'text-destructive' : undefined}>
           {/* ✅ MODEL HEADER: Always visible */}
           <div className="flex items-center gap-2 mb-2 -mt-1">
-            {/* Model Name */}
-            <span
-              className="text-sm font-semibold"
-              style={{ color: model.metadata.color }}
-            >
+            {/* Model Name - subtle, no special color */}
+            <span className="text-sm font-medium text-foreground/90">
               {model.name}
             </span>
 
-            {/* Role */}
+            {/* Role - subtle differentiation */}
             {role && (
               <>
-                <span className="text-muted-foreground text-xs">•</span>
-                <span className="text-muted-foreground text-xs">
+                <span className="text-muted-foreground/50 text-xs">•</span>
+                <span className="text-muted-foreground/70 text-xs">
                   {role}
                 </span>
               </>
             )}
 
-            {/* Status Indicator */}
-            {showStatusIndicator && statusText && (
-              <>
-                <span className="text-muted-foreground text-xs">•</span>
-                <span className="text-xs text-muted-foreground animate-pulse">
-                  {statusText}
-                </span>
-              </>
+            {/* Status Indicator - very subtle, no text */}
+            {showStatusIndicator && (
+              <span className="ml-1 size-1.5 rounded-full bg-primary/60 animate-pulse" />
             )}
 
-            {/* Error Indicator */}
+            {/* Error Indicator - subtle red dot */}
             {isError && (
-              <>
-                <span className="text-destructive text-xs">•</span>
-                <span className="text-xs text-destructive">
-                  {statusText}
-                </span>
-              </>
+              <span className="ml-1 size-1.5 rounded-full bg-destructive/80" />
             )}
           </div>
 
@@ -108,8 +97,9 @@ export function ModelMessageCard({
           {parts.map((part, partIndex) => {
             if (part.type === 'text') {
               // ✅ OFFICIAL AI SDK: Always render Response, even with empty text
+              // Use stable key combining messageId and partIndex
               return (
-                <Response key={`text-${partIndex}`}>
+                <Response key={messageId ? `${messageId}-text-${partIndex}` : `text-${partIndex}`}>
                   {part.text}
                 </Response>
               );
@@ -117,18 +107,28 @@ export function ModelMessageCard({
 
             if (part.type === 'reasoning') {
               // ✅ OFFICIAL AI SDK: Always render reasoning if part exists
+              // Using Chain of Thought pattern for reasoning display
               return (
-                <details
-                  key={`reasoning-${partIndex}`}
-                  className="mt-2 mb-2 rounded-lg border border-border/50 bg-muted/30"
+                <ChainOfThought
+                  key={messageId ? `${messageId}-reasoning-${partIndex}` : `reasoning-${partIndex}`}
+                  defaultOpen={false}
+                  className="mt-2 mb-2"
                 >
-                  <summary className="cursor-pointer px-3 py-2 text-xs font-medium text-muted-foreground hover:text-foreground">
+                  <ChainOfThoughtHeader>
                     💭 View reasoning process
-                  </summary>
-                  <pre className="px-3 py-2 text-xs text-muted-foreground whitespace-pre-wrap font-mono overflow-x-auto">
-                    {part.text}
-                  </pre>
-                </details>
+                  </ChainOfThoughtHeader>
+                  <ChainOfThoughtContent>
+                    <ChainOfThoughtStep
+                      label="Model Reasoning"
+                      description="Internal thinking process used to generate this response"
+                      status="complete"
+                    >
+                      <pre className="text-xs text-muted-foreground whitespace-pre-wrap font-mono overflow-x-auto px-3 py-2 rounded-lg bg-muted/50">
+                        {part.text}
+                      </pre>
+                    </ChainOfThoughtStep>
+                  </ChainOfThoughtContent>
+                </ChainOfThought>
               );
             }
 

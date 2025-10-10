@@ -2,8 +2,9 @@
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Mail } from 'lucide-react';
+import { useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
@@ -18,6 +19,7 @@ import {
 } from '@/components/ui/card';
 import { Form } from '@/components/ui/form';
 import { authClient } from '@/lib/auth/client';
+import { toastManager } from '@/lib/toast/toast-manager';
 import { getApiErrorMessage } from '@/lib/utils/error-handling';
 
 import { GoogleButton } from './google-button';
@@ -31,9 +33,37 @@ type MagicLinkFormData = z.infer<typeof magicLinkSchema>;
 
 export function AuthForm() {
   const t = useTranslations();
+  const searchParams = useSearchParams();
   const [isLoading, setIsLoading] = useState(false);
   const [magicLinkSent, setMagicLinkSent] = useState(false);
   const [sentEmail, setSentEmail] = useState('');
+
+  // Display toast message from URL parameters (for redirects from unavailable public threads)
+  useEffect(() => {
+    const toastType = searchParams.get('toast');
+    const message = searchParams.get('message');
+
+    if (toastType && message) {
+      // Display appropriate toast based on type
+      if (toastType === 'error') {
+        toastManager.error('Thread Not Found', message);
+      } else if (toastType === 'info') {
+        toastManager.info('Thread Unavailable', message);
+      } else {
+        toastManager.info('Notice', message);
+      }
+
+      // Clean up URL parameters after displaying toast
+      if (window.history.replaceState) {
+        const url = new URL(window.location.href);
+        url.searchParams.delete('toast');
+        url.searchParams.delete('message');
+        url.searchParams.delete('action');
+        url.searchParams.delete('from');
+        window.history.replaceState({}, '', url.toString());
+      }
+    }
+  }, [searchParams]);
 
   // Initialize RHF with Zod validation
   const form = useForm<MagicLinkFormData>({

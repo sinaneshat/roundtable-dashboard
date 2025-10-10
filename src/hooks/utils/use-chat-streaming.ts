@@ -98,18 +98,41 @@ export function useChatStreaming(
       // Update streaming state
       setStreamingState({ participantIndex, messageId });
 
+      // ✅ Get participant data for metadata
+      const participant = selectedParticipants[participantIndex];
+      if (!participant) {
+        console.error('[STREAMING] Invalid participant index:', participantIndex);
+        throw new Error(`Invalid participant index: ${participantIndex}`);
+      }
+
       // Add placeholder message for this participant
+      // ✅ CRITICAL: Include model, role, and createdAt in metadata for rendering and timeline sorting
       setMessages(prev => [
         ...prev,
         {
           id: messageId,
           role: 'assistant',
           parts: [],
-          metadata: { participantIndex },
+          metadata: {
+            participantIndex,
+            model: participant.modelId, // ✅ Required for avatar rendering
+            role: participant.role, // ✅ Required for display
+            createdAt: new Date().toISOString(), // ✅ Required for timeline sorting
+          },
         },
       ]);
 
       try {
+        // Log streaming request details for debugging
+        console.log('[STREAMING] Starting request:', {
+          threadId,
+          participantIndex,
+          mode: selectedMode,
+          participantCount: selectedParticipants.length,
+          memoryCount: selectedMemoryIds.length,
+          messageCount: messages.length,
+        });
+
         // Make streaming request - backend handles SSE format
         const response = await fetch(`/api/v1/chat/threads/${threadId}/stream`, {
           method: 'POST',
@@ -126,10 +149,18 @@ export function useChatStreaming(
           signal: abortSignal,
         });
 
+        console.log('[STREAMING] Response received:', {
+          ok: response.ok,
+          status: response.status,
+          statusText: response.statusText,
+          contentType: response.headers.get('content-type'),
+        });
+
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({
             error: { message: response.statusText },
           })) as { error?: { message?: string } };
+          console.error('[STREAMING] Request failed:', errorData);
           throw new Error(errorData.error?.message || 'Stream request failed');
         }
 
@@ -142,11 +173,42 @@ export function useChatStreaming(
         const decoder = new TextDecoder();
         let buffer = '';
         let currentContent = '';
+        let eventCount = 0;
+
+        console.log('[STREAMING] Starting SSE stream processing');
 
         while (true) {
           const { done, value } = await reader.read();
 
           if (done) {
+            console.log('[STREAMING] Stream completed:', {
+              totalEvents: eventCount,
+              finalContentLength: currentContent.length,
+              hasContent: currentContent.length > 0,
+            });
+
+            // ✅ Handle empty response case (model failed silently)
+            if (currentContent.length === 0) {
+              console.warn('[STREAMING] Stream completed with no content - marking as error');
+              setMessages(prev =>
+                prev.map(msg =>
+                  msg.id === messageId
+                    ? {
+                        ...msg,
+                        parts: [{ type: 'text' as const, text: '⚠️ An unexpected error occurred. Retrying...' }],
+                        metadata: {
+                          ...(msg.metadata || {}),
+                          error: 'unknown',
+                          errorMessage: 'An unexpected error occurred. Retrying...',
+                          errorType: 'unknown',
+                          isTransient: true,
+                        },
+                      }
+                    : msg,
+                ),
+              );
+            }
+
             break;
           }
 
@@ -166,15 +228,43 @@ export function useChatStreaming(
 
               // ✅ Skip [DONE] sentinel value (not JSON)
               if (data === '[DONE]') {
+                console.log('[STREAMING] Received [DONE] sentinel');
                 continue;
               }
 
               try {
                 const event = JSON.parse(data);
+                eventCount++;
+                console.log('[STREAMING] SSE event received:', {
+                  type: event.type,
+                  eventNumber: eventCount,
+                  hasDelta: !!event.delta,
+                  hasMetadata: !!event.metadata,
+                  hasMessageMetadata: !!event.messageMetadata,
+                });
+
+                // Handle start event - may contain error info in metadata
+                if (event.type === 'start' && event.messageMetadata) {
+                  const startMetadata = event.messageMetadata;
+                  // Merge start metadata into message immediately
+                  setMessages(prev =>
+                    prev.map(msg =>
+                      msg.id === messageId
+                        ? {
+                            ...msg,
+                            metadata: {
+                              ...(msg.metadata || {}),
+                              ...startMetadata,
+                            },
+                          }
+                        : msg,
+                    ),
+                  );
+                }
 
                 // Handle text delta - update message content
-                if (event.type === 'text-delta' && event.textDelta) {
-                  currentContent += event.textDelta;
+                if (event.type === 'text-delta' && event.delta) {
+                  currentContent += event.delta;
 
                   // Update message with accumulated content
                   setMessages(prev =>
@@ -191,6 +281,21 @@ export function useChatStreaming(
 
                 // Handle finish - update with metadata from backend
                 if (event.type === 'finish') {
+                  const finishMetadata = event.metadata || {};
+
+                  // Check if backend sent error information in metadata
+                  const hasBackendError = finishMetadata.error || finishMetadata.errorMessage;
+
+                  if (hasBackendError) {
+                    console.warn('[STREAMING] Backend reported error in finish event:', {
+                      error: finishMetadata.error,
+                      errorMessage: finishMetadata.errorMessage,
+                      errorType: finishMetadata.errorType,
+                      isTransient: finishMetadata.isTransient,
+                      hasContent: currentContent.length > 0,
+                    });
+                  }
+
                   setMessages(prev =>
                     prev.map(msg =>
                       msg.id === messageId
@@ -198,16 +303,25 @@ export function useChatStreaming(
                             ...msg,
                             metadata: {
                               ...(msg.metadata || {}),
-                              ...(event.metadata || {}),
+                              ...finishMetadata,
                             },
+                            // If backend sent error but no content, show error message
+                            ...(hasBackendError && currentContent.length === 0
+                              ? {
+                                  parts: [{
+                                    type: 'text' as const,
+                                    text: finishMetadata.errorMessage || '⚠️ An unexpected error occurred. Retrying...',
+                                  }],
+                                }
+                              : {}),
                           }
                         : msg,
                     ),
                   );
 
                   // Sync participants if backend sent updates
-                  if (event.metadata?.participants) {
-                    setSelectedParticipants(event.metadata.participants);
+                  if (finishMetadata.participants) {
+                    setSelectedParticipants(finishMetadata.participants);
                   }
                 }
 
@@ -216,7 +330,11 @@ export function useChatStreaming(
                   throw new Error(event.error?.message || 'Stream error');
                 }
               } catch (parseError) {
-                console.error('Failed to parse SSE event:', parseError);
+                console.error('[STREAMING] Failed to parse SSE event:', {
+                  error: parseError,
+                  rawData: data,
+                  line,
+                });
               }
             }
           }
@@ -224,11 +342,17 @@ export function useChatStreaming(
       } catch (error) {
         // Handle abort
         if (error instanceof Error && error.name === 'AbortError') {
+          console.log('[STREAMING] Aborted by user');
           return; // Graceful abort - don't throw
         }
 
         // Handle other errors
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        console.error('[STREAMING] Fatal error:', {
+          error,
+          errorMessage,
+          messageId,
+        });
 
         setMessages(prev =>
           prev.map(msg =>

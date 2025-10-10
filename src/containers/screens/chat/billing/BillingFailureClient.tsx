@@ -1,15 +1,12 @@
 'use client';
 
-import { useQueryClient } from '@tanstack/react-query';
 import { AlertCircle, Mail, XCircle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { useEffect } from 'react';
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { ScaleIn, StaggerContainer, StaggerItem } from '@/components/ui/motion';
-import { queryKeys } from '@/lib/data/query-keys';
 
 /**
  * Billing Failure Client Component
@@ -17,12 +14,14 @@ import { queryKeys } from '@/lib/data/query-keys';
  * Displays payment failure information with error details and support guidance.
  * Follows the same design patterns as BillingSuccessClient for consistency.
  *
+ * ✅ NO useEffect - all data is server-hydrated via HydrationBoundary
+ * ✅ No client-side query invalidation - queries are prefetched on server
+ *
  * Key Features:
  * - Shows failure animation with clear error messaging
  * - Displays specific error details when available
  * - Provides support contact information
- * - Invalidates client-side queries for accurate state
- * - Offers retry action via pricing page
+ * - Offers retry action via pricing page with fresh hydrated data
  *
  * @param failureData - Payment failure details from server action
  */
@@ -39,15 +38,6 @@ type BillingFailureClientProps = {
 export function BillingFailureClient({ failureData }: BillingFailureClientProps) {
   const router = useRouter();
   const t = useTranslations();
-  const queryClient = useQueryClient();
-
-  // Invalidate client-side queries on mount to ensure accurate state
-  useEffect(() => {
-    // Invalidate billing-related queries to reflect current state
-    queryClient.invalidateQueries({ queryKey: queryKeys.subscriptions.all });
-    queryClient.invalidateQueries({ queryKey: queryKeys.products.all });
-    queryClient.invalidateQueries({ queryKey: queryKeys.usage.all });
-  }, [queryClient]);
 
   // Determine error details based on error type
   const getErrorDetails = () => {

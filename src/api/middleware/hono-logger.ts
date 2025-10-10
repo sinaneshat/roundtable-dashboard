@@ -172,7 +172,15 @@ export async function errorLoggerMiddleware(c: Context, next: () => Promise<void
   try {
     await next();
   } catch (error) {
-    apiLogger.apiError(c, 'Unhandled API error', error);
+    // Don't log expected HTTP errors (404, 410) as ERROR level
+    // These are normal application flow errors, not system errors
+    const isExpectedHttpError = error && typeof error === 'object'
+      && 'statusCode' in error
+      && [404, 410].includes((error as { statusCode: number }).statusCode);
+
+    if (!isExpectedHttpError) {
+      apiLogger.apiError(c, 'Unhandled API error', error);
+    }
 
     // Re-throw to let other error handlers deal with it
     throw error;

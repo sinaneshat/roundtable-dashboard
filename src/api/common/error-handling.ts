@@ -319,6 +319,21 @@ export const createError = {
     }),
 
   /**
+   * SEO-friendly 410 Gone error for resources that existed but are no longer available
+   * Use this for deleted or permanently unavailable resources to help search engines
+   * remove them from their index
+   */
+  gone: (message = 'Resource no longer available', context?: ErrorContext, correlationId?: string) =>
+    new AppError({
+      message,
+      code: ERROR_CODES.RESOURCE_NOT_FOUND,
+      statusCode: HttpStatusCodes.GONE,
+      severity: ERROR_SEVERITY.LOW,
+      context,
+      correlationId,
+    }),
+
+  /**
    * Validation errors
    */
   badRequest: (message = 'Invalid request', context?: ErrorContext, correlationId?: string) =>
