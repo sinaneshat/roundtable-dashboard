@@ -62,12 +62,12 @@ export function chatMessageToUIMessage(message: ChatMessage): UIMessage {
   }
 
   // Build properly typed metadata
-  // ✅ Include createdAt and parentMessageId from top-level message fields
+  // ✅ Include createdAt from message and preserve parentMessageId from metadata
   // Handle null metadata from database by using empty object as base
+  const baseMetadata = (message.metadata || {}) as Record<string, unknown>;
   const metadata: UIMessageMetadata = {
-    ...(message.metadata || {}), // Spread empty object if metadata is null
-    participantId: message.participantId,
-    parentMessageId: message.parentMessageId, // ✅ Required for variant fetching
+    ...baseMetadata, // Spread metadata (includes parentMessageId, variantIndex, etc.)
+    participantId: message.participantId, // Override with top-level participantId
     createdAt: message.createdAt, // Add timestamp for timeline sorting
   };
 

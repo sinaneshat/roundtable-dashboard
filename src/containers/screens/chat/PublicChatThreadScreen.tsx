@@ -303,9 +303,9 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
         <ConversationScrollButton aria-label={t('chat.actions.scrollToBottom')} />
       </Conversation>
 
-      {/* ✅ Participants Preview (read-only, no streaming state) - Same as ChatThreadScreen */}
+      {/* ✅ Participants Preview (read-only, no streaming state) - Same as ChatThreadScreen - Glass design */}
       {participantConfigs.length > 0 && (
-        <div className="sticky bottom-0 left-0 right-0 z-10 mt-auto">
+        <div className="sticky bottom-0 left-0 right-0 z-10 mt-auto backdrop-blur-xl bg-background/10 border-t border-white/30">
           <div className="w-full max-w-full sm:max-w-3xl lg:max-w-4xl mx-auto px-3 sm:px-4 md:px-6 lg:px-8 py-4">
             <ParticipantsPreview
               participants={participantConfigs}

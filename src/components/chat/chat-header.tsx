@@ -4,7 +4,6 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import type { ReactNode } from 'react';
-import { useEffect, useState } from 'react';
 
 import { Logo } from '@/components/logo';
 import {
@@ -69,7 +68,6 @@ export function NavigationHeader({
 }: NavigationHeaderProps = {}) {
   const pathname = usePathname();
   const t = useTranslations();
-  const [isScrolled, setIsScrolled] = useState(false);
 
   // Get thread data from context (used by child components to pass data up to layout)
   // Use optional version that doesn't throw if provider is missing (for public pages)
@@ -95,43 +93,11 @@ export function NavigationHeader({
 
   const parentPage = currentPage?.parent ? breadcrumbMap[currentPage.parent] : null;
 
-  // Scroll detection for glass morphism effect only (header stays visible)
-  useEffect(() => {
-    let ticking = false;
-
-    const handleScroll = () => {
-      if (!ticking) {
-        window.requestAnimationFrame(() => {
-          const currentScrollY = window.scrollY;
-
-          // Update scrolled state for glass morphism effect
-          const shouldBeScrolled = currentScrollY > 10;
-          setIsScrolled(prev => prev !== shouldBeScrolled ? shouldBeScrolled : prev);
-
-          ticking = false;
-        });
-
-        ticking = true;
-      }
-    };
-
-    // Add scroll listener
-    window.addEventListener('scroll', handleScroll, { passive: true });
-
-    // Check initial scroll position
-    handleScroll();
-
-    return () => {
-      window.removeEventListener('scroll', handleScroll);
-    };
-  }, []);
-
   return (
     <header
       className={cn(
         'sticky top-0 z-50 flex h-16 shrink-0 items-center gap-2 transition-all duration-200 ease-in-out group-has-data-[collapsible=icon]/sidebar-wrapper:h-12',
-        isScrolled && 'bg-background/80 backdrop-blur-md border-b border-border/40 shadow-sm',
-        !isScrolled && 'bg-background',
+        'backdrop-blur-xl bg-background/10 border-b border-white/30 shadow-2xl',
         className,
       )}
     >

@@ -255,31 +255,70 @@ export default function ChatThreadScreen({
       if (!round)
         return;
 
+      console.log('[Variant Switch] Starting branch change', {
+        roundIndex,
+        newVariantIndex,
+        roundParticipants: round.participantMessages.length,
+        roundParticipantIds: round.participantMessages.map((pm) => {
+          const meta = getMessageMetadata(pm.metadata);
+          return meta?.participantId;
+        }),
+      });
+
       // Update messages by swapping to the selected variant
       setMessages((prevMessages) => {
-        return prevMessages.map((msg) => {
-          // Check if this message is part of the round we're switching
-          const isRoundParticipant = round.participantMessages.some(pm => pm.id === msg.id);
-          if (!isRoundParticipant || msg.role !== 'assistant') {
-            return msg;
-          }
+        console.log('[Variant Switch] Current messages before switch', {
+          totalMessages: prevMessages.length,
+          assistantMessages: prevMessages.filter(m => m.role === 'assistant').length,
+          messageIds: prevMessages.map(m => m.id),
+        });
 
-          // Get variant data from message metadata
+        // ✅ STEP 1: Collect variant group IDs from the round's participant messages
+        // These identify which variant groups we need to switch
+        const variantGroupsToSwitch = new Set<string>();
+
+        round.participantMessages.forEach((msg) => {
           const metadata = getMessageMetadata(msg.metadata);
-          const variants = metadata?.variants || [];
+          const variantGroupId = metadata?.variantGroupId;
 
-          // Find the variant we want to switch to
+          if (variantGroupId && typeof variantGroupId === 'string') {
+            variantGroupsToSwitch.add(variantGroupId);
+          }
+        });
+
+        console.log('[Variant Switch] Variant groups to switch', {
+          variantGroups: Array.from(variantGroupsToSwitch),
+        });
+
+        // ✅ STEP 2: Build map of target variant messages to insert
+        const targetVariants = new Map<string, UIMessage>(); // participantId -> target variant message
+
+        round.participantMessages.forEach((msg) => {
+          const metadata = getMessageMetadata(msg.metadata);
+          const participantId = metadata?.participantId;
+
+          if (!participantId)
+            return;
+
+          const variants = metadata?.variants || [];
           const targetVariant = variants.find(v => v.variantIndex === newVariantIndex);
+
           if (!targetVariant) {
             console.warn('[Variant Switch] Target variant not found', {
-              messageId: msg.id,
+              participantId,
               requestedIndex: newVariantIndex,
               availableVariants: variants.length,
             });
-            return msg;
+            return;
           }
 
-          // Create a new UI message with the variant's content
+          console.log('[Variant Switch] Preparing target variant for participant', {
+            participantId,
+            targetVariantId: targetVariant.id,
+            targetVariantIndex: newVariantIndex,
+          });
+
+          // Create the target variant message
           const switchedMessage: UIMessage = {
             id: targetVariant.id,
             role: 'assistant',
@@ -289,14 +328,76 @@ export default function ChatThreadScreen({
             ],
             metadata: {
               ...metadata,
-              // Update active variant index in metadata
+              variants, // Preserve ALL variant data
               activeVariantIndex: newVariantIndex,
               currentVariantIndex: newVariantIndex,
+              participantId,
             },
           };
 
-          return switchedMessage;
+          targetVariants.set(participantId, switchedMessage);
         });
+
+        // ✅ STEP 3: Filter messages to remove ALL variants from this round
+        // Then add back only the selected variants
+        const filteredMessages = prevMessages.filter((msg) => {
+          if (msg.role !== 'assistant')
+            return true; // Keep all user messages
+
+          const metadata = getMessageMetadata(msg.metadata);
+          const participantId = metadata?.participantId;
+          const variantGroupId = metadata?.variantGroupId;
+
+          // If this message belongs to a variant group we're switching, filter it out
+          // We'll add back the selected variant separately
+          if (variantGroupId && typeof variantGroupId === 'string' && variantGroupsToSwitch.has(variantGroupId)) {
+            console.log('[Variant Switch] Filtering out variant message', {
+              messageId: msg.id,
+              participantId,
+              variantGroupId,
+            });
+            return false; // Remove this variant message
+          }
+
+          return true; // Keep messages not part of variant switching
+        });
+
+        // ✅ STEP 4: Insert target variants at the correct position
+        // Find the position where the round starts and insert after the user message
+        const userMessageIndex = prevMessages.findIndex(
+          (m, idx) => idx === round.userMessageIndex,
+        );
+
+        if (userMessageIndex === -1) {
+          console.error('[Variant Switch] Could not find user message for round', roundIndex);
+          return prevMessages;
+        }
+
+        // Build the final message array
+        const messagesBeforeRound = filteredMessages.slice(0, userMessageIndex + 1);
+        const messagesAfterRound = filteredMessages.slice(userMessageIndex + 1);
+
+        const targetVariantMessages = Array.from(targetVariants.values());
+
+        console.log('[Variant Switch] Building final message array', {
+          messagesBeforeRound: messagesBeforeRound.length,
+          targetVariants: targetVariantMessages.length,
+          messagesAfterRound: messagesAfterRound.length,
+        });
+
+        const updatedMessages = [
+          ...messagesBeforeRound,
+          ...targetVariantMessages,
+          ...messagesAfterRound,
+        ];
+
+        console.log('[Variant Switch] Messages after switch', {
+          totalMessages: updatedMessages.length,
+          assistantMessages: updatedMessages.filter(m => m.role === 'assistant').length,
+          messageIds: updatedMessages.map(m => m.id),
+        });
+
+        return updatedMessages;
       });
     },
     [rounds],
@@ -507,8 +608,8 @@ export default function ChatThreadScreen({
         <ConversationScrollButton aria-label={t('actions.scrollToBottom')} />
       </Conversation>
 
-      {/* ✅ STICKY INPUT - Relative to dashboard content, not viewport */}
-      <div className="sticky bottom-0 left-0 right-0 z-10 mt-auto">
+      {/* ✅ STICKY INPUT - Relative to dashboard content, not viewport - Glass design */}
+      <div className="sticky bottom-0 left-0 right-0 z-10 mt-auto backdrop-blur-xl bg-background/10 border-t border-white/30">
         <div className="w-full max-w-full sm:max-w-3xl lg:max-w-4xl mx-auto px-3 sm:px-4 md:px-6 lg:px-8 py-4">
           {/* Participants Preview - shows status during streaming */}
           {selectedParticipants.length > 0 && (
