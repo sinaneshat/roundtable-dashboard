@@ -129,13 +129,18 @@ export const UIMessageMetadataSchema = z.object({
   aborted: z.boolean().optional(), // Whether streaming was aborted
   partialResponse: z.boolean().optional(), // Whether response is partial
 
-  // ✅ Variant/branching fields (uses StreamingVariantSchema)
-  variants: z.array(StreamingVariantSchema).optional(),
-  currentVariantIndex: z.number().optional(),
-  activeVariantIndex: z.number().optional(),
-  totalVariants: z.number().optional(),
-  hasVariants: z.boolean().optional(),
-  roundId: z.string().optional(),
+  // ✅ Variant/branching fields (backend + UI fields)
+  // Backend fields (from MessageMetadataSchema - maintain parity)
+  variantIndex: z.number().optional(), // ✅ Which variant this is (0 = original, 1+ = regenerated)
+  isActiveVariant: z.boolean().optional(), // ✅ Currently displayed/active variant
+  variantGroupId: z.string().optional(), // ✅ Groups variants of the same response
+  roundId: z.string().optional(), // ✅ Groups messages from same conversation round
+  // UI-specific variant fields (for client-side variant switching)
+  variants: z.array(StreamingVariantSchema).optional(), // ✅ Pre-loaded variant data for switching
+  currentVariantIndex: z.number().optional(), // ✅ UI state: current variant being displayed
+  activeVariantIndex: z.number().optional(), // ✅ UI state: active variant index
+  totalVariants: z.number().optional(), // ✅ UI state: total number of variants available
+  hasVariants: z.boolean().optional(), // ✅ UI state: whether message has multiple variants
 
   // ✅ Error handling fields (AI SDK error handling pattern)
   hasError: z.boolean().optional(),

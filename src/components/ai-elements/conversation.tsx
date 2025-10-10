@@ -90,13 +90,12 @@ export function ConversationScrollButton({
   return (
     <Button
       className={cn(
-        // Glass design positioned at bottom of scroll area
+        // Liquid Glass design positioned at bottom of scroll area
         'absolute bottom-4 left-[50%] translate-x-[-50%]',
-        'rounded-full shadow-lg',
-        'backdrop-blur-xl bg-background/10 border-white/30',
-        'hover:bg-background/20 hover:border-white/40',
+        'rounded-full',
+        'backdrop-blur-2xl border border-white/10',
+        'hover:border-white/20',
         'transition-all duration-200',
-        'shadow-2xl',
         className,
       )}
       onClick={handleScrollToBottom}

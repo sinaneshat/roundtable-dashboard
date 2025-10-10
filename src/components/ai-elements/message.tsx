@@ -28,17 +28,17 @@ export function Message({ className, from, ...props }: MessageProps) {
 }
 
 const messageContentVariants = cva(
-  'is-user:dark flex flex-col gap-2 overflow-hidden rounded-lg text-sm',
+  'is-user:dark flex flex-col gap-2 overflow-hidden rounded-2xl text-sm',
   {
     variants: {
       variant: {
         contained: [
           'max-w-[80%] px-4 py-3',
-          'group-[.is-user]:bg-primary group-[.is-user]:text-primary-foreground',
-          'group-[.is-assistant]:bg-secondary group-[.is-assistant]:text-foreground',
+          'group-[.is-user]:backdrop-blur-2xl group-[.is-user]:bg-primary/10 group-[.is-user]:border group-[.is-user]:border-primary/20 group-[.is-user]:text-foreground',
+          'group-[.is-assistant]:backdrop-blur-2xl group-[.is-assistant]:bg-secondary/10 group-[.is-assistant]:border group-[.is-assistant]:border-white/10 group-[.is-assistant]:text-foreground',
         ],
         flat: [
-          'group-[.is-user]:max-w-[80%] group-[.is-user]:bg-secondary group-[.is-user]:px-4 group-[.is-user]:py-3 group-[.is-user]:text-foreground',
+          'group-[.is-user]:max-w-[80%] group-[.is-user]:backdrop-blur-2xl group-[.is-user]:bg-primary/10 group-[.is-user]:border group-[.is-user]:border-primary/20 group-[.is-user]:px-4 group-[.is-user]:py-3 group-[.is-user]:text-foreground',
           'group-[.is-assistant]:text-foreground',
         ],
       },

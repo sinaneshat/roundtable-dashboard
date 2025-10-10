@@ -7,7 +7,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { ChatMemory, ChatMessage, ChatParticipant, ChatThread, ChatThreadChangelog } from '@/api/routes/chat/schema';
 import { Action, Actions } from '@/components/ai-elements/actions';
-import { Conversation, ConversationContent, ConversationScrollButton } from '@/components/ai-elements/conversation';
 import { Message, MessageAvatar, MessageContent } from '@/components/ai-elements/message';
 import { Response } from '@/components/ai-elements/response';
 import { ChatDeleteDialog } from '@/components/chat/chat-delete-dialog';
@@ -217,6 +216,8 @@ export default function ChatThreadScreen({
       setInputValue('');
       setMessages(prev => [...prev, userMessage]);
       await streamMessage([...messages, userMessage]);
+
+      // Auto-scroll handled by useEffect watching messages
     },
     [inputValue, messages, status, streamMessage],
   );
@@ -275,13 +276,15 @@ export default function ChatThreadScreen({
 
         // ✅ STEP 1: Collect variant group IDs from the round's participant messages
         // These identify which variant groups we need to switch
+        // Uses validated UIMessageMetadata from getMessageMetadata helper
         const variantGroupsToSwitch = new Set<string>();
 
         round.participantMessages.forEach((msg) => {
           const metadata = getMessageMetadata(msg.metadata);
           const variantGroupId = metadata?.variantGroupId;
 
-          if (variantGroupId && typeof variantGroupId === 'string') {
+          // ✅ Schema validation ensures variantGroupId is string | undefined
+          if (variantGroupId) {
             variantGroupsToSwitch.add(variantGroupId);
           }
         });
@@ -291,15 +294,18 @@ export default function ChatThreadScreen({
         });
 
         // ✅ STEP 2: Build map of target variant messages to insert
+        // Uses validated UIMessageMetadata and StreamingVariant types
         const targetVariants = new Map<string, UIMessage>(); // participantId -> target variant message
 
         round.participantMessages.forEach((msg) => {
           const metadata = getMessageMetadata(msg.metadata);
           const participantId = metadata?.participantId;
 
+          // ✅ Schema validation ensures participantId is string | null | undefined
           if (!participantId)
             return;
 
+          // ✅ Schema validation ensures variants is StreamingVariant[] | undefined
           const variants = metadata?.variants || [];
           const targetVariant = variants.find(v => v.variantIndex === newVariantIndex);
 
@@ -318,7 +324,8 @@ export default function ChatThreadScreen({
             targetVariantIndex: newVariantIndex,
           });
 
-          // Create the target variant message
+          // ✅ Build UIMessage using validated StreamingVariant data
+          // StreamingVariant schema guarantees: id, content, variantIndex, isActive, createdAt, metadata, participantId, reasoning?
           const switchedMessage: UIMessage = {
             id: targetVariant.id,
             role: 'assistant',
@@ -328,7 +335,7 @@ export default function ChatThreadScreen({
             ],
             metadata: {
               ...metadata,
-              variants, // Preserve ALL variant data
+              variants, // Preserve ALL variant data for future switching
               activeVariantIndex: newVariantIndex,
               currentVariantIndex: newVariantIndex,
               participantId,
@@ -340,20 +347,21 @@ export default function ChatThreadScreen({
 
         // ✅ STEP 3: Filter messages to remove ALL variants from this round
         // Then add back only the selected variants
+        // Uses validated UIMessageMetadata to identify variant groups
         const filteredMessages = prevMessages.filter((msg) => {
           if (msg.role !== 'assistant')
             return true; // Keep all user messages
 
           const metadata = getMessageMetadata(msg.metadata);
-          const participantId = metadata?.participantId;
           const variantGroupId = metadata?.variantGroupId;
 
+          // ✅ Schema validation ensures variantGroupId is string | undefined
           // If this message belongs to a variant group we're switching, filter it out
           // We'll add back the selected variant separately
-          if (variantGroupId && typeof variantGroupId === 'string' && variantGroupsToSwitch.has(variantGroupId)) {
+          if (variantGroupId && variantGroupsToSwitch.has(variantGroupId)) {
             console.log('[Variant Switch] Filtering out variant message', {
               messageId: msg.id,
-              participantId,
+              participantId: metadata?.participantId,
               variantGroupId,
             });
             return false; // Remove this variant message
@@ -429,187 +437,200 @@ export default function ChatThreadScreen({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [threadActions, thread.title]);
 
+  // ✅ Auto-scroll to bottom when messages change (during streaming or new messages)
+  useEffect(() => {
+    const scrollContainer = document.querySelector('[data-slot="sidebar-inset"]') as HTMLElement;
+    if (!scrollContainer)
+      return;
+
+    // Check if user is near bottom before auto-scrolling (respect user scroll position)
+    const { scrollTop, scrollHeight, clientHeight } = scrollContainer;
+    const isNearBottom = scrollHeight - scrollTop - clientHeight < 150;
+
+    // Only auto-scroll if user is already near the bottom or if streaming
+    if (isNearBottom || status === 'streaming') {
+      scrollContainer.scrollTo({ top: scrollContainer.scrollHeight, behavior: 'smooth' });
+    }
+  }, [messages, status]); // Re-run when messages or streaming status changes
+
   return (
-    <div className="relative flex flex-1 flex-col min-h-0">
-      {/* ✅ AI Elements Conversation - Official pattern with auto-scroll */}
-      <Conversation>
-        <ConversationContent className="w-full max-w-full sm:max-w-3xl lg:max-w-4xl mx-auto px-3 sm:px-4 md:px-6 lg:px-8 pt-4 pb-4 space-y-4">
-          {/* ✅ Timeline: Messages and grouped configuration changes sorted by time */}
-          {timeline.map((item, _index) => {
-            // Render grouped configuration changes
-            if (item.type === 'changelog_group') {
-              return (
-                <ConfigurationChangesGroup
-                  key={`changelog-group-${item.data.timestamp.getTime()}`}
-                  group={item.data}
-                />
-              );
-            }
-
-            // Render message (existing logic)
-            const message = item.data;
-            const messageIndex = 'index' in item ? item.index : -1;
-            if (message.role === 'user') {
-              // ✅ User message
-              return (
-                <Message from="user" key={message.id}>
-                  <MessageContent>
-                    {message.parts.map((part, partIndex) => {
-                      if (part.type === 'text') {
-                        return (
-                          // eslint-disable-next-line react/no-array-index-key -- Parts are stable content segments within a message
-                          <Response key={`${message.id}-${partIndex}`}>
-                            {part.text}
-                          </Response>
-                        );
-                      }
-                      return null;
-                    })}
-                  </MessageContent>
-                  <MessageAvatar
-                    src={session?.user?.image ?? ''}
-                    name={session?.user?.name ?? t('user.defaultName')}
-                  />
-                </Message>
-              );
-            }
-
-            // ✅ Assistant message: Extract participant data from message metadata
-            // CRITICAL: Use stored model/role from participants array (NOT just metadata)
-            // Look up participant to get model and role information
-            const metadata = getMessageMetadata(message.metadata);
-
-            // Get participantId from metadata (where chatMessageToUIMessage puts it)
-            const participantId = metadata?.participantId;
-
-            // Find the participant in the participants array
-            const participant = participants.find(p => p.id === participantId);
-
-            // Get model ID from participant (primary) or metadata (fallback)
-            const storedModelId = participant?.modelId || metadata?.model;
-
-            // Get role from participant
-            const storedRole = participant?.role;
-
-            // Calculate participant index (0-based position in enabled participants sorted by priority)
-            const participantIndex = participant
-              ? participants
-                  .filter(p => p.isEnabled)
-                  .sort((a, b) => a.priority - b.priority)
-                  .findIndex(p => p.id === participant.id)
-              : 0;
-
-            // ✅ CRITICAL: Use stored modelId directly for avatar (independent of current participants)
-            const avatarProps = getAvatarPropsFromModelId(
-              message.role === 'system' ? 'assistant' : message.role,
-              storedModelId,
-              session?.user?.image,
-              session?.user?.name,
-            );
-
-            // Use stored modelId from participant or metadata
-            const model = storedModelId ? getModelById(storedModelId) : undefined;
-
-            if (!model) {
-              console.warn('[ChatThreadScreen] Skipping message - no model found:', {
-                messageId: message.id,
-                storedModelId,
-                participantId,
-                hasParticipant: !!participant,
-                metadataModel: metadata?.model,
-              });
-              // Skip rendering messages without valid model reference
-              // This can happen with deleted participants or invalid model IDs
-              return null;
-            }
-
-            // ✅ Check for error using typed metadata (already declared above)
-            // Type-safe error detection following AI SDK error handling pattern
-            const hasError = metadata?.hasError === true || !!metadata?.error;
-            const isCurrentlyStreaming = streamingState.messageId === message.id;
-            const hasContent = message.parts.some(p => p.type === 'text' && p.text.trim().length > 0);
-
-            const messageStatus: 'thinking' | 'streaming' | 'completed' | 'error' = hasError
-              ? 'error'
-              : isCurrentlyStreaming && !hasContent
-                ? 'thinking'
-                : isCurrentlyStreaming
-                  ? 'streaming'
-                  : 'completed';
-
-            // Filter message parts to only text and reasoning (ModelMessageCard types)
-            const filteredParts = message.parts.filter(
-              (p): p is { type: 'text'; text: string } | { type: 'reasoning'; text: string } =>
-                p.type === 'text' || p.type === 'reasoning',
-            );
-
-            // ✅ Check if this is the last message in a round
-            const isLastInRound = messageIndex !== -1 && isLastMessageInRound(messageIndex, rounds);
-            const roundForMessage = messageIndex !== -1 ? getRoundForMessage(messageIndex, rounds) : undefined;
-            const roundIndex = roundForMessage ? rounds.indexOf(roundForMessage) : -1;
-            const currentRound = rounds[roundIndex];
-
-            // ✅ Check if this round has multiple variants (for branch navigation)
-            const hasRoundVariants = currentRound && (currentRound.totalVariants ?? 0) > 1;
-
+    <div className="relative flex flex-1 flex-col min-h-0 h-full">
+      {/* Content scrolls at page level - no Conversation scroll container */}
+      <div className="w-full max-w-full sm:max-w-3xl lg:max-w-4xl mx-auto px-3 sm:px-4 md:px-6 lg:px-8 pt-20 pb-32 space-y-4">
+        {/* ✅ Timeline: Messages and grouped configuration changes sorted by time */}
+        {timeline.map((item, _index) => {
+          // Render grouped configuration changes
+          if (item.type === 'changelog_group') {
             return (
-              <div key={message.id}>
-                <ModelMessageCard
-                  messageId={message.id}
-                  model={model}
-                  role={storedRole || ''} // ✅ Use stored role from metadata
-                  participantIndex={participantIndex ?? 0}
-                  status={messageStatus}
-                  parts={filteredParts}
-                  avatarSrc={avatarProps.src}
-                  avatarName={avatarProps.name}
-                />
-
-                {/* ✅ Show round actions (regenerate + branch selector) after the last message in a round */}
-                {isLastInRound && roundIndex !== -1 && status === 'ready' && (
-                  <div className="flex items-center gap-3 mt-1 ml-12">
-                    {/* Regenerate action */}
-                    <Actions className="flex-shrink-0">
-                      <Action
-                        onClick={() => handleRegenerateRound(roundIndex)}
-                        label={t('actions.regenerateRound')}
-                      >
-                        <RefreshCcwIcon className="size-3" />
-                      </Action>
-                    </Actions>
-
-                    {/* Branch selector - only show if multiple variants exist */}
-                    {hasRoundVariants && currentRound && (
-                      <RoundBranchSelector
-                        roundIndex={roundIndex}
-                        activeBranchIndex={currentRound.activeVariantIndex ?? 0}
-                        totalBranches={currentRound.totalVariants ?? 1}
-                        onBranchChange={async (newBranchIndex) => {
-                          await handleRoundBranchChange(roundIndex, newBranchIndex);
-                        }}
-                        from="assistant"
-                        className="py-0"
-                      />
-                    )}
-                  </div>
-                )}
-              </div>
+              <ConfigurationChangesGroup
+                key={`changelog-group-${item.data.timestamp.getTime()}`}
+                group={item.data}
+              />
             );
-          })}
+          }
 
-          {/* ✅ Enhanced streaming loader with participant queue and thinking messages */}
-          {status === 'streaming' && (
-            <StreamingParticipantsLoader
-              participants={selectedParticipants}
-              currentParticipantIndex={streamingState.participantIndex}
-            />
-          )}
-        </ConversationContent>
-        <ConversationScrollButton aria-label={t('actions.scrollToBottom')} />
-      </Conversation>
+          // Render message (existing logic)
+          const message = item.data;
+          const messageIndex = 'index' in item ? item.index : -1;
+          if (message.role === 'user') {
+            // ✅ User message
+            return (
+              <Message from="user" key={message.id}>
+                <MessageContent>
+                  {message.parts.map((part, partIndex) => {
+                    if (part.type === 'text') {
+                      return (
+                      // eslint-disable-next-line react/no-array-index-key -- Parts are stable content segments within a message
+                        <Response key={`${message.id}-${partIndex}`}>
+                          {part.text}
+                        </Response>
+                      );
+                    }
+                    return null;
+                  })}
+                </MessageContent>
+                <MessageAvatar
+                  src={session?.user?.image ?? ''}
+                  name={session?.user?.name ?? t('user.defaultName')}
+                />
+              </Message>
+            );
+          }
 
-      {/* ✅ STICKY INPUT - Relative to dashboard content, not viewport - Glass design */}
-      <div className="sticky bottom-0 left-0 right-0 z-10 mt-auto backdrop-blur-xl bg-background/10 border-t border-white/30">
+          // ✅ Assistant message: Extract participant data from message metadata
+          // CRITICAL: Use stored model/role from participants array (NOT just metadata)
+          // Look up participant to get model and role information
+          const metadata = getMessageMetadata(message.metadata);
+
+          // Get participantId from metadata (where chatMessageToUIMessage puts it)
+          const participantId = metadata?.participantId;
+
+          // Find the participant in the participants array
+          const participant = participants.find(p => p.id === participantId);
+
+          // Get model ID from participant (primary) or metadata (fallback)
+          const storedModelId = participant?.modelId || metadata?.model;
+
+          // Get role from participant
+          const storedRole = participant?.role;
+
+          // Calculate participant index (0-based position in enabled participants sorted by priority)
+          const participantIndex = participant
+            ? participants
+                .filter(p => p.isEnabled)
+                .sort((a, b) => a.priority - b.priority)
+                .findIndex(p => p.id === participant.id)
+            : 0;
+
+          // ✅ CRITICAL: Use stored modelId directly for avatar (independent of current participants)
+          const avatarProps = getAvatarPropsFromModelId(
+            message.role === 'system' ? 'assistant' : message.role,
+            storedModelId,
+            session?.user?.image,
+            session?.user?.name,
+          );
+
+          // Use stored modelId from participant or metadata
+          const model = storedModelId ? getModelById(storedModelId) : undefined;
+
+          if (!model) {
+            console.warn('[ChatThreadScreen] Skipping message - no model found:', {
+              messageId: message.id,
+              storedModelId,
+              participantId,
+              hasParticipant: !!participant,
+              metadataModel: metadata?.model,
+            });
+            // Skip rendering messages without valid model reference
+            // This can happen with deleted participants or invalid model IDs
+            return null;
+          }
+
+          // ✅ Check for error using typed metadata (already declared above)
+          // Type-safe error detection following AI SDK error handling pattern
+          const hasError = metadata?.hasError === true || !!metadata?.error;
+          const isCurrentlyStreaming = streamingState.messageId === message.id;
+          const hasContent = message.parts.some(p => p.type === 'text' && p.text.trim().length > 0);
+
+          const messageStatus: 'thinking' | 'streaming' | 'completed' | 'error' = hasError
+            ? 'error'
+            : isCurrentlyStreaming && !hasContent
+              ? 'thinking'
+              : isCurrentlyStreaming
+                ? 'streaming'
+                : 'completed';
+
+          // Filter message parts to only text and reasoning (ModelMessageCard types)
+          const filteredParts = message.parts.filter(
+            (p): p is { type: 'text'; text: string } | { type: 'reasoning'; text: string } =>
+              p.type === 'text' || p.type === 'reasoning',
+          );
+
+          // ✅ Check if this is the last message in a round
+          const isLastInRound = messageIndex !== -1 && isLastMessageInRound(messageIndex, rounds);
+          const roundForMessage = messageIndex !== -1 ? getRoundForMessage(messageIndex, rounds) : undefined;
+          const roundIndex = roundForMessage ? rounds.indexOf(roundForMessage) : -1;
+          const currentRound = rounds[roundIndex];
+
+          // ✅ Check if this round has multiple variants (for branch navigation)
+          const hasRoundVariants = currentRound && (currentRound.totalVariants ?? 0) > 1;
+
+          return (
+            <div key={message.id}>
+              <ModelMessageCard
+                messageId={message.id}
+                model={model}
+                role={storedRole || ''} // ✅ Use stored role from metadata
+                participantIndex={participantIndex ?? 0}
+                status={messageStatus}
+                parts={filteredParts}
+                avatarSrc={avatarProps.src}
+                avatarName={avatarProps.name}
+              />
+
+              {/* ✅ Show round actions (regenerate + branch selector) after the last message in a round */}
+              {isLastInRound && roundIndex !== -1 && status === 'ready' && (
+                <div className="flex items-center gap-3 mt-1 ml-12">
+                  {/* Regenerate action */}
+                  <Actions className="flex-shrink-0">
+                    <Action
+                      onClick={() => handleRegenerateRound(roundIndex)}
+                      label={t('actions.regenerateRound')}
+                    >
+                      <RefreshCcwIcon className="size-3" />
+                    </Action>
+                  </Actions>
+
+                  {/* Branch selector - only show if multiple variants exist */}
+                  {hasRoundVariants && currentRound && (
+                    <RoundBranchSelector
+                      roundIndex={roundIndex}
+                      activeBranchIndex={currentRound.activeVariantIndex ?? 0}
+                      totalBranches={currentRound.totalVariants ?? 1}
+                      onBranchChange={async (newBranchIndex) => {
+                        await handleRoundBranchChange(roundIndex, newBranchIndex);
+                      }}
+                      from="assistant"
+                      className="py-0"
+                    />
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+
+        {/* ✅ Enhanced streaming loader with participant queue and thinking messages */}
+        {status === 'streaming' && (
+          <StreamingParticipantsLoader
+            participants={selectedParticipants}
+            currentParticipantIndex={streamingState.participantIndex}
+          />
+        )}
+      </div>
+
+      {/* ✅ STICKY INPUT - Liquid Glass design with content scrolling underneath */}
+      <div className="sticky bottom-0 z-10 mt-auto">
         <div className="w-full max-w-full sm:max-w-3xl lg:max-w-4xl mx-auto px-3 sm:px-4 md:px-6 lg:px-8 py-4">
           {/* Participants Preview - shows status during streaming */}
           {selectedParticipants.length > 0 && (

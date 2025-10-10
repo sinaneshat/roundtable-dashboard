@@ -28,16 +28,16 @@ export function HeaderScrollButton({ ariaLabel = 'Scroll to bottom' }: { ariaLab
 
   // Check scroll position and update visibility
   const checkScrollPosition = useCallback(() => {
-    // Find the conversation element (has overflow-y-auto and role="log")
-    const conversation = document.querySelector('[role="log"]');
+    // Find the scroll container (SidebarInset for page-level scrolling)
+    const scrollContainer = document.querySelector('[data-slot="sidebar-inset"]') as HTMLElement;
 
-    if (!conversation) {
+    if (!scrollContainer) {
       setIsVisible(false);
       return;
     }
 
     // Check if scrolled away from bottom (threshold: 100px)
-    const { scrollHeight, scrollTop, clientHeight } = conversation;
+    const { scrollHeight, scrollTop, clientHeight } = scrollContainer;
     const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
     const shouldShow = distanceFromBottom > 100;
 
@@ -46,35 +46,35 @@ export function HeaderScrollButton({ ariaLabel = 'Scroll to bottom' }: { ariaLab
 
   // Scroll to bottom handler
   const scrollToBottom = useCallback(() => {
-    const conversation = document.querySelector('[role="log"]');
+    const scrollContainer = document.querySelector('[data-slot="sidebar-inset"]') as HTMLElement;
 
-    if (!conversation)
+    if (!scrollContainer)
       return;
 
-    conversation.scrollTo({
-      top: conversation.scrollHeight,
+    scrollContainer.scrollTo({
+      top: scrollContainer.scrollHeight,
       behavior: 'smooth',
     });
   }, []);
 
   // Set up scroll listener
   useEffect(() => {
-    const conversation = document.querySelector('[role="log"]');
+    const scrollContainer = document.querySelector('[data-slot="sidebar-inset"]') as HTMLElement;
 
-    if (!conversation)
+    if (!scrollContainer)
       return;
 
     // Check initial position
     checkScrollPosition();
 
     // Listen to scroll events
-    conversation.addEventListener('scroll', checkScrollPosition, { passive: true });
+    scrollContainer.addEventListener('scroll', checkScrollPosition, { passive: true });
 
     // Also check on window resize
     window.addEventListener('resize', checkScrollPosition, { passive: true });
 
     return () => {
-      conversation.removeEventListener('scroll', checkScrollPosition);
+      scrollContainer.removeEventListener('scroll', checkScrollPosition);
       window.removeEventListener('resize', checkScrollPosition);
     };
   }, [checkScrollPosition]);

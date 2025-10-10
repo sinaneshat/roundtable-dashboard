@@ -165,16 +165,12 @@ export const chatGlass = {
     'hover:shadow-3xl', // Extra shadow on hover
   ),
 
-  // Chat input box
+  // Chat input box - Liquid Glass effect (fully transparent with blur)
   inputBox: cn(
-    'backdrop-blur-xl',
-    'bg-background/10',
-    'border border-white/30',
-    'shadow-2xl',
-    'hover:border-white/40',
-    'focus-within:bg-background/20',
-    'focus-within:border-white/40',
-    'focus-within:ring-2 focus-within:ring-white/20',
+    'backdrop-blur-2xl',
+    'border border-white/10',
+    'hover:border-white/20',
+    'focus-within:border-white/20',
     'transition-all duration-200',
   ),
 

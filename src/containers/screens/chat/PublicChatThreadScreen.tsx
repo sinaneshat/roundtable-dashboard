@@ -152,10 +152,10 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
   const signUpUrl = `/auth/sign-up?utm_source=public_chat&utm_medium=cta&utm_campaign=thread_${thread.slug}&utm_content=inline`;
 
   return (
-    <div className="relative flex flex-1 flex-col min-h-0">
+    <div className="relative flex flex-1 flex-col min-h-0 h-full">
       {/* ✅ AI Elements Conversation - Same pattern as ChatThreadScreen */}
       <Conversation className="flex-1">
-        <ConversationContent className="w-full max-w-full sm:max-w-3xl lg:max-w-4xl mx-auto px-3 sm:px-4 md:px-6 lg:px-8 pt-4 pb-4 space-y-4">
+        <ConversationContent className="w-full max-w-full sm:max-w-3xl lg:max-w-4xl mx-auto px-3 sm:px-4 md:px-6 lg:px-8 pt-20 pb-32 space-y-4">
           {timeline.length === 0
             ? (
                 <div className="flex items-center justify-center min-h-[50vh]">
@@ -305,7 +305,7 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
 
       {/* ✅ Participants Preview (read-only, no streaming state) - Same as ChatThreadScreen - Glass design */}
       {participantConfigs.length > 0 && (
-        <div className="sticky bottom-0 left-0 right-0 z-10 mt-auto backdrop-blur-xl bg-background/10 border-t border-white/30">
+        <div className="sticky bottom-0 z-10 mt-auto">
           <div className="w-full max-w-full sm:max-w-3xl lg:max-w-4xl mx-auto px-3 sm:px-4 md:px-6 lg:px-8 py-4">
             <ParticipantsPreview
               participants={participantConfigs}

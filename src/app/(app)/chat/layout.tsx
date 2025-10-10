@@ -116,9 +116,9 @@ export default async function ChatLayout({
       <ThreadHeaderProvider>
         <SidebarProvider>
           <AppSidebar />
-          <SidebarInset className="h-svh flex flex-col min-h-0">
+          <SidebarInset className="h-svh flex flex-col min-h-0 overflow-y-auto">
             <NavigationHeader />
-            <div className="flex flex-1 flex-col w-full min-w-0 min-h-0 relative">
+            <div className="flex flex-1 flex-col w-full min-w-0 min-h-0">
               {children}
             </div>
           </SidebarInset>

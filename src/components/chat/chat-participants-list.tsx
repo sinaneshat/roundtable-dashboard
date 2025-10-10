@@ -37,7 +37,6 @@ import type { SubscriptionTier } from '@/db/tables/usage';
 import { useCreateCustomRoleMutation, useDeleteCustomRoleMutation } from '@/hooks/mutations/chat-mutations';
 import { useCustomRolesQuery } from '@/hooks/queries/chat-roles';
 import { useUsageStatsQuery } from '@/hooks/queries/usage';
-import { getMessageMetadata } from '@/lib/ai/message-helpers';
 import type { AIModel } from '@/lib/ai/models-config';
 import { AI_MODELS, canAccessModel, DEFAULT_ROLES, getModelById, getTierDisplayName } from '@/lib/ai/models-config';
 import type { ParticipantConfig } from '@/lib/schemas/chat-forms';
@@ -874,7 +873,7 @@ export function ParticipantsPreview({
   isStreaming,
   currentParticipantIndex,
   className,
-  chatMessages,
+  chatMessages: _chatMessages, // Renamed to indicate intentionally unused (for future feature)
 }: {
   participants: ParticipantConfig[];
   isStreaming?: boolean;
@@ -952,12 +951,7 @@ export function ParticipantsPreview({
             if (!model)
               return null;
 
-            // Check if this model has any messages in the chat
-            // participantId is stored in metadata by the message helper
-            const hasMessages = chatMessages?.some((msg) => {
-              const metadata = getMessageMetadata(msg.metadata);
-              return metadata?.participantId === participant.id;
-            }) ?? false;
+            // Note: Participant message tracking removed for cleaner liquid glass UI
 
             // Determine participant status during streaming - sequential turn-taking
             const isCurrentlyStreaming = isStreaming && currentParticipantIndex === index;
@@ -976,14 +970,12 @@ export function ParticipantsPreview({
                 }}
                 className={cn(
                   'relative flex items-center gap-1.5 sm:gap-2 px-2 sm:px-2.5 py-1 sm:py-1.5 shrink-0',
-                  'backdrop-blur-md border rounded-lg shadow-md overflow-hidden',
-                  // Default state
-                  'bg-background/10 border-white/30 dark:border-white/20',
+                  'backdrop-blur-2xl border rounded-lg overflow-hidden',
+                  // Default state - liquid glass with subtle border
+                  'border-white/10',
                   // Waiting states
                   isNextInQueue && 'border-primary/40',
                   isWaitingInQueue && 'opacity-60',
-                  // Normal completed state
-                  !isCurrentlyStreaming && !isNextInQueue && !isWaitingInQueue && !isJustCompleted && hasMessages && 'bg-background/10',
                 )}
               >
                 {/* Streaming background gradient animation - more subtle */}
