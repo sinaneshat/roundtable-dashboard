@@ -157,6 +157,7 @@ export function ChatThreadActions({ thread, slug, onDeleteClick, isPublicMode = 
           url={`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/public/chat/${slug}`}
           title={thread.title}
           description={`Check out this AI collaboration on ${thread.title}`}
+          showTextOnLargeScreens={isPublicMode}
         />
       )}
 

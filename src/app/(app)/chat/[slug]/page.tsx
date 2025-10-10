@@ -58,12 +58,14 @@ export default async function ChatThreadPage({
 
   const { thread, participants, messages, memories } = threadResult.data;
 
-  // Fetch changelog for configuration changes
+  // Fetch changelog for configuration changes (SSR - for initial page load)
+  // ✅ Client component will refetch this reactively via useThreadChangelogQuery
   const changelogResult = await getThreadChangelogService(thread.id);
-  const changelog = changelogResult?.success ? changelogResult.data.changelog : [];
+  const initialChangelog = changelogResult?.success ? changelogResult.data.changelog : [];
 
   // OFFICIAL PATTERN: Pass raw data as props to Client Component
   // Client Component will use useChat with initialMessages
+  // ✅ Changelog is fetched reactively on client for real-time updates
   // NavigationHeader in layout will automatically show thread actions for this route
   return (
     <ChatThreadScreen
@@ -71,7 +73,7 @@ export default async function ChatThreadPage({
       participants={participants}
       initialMessages={messages}
       memories={memories}
-      changelog={changelog}
+      initialChangelog={initialChangelog}
       slug={slug}
     />
   );

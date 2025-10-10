@@ -101,6 +101,37 @@ export async function saveAssistantMessageWithVariants(params: {
     isRegeneration: variantIndex > 0,
   });
 
+  // ✅ CRITICAL: Mark all existing variants as inactive before creating new variant
+  // This ensures only the latest variant is active on initial load
+  if (existingVariants.length > 0) {
+    apiLogger.info('[Variant Service] Marking existing variants as inactive', {
+      messageId: params.messageId,
+      variantsToDeactivate: existingVariants.length,
+      variantIds: existingVariants.map(v => v.id),
+    });
+
+    // Update each existing variant's metadata to set isActiveVariant: false
+    for (const existingVariant of existingVariants) {
+      const existingMetadata = existingVariant.metadata as MessageMetadata;
+      const updatedMetadata = {
+        ...(existingMetadata || {}),
+        isActiveVariant: false, // ✅ Mark as inactive
+      };
+
+      await db
+        .update(tables.chatMessage)
+        .set({
+          metadata: updatedMetadata as typeof tables.chatMessage.$inferInsert['metadata'],
+        })
+        .where(eq(tables.chatMessage.id, existingVariant.id));
+    }
+
+    apiLogger.info('[Variant Service] Successfully deactivated existing variants', {
+      messageId: params.messageId,
+      deactivatedCount: existingVariants.length,
+    });
+  }
+
   // ✅ Build metadata with variant tracking fields
   // Cast to MessageMetadata to ensure type safety during construction
   const baseMetadata = params.metadata as MessageMetadata;

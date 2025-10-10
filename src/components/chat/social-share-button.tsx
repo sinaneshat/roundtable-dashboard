@@ -46,8 +46,8 @@ type SocialShareButtonProps = {
   title: string;
   /** Optional description for platforms that support it */
   description?: string;
-  /** Icon-only mode (no text) */
-  iconOnly?: boolean;
+  /** Show text on larger screens, icon only on small screens */
+  showTextOnLargeScreens?: boolean;
   /** Custom className for the trigger button */
   className?: string;
 };
@@ -56,7 +56,7 @@ export function SocialShareButton({
   url,
   title,
   description,
-  iconOnly: _iconOnly = true,
+  showTextOnLargeScreens = false,
   className,
 }: SocialShareButtonProps) {
   const t = useTranslations('chat');
@@ -145,9 +145,13 @@ export function SocialShareButton({
             <PopoverTrigger asChild>
               <Button
                 variant="ghost"
-                size="icon"
+                size={showTextOnLargeScreens ? 'sm' : 'icon'}
                 aria-label={t('copyLink')}
-                className={cn('transition-all duration-200', className)}
+                className={cn(
+                  'transition-all duration-200',
+                  showTextOnLargeScreens && 'gap-2',
+                  className,
+                )}
               >
                 {copySuccess
                   ? (
@@ -156,6 +160,11 @@ export function SocialShareButton({
                   : (
                       <Share2 className="size-4 text-muted-foreground hover:text-foreground transition-all duration-200 hover:scale-110" />
                     )}
+                {showTextOnLargeScreens && (
+                  <span className="hidden md:inline">
+                    {copySuccess ? t('linkCopied') : t('shareConversation')}
+                  </span>
+                )}
               </Button>
             </PopoverTrigger>
           </TooltipTrigger>

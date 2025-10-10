@@ -319,6 +319,7 @@
       "noMessagesYet": "No messages yet",
       "noMessagesDescription": "This conversation hasn't started yet. Create your own multi-AI chat!",
       "learnMore": "Learn More",
+      "tryNow": "Try Now",
       "tryRoundtable": "Try Roundtable",
       "description": "lets you chat with multiple AI models simultaneously for deeper insights and better solutions."
     },
@@ -378,6 +379,7 @@
     "removedFromFavoritesDescription": "Thread has been removed from your favorites",
     "scrollToBottom": "Scroll to bottom",
     "searchChats": "Search chats...",
+    "shareConversation": "Share Conversation",
     "shareThread": "Share Thread",
     "shareThreadDescription": "Share this link with anyone to give them access to this thread",
     "streaming": {

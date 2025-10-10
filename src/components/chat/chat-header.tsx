@@ -97,12 +97,12 @@ export function NavigationHeader({
     <header
       className={cn(
         'sticky top-0 z-50 flex h-16 shrink-0 items-center gap-2 transition-all duration-200 ease-in-out',
+        'backdrop-blur-2xl w-full',
         className,
       )}
     >
       <div className={cn(
         'flex items-center justify-between gap-2 px-3 sm:px-4 md:px-6 lg:px-8 h-16 w-full',
-        'backdrop-blur-2xl',
         maxWidth && 'max-w-full sm:max-w-3xl lg:max-w-4xl mx-auto',
       )}
       >

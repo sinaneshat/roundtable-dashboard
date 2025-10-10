@@ -820,10 +820,70 @@ export const getPublicThreadHandler: RouteHandler<typeof getPublicThreadRoute, A
     });
 
     // ✅ Filter active messages using metadata.isActiveVariant
-    const messages = allMessages.filter((msg) => {
+    const activeMessages = allMessages.filter((msg) => {
       const metadata = msg.metadata as MessageMetadata;
       return msg.role === 'user' || (metadata?.isActiveVariant === true);
     });
+
+    // ✅ Enrich active messages with ALL their variant siblings
+    const messages = await Promise.all(
+      activeMessages.map(async (message) => {
+        if (message.role !== 'assistant' || !message.participantId) {
+          return message;
+        }
+
+        try {
+          const messageMetadata = message.metadata as MessageMetadata;
+          const parentMsgId = messageMetadata?.parentMessageId as string || null;
+
+          // ✅ Filter variant siblings using metadata.parentMessageId
+          const variantSiblings = allMessages.filter((msg) => {
+            const msgMetadata = msg.metadata as MessageMetadata;
+            return msg.role === 'assistant'
+              && msg.participantId === message.participantId
+              && msgMetadata?.parentMessageId === parentMsgId;
+          });
+
+          // ✅ Map variants reading from metadata
+          const variants = variantSiblings.map((v) => {
+            const vMetadata = v.metadata as MessageMetadata;
+            return {
+              id: v.id,
+              content: v.content,
+              variantIndex: (vMetadata?.variantIndex as number) || 0,
+              isActive: (vMetadata?.isActiveVariant as boolean) || false,
+              createdAt: v.createdAt.toISOString(),
+              metadata: v.metadata,
+              participantId: v.participantId,
+              reasoning: v.reasoning || undefined,
+            };
+          });
+
+          const currentVariantIndex = (messageMetadata?.variantIndex as number) || 0;
+          const activeVariantIndex = variants.findIndex(v => v.isActive);
+
+          return {
+            ...message,
+            metadata: {
+              ...(typeof message.metadata === 'object' && message.metadata !== null ? message.metadata : {}),
+              variants,
+              currentVariantIndex,
+              activeVariantIndex: activeVariantIndex >= 0 ? activeVariantIndex : currentVariantIndex,
+              totalVariants: variants.length,
+              hasVariants: variants.length > 1,
+              roundId: message.id,
+              parentMessageId: parentMsgId,
+            },
+          };
+        } catch (error) {
+          apiLogger.error('[getPublicThread] Failed to process variants for message', {
+            messageId: message.id,
+            error: error instanceof Error ? error.message : String(error),
+          });
+          return message;
+        }
+      }),
+    );
 
     // Fetch changelog entries (ordered by creation time, newest first)
     // Following the pattern from getThreadChangelog service

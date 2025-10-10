@@ -91,14 +91,14 @@ export function ConfigurationChangesGroup({ group, className }: ConfigurationCha
         <ChainOfThoughtHeader>
           <div className="flex items-center gap-2">
             <Clock className="size-4 text-muted-foreground flex-shrink-0" />
-            <span className="text-sm">Configuration updated</span>
+            <span className="text-sm">Configuration changed</span>
             {/* Show detailed info only on desktop */}
             <span className="hidden md:inline text-xs text-muted-foreground">•</span>
             <span className="hidden md:inline text-xs text-muted-foreground truncate">
               {actionSummaries.join(', ')}
             </span>
-            <span className="text-xs text-muted-foreground flex-shrink-0">•</span>
-            <span className="text-xs text-muted-foreground whitespace-nowrap flex-shrink-0">
+            <span className="hidden md:inline text-xs text-muted-foreground flex-shrink-0">•</span>
+            <span className="hidden md:inline text-xs text-muted-foreground whitespace-nowrap flex-shrink-0">
               {formatRelativeTime(group.timestamp)}
             </span>
           </div>

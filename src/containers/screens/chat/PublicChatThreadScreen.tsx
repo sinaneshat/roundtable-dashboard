@@ -12,7 +12,6 @@ import {
 } from '@/components/ai-elements/conversation';
 import { Message, MessageAvatar, MessageContent } from '@/components/ai-elements/message';
 import { Response } from '@/components/ai-elements/response';
-import { ParticipantsPreview } from '@/components/chat/chat-participants-list';
 import { ConfigurationChangesGroup } from '@/components/chat/configuration-changes-group';
 import { ModelMessageCard } from '@/components/chat/model-message-card';
 import { Button } from '@/components/ui/button';
@@ -22,7 +21,6 @@ import { getAvatarPropsFromModelId } from '@/lib/ai/avatar-helpers';
 import { groupChangelogByTime } from '@/lib/ai/changelog-helpers';
 import { chatMessagesToUIMessages, getMessageMetadata } from '@/lib/ai/message-helpers';
 import { getModelById } from '@/lib/ai/models-config';
-import type { ParticipantConfig } from '@/lib/schemas/chat-forms';
 
 /**
  * Public Chat Thread Screen - Client Component
@@ -40,7 +38,6 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
 
   // Memoize derived data to prevent unnecessary re-renders
   const serverMessages = useMemo(() => threadResponse?.messages || [], [threadResponse]);
-  const rawParticipants = useMemo(() => threadResponse?.participants || [], [threadResponse]);
   const changelog = useMemo(() => threadResponse?.changelog || [], [threadResponse]);
 
   // Thread owner information (available for future use, e.g., displaying author credits)
@@ -48,20 +45,6 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
 
   // Convert server messages to AI SDK format using the same helper as ChatThreadScreen
   const messages: UIMessage[] = useMemo(() => chatMessagesToUIMessages(serverMessages), [serverMessages]);
-
-  // Convert participants to ParticipantConfig format for ParticipantsPreview
-  const participantConfigs = useMemo<ParticipantConfig[]>(() => {
-    return rawParticipants
-      .filter(p => p.isEnabled)
-      .sort((a, b) => a.priority - b.priority)
-      .map((p, index) => ({
-        id: p.id,
-        modelId: p.modelId,
-        role: p.role,
-        customRoleId: p.customRoleId || undefined,
-        order: index,
-      }));
-  }, [rawParticipants]);
 
   // Create a merged timeline of messages and grouped changelog entries
   // Sort by creation time to show configuration changes at the right points
@@ -302,19 +285,6 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
         </ConversationContent>
         <ConversationScrollButton aria-label={t('chat.actions.scrollToBottom')} />
       </Conversation>
-
-      {/* ✅ Participants Preview (read-only, no streaming state) - Same as ChatThreadScreen - Glass design */}
-      {participantConfigs.length > 0 && (
-        <div className="sticky bottom-0 z-10 mt-auto">
-          <div className="w-full max-w-full sm:max-w-3xl lg:max-w-4xl mx-auto px-3 sm:px-4 md:px-6 lg:px-8 py-4">
-            <ParticipantsPreview
-              participants={participantConfigs}
-              isStreaming={false}
-              chatMessages={messages}
-            />
-          </div>
-        </div>
-      )}
     </div>
   );
 }

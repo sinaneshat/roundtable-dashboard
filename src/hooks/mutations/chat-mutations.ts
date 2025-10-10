@@ -413,11 +413,18 @@ export function useUpdateParticipantMutation() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ participantId, data }: Parameters<typeof updateParticipantService>[0] extends string ? { participantId: string; data: Parameters<typeof updateParticipantService>[1] } : never) =>
+    mutationFn: ({ participantId, data }: Parameters<typeof updateParticipantService>[0] extends string ? { participantId: string; data: Parameters<typeof updateParticipantService>[1]; threadId?: string } : never) =>
       updateParticipantService(participantId, data),
-    onSuccess: () => {
-      // Invalidate all thread data (we don't know which thread the participant belongs to)
-      queryClient.invalidateQueries({ queryKey: queryKeys.threads.all });
+    onSuccess: (_data, variables) => {
+      // If threadId is provided, use specific invalidation (includes changelog)
+      if (variables.threadId) {
+        invalidationPatterns.threadDetail(variables.threadId).forEach((key) => {
+          queryClient.invalidateQueries({ queryKey: key });
+        });
+      } else {
+        // Fallback: Invalidate all thread data (we don't know which thread the participant belongs to)
+        queryClient.invalidateQueries({ queryKey: queryKeys.threads.all });
+      }
     },
     onError: (error) => {
       if (process.env.NODE_ENV === 'development') {
@@ -439,10 +446,18 @@ export function useDeleteParticipantMutation() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: deleteParticipantService,
-    onSuccess: () => {
-      // Invalidate all thread data
-      queryClient.invalidateQueries({ queryKey: queryKeys.threads.all });
+    mutationFn: ({ participantId }: { participantId: string; threadId?: string }) =>
+      deleteParticipantService(participantId),
+    onSuccess: (_data, variables) => {
+      // If threadId is provided, use specific invalidation (includes changelog)
+      if (variables.threadId) {
+        invalidationPatterns.threadDetail(variables.threadId).forEach((key) => {
+          queryClient.invalidateQueries({ queryKey: key });
+        });
+      } else {
+        // Fallback: Invalidate all thread data
+        queryClient.invalidateQueries({ queryKey: queryKeys.threads.all });
+      }
     },
     onError: (error) => {
       if (process.env.NODE_ENV === 'development') {

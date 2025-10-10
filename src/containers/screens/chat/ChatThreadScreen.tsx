@@ -1,5 +1,6 @@
 'use client';
 
+import { useQueryClient } from '@tanstack/react-query';
 import type { UIMessage } from 'ai';
 import { RefreshCcwIcon } from 'lucide-react';
 import { useTranslations } from 'next-intl';
@@ -20,6 +21,7 @@ import { ModelMessageCard } from '@/components/chat/model-message-card';
 import { RoundBranchSelector } from '@/components/chat/round-branch-selector';
 import { StreamingParticipantsLoader } from '@/components/chat/streaming-participants-loader';
 import { useThreadHeader } from '@/components/chat/thread-header-context';
+import { useThreadChangelogQuery } from '@/hooks/queries/chat-threads';
 import { useChatStreaming } from '@/hooks/utils/use-chat-streaming';
 import { getAvatarPropsFromModelId } from '@/lib/ai/avatar-helpers';
 import { groupChangelogByTime } from '@/lib/ai/changelog-helpers';
@@ -34,6 +36,7 @@ import {
 import { getModelById } from '@/lib/ai/models-config';
 import { useSession } from '@/lib/auth/client';
 import type { ChatModeId } from '@/lib/config/chat-modes';
+import { invalidationPatterns } from '@/lib/data/query-keys';
 import type { ParticipantConfig } from '@/lib/schemas/chat-forms';
 
 type ChatThreadScreenProps = {
@@ -41,7 +44,7 @@ type ChatThreadScreenProps = {
   participants: ChatParticipant[];
   initialMessages: ChatMessage[];
   memories: ChatMemory[];
-  changelog: ChatThreadChangelog[];
+  initialChangelog: ChatThreadChangelog[]; // ✅ Renamed: Only for SSR, real data comes from query
   slug: string;
 };
 
@@ -55,6 +58,7 @@ type ChatThreadScreenProps = {
  * ✅ Simple message mapping - no complex grouping
  * ✅ Messages appear immediately as they're added to state
  * ✅ Direct rendering following AI SDK docs exactly
+ * ✅ Real-time changelog updates via TanStack Query
  *
  * See: https://ai-sdk.dev/elements/components/message
  */
@@ -63,12 +67,20 @@ export default function ChatThreadScreen({
   participants,
   initialMessages,
   memories,
-  changelog,
+  initialChangelog,
   slug,
 }: ChatThreadScreenProps) {
   const t = useTranslations('chat');
   const { data: session } = useSession();
   const { setThreadActions, setThreadTitle } = useThreadHeader();
+  const queryClient = useQueryClient();
+
+  // ✅ Fetch changelog reactively - updates when configuration changes happen
+  const { data: changelogResponse } = useThreadChangelogQuery(thread.id);
+  const changelog = useMemo(
+    () => (changelogResponse?.success ? changelogResponse.data.changelog || [] : initialChangelog),
+    [changelogResponse, initialChangelog],
+  );
 
   // ✅ Thread action state
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -161,8 +173,9 @@ export default function ChatThreadScreen({
 
   // ✅ Removed fetchedVariantsRef - no longer needed since variants are pre-loaded
 
-  // ✅ Refetch messages from backend after streaming completes
+  // ✅ Refetch messages and changelog from backend after streaming completes
   // This ensures we get real backend message IDs, participantIds, and parentMessageIds for variant support
+  // ALSO invalidates changelog to show any configuration changes that occurred during streaming
   const previousStatusRef = useRef<typeof status>('ready');
   useEffect(() => {
     const didJustFinishStreaming = previousStatusRef.current === 'streaming' && status === 'ready';
@@ -172,12 +185,13 @@ export default function ChatThreadScreen({
       return;
     }
 
-    // Streaming just completed - refetch messages from backend to get real data
-    console.warn('[ChatThreadScreen] Streaming completed - refetching messages from backend');
+    // Streaming just completed - refetch messages and invalidate changelog
+    console.warn('[ChatThreadScreen] Streaming completed - refetching messages and changelog from backend');
 
-    const refetchMessages = async () => {
+    const refetchData = async () => {
       try {
         const { getThreadService } = await import('@/services/api/chat-threads');
+
         const result = await getThreadService(thread.id);
 
         if (result.success && result.data?.messages) {
@@ -188,13 +202,19 @@ export default function ChatThreadScreen({
 
           // Variants are already included in message metadata from server
         }
+
+        // ✅ CRITICAL: Invalidate thread detail queries (includes changelog) to show config changes
+        // This triggers refetch of changelog query which will show new entries created during streaming
+        invalidationPatterns.threadDetail(thread.id).forEach((key) => {
+          queryClient.invalidateQueries({ queryKey: key });
+        });
       } catch (error) {
         console.error('[ChatThreadScreen] Failed to refetch messages after streaming:', error);
       }
     };
 
-    refetchMessages();
-  }, [status, thread.id]);
+    refetchData();
+  }, [status, thread.id, queryClient]);
 
   // ✅ Handle sending new message
   const handleSubmit = useCallback(
