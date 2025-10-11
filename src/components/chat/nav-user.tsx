@@ -1,6 +1,6 @@
 'use client';
 
-import { BadgeCheck, ChevronsUpDown, CreditCard, Key, Loader2, LogOut, Sparkles, X } from 'lucide-react';
+import { ChevronsUpDown, CreditCard, Key, Loader2, LogOut, Sparkles } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
@@ -9,7 +9,6 @@ import { useState } from 'react';
 import { CancelSubscriptionDialog } from '@/components/chat/cancel-subscription-dialog';
 import { ApiKeysModal } from '@/components/modals/api-keys-modal';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Badge } from '@/components/ui/badge';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -25,11 +24,6 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from '@/components/ui/sidebar';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
 import {
   useCancelSubscriptionMutation,
   useCreateCustomerPortalSessionMutation,
@@ -91,10 +85,6 @@ export function NavUser() {
     }
   };
 
-  const handleOpenCancelDialog = () => {
-    setShowCancelDialog(true);
-  };
-
   const handleConfirmCancellation = async () => {
     if (!activeSubscription)
       return;
@@ -115,18 +105,9 @@ export function NavUser() {
     }
   };
 
-  // Get subscription tier and cancellation status
+  // Get subscription tier
   const subscriptionTier = usageData?.success ? usageData.data.subscription.tier : 'free';
   const isPremium = subscriptionTier !== 'free';
-  const isCanceled = activeSubscription?.cancelAtPeriodEnd ?? false;
-  const endDate = activeSubscription?.currentPeriodEnd;
-  const formattedEndDate = endDate
-    ? new Date(endDate).toLocaleDateString(undefined, {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-      })
-    : null;
 
   return (
     <>
@@ -177,39 +158,6 @@ export function NavUser() {
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
 
-              {/* Subscription Status - Only show for premium users */}
-              {isPremium && (
-                <>
-                  <DropdownMenuGroup>
-                    <DropdownMenuItem disabled className="cursor-default focus:bg-transparent">
-                      <BadgeCheck className="text-primary" />
-                      <div className="flex flex-1 items-center justify-between gap-2">
-                        <span className="font-medium capitalize">
-                          {subscriptionTier}
-                          {' '}
-                          {t('usage.plan')}
-                        </span>
-                        {isCanceled && (
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Badge variant="destructive" className="text-[10px]">
-                                {t('billing.status.canceled')}
-                              </Badge>
-                            </TooltipTrigger>
-                            <TooltipContent className="max-w-xs" side="left">
-                              <p className="text-sm">
-                                {t('billing.status.canceledTooltip', { date: formattedEndDate || t('billing.status.endOfPeriod') })}
-                              </p>
-                            </TooltipContent>
-                          </Tooltip>
-                        )}
-                      </div>
-                    </DropdownMenuItem>
-                  </DropdownMenuGroup>
-                  <DropdownMenuSeparator />
-                </>
-              )}
-
               {/* Account Actions */}
               <DropdownMenuGroup>
                 <DropdownMenuItem asChild>
@@ -223,41 +171,33 @@ export function NavUser() {
                   API Keys
                 </DropdownMenuItem>
               </DropdownMenuGroup>
-              <DropdownMenuSeparator />
 
-              {/* Billing Actions */}
-              <DropdownMenuGroup>
-                <DropdownMenuItem
-                  onClick={handleManageBilling}
-                  disabled={customerPortalMutation.isPending || cancelSubscriptionMutation.isPending}
-                >
-                  {customerPortalMutation.isPending
-                    ? (
-                        <>
-                          <Loader2 className="size-4 animate-spin" />
-                          {t('pricing.card.processing')}
-                        </>
-                      )
-                    : (
-                        <>
-                          <CreditCard />
-                          {t('pricing.card.manageBilling')}
-                        </>
-                      )}
-                </DropdownMenuItem>
-
-                {/* Cancel subscription - only for paid plans */}
-                {isPremium && activeSubscription && (
-                  <DropdownMenuItem
-                    onClick={handleOpenCancelDialog}
-                    disabled={customerPortalMutation.isPending}
-                    className="text-destructive focus:text-destructive"
-                  >
-                    <X />
-                    {t('pricing.card.cancelSubscription')}
-                  </DropdownMenuItem>
-                )}
-              </DropdownMenuGroup>
+              {/* Billing Actions - Only show for users with active subscriptions */}
+              {activeSubscription && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuGroup>
+                    <DropdownMenuItem
+                      onClick={handleManageBilling}
+                      disabled={customerPortalMutation.isPending || cancelSubscriptionMutation.isPending}
+                    >
+                      {customerPortalMutation.isPending
+                        ? (
+                            <>
+                              <Loader2 className="size-4 animate-spin" />
+                              {t('pricing.card.processing')}
+                            </>
+                          )
+                        : (
+                            <>
+                              <CreditCard />
+                              {t('pricing.card.manageBilling')}
+                            </>
+                          )}
+                    </DropdownMenuItem>
+                  </DropdownMenuGroup>
+                </>
+              )}
 
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={handleSignOut}>

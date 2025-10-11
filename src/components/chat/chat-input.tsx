@@ -79,13 +79,14 @@ export function ChatInput({
   const isDisabled = disabled || status !== 'ready';
 
   return (
-    <div className={cn('space-y-2', className)}>
-      {/* OFFICIAL PATTERN: Simple HTML form - Glass design */}
+    <div className={cn('', className)}>
+      {/* OFFICIAL PATTERN: Simple HTML form - Glass design with enhanced shadows */}
       <form
         onSubmit={onSubmit}
         className={cn(
           chatGlass.inputBox,
           'rounded-lg',
+          'shadow-2xl', // Enhanced shadow for visibility on black backgrounds
         )}
       >
         <div className="flex flex-col gap-2">
@@ -141,11 +142,6 @@ export function ChatInput({
           </div>
         </div>
       </form>
-
-      {/* Help Text */}
-      <p className="text-xs text-center text-muted-foreground">
-        {t('chat.input.helpText')}
-      </p>
     </div>
   );
 }

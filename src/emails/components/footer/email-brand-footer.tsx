@@ -1,6 +1,7 @@
 import { Column, Row, Section } from '@react-email/components';
 import type { CSSProperties, ReactNode } from 'react';
 
+import { BRAND } from '@/constants/brand';
 import { colors, spacing } from '@/emails/design-tokens';
 
 import { EmailLink } from '../content/email-link';
@@ -20,11 +21,11 @@ type EmailBrandFooterProps = {
 // Simple minimal footer
 
 export function EmailBrandFooter({
-  companyName = 'Roundtable',
+  companyName = BRAND.displayName,
   unsubscribeUrl,
   privacyUrl,
   termsUrl,
-  contactEmail = 'support@roundtable.now',
+  contactEmail = BRAND.support,
   style,
   children,
 }: EmailBrandFooterProps) {

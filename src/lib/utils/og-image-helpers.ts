@@ -14,6 +14,7 @@
 import { Buffer } from 'node:buffer';
 
 import { BRAND } from '@/constants/brand';
+import { getModelIconInfo } from '@/lib/ai/provider-icons';
 
 /**
  * Get the base URL for the application
@@ -78,52 +79,48 @@ export async function getBase64Image(relativePath: string): Promise<string> {
 
 /**
  * Get model icon path from model ID
- * Maps OpenRouter model IDs to local icon files
+ * Uses comprehensive provider icon mapping from provider-icons.ts
  *
  * Model ID format: "provider/model-name"
- * Icon path: "public/static/icons/ai-models/{provider}.png"
+ * Icon path: Resolved from getModelIconInfo utility
  *
  * @param modelId - OpenRouter model ID (e.g., "anthropic/claude-3.5-sonnet")
  * @returns Base64 data URL for the model icon
  */
 export async function getModelIconBase64(modelId: string): Promise<string> {
-  const provider = getProviderFromModelId(modelId);
-  const iconPath = `public/static/icons/ai-models/${provider}.png`;
-
   try {
+    // Use comprehensive provider icon utilities
+    const { icon } = getModelIconInfo(modelId);
+
+    // Convert public path to fetch path (remove leading slash)
+    const iconPath = icon.startsWith('/') ? `public${icon}` : `public/${icon}`;
+
     return await getBase64Image(iconPath);
   } catch (error) {
     console.error(`Failed to load icon for model: ${modelId}`, error);
-    // Fallback: return a default icon or empty string
-    return '';
+    // Fallback: try to load OpenRouter default icon
+    try {
+      return await getBase64Image('public/static/icons/ai-models/openrouter.png');
+    } catch {
+      return '';
+    }
   }
 }
 
 /**
  * Extract provider name from OpenRouter model ID
+ * ⚠️ DEPRECATED: Use getModelIconInfo from '@/lib/ai/provider-icons' instead
+ *
+ * This function is kept for backward compatibility but should not be used in new code.
+ * The comprehensive provider mapping is now in provider-icons.ts
  *
  * @param modelId - OpenRouter model ID (e.g., "anthropic/claude-3.5-sonnet")
  * @returns Provider name (e.g., "anthropic")
+ * @deprecated Use getModelIconInfo from provider-icons.ts for comprehensive provider support
  */
 export function getProviderFromModelId(modelId: string): string {
-  const [provider] = modelId.split('/');
-
-  if (!provider) {
-    return 'unknown';
-  }
-
-  // Map provider prefixes to icon filenames
-  const providerMap: Record<string, string> = {
-    'anthropic': 'anthropic',
-    'openai': 'openai',
-    'google': 'gemini',
-    'meta-llama': 'meta',
-    'deepseek': 'deepseek',
-    'x-ai': 'xai',
-    'perplexity': 'perplexity',
-  };
-
-  return providerMap[provider] || provider;
+  const { provider } = getModelIconInfo(modelId);
+  return provider;
 }
 
 /**

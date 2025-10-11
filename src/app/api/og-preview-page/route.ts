@@ -6,6 +6,8 @@
  */
 import { NextResponse } from 'next/server';
 
+import { BRAND } from '@/constants/brand';
+
 export async function GET() {
   const html = `
 <!DOCTYPE html>
@@ -13,7 +15,7 @@ export async function GET() {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>OG Image Preview - Roundtable</title>
+  <title>OG Image Preview - ${BRAND.displayName}</title>
   <style>
     * {
       margin: 0;

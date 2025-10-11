@@ -6,7 +6,7 @@ import { RefreshCcwIcon } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import type { ChatMemory, ChatMessage, ChatParticipant, ChatThread, ChatThreadChangelog } from '@/api/routes/chat/schema';
+import type { ChatMemory, ChatMessage, ChatParticipant, ChatThread } from '@/api/routes/chat/schema';
 import { Action, Actions } from '@/components/ai-elements/actions';
 import { Message, MessageAvatar, MessageContent } from '@/components/ai-elements/message';
 import { Response } from '@/components/ai-elements/response';
@@ -14,7 +14,7 @@ import { ChatDeleteDialog } from '@/components/chat/chat-delete-dialog';
 import { ChatInput } from '@/components/chat/chat-input';
 import { ChatMemoriesList } from '@/components/chat/chat-memories-list';
 import { ChatModeSelector } from '@/components/chat/chat-mode-selector';
-import { ChatParticipantsList, ParticipantsPreview } from '@/components/chat/chat-participants-list';
+import { ChatParticipantsList } from '@/components/chat/chat-participants-list';
 import { ChatThreadActions } from '@/components/chat/chat-thread-actions';
 import { ConfigurationChangesGroup } from '@/components/chat/configuration-changes-group';
 import { ModelMessageCard } from '@/components/chat/model-message-card';
@@ -22,6 +22,7 @@ import { RoundBranchSelector } from '@/components/chat/round-branch-selector';
 import { StreamingParticipantsLoader } from '@/components/chat/streaming-participants-loader';
 import { useThreadHeader } from '@/components/chat/thread-header-context';
 import { useThreadChangelogQuery } from '@/hooks/queries/chat-threads';
+import { useUsageStatsQuery } from '@/hooks/queries/usage';
 import { useChatStreaming } from '@/hooks/utils/use-chat-streaming';
 import { getAvatarPropsFromModelId } from '@/lib/ai/avatar-helpers';
 import { groupChangelogByTime } from '@/lib/ai/changelog-helpers';
@@ -33,7 +34,7 @@ import {
   getRoundForMessage,
   isLastMessageInRound,
 } from '@/lib/ai/message-helpers';
-import { getModelById } from '@/lib/ai/models-config';
+import { canAccessModel, getModelById } from '@/lib/ai/models-config';
 import { useSession } from '@/lib/auth/client';
 import type { ChatModeId } from '@/lib/config/chat-modes';
 import { invalidationPatterns } from '@/lib/data/query-keys';
@@ -44,7 +45,6 @@ type ChatThreadScreenProps = {
   participants: ChatParticipant[];
   initialMessages: ChatMessage[];
   memories: ChatMemory[];
-  initialChangelog: ChatThreadChangelog[]; // ✅ Renamed: Only for SSR, real data comes from query
   slug: string;
 };
 
@@ -67,7 +67,6 @@ export default function ChatThreadScreen({
   participants,
   initialMessages,
   memories,
-  initialChangelog,
   slug,
 }: ChatThreadScreenProps) {
   const t = useTranslations('chat');
@@ -75,12 +74,16 @@ export default function ChatThreadScreen({
   const { setThreadActions, setThreadTitle } = useThreadHeader();
   const queryClient = useQueryClient();
 
-  // ✅ Fetch changelog reactively - updates when configuration changes happen
+  // ✅ Fetch changelog reactively - prefetched on server, updates when configuration changes happen
   const { data: changelogResponse } = useThreadChangelogQuery(thread.id);
   const changelog = useMemo(
-    () => (changelogResponse?.success ? changelogResponse.data.changelog || [] : initialChangelog),
-    [changelogResponse, initialChangelog],
+    () => (changelogResponse?.success ? changelogResponse.data.changelog || [] : []),
+    [changelogResponse],
   );
+
+  // ✅ DYNAMIC PRICING: Fetch user tier for access control
+  const { data: usageData } = useUsageStatsQuery();
+  const userTier = usageData?.success ? usageData.data.subscription.tier : 'free';
 
   // ✅ Thread action state
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -566,6 +569,9 @@ export default function ChatThreadScreen({
             return null;
           }
 
+          // ✅ DYNAMIC PRICING: Check if user can access this model at their current tier
+          const isAccessible = canAccessModel(userTier, model.modelId);
+
           // ✅ Check for error using typed metadata (already declared above)
           // Type-safe error detection following AI SDK error handling pattern
           const hasError = metadata?.hasError === true || !!metadata?.error;
@@ -607,6 +613,7 @@ export default function ChatThreadScreen({
                 avatarSrc={avatarProps.src}
                 avatarName={avatarProps.name}
                 metadata={metadata ?? null}
+                isAccessible={isAccessible} // ✅ DYNAMIC PRICING: Show tier badge if not accessible
               />
 
               {/* ✅ Show round actions (regenerate + branch selector) after the last message in a round */}
@@ -653,17 +660,6 @@ export default function ChatThreadScreen({
       {/* ✅ STICKY INPUT - Liquid Glass design with content scrolling underneath */}
       <div className="sticky bottom-0 z-10 mt-auto">
         <div className="w-full max-w-full sm:max-w-3xl lg:max-w-4xl mx-auto px-3 sm:px-4 md:px-6 lg:px-8 py-4">
-          {/* Participants Preview - shows status during streaming */}
-          {selectedParticipants.length > 0 && (
-            <ParticipantsPreview
-              participants={selectedParticipants}
-              isStreaming={status === 'streaming'}
-              currentParticipantIndex={streamingState.participantIndex ?? undefined}
-              chatMessages={messages}
-              className="mb-4"
-            />
-          )}
-
           {/* ✅ Chat input with mode selector in toolbar - Glass design */}
           <ChatInput
             value={inputValue}

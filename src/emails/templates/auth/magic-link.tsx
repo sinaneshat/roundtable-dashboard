@@ -1,3 +1,4 @@
+import { BRAND } from '@/constants/brand';
 import {
   EmailBody,
   EmailButton,
@@ -28,7 +29,7 @@ export function MagicLink({
   requestIp,
   requestLocation,
 }: MagicLinkProps) {
-  const previewText = 'Your secure login link for Roundtable';
+  const previewText = `Your secure login link for ${BRAND.displayName}`;
 
   return (
     <EmailLayout>
@@ -40,7 +41,7 @@ export function MagicLink({
           <EmailHeading level={1}>
             Sign in to
             {' '}
-            <strong>Roundtable</strong>
+            <strong>{BRAND.displayName}</strong>
           </EmailHeading>
 
           <EmailText>

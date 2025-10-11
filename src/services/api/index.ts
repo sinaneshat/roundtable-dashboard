@@ -155,6 +155,23 @@ export {
 // ============================================================================
 
 export {
+  clearModelsCacheService,
+  type GetModelRequest,
+  type GetModelResponse,
+  getModelService,
+  type ListModelsRequest,
+  type ListModelsResponse,
+  listModelsService,
+  type ListProvidersRequest,
+  type ListProvidersResponse,
+  listProvidersService,
+} from './models';
+
+// ============================================================================
+// Chat Memories Service Exports
+// ============================================================================
+
+export {
   type GetProductRequest,
   type GetProductResponse,
   getProductService,
@@ -164,7 +181,7 @@ export {
 } from './products';
 
 // ============================================================================
-// Chat Memories Service Exports
+// Message Variants Service Exports
 // ============================================================================
 
 export {
@@ -177,7 +194,7 @@ export {
 } from './subscription-management';
 
 // ============================================================================
-// Message Variants Service Exports
+// Chat Custom Roles Service Exports
 // ============================================================================
 
 export {
@@ -190,7 +207,7 @@ export {
 } from './subscriptions';
 
 // ============================================================================
-// Chat Custom Roles Service Exports
+// Models Service Exports (Dynamic OpenRouter Models)
 // ============================================================================
 
 export {

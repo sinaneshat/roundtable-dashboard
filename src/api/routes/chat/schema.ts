@@ -605,6 +605,52 @@ const MessagesListPayloadSchema = z.object({
 export const MessagesListResponseSchema = createApiResponseSchema(MessagesListPayloadSchema).openapi('MessagesListResponse');
 
 // ============================================================================
+// Helper Schemas (Service Layer)
+// ============================================================================
+
+/**
+ * Roundtable System Prompt Parameters Schema
+ * Used by chat handler to build context-aware prompts for multi-model discussions
+ * ✅ Zod-first: Single source of truth for prompt building
+ */
+export const RoundtablePromptParamsSchema = z.object({
+  mode: z.string().openapi({
+    description: 'Chat mode (debating, analyzing, brainstorming, etc.)',
+    example: 'debating',
+  }),
+  participantIndex: z.number().int().nonnegative().openapi({
+    description: 'Index of the current participant in the participants array',
+    example: 0,
+  }),
+  participantRole: z.string().nullable().openapi({
+    description: 'Role assigned to this participant',
+    example: 'The Ideator',
+  }),
+  participants: z.array(z.object({
+    role: z.string().nullable(),
+    modelId: z.string(),
+  })).optional().openapi({
+    description: 'All participants in the discussion',
+  }),
+  otherParticipants: z.array(z.object({
+    index: z.number().int().optional(),
+    role: z.string().nullable(),
+    modelId: z.string().optional(),
+  })).optional().openapi({
+    description: 'Other participants (excluding current)',
+  }),
+  memories: z.array(z.object({
+    title: z.string(),
+    content: z.string(),
+  })).optional().openapi({
+    description: 'Relevant memory contexts to include in prompt',
+  }),
+  customSystemPrompt: z.string().nullable().optional().openapi({
+    description: 'Custom system prompt override',
+  }),
+}).openapi('RoundtablePromptParams');
+
+// ============================================================================
 // Memory Request/Response Schemas
 // ============================================================================
 // Note: ChatMemorySchema moved before ThreadDetailPayloadSchema (line 346)
@@ -807,3 +853,5 @@ export type CreateCustomRoleRequest = z.infer<typeof CreateCustomRoleRequestSche
 export type UpdateCustomRoleRequest = z.infer<typeof UpdateCustomRoleRequestSchema>;
 
 export type ChatThreadChangelog = z.infer<typeof ChatThreadChangelogSchema>;
+
+export type RoundtablePromptParams = z.infer<typeof RoundtablePromptParamsSchema>;

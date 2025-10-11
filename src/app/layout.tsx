@@ -33,7 +33,7 @@ export async function generateMetadata(): Promise<Metadata> {
       'ChatGPT',
       'Claude',
       'Gemini',
-      'roundtable discussion',
+      `${BRAND.displayName} discussion`,
       'AI chat',
       'collaborative AI',
       'team productivity',
@@ -59,7 +59,7 @@ export default async function Layout({ children, modal }: RootLayoutProps) {
       <head>
         {/* 2025 AI Search Optimization - Answer Engine Optimization */}
         <AeoMetaTags
-          primaryQuestion="What is Roundtable?"
+          primaryQuestion={`What is ${BRAND.displayName}?`}
           primaryAnswer="A collaborative AI platform where multiple AI models work together to brainstorm, solve problems, and generate ideas in real-time conversations."
           contentType="guide"
           entities={[
@@ -74,7 +74,7 @@ export default async function Layout({ children, modal }: RootLayoutProps) {
           relatedQuestions={[
             'How does AI collaboration work?',
             'What are the benefits of multiple AI models?',
-            'How to use Roundtable for brainstorming?',
+            `How to use ${BRAND.displayName} for brainstorming?`,
           ]}
         />
       </head>

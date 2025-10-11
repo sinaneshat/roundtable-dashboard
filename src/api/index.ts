@@ -123,6 +123,19 @@ import {
   updateParticipantRoute,
   updateThreadRoute,
 } from './routes/chat/route';
+// Models routes (dynamic OpenRouter models)
+import {
+  handleClearCache,
+  handleGetModel,
+  handleListModels,
+  handleListProviders,
+} from './routes/models/handler';
+import {
+  clearCacheRoute,
+  getModelRoute,
+  listModelsRoute,
+  listProvidersRoute,
+} from './routes/models/route';
 // System/health routes
 import {
   detailedHealthHandler,
@@ -368,6 +381,11 @@ const appRoutes = app
   .openapi(checkMessageQuotaRoute, checkMessageQuotaHandler)
   .openapi(checkMemoryQuotaRoute, checkMemoryQuotaHandler)
   .openapi(checkCustomRoleQuotaRoute, checkCustomRoleQuotaHandler)
+  // Models routes (dynamic OpenRouter models - public)
+  .openapi(listModelsRoute, handleListModels)
+  .openapi(getModelRoute, handleGetModel)
+  .openapi(listProvidersRoute, handleListProviders)
+  .openapi(clearCacheRoute, handleClearCache)
 ;
 
 // ============================================================================
@@ -399,6 +417,7 @@ appRoutes.doc('/doc', c => ({
     { name: 'billing', description: 'Stripe billing, subscriptions, and payments' },
     { name: 'chat', description: 'Multi-model AI chat threads, messages, and memories' },
     { name: 'usage', description: 'Usage tracking and quota management' },
+    { name: 'models', description: 'Dynamic OpenRouter AI models discovery and management' },
   ],
   servers: [
     {

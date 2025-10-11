@@ -138,11 +138,11 @@ class EmailService {
       loginUrl: magicLink,
     }));
 
-    const text = `Sign in to ${BRAND.name} using this link: ${magicLink}`;
+    const text = `Sign in to ${BRAND.displayName} using this link: ${magicLink}`;
 
     return this.sendEmail({
       to,
-      subject: `Your sign-in link - ${BRAND.name}`,
+      subject: `Your sign-in link - ${BRAND.displayName}`,
       html,
       text,
     });

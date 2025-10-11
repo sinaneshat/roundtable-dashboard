@@ -1,214 +1,201 @@
 'use client';
 
-import { AlertCircle, ArrowDownCircle, ArrowUpCircle, Clock, MessageSquare, MessagesSquare } from 'lucide-react';
+import { ArrowUpCircle, ChevronDown, Clock, MessageSquare, MessagesSquare } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
+import { useState } from 'react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Progress } from '@/components/ui/progress';
-import { useSidebar } from '@/components/ui/sidebar';
+import { SidebarMenu, SidebarMenuItem } from '@/components/ui/sidebar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useUsageStatsQuery } from '@/hooks/queries';
 import { cn } from '@/lib/ui/cn';
 
 /**
- * UsageMetrics Component
+ * UsageMetrics Component - Minimal Design
  *
- * Displays user's current usage statistics for threads and messages
- * Shows progress bars and remaining quota
- * Non-clickable - only shows upgrade button when quota is maxed out
- * Positioned above the profile icon in the sidebar
+ * Shows a subtle, collapsible view of usage statistics
+ * Collapsed by default to reduce visual noise
+ * Expands to show detailed usage when needed
  */
 export function UsageMetrics() {
   const t = useTranslations();
   const router = useRouter();
-  const { state } = useSidebar();
   const { data: usageData, isLoading, isError } = useUsageStatsQuery();
+  const [isOpen, setIsOpen] = useState(false);
 
-  const isCollapsed = state === 'collapsed';
-
-  // Loading state
+  // Loading state - minimal skeleton
   if (isLoading) {
     return (
-      <div className={cn('px-2 py-3', isCollapsed && 'px-2')}>
-        <div className="space-y-3">
-          <Skeleton className="h-4 w-full" />
-          <Skeleton className="h-2 w-full" />
-          <Skeleton className="h-4 w-full" />
-          <Skeleton className="h-2 w-full" />
-        </div>
-      </div>
+      <SidebarMenu className="group-data-[collapsible=icon]:hidden">
+        <SidebarMenuItem>
+          <Skeleton className="h-9 w-full rounded-md" />
+        </SidebarMenuItem>
+      </SidebarMenu>
     );
   }
 
-  // Error state
+  // Error state - hide completely on error
   if (isError || !usageData?.success) {
-    return (
-      <div className={cn('px-2 py-3', isCollapsed && 'hidden')}>
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <AlertCircle className="size-4" />
-          <span>{t('usage.errorLoading')}</span>
-        </div>
-      </div>
-    );
+    return null;
   }
 
   const usage = usageData.data;
 
-  // Collapsed state - show minimal icons with tooltips
-  if (isCollapsed) {
-    return (
-      <div className="flex flex-col items-center gap-2 px-2 py-3">
-        <div className="flex size-8 items-center justify-center rounded-md bg-sidebar-accent">
-          <MessagesSquare className="size-4" />
-        </div>
-      </div>
-    );
-  }
-
-  // Calculate if user is approaching limits (80% or more) or maxed out (100%)
+  // Calculate warning states
   const threadsWarning = usage.threads.percentage >= 80;
   const messagesWarning = usage.messages.percentage >= 80;
   const threadsMaxedOut = usage.threads.percentage >= 100;
   const messagesMaxedOut = usage.messages.percentage >= 100;
   const isMaxedOut = threadsMaxedOut || messagesMaxedOut;
+  const hasWarning = threadsWarning || messagesWarning;
 
   const handleUpgrade = () => {
     router.push('/chat/pricing');
   };
 
+  // Determine if user has premium tier
+  const isPremiumTier = usage.subscription.tier !== 'free';
+
   return (
-    <div className="px-2 py-3">
-      <div className="space-y-3">
-        {/* Threads Usage */}
-        <div className="space-y-1.5">
-          <div className="flex items-center justify-between text-xs">
-            <div className="flex items-center gap-1.5">
-              <MessagesSquare className="size-3.5" />
-              <span className="font-medium">{t('usage.threads')}</span>
-            </div>
-            <span className={cn(
-              'font-mono text-[10px]',
-              threadsWarning ? 'text-destructive' : 'text-muted-foreground',
-            )}
+    <SidebarMenu className="group-data-[collapsible=icon]:hidden">
+      <Collapsible open={isOpen} onOpenChange={setIsOpen} asChild>
+        <SidebarMenuItem>
+          {/* Collapsed State - Minimal with Premium Indicator */}
+          <CollapsibleTrigger asChild>
+            <Button
+              variant="ghost"
+              size="sm"
+              className={cn(
+                'w-full justify-between h-9 px-2 text-xs font-normal hover:bg-accent/50 transition-colors',
+                hasWarning && 'text-destructive/80 hover:text-destructive',
+              )}
             >
-              {usage.threads.used}
-              /
-              {usage.threads.limit}
-            </span>
-          </div>
-          <Progress
-            value={usage.threads.percentage}
-            className={cn(
-              'h-1.5',
-              threadsWarning && '[&>*]:bg-destructive',
-            )}
-          />
-          {threadsWarning && (
-            <p className="text-[10px] text-destructive">
-              {usage.threads.remaining}
-              {' '}
-              {t('usage.threadsRemaining')}
-            </p>
-          )}
-        </div>
-
-        {/* Messages Usage */}
-        <div className="space-y-1.5">
-          <div className="flex items-center justify-between text-xs">
-            <div className="flex items-center gap-1.5">
-              <MessageSquare className="size-3.5" />
-              <span className="font-medium">{t('usage.messages')}</span>
-            </div>
-            <span className={cn(
-              'font-mono text-[10px]',
-              messagesWarning ? 'text-destructive' : 'text-muted-foreground',
-            )}
-            >
-              {usage.messages.used}
-              /
-              {usage.messages.limit}
-            </span>
-          </div>
-          <Progress
-            value={usage.messages.percentage}
-            className={cn(
-              'h-1.5',
-              messagesWarning && '[&>*]:bg-destructive',
-            )}
-          />
-          {messagesWarning && (
-            <p className="text-[10px] text-destructive">
-              {usage.messages.remaining}
-              {' '}
-              {t('usage.messagesRemaining')}
-            </p>
-          )}
-        </div>
-
-        {/* Subscription Tier & Period Info */}
-        <div className="flex items-center justify-between text-[10px] text-muted-foreground pt-1">
-          <span className="capitalize">
-            {usage.subscription.tier}
-            {' '}
-            {t('usage.plan')}
-          </span>
-          <span>
-            {usage.period.daysRemaining}
-            {' '}
-            {t('usage.daysLeft')}
-          </span>
-        </div>
-
-        {/* Pending Tier Change Alert */}
-        {usage.subscription.pendingTierChange && (
-          <div className="rounded-lg border border-amber-200 dark:border-amber-900/30 bg-amber-50 dark:bg-amber-950/20 p-2.5 space-y-1.5">
-            <div className="flex items-start gap-2">
-              <Clock className="size-3.5 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
-              <div className="flex-1 min-w-0 space-y-0.5">
-                <p className="text-[10px] font-medium text-amber-900 dark:text-amber-100">
-                  {t('usage.scheduledChange')}
-                </p>
-                <p className="text-[10px] text-amber-700 dark:text-amber-300">
-                  {t('usage.changingTo')}
-                  {' '}
-                  <span className="font-semibold capitalize">
-                    {usage.subscription.pendingTierChange}
+              <div className="flex items-center gap-1.5">
+                <Badge
+                  variant={isPremiumTier ? 'default' : 'outline'}
+                  className={cn(
+                    'text-[10px] px-1.5 py-0 h-4 font-medium capitalize',
+                    !isPremiumTier && 'border-muted-foreground/20',
+                    hasWarning && !isPremiumTier && 'border-destructive/30 text-destructive bg-destructive/5',
+                  )}
+                >
+                  {t(`subscription.tiers.${usage.subscription.tier}`)}
+                </Badge>
+                {hasWarning && (
+                  <span className="text-[9px] text-muted-foreground">
+                    {Math.min(usage.threads.remaining, usage.messages.remaining)}
+                    {' '}
+                    {t('usage.remaining')}
                   </span>
-                  {' '}
-                  {t('usage.onPeriodEnd')}
-                </p>
+                )}
               </div>
-            </div>
-            <Badge
-              variant="outline"
-              className="w-full justify-center text-[9px] h-5 bg-amber-100 dark:bg-amber-900/30 border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300"
-            >
-              <ArrowDownCircle className="size-2.5 mr-1" />
-              {t('usage.keepAccessUntil')}
-              {' '}
-              {new Date(usage.period.end).toLocaleDateString(undefined, {
-                month: 'short',
-                day: 'numeric',
-              })}
-            </Badge>
-          </div>
-        )}
+              <ChevronDown
+                className={cn(
+                  'size-3 text-muted-foreground transition-transform duration-200',
+                  isOpen && 'rotate-180',
+                )}
+              />
+            </Button>
+          </CollapsibleTrigger>
 
-        {/* Upgrade button - only shown when quota is maxed out */}
-        {isMaxedOut && (
-          <Button
-            variant="outline"
-            size="sm"
-            className="w-full rounded-full gap-1.5"
-            onClick={handleUpgrade}
-          >
-            <ArrowUpCircle className="size-3.5" />
-            {t('usage.upgradeNow')}
-          </Button>
-        )}
-      </div>
-    </div>
+          {/* Expanded State - Minimal Design */}
+          <CollapsibleContent className="space-y-2 pt-2 px-2">
+            {/* Threads Usage */}
+            <div className="space-y-1">
+              <div className="flex items-center justify-between text-[10px]">
+                <div className="flex items-center gap-1">
+                  <MessagesSquare className="size-3" />
+                  <span className="text-muted-foreground">{t('usage.threads')}</span>
+                </div>
+                <span className={cn(
+                  'font-mono text-[9px]',
+                  threadsWarning ? 'text-destructive font-medium' : 'text-muted-foreground',
+                )}
+                >
+                  {usage.threads.used}
+                  /
+                  {usage.threads.limit}
+                </span>
+              </div>
+              <Progress
+                value={usage.threads.percentage}
+                className={cn(
+                  'h-1',
+                  threadsWarning && '[&>*]:bg-destructive',
+                )}
+              />
+            </div>
+
+            {/* Messages Usage */}
+            <div className="space-y-1">
+              <div className="flex items-center justify-between text-[10px]">
+                <div className="flex items-center gap-1">
+                  <MessageSquare className="size-3" />
+                  <span className="text-muted-foreground">{t('usage.messages')}</span>
+                </div>
+                <span className={cn(
+                  'font-mono text-[9px]',
+                  messagesWarning ? 'text-destructive font-medium' : 'text-muted-foreground',
+                )}
+                >
+                  {usage.messages.used}
+                  /
+                  {usage.messages.limit}
+                </span>
+              </div>
+              <Progress
+                value={usage.messages.percentage}
+                className={cn(
+                  'h-1',
+                  messagesWarning && '[&>*]:bg-destructive',
+                )}
+              />
+            </div>
+
+            {/* Period Info */}
+            <div className="flex items-center justify-between text-[9px] text-muted-foreground pt-0.5">
+              <span>
+                {usage.period.daysRemaining}
+                {' '}
+                {t('usage.daysLeft')}
+              </span>
+            </div>
+
+            {/* Pending Tier Change Alert - Compact */}
+            {usage.subscription.pendingTierChange && (
+              <div className="rounded-md border border-amber-200/50 dark:border-amber-900/20 bg-amber-50/50 dark:bg-amber-950/10 p-1.5">
+                <div className="flex items-center gap-1.5">
+                  <Clock className="size-3 text-amber-600 dark:text-amber-400 shrink-0" />
+                  <p className="text-[9px] text-amber-700 dark:text-amber-300">
+                    {t('usage.changingTo')}
+                    {' '}
+                    <span className="font-semibold capitalize">
+                      {usage.subscription.pendingTierChange}
+                    </span>
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Upgrade button - minimal, only when maxed out */}
+            {isMaxedOut && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full h-7 rounded-md gap-1 text-[10px]"
+                onClick={handleUpgrade}
+              >
+                <ArrowUpCircle className="size-3" />
+                {t('usage.upgradeNow')}
+              </Button>
+            )}
+          </CollapsibleContent>
+        </SidebarMenuItem>
+      </Collapsible>
+    </SidebarMenu>
   );
 }

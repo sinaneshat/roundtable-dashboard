@@ -255,7 +255,7 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
                         <p className="text-muted-foreground max-w-xl mx-auto text-base">
                           Experience the power of multi-AI collaboration.
                           {' '}
-                          {BRAND.name}
+                          {BRAND.displayName}
                           {' '}
                           {t('chat.public.description')}
                         </p>

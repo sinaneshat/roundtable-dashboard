@@ -27,16 +27,17 @@ import { Response } from '@/components/ai-elements/response';
 import { ChatInput } from '@/components/chat/chat-input';
 import { ChatMemoriesList } from '@/components/chat/chat-memories-list';
 import { ChatModeSelector } from '@/components/chat/chat-mode-selector';
-import { ChatParticipantsList, ParticipantsPreview } from '@/components/chat/chat-participants-list';
+import { ChatParticipantsList } from '@/components/chat/chat-participants-list';
 import { ChatQuickStart } from '@/components/chat/chat-quick-start';
 import { ModelMessageCard } from '@/components/chat/model-message-card';
 import { StreamingParticipantsLoader } from '@/components/chat/streaming-participants-loader';
 import { toast } from '@/components/ui/use-toast';
 import { WavyBackground } from '@/components/ui/wavy-background';
+import { BRAND } from '@/constants/brand';
 import { useCreateThreadMutation } from '@/hooks/mutations/chat-mutations';
 import { getAvatarPropsFromModelId } from '@/lib/ai/avatar-helpers';
 import { getMessageMetadata } from '@/lib/ai/message-helpers';
-import { AllowedModelId, getModelById } from '@/lib/ai/models-config';
+import { getModelById } from '@/lib/ai/models-config';
 import { useSession } from '@/lib/auth/client';
 import type { ChatModeId } from '@/lib/config/chat-modes';
 import type { ParticipantConfig } from '@/lib/schemas/chat-forms';
@@ -51,8 +52,8 @@ export default function ChatOverviewScreen() {
   // Chat configuration state
   const [selectedMode, setSelectedMode] = useState<ChatModeId>(chatInputFormDefaults.mode);
   const [selectedParticipants, setSelectedParticipants] = useState<ParticipantConfig[]>([
-    // Default to cheapest model: Gemini 2.5 Flash ($0.075/M in, $0.30/M out)
-    { id: 'temp-1', modelId: AllowedModelId.GEMINI_2_5_FLASH, role: '', order: 0 },
+    // Default to cheapest model: Gemini Flash
+    { id: 'temp-1', modelId: 'google/gemini-flash-1.5', role: '', order: 0 },
   ]);
   const [selectedMemoryIds, setSelectedMemoryIds] = useState<string[]>([]);
   const [inputValue, setInputValue] = useState('');
@@ -436,8 +437,8 @@ export default function ChatOverviewScreen() {
                       {/* Logo - Smooth scaling across breakpoints */}
                       <div className="relative h-20 w-20 xs:h-24 xs:w-24 sm:h-28 sm:w-28 md:h-32 md:w-32 lg:h-36 lg:w-36">
                         <Image
-                          src="/static/logo.png"
-                          alt="Roundtable Logo"
+                          src={BRAND.logos.main}
+                          alt={`${BRAND.displayName} Logo`}
                           fill
                           sizes="(max-width: 480px) 80px, (max-width: 640px) 96px, (max-width: 768px) 112px, (max-width: 1024px) 128px, 144px"
                           className="object-contain drop-shadow-2xl"
@@ -447,12 +448,12 @@ export default function ChatOverviewScreen() {
 
                       {/* Title - Smooth text scaling */}
                       <h1 className="font-bold text-white drop-shadow-2xl text-2xl xs:text-3xl sm:text-4xl md:text-5xl lg:text-6xl">
-                        roundtable.now
+                        {BRAND.displayName}
                       </h1>
 
                       {/* Subtitle - Smooth text scaling with max-width */}
                       <p className="font-normal text-white/90 drop-shadow-lg text-sm xs:text-base sm:text-lg md:text-xl max-w-2xl">
-                        Where AI models collaborate together
+                        {BRAND.tagline}
                       </p>
                     </motion.div>
                   </div>
@@ -577,20 +578,9 @@ export default function ChatOverviewScreen() {
         </AnimatePresence>
       </div>
 
-      {/* ✅ STICKY INPUT - Relative to dashboard content, not viewport */}
-      <div className="sticky bottom-0 left-0 right-0 z-10 mt-auto">
+      {/* ✅ STICKY INPUT - Matching single chat page exactly */}
+      <div className="sticky bottom-0 z-10 mt-auto">
         <div className="w-full max-w-full sm:max-w-3xl lg:max-w-4xl mx-auto px-3 sm:px-4 md:px-6 lg:px-8 py-4">
-          {/* Participants Preview - shows status during streaming */}
-          {selectedParticipants.length > 0 && (
-            <ParticipantsPreview
-              participants={selectedParticipants}
-              isStreaming={status === 'streaming'}
-              currentParticipantIndex={undefined}
-              chatMessages={messages}
-              className="mb-4"
-            />
-          )}
-
           {/* Chat Input - Glass design, fixed to bottom */}
           <ChatInput
             value={inputValue}

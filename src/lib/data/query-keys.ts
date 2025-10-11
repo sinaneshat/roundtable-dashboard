@@ -108,6 +108,22 @@ export const queryKeys = {
     details: () => [...queryKeys.apiKeys.all, 'detail'] as const,
     detail: (id: string) => QueryKeyFactory.detail('apiKeys', id),
   },
+
+  // OpenRouter Models
+  models: {
+    all: QueryKeyFactory.base('models'),
+    lists: (filters?: { provider?: string; category?: string; freeOnly?: boolean; search?: string; supportsVision?: boolean }) =>
+      filters
+        ? [...queryKeys.models.all, 'list', filters] as const
+        : [...queryKeys.models.all, 'list'] as const,
+    list: (filters?: { provider?: string; category?: string; freeOnly?: boolean; search?: string; supportsVision?: boolean }) =>
+      filters
+        ? QueryKeyFactory.action('models', 'list', JSON.stringify(filters))
+        : QueryKeyFactory.list('models'),
+    details: () => [...queryKeys.models.all, 'detail'] as const,
+    detail: (id: string) => QueryKeyFactory.detail('models', id),
+    providers: () => QueryKeyFactory.action('models', 'providers'),
+  },
 } as const;
 
 /**

@@ -10,7 +10,7 @@
  * - Status management following AI SDK patterns
  *
  * 🎯 APPLICATION-SPECIFIC:
- * - Multi-participant sequential streaming (roundtable feature)
+ * - Multi-participant sequential streaming (Roundtable feature)
  * - Participant state synchronization
  *
  * Simplified from 312 lines → ~150 lines by removing:

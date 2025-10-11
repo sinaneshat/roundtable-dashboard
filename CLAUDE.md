@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-Project guidance for Claude Code specialized agents working on roundtable.now - a collaborative AI brainstorming platform where multiple AI models work together to solve problems and generate ideas.
+Project guidance for Claude Code specialized agents working on Roundtable - a collaborative AI brainstorming platform where multiple AI models work together to solve problems and generate ideas.
 
 ## 🚨 DOCUMENTATION HIERARCHY
 

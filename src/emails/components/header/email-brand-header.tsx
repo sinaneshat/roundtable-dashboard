@@ -1,6 +1,7 @@
 import { Column, Row, Section } from '@react-email/components';
 import type { CSSProperties, ReactNode } from 'react';
 
+import { BRAND } from '@/constants/brand';
 import { assets, spacing } from '@/emails/design-tokens';
 
 type EmailBrandHeaderProps = {
@@ -54,7 +55,7 @@ export function EmailBrandHeader({
                 src={logoSrc}
                 width={logoWidth}
                 height={logoHeight}
-                alt="Roundtable"
+                alt={`${BRAND.displayName} Logo`}
                 style={{ display: 'block', margin: '0 auto' }}
               />
             </div>

@@ -11,6 +11,7 @@ import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 
 import { useSession } from '@/lib/auth/client';
 import { queryKeys } from '@/lib/data/query-keys';
+import { STALE_TIMES } from '@/lib/data/stale-times';
 import {
   getMemoryService,
   listMemoriesService,
@@ -43,7 +44,7 @@ import {
  * </button>
  * ```
  *
- * Stale time: 1 minute (memories change less frequently)
+ * Stale time: 2 minutes (memories change less frequently)
  */
 export function useMemoriesQuery(enabled = true) {
   const { data: session, isPending } = useSession();
@@ -64,7 +65,7 @@ export function useMemoriesQuery(enabled = true) {
       }
       return undefined;
     },
-    staleTime: 1 * 60 * 1000, // 1 minute
+    staleTime: STALE_TIMES.chatMemories, // 2 minutes - matches server-side prefetch
     retry: false,
     enabled: isAuthenticated && enabled, // Only fetch when authenticated and explicitly enabled
     throwOnError: false,
@@ -88,7 +89,7 @@ export function useMemoryQuery(memoryId: string | null | undefined, enabled = tr
   return useQuery({
     queryKey: queryKeys.memories.detail(memoryId || ''),
     queryFn: () => getMemoryService(memoryId!),
-    staleTime: 2 * 60 * 1000, // 2 minutes
+    staleTime: STALE_TIMES.chatMemories, // 2 minutes - matches server-side prefetch
     enabled: isAuthenticated && !!memoryId && enabled, // Only fetch when authenticated and memoryId exists
     retry: false,
     throwOnError: false,

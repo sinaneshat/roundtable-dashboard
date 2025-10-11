@@ -8,7 +8,8 @@
  * - Handles billing period rollover
  * - Provides usage statistics for UI display
  *
- * 🚨 Uses SUBSCRIPTION_TIER_CONFIG from models-config.ts as single source of truth
+ * ✅ DYNAMIC: All quotas fetched from subscriptionTierQuotas table (database is source of truth)
+ * ✅ Fallback: SUBSCRIPTION_TIER_CONFIG used only if DB query fails
  */
 
 import { and, eq } from 'drizzle-orm';
@@ -27,6 +28,34 @@ import type {
 import { SUBSCRIPTION_TIER_CONFIG } from '@/lib/ai/models-config';
 
 /**
+ * Get tier quotas from database (with fallback to SUBSCRIPTION_TIER_CONFIG)
+ * ✅ DYNAMIC: Fetches from subscriptionTierQuotas table
+ */
+async function getTierQuotas(tier: SubscriptionTier, isAnnual: boolean) {
+  const db = await getDbAsync();
+
+  const quotaConfig = await db.query.subscriptionTierQuotas.findFirst({
+    where: and(
+      eq(tables.subscriptionTierQuotas.tier, tier),
+      eq(tables.subscriptionTierQuotas.isAnnual, isAnnual),
+    ),
+  });
+
+  // Fallback to hardcoded config if DB query fails
+  if (!quotaConfig) {
+    apiLogger.warn('Quota config not found in DB, using fallback', { tier, isAnnual });
+    return SUBSCRIPTION_TIER_CONFIG[tier].quotas;
+  }
+
+  return {
+    threadsPerMonth: quotaConfig.threadsPerMonth,
+    messagesPerMonth: quotaConfig.messagesPerMonth,
+    memoriesPerMonth: quotaConfig.memoriesPerMonth,
+    customRolesPerMonth: quotaConfig.customRolesPerMonth,
+  };
+}
+
+/**
  * Get or create user usage record
  * Ensures a user has a usage tracking record for the current billing period
  */
@@ -40,12 +69,13 @@ async function ensureUserUsageRecord(userId: string): Promise<typeof tables.user
 
   const now = new Date();
 
-  // If no usage record exists, create one with free tier defaults from SUBSCRIPTION_TIER_CONFIG
+  // If no usage record exists, create one with free tier defaults from DB
   if (!usage) {
     const periodStart = new Date(now.getFullYear(), now.getMonth(), 1); // First day of current month
     const periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59); // Last day of current month
 
-    const freeTierConfig = SUBSCRIPTION_TIER_CONFIG.free;
+    // ✅ DYNAMIC: Fetch free tier quotas from database
+    const freeTierQuotas = await getTierQuotas('free', false);
 
     const [newUsage] = await db
       .insert(tables.userChatUsage)
@@ -55,13 +85,13 @@ async function ensureUserUsageRecord(userId: string): Promise<typeof tables.user
         currentPeriodStart: periodStart,
         currentPeriodEnd: periodEnd,
         threadsCreated: 0,
-        threadsLimit: freeTierConfig.quotas.threadsPerMonth,
+        threadsLimit: freeTierQuotas.threadsPerMonth,
         messagesCreated: 0,
-        messagesLimit: freeTierConfig.quotas.messagesPerMonth,
+        messagesLimit: freeTierQuotas.messagesPerMonth,
         memoriesCreated: 0,
-        memoriesLimit: freeTierConfig.quotas.memoriesPerMonth,
+        memoriesLimit: freeTierQuotas.memoriesPerMonth,
         customRolesCreated: 0,
-        customRolesLimit: freeTierConfig.quotas.customRolesPerMonth,
+        customRolesLimit: freeTierQuotas.customRolesPerMonth,
         subscriptionTier: 'free',
         isAnnual: false,
         createdAt: now,

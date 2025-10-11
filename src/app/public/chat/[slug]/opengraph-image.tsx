@@ -145,13 +145,14 @@ export default async function Image({
     }
 
     // Load model icons for participants (up to 4 to avoid clutter)
+    // ✅ DYNAMIC: Uses modelId to resolve provider icon automatically
     const participantIcons = await Promise.all(
       participants.slice(0, 4).map(async (p) => {
         try {
-          const icon = await getModelIconBase64(p.role);
-          return { role: p.role, icon };
+          const icon = await getModelIconBase64(p.modelId); // ✅ Use modelId, not role
+          return { modelId: p.modelId, role: p.role, icon };
         } catch {
-          return { role: p.role, icon: '' };
+          return { modelId: p.modelId, role: p.role, icon: '' };
         }
       }),
     );
@@ -218,7 +219,7 @@ export default async function Image({
                   color: OG_COLORS.textPrimary,
                 }}
               >
-                {BRAND.name}
+                {BRAND.displayName}
               </div>
             </div>
           </div>

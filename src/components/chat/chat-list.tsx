@@ -1,6 +1,6 @@
 'use client';
 
-import { Loader2, Star, Trash2 } from 'lucide-react';
+import { Loader2, Trash2 } from 'lucide-react';
 import { motion } from 'motion/react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -38,15 +38,13 @@ type ChatListProps = {
   onNavigate?: () => void;
 };
 
-type StickyHeaderProps = {
-  children: React.ReactNode;
-  zIndex?: number;
-};
-
 // Stable default value to avoid infinite render loop
 const EMPTY_FAVORITES: Chat[] = [];
 
-function StickyHeader({ children, zIndex = 10 }: StickyHeaderProps) {
+/**
+ * StickyHeader - Timestamp header that stays visible while scrolling
+ */
+function StickyHeader({ children, zIndex = 10 }: { children: React.ReactNode; zIndex?: number }) {
   const headerRef = useRef<HTMLDivElement>(null);
 
   return (
@@ -71,6 +69,13 @@ function StickyHeader({ children, zIndex = 10 }: StickyHeaderProps) {
   );
 }
 
+/**
+ * ChatList - Renders chat items in sidebar
+ *
+ * ✅ Sticky timestamp headers for scroll visibility
+ * ✅ Matches frontend-patterns.md for list rendering
+ * ✅ Optimized prefetching for first 3 items
+ */
 export function ChatList({
   chatGroups,
   favorites = EMPTY_FAVORITES,
@@ -186,37 +191,9 @@ export function ChatList({
 
   return (
     <>
-      {/* Favorites Section */}
+      {/* Favorites Section - No header, parent provides it */}
       {favorites.length > 0 && (
         <SidebarGroup className="group-data-[collapsible=icon]:hidden">
-          <StickyHeader zIndex={10}>
-            <SidebarGroupLabel className="flex items-center gap-2 py-2.5 px-2">
-              <motion.div
-                initial={{ scale: 0.8, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                transition={{
-                  type: 'spring',
-                  stiffness: 500,
-                  damping: 40,
-                  delay: 0.05,
-                }}
-              >
-                <Star className="size-4 fill-yellow-500 text-yellow-500" />
-              </motion.div>
-              <motion.span
-                initial={{ x: -10, opacity: 0 }}
-                animate={{ x: 0, opacity: 1 }}
-                transition={{
-                  type: 'spring',
-                  stiffness: 500,
-                  damping: 40,
-                  delay: 0.1,
-                }}
-              >
-                {t('chat.favorites')}
-              </motion.span>
-            </SidebarGroupLabel>
-          </StickyHeader>
           <SidebarMenu>
             {favorites.map((chat) => {
               const item = renderChatItem(chat, globalIndex);
@@ -227,10 +204,9 @@ export function ChatList({
         </SidebarGroup>
       )}
 
-      {/* Regular Chat Groups */}
+      {/* Regular Chat Groups - WITH sticky timestamp headers */}
       {chatGroups.map((group, groupIndex) => {
         // Each subsequent section gets a higher z-index
-        // This ensures later headers push earlier ones out when scrolling
         const baseZIndex = favorites.length > 0 ? 11 : 10;
         const sectionZIndex = baseZIndex + groupIndex;
 
@@ -277,7 +253,7 @@ export function ChatList({
               {t('actions.cancel')}
             </AlertDialogCancel>
             <AlertDialogAction onClick={handleConfirmDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-              {t('chat.deleteThread')}
+              {t('actions.delete')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

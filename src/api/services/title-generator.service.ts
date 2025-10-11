@@ -14,7 +14,6 @@ import { apiLogger } from '@/api/middleware/hono-logger';
 import type { ApiEnv } from '@/api/types';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db/schema';
-import { AI_MODELS, AllowedModelId } from '@/lib/ai/models-config';
 
 import { initializeOpenRouter, openRouterService } from './openrouter.service';
 import { updateThreadSlug } from './slug-generator.service';
@@ -26,34 +25,25 @@ import { updateThreadSlug } from './slug-generator.service';
 const TITLE_GENERATION_PROMPT = `Generate a 5-word title from this message. Title only, no quotes.`;
 
 /**
+ * ✅ DYNAMIC: Preferred models for title generation
+ * Priority order: cheapest/fastest models first
+ * Uses actual OpenRouter model IDs (no hardcoded enum)
+ */
+const TITLE_GENERATION_PREFERRED_MODELS = [
+  'google/gemini-flash-1.5', // Free or very cheap
+  'anthropic/claude-3-haiku', // Fast and affordable
+  'qwen/qwen-2.5-72b-instruct', // Good budget option
+  'anthropic/claude-3.5-sonnet', // Fallback to quality model
+];
+
+/**
  * Get the best model for title generation
- * Prioritizes fast, cost-effective models from the configuration
- * ✅ Uses AllowedModelId enum for type safety
+ * Uses first available model from preferred list
  */
 function getTitleGenerationModel(): string {
-  // Priority order: cheapest/fastest models first (from AI_MODELS config)
-  const preferredModels = [
-    AllowedModelId.GEMINI_2_5_FLASH, // $0.075/Mtok - ultra cheap
-    AllowedModelId.CLAUDE_3_HAIKU, // $0.25/Mtok - fast and cheap
-    AllowedModelId.DEEPSEEK_R1, // $0.55/Mtok - reasoning model
-    AllowedModelId.CLAUDE_SONNET_4_5, // Fallback to premium model
-  ];
-
-  // Find first available enabled model from preferences
-  for (const modelId of preferredModels) {
-    const model = AI_MODELS.find(m => m.modelId === modelId && m.isEnabled);
-    if (model) {
-      return model.modelId;
-    }
-  }
-
-  // Final fallback: use first enabled model
-  const firstEnabled = AI_MODELS.find(m => m.isEnabled);
-  if (!firstEnabled) {
-    throw new Error('No enabled models found in configuration');
-  }
-
-  return firstEnabled.modelId;
+  // Return first preferred model (they're all available via OpenRouter)
+  // In a production system, you could validate availability via API
+  return TITLE_GENERATION_PREFERRED_MODELS[0] || 'google/gemini-flash-1.5';
 }
 
 /**

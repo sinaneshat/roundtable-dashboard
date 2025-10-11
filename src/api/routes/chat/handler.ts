@@ -1855,7 +1855,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
     // 🚫 NO MANUAL STREAM HANDLING
     // 🚫 NO CUSTOM STREAMING UTILITIES
     return result.toUIMessageStreamResponse({
-      // ✅ CRITICAL FIX: Only pass USER messages in originalMessages for roundtable scenarios
+      // ✅ CRITICAL FIX: Only pass USER messages in originalMessages for Roundtable scenarios
       // Including previous assistant messages causes ID reuse across participants
       // Each participant needs a NEW unique message, not an update to existing ones
       // See: AI SDK v5 Multi-Agent Pattern - each agent gets unique message ID

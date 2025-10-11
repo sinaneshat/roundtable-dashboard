@@ -5,6 +5,7 @@ import { Reasoning, ReasoningContent, ReasoningTrigger } from '@/components/ai-e
 import { Response } from '@/components/ai-elements/response';
 import { MessageErrorDetails } from '@/components/chat/message-error-details';
 import type { AIModel } from '@/lib/ai/models-config';
+import { getTierDisplayName } from '@/lib/ai/models-config';
 import type { UIMessageMetadata } from '@/lib/schemas/message-metadata';
 
 /**
@@ -30,6 +31,8 @@ type ModelMessageCardProps = {
   messageId?: string;
   /** Message metadata with error information */
   metadata?: UIMessageMetadata | null;
+  /** Whether user can access this model at their current tier */
+  isAccessible?: boolean;
 };
 
 /**
@@ -56,6 +59,7 @@ export function ModelMessageCard({
   className,
   messageId,
   metadata,
+  isAccessible = true, // Default to true for backward compatibility
 }: ModelMessageCardProps) {
   const showStatusIndicator = status === 'thinking' || status === 'streaming';
   const isError = status === 'error';
@@ -68,7 +72,7 @@ export function ModelMessageCard({
         <MessageContent className={hasError ? 'text-destructive' : undefined}>
           {/* ✅ MODEL HEADER: Always visible */}
           <>
-            <div className="flex items-center gap-2 mb-2 -mt-1">
+            <div className="flex items-center gap-2 mb-2 -mt-1 flex-wrap">
               {/* Model Name - subtle, no special color */}
               <span className="text-sm font-medium text-foreground/90">
                 {model.name}
@@ -80,6 +84,18 @@ export function ModelMessageCard({
                   <span className="text-muted-foreground/50 text-xs">•</span>
                   <span className="text-muted-foreground/70 text-xs">
                     {String(role)}
+                  </span>
+                </>
+              )}
+
+              {/* ✅ DYNAMIC PRICING: Show tier requirement if model not accessible */}
+              {!isAccessible && (
+                <>
+                  <span className="text-muted-foreground/50 text-xs">•</span>
+                  <span className="text-muted-foreground/70 text-xs">
+                    {getTierDisplayName(model.minTier)}
+                    {' '}
+                    required
                   </span>
                 </>
               )}

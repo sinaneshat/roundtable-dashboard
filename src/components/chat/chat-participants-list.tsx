@@ -3,12 +3,14 @@
 import type { UIMessage } from 'ai';
 import { Bot, Check, GripVertical, Plus, Trash2 } from 'lucide-react';
 import { motion, Reorder, useDragControls } from 'motion/react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 // ============================================================================
 // Types - ✅ Inferred from Backend Schema (Zero Hardcoding)
 // ============================================================================
 import type { ChatCustomRole } from '@/api/routes/chat/schema';
+// ✅ ZOD-INFERRED TYPE: Import from schema (no hardcoded interfaces)
+import type { EnhancedModelResponse } from '@/api/routes/models/schema';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -36,9 +38,11 @@ import {
 import type { SubscriptionTier } from '@/db/tables/usage';
 import { useCreateCustomRoleMutation, useDeleteCustomRoleMutation } from '@/hooks/mutations/chat-mutations';
 import { useCustomRolesQuery } from '@/hooks/queries/chat-roles';
+import { useModelsQuery } from '@/hooks/queries/models';
 import { useUsageStatsQuery } from '@/hooks/queries/usage';
 import type { AIModel } from '@/lib/ai/models-config';
-import { AI_MODELS, canAccessModel, DEFAULT_ROLES, getModelById, getTierDisplayName } from '@/lib/ai/models-config';
+import { canAccessModel, DEFAULT_ROLES, getModelById, getTierDisplayName } from '@/lib/ai/models-config';
+import { getProviderIcon } from '@/lib/ai/provider-icons';
 import type { ParticipantConfig } from '@/lib/schemas/chat-forms';
 import { toastManager } from '@/lib/toast/toast-manager';
 import { cn } from '@/lib/ui/cn';
@@ -67,18 +71,32 @@ function RoleSelector({
   customRoles,
   onRoleChange,
   onClearRole,
+  onRequestSelection,
 }: {
-  participant: ParticipantConfig;
+  participant: ParticipantConfig | null;
   customRoles: ChatCustomRole[]; // ✅ Using backend schema type
   onRoleChange: (role: string, customRoleId?: string) => void;
   onClearRole: () => void;
+  onRequestSelection?: () => void; // Called when model needs to be selected first
 }) {
   const [rolePopoverOpen, setRolePopoverOpen] = useState(false);
   const [roleSearchQuery, setRoleSearchQuery] = useState('');
 
   const createRoleMutation = useCreateCustomRoleMutation();
   const deleteRoleMutation = useDeleteCustomRoleMutation();
-  const hasRole = Boolean(participant.role);
+  const hasRole = Boolean(participant?.role);
+
+  // Handle opening popover - select model first if needed
+  const handleOpenChange = (open: boolean) => {
+    if (open && !participant && onRequestSelection) {
+      // Auto-select the model first
+      onRequestSelection();
+      // Wait a tick for the selection to complete, then open popover
+      setTimeout(() => setRolePopoverOpen(true), 50);
+      return;
+    }
+    setRolePopoverOpen(open);
+  };
 
   // Combine all existing roles for checking duplicates
   const allRoles = [
@@ -127,7 +145,7 @@ function RoleSelector({
 
       if (result.success) {
         // If the deleted role was the currently selected role, clear it
-        if (participant.customRoleId === roleId || participant.role === roleName) {
+        if (participant?.customRoleId === roleId || participant?.role === roleName) {
           onClearRole();
         }
         // Success is obvious from the role disappearing - no toast needed
@@ -143,7 +161,7 @@ function RoleSelector({
   if (!hasRole) {
     return (
       <>
-        <Popover open={rolePopoverOpen} onOpenChange={setRolePopoverOpen}>
+        <Popover open={rolePopoverOpen} onOpenChange={handleOpenChange}>
           <PopoverTrigger asChild>
             <Button
               variant="ghost"
@@ -162,6 +180,22 @@ function RoleSelector({
                 onValueChange={setRoleSearchQuery}
               />
               <CommandList>
+                {/* Always show Create Custom Role button at the top */}
+                <CommandGroup>
+                  <CommandItem
+                    onSelect={() => {
+                      // Focus the search input to allow user to type the new role name
+                      setRoleSearchQuery('');
+                    }}
+                    className="gap-2 text-primary font-medium"
+                  >
+                    <Plus className="size-4" />
+                    <span>Create Custom Role</span>
+                  </CommandItem>
+                </CommandGroup>
+
+                <CommandSeparator />
+
                 {/* Default Roles */}
                 <CommandGroup heading="Default Roles">
                   {DEFAULT_ROLES.map(role => (
@@ -173,7 +207,7 @@ function RoleSelector({
                       <Check
                         className={cn(
                           'mr-2 h-4 w-4',
-                          participant.role === role ? 'opacity-100' : 'opacity-0',
+                          participant?.role === role ? 'opacity-100' : 'opacity-0',
                         )}
                       />
                       {role}
@@ -196,13 +230,12 @@ function RoleSelector({
                           <Check
                             className={cn(
                               'mr-2 h-4 w-4 flex-shrink-0',
-                              participant.customRoleId === role.id ? 'opacity-100' : 'opacity-0',
+                              participant?.customRoleId === role.id ? 'opacity-100' : 'opacity-0',
                             )}
                           />
                           <div className="flex flex-col flex-1 min-w-0">
                             <div className="flex items-center gap-1.5">
                               <span className="font-medium">{role.name}</span>
-                              <Badge variant="secondary" className="text-[10px] px-1 py-0 h-4">Custom</Badge>
                             </div>
                             {role.description && (
                               <span className="text-xs text-muted-foreground line-clamp-1">
@@ -219,10 +252,10 @@ function RoleSelector({
                           >
                             {deleteRoleMutation.isPending
                               ? (
-                                  <div className="size-3.5 animate-spin rounded-full border-2 border-destructive border-t-transparent" />
+                                  <div className="size-4 animate-spin rounded-full border-2 border-destructive border-t-transparent" />
                                 )
                               : (
-                                  <Trash2 className="size-3.5" />
+                                  <Trash2 className="size-4" />
                                 )}
                           </button>
                         </CommandItem>
@@ -274,9 +307,14 @@ function RoleSelector({
   }
 
   // If role is assigned, show role as chip with integrated X button
+  // Safety check: participant should exist if hasRole is true, but TypeScript needs explicit check
+  if (!participant) {
+    return null;
+  }
+
   return (
     <div className="flex items-center gap-1">
-      <Popover open={rolePopoverOpen} onOpenChange={setRolePopoverOpen}>
+      <Popover open={rolePopoverOpen} onOpenChange={handleOpenChange}>
         <PopoverTrigger asChild>
           <Button
             variant="secondary"
@@ -305,6 +343,22 @@ function RoleSelector({
               onValueChange={setRoleSearchQuery}
             />
             <CommandList>
+              {/* Always show Create Custom Role button at the top */}
+              <CommandGroup>
+                <CommandItem
+                  onSelect={() => {
+                    // Focus the search input to allow user to type the new role name
+                    setRoleSearchQuery('');
+                  }}
+                  className="gap-2 text-primary font-medium"
+                >
+                  <Plus className="size-4" />
+                  <span>Create Custom Role</span>
+                </CommandItem>
+              </CommandGroup>
+
+              <CommandSeparator />
+
               {/* Default Roles */}
               <CommandGroup heading="Default Roles">
                 {DEFAULT_ROLES.map(role => (
@@ -316,7 +370,7 @@ function RoleSelector({
                     <Check
                       className={cn(
                         'mr-2 h-4 w-4',
-                        participant.role === role ? 'opacity-100' : 'opacity-0',
+                        participant?.role === role ? 'opacity-100' : 'opacity-0',
                       )}
                     />
                     {role}
@@ -345,7 +399,6 @@ function RoleSelector({
                         <div className="flex flex-col flex-1 min-w-0">
                           <div className="flex items-center gap-1.5">
                             <span className="font-medium">{role.name}</span>
-                            <Badge variant="secondary" className="text-[10px] px-1 py-0 h-4">Custom</Badge>
                           </div>
                           {role.description && (
                             <span className="text-xs text-muted-foreground line-clamp-1">
@@ -362,10 +415,10 @@ function RoleSelector({
                         >
                           {deleteRoleMutation.isPending
                             ? (
-                                <div className="size-3.5 animate-spin rounded-full border-2 border-destructive border-t-transparent" />
+                                <div className="size-4 animate-spin rounded-full border-2 border-destructive border-t-transparent" />
                               )
                             : (
-                                <Trash2 className="size-3.5" />
+                                <Trash2 className="size-4" />
                               )}
                         </button>
                       </CommandItem>
@@ -532,9 +585,12 @@ function ModelItem({
                   <div className="text-sm font-medium truncate flex items-center gap-2">
                     {model.name}
                     {isDisabledDueToTier && (
-                      <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4">
+                      <span className="text-[10px] text-muted-foreground">
+                        (
                         {getTierDisplayName(model.minTier)}
-                      </Badge>
+                        {' '}
+                        required)
+                      </span>
                     )}
                   </div>
                   <div className="text-xs text-muted-foreground truncate">
@@ -543,19 +599,15 @@ function ModelItem({
                 </div>
               </div>
 
-              {/* Role Selector - shown only for selected models */}
-              {isSelected && participant && !isDisabledDueToTier && (
-                <div
-                  role="presentation"
-                  onClick={e => e.stopPropagation()}
-                >
-                  <RoleSelector
-                    participant={participant}
-                    customRoles={customRoles}
-                    onRoleChange={onRoleChange}
-                    onClearRole={onClearRole}
-                  />
-                </div>
+              {/* Role Selector - always shown with consistent styling */}
+              {!isDisabledDueToTier && (
+                <RoleSelector
+                  participant={participant}
+                  customRoles={customRoles}
+                  onRoleChange={onRoleChange}
+                  onClearRole={onClearRole}
+                  onRequestSelection={!participant ? onToggle : undefined}
+                />
               )}
             </div>
           </div>
@@ -601,6 +653,7 @@ export function ChatParticipantsList({
   // Only fetch when popover is open (not on page load)
   const { data: customRolesData } = useCustomRolesQuery(open && !isStreaming);
   const { data: usageData } = useUsageStatsQuery();
+  const { data: modelsData } = useModelsQuery(); // Fetch all OpenRouter models
 
   const customRoles = customRolesData?.pages.flatMap(page =>
     (page?.success && page.data?.items) ? page.data.items : [],
@@ -609,20 +662,73 @@ export function ChatParticipantsList({
   // Get user's subscription tier for filtering models
   const userTier = (usageData?.success ? usageData.data.subscription.tier : 'free') as SubscriptionTier;
 
-  // Get ALL enabled models (not just accessible ones) - memoized to prevent infinite loops
-  const allEnabledModels = useMemo(() => AI_MODELS.filter(m => m.isEnabled), []);
+  // Map OpenRouter models to AIModel format and filter enabled ones
+  // Memoized to prevent infinite loops
+  const allEnabledModels = useMemo(() => {
+    if (!modelsData?.data?.models)
+      return [];
+
+    return modelsData.data.models
+      .filter((m: EnhancedModelResponse) => !m.id.includes('deepseek')) // Exclude DeepSeek models
+      .map((openRouterModel: EnhancedModelResponse): AIModel => {
+        // Extract provider from model ID (e.g., "anthropic/claude-3" -> "anthropic")
+        const provider = openRouterModel.id.split('/')[0] || 'openrouter';
+
+        return {
+          id: openRouterModel.id,
+          provider: 'openrouter' as const,
+          modelId: openRouterModel.id as string, // Dynamic OpenRouter models use string IDs
+          name: openRouterModel.name,
+          description: openRouterModel.description || '',
+          capabilities: {
+            streaming: openRouterModel.capabilities.streaming,
+            tools: openRouterModel.capabilities.tools,
+            vision: openRouterModel.capabilities.vision,
+            reasoning: openRouterModel.capabilities.reasoning,
+          },
+          defaultSettings: {
+            temperature: 0.7,
+            maxTokens: 4096,
+            topP: 0.9,
+          },
+          isEnabled: true,
+          order: 0,
+          minTier: openRouterModel.is_free ? 'free' : 'pro' as SubscriptionTier,
+          metadata: {
+            icon: getProviderIcon(provider), // ✅ Use provider icon utility with fallback
+            color: '#10A37F',
+            category: openRouterModel.category,
+            contextWindow: openRouterModel.context_length,
+            strengths: [],
+            pricing: {
+              input: openRouterModel.pricing_display.input,
+              output: openRouterModel.pricing_display.output,
+            },
+          },
+        };
+      });
+  }, [modelsData?.data?.models]);
 
   // Create a unified list of all models with their order
   // Selected models maintain their participant order, unselected go to the end
   // Now showing ALL models (both accessible and inaccessible)
   const [orderedModels, setOrderedModels] = useState<OrderedModel[]>(() => {
+    // Wait for models to load before initializing
+    if (allEnabledModels.length === 0)
+      return [];
+
     const selectedModels: OrderedModel[] = participants
       .sort((a, b) => a.order - b.order)
-      .map((p, index) => ({
-        model: AI_MODELS.find(m => m.modelId === p.modelId)!,
-        participant: p,
-        order: index,
-      }))
+      .map((p, index) => {
+        // Try to find model in dynamic models first, fallback to getModelById for validation
+        const dynamicModel = allEnabledModels.find(m => m.modelId === p.modelId);
+        const fallbackModel = getModelById(p.modelId);
+        return {
+          model: (dynamicModel || fallbackModel)!,
+          participant: p,
+          order: index,
+        };
+      })
       .filter(om => om.model);
 
     const selectedIds = new Set(participants.map(p => p.modelId));
@@ -762,7 +868,7 @@ export function ChatParticipantsList({
 
   return (
     <div className={cn('flex items-center gap-1.5', className)}>
-      {/* Add AI Button with Count Badge */}
+      {/* Add AI Button with Count */}
       <TooltipProvider>
         <Popover open={open} onOpenChange={setOpen}>
           <Tooltip>
@@ -827,6 +933,7 @@ export function ChatParticipantsList({
                 value={modelSearchQuery}
                 onValueChange={setModelSearchQuery}
               />
+
               <CommandList>
                 {filteredModels.length === 0 && (
                   <CommandEmpty>No models found.</CommandEmpty>
@@ -843,7 +950,7 @@ export function ChatParticipantsList({
                   >
                     {filteredModels.map(orderedModel => (
                       <ModelItem
-                        key={orderedModel.model.id}
+                        key={orderedModel.participant ? orderedModel.participant.id : `unselected-${orderedModel.model.id}`}
                         orderedModel={orderedModel}
                         customRoles={customRoles}
                         onToggle={() => handleToggleModel(orderedModel.model.modelId)}
@@ -881,61 +988,6 @@ export function ParticipantsPreview({
   className?: string;
   chatMessages?: UIMessage[];
 }) {
-  // Track which participants just completed streaming (for flash animation)
-  const [justCompletedSet, setJustCompletedSet] = useState<Set<string>>(() => new Set());
-  const previousStreamingRef = useRef(isStreaming);
-  const previousParticipantIndexRef = useRef(currentParticipantIndex);
-  const timeoutsRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
-
-  // Handle just completed participant
-  const handleJustCompleted = useCallback((participantId: string) => {
-    setJustCompletedSet(prev => new Set(prev).add(participantId));
-
-    // Clear any existing timeout for this participant
-    const existingTimeout = timeoutsRef.current.get(participantId);
-    if (existingTimeout) {
-      clearTimeout(existingTimeout);
-    }
-
-    // Auto-remove from "just completed" after animation duration (1.5s)
-    const timeoutId = setTimeout(() => {
-      setJustCompletedSet((prev) => {
-        const next = new Set(prev);
-        next.delete(participantId);
-        return next;
-      });
-      timeoutsRef.current.delete(participantId);
-    }, 1500);
-
-    timeoutsRef.current.set(participantId, timeoutId);
-  }, []);
-
-  // Detect when a participant just finished streaming
-  useEffect(() => {
-    const wasStreaming = previousStreamingRef.current;
-    const previousIndex = previousParticipantIndexRef.current;
-
-    // Update refs for next comparison
-    previousStreamingRef.current = isStreaming;
-    previousParticipantIndexRef.current = currentParticipantIndex;
-
-    // Streaming just stopped - mark the last streaming participant as "just completed"
-    if (wasStreaming && !isStreaming && previousIndex !== undefined) {
-      const completedParticipant = participants[previousIndex];
-      if (completedParticipant) {
-        handleJustCompleted(completedParticipant.id);
-      }
-    }
-  }, [isStreaming, currentParticipantIndex, participants, handleJustCompleted]);
-
-  // Cleanup all timeouts on unmount
-  useEffect(() => {
-    return () => {
-      timeoutsRef.current.forEach(timeout => clearTimeout(timeout));
-      timeoutsRef.current.clear();
-    };
-  }, []);
-
   if (participants.length === 0) {
     return null;
   }
@@ -953,11 +1005,8 @@ export function ParticipantsPreview({
 
             // Note: Participant message tracking removed for cleaner liquid glass UI
 
-            // Determine participant status during streaming - sequential turn-taking
-            const isCurrentlyStreaming = isStreaming && currentParticipantIndex === index;
-            const isNextInQueue = isStreaming && currentParticipantIndex !== undefined && index === currentParticipantIndex + 1;
+            // Determine participant status during streaming - simplified for minimalistic UI
             const isWaitingInQueue = isStreaming && currentParticipantIndex !== undefined && index > currentParticipantIndex;
-            const isJustCompleted = justCompletedSet.has(participant.id);
 
             return (
               <motion.div
@@ -969,58 +1018,20 @@ export function ParticipantsPreview({
                   ease: [0.25, 0.1, 0.25, 1],
                 }}
                 className={cn(
-                  'relative flex items-center gap-1.5 sm:gap-2 px-2 sm:px-2.5 py-1 sm:py-1.5 shrink-0',
-                  'backdrop-blur-2xl border rounded-lg overflow-hidden',
-                  // Default state - liquid glass with subtle border
-                  'border-white/10',
-                  // Waiting states
-                  isNextInQueue && 'border-primary/40',
+                  'relative flex items-center gap-1.5 sm:gap-2 shrink-0',
+                  // Simplified - no background effects, just content
                   isWaitingInQueue && 'opacity-60',
                 )}
               >
-                {/* Streaming background gradient animation - more subtle */}
-                {isCurrentlyStreaming && (
-                  <motion.div
-                    className="absolute inset-0 bg-gradient-to-br from-primary/15 via-primary/8 to-primary/3"
-                    animate={{
-                      opacity: [0.4, 0.7, 0.4],
-                    }}
-                    transition={{
-                      duration: 2.5,
-                      repeat: Number.POSITIVE_INFINITY,
-                      ease: 'easeInOut',
-                    }}
-                  />
-                )}
-
-                {/* Completed flash - subtle green gradient pulse */}
-                {isJustCompleted && (
-                  <motion.div
-                    className="absolute inset-0 bg-gradient-to-br from-green-500/20 via-green-500/12 to-green-500/5"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: [0, 0.8, 0] }}
-                    transition={{
-                      duration: 1,
-                      ease: [0.22, 1, 0.36, 1],
-                    }}
-                  />
-                )}
-                {/* Content layer (above background animations) */}
-                <div className="relative z-10 flex items-center gap-1.5 sm:gap-2 w-full">
-                  <Avatar className="size-4 sm:size-5 shrink-0">
+                {/* Content - minimalistic display */}
+                <div className="flex items-center gap-1.5 sm:gap-2">
+                  <Avatar className="size-6 sm:size-7 shrink-0">
                     <AvatarImage src={model.metadata.icon} alt={model.name} />
-                    <AvatarFallback className="text-[8px] sm:text-[10px]">
+                    <AvatarFallback className="text-[10px] sm:text-xs">
                       {model.name.slice(0, 2).toUpperCase()}
                     </AvatarFallback>
                   </Avatar>
-                  <div className="flex flex-col gap-0.5 min-w-0 flex-1">
-                    <div className="flex items-center gap-1.5 sm:gap-2">
-                      <span className="text-[10px] sm:text-xs font-medium truncate whitespace-nowrap text-foreground/90">{model.name}</span>
-                    </div>
-                    {participant.role && (
-                      <span className="text-[9px] sm:text-[10px] text-muted-foreground/70 truncate whitespace-nowrap">{participant.role}</span>
-                    )}
-                  </div>
+                  <span className="text-xs sm:text-sm font-medium text-foreground/90">{model.name}</span>
                 </div>
               </motion.div>
             );

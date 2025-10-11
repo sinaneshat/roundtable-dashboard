@@ -14,6 +14,7 @@ import { STALE_TIMES } from '@/lib/data/stale-times';
 import {
   getSubscriptionsService,
   getUserUsageStatsService,
+  listMemoriesService,
   listThreadsService,
 } from '@/services/api';
 import { createMetadata } from '@/utils/metadata';
@@ -36,6 +37,7 @@ export async function generateMetadata(): Promise<Metadata> {
  * ✅ Threads list (infinite query) - First 50 items for sidebar
  * ✅ Usage stats - For usage metrics display
  * ✅ Subscriptions - For NavUser billing info
+ * ✅ Memories list (infinite query) - For MemoriesSection
  *
  * Why this approach:
  * ✅ Eliminates loading states on initial page load
@@ -48,6 +50,7 @@ export async function generateMetadata(): Promise<Metadata> {
  * - Threads: prefetchInfiniteQuery with 50 items (staleTime: 30s)
  * - Usage: prefetchQuery (staleTime: 1min)
  * - Subscriptions: prefetchQuery (staleTime: 2min)
+ * - Memories: prefetchInfiniteQuery (staleTime: 2min)
  *
  * First load experience:
  * - Zero loading states (data pre-hydrated)
@@ -102,6 +105,26 @@ export default async function ChatLayout({
       queryKey: queryKeys.subscriptions.list(),
       queryFn: getSubscriptionsService,
       staleTime: STALE_TIMES.subscriptions, // 2 minutes - matches client hook
+    }),
+
+    // 4. Prefetch memories list (infinite query) for MemoriesSection
+    queryClient.prefetchInfiniteQuery({
+      queryKey: queryKeys.memories.lists(),
+      queryFn: async ({ pageParam }) => {
+        return listMemoriesService(
+          pageParam ? { query: { cursor: pageParam } } : undefined,
+        );
+      },
+      initialPageParam: undefined as string | undefined,
+      getNextPageParam: (lastPage) => {
+        // Return nextCursor from pagination metadata, or undefined if no more pages
+        if (lastPage?.success && lastPage.data?.pagination?.nextCursor) {
+          return lastPage.data.pagination.nextCursor;
+        }
+        return undefined;
+      },
+      pages: 1, // Only prefetch first page (sufficient for initial display)
+      staleTime: STALE_TIMES.chatMemories, // 2 minutes - matches client hook
     }),
   ]);
 

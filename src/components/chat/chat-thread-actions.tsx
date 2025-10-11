@@ -1,6 +1,6 @@
 'use client';
 
-import { Globe, Loader2, Lock, Star, Trash2 } from 'lucide-react';
+import { Loader2, Lock, Share2, Star, Trash2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
 import type { ChatThread } from '@/api/routes/chat/schema';
@@ -134,10 +134,10 @@ export function ChatThreadActions({ thread, slug, onDeleteClick, isPublicMode = 
                   )
                 : displayIsPublic
                   ? (
-                      <Globe className="size-4 text-muted-foreground transition-all duration-200 hover:text-foreground hover:scale-110" />
+                      <Lock className="size-4 text-muted-foreground transition-all duration-200 hover:text-foreground hover:scale-110" />
                     )
                   : (
-                      <Lock className="size-4 text-muted-foreground transition-all duration-200 hover:text-foreground hover:scale-110" />
+                      <Share2 className="size-4 text-muted-foreground transition-all duration-200 hover:text-foreground hover:scale-110" />
                     )}
             </Button>
           </TooltipTrigger>
@@ -154,7 +154,7 @@ export function ChatThreadActions({ thread, slug, onDeleteClick, isPublicMode = 
       {/* Social Share Button (only shown when public) - uses optimistic state */}
       {displayIsPublic && (
         <SocialShareButton
-          url={`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/public/chat/${slug}`}
+          url={`${process.env.NEXT_PUBLIC_APP_URL || (typeof window !== 'undefined' ? window.location.origin : '')}/public/chat/${slug}`}
           title={thread.title}
           description={`Check out this AI collaboration on ${thread.title}`}
           showTextOnLargeScreens={isPublicMode}
@@ -170,9 +170,9 @@ export function ChatThreadActions({ thread, slug, onDeleteClick, isPublicMode = 
               size="icon"
               onClick={onDeleteClick}
               aria-label={t('deleteThread')}
-              className="transition-all duration-200"
+              className="transition-all duration-200 hover:text-destructive"
             >
-              <Trash2 className="size-4 text-muted-foreground transition-all duration-200 hover:text-foreground hover:scale-110" />
+              <Trash2 className="size-4 text-muted-foreground transition-all duration-200" />
             </Button>
           </TooltipTrigger>
           <TooltipContent side="bottom">

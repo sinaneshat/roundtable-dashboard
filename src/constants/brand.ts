@@ -1,6 +1,9 @@
 export const BRAND = {
   name: 'Roundtable',
   fullName: 'Roundtable Dashboard',
+  displayName: 'Roundtable.now', // User-facing brand name (domain format)
+  domain: 'roundtable.now', // Domain name without protocol
+  domainDisplay: 'Roundtable.now', // Spoken/readable domain format
   tagline: 'Multiple AI Models Brainstorm Together',
   description: 'AI collaboration platform where multiple minds meet.',
   venture: 'Roundtable',

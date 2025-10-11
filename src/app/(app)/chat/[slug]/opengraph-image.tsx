@@ -41,7 +41,7 @@ export default async function Image() {
               letterSpacing: '-0.05em',
             }}
           >
-            {BRAND.name}
+            {BRAND.displayName}
           </div>
         </div>
 

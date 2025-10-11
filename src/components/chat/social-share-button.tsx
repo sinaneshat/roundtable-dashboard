@@ -64,8 +64,8 @@ export function SocialShareButton({
   const [copySuccess, setCopySuccess] = useState(false);
 
   // Prepare sharing text with brand mention
-  const shareTitle = `${title} - ${BRAND.name}`;
-  const shareDescription = description || `Check out this conversation on ${BRAND.name}, where multiple AI models collaborate to solve problems.`;
+  const shareTitle = `${title} - ${BRAND.displayName}`;
+  const shareDescription = description || `Check out this conversation on ${BRAND.displayName}, where multiple AI models collaborate to solve problems.`;
 
   const handleCopyLink = async () => {
     try {
@@ -103,7 +103,7 @@ export function SocialShareButton({
         </svg>
       ),
       Component: LinkedinShareButton,
-      props: { title: shareTitle, summary: shareDescription, source: BRAND.name, url },
+      props: { title: shareTitle, summary: shareDescription, source: BRAND.displayName, url },
       className: 'hover:text-[#0A66C2]',
     },
     {

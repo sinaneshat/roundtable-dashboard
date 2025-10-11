@@ -251,7 +251,7 @@ export function createMetadata({
   siteName = BRAND.fullName,
   robots = 'index, follow',
   canonicalUrl,
-  keywords = ['AI collaboration', 'dashboard', 'brainstorming', 'multiple models', 'roundtable'],
+  keywords = ['AI collaboration', 'dashboard', 'brainstorming', 'multiple models', 'Roundtable'],
   author = BRAND.name,
   publishedTime,
   modifiedTime,

@@ -1,3 +1,5 @@
+import { BRAND } from '@/constants/brand';
+
 import { EmailLink } from '../content/email-link';
 import { EmailSection } from '../content/email-section';
 import { EmailText } from '../content/email-text';
@@ -13,11 +15,11 @@ type EmailFooterProps = {
 };
 
 export function EmailFooter({
-  companyName = 'Roundtable',
+  companyName = BRAND.displayName,
   unsubscribeUrl,
   privacyUrl,
   termsUrl,
-  contactEmail = 'support@roundtable.now',
+  contactEmail = BRAND.support,
   className,
 }: EmailFooterProps) {
   return (

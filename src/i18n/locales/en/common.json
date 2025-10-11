@@ -293,6 +293,7 @@
       "saveAndRegenerate": "Save & Regenerate",
       "title": "Edit Message"
     },
+    "memories": "Memories",
     "error": {
       "generic": "An error occurred. Please try again."
     },
@@ -335,11 +336,10 @@
     "favoriteFailed": "Failed to update favorite",
     "favorites": "Favorites",
     "favoriteFailedDescription": "Could not update favorite status. Please try again.",
+    "trending": "Trending",
+    "comingSoon": "Coming soon",
     "input": {
-      "helperText": "Press Enter to send, Shift + Enter for new line",
-      "helpText": "Press Enter to send, Shift + Enter for new line",
       "placeholder": "Message Roundtable...",
-      "streamingHelperText": "AI is responding... Click stop button to interrupt",
       "streamingPlaceholder": "Waiting for AI response...",
       "submit": "Send message",
       "threadPlaceholder": "Continue the conversation..."
@@ -482,7 +482,6 @@
   "errors": {
     "generic": "Generic"
   },
-  "favorites": "Favorites",
   "forms": {
     "loading": "Loading",
     "noOptionsAvailable": "NoOptionsAvailable",
@@ -598,7 +597,6 @@
   "makePrivate": "Make Private",
   "makePublic": "Make Public",
   "manageBilling": "Manage Billing",
-  "memories": "Memories",
   "mostPopular": "Most Popular",
   "name": "Name",
   "namespace": "Namespace",
@@ -731,7 +729,13 @@
   "subscription": {
     "label": "Subscription",
     "changingTo": "Changing to",
-    "planChangeInfo": "Upgrades apply instantly. Downgrades take effect at period end."
+    "planChangeInfo": "Upgrades apply instantly. Downgrades take effect at period end.",
+    "tiers": {
+      "free": "Free",
+      "starter": "Starter",
+      "pro": "Pro",
+      "power": "Power"
+    }
   },
   "subscriptions": "Subscriptions",
   "table": {
@@ -767,7 +771,8 @@
     "scheduledChange": "Plan Change Scheduled",
     "changingTo": "Switching to",
     "onPeriodEnd": "at period end",
-    "keepAccessUntil": "Keep current access until"
+    "keepAccessUntil": "Keep current access until",
+    "remaining": "left"
   },
   "user": {
     "defaultName": "User"

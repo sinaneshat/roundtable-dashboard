@@ -119,7 +119,7 @@ export function NavigationHeader({
               <Link href="/" className="flex items-center gap-2 flex-shrink-0" prefetch={false}>
                 <Logo size="sm" variant="icon" />
                 <span className="text-base font-semibold tracking-tight">
-                  {BRAND.name}
+                  {BRAND.displayName}
                 </span>
               </Link>
               <Separator orientation="vertical" className="me-2 h-4 flex-shrink-0" />

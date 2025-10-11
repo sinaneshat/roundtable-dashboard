@@ -9,8 +9,7 @@ import {
   chatThreadChangelog,
   modelConfiguration,
 } from '@/db/tables/chat';
-import type { OpenRouterModelId } from '@/lib/ai/models-config';
-import { ALLOWED_MODEL_IDS } from '@/lib/ai/models-config';
+import { isValidModelId } from '@/lib/ai/models-config';
 import { ALLOWED_CHAT_MODES } from '@/lib/config/chat-modes';
 
 /**
@@ -29,18 +28,22 @@ export const chatThreadUpdateSchema = createUpdateSchema(chatThread, {
 
 /**
  * Chat Participant Schemas
- * ✅ Validates modelId against AllowedModelId enum
+ * ✅ DYNAMIC: Validates modelId as string (accepts any OpenRouter model)
  */
 export const chatParticipantSelectSchema = createSelectSchema(chatParticipant);
 export const chatParticipantInsertSchema = createInsertSchema(chatParticipant, {
-  modelId: () => z.enum(ALLOWED_MODEL_IDS as unknown as readonly [OpenRouterModelId, ...OpenRouterModelId[]])
-    .describe('Must be a valid OpenRouter model ID from AllowedModelId enum'),
+  modelId: () => z.string()
+    .min(1)
+    .refine(isValidModelId, { message: 'Must be a valid model ID' })
+    .describe('Must be a valid OpenRouter model ID'),
   role: schema => schema.min(1).max(100).optional(),
   priority: schema => schema.min(0).max(100),
 });
 export const chatParticipantUpdateSchema = createUpdateSchema(chatParticipant, {
-  modelId: () => z.enum(ALLOWED_MODEL_IDS as unknown as readonly [OpenRouterModelId, ...OpenRouterModelId[]])
-    .describe('Must be a valid OpenRouter model ID from AllowedModelId enum')
+  modelId: () => z.string()
+    .min(1)
+    .refine(isValidModelId, { message: 'Must be a valid model ID' })
+    .describe('Must be a valid OpenRouter model ID')
     .optional(),
   role: schema => schema.min(1).max(100).optional(),
   priority: schema => schema.min(0).max(100).optional(),
@@ -74,18 +77,22 @@ export const chatMemoryUpdateSchema = createUpdateSchema(chatMemory, {
 
 /**
  * Model Configuration Schemas
- * ✅ Validates modelId against AllowedModelId enum
+ * ✅ DYNAMIC: Validates modelId as string (accepts any OpenRouter model)
  */
 export const modelConfigurationSelectSchema = createSelectSchema(modelConfiguration);
 export const modelConfigurationInsertSchema = createInsertSchema(modelConfiguration, {
-  modelId: () => z.enum(ALLOWED_MODEL_IDS as unknown as readonly [OpenRouterModelId, ...OpenRouterModelId[]])
-    .describe('Must be a valid OpenRouter model ID from AllowedModelId enum'),
+  modelId: () => z.string()
+    .min(1)
+    .refine(isValidModelId, { message: 'Must be a valid model ID' })
+    .describe('Must be a valid OpenRouter model ID'),
   name: schema => schema.min(1).max(100),
   provider: () => z.enum(['openrouter', 'anthropic', 'openai', 'google', 'xai', 'perplexity']),
 });
 export const modelConfigurationUpdateSchema = createUpdateSchema(modelConfiguration, {
-  modelId: () => z.enum(ALLOWED_MODEL_IDS as unknown as readonly [OpenRouterModelId, ...OpenRouterModelId[]])
-    .describe('Must be a valid OpenRouter model ID from AllowedModelId enum')
+  modelId: () => z.string()
+    .min(1)
+    .refine(isValidModelId, { message: 'Must be a valid model ID' })
+    .describe('Must be a valid OpenRouter model ID')
     .optional(),
   name: schema => schema.min(1).max(100).optional(),
 });

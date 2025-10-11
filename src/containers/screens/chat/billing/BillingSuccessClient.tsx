@@ -196,7 +196,7 @@ export function BillingSuccessClient() {
             <Card>
               <CardHeader>
                 <CardTitle>
-                  {tierLimits.name}
+                  {t(`subscription.tiers.${tier}`)}
                   {' '}
                   Plan
                 </CardTitle>

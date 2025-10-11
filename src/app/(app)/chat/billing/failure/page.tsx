@@ -4,8 +4,6 @@ import type { Metadata } from 'next';
 import { BRAND } from '@/constants/brand';
 import { BillingFailureClient } from '@/containers/screens/chat/billing/BillingFailureClient';
 import { getQueryClient } from '@/lib/data/query-client';
-import { queryKeys } from '@/lib/data/query-keys';
-import { getSubscriptionsService, getUserUsageStatsService } from '@/services/api';
 import { createMetadata } from '@/utils/metadata';
 
 import { capturePaymentFailure } from './actions';
@@ -69,24 +67,15 @@ export default async function BillingFailurePage({
     // User can then sign in again if needed
   }
 
-  // ✅ Prefetch queries to ensure accurate state for retry attempts
-  // This eliminates the need for client-side query invalidation
+  // ✅ No prefetch needed here - layout already prefetches:
+  //    - subscriptions (queryKeys.subscriptions.list())
+  //    - usage stats (queryKeys.usage.stats())
+  //
+  // If fresh data is needed after payment failure, the client component
+  // should use queryClient.invalidateQueries() instead of duplicate prefetch
   const queryClient = getQueryClient();
-  await Promise.all([
-    queryClient.prefetchQuery({
-      queryKey: queryKeys.subscriptions.list(),
-      queryFn: () => getSubscriptionsService(),
-      staleTime: 60 * 1000, // 1 minute
-    }),
-    queryClient.prefetchQuery({
-      queryKey: queryKeys.usage.stats(),
-      queryFn: () => getUserUsageStatsService(),
-      staleTime: 60 * 1000, // 1 minute
-    }),
-  ]);
 
-  // Render client component with hydrated queries and failure data
-  // No useEffect for invalidation needed - queries are already fresh
+  // Render client component with hydrated queries from layout and failure data
   return (
     <HydrationBoundary state={dehydrate(queryClient)}>
       <BillingFailureClient failureData={failureResult.data} />

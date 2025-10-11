@@ -26,15 +26,19 @@ import {
 
 export const runtime = 'nodejs';
 
-// Mock data for preview
+// Mock data for preview - Showcasing diverse AI model providers
+// ✅ DYNAMIC: Uses modelId for icon resolution, role for display names
 const MOCK_THREAD = {
   title: 'How to Build a Scalable SaaS Platform',
   mode: 'analyzing' as const,
   messagePreview: 'I\'m looking to understand the best practices for building a modern SaaS application with proper authentication, billing, and scalability...',
   participants: [
-    { role: 'anthropic/claude-3.5-sonnet' },
-    { role: 'openai/gpt-4' },
-    { role: 'google/gemini-pro' },
+    { modelId: 'anthropic/claude-3.5-sonnet', role: 'The Architect' },
+    { modelId: 'openai/gpt-4-turbo', role: 'Code Reviewer' },
+    { modelId: 'google/gemini-pro', role: 'Security Expert' },
+    { modelId: 'x-ai/grok-2', role: 'DevOps Specialist' },
+    { modelId: 'deepseek/deepseek-chat', role: 'Performance Optimizer' },
+    { modelId: 'perplexity/llama-3.1-sonar-large', role: 'Research Assistant' },
   ],
   messagesCount: 24,
 };
@@ -74,14 +78,15 @@ export async function GET() {
     messageIconBase64 = '';
   }
 
-  // Load model icons
+  // Load model icons (only first 4 to avoid clutter)
+  // ✅ DYNAMIC: Uses modelId to resolve provider icon automatically
   const participantIcons = await Promise.all(
-    MOCK_THREAD.participants.map(async (p) => {
+    MOCK_THREAD.participants.slice(0, 4).map(async (p) => {
       try {
-        const icon = await getModelIconBase64(p.role);
-        return { role: p.role, icon };
+        const icon = await getModelIconBase64(p.modelId); // ✅ Use modelId, not role
+        return { modelId: p.modelId, role: p.role, icon };
       } catch {
-        return { role: p.role, icon: '' };
+        return { modelId: p.modelId, role: p.role, icon: '' };
       }
     }),
   );
@@ -230,6 +235,26 @@ export async function GET() {
               </div>
             )
           ))}
+          {MOCK_THREAD.participants.length > 4 && (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: 48,
+                height: 48,
+                backgroundColor: OG_COLORS.glassBackground,
+                borderRadius: 12,
+                border: `1px solid ${OG_COLORS.glassBorder}`,
+                fontSize: 18,
+                color: OG_COLORS.textSecondary,
+                fontWeight: 600,
+              }}
+            >
+              +
+              {MOCK_THREAD.participants.length - 4}
+            </div>
+          )}
         </div>
 
         {/* Stats Bar - Glass morphism */}

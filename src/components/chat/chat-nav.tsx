@@ -1,6 +1,6 @@
 'use client';
 
-import { Plus, Search } from 'lucide-react';
+import { Flame, MessageSquare, Plus, Search, Sparkles, Star } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -13,7 +13,9 @@ import {
   ChatSidebarSkeleton,
 } from '@/components/chat/chat-sidebar-skeleton';
 import { CommandSearch } from '@/components/chat/command-search';
+import { MemoriesSection } from '@/components/chat/memories-section';
 import { NavUser } from '@/components/chat/nav-user';
+import { SidebarSection } from '@/components/chat/sidebar-section';
 import { UsageMetrics } from '@/components/chat/usage-metrics';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -32,6 +34,7 @@ import {
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { BRAND } from '@/constants/brand';
 import { useDeleteThreadMutation } from '@/hooks/mutations/chat-mutations';
+import { useMemoriesQuery } from '@/hooks/queries/chat-memories';
 import { useThreadsQuery } from '@/hooks/queries/chat-threads';
 import { toastManager } from '@/lib/toast/toast-manager';
 import type { Chat } from '@/lib/types/chat';
@@ -55,6 +58,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     isError,
     error,
   } = useThreadsQuery();
+
+  // Fetch memories for count display in sidebar
+  const { data: memoriesData } = useMemoriesQuery();
 
   // Mutations
   const deleteThreadMutation = useDeleteThreadMutation();
@@ -128,15 +134,27 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     });
   };
 
-  // Get favorites from chats
+  // Get favorites from chats and group them by time
   const favorites = useMemo(() =>
     chats.filter(chat => chat.isFavorite), [chats]);
+
+  const favoriteGroups = useMemo(() =>
+    groupChatsByPeriod(favorites), [favorites]);
 
   // Get non-favorite chats for grouping
   const nonFavoriteChats = useMemo(() =>
     chats.filter(chat => !chat.isFavorite), [chats]);
 
   const chatGroups = groupChatsByPeriod(nonFavoriteChats);
+
+  // Calculate memories count for sidebar section
+  const memoriesCount = useMemo(() => {
+    if (!memoriesData?.pages)
+      return 0;
+    return memoriesData.pages.flatMap(page =>
+      (page?.success && page.data?.items) ? page.data.items : [],
+    ).length;
+  }, [memoriesData]);
 
   // Extract loading states from mutations
   const deletingChatId = deleteThreadMutation.isPending ? deleteThreadMutation.variables : null;
@@ -185,15 +203,16 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                   >
                     <div className="flex aspect-square size-8 items-center justify-center rounded-lg">
                       <Image
-                        src="/static/logo.png"
-                        alt={t('brand.logoAlt')}
+                        src={BRAND.logos.main}
+                        alt={`${BRAND.displayName} Logo`}
                         width={32}
                         height={32}
                         className="size-6 object-contain"
+                        loading="lazy"
                       />
                     </div>
                     <div className="grid flex-1 text-left text-sm leading-tight">
-                      <span className="truncate font-semibold">{BRAND.name}</span>
+                      <span className="truncate font-semibold">{BRAND.displayName}</span>
                       <span className="truncate text-xs">{BRAND.tagline}</span>
                     </div>
                   </Link>
@@ -251,7 +270,72 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
           <SidebarContent className="p-0">
             <ScrollArea ref={scrollAreaRef} className="h-full w-full">
-              <div className="px-2 py-2">
+              <div className="px-2 py-2 space-y-2">
+                {/* ==================== NEW SECTIONS (Open WebUI-inspired) ==================== */}
+
+                {/* Favorites Section - Always visible, collapsible, with time-based grouping */}
+                {!isLoading && !isError && favorites.length > 0 && (
+                  <div className="group-data-[collapsible=icon]:hidden">
+                    <SidebarSection
+                      title={t('chat.favorites')}
+                      icon={<Star className="size-3.5" />}
+                      count={favorites.length}
+                      defaultOpen={false}
+                      collapsible
+                    >
+                      <ChatList
+                        chatGroups={favoriteGroups}
+                        favorites={[]}
+                        onDeleteChat={handleDeleteChat}
+                        searchTerm=""
+                        deletingChatId={deletingChatId}
+                        isMobile={isMobile}
+                        onNavigate={() => {
+                          if (isMobile) {
+                            setOpenMobile(false);
+                          }
+                        }}
+                      />
+                    </SidebarSection>
+                  </div>
+                )}
+
+                {/* Memories Section - Memory management */}
+                <div className="group-data-[collapsible=icon]:hidden">
+                  <SidebarSection
+                    title={t('chat.memories')}
+                    icon={<Sparkles className="size-3.5" />}
+                    count={memoriesCount}
+                    defaultOpen={false}
+                    collapsible
+                  >
+                    <MemoriesSection />
+                  </SidebarSection>
+                </div>
+
+                {/* Trending Section - Coming soon */}
+                <div className="group-data-[collapsible=icon]:hidden">
+                  <div className="space-y-1 opacity-60 cursor-not-allowed">
+                    <div className="flex items-center justify-between px-2 py-1">
+                      <div className="flex items-center gap-1.5">
+                        <div className="text-orange-500">
+                          <Flame className="size-3.5" />
+                        </div>
+                        <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                          {t('chat.trending')}
+                        </h3>
+                      </div>
+                    </div>
+                    <div className="px-2 py-2">
+                      <p className="text-xs text-muted-foreground italic">
+                        {t('chat.comingSoon')}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* ==================== EXISTING CHAT SECTIONS (Now Collapsible) ==================== */}
+
                 {/* Initial Loading State - Following React Query v5 pattern */}
                 {isLoading && <ChatSidebarSkeleton count={15} showFavorites={false} />}
 
@@ -268,32 +352,41 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 )}
 
                 {/* Data Loaded - Show Chat List */}
-                {!isLoading && !isError && (
-                  <>
-                    <ChatList
-                      chatGroups={chatGroups}
-                      favorites={favorites}
-                      onDeleteChat={handleDeleteChat}
-                      searchTerm=""
-                      deletingChatId={deletingChatId}
-                      isMobile={isMobile}
-                      onNavigate={() => {
-                        if (isMobile) {
-                          setOpenMobile(false);
-                        }
-                      }}
-                    />
+                {!isLoading && !isError && chatGroups.length > 0 && (
+                  <div className="group-data-[collapsible=icon]:hidden">
+                    {/* Single "Chat" section - Always expanded */}
+                    <SidebarSection
+                      title={t('navigation.chat')}
+                      icon={<MessageSquare className="size-3.5" />}
+                      count={chats.length}
+                      defaultOpen
+                      collapsible
+                    >
+                      <ChatList
+                        chatGroups={chatGroups}
+                        favorites={[]}
+                        onDeleteChat={handleDeleteChat}
+                        searchTerm=""
+                        deletingChatId={deletingChatId}
+                        isMobile={isMobile}
+                        onNavigate={() => {
+                          if (isMobile) {
+                            setOpenMobile(false);
+                          }
+                        }}
+                      />
 
-                    {/* Pagination Loading Skeleton - Following React Query v5 pattern */}
-                    {isFetchingNextPage && <ChatSidebarPaginationSkeleton count={20} />}
+                      {/* Pagination Loading Skeleton - Following React Query v5 pattern */}
+                      {isFetchingNextPage && <ChatSidebarPaginationSkeleton count={20} />}
 
-                    {/* Show end message when no more pages - Hidden when collapsed */}
-                    {!hasNextPage && !isFetchingNextPage && chats.length > 0 && (
-                      <div className="px-2 py-4 text-center text-xs text-muted-foreground group-data-[collapsible=icon]:hidden">
-                        {t('chat.noMoreThreads')}
-                      </div>
-                    )}
-                  </>
+                      {/* Show end message when no more pages */}
+                      {!hasNextPage && !isFetchingNextPage && chats.length > 0 && (
+                        <div className="px-2 py-4 text-center text-xs text-muted-foreground">
+                          {t('chat.noMoreThreads')}
+                        </div>
+                      )}
+                    </SidebarSection>
+                  </div>
                 )}
               </div>
             </ScrollArea>
