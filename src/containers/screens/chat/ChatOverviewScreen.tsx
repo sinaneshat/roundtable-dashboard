@@ -42,16 +42,13 @@ import type { ParticipantConfig } from '@/lib/schemas/chat-forms';
 import { chatInputFormDefaults, chatInputFormToCreateThreadRequest } from '@/lib/schemas/chat-forms';
 import { showApiErrorToast } from '@/lib/toast';
 
-// ✅ STABLE FILTER: Define outside component to prevent query key changes on re-render
-const MODELS_QUERY_FILTERS = { includeAll: true } as const;
-
 export default function ChatOverviewScreen() {
   const router = useRouter();
   const t = useTranslations();
   const { data: session } = useSession();
 
   // ✅ SINGLE SOURCE OF TRUTH: Fetch models from backend (includes default_model_id)
-  const { data: modelsData } = useModelsQuery(MODELS_QUERY_FILTERS);
+  const { data: modelsData } = useModelsQuery();
   const allModels = modelsData?.data?.models || [];
   const defaultModelId = modelsData?.data?.default_model_id;
 

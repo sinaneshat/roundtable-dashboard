@@ -1,22 +1,13 @@
 import { relations } from 'drizzle-orm';
 import { index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 
-import type { SubscriptionTier } from '@/db/config/subscription-tiers';
-import {
-  SUBSCRIPTION_TIERS,
-} from '@/db/config/subscription-tiers';
-
 import { user } from './auth';
 
-// ============================================================================
-// Subscription Tier Constants
-// ============================================================================
-
 /**
- * ✅ SINGLE SOURCE OF TRUTH: Imported from @/db/config/subscription-tiers
- * Re-exported for backward compatibility with existing imports
+ * ✅ SINGLE SOURCE OF TRUTH: Subscription tier constants defined here
  */
-export { SUBSCRIPTION_TIERS, type SubscriptionTier };
+export const SUBSCRIPTION_TIERS = ['free', 'starter', 'pro', 'power'] as const;
+export type SubscriptionTier = (typeof SUBSCRIPTION_TIERS)[number];
 
 /**
  * User Chat Usage Tracking

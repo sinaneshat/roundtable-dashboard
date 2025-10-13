@@ -64,14 +64,14 @@ export const chatMessageUpdateSchema = createUpdateSchema(chatMessage, {
 /**
  * Chat Thread Changelog Schemas
  * ✅ Tracks configuration changes to threads
+ * ✅ SINGLE SOURCE: Matches ChangelogTypeSchema in @/api/routes/chat/schema.ts
  */
 const CHANGELOG_TYPES = [
   'mode_change',
   'participant_added',
   'participant_removed',
   'participant_updated',
-  'memory_added',
-  'memory_removed',
+  'participants_reordered',
 ] as const;
 
 export const chatThreadChangelogSelectSchema = createSelectSchema(chatThreadChangelog);

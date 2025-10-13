@@ -101,18 +101,7 @@ export const queryKeys = {
   // OpenRouter Models
   models: {
     all: QueryKeyFactory.base('models'),
-    lists: (filters?: { provider?: string; category?: string; freeOnly?: boolean; search?: string; supportsVision?: boolean; includeAll?: boolean }) =>
-      filters
-        ? [...queryKeys.models.all, 'list', filters] as const
-        : [...queryKeys.models.all, 'list'] as const,
-    list: (filters?: { provider?: string; category?: string; freeOnly?: boolean; search?: string; supportsVision?: boolean; includeAll?: boolean }) =>
-      filters
-        ? QueryKeyFactory.action('models', 'list', JSON.stringify(filters))
-        : QueryKeyFactory.list('models'),
-    details: () => [...queryKeys.models.all, 'detail'] as const,
-    detail: (id: string) => QueryKeyFactory.detail('models', id),
-    providers: () => QueryKeyFactory.action('models', 'providers'),
-    default: () => QueryKeyFactory.action('models', 'default'), // Default model for user's tier
+    list: () => QueryKeyFactory.list('models'),
   },
 } as const;
 

@@ -1,14 +1,14 @@
 import { createInsertSchema, createSelectSchema } from 'drizzle-zod';
 import { z } from 'zod';
 
-import type { SubscriptionTier } from '@/db/config/subscription-tiers';
 import {
   getTierName as getSubscriptionTierName,
   isValidSubscriptionTier,
   SUBSCRIPTION_TIER_NAMES,
-  SUBSCRIPTION_TIERS,
   subscriptionTierSchema,
-} from '@/db/config/subscription-tiers';
+} from '@/constants/subscription-tiers';
+import type { SubscriptionTier } from '@/db/tables/usage';
+import { SUBSCRIPTION_TIERS } from '@/db/tables/usage';
 
 import {
   subscriptionTierQuotas,

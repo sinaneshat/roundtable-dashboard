@@ -5,13 +5,13 @@ import type { Metadata, Viewport } from 'next';
 import { getMessages, getTranslations } from 'next-intl/server';
 import React from 'react';
 
+import { AppProviders } from '@/components/providers';
 import {
   AeoMetaTags,
   SoftwareApplicationSchema,
   StructuredData,
 } from '@/components/seo';
 import { BRAND } from '@/constants/brand';
-import { RootLayout } from '@/containers/layouts/root';
 import { createMetadata } from '@/utils/metadata';
 
 export const viewport: Viewport = {
@@ -94,17 +94,19 @@ export default async function Layout({ children, modal }: RootLayoutProps) {
           ]}
         />
 
-        <RootLayout
+        <AppProviders
           locale="en"
           translations={translations as Record<string, unknown>}
-          modal={modal}
           env={{
             NEXT_PUBLIC_WEBAPP_ENV: env.NEXT_PUBLIC_WEBAPP_ENV,
             NEXT_PUBLIC_MAINTENANCE: env.NEXT_PUBLIC_MAINTENANCE,
+            NEXT_PUBLIC_POSTHOG_API_KEY: env.NEXT_PUBLIC_POSTHOG_API_KEY,
+            NEXT_PUBLIC_POSTHOG_HOST: env.NEXT_PUBLIC_POSTHOG_HOST,
           }}
         >
-          {children}
-        </RootLayout>
+          <main>{children}</main>
+          {modal}
+        </AppProviders>
       </body>
     </html>
   );

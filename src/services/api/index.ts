@@ -129,20 +129,12 @@ export {
 } from './customer-portal';
 
 // ============================================================================
-// Chat Participants Service Exports
+// Models Service Exports
 // ============================================================================
 
 export {
-  clearModelsCacheService,
-  type GetModelRequest,
-  type GetModelResponse,
-  getModelService,
-  type ListModelsRequest,
   type ListModelsResponse,
   listModelsService,
-  type ListProvidersRequest,
-  type ListProvidersResponse,
-  listProvidersService,
 } from './models';
 
 // ============================================================================

@@ -15,8 +15,8 @@
  * - Scientific notation for paid models (e.g., "0.0000003")
  */
 
-import type { SubscriptionTier } from '@/db/config/subscription-tiers';
-import { getMaxModelPricing, getTierName } from '@/db/config/subscription-tiers';
+import { getMaxModelPricing, getTierName } from '@/constants/subscription-tiers';
+import type { SubscriptionTier } from '@/db/tables/usage';
 
 import type { BaseModelResponse } from '../routes/models/schema';
 
@@ -57,19 +57,21 @@ function getPricingThreshold(tier: SubscriptionTier): {
 }
 
 // ============================================================================
-// PRICING UTILITY FUNCTIONS
+// PRICING UTILITY FUNCTIONS (Exported for Reuse)
 // ============================================================================
 
 /**
  * Parse OpenRouter pricing string to number
  * Handles scientific notation and "0" for free models
  *
+ * ✅ SINGLE SOURCE OF TRUTH: Exported for use across all pricing calculations
+ *
  * @example
  * parsePrice("0") => 0
  * parsePrice("0.0000003") => 0.0000003
  * parsePrice("0.003") => 0.003
  */
-function parsePrice(priceStr: string): number {
+export function parsePrice(priceStr: string): number {
   const price = Number.parseFloat(priceStr);
   return Number.isNaN(price) ? 0 : price;
 }
@@ -85,6 +87,21 @@ function parsePrice(priceStr: string): number {
 function costPer1K(priceStr: string): number {
   const perTokenCost = parsePrice(priceStr);
   return perTokenCost * 1000;
+}
+
+/**
+ * Convert per-token cost to per-million-token cost
+ * OpenRouter prices are per token, we calculate per million for display purposes
+ *
+ * ✅ SINGLE SOURCE OF TRUTH: Exported for use in pricing display calculations
+ *
+ * @example
+ * costPerMillion("0.0000003") => 0.3 (per 1M tokens = $0.30)
+ * costPerMillion("0.000003") => 3.0 (per 1M tokens = $3.00)
+ */
+export function costPerMillion(priceStr: string): number {
+  const perTokenCost = parsePrice(priceStr);
+  return perTokenCost * 1_000_000;
 }
 
 /**

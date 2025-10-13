@@ -23,9 +23,6 @@ import { getProviderIcon } from '@/lib/ai/provider-icons';
 import { formatRelativeTime } from '@/lib/format/date';
 import { cn } from '@/lib/ui/cn';
 
-// ✅ STABLE FILTER: Define outside component to prevent query key changes on re-render
-const MODELS_QUERY_FILTERS = { includeAll: true } as const;
-
 type ConfigurationChangesGroupProps = {
   group: ChangeGroup;
   className?: string;
@@ -147,7 +144,7 @@ export function ConfigurationChangesGroup({ group, className }: ConfigurationCha
  */
 function ChangeItem({ change }: { change: ChatThreadChangelog }) {
   // ✅ SINGLE SOURCE OF TRUTH: Fetch models from backend
-  const { data: modelsData } = useModelsQuery(MODELS_QUERY_FILTERS);
+  const { data: modelsData } = useModelsQuery();
   const allModels = modelsData?.data?.models || [];
 
   // ✅ ZOD PATTERN: Parse changeData using type-safe schemas (no inline casting)

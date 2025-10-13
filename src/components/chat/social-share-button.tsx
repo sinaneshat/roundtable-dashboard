@@ -2,7 +2,6 @@
 
 import { Check, Mail, Share2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { useState } from 'react';
 import {
   EmailShareButton,
   FacebookShareButton,
@@ -24,6 +23,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { BRAND } from '@/constants/brand';
+import { useBoolean } from '@/hooks/utils';
 import { cn } from '@/lib/ui/cn';
 
 /**
@@ -60,8 +60,8 @@ export function SocialShareButton({
   className,
 }: SocialShareButtonProps) {
   const t = useTranslations('chat');
-  const [isOpen, setIsOpen] = useState(false);
-  const [copySuccess, setCopySuccess] = useState(false);
+  const isOpen = useBoolean(false);
+  const copySuccess = useBoolean(false);
 
   // Prepare sharing text with brand mention
   const shareTitle = `${title} - ${BRAND.displayName}`;
@@ -70,10 +70,10 @@ export function SocialShareButton({
   const handleCopyLink = async () => {
     try {
       await navigator.clipboard.writeText(url);
-      setCopySuccess(true);
+      copySuccess.onTrue();
       setTimeout(() => {
-        setCopySuccess(false);
-        setIsOpen(false);
+        copySuccess.onFalse();
+        isOpen.onFalse();
       }, 2000);
     } catch (error) {
       if (process.env.NODE_ENV === 'development') {
@@ -139,7 +139,7 @@ export function SocialShareButton({
 
   return (
     <TooltipProvider>
-      <Popover open={isOpen} onOpenChange={setIsOpen}>
+      <Popover open={isOpen.value} onOpenChange={isOpen.setValue}>
         <Tooltip delayDuration={300}>
           <TooltipTrigger asChild>
             <PopoverTrigger asChild>
@@ -153,7 +153,7 @@ export function SocialShareButton({
                   className,
                 )}
               >
-                {copySuccess
+                {copySuccess.value
                   ? (
                       <Check className="size-4 text-green-500 animate-in zoom-in-75 duration-300" />
                     )
@@ -162,14 +162,14 @@ export function SocialShareButton({
                     )}
                 {showTextOnLargeScreens && (
                   <span className="hidden md:inline">
-                    {copySuccess ? t('linkCopied') : t('shareConversation')}
+                    {copySuccess.value ? t('linkCopied') : t('shareConversation')}
                   </span>
                 )}
               </Button>
             </PopoverTrigger>
           </TooltipTrigger>
           <TooltipContent side="bottom">
-            <p className="text-sm">{copySuccess ? t('linkCopied') : t('shareThread')}</p>
+            <p className="text-sm">{copySuccess.value ? t('linkCopied') : t('shareThread')}</p>
           </TooltipContent>
         </Tooltip>
 
@@ -195,7 +195,7 @@ export function SocialShareButton({
                       'focus:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                       itemClassName,
                     )}
-                    onClick={() => setIsOpen(false)}
+                    onClick={isOpen.onFalse}
                   >
                     <span className="flex size-5 items-center justify-center shrink-0">
                       {icon}
@@ -213,13 +213,13 @@ export function SocialShareButton({
                   'flex w-full items-center gap-3 rounded-md px-2 py-2 text-sm',
                   'hover:bg-accent/50 transition-colors duration-200',
                   'focus:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                  copySuccess && 'text-green-500',
+                  copySuccess.value && 'text-green-500',
                 )}
               >
                 <span className="flex size-5 items-center justify-center shrink-0">
-                  {copySuccess ? <Check className="size-4" /> : <Share2 className="size-4" />}
+                  {copySuccess.value ? <Check className="size-4" /> : <Share2 className="size-4" />}
                 </span>
-                <span>{copySuccess ? t('linkCopied') : t('copyLink')}</span>
+                <span>{copySuccess.value ? t('linkCopied') : t('copyLink')}</span>
               </button>
             </div>
           </div>

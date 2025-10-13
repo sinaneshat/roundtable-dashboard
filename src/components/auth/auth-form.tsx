@@ -19,6 +19,7 @@ import {
 import { Form } from '@/components/ui/form';
 import type { AuthEmailValues } from '@/db/validation/auth';
 import { authEmailSchema } from '@/db/validation/auth';
+import { useBoolean } from '@/hooks/utils';
 import { authClient } from '@/lib/auth/client';
 import { showApiErrorToast, showApiInfoToast } from '@/lib/toast';
 import { getApiErrorDetails } from '@/lib/utils/error-handling';
@@ -32,8 +33,8 @@ type MagicLinkFormData = AuthEmailValues;
 export function AuthForm() {
   const t = useTranslations();
   const searchParams = useSearchParams();
-  const [isLoading, setIsLoading] = useState(false);
-  const [magicLinkSent, setMagicLinkSent] = useState(false);
+  const isLoading = useBoolean(false);
+  const magicLinkSent = useBoolean(false);
   const [sentEmail, setSentEmail] = useState('');
 
   // Display toast message from URL parameters (for redirects from unavailable public threads)
@@ -72,7 +73,7 @@ export function AuthForm() {
   });
 
   const handleMagicLink = async (data: MagicLinkFormData) => {
-    setIsLoading(true);
+    isLoading.onTrue();
     try {
       await authClient.signIn.magicLink({
         email: data.email,
@@ -81,7 +82,7 @@ export function AuthForm() {
         errorCallbackURL: '/auth/error',
       });
       setSentEmail(data.email);
-      setMagicLinkSent(true);
+      magicLinkSent.onTrue();
     } catch (error) {
       console.error('Magic link failed:', error);
       const errorDetails = getApiErrorDetails(error);
@@ -90,11 +91,11 @@ export function AuthForm() {
         message: errorDetails.message || t('auth.magicLink.error'),
       });
     } finally {
-      setIsLoading(false);
+      isLoading.onFalse();
     }
   };
 
-  if (magicLinkSent) {
+  if (magicLinkSent.value) {
     return (
       <div className="relative">
         <Card className="w-full max-w-md mx-auto">
@@ -112,7 +113,7 @@ export function AuthForm() {
               variant="outline"
               className="w-full"
               onClick={() => {
-                setMagicLinkSent(false);
+                magicLinkSent.onFalse();
                 form.reset();
               }}
             >
@@ -142,10 +143,10 @@ export function AuthForm() {
                 placeholder={t('auth.emailPlaceholder')}
                 fieldType="email"
                 required
-                disabled={isLoading}
+                disabled={isLoading.value}
               />
-              <Button type="submit" className="w-full" disabled={isLoading}>
-                {isLoading ? t('actions.loading') : t('auth.magicLink.sendButton')}
+              <Button type="submit" className="w-full" disabled={isLoading.value}>
+                {isLoading.value ? t('actions.loading') : t('auth.magicLink.sendButton')}
               </Button>
             </form>
           </Form>

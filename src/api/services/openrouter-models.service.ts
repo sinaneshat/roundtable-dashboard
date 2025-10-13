@@ -13,9 +13,9 @@
 import { apiLogger } from '@/api/middleware/hono-logger';
 import type { BaseModelResponse, RawOpenRouterModel } from '@/api/routes/models/schema';
 import { OpenRouterModelsResponseSchema } from '@/api/routes/models/schema';
-import type { SubscriptionTier } from '@/db/config/subscription-tiers';
+import type { SubscriptionTier } from '@/db/tables/usage';
 
-import { canAccessModelByPricing, getRequiredTierForModel } from './model-pricing-tiers.service';
+import { canAccessModelByPricing, costPerMillion, getRequiredTierForModel, isModelFree, parsePrice } from './model-pricing-tiers.service';
 
 // ============================================================================
 // SCHEMA IMPORTS - SINGLE SOURCE OF TRUTH
@@ -149,24 +149,28 @@ class OpenRouterModelsService {
       tools: true, // Most modern models support tools
     };
 
-    // Format pricing for display
+    // ✅ SINGLE SOURCE OF TRUTH: Use parsePrice() utility for consistent parsing
     const pricing_display = {
-      input: this.formatPricing(Number.parseFloat(model.pricing.prompt)),
-      output: this.formatPricing(Number.parseFloat(model.pricing.completion)),
+      input: this.formatPricing(parsePrice(model.pricing.prompt)),
+      output: this.formatPricing(parsePrice(model.pricing.completion)),
     };
 
-    // Check if model is free
-    const is_free = Number.parseFloat(model.pricing.prompt) === 0 && Number.parseFloat(model.pricing.completion) === 0;
-
-    return {
+    // ✅ SINGLE SOURCE OF TRUTH: Use isModelFree() from model-pricing-tiers.service.ts
+    // This checks both pricing AND model name for "free" designation
+    const baseModel: BaseModelResponse = {
       ...model,
       provider,
       category,
       capabilities,
       pricing_display,
-      is_free,
+      is_free: false, // Will be set correctly below
       supports_vision: capabilities.vision,
       is_reasoning_model: capabilities.reasoning,
+    };
+
+    return {
+      ...baseModel,
+      is_free: isModelFree(baseModel),
     };
   }
 
@@ -276,53 +280,6 @@ class OpenRouterModelsService {
   }
 
   /**
-   * ✅ GET DEFAULT MODEL: Get the most popular accessible model for a user's tier
-   *
-   * Returns the first model from the top 10 that the user can access based on their subscription tier.
-   * This ensures the default model is always:
-   * 1. One of the most popular models
-   * 2. Accessible to the user's current tier
-   * 3. Dynamically selected (no hardcoding)
-   *
-   * Falls back to the cheapest free model if no popular models are accessible (edge case).
-   *
-   * @param userTier - User's subscription tier
-   * @returns The default model ID for the user
-   */
-  async getDefaultModelForTier(userTier: SubscriptionTier): Promise<string> {
-    const top50 = await this.getTop50Models();
-
-    // Get top 10 most popular models
-    const top10 = top50.slice(0, 10);
-
-    // Find the first model from top 10 that user can access
-    const defaultModel = top10.find(model => this.canUserAccessModel(userTier, model));
-
-    if (defaultModel) {
-      apiLogger.info('Selected default model for user tier', {
-        userTier,
-        modelId: defaultModel.id,
-        modelName: defaultModel.name,
-        provider: defaultModel.provider,
-        isPopular: true,
-      });
-      return defaultModel.id;
-    }
-
-    // Fallback: Find the cheapest free model (edge case - should rarely happen)
-    const freeModels = top50.filter(m => m.is_free);
-    const fallbackModel = freeModels[0] || top50[0];
-
-    apiLogger.warn('No popular model accessible for user tier, using fallback', {
-      userTier,
-      fallbackModelId: fallbackModel?.id || 'none',
-      fallbackModelName: fallbackModel?.name || 'none',
-    });
-
-    return fallbackModel?.id || 'google/gemini-flash-1.5'; // Ultimate fallback
-  }
-
-  /**
    * Clear cache (useful for testing or manual refresh)
    */
   clearCache(): void {
@@ -340,157 +297,54 @@ class OpenRouterModelsService {
   }
 
   /**
-   * ✅ SINGLE SOURCE OF TRUTH: Check if user can access a model based on their tier
-   */
-  canUserAccessModel(userTier: SubscriptionTier, model: EnhancedOpenRouterModel): boolean {
-    return canAccessModelByPricing(userTier, model);
-  }
-
-  /**
-   * ✅ OPTIMAL ANALYSIS MODEL: Find the cheapest and fastest model for moderator analysis
+   * ✅ GET DEFAULT MODEL: Get the most popular accessible model for a user's tier
    *
-   * Selection criteria (in priority order):
-   * 1. Cost: Very cheap (budget tier preferred, <$0.50/M tokens)
-   * 2. Speed: Non-reasoning models (faster inference)
-   * 3. Provider: Top-tier providers (anthropic, openai, google, meta, deepseek)
-   * 4. Context: Reasonable context window (don't need huge)
-   * 5. Structured output: Must support JSON structured output (most modern models do)
+   * Returns the first model from the top 10 that the user can access based on their subscription tier.
+   * This ensures the default model is always:
+   * 1. One of the most popular models
+   * 2. Accessible to the user's current tier
+   * 3. Dynamically selected (no hardcoding)
    *
-   * Returns the single best model for cost-performance balance for analysis tasks
+   * Falls back to the cheapest free model if no popular models are accessible (edge case).
+   *
+   * @param userTier - User's subscription tier
+   * @returns The default model ID for the user
    */
-  async getOptimalAnalysisModel(): Promise<EnhancedOpenRouterModel | null> {
-    const allModels = await this.fetchAllModels();
+  async getDefaultModelForTier(userTier: SubscriptionTier): Promise<string> {
+    const top100 = await this.getTop100Models();
 
-    // Filter criteria for analysis models
-    const candidateModels = allModels.filter((model) => {
-      // Must not be a reasoning model (slower)
-      if (model.is_reasoning_model || model.category === 'reasoning') {
-        return false;
-      }
+    // Get top 10 most popular models
+    const top10 = top100.slice(0, 10);
 
-      // Must be from a reputable provider for reliability
-      const topProviders = new Set(['anthropic', 'openai', 'google', 'meta-llama', 'deepseek', 'mistralai', 'qwen']);
-      if (!topProviders.has(model.provider)) {
-        return false;
-      }
+    // ✅ SINGLE SOURCE OF TRUTH: Use canAccessModelByPricing directly from model-pricing-tiers.service.ts
+    const defaultModel = top10.find(model => canAccessModelByPricing(userTier, model));
 
-      // Calculate cost per million tokens
-      const inputPricePerMillion = Number.parseFloat(model.pricing.prompt) * 1000000;
-      const outputPricePerMillion = Number.parseFloat(model.pricing.completion) * 1000000;
-
-      // Must be very cheap (budget tier: <$0.50/M tokens input, <$2/M tokens output)
-      if (inputPricePerMillion > 0.5 || outputPricePerMillion > 2) {
-        return false;
-      }
-
-      // Must have reasonable context window (at least 32K, but not excessively large)
-      if (model.context_length < 32000) {
-        return false;
-      }
-
-      return true;
-    });
-
-    if (candidateModels.length === 0) {
-      apiLogger.warn('No suitable analysis models found, falling back to gpt-4o-mini');
-      return allModels.find(m => m.id === 'openai/gpt-4o-mini') || null;
-    }
-
-    // Score each candidate for cost-performance balance
-    const scoredModels = candidateModels.map((model) => {
-      let score = 0;
-
-      // Provider quality scoring (60 points max)
-      const tierAProviders = new Set(['anthropic', 'openai', 'google']);
-      const tierBProviders = new Set(['meta-llama', 'deepseek', 'mistralai', 'qwen']);
-
-      if (tierAProviders.has(model.provider)) {
-        score += 60;
-      } else if (tierBProviders.has(model.provider)) {
-        score += 40;
-      } else {
-        score += 20;
-      }
-
-      // Cost efficiency scoring (60 points max - lower cost = higher score)
-      const inputPricePerMillion = Number.parseFloat(model.pricing.prompt) * 1000000;
-      const outputPricePerMillion = Number.parseFloat(model.pricing.completion) * 1000000;
-      const avgCostPerMillion = (inputPricePerMillion + outputPricePerMillion) / 2;
-
-      // Invert cost to score (cheaper = better)
-      // $0 = 60 points, $0.50/M = 0 points
-      const costScore = Math.max(0, 60 - (avgCostPerMillion / 0.5) * 60);
-      score += costScore;
-
-      // Speed indicators (30 points max)
-      // Prefer newer, smaller, faster models
-      // Smaller context = faster (but we need at least 32K)
-      if (model.context_length < 64000) {
-        score += 15; // Fast models
-      } else if (model.context_length < 128000) {
-        score += 10; // Medium speed
-      } else {
-        score += 5; // Slower but capable
-      }
-
-      // Recency bonus (15 points max)
-      if (model.created) {
-        const ageInDays = (Date.now() / 1000 - model.created) / (60 * 60 * 24);
-        if (ageInDays < 180) {
-          score += 15; // Last 6 months
-        } else if (ageInDays < 365) {
-          score += 10; // Last year
-        } else {
-          score += 5; // Older
-        }
-      }
-
-      // Specific model bonuses for known fast+cheap models
-      const idLower = model.id.toLowerCase();
-      const nameLower = model.name.toLowerCase();
-
-      if (
-        idLower.includes('gpt-4o-mini')
-        || idLower.includes('gemini-2.0-flash')
-        || idLower.includes('gemini-1.5-flash')
-        || idLower.includes('claude-3-5-haiku')
-        || idLower.includes('claude-3-haiku')
-        || idLower.includes('llama-3.3-70b')
-        || idLower.includes('llama-3.1-70b')
-        || idLower.includes('deepseek-chat')
-        || idLower.includes('qwen-2.5-72b')
-        || nameLower.includes('haiku')
-        || nameLower.includes('flash')
-        || nameLower.includes('mini')
-      ) {
-        score += 30; // Bonus for known fast+cheap models
-      }
-
-      return { model, score };
-    });
-
-    // Sort by score and pick the best
-    const bestModel = scoredModels.sort((a, b) => b.score - a.score)[0];
-
-    if (bestModel) {
-      apiLogger.info('Selected optimal analysis model', {
-        modelId: bestModel.model.id,
-        modelName: bestModel.model.name,
-        provider: bestModel.model.provider,
-        inputPrice: bestModel.model.pricing_display.input,
-        outputPrice: bestModel.model.pricing_display.output,
-        contextLength: bestModel.model.context_length,
-        score: bestModel.score.toFixed(2),
+    if (defaultModel) {
+      apiLogger.info('Selected default model for user tier', {
+        userTier,
+        modelId: defaultModel.id,
+        modelName: defaultModel.name,
+        provider: defaultModel.provider,
+        isPopular: true,
       });
-
-      return bestModel.model;
+      return defaultModel.id;
     }
 
-    return null;
+    // Fallback: Find the cheapest free model (edge case - should rarely happen)
+    const freeModels = top100.filter(m => m.is_free);
+    const fallbackModel = freeModels[0] || top100[0];
+
+    apiLogger.warn('No popular model accessible for user tier, using fallback', {
+      userTier,
+      fallbackModelId: fallbackModel?.id || 'none',
+      fallbackModelName: fallbackModel?.name || 'none',
+    });
+
+    return fallbackModel?.id || 'google/gemini-flash-1.5'; // Ultimate fallback
   }
 
   /**
-   * ✅ DYNAMIC TOP 50 SELECTION: Intelligently select top 50 most popular models from OpenRouter
+   * ✅ DYNAMIC TOP 100 SELECTION: Intelligently select top 100 most popular models from OpenRouter
    *
    * Selection criteria (in priority order):
    * 1. Provider quality (top tier providers first)
@@ -501,9 +355,9 @@ class OpenRouterModelsService {
    * 6. Pricing tier diversity (ensure models across all tiers)
    *
    * This replaces hardcoded model lists with dynamic selection from OpenRouter API
-   * Limited to 50 models to show only the most relevant and popular options
+   * Limited to 100 models to show the most relevant and popular options
    */
-  async getTop50Models(): Promise<EnhancedOpenRouterModel[]> {
+  async getTop100Models(): Promise<EnhancedOpenRouterModel[]> {
     const allModels = await this.fetchAllModels();
 
     // Define top-tier providers (based on quality and popularity)
@@ -625,7 +479,8 @@ class OpenRouterModelsService {
       }
 
       // Penalize extremely expensive models (but don't exclude them entirely)
-      const inputPricePerMillion = Number.parseFloat(model.pricing.prompt) * 1000000;
+      // ✅ SINGLE SOURCE OF TRUTH: Use costPerMillion() utility for consistent calculations
+      const inputPricePerMillion = costPerMillion(model.pricing.prompt);
       if (inputPricePerMillion > 50) {
         // Very expensive models
         score -= 15;
@@ -659,10 +514,10 @@ class OpenRouterModelsService {
       return { model, score };
     });
 
-    // Sort by score (descending) and take top 50
-    const top50 = scoredModels
+    // Sort by score (descending) and take top 100
+    const top100 = scoredModels
       .sort((a, b) => b.score - a.score)
-      .slice(0, 50)
+      .slice(0, 100)
       .map(item => item.model);
 
     // Ensure tier diversity - make sure we have models across all pricing tiers
@@ -673,20 +528,164 @@ class OpenRouterModelsService {
       power: 0,
     };
 
-    top50.forEach((model) => {
+    top100.forEach((model) => {
       const tier = this.getRequiredTierForModel(model);
       tierCounts[tier]++;
     });
 
-    apiLogger.info('Selected top 50 models dynamically from OpenRouter', {
+    apiLogger.info('Selected top 100 models dynamically from OpenRouter', {
       total: allModels.length,
-      selected: top50.length,
+      selected: top100.length,
       tierDistribution: tierCounts,
-      topProviders: [...new Set(top50.slice(0, 10).map(m => m.provider))],
-      top10Models: top50.slice(0, 10).map(m => m.id),
+      topProviders: [...new Set(top100.slice(0, 10).map(m => m.provider))],
+      top10Models: top100.slice(0, 10).map(m => m.id),
     });
 
-    return top50;
+    return top100;
+  }
+
+  /**
+   * ✅ OPTIMAL ANALYSIS MODEL: Find the cheapest and fastest model for moderator analysis
+   *
+   * Selection criteria (in priority order):
+   * 1. Cost: Very cheap (budget tier preferred, <$0.50/M tokens)
+   * 2. Speed: Non-reasoning models (faster inference)
+   * 3. Provider: Top-tier providers (anthropic, openai, google, meta, deepseek)
+   * 4. Context: Reasonable context window (don't need huge)
+   * 5. Structured output: Must support JSON structured output (most modern models do)
+   *
+   * Returns the single best model for cost-performance balance for analysis tasks
+   */
+  async getOptimalAnalysisModel(): Promise<EnhancedOpenRouterModel | null> {
+    const allModels = await this.fetchAllModels();
+
+    // Filter criteria for analysis models
+    const candidateModels = allModels.filter((model) => {
+      // Must not be a reasoning model (slower)
+      if (model.is_reasoning_model || model.category === 'reasoning') {
+        return false;
+      }
+
+      // Must be from a reputable provider for reliability
+      const topProviders = new Set(['anthropic', 'openai', 'google', 'meta-llama', 'deepseek', 'mistralai', 'qwen']);
+      if (!topProviders.has(model.provider)) {
+        return false;
+      }
+
+      // ✅ SINGLE SOURCE OF TRUTH: Use costPerMillion() utility for consistent calculations
+      const inputPricePerMillion = costPerMillion(model.pricing.prompt);
+      const outputPricePerMillion = costPerMillion(model.pricing.completion);
+
+      // Must be very cheap (budget tier: <$0.50/M tokens input, <$2/M tokens output)
+      if (inputPricePerMillion > 0.5 || outputPricePerMillion > 2) {
+        return false;
+      }
+
+      // Must have reasonable context window (at least 32K, but not excessively large)
+      if (model.context_length < 32000) {
+        return false;
+      }
+
+      return true;
+    });
+
+    if (candidateModels.length === 0) {
+      apiLogger.warn('No suitable analysis models found, falling back to gpt-4o-mini');
+      return allModels.find(m => m.id === 'openai/gpt-4o-mini') || null;
+    }
+
+    // Score each candidate for cost-performance balance
+    const scoredModels = candidateModels.map((model) => {
+      let score = 0;
+
+      // Provider quality scoring (60 points max)
+      const tierAProviders = new Set(['anthropic', 'openai', 'google']);
+      const tierBProviders = new Set(['meta-llama', 'deepseek', 'mistralai', 'qwen']);
+
+      if (tierAProviders.has(model.provider)) {
+        score += 60;
+      } else if (tierBProviders.has(model.provider)) {
+        score += 40;
+      } else {
+        score += 20;
+      }
+
+      // Cost efficiency scoring (60 points max - lower cost = higher score)
+      // ✅ SINGLE SOURCE OF TRUTH: Use costPerMillion() utility for consistent calculations
+      const inputPricePerMillion = costPerMillion(model.pricing.prompt);
+      const outputPricePerMillion = costPerMillion(model.pricing.completion);
+      const avgCostPerMillion = (inputPricePerMillion + outputPricePerMillion) / 2;
+
+      // Invert cost to score (cheaper = better)
+      // $0 = 60 points, $0.50/M = 0 points
+      const costScore = Math.max(0, 60 - (avgCostPerMillion / 0.5) * 60);
+      score += costScore;
+
+      // Speed indicators (30 points max)
+      // Prefer newer, smaller, faster models
+      // Smaller context = faster (but we need at least 32K)
+      if (model.context_length < 64000) {
+        score += 15; // Fast models
+      } else if (model.context_length < 128000) {
+        score += 10; // Medium speed
+      } else {
+        score += 5; // Slower but capable
+      }
+
+      // Recency bonus (15 points max)
+      if (model.created) {
+        const ageInDays = (Date.now() / 1000 - model.created) / (60 * 60 * 24);
+        if (ageInDays < 180) {
+          score += 15; // Last 6 months
+        } else if (ageInDays < 365) {
+          score += 10; // Last year
+        } else {
+          score += 5; // Older
+        }
+      }
+
+      // Specific model bonuses for known fast+cheap models
+      const idLower = model.id.toLowerCase();
+      const nameLower = model.name.toLowerCase();
+
+      if (
+        idLower.includes('gpt-4o-mini')
+        || idLower.includes('gemini-2.0-flash')
+        || idLower.includes('gemini-1.5-flash')
+        || idLower.includes('claude-3-5-haiku')
+        || idLower.includes('claude-3-haiku')
+        || idLower.includes('llama-3.3-70b')
+        || idLower.includes('llama-3.1-70b')
+        || idLower.includes('deepseek-chat')
+        || idLower.includes('qwen-2.5-72b')
+        || nameLower.includes('haiku')
+        || nameLower.includes('flash')
+        || nameLower.includes('mini')
+      ) {
+        score += 30; // Bonus for known fast+cheap models
+      }
+
+      return { model, score };
+    });
+
+    // Sort by score and pick the best
+    const bestModel = scoredModels.sort((a, b) => b.score - a.score)[0];
+
+    if (bestModel) {
+      apiLogger.info('Selected optimal analysis model', {
+        modelId: bestModel.model.id,
+        modelName: bestModel.model.name,
+        provider: bestModel.model.provider,
+        inputPrice: bestModel.model.pricing_display.input,
+        outputPrice: bestModel.model.pricing_display.output,
+        contextLength: bestModel.model.context_length,
+        score: bestModel.score.toFixed(2),
+      });
+
+      return bestModel.model;
+    }
+
+    return null;
   }
 }
 

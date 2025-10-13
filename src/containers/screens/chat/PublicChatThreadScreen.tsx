@@ -22,9 +22,6 @@ import { getAvatarPropsFromModelId } from '@/lib/ai/avatar-helpers';
 import { groupChangelogByTime } from '@/lib/ai/changelog-helpers';
 import { chatMessagesToUIMessages, getMessageMetadata } from '@/lib/ai/message-helpers';
 
-// ✅ STABLE FILTER: Define outside component to prevent query key changes on re-render
-const MODELS_QUERY_FILTERS = { includeAll: true } as const;
-
 /**
  * Public Chat Thread Screen - Client Component
  * Read-only view of publicly shared chat threads (no authentication required)
@@ -40,7 +37,7 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
   const thread = threadResponse?.thread || null;
 
   // ✅ SINGLE SOURCE OF TRUTH: Fetch models from backend
-  const { data: modelsData } = useModelsQuery(MODELS_QUERY_FILTERS);
+  const { data: modelsData } = useModelsQuery();
   const allModels = modelsData?.data?.models || [];
 
   // Memoize derived data to prevent unnecessary re-renders

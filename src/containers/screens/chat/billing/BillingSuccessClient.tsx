@@ -9,10 +9,11 @@ import type { Subscription } from '@/api/routes/billing/schema';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScaleIn, StaggerContainer, StaggerItem } from '@/components/ui/motion';
-import type { SubscriptionTier } from '@/db/config/subscription-tiers';
-import { getTierConfig } from '@/db/config/subscription-tiers';
+import { getMaxModelsSync, getTierName } from '@/constants/subscription-tiers';
+import type { SubscriptionTier } from '@/db/tables/usage';
 import { useSyncAfterCheckoutMutation } from '@/hooks/mutations/checkout';
 import { useCurrentSubscriptionQuery, useSubscriptionsQuery } from '@/hooks/queries/subscriptions';
+import { useUsageStatsQuery } from '@/hooks/queries/usage';
 
 /**
  * Billing Success Client Component - Client-Side Sync Pattern
@@ -40,6 +41,9 @@ export function BillingSuccessClient() {
   // Subscription queries - automatically fetch after sync completes
   const { data: subscriptionData } = useSubscriptionsQuery();
   const { data: currentSubscription } = useCurrentSubscriptionQuery();
+
+  // Get usage stats for tier quotas
+  const { data: usageStats } = useUsageStatsQuery();
 
   // Store subscription data once fetched to prevent disappearing
   useEffect(() => {
@@ -160,8 +164,13 @@ export function BillingSuccessClient() {
   const tier = displaySubscription?.productId
     ? getTierFromProductId(displaySubscription.productId)
     : 'free';
-  // ✅ SINGLE SOURCE OF TRUTH: Get tier configuration from backend
-  const tierConfig = getTierConfig(tier);
+
+  // ✅ SINGLE SOURCE OF TRUTH: Get tier quotas from usage stats (database-driven)
+  const tierName = getTierName(tier);
+  const maxModels = getMaxModelsSync(tier);
+  const threadsLimit = usageStats?.data?.threads?.limit || 0;
+  const messagesLimit = usageStats?.data?.messages?.limit || 0;
+  const customRolesLimit = usageStats?.data?.customRoles?.limit || 0;
 
   return (
     <div className="flex min-h-screen w-full flex-col items-center justify-start px-4 pt-16 md:pt-20">
@@ -197,7 +206,7 @@ export function BillingSuccessClient() {
             <Card>
               <CardHeader>
                 <CardTitle>
-                  {tierConfig.tierName}
+                  {tierName}
                   {' '}
                   Plan
                 </CardTitle>
@@ -207,30 +216,31 @@ export function BillingSuccessClient() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-left">
                   <div className="space-y-1">
                     <p className="text-sm font-medium">{t('billing.success.planLimits.concurrentModels')}</p>
-                    <p className="text-2xl font-bold text-primary">{tierConfig.maxModels}</p>
+                    <p className="text-2xl font-bold text-primary">{maxModels}</p>
                   </div>
                   <div className="space-y-1">
                     <p className="text-sm font-medium">{t('billing.success.planLimits.maxThreads')}</p>
                     <p className="text-2xl font-bold text-primary">
-                      {tierConfig.threadsPerMonth === -1 ? 'Unlimited' : tierConfig.threadsPerMonth.toLocaleString()}
+                      {threadsLimit === -1 ? 'Unlimited' : threadsLimit.toLocaleString()}
                     </p>
                   </div>
                   <div className="space-y-1">
                     <p className="text-sm font-medium">{t('billing.success.planLimits.maxMessages')}</p>
                     <p className="text-2xl font-bold text-primary">
-                      {tierConfig.messagesPerMonth === -1 ? 'Unlimited' : tierConfig.messagesPerMonth.toLocaleString()}
+                      {messagesLimit === -1 ? 'Unlimited' : messagesLimit.toLocaleString()}
                     </p>
                   </div>
                   <div className="space-y-1">
                     <p className="text-sm font-medium">{t('billing.success.planLimits.maxMemories')}</p>
                     <p className="text-2xl font-bold text-primary">
-                      {tierConfig.memoriesPerMonth === -1 ? 'Unlimited' : tierConfig.memoriesPerMonth.toLocaleString()}
+                      {/* Memories not in current schema, show as 0 for now */}
+                      0
                     </p>
                   </div>
                   <div className="space-y-1">
                     <p className="text-sm font-medium">{t('billing.success.planLimits.customRoles')}</p>
                     <p className="text-2xl font-bold text-primary">
-                      {tierConfig.customRolesPerMonth === -1 ? 'Unlimited' : tierConfig.customRolesPerMonth.toLocaleString()}
+                      {customRolesLimit === -1 ? 'Unlimited' : customRolesLimit.toLocaleString()}
                     </p>
                   </div>
                   <div className="space-y-1">

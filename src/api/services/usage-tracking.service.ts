@@ -19,10 +19,17 @@ import { createError } from '@/api/common/error-handling';
 import type { ErrorContext } from '@/api/core';
 import { apiLogger } from '@/api/middleware/hono-logger';
 import { getDbAsync } from '@/db';
-import type { SubscriptionTier } from '@/db/config/subscription-tiers';
-import { getTierConfig } from '@/db/config/subscription-tiers';
 import * as tables from '@/db/schema';
+import type { SubscriptionTier } from '@/db/tables/usage';
 import type { QuotaCheck, UsageStats } from '@/db/validation/usage';
+
+// Fallback tier config for when DB query fails
+const FALLBACK_TIER_QUOTAS: Record<SubscriptionTier, { threadsPerMonth: number; messagesPerMonth: number; customRolesPerMonth: number }> = {
+  free: { threadsPerMonth: 2, messagesPerMonth: 20, customRolesPerMonth: 0 },
+  starter: { threadsPerMonth: 30, messagesPerMonth: 150, customRolesPerMonth: 5 },
+  pro: { threadsPerMonth: 75, messagesPerMonth: 400, customRolesPerMonth: 20 },
+  power: { threadsPerMonth: 300, messagesPerMonth: 1800, customRolesPerMonth: -1 },
+};
 
 /**
  * Get tier quotas from database (with fallback to SUBSCRIPTION_TIER_CONFIG)
@@ -38,15 +45,10 @@ async function getTierQuotas(tier: SubscriptionTier, isAnnual: boolean) {
     ),
   });
 
-  // Fallback to backend config if DB query fails
+  // Fallback to static config if DB query fails
   if (!quotaConfig) {
     apiLogger.warn('Quota config not found in DB, using fallback', { tier, isAnnual });
-    const tierConfig = getTierConfig(tier);
-    return {
-      threadsPerMonth: tierConfig.threadsPerMonth,
-      messagesPerMonth: tierConfig.messagesPerMonth,
-      customRolesPerMonth: tierConfig.customRolesPerMonth,
-    };
+    return FALLBACK_TIER_QUOTAS[tier];
   }
 
   return {
@@ -774,4 +776,61 @@ export async function syncUserQuotaFromSubscription(
     // No period reset, just update usage
     await usageUpdate;
   }
+}
+
+// ============================================================================
+// Tier Configuration Helpers (Database-Driven)
+// ============================================================================
+
+/**
+ * Get maximum models allowed for a tier
+ * ✅ DYNAMIC: Fetches from subscriptionTierQuotas table
+ *
+ * @param tier - Subscription tier
+ * @param isAnnual - Whether it's an annual subscription (default: false)
+ * @returns Maximum number of models allowed
+ */
+export async function getMaxModels(tier: SubscriptionTier, isAnnual = false): Promise<number> {
+  const db = await getDbAsync();
+
+  const quotaConfig = await db.query.subscriptionTierQuotas.findFirst({
+    where: and(
+      eq(tables.subscriptionTierQuotas.tier, tier),
+      eq(tables.subscriptionTierQuotas.isAnnual, isAnnual),
+    ),
+  });
+
+  // Fallback to default if DB query fails
+  if (!quotaConfig) {
+    apiLogger.warn('Max models config not found in DB, using fallback', { tier, isAnnual });
+    // Fallback defaults matching previous config
+    const fallbackMaxModels: Record<SubscriptionTier, number> = {
+      free: 5,
+      starter: 5,
+      pro: 7,
+      power: 15,
+    };
+    return fallbackMaxModels[tier];
+  }
+
+  return quotaConfig.maxAiModels;
+}
+
+/**
+ * Check if user can add more models based on current count
+ * ✅ DYNAMIC: Uses database configuration
+ */
+export async function canAddMoreModels(currentCount: number, tier: SubscriptionTier, isAnnual = false): Promise<boolean> {
+  const maxModels = await getMaxModels(tier, isAnnual);
+  return currentCount < maxModels;
+}
+
+/**
+ * Get error message when max models limit is reached
+ * ✅ DYNAMIC: Uses database configuration
+ */
+export async function getMaxModelsErrorMessage(tier: SubscriptionTier, isAnnual = false): Promise<string> {
+  const maxModels = await getMaxModels(tier, isAnnual);
+  const tierName = tier.charAt(0).toUpperCase() + tier.slice(1); // Capitalize
+  return `You've reached the maximum of ${maxModels} models for the ${tierName} tier. Upgrade to add more models.`;
 }

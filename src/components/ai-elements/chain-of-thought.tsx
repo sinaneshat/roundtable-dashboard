@@ -3,7 +3,7 @@
 import type { LucideIcon } from 'lucide-react';
 import { ChevronDown } from 'lucide-react';
 import type { ComponentProps, ReactNode } from 'react';
-import { createContext, use, useState } from 'react';
+import { createContext, use, useMemo, useState } from 'react';
 
 import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
@@ -65,8 +65,13 @@ export function ChainOfThought({
     onOpenChange?.(newOpen);
   };
 
+  const contextValue = useMemo(
+    () => ({ open, setOpen: handleOpenChange }),
+    [open, handleOpenChange],
+  );
+
   return (
-    <ChainOfThoughtContext value={{ open, setOpen: handleOpenChange }}>
+    <ChainOfThoughtContext value={contextValue}>
       <Collapsible open={open} onOpenChange={handleOpenChange}>
         <div
           className={cn(

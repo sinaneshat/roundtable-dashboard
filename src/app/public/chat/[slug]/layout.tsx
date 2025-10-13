@@ -1,15 +1,14 @@
 import type React from 'react';
 
-import { NavigationHeader } from '@/components/chat/chat-header';
-import { ChatThreadActions } from '@/components/chat/chat-thread-actions';
+import { PublicChatLayout } from '@/components/layouts';
 import { getPublicThreadService } from '@/services/api';
 
 /**
- * Public Chat Layout
- * Includes NavigationHeader with thread title and actions
+ * Public Chat Layout Page
+ * Fetches thread data and renders PublicChatLayout component
  * No authentication required, no sidebar
  */
-export default async function PublicChatLayout({
+export default async function PublicChatLayoutPage({
   children,
   params,
 }: {
@@ -30,31 +29,8 @@ export default async function PublicChatLayout({
   }
 
   return (
-    <div className="flex flex-col min-h-screen bg-background">
-      {/* Header with thread title and actions */}
-      <NavigationHeader
-        showSidebarTrigger={false}
-        showLogo={true}
-        maxWidth={true}
-        threadTitle={thread?.title}
-        threadParent="/"
-        threadActions={
-          thread
-            ? (
-                <ChatThreadActions
-                  thread={thread}
-                  slug={slug}
-                  isPublicMode={true}
-                />
-              )
-            : null
-        }
-      />
-
-      {/* Content area with scroll */}
-      <div className="flex flex-1 flex-col w-full min-w-0 relative overflow-y-auto" data-public-content>
-        {children}
-      </div>
-    </div>
+    <PublicChatLayout thread={thread} slug={slug}>
+      {children}
+    </PublicChatLayout>
   );
 }

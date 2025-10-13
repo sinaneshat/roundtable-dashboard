@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 
 import { Logo } from '@/components/logo';
+import { DottedGlowBackground } from '@/components/ui/dotted-glow-background';
 import { BRAND } from '@/constants/brand';
 
 type AuthLayoutProps = {
@@ -14,15 +15,23 @@ export default function AuthLayout({ children }: AuthLayoutProps) {
   const t = useTranslations();
 
   return (
-    <div className="relative min-h-svh bg-gradient-to-br from-background via-muted/30 to-background">
-      {/* Animated background elements */}
+    <div className="relative min-h-svh">
+      {/* Animated dotted glow background */}
       <div className="fixed inset-0 -z-10">
-        {/* Primary gradient orb */}
-        <div className="absolute start-1/4 top-1/4 h-96 w-96 animate-pulse rounded-full bg-primary/5 blur-3xl" />
-        {/* Secondary gradient orb */}
-        <div className="absolute end-1/4 bottom-1/4 h-80 w-80 animate-pulse rounded-full bg-chart-2/5 blur-3xl delay-1000" />
-        {/* Subtle grid pattern */}
-        <div className="absolute inset-0 bg-grid-pattern opacity-[0.02] dark:opacity-[0.05]" />
+        <DottedGlowBackground
+          className="pointer-events-none"
+          opacity={0.8}
+          gap={10}
+          radius={1.6}
+          color="rgba(156, 163, 175, 0.3)"
+          darkColor="rgba(156, 163, 175, 0.2)"
+          glowColor="rgba(147, 197, 253, 0.5)"
+          darkGlowColor="rgba(59, 130, 246, 0.6)"
+          backgroundOpacity={0}
+          speedMin={0.3}
+          speedMax={1.6}
+          speedScale={1}
+        />
       </div>
 
       {/* Main content container */}

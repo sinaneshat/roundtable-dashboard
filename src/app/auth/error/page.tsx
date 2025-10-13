@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { Suspense } from 'react';
 
+import { PageLoadingFallback } from '@/components/loading';
 import { BRAND } from '@/constants/brand';
 import { AuthErrorScreen } from '@/containers/screens/errors';
 import { createMetadata } from '@/utils/metadata';
@@ -15,7 +16,7 @@ export async function generateMetadata(): Promise<Metadata> {
 
 export default function AuthErrorPage() {
   return (
-    <Suspense fallback={<div className="flex items-center justify-center min-h-screen">{/* Loading state handled by component */}</div>}>
+    <Suspense fallback={<PageLoadingFallback text="Loading error details..." />}>
       <AuthErrorScreen />
     </Suspense>
   );

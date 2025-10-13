@@ -1,7 +1,6 @@
 'use client';
 
 import { Check } from 'lucide-react';
-import { useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -21,6 +20,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import { useBoolean } from '@/hooks/utils';
 import type { ChatModeId } from '@/lib/config/chat-modes';
 import { getChatModeById, getChatModeOptions } from '@/lib/config/chat-modes';
 import { cn } from '@/lib/ui/cn';
@@ -47,7 +47,7 @@ export function ChatModeSelector({
   onModeChange,
   className,
 }: ChatModeSelectorProps) {
-  const [open, setOpen] = useState(false);
+  const open = useBoolean(false);
   const chatModeOptions = getChatModeOptions();
   const currentMode = getChatModeById(selectedMode);
   const ModeIcon = currentMode?.icon;
@@ -55,7 +55,7 @@ export function ChatModeSelector({
   return (
     <div className={cn('flex items-center gap-1.5', className)}>
       <TooltipProvider>
-        <Popover open={open} onOpenChange={setOpen}>
+        <Popover open={open.value} onOpenChange={open.setValue}>
           <Tooltip>
             <TooltipTrigger asChild>
               <PopoverTrigger asChild>
@@ -100,7 +100,7 @@ export function ChatModeSelector({
                         value={option.value}
                         onSelect={() => {
                           onModeChange(option.value);
-                          setOpen(false);
+                          open.onFalse();
                         }}
                         className="gap-2"
                       >

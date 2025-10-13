@@ -7,7 +7,7 @@
 
 import { z } from 'zod';
 
-import { subscriptionTierSchema } from '@/db/config/subscription-tiers';
+import { subscriptionTierSchema } from '@/constants/subscription-tiers';
 
 // ============================================================================
 // Base Metadata Schema

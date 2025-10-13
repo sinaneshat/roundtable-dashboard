@@ -5,7 +5,7 @@ import { Message, MessageAvatar, MessageContent } from '@/components/ai-elements
 import { Reasoning, ReasoningContent, ReasoningTrigger } from '@/components/ai-elements/reasoning';
 import { Response } from '@/components/ai-elements/response';
 import { MessageErrorDetails } from '@/components/chat/message-error-details';
-import { getTierName } from '@/db/config/subscription-tiers';
+import { getTierName } from '@/constants/subscription-tiers';
 import type { UIMessageMetadata } from '@/lib/schemas/message-metadata';
 
 /**
@@ -20,7 +20,7 @@ type ModelStatus = 'thinking' | 'streaming' | 'completed' | 'error';
 
 /**
  * ✅ ZOD-INFERRED TYPE: Uses backend EnhancedModelResponse
- * Single source of truth from OpenRouter API via backend
+ * Single source of truth from OpenRouter API via backend with tier access info
  */
 type ModelMessageCardProps = {
   model: EnhancedModelResponse;
@@ -63,8 +63,10 @@ export function ModelMessageCard({
   className,
   messageId,
   metadata,
-  isAccessible = true,
+  isAccessible,
 }: ModelMessageCardProps) {
+  // ✅ USE BACKEND FLAG: Default to backend-computed accessibility
+  const modelIsAccessible = isAccessible ?? model.is_accessible_to_user;
   const showStatusIndicator = status === 'thinking' || status === 'streaming';
   const isError = status === 'error';
   const hasError = isError || metadata?.hasError || metadata?.error;
@@ -93,7 +95,7 @@ export function ModelMessageCard({
               )}
 
               {/* ✅ BACKEND-COMPUTED TIER: Show tier requirement if model not accessible */}
-              {!isAccessible && model.required_tier && (
+              {!modelIsAccessible && (
                 <>
                   <span className="text-muted-foreground/50 text-xs">•</span>
                   <span className="text-muted-foreground/70 text-xs">

@@ -23,9 +23,6 @@ import { useModelsQuery } from '@/hooks/queries/models';
 import { getAvatarPropsFromModelId } from '@/lib/ai/avatar-helpers';
 import { cn } from '@/lib/ui/cn';
 
-// ✅ STABLE FILTER: Define outside component to prevent query key changes on re-render
-const MODELS_QUERY_FILTERS = { includeAll: true } as const;
-
 export type LeaderboardEntry = {
   rank: number;
   participantIndex: number;
@@ -74,7 +71,7 @@ export function LeaderboardCard({ leaderboard }: LeaderboardCardProps) {
   const t = useTranslations('moderator');
 
   // ✅ SINGLE SOURCE OF TRUTH: Fetch models from backend
-  const { data: modelsData } = useModelsQuery(MODELS_QUERY_FILTERS);
+  const { data: modelsData } = useModelsQuery();
   const allModels = modelsData?.data?.models || [];
 
   // If no leaderboard data, don't render anything

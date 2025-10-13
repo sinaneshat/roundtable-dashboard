@@ -11,7 +11,7 @@ import { useEffect, useMemo, useState } from 'react';
 // ============================================================================
 import type { ChatCustomRole } from '@/api/routes/chat/schema';
 // ✅ ZOD-INFERRED TYPE: Import from schema (no hardcoded interfaces)
-import type { EnhancedModelResponse } from '@/api/routes/models/schema';
+import type { BaseModelResponse } from '@/api/routes/models/schema';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -36,11 +36,12 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import type { SubscriptionTier } from '@/db/config/subscription-tiers';
-import { getTierName } from '@/db/config/subscription-tiers';
+import { getMaxModelsSync, getTierName, getTiersInOrder } from '@/constants/subscription-tiers';
+import type { SubscriptionTier } from '@/db/tables/usage';
 import { useCreateCustomRoleMutation, useDeleteCustomRoleMutation } from '@/hooks/mutations/chat-mutations';
 import { useCustomRolesQuery } from '@/hooks/queries/chat-roles';
 import { useModelsQuery } from '@/hooks/queries/models';
+import { useUsageStatsQuery } from '@/hooks/queries/usage';
 import { DEFAULT_ROLES } from '@/lib/ai/models-config';
 import { getProviderIcon } from '@/lib/ai/provider-icons';
 import type { ParticipantConfig } from '@/lib/schemas/chat-forms';
@@ -48,11 +49,8 @@ import { toastManager } from '@/lib/toast/toast-manager';
 import { cn } from '@/lib/ui/cn';
 import { getApiErrorMessage } from '@/lib/utils/error-handling';
 
-// ✅ STABLE FILTER: Define outside component to prevent query key changes on re-render
-const MODELS_QUERY_FILTERS = { includeAll: true } as const;
-
 // UI Model Type: Backend type + UI-specific computed properties
-type UIModel = EnhancedModelResponse & {
+type UIModel = BaseModelResponse & {
   modelId: string; // Alias for id
   minTier: SubscriptionTier; // ✅ SINGLE SOURCE: Alias for required_tier
   metadata: {
@@ -726,17 +724,19 @@ export function ChatParticipantsList({
 
   // Only fetch when popover is open (not on page load)
   const { data: customRolesData } = useCustomRolesQuery(open && !isStreaming);
-  const { data: modelsData } = useModelsQuery(MODELS_QUERY_FILTERS); // Fetch ALL models with tier groups
+  const { data: modelsData } = useModelsQuery(); // Fetch ALL models with tier groups
 
   const customRoles = customRolesData?.pages.flatMap(page =>
     (page?.success && page.data?.items) ? page.data.items : [],
   ) || [];
 
-  // ✅ BACKEND-COMPUTED DATA: Use tier info from backend (single source of truth)
-  const userTierInfo = modelsData?.data?.user_tier_info;
-  const tierGroups = modelsData?.data?.tier_groups || [];
-  const popularGroup = modelsData?.data?.popular_group;
-  const maxModels = userTierInfo?.max_models || 5;
+  // ✅ USER TIER: Get from usage stats
+  const { data: usageStatsData } = useUsageStatsQuery();
+  const userTier = usageStatsData?.data?.subscription?.tier || 'free';
+
+  // ✅ TIER CONFIG: Get max models from tier configuration (synchronous for UI)
+  const maxModels = getMaxModelsSync(userTier);
+  const tierName = getTierName(userTier);
 
   // ✅ BACKEND MODELS + UI PROPERTIES: Add computed properties for component
   const allEnabledModels: UIModel[] = useMemo(() => {
@@ -843,6 +843,14 @@ export function ChatParticipantsList({
     });
   }, [participants, allEnabledModels]);
 
+  // ✅ USER TIER INFO: Construct from computed values for backward compatibility
+  const userTierInfo = {
+    tier_name: tierName,
+    max_models: maxModels,
+    current_tier: userTier,
+    can_upgrade: userTier !== 'power',
+  };
+
   // Toggle model selection
   const handleToggleModel = (modelId: string) => {
     const orderedModel = orderedModels.find(om => om.model.modelId === modelId);
@@ -931,54 +939,27 @@ export function ChatParticipantsList({
       .filter(om => om.participant === null);
   }, [filteredModels]);
 
-  // ✅ BACKEND-COMPUTED POPULAR GROUP: Map popular models to OrderedModel format
-  const popularModels = useMemo(() => {
-    if (!popularGroup || !popularGroup.models) {
-      return [];
-    }
+  // ✅ BACKEND TIER GROUPS: Use tier groups from backend response
+  const tierGroups = modelsData?.data?.tier_groups || [];
 
-    return popularGroup.models
-      .map((backendModel) => {
-        // Find matching model in orderedModels (unselected only)
-        return unselectedModels.find(om => om.model.modelId === backendModel.id);
-      })
-      .filter((om): om is OrderedModel => om !== undefined); // Type guard
-  }, [popularGroup, unselectedModels]);
-
-  // ✅ BACKEND-COMPUTED TIER GROUPING: Use tier_groups from backend (no frontend grouping logic)
-  const unselectedModelsByTier: Record<SubscriptionTier, OrderedModel[]> = useMemo(() => {
-    if (!tierGroups || tierGroups.length === 0) {
-      return {
-        free: [],
-        starter: [],
-        pro: [],
-        power: [],
-      };
-    }
-
-    const groups: Record<SubscriptionTier, OrderedModel[]> = {
+  // ✅ Group unselected models by tier for display
+  const unselectedModelsByTier = useMemo(() => {
+    const grouped: Record<SubscriptionTier, OrderedModel[]> = {
       free: [],
       starter: [],
       pro: [],
       power: [],
     };
 
-    // Map backend tier groups to frontend OrderedModel format
-    tierGroups.forEach((tierGroup) => {
-      const tieredModels = tierGroup.models
-        .map((backendModel) => {
-          // Find matching model in orderedModels (unselected only)
-          return unselectedModels.find(om => om.model.modelId === backendModel.id);
-        })
-        .filter((om): om is OrderedModel => om !== undefined); // Type guard
-
-      if (groups[tierGroup.tier]) {
-        groups[tierGroup.tier] = tieredModels;
+    unselectedModels.forEach((om) => {
+      const tier = om.model.minTier;
+      if (grouped[tier]) {
+        grouped[tier]!.push(om);
       }
     });
 
-    return groups;
-  }, [tierGroups, unselectedModels]);
+    return grouped;
+  }, [unselectedModels]);
 
   return (
     <div className={cn('flex items-center gap-1.5', className)}>
@@ -1094,52 +1075,7 @@ export function ChatParticipantsList({
                   </div>
                 )}
 
-                {/* Most Popular Models Section - Shown first, includes models from all tiers */}
-                {popularModels.length > 0 && popularGroup && (
-                  <div className="border-b">
-                    <div
-                      className="px-3 py-2.5 text-xs font-medium border-b bg-gradient-to-r from-primary/20 to-primary/10 text-primary sticky top-0 z-20 backdrop-blur-sm"
-                      style={{
-                        boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1)',
-                      }}
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="flex items-center gap-2">
-                          <span className="font-semibold">{popularGroup.group_name}</span>
-                          <Badge variant="default" className="text-[10px] px-1.5 py-0 h-4 bg-primary text-primary-foreground">
-                            Top Models
-                          </Badge>
-                        </span>
-                        <span className="text-[10px] opacity-80">
-                          {popularModels.length}
-                          {' '}
-                          {popularModels.length === 1 ? 'model' : 'models'}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Popular Models List */}
-                    <div className="space-y-0">
-                      {popularModels.map((orderedModel: OrderedModel) => (
-                        <ModelItem
-                          key={`popular-${orderedModel.model.id}`}
-                          orderedModel={orderedModel}
-                          customRoles={customRoles}
-                          onToggle={() => handleToggleModel(orderedModel.model.modelId)}
-                          onRoleChange={(role, customRoleId) => handleRoleChange(orderedModel.model.modelId, role, customRoleId)}
-                          onClearRole={() => handleClearRole(orderedModel.model.modelId)}
-                          isLastParticipant={false}
-                          selectedCount={participants.length}
-                          maxModels={maxModels}
-                          enableDrag={false}
-                          userTierInfo={userTierInfo}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Available Models Section - Tier-grouped by backend, non-draggable */}
+                {/* Available Models Section - Tier-grouped by backend */}
                 {unselectedModels.length > 0 && tierGroups.length > 0 && (
                   <div className="space-y-0">
                     {tierGroups.map((tierGroup) => {
@@ -1149,7 +1085,7 @@ export function ChatParticipantsList({
 
                       // ✅ USE BACKEND FLAGS: is_user_tier from backend
                       const isUserTier = tierGroup.is_user_tier;
-                      const tierOrder: SubscriptionTier[] = ['free', 'starter', 'pro', 'power'];
+                      const tierOrder = getTiersInOrder();
                       const tierIndex = tierOrder.indexOf(tierGroup.tier);
                       const userTierIndex = tierOrder.indexOf(userTierInfo?.current_tier || 'free');
                       const isLowerTier = tierIndex < userTierIndex;
@@ -1247,7 +1183,7 @@ export function ParticipantsPreview({
   chatMessages?: UIMessage[];
 }) {
   // ✅ FETCH MODELS: Each component manages its own data
-  const { data: modelsData } = useModelsQuery(MODELS_QUERY_FILTERS);
+  const { data: modelsData } = useModelsQuery();
   const allModels: UIModel[] = useMemo(() => {
     const models = modelsData?.data?.models || [];
     return models.map((model): UIModel => ({

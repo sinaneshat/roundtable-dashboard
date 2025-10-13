@@ -80,47 +80,51 @@ interface ButtonProps extends React.ComponentProps<"button">, VariantProps<typeo
   endIcon?: React.ReactNode
 }
 
-function Button({
-  className,
-  variant,
-  size,
-  asChild = false,
-  loading = false,
-  loadingText,
-  startIcon,
-  endIcon,
-  children,
-  disabled,
-  ...props
-}: ButtonProps) {
-  const Comp = asChild ? Slot : "button"
-  
-  const isDisabled = disabled || loading
-  const buttonChildren = loading && loadingText ? loadingText : children
-  
-  return (
-    <Comp
-      data-slot="button"
-      className={cn(buttonVariants({ variant, size, className }))}
-      disabled={isDisabled}
-      aria-busy={loading}
-      aria-describedby={loading ? "button-loading" : undefined}
-      {...props}
-    >
-      {loading ? (
-        <>
-          <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-          {buttonChildren}
-        </>
-      ) : (
-        <>
-          {startIcon && <span className="inline-flex items-center shrink-0" aria-hidden="true">{startIcon}</span>}
-          {buttonChildren}
-          {endIcon && <span className="inline-flex items-center shrink-0" aria-hidden="true">{endIcon}</span>}
-        </>
-      )}
-    </Comp>
-  )
-}
+const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
+  ({
+    className,
+    variant,
+    size,
+    asChild = false,
+    loading = false,
+    loadingText,
+    startIcon,
+    endIcon,
+    children,
+    disabled,
+    ...props
+  }, ref) => {
+    const Comp = asChild ? Slot : "button"
+
+    const isDisabled = disabled || loading
+    const buttonChildren = loading && loadingText ? loadingText : children
+
+    return (
+      <Comp
+        ref={ref}
+        data-slot="button"
+        className={cn(buttonVariants({ variant, size, className }))}
+        disabled={isDisabled}
+        aria-busy={loading}
+        aria-describedby={loading ? "button-loading" : undefined}
+        {...props}
+      >
+        {loading ? (
+          <>
+            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+            {buttonChildren}
+          </>
+        ) : (
+          <>
+            {startIcon && <span className="inline-flex items-center shrink-0" aria-hidden="true">{startIcon}</span>}
+            {buttonChildren}
+            {endIcon && <span className="inline-flex items-center shrink-0" aria-hidden="true">{endIcon}</span>}
+          </>
+        )}
+      </Comp>
+    )
+  }
+)
+Button.displayName = "Button"
 
 export { Button, buttonVariants, type ButtonProps }

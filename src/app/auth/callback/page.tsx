@@ -1,7 +1,6 @@
 import type { Metadata } from 'next';
-import { redirect } from 'next/navigation';
 
-import { getSessionOrRedirect } from '@/app/auth/actions';
+import { AuthCallbackScreen } from '@/containers/screens/auth';
 
 export const metadata: Metadata = {
   title: 'Authenticating...',
@@ -18,14 +17,5 @@ export default async function AuthCallbackPage({
 }) {
   const params = await searchParams;
 
-  // 1. Verify session exists
-  await getSessionOrRedirect();
-
-  // 2. If valid return URL is provided, redirect to it
-  if (params.returnUrl && params.returnUrl.startsWith('/')) {
-    redirect(params.returnUrl);
-  }
-
-  // 3. Redirect to chat
-  redirect('/chat');
+  return <AuthCallbackScreen returnUrl={params.returnUrl} />;
 }

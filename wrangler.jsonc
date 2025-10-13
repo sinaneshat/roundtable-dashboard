@@ -105,7 +105,9 @@
     "NEXTJS_ENV": "development",
     "NODE_VERSION": "22.14.0",
     "PNPM_VERSION": "10.10.0",
-    "NODE_ENV": "development"
+    "NODE_ENV": "development",
+    "NEXT_PUBLIC_POSTHOG_API_KEY": "phc_your_production_posthog_api_key_here",
+    "NEXT_PUBLIC_POSTHOG_HOST": "https://us.i.posthog.com"
     // All sensitive secrets are managed via wrangler secret commands
   },
   "env": {
@@ -189,7 +191,9 @@
         "NEXTJS_ENV": "production",
         "NODE_VERSION": "22.14.0",
         "PNPM_VERSION": "10.10.0",
-        "NODE_ENV": "production"
+        "NODE_ENV": "production",
+        "NEXT_PUBLIC_POSTHOG_API_KEY": "phc_your_production_posthog_api_key_here",
+        "NEXT_PUBLIC_POSTHOG_HOST": "https://us.i.posthog.com"
         // All sensitive secrets are managed via wrangler secret commands
       }
     },
@@ -273,7 +277,9 @@
         "NEXTJS_ENV": "production",
         "NODE_VERSION": "22.14.0",
         "PNPM_VERSION": "10.10.0",
-        "NODE_ENV": "production"
+        "NODE_ENV": "production",
+        "NEXT_PUBLIC_POSTHOG_API_KEY": "phc_your_production_posthog_api_key_here",
+        "NEXT_PUBLIC_POSTHOG_HOST": "https://us.i.posthog.com"
         // All sensitive secrets are managed via wrangler secret commands
       }
     }

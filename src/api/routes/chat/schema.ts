@@ -812,112 +812,28 @@ export const RetryAttemptMetadataSchema = z.object({
 export type RetryAttemptMetadata = z.infer<typeof RetryAttemptMetadataSchema>;
 
 // ============================================================================
-// AI Configuration Constants (Single Source of Truth)
+// AI Configuration Constants - Re-exported from @/constants/ai-parameters
 // ============================================================================
 
 /**
- * Default AI generation parameters
- * ✅ SINGLE SOURCE: All AI defaults defined here
- */
-export const DEFAULT_AI_PARAMS = {
-  temperature: 0.7,
-  maxTokens: 4096,
-  topP: 0.9,
-} as const;
-
-/**
- * Mode-specific AI parameters for maximum stability and consistency
- * ✅ OPTIMIZED FOR STABILITY: Lower temperature = more deterministic outputs
- * ✅ FOCUSED SAMPLING: Lower topP = more focused, less random outputs
- * ✅ MODE-ALIGNED: Each mode has parameters tuned for its specific goals
+ * ✅ SINGLE SOURCE OF TRUTH: AI parameters moved to @/constants/ai-parameters.ts
+ * Re-exported here for backward compatibility with existing imports
  *
- * Temperature scale:
- * - 0.3-0.4: Highly deterministic (analyzing, solving)
- * - 0.5-0.6: Balanced creativity (debating)
- * - 0.6-0.7: Moderate creativity (brainstorming)
- *
- * TopP scale:
- * - 0.7-0.75: Very focused (analyzing, solving)
- * - 0.8: Balanced (debating)
- * - 0.85: Slightly diverse (brainstorming)
+ * All AI configuration (defaults, mode-specific params, timeouts, retries)
+ * is now centralized in the constants directory following separation of concerns.
  */
-export const MODE_SPECIFIC_AI_PARAMS: Record<string, { temperature: number; topP: number; maxTokens: number }> = {
-  analyzing: {
-    temperature: 0.3, // Highly deterministic for logical analysis
-    topP: 0.7, // Very focused sampling for consistent reasoning
-    maxTokens: 4096,
-  },
-  brainstorming: {
-    temperature: 0.6, // Moderate creativity for idea generation
-    topP: 0.85, // Slightly diverse for creative exploration
-    maxTokens: 4096,
-  },
-  debating: {
-    temperature: 0.5, // Balanced for structured argumentation
-    topP: 0.8, // Balanced sampling for logical counter-arguments
-    maxTokens: 4096,
-  },
-  solving: {
-    temperature: 0.4, // Low for practical, actionable solutions
-    topP: 0.75, // Focused for concrete implementation steps
-    maxTokens: 4096,
-  },
-} as const;
-
-/**
- * Title generation configuration
- */
-export const TITLE_GENERATION_CONFIG = {
-  temperature: 0.3,
-  maxTokens: 15,
-  topP: 0.9,
-  systemPrompt: 'Generate a 5-word title from this message. Title only, no quotes.',
-  preferredModels: [
-    'google/gemini-flash-1.5',
-    'anthropic/claude-3-haiku',
-    'qwen/qwen-2.5-72b-instruct',
-    'anthropic/claude-3.5-sonnet',
-  ],
-} as const;
-
-/**
- * Retry configuration
- * ✅ USER REQUIREMENT: 10 retry attempts
- */
-export const AI_RETRY_CONFIG = {
-  maxAttempts: 10,
-  baseDelayMs: 1000,
-  maxDelayMs: 60000,
-  backoffMultiplier: 2,
-} as const;
-
-/**
- * Timeout configuration for AI operations
- */
-export const AI_TIMEOUT_CONFIG = {
-  perAttemptMs: 30000, // 30 seconds per attempt
-  totalMs: 300000, // 5 minutes total
-  moderatorAnalysisMs: 90000, // 90 seconds for moderator analysis (structured output generation)
-} as const;
+export {
+  AI_RETRY_CONFIG,
+  AI_TIMEOUT_CONFIG,
+  DEFAULT_AI_PARAMS,
+  getAIParamsForMode,
+  MODE_SPECIFIC_AI_PARAMS,
+  TITLE_GENERATION_CONFIG,
+} from '@/constants/ai-parameters';
 
 export type ChatThreadChangelog = z.infer<typeof ChatThreadChangelogSchema>;
 
 export type RoundtablePromptParams = z.infer<typeof RoundtablePromptParamsSchema>;
-
-// ============================================================================
-// Utility Functions - AI Parameters
-// ============================================================================
-
-/**
- * Get AI parameters optimized for a specific chat mode
- * ✅ STABILITY: Returns mode-specific parameters for consistent, deterministic outputs
- *
- * @param mode - Chat mode (analyzing, brainstorming, debating, solving)
- * @returns Optimized temperature, topP, and maxTokens for the mode
- */
-export function getAIParamsForMode(mode: string): { temperature: number; topP: number; maxTokens: number } {
-  return MODE_SPECIFIC_AI_PARAMS[mode] || DEFAULT_AI_PARAMS;
-}
 
 export type ModeratorAnalysisRequest = z.infer<typeof ModeratorAnalysisRequestSchema>;
 export type ModeratorAnalysisPayload = z.infer<typeof ModeratorAnalysisPayloadSchema>;

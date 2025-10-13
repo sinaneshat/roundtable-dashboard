@@ -51,15 +51,9 @@ export default async function ChatOverviewPage() {
 
   // ✅ SSG STRATEGY: Prefetch all models on server at page load time
   // Models are cached with infinite stale time and available immediately
-  // Response includes default_model_id computed on backend for user's tier
   await queryClient.prefetchQuery({
-    queryKey: queryKeys.models.list({ includeAll: true }),
-    queryFn: () =>
-      listModelsService({
-        query: {
-          includeAll: 'true',
-        },
-      }),
+    queryKey: queryKeys.models.list(),
+    queryFn: () => listModelsService(),
     staleTime: STALE_TIMES.models, // Infinity - cached indefinitely
   });
 

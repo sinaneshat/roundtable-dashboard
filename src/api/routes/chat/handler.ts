@@ -51,16 +51,17 @@ import {
   enforceMessageQuota,
   enforceThreadQuota,
   ensureUserUsageRecord,
+  getMaxModels,
   getUserUsageStats,
   incrementCustomRoleUsage,
   incrementMessageUsage,
   incrementThreadUsage,
 } from '@/api/services/usage-tracking.service';
 import type { ApiEnv } from '@/api/types';
+import { getMaxOutputTokens, getTierName } from '@/constants/subscription-tiers';
 import { getDbAsync } from '@/db';
-import type { SubscriptionTier } from '@/db/config/subscription-tiers';
-import { getMaxOutputTokens, getTierConfig, getTierName } from '@/db/config/subscription-tiers';
 import * as tables from '@/db/schema';
+import type { SubscriptionTier } from '@/db/tables/usage';
 import type { ChatModeId, ThreadStatus } from '@/lib/config/chat-modes';
 
 import type {
@@ -804,11 +805,11 @@ export const addParticipantHandler: RouteHandler<typeof addParticipantRoute, Api
 
     const currentModelCount = existingParticipants.length;
 
-    // ✅ SINGLE SOURCE OF TRUTH: Check maxModels limit from tier config
-    const tierConfig = getTierConfig(userTier);
-    if (currentModelCount >= tierConfig.maxModels) {
+    // ✅ SINGLE SOURCE OF TRUTH: Check maxModels limit from database config
+    const maxModels = await getMaxModels(userTier);
+    if (currentModelCount >= maxModels) {
       throw createError.badRequest(
-        `Your ${getTierName(userTier)} plan allows up to ${tierConfig.maxModels} AI models per conversation. You already have ${currentModelCount} models. Remove a model or upgrade your plan to add more.`,
+        `Your ${getTierName(userTier)} plan allows up to ${maxModels} AI models per conversation. You already have ${currentModelCount} models. Remove a model or upgrade your plan to add more.`,
         {
           errorType: 'validation',
           field: 'modelId',
@@ -1097,10 +1098,10 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
       }
 
       // ✅ MODEL COUNT VALIDATION: Check if user can add this many models based on tier
-      const tierConfig = getTierConfig(userTier);
-      if (newParticipants.length > tierConfig.maxModels) {
+      const maxModels = await getMaxModels(userTier);
+      if (newParticipants.length > maxModels) {
         throw createError.unauthorized(
-          `Your ${getTierName(userTier)} plan allows up to ${tierConfig.maxModels} AI models per conversation. You've selected ${newParticipants.length} models. Remove some models or upgrade your plan.`,
+          `Your ${getTierName(userTier)} plan allows up to ${maxModels} AI models per conversation. You've selected ${newParticipants.length} models. Remove some models or upgrade your plan.`,
           {
             errorType: 'authorization',
             resource: 'participants',
@@ -2566,7 +2567,7 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
           status: existingAnalysis.status,
         });
 
-        return c.json({
+        return Responses.ok(c, {
           object: {
             ...existingAnalysis.analysisData,
             mode: existingAnalysis.mode,
@@ -2587,12 +2588,12 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
           createdAt: existingAnalysis.createdAt,
         });
 
-        return c.json({
+        return Responses.accepted(c, {
           status: existingAnalysis.status,
           message: 'Analysis is currently being generated. Please wait...',
           analysisId: existingAnalysis.id,
           createdAt: existingAnalysis.createdAt,
-        }, 202); // 202 Accepted - request accepted but not yet completed
+        }); // 202 Accepted - request accepted but not yet completed
       }
 
       // ✅ FAILED: Allow retry by creating new analysis

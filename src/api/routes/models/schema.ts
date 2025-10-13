@@ -1,78 +1,13 @@
 /**
  * Models API Schemas
  *
- * Type-safe request/response schemas for dynamic OpenRouter models endpoints
+ * Simplified schemas for OpenRouter models endpoint
  */
 
 import { z } from 'zod';
 
 import { createApiResponseSchema } from '@/api/core/schemas';
-
-// ============================================================================
-// Request Schemas
-// ============================================================================
-
-/**
- * Query params for listing models with filters
- * ✅ PATTERN: Transform query string booleans to actual booleans
- */
-export const ListModelsQuerySchema = z.object({
-  provider: z.string().optional().openapi({
-    description: 'Filter by provider name (e.g., anthropic, openai)',
-    example: 'anthropic',
-  }),
-  category: z.enum(['reasoning', 'general', 'creative', 'research']).optional().openapi({
-    description: 'Filter by model category',
-    example: 'reasoning',
-  }),
-  freeOnly: z
-    .string()
-    .optional()
-    .transform(val => val === 'true')
-    .openapi({
-      description: 'Show only free models',
-      example: 'false',
-    }),
-  search: z.string().optional().openapi({
-    description: 'Search models by name, ID, or description',
-    example: 'claude',
-  }),
-  supportsVision: z
-    .string()
-    .optional()
-    .transform(val => val === 'true')
-    .openapi({
-      description: 'Filter models that support vision capabilities',
-      example: 'false',
-    }),
-  includeAll: z
-    .string()
-    .optional()
-    .transform(val => val === 'true')
-    .openapi({
-      description: 'Include models not accessible to user (for tier comparison)',
-      example: 'false',
-    }),
-}).openapi('ListModelsQuery');
-
-export type ListModelsQuery = z.infer<typeof ListModelsQuerySchema>;
-
-/**
- * Model ID param schema
- * ✅ PATTERN: All param schemas in schema.ts, not inline in route.ts
- */
-export const ModelIdParamSchema = z.object({
-  modelId: z.string().min(1).openapi({
-    param: {
-      name: 'modelId',
-      in: 'path',
-    },
-    example: 'anthropic%2Fclaude-sonnet-4.5',
-    description: 'URL-encoded model ID from OpenRouter (e.g., anthropic/claude-4 becomes anthropic%2Fclaude-4)',
-  }),
-}).openapi('ModelIdParam');
-
-export type ModelIdParam = z.infer<typeof ModelIdParamSchema>;
+import { subscriptionTierSchema } from '@/constants/subscription-tiers';
 
 // ============================================================================
 // Response Schemas
@@ -237,113 +172,35 @@ export type BaseModelResponse = z.infer<typeof BaseModelSchema>;
  */
 export const EnhancedModelSchema = BaseModelSchema.extend({
   // ✅ SERVER-COMPUTED TIER ACCESS (Single Source of Truth)
-  required_tier: z.enum(['free', 'starter', 'pro', 'power']),
+  required_tier: subscriptionTierSchema,
   is_accessible_to_user: z.boolean(),
 });
 
 export type EnhancedModelResponse = z.infer<typeof EnhancedModelSchema>;
 
 /**
- * Tier group schema - models grouped by subscription tier
+ * Tier Group Schema - Groups models by subscription tier
+ * Computed on backend for consistent tier-based UI rendering
  */
 export const TierGroupSchema = z.object({
-  tier: z.enum(['free', 'starter', 'pro', 'power']),
-  tier_name: z.string(),
-  is_user_tier: z.boolean(),
+  tier: subscriptionTierSchema,
+  tier_name: z.string(), // Human-readable tier name (e.g., "Free Plan")
   models: z.array(EnhancedModelSchema),
-  model_count: z.number(),
+  is_user_tier: z.boolean(), // True if this is the user's current tier
 });
 
 export type TierGroup = z.infer<typeof TierGroupSchema>;
 
 /**
- * Popular group schema - most popular models regardless of tier
- */
-export const PopularGroupSchema = z.object({
-  group_name: z.string(),
-  models: z.array(EnhancedModelSchema),
-  model_count: z.number(),
-});
-
-export type PopularGroup = z.infer<typeof PopularGroupSchema>;
-
-/**
- * User tier info schema
- */
-export const UserTierInfoSchema = z.object({
-  current_tier: z.enum(['free', 'starter', 'pro', 'power']),
-  tier_name: z.string(),
-  max_models: z.number(),
-  can_upgrade: z.boolean(),
-});
-
-export type UserTierInfo = z.infer<typeof UserTierInfoSchema>;
-
-/**
- * List models response schema with server-computed tier grouping
+ * List models response with top 50 models, tier grouping, and default model selection
  */
 export const ListModelsResponseSchema = createApiResponseSchema(
   z.object({
     models: z.array(EnhancedModelSchema),
     total: z.number(),
-    // ✅ DEFAULT MODEL FOR USER'S TIER (computed on backend, pre-selected on frontend)
-    default_model_id: z.string(),
-    // ✅ MOST POPULAR MODELS GROUP (appears first, includes models from all tiers)
-    popular_group: PopularGroupSchema.optional(),
-    // ✅ SERVER-COMPUTED TIER GROUPING (Single Source of Truth)
-    tier_groups: z.array(TierGroupSchema),
-    user_tier_info: UserTierInfoSchema,
-    filters: z.object({
-      provider: z.string().optional(),
-      category: z.enum(['reasoning', 'general', 'creative', 'research']).optional(),
-      freeOnly: z.boolean().optional(),
-      search: z.string().optional(),
-      supportsVision: z.boolean().optional(),
-      includeAll: z.boolean().optional(),
-    }),
+    default_model_id: z.string(), // Default model selected based on user's tier and popularity
+    tier_groups: z.array(TierGroupSchema), // Models grouped by subscription tier
   }),
 );
 
 export type ListModelsResponse = z.infer<typeof ListModelsResponseSchema>;
-
-/**
- * Single model response schema (public endpoint - no tier info)
- * ✅ PATTERN: Public endpoints use base schema without tier access info
- */
-export const GetModelResponseSchema = createApiResponseSchema(
-  z.object({
-    model: BaseModelSchema,
-  }),
-);
-
-export type GetModelResponse = z.infer<typeof GetModelResponseSchema>;
-
-/**
- * Model providers response schema
- */
-export const ListProvidersResponseSchema = createApiResponseSchema(
-  z.object({
-    providers: z.array(
-      z.object({
-        name: z.string(),
-        count: z.number(),
-      }),
-    ),
-  }),
-);
-
-export type ListProvidersResponse = z.infer<typeof ListProvidersResponseSchema>;
-
-/**
- * Clear cache response schema
- */
-export const ClearCacheResponseSchema = createApiResponseSchema(
-  z.object({
-    cleared: z.boolean().openapi({
-      description: 'Whether cache was cleared successfully',
-      example: true,
-    }),
-  }),
-);
-
-export type ClearCacheResponse = z.infer<typeof ClearCacheResponseSchema>;

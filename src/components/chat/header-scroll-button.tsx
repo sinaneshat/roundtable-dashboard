@@ -1,7 +1,7 @@
 'use client';
 
 import { ArrowDown } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect } from 'react';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -10,6 +10,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import { useBoolean } from '@/hooks/utils';
 
 /**
  * Header Scroll Button
@@ -24,7 +25,7 @@ import {
  * - Smooth scroll animation
  */
 export function HeaderScrollButton({ ariaLabel = 'Scroll to bottom' }: { ariaLabel?: string }) {
-  const [isVisible, setIsVisible] = useState(false);
+  const isVisible = useBoolean(false);
 
   // Check scroll position and update visibility
   const checkScrollPosition = useCallback(() => {
@@ -32,7 +33,7 @@ export function HeaderScrollButton({ ariaLabel = 'Scroll to bottom' }: { ariaLab
     const scrollContainer = document.querySelector('[data-slot="sidebar-inset"]') as HTMLElement;
 
     if (!scrollContainer) {
-      setIsVisible(false);
+      isVisible.onFalse();
       return;
     }
 
@@ -41,8 +42,8 @@ export function HeaderScrollButton({ ariaLabel = 'Scroll to bottom' }: { ariaLab
     const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
     const shouldShow = distanceFromBottom > 100;
 
-    setIsVisible(shouldShow);
-  }, []);
+    isVisible.setValue(shouldShow);
+  }, [isVisible]);
 
   // Scroll to bottom handler
   const scrollToBottom = useCallback(() => {
@@ -80,7 +81,7 @@ export function HeaderScrollButton({ ariaLabel = 'Scroll to bottom' }: { ariaLab
   }, [checkScrollPosition]);
 
   // Don't render if not visible
-  if (!isVisible)
+  if (!isVisible.value)
     return null;
 
   return (

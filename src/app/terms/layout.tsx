@@ -1,6 +1,6 @@
 import type React from 'react';
 
-import { AuthLayout } from '@/containers/layouts/auth';
+import { AuthLayout } from '@/components/layouts';
 
 type TermsLayoutProps = {
   children: React.ReactNode;

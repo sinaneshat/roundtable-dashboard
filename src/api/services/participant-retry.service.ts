@@ -21,7 +21,7 @@ import type { streamText } from 'ai';
 import { apiLogger } from '@/api/middleware/hono-logger';
 import type { RetryAttemptMetadata } from '@/api/routes/chat/schema';
 import { AI_RETRY_CONFIG } from '@/api/routes/chat/schema';
-import type { SubscriptionTier } from '@/db/config/subscription-tiers';
+import type { SubscriptionTier } from '@/db/tables/usage';
 
 import { canAccessModelByPricing } from './model-pricing-tiers.service';
 import {

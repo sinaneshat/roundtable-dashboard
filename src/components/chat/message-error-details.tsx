@@ -1,8 +1,8 @@
 'use client';
 
 import { AlertCircle } from 'lucide-react';
-import { useState } from 'react';
 
+import { useBoolean } from '@/hooks/utils';
 import type { UIMessageMetadata } from '@/lib/schemas/message-metadata';
 
 type MessageErrorDetailsProps = {
@@ -24,7 +24,7 @@ export function MessageErrorDetails({
   metadata,
   className,
 }: MessageErrorDetailsProps) {
-  const [showDetails, setShowDetails] = useState(false);
+  const showDetails = useBoolean(false);
 
   // Check if this message has an error
   const hasError = metadata?.hasError || metadata?.error || metadata?.errorMessage;
@@ -73,13 +73,13 @@ export function MessageErrorDetails({
 
       {/* Expandable details - simple text button */}
       <button
-        onClick={() => setShowDetails(!showDetails)}
+        onClick={showDetails.onToggle}
         className="ml-6 mt-1 text-xs text-destructive/60 hover:text-destructive/80 underline-offset-2 hover:underline"
       >
-        {showDetails ? '− Hide details' : '+ Show details'}
+        {showDetails.value ? '− Hide details' : '+ Show details'}
       </button>
 
-      {showDetails && (
+      {showDetails.value && (
         <div className="mt-2 ml-6 space-y-1 text-xs text-destructive/70">
           <div className="flex gap-2">
             <span className="font-medium min-w-20">Error Type:</span>

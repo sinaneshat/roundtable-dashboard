@@ -3,10 +3,9 @@
 import { motion } from 'motion/react';
 import { useMemo } from 'react';
 
-import { canAccessModelByPricing } from '@/api/services/model-pricing-tiers.service';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Card } from '@/components/ui/card';
-import type { SubscriptionTier } from '@/db/config/subscription-tiers';
+import type { SubscriptionTier } from '@/db/tables/usage';
 import { useModelsQuery } from '@/hooks/queries/models';
 import { useUsageStatsQuery } from '@/hooks/queries/usage';
 import { getProviderIcon } from '@/lib/ai/provider-icons';
@@ -49,14 +48,14 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
   const { data: usageData } = useUsageStatsQuery();
   const userTier = (usageData?.success ? usageData.data.subscription.tier : 'free') as SubscriptionTier;
 
-  // ✅ DYNAMIC: Fetch all models from OpenRouter API
+  // ✅ DYNAMIC: Fetch all models from OpenRouter API with tier access info
   const { data: modelsResponse, isLoading: modelsLoading } = useModelsQuery();
   const allModels = modelsResponse?.success ? modelsResponse.data.models : [];
 
-  // ✅ DYNAMIC: Filter models by user tier using pricing-based access control
+  // ✅ BACKEND-COMPUTED ACCESS: Use backend's is_accessible_to_user flag
   const accessibleModels = useMemo(() => {
-    return allModels.filter(model => canAccessModelByPricing(userTier, model));
-  }, [allModels, userTier]);
+    return allModels.filter(model => model.is_accessible_to_user ?? true);
+  }, [allModels]);
 
   // ✅ DYNAMIC: Helper to select models by criteria (pricing tier and capabilities)
   // NO HARDCODED MODEL IDS - selects based on pricing and capabilities

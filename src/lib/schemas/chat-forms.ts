@@ -50,27 +50,19 @@ export type ParticipantConfig = z.infer<typeof ParticipantConfigSchema>;
 // ============================================================================
 
 /**
- * Default model ID for new chats
- * ✅ Dynamic: Uses first accessible model from top 10 most popular models
+ * ❌ REMOVED: DEFAULT_MODEL_ID and DEFAULT_PARTICIPANT
  *
- * Note: This fallback is used for form initialization. The actual default model
- * is determined dynamically by the backend based on user's subscription tier.
- * See: GET /api/v1/models/default endpoint
+ * These were removed to enforce single source of truth.
+ * The backend dynamically selects the default model via GET /api/v1/models
+ * based on the user's subscription tier and top 10 most popular models.
  *
- * This fallback should be a popular, widely accessible model that exists in most tiers.
+ * Frontend components MUST:
+ * 1. Fetch models from GET /api/v1/models (includes default_model_id)
+ * 2. Use the default_model_id from the response
+ * 3. Show loading state until models are fetched
+ *
+ * ✅ SINGLE SOURCE OF TRUTH: Backend openRouterModelsService.getDefaultModelForTier()
  */
-export const DEFAULT_MODEL_ID = 'anthropic/claude-3-haiku';
-
-/**
- * Default participant configuration for form initialization
- * The actual default model will be fetched from the backend on component mount
- */
-export const DEFAULT_PARTICIPANT: ParticipantConfig = {
-  id: 'participant-default',
-  modelId: DEFAULT_MODEL_ID,
-  role: '',
-  order: 0,
-};
 
 // ============================================================================
 // Chat Input Form Schema (New Thread Creation)
@@ -95,17 +87,16 @@ export const ChatInputFormSchema = z.object({
  * Default values for chat input form
  * Uses centralized config for default mode
  *
- * NOTE: The participants array with DEFAULT_PARTICIPANT is just a fallback.
- * In practice, components should use the default_model_id from the models list response:
+ * ✅ SINGLE SOURCE OF TRUTH: Participants must be populated from backend
  * - Backend computes default model in GET /api/v1/models endpoint
  * - Response includes default_model_id field (best accessible model from top 10)
- * - Frontend consumes this from the prefetched models data (zero additional requests)
- * This ensures users get the best accessible model from top 10 popular models for their tier.
+ * - Frontend MUST use default_model_id from models response
+ * - Empty array here forces components to properly handle dynamic loading
  */
 export const chatInputFormDefaults = {
   message: '',
   mode: getDefaultChatMode(),
-  participants: [DEFAULT_PARTICIPANT] as ParticipantConfig[],
+  participants: [] as ParticipantConfig[], // Empty - must be populated from backend
 };
 
 // ============================================================================
@@ -205,17 +196,18 @@ export function threadConfigToStreamChatFormat(config: Partial<ThreadConfig>) {
 /**
  * Ensure at least one participant exists (validation helper)
  *
- * NOTE: This returns DEFAULT_PARTICIPANT as a fallback only.
- * For initial participant selection, use the default_model_id from models list:
- * - Backend includes default_model_id in GET /api/v1/models response
- * - Frontend uses this from prefetched data (no additional request)
+ * ⚠️ WARNING: Returns empty array if no participants exist
+ * Components MUST handle empty participants array by:
+ * 1. Fetching models from GET /api/v1/models
+ * 2. Using default_model_id from response
+ * 3. Creating participant with that model
+ *
+ * ✅ SINGLE SOURCE OF TRUTH: No hardcoded fallback models
  */
 export function ensureMinimumParticipants(
   participants: ParticipantConfig[],
 ): ParticipantConfig[] {
-  if (participants.length === 0) {
-    return [DEFAULT_PARTICIPANT];
-  }
+  // Return as-is - components must handle empty array properly
   return participants;
 }
 

@@ -87,16 +87,10 @@ export default async function ChatThreadPage({
   });
 
   // ✅ SSG STRATEGY: Prefetch all OpenRouter models (cached indefinitely)
-  // Models fetched with includeAll=true so all models are available immediately
-  // Backend returns ALL models with tier info, client filters by user's tier
+  // All models are fetched and available immediately
   await queryClient.prefetchQuery({
-    queryKey: queryKeys.models.list({ includeAll: true }),
-    queryFn: () =>
-      listModelsService({
-        query: {
-          includeAll: 'true',
-        },
-      }),
+    queryKey: queryKeys.models.list(),
+    queryFn: () => listModelsService(),
     staleTime: STALE_TIMES.models, // Infinity - cached indefinitely
   });
 

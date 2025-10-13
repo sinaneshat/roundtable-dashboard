@@ -30,13 +30,13 @@ export {
 } from '@/api/services/model-pricing-tiers.service';
 
 /**
- * ✅ ALL tier configuration from backend
+ * ✅ TIER UTILITIES: Import tier types from @/db/tables/usage
+ * Tier helper functions available from @/constants/subscription-tiers
  */
 export {
-  getTierConfig,
   getTierName,
   getTiersInOrder,
-} from '@/db/config/subscription-tiers';
+} from '@/constants/subscription-tiers';
 
 // ============================================================================
 // MODEL VALIDATION (Simple String Validation)

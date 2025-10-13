@@ -21,6 +21,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useCreateApiKeyMutation } from '@/hooks';
+import { useBoolean } from '@/hooks/utils';
 import { showApiErrorToast } from '@/lib/toast';
 
 type ApiKeyFormProps = {
@@ -48,7 +49,7 @@ type FormValues = z.infer<typeof formSchema>;
 export function ApiKeyForm({ onCreated, currentKeyCount = 0 }: ApiKeyFormProps & { currentKeyCount?: number }) {
   const t = useTranslations();
   const [createdKey, setCreatedKey] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
+  const copied = useBoolean(false);
   const createMutation = useCreateApiKeyMutation();
 
   const methods = useForm<FormValues>({
@@ -75,7 +76,7 @@ export function ApiKeyForm({ onCreated, currentKeyCount = 0 }: ApiKeyFormProps &
 
   const onSubmit = async (values: FormValues) => {
     setCreatedKey(null);
-    setCopied(false);
+    copied.onFalse();
 
     try {
       const expiresInDays = values.expiresIn && values.expiresIn !== 'never'
@@ -102,7 +103,7 @@ export function ApiKeyForm({ onCreated, currentKeyCount = 0 }: ApiKeyFormProps &
 
   const handleDone = () => {
     setCreatedKey(null);
-    setCopied(false);
+    copied.onFalse();
     reset();
     onCreated();
   };
@@ -110,9 +111,9 @@ export function ApiKeyForm({ onCreated, currentKeyCount = 0 }: ApiKeyFormProps &
   const handleCopy = async () => {
     if (createdKey) {
       await navigator.clipboard.writeText(createdKey);
-      setCopied(true);
+      copied.onTrue();
       // Success is obvious from the button changing to "Copied" - no toast needed
-      setTimeout(() => setCopied(false), 2000);
+      setTimeout(() => copied.onFalse(), 2000);
     }
   };
 
@@ -153,7 +154,7 @@ export function ApiKeyForm({ onCreated, currentKeyCount = 0 }: ApiKeyFormProps &
               size="default"
               className="shrink-0"
             >
-              {copied
+              {copied.value
                 ? (
                     <>
                       <Check className="mr-2 size-4" />

@@ -4,7 +4,6 @@ import { ChevronsUpDown, CreditCard, Key, Loader2, LogOut, Sparkles } from 'luci
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { useState } from 'react';
 
 import { CancelSubscriptionDialog } from '@/components/chat/cancel-subscription-dialog';
 import { UsageMetrics } from '@/components/chat/usage-metrics';
@@ -31,6 +30,7 @@ import {
   useSubscriptionsQuery,
   useUsageStatsQuery,
 } from '@/hooks';
+import { useBoolean } from '@/hooks/utils';
 import { signOut, useSession } from '@/lib/auth/client';
 import { showApiErrorToast } from '@/lib/toast';
 
@@ -41,8 +41,8 @@ export function NavUser() {
   const t = useTranslations();
   const { data: usageData } = useUsageStatsQuery();
   const { data: subscriptionsData } = useSubscriptionsQuery();
-  const [showCancelDialog, setShowCancelDialog] = useState(false);
-  const [showApiKeysModal, setShowApiKeysModal] = useState(false);
+  const showCancelDialog = useBoolean(false);
+  const showApiKeysModal = useBoolean(false);
 
   // Mutations
   const customerPortalMutation = useCreateCustomerPortalSessionMutation();
@@ -95,7 +95,7 @@ export function NavUser() {
       });
 
       if (result.success) {
-        setShowCancelDialog(false);
+        showCancelDialog.onFalse();
         // Success is obvious from the dialog closing and UI update - no toast needed
       }
     } catch (error) {
@@ -170,7 +170,7 @@ export function NavUser() {
                     {isPremium ? t('navigation.pricing') : t('pricing.card.upgradeToPro')}
                   </Link>
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setShowApiKeysModal(true)}>
+                <DropdownMenuItem onClick={showApiKeysModal.onTrue}>
                   <Key />
                   API Keys
                 </DropdownMenuItem>
@@ -215,8 +215,8 @@ export function NavUser() {
 
       {/* Cancel Subscription Confirmation Dialog */}
       <CancelSubscriptionDialog
-        open={showCancelDialog}
-        onOpenChange={setShowCancelDialog}
+        open={showCancelDialog.value}
+        onOpenChange={showCancelDialog.setValue}
         onConfirm={handleConfirmCancellation}
         subscriptionTier={subscriptionTier}
         currentPeriodEnd={activeSubscription?.currentPeriodEnd}
@@ -225,8 +225,8 @@ export function NavUser() {
 
       {/* API Keys Modal */}
       <ApiKeysModal
-        open={showApiKeysModal}
-        onOpenChange={setShowApiKeysModal}
+        open={showApiKeysModal.value}
+        onOpenChange={showApiKeysModal.setValue}
       />
     </>
   );

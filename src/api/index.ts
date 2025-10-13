@@ -116,18 +116,8 @@ import {
   updateThreadRoute,
 } from './routes/chat/route';
 // Models routes (dynamic OpenRouter models)
-import {
-  clearCacheHandler,
-  getModelHandler,
-  listModelsHandler,
-  listProvidersHandler,
-} from './routes/models/handler';
-import {
-  clearCacheRoute,
-  getModelRoute,
-  listModelsRoute,
-  listProvidersRoute,
-} from './routes/models/route';
+import { listModelsHandler } from './routes/models/handler';
+import { listModelsRoute } from './routes/models/route';
 // ============================================================================
 // Route and Handler Imports (organized to match registration order below)
 // ============================================================================
@@ -391,12 +381,9 @@ const appRoutes = app
   .openapi(checkCustomRoleQuotaRoute, checkCustomRoleQuotaHandler) // Check custom role creation quota
 
   // ============================================================================
-  // Models Routes - Dynamic OpenRouter models discovery (public)
+  // Models Routes - Simplified OpenRouter models endpoint (public)
   // ============================================================================
-  .openapi(listModelsRoute, listModelsHandler) // List all available OpenRouter models (includes default_model_id)
-  .openapi(getModelRoute, getModelHandler) // Get specific model by ID
-  .openapi(listProvidersRoute, listProvidersHandler) // List all model providers
-  .openapi(clearCacheRoute, clearCacheHandler) // Clear models cache (admin only)
+  .openapi(listModelsRoute, listModelsHandler) // List all available OpenRouter models
 ;
 
 // ============================================================================

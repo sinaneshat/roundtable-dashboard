@@ -22,6 +22,7 @@ import { useThreadHeader } from '@/components/chat/thread-header-context';
 import { useThreadAnalysesQuery, useThreadChangelogQuery } from '@/hooks/queries/chat-threads';
 import { useModelsQuery } from '@/hooks/queries/models';
 import { useUsageStatsQuery } from '@/hooks/queries/usage';
+import { useBoolean } from '@/hooks/utils';
 import { useChatStreaming } from '@/hooks/utils/use-chat-streaming';
 import { getAvatarPropsFromModelId } from '@/lib/ai/avatar-helpers';
 import { groupChangelogByTime } from '@/lib/ai/changelog-helpers';
@@ -48,9 +49,6 @@ type ChatThreadScreenProps = {
     image: string | null;
   };
 };
-
-// ✅ STABLE FILTER: Define outside component to prevent query key changes on re-render
-const MODELS_QUERY_FILTERS = { includeAll: true } as const;
 
 // ============================================================================
 // Main Component - ✅ OFFICIAL AI SDK PATTERN
@@ -79,7 +77,7 @@ export default function ChatThreadScreen({
   const queryClient = useQueryClient();
 
   // ✅ SINGLE SOURCE OF TRUTH: Fetch models from backend
-  const { data: modelsData } = useModelsQuery(MODELS_QUERY_FILTERS);
+  const { data: modelsData } = useModelsQuery();
   const allModels = modelsData?.data?.models || [];
 
   // ✅ Fetch changelog reactively - prefetched on server, updates when configuration changes happen
@@ -102,7 +100,7 @@ export default function ChatThreadScreen({
   const userTier = usageData?.success ? usageData.data.subscription.tier : 'free';
 
   // ✅ Thread action state
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const isDeleteDialogOpen = useBoolean(false);
 
   // ✅ Transform backend ChatMessage to AI SDK format using helper
   const [messages, setMessages] = useState<UIMessage[]>(() => chatMessagesToUIMessages(initialMessages));
@@ -278,10 +276,10 @@ export default function ChatThreadScreen({
       <ChatThreadActions
         thread={thread}
         slug={slug}
-        onDeleteClick={() => setIsDeleteDialogOpen(true)}
+        onDeleteClick={isDeleteDialogOpen.onTrue}
       />
     ),
-    [thread, slug],
+    [thread, slug, isDeleteDialogOpen.onTrue],
   );
 
   // ✅ Set thread actions in header context - minimal dependencies
@@ -498,8 +496,8 @@ export default function ChatThreadScreen({
 
       {/* Delete confirmation dialog */}
       <ChatDeleteDialog
-        isOpen={isDeleteDialogOpen}
-        onOpenChange={setIsDeleteDialogOpen}
+        isOpen={isDeleteDialogOpen.value}
+        onOpenChange={isDeleteDialogOpen.setValue}
         threadId={thread.id}
         threadSlug={slug}
         redirectIfCurrent={true}
