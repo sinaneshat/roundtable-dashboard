@@ -50,6 +50,7 @@ import {
   enforceCustomRoleQuota,
   enforceMessageQuota,
   enforceThreadQuota,
+  ensureUserUsageRecord,
   getUserUsageStats,
   incrementCustomRoleUsage,
   incrementMessageUsage,
@@ -1923,33 +1924,72 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
           retryHistory: retryMetadata.retryHistory,
         };
 
-        // ✅ Save assistant message to database
-        // Simple insert without variant tracking
-        await db.insert(tables.chatMessage).values({
-          id: responseMessage.id,
-          threadId,
-          participantId: participant.id,
-          role: 'assistant',
-          content,
-          reasoning, // ✅ Extracted from parts array (may be null)
-          metadata: {
-            ...baseMetadata,
-            // Include error metadata if error occurred
-            ...(errorMetadata || {}),
-          },
-          createdAt: now,
-        }).onConflictDoNothing(); // ✅ Prevent duplicates if onFinish called multiple times
-
-        await db.update(tables.chatThread)
-          .set({
-            lastMessageAt: now,
-            updatedAt: now,
-          })
-          .where(eq(tables.chatThread.id, threadId));
-
-        // Increment usage
+        // ✅ ATOMIC BATCH: Save message + update thread + increment usage
+        // All three operations must succeed or fail together for data consistency
         const totalNewMessages = isNewMessage ? 2 : 1;
-        await incrementMessageUsage(user.id, totalNewMessages);
+        const usage = await ensureUserUsageRecord(user.id);
+
+        if ('batch' in db && typeof db.batch === 'function') {
+          await db.batch([
+            db.insert(tables.chatMessage).values({
+              id: responseMessage.id,
+              threadId,
+              participantId: participant.id,
+              role: 'assistant',
+              content,
+              reasoning, // ✅ Extracted from parts array (may be null)
+              metadata: {
+                ...baseMetadata,
+                // Include error metadata if error occurred
+                ...(errorMetadata || {}),
+              },
+              createdAt: now,
+            }).onConflictDoNothing(), // ✅ Prevent duplicates if onFinish called multiple times
+
+            db.update(tables.chatThread)
+              .set({
+                lastMessageAt: now,
+                updatedAt: now,
+              })
+              .where(eq(tables.chatThread.id, threadId)),
+
+            db.update(tables.userChatUsage)
+              .set({
+                messagesCreated: usage.messagesCreated + totalNewMessages,
+                updatedAt: new Date(),
+              })
+              .where(eq(tables.userChatUsage.userId, user.id)),
+          ]);
+        } else {
+          // Local SQLite fallback - sequential operations
+          await db.insert(tables.chatMessage).values({
+            id: responseMessage.id,
+            threadId,
+            participantId: participant.id,
+            role: 'assistant',
+            content,
+            reasoning,
+            metadata: {
+              ...baseMetadata,
+              ...(errorMetadata || {}),
+            },
+            createdAt: now,
+          }).onConflictDoNothing();
+
+          await db.update(tables.chatThread)
+            .set({
+              lastMessageAt: now,
+              updatedAt: now,
+            })
+            .where(eq(tables.chatThread.id, threadId));
+
+          await db.update(tables.userChatUsage)
+            .set({
+              messagesCreated: usage.messagesCreated + totalNewMessages,
+              updatedAt: new Date(),
+            })
+            .where(eq(tables.userChatUsage.userId, user.id));
+        }
 
         // ✅ USER REQUIREMENT: Automatically trigger moderator analysis after last participant
         // This analysis will be streamed to the frontend as part of the finish event

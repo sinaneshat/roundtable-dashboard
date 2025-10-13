@@ -60,7 +60,7 @@ async function getTierQuotas(tier: SubscriptionTier, isAnnual: boolean) {
  * Get or create user usage record
  * Ensures a user has a usage tracking record for the current billing period
  */
-async function ensureUserUsageRecord(userId: string): Promise<typeof tables.userChatUsage.$inferSelect> {
+export async function ensureUserUsageRecord(userId: string): Promise<typeof tables.userChatUsage.$inferSelect> {
   const db = await getDbAsync();
 
   // Check if user has existing usage record

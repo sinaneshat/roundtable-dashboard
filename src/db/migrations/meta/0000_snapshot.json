@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "6ba3965f-fca4-4f19-911e-5157bfffab4a",
+  "id": "e8df84bc-c8d3-4a56-a7d1-3e9413735b8d",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "account": {
@@ -1702,11 +1702,19 @@
           "notNull": true,
           "autoincrement": false
         },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'pending'"
+        },
         "analysis_data": {
           "name": "analysis_data",
           "type": "text",
           "primaryKey": false,
-          "notNull": true,
+          "notNull": false,
           "autoincrement": false
         },
         "participant_message_ids": {
@@ -1714,6 +1722,20 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true,
+          "autoincrement": false
+        },
+        "error_message": {
+          "name": "error_message",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "completed_at": {
+          "name": "completed_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
           "autoincrement": false
         },
         "created_at": {
@@ -1745,6 +1767,13 @@
           "name": "chat_moderator_analysis_created_idx",
           "columns": [
             "created_at"
+          ],
+          "isUnique": false
+        },
+        "chat_moderator_analysis_status_idx": {
+          "name": "chat_moderator_analysis_status_idx",
+          "columns": [
+            "status"
           ],
           "isUnique": false
         }
