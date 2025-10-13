@@ -2,7 +2,7 @@
 import './global.css';
 
 import type { Metadata, Viewport } from 'next';
-import { getMessages } from 'next-intl/server';
+import { getMessages, getTranslations } from 'next-intl/server';
 import React from 'react';
 
 import {
@@ -23,20 +23,22 @@ export const viewport: Viewport = {
 };
 
 export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations('seo.keywords');
+
   return createMetadata({
     title: BRAND.fullName,
     description: BRAND.description,
     keywords: [
-      'AI collaboration',
-      'multiple AI models',
-      'brainstorming',
-      'ChatGPT',
-      'Claude',
-      'Gemini',
+      t('aiCollaboration'),
+      t('multipleAiModels'),
+      t('brainstorming'),
+      t('chatgpt'),
+      t('claude'),
+      t('gemini'),
       `${BRAND.displayName} discussion`,
-      'AI chat',
-      'collaborative AI',
-      'team productivity',
+      t('aiChat'),
+      t('collaborativeAi'),
+      t('teamProductivity'),
     ],
   });
 }
@@ -49,6 +51,8 @@ type RootLayoutProps = {
 export default async function Layout({ children, modal }: RootLayoutProps) {
   const translations = await getMessages();
   const env = process.env;
+  const tAeo = await getTranslations('seo.aeo');
+  const tFeatures = await getTranslations('seo.features');
 
   return (
     <html
@@ -59,22 +63,18 @@ export default async function Layout({ children, modal }: RootLayoutProps) {
       <head>
         {/* 2025 AI Search Optimization - Answer Engine Optimization */}
         <AeoMetaTags
-          primaryQuestion={`What is ${BRAND.displayName}?`}
-          primaryAnswer="A collaborative AI platform where multiple AI models work together to brainstorm, solve problems, and generate ideas in real-time conversations."
-          contentType="guide"
+          primaryQuestion={tAeo('primaryQuestion', { brand: BRAND.displayName })}
+          primaryAnswer={tAeo('primaryAnswer')}
+          contentType={tAeo('contentType') as 'guide'}
           entities={[
-            'AI collaboration',
-            'ChatGPT',
-            'Claude',
-            'Gemini',
-            'artificial intelligence',
-            'brainstorming',
-            'productivity',
+            tAeo('relatedQuestions.howItWorks'),
+            tAeo('relatedQuestions.benefits'),
+            tAeo('relatedQuestions.howToUse', { brand: BRAND.displayName }),
           ]}
           relatedQuestions={[
-            'How does AI collaboration work?',
-            'What are the benefits of multiple AI models?',
-            `How to use ${BRAND.displayName} for brainstorming?`,
+            tAeo('relatedQuestions.howItWorks'),
+            tAeo('relatedQuestions.benefits'),
+            tAeo('relatedQuestions.howToUse', { brand: BRAND.displayName }),
           ]}
         />
       </head>
@@ -85,12 +85,12 @@ export default async function Layout({ children, modal }: RootLayoutProps) {
         {/* Enhanced SoftwareApplication schema for AI search engines */}
         <SoftwareApplicationSchema
           features={[
-            'Multi-model AI collaboration',
-            'Real-time chat interface',
-            'Session management',
-            'Public sharing capabilities',
-            'Usage tracking and analytics',
-            'Multiple AI participants per conversation',
+            tFeatures('multiModelCollaboration'),
+            tFeatures('realtimeChat'),
+            tFeatures('sessionManagement'),
+            tFeatures('publicSharing'),
+            tFeatures('usageTracking'),
+            tFeatures('multipleParticipants'),
           ]}
         />
 

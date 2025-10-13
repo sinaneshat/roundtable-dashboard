@@ -71,6 +71,14 @@ export type GetThreadChangelogResponse = InferResponseType<
   ApiClientType['chat']['threads'][':id']['changelog']['$get']
 >;
 
+export type GetThreadAnalysesRequest = InferRequestType<
+  ApiClientType['chat']['threads'][':id']['analyses']['$get']
+>;
+
+export type GetThreadAnalysesResponse = InferResponseType<
+  ApiClientType['chat']['threads'][':id']['analyses']['$get']
+>;
+
 // ============================================================================
 // Type Aliases - For convenience
 // ============================================================================
@@ -219,6 +227,23 @@ export async function getThreadChangelogService(threadId: string) {
   const client = await createApiClient();
   return parseResponse(
     client.chat.threads[':id'].changelog.$get({
+      param: { id: threadId },
+    }),
+  );
+}
+
+/**
+ * Get moderator analyses for a thread
+ * Protected endpoint - requires authentication (ownership check)
+ *
+ * Returns all moderator analyses for a thread ordered by round number.
+ *
+ * @param threadId - Thread ID
+ */
+export async function getThreadAnalysesService(threadId: string) {
+  const client = await createApiClient();
+  return parseResponse(
+    client.chat.threads[':id'].analyses.$get({
       param: { id: threadId },
     }),
   );

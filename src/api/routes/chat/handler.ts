@@ -1,10 +1,11 @@
 import type { RouteHandler } from '@hono/zod-openapi';
 import type { UIMessage } from 'ai';
-import { APICallError, consumeStream, convertToModelMessages, smoothStream, streamText, validateUIMessages } from 'ai';
+import { APICallError, consumeStream, convertToModelMessages, streamText, validateUIMessages } from 'ai';
 import type { SQL } from 'drizzle-orm';
 import { and, desc, eq, like, ne } from 'drizzle-orm';
 import { ulid } from 'ulid';
 
+import { ErrorContextBuilders } from '@/api/common/error-contexts';
 import { createError } from '@/api/common/error-handling';
 import {
   applyCursorPagination,
@@ -12,22 +13,32 @@ import {
   createTimestampCursor,
   getCursorOrderBy,
 } from '@/api/common/pagination';
-import type { ErrorContext } from '@/api/core';
 import { createHandler, Responses } from '@/api/core';
 import { CursorPaginationQuerySchema } from '@/api/core/schemas';
 import { apiLogger } from '@/api/middleware/hono-logger';
-import { getMessageVariantsForStream, saveAssistantMessageWithVariants } from '@/api/services/message-variant.service';
+import type { ClassifiedError, ParticipantInfo, RoundtablePromptConfig } from '@/api/routes/chat/schema';
+import {
+  AI_TIMEOUT_CONFIG,
+  DEFAULT_AI_PARAMS,
+} from '@/api/routes/chat/schema';
+import {
+  canAccessModelByPricing,
+  getModelPricingDisplay,
+  getRequiredTierForModel,
+} from '@/api/services/model-pricing-tiers.service';
 import { initializeOpenRouter, openRouterService } from '@/api/services/openrouter.service';
-import type { ClassifiedError } from '@/api/services/openrouter-error-handler';
 import {
   classifyOpenRouterError,
   extractErrorDetails,
   formatErrorForDatabase,
 } from '@/api/services/openrouter-error-handler';
+import { openRouterModelsService } from '@/api/services/openrouter-models.service';
+import { retryParticipantStream } from '@/api/services/participant-retry.service';
+import {
+  buildRoundtablePrompt,
+} from '@/api/services/roundtable-prompt.service';
 import { generateUniqueSlug } from '@/api/services/slug-generator.service';
 import {
-  logMemoryAdded,
-  logMemoryRemoved,
   logModeChange,
   logParticipantAdded,
   logParticipantRemoved,
@@ -37,70 +48,55 @@ import {
 import { generateTitleFromMessage } from '@/api/services/title-generator.service';
 import {
   enforceCustomRoleQuota,
-  enforceMemoryQuota,
   enforceMessageQuota,
   enforceThreadQuota,
   getUserUsageStats,
   incrementCustomRoleUsage,
-  incrementMemoryUsage,
   incrementMessageUsage,
   incrementThreadUsage,
 } from '@/api/services/usage-tracking.service';
 import type { ApiEnv } from '@/api/types';
 import { getDbAsync } from '@/db';
+import type { SubscriptionTier } from '@/db/config/subscription-tiers';
+import { getMaxOutputTokens, getTierConfig, getTierName } from '@/db/config/subscription-tiers';
 import * as tables from '@/db/schema';
-import type { SubscriptionTier } from '@/db/tables/usage';
-import {
-  buildRoundtableSystemPrompt,
-  canAccessModel,
-  canAddMoreModels,
-  getMaxModelsErrorMessage,
-  getMaxOutputTokens,
-  getModelById,
-  getTierDisplayName,
-} from '@/lib/ai/models-config';
 import type { ChatModeId, ThreadStatus } from '@/lib/config/chat-modes';
-import type { MessageMetadata } from '@/lib/schemas/message-metadata';
 
 import type {
   addParticipantRoute,
+  analyzeRoundRoute,
   createCustomRoleRoute,
-  createMemoryRoute,
   createThreadRoute,
   deleteCustomRoleRoute,
-  deleteMemoryRoute,
   deleteParticipantRoute,
   deleteThreadRoute,
   getCustomRoleRoute,
-  getMemoryRoute,
   getPublicThreadRoute,
+  getThreadAnalysesRoute,
   getThreadBySlugRoute,
   getThreadChangelogRoute,
   getThreadMessagesRoute,
   getThreadRoute,
   listCustomRolesRoute,
-  listMemoriesRoute,
   listThreadsRoute,
   streamChatRoute,
   updateCustomRoleRoute,
-  updateMemoryRoute,
   updateParticipantRoute,
   updateThreadRoute,
 } from './route';
 import {
   AddParticipantRequestSchema,
   CreateCustomRoleRequestSchema,
-  CreateMemoryRequestSchema,
   CreateThreadRequestSchema,
   CustomRoleIdParamSchema,
-  MemoryIdParamSchema,
+  ModeratorAnalysisRequestSchema,
   ParticipantIdParamSchema,
+  RoundAnalysisParamSchema,
   StreamChatRequestSchema,
   ThreadIdParamSchema,
   ThreadListQuerySchema,
   ThreadSlugParamSchema,
   UpdateCustomRoleRequestSchema,
-  UpdateMemoryRequestSchema,
   UpdateParticipantRequestSchema,
   UpdateThreadRequestSchema,
 } from './schema';
@@ -108,38 +104,6 @@ import {
 // ============================================================================
 // Internal Helper Functions (Following 3-file pattern: handler, route, schema)
 // ============================================================================
-
-/**
- * Error Context Builders - Following src/api/routes/billing/handler.ts pattern
- */
-function createAuthErrorContext(operation?: string): ErrorContext {
-  return {
-    errorType: 'authentication',
-    operation: operation || 'session_required',
-  };
-}
-
-function createResourceNotFoundContext(
-  resource: string,
-  resourceId?: string,
-): ErrorContext {
-  return {
-    errorType: 'resource',
-    resource,
-    resourceId,
-  };
-}
-
-function createAuthorizationErrorContext(
-  resource: string,
-  resourceId?: string,
-): ErrorContext {
-  return {
-    errorType: 'authorization',
-    resource,
-    resourceId,
-  };
-}
 
 /**
  * Verify thread exists and user owns it
@@ -187,13 +151,13 @@ async function verifyThreadOwnership(
   });
 
   if (!thread) {
-    throw createError.notFound('Thread not found', createResourceNotFoundContext('thread', threadId));
+    throw createError.notFound('Thread not found', ErrorContextBuilders.resourceNotFound('thread', threadId));
   }
 
   if (thread.userId !== userId) {
     throw createError.unauthorized(
       'Not authorized to access this thread',
-      createAuthorizationErrorContext('thread', threadId),
+      ErrorContextBuilders.authorization('thread', threadId),
     );
   }
 
@@ -225,14 +189,15 @@ async function verifyThreadOwnership(
 export const listThreadsHandler: RouteHandler<typeof listThreadsRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
+    validateQuery: ThreadListQuerySchema,
     operationName: 'listThreads',
   },
   async (c) => {
     // With auth: 'session', c.auth() provides type-safe access to user and session
     const { user } = c.auth();
 
-    // Parse query parameters including search
-    const query = ThreadListQuerySchema.parse(c.req.query());
+    // Use validated query parameters
+    const query = c.validated.query;
     const db = await getDbAsync();
 
     // Build filters for thread query
@@ -287,9 +252,9 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
     const usageStats = await getUserUsageStats(user.id);
     const userTier = usageStats.subscription.tier as SubscriptionTier;
 
-    // Validate that user can access all requested models
+    // ✅ SINGLE SOURCE OF TRUTH: Validate model access using backend service
     for (const participant of body.participants) {
-      const model = getModelById(participant.modelId);
+      const model = await openRouterModelsService.getModelById(participant.modelId);
 
       if (!model) {
         throw createError.badRequest(
@@ -301,9 +266,12 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
         );
       }
 
-      if (!canAccessModel(userTier, participant.modelId)) {
+      // ✅ PRICING-BASED ACCESS: Check using dynamic pricing from OpenRouter
+      const canAccess = canAccessModelByPricing(userTier, model);
+      if (!canAccess) {
+        const requiredTier = getRequiredTierForModel(model);
         throw createError.unauthorized(
-          `Your ${getTierDisplayName(userTier)} plan does not include access to ${model.name}. Upgrade to ${getTierDisplayName(model.minTier)} or higher to use this model.`,
+          `Your ${getTierName(userTier)} plan does not include access to ${model.name}. Upgrade to ${getTierName(requiredTier)} or higher to use this model.`,
           {
             errorType: 'authorization',
             resource: 'model',
@@ -357,7 +325,7 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
             if (customRole.userId !== user.id) {
               throw createError.unauthorized(
                 'Not authorized to use this custom role',
-                createAuthorizationErrorContext('custom_role', p.customRoleId),
+                ErrorContextBuilders.authorization('custom_role', p.customRoleId),
               );
             }
             systemPrompt = customRole.systemPrompt;
@@ -463,45 +431,6 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
       // Suppress unhandled rejection warnings
     });
 
-    // Attach memories to thread via junction table if provided
-    if (body.memoryIds && body.memoryIds.length > 0) {
-      // Verify all memories exist and belong to user
-      const memories = await db.query.chatMemory.findMany({
-        where: (fields, { inArray }) => inArray(fields.id, body.memoryIds!),
-      });
-
-      // Check if all memories exist
-      if (memories.length !== body.memoryIds.length) {
-        const foundIds = memories.map(m => m.id);
-        const missingIds = body.memoryIds.filter(id => !foundIds.includes(id));
-        throw createError.notFound(
-          `Memories not found: ${missingIds.join(', ')}`,
-          createResourceNotFoundContext('memory', missingIds[0]),
-        );
-      }
-
-      // Check if all memories belong to the user
-      const unauthorizedMemory = memories.find(m => m.userId !== user.id);
-      if (unauthorizedMemory) {
-        throw createError.unauthorized(
-          'Not authorized to use this memory',
-          createAuthorizationErrorContext('memory', unauthorizedMemory.id),
-        );
-      }
-
-      // Create junction table entries
-      await Promise.all(
-        body.memoryIds.map(memoryId =>
-          db.insert(tables.chatThreadMemory).values({
-            id: ulid(),
-            threadId,
-            memoryId,
-            attachedAt: now,
-          }),
-        ),
-      );
-    }
-
     // Return thread with participants and first user message
     // AI responses will be generated via the streaming endpoint
     return Responses.ok(c, {
@@ -519,7 +448,7 @@ export const getThreadHandler: RouteHandler<typeof getThreadRoute, ApiEnv> = cre
     operationName: 'getThread',
   },
   async (c) => {
-    const user = c.var.user; // May be undefined for unauthenticated requests
+    const user = c.get('user'); // May be null for unauthenticated requests
     const { id } = c.validated.params;
     const db = await getDbAsync();
 
@@ -528,7 +457,7 @@ export const getThreadHandler: RouteHandler<typeof getThreadRoute, ApiEnv> = cre
     });
 
     if (!thread) {
-      throw createError.notFound('Thread not found', createResourceNotFoundContext('thread', id));
+      throw createError.notFound('Thread not found', ErrorContextBuilders.resourceNotFound('thread', id));
     }
 
     // Smart access control: Public threads are accessible to anyone, private threads require ownership
@@ -537,14 +466,14 @@ export const getThreadHandler: RouteHandler<typeof getThreadRoute, ApiEnv> = cre
       if (!user) {
         throw createError.unauthenticated(
           'Authentication required to access private thread',
-          createAuthErrorContext(),
+          ErrorContextBuilders.auth(),
         );
       }
 
       if (thread.userId !== user.id) {
         throw createError.unauthorized(
           'Not authorized to access this thread',
-          createAuthorizationErrorContext('thread', id),
+          ErrorContextBuilders.authorization('thread', id),
         );
       }
     }
@@ -555,90 +484,11 @@ export const getThreadHandler: RouteHandler<typeof getThreadRoute, ApiEnv> = cre
       orderBy: [tables.chatParticipant.priority],
     });
 
-    // ✅ UPDATED: Fetch ALL messages (including inactive variants)
-    // ✅ Fetch ALL messages (no filtering by isActiveVariant - that's now in metadata)
-    const allMessages = await db.query.chatMessage.findMany({
+    // ✅ Fetch all messages for this thread
+    const messages = await db.query.chatMessage.findMany({
       where: eq(tables.chatMessage.threadId, id),
       orderBy: [tables.chatMessage.createdAt],
     });
-
-    // ✅ Get active messages for display using metadata.isActiveVariant
-    const activeMessages = allMessages.filter((msg) => {
-      const metadata = msg.metadata as MessageMetadata;
-      // User messages are always active, assistant messages check metadata
-      return msg.role === 'user' || (metadata?.isActiveVariant === true);
-    });
-
-    // ✅ Enrich active messages with ALL their variant siblings
-    const messages = await Promise.all(
-      activeMessages.map(async (message) => {
-        if (message.role !== 'assistant' || !message.participantId) {
-          return message;
-        }
-
-        try {
-          const messageMetadata = message.metadata as MessageMetadata;
-          const parentMsgId = messageMetadata?.parentMessageId as string || null;
-
-          // ✅ Filter variant siblings using metadata.parentMessageId
-          const variantSiblings = allMessages.filter((msg) => {
-            const msgMetadata = msg.metadata as MessageMetadata;
-            return msg.role === 'assistant'
-              && msg.participantId === message.participantId
-              && msgMetadata?.parentMessageId === parentMsgId;
-          });
-
-          // ✅ Map variants reading from metadata
-          const variants = variantSiblings.map((v) => {
-            const vMetadata = v.metadata as MessageMetadata;
-            return {
-              id: v.id,
-              content: v.content,
-              variantIndex: (vMetadata?.variantIndex as number) || 0,
-              isActive: (vMetadata?.isActiveVariant as boolean) || false,
-              createdAt: v.createdAt.toISOString(),
-              metadata: v.metadata,
-              participantId: v.participantId,
-              reasoning: v.reasoning || undefined,
-            };
-          });
-
-          const currentVariantIndex = (messageMetadata?.variantIndex as number) || 0;
-          const activeVariantIndex = variants.findIndex(v => v.isActive);
-
-          return {
-            ...message,
-            metadata: {
-              ...(typeof message.metadata === 'object' && message.metadata !== null ? message.metadata : {}),
-              variants,
-              currentVariantIndex,
-              activeVariantIndex: activeVariantIndex >= 0 ? activeVariantIndex : currentVariantIndex,
-              totalVariants: variants.length,
-              hasVariants: variants.length > 1,
-              roundId: message.id,
-              parentMessageId: parentMsgId,
-            },
-          };
-        } catch (error) {
-          apiLogger.error('[getThread] Failed to process variants for message', {
-            messageId: message.id,
-            error: error instanceof Error ? error.message : String(error),
-          });
-          return message;
-        }
-      }),
-    );
-
-    // Fetch attached memories via junction table
-    const threadMemories = await db.query.chatThreadMemory.findMany({
-      where: eq(tables.chatThreadMemory.threadId, id),
-      with: {
-        memory: true, // Include the full memory object
-      },
-    });
-
-    // Extract just the memory objects from the junction records
-    const memories = threadMemories.map(tm => tm.memory);
 
     // Fetch changelog entries (ordered by creation time, newest first)
     const changelog = await db.query.chatThreadChangelog.findMany({
@@ -659,7 +509,7 @@ export const getThreadHandler: RouteHandler<typeof getThreadRoute, ApiEnv> = cre
     if (!threadOwner) {
       throw createError.internal(
         'Thread owner not found',
-        createResourceNotFoundContext('user', thread.userId),
+        ErrorContextBuilders.resourceNotFound('user', thread.userId),
       );
     }
 
@@ -668,7 +518,6 @@ export const getThreadHandler: RouteHandler<typeof getThreadRoute, ApiEnv> = cre
       thread,
       participants,
       messages,
-      memories,
       changelog,
       user: {
         name: threadOwner.name,
@@ -718,7 +567,7 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
     if (body.isPublic !== undefined)
       updateData.isPublic = body.isPublic;
     if (body.metadata !== undefined)
-      updateData.metadata = body.metadata;
+      updateData.metadata = body.metadata ?? undefined;
 
     const [updatedThread] = await db
       .update(tables.chatThread)
@@ -779,7 +628,7 @@ export const getPublicThreadHandler: RouteHandler<typeof getPublicThreadRoute, A
     if (!thread) {
       throw createError.notFound(
         'Thread not found',
-        createResourceNotFoundContext('thread', slug),
+        ErrorContextBuilders.resourceNotFound('thread', slug),
       );
     }
 
@@ -805,7 +654,7 @@ export const getPublicThreadHandler: RouteHandler<typeof getPublicThreadRoute, A
     if (!threadOwner) {
       throw createError.internal(
         'Thread owner not found',
-        createResourceNotFoundContext('user', thread.userId),
+        ErrorContextBuilders.resourceNotFound('user', thread.userId),
       );
     }
 
@@ -815,77 +664,11 @@ export const getPublicThreadHandler: RouteHandler<typeof getPublicThreadRoute, A
       orderBy: [tables.chatParticipant.priority],
     });
 
-    // ✅ Fetch messages using metadata-based approach (no isActiveVariant column)
-    const allMessages = await db.query.chatMessage.findMany({
+    // Fetch all messages
+    const messages = await db.query.chatMessage.findMany({
       where: eq(tables.chatMessage.threadId, thread.id),
       orderBy: [tables.chatMessage.createdAt],
     });
-
-    // ✅ Filter active messages using metadata.isActiveVariant
-    const activeMessages = allMessages.filter((msg) => {
-      const metadata = msg.metadata as MessageMetadata;
-      return msg.role === 'user' || (metadata?.isActiveVariant === true);
-    });
-
-    // ✅ Enrich active messages with ALL their variant siblings
-    const messages = await Promise.all(
-      activeMessages.map(async (message) => {
-        if (message.role !== 'assistant' || !message.participantId) {
-          return message;
-        }
-
-        try {
-          const messageMetadata = message.metadata as MessageMetadata;
-          const parentMsgId = messageMetadata?.parentMessageId as string || null;
-
-          // ✅ Filter variant siblings using metadata.parentMessageId
-          const variantSiblings = allMessages.filter((msg) => {
-            const msgMetadata = msg.metadata as MessageMetadata;
-            return msg.role === 'assistant'
-              && msg.participantId === message.participantId
-              && msgMetadata?.parentMessageId === parentMsgId;
-          });
-
-          // ✅ Map variants reading from metadata
-          const variants = variantSiblings.map((v) => {
-            const vMetadata = v.metadata as MessageMetadata;
-            return {
-              id: v.id,
-              content: v.content,
-              variantIndex: (vMetadata?.variantIndex as number) || 0,
-              isActive: (vMetadata?.isActiveVariant as boolean) || false,
-              createdAt: v.createdAt.toISOString(),
-              metadata: v.metadata,
-              participantId: v.participantId,
-              reasoning: v.reasoning || undefined,
-            };
-          });
-
-          const currentVariantIndex = (messageMetadata?.variantIndex as number) || 0;
-          const activeVariantIndex = variants.findIndex(v => v.isActive);
-
-          return {
-            ...message,
-            metadata: {
-              ...(typeof message.metadata === 'object' && message.metadata !== null ? message.metadata : {}),
-              variants,
-              currentVariantIndex,
-              activeVariantIndex: activeVariantIndex >= 0 ? activeVariantIndex : currentVariantIndex,
-              totalVariants: variants.length,
-              hasVariants: variants.length > 1,
-              roundId: message.id,
-              parentMessageId: parentMsgId,
-            },
-          };
-        } catch (error) {
-          apiLogger.error('[getPublicThread] Failed to process variants for message', {
-            messageId: message.id,
-            error: error instanceof Error ? error.message : String(error),
-          });
-          return message;
-        }
-      }),
-    );
 
     // Fetch changelog entries (ordered by creation time, newest first)
     // Following the pattern from getThreadChangelog service
@@ -924,14 +707,14 @@ export const getThreadBySlugHandler: RouteHandler<typeof getThreadBySlugRoute, A
     });
 
     if (!thread) {
-      throw createError.notFound('Thread not found', createResourceNotFoundContext('thread', slug));
+      throw createError.notFound('Thread not found', ErrorContextBuilders.resourceNotFound('thread', slug));
     }
 
     // Ownership check - user can only access their own threads
     if (thread.userId !== user.id) {
       throw createError.unauthorized(
         'Not authorized to access this thread',
-        createAuthorizationErrorContext('thread', slug),
+        ErrorContextBuilders.authorization('thread', slug),
       );
     }
 
@@ -941,96 +724,22 @@ export const getThreadBySlugHandler: RouteHandler<typeof getThreadBySlugRoute, A
       orderBy: [tables.chatParticipant.priority],
     });
 
-    // ✅ UPDATED: Fetch ALL messages (including inactive variants) using metadata-based approach
-    const allMessages = await db.query.chatMessage.findMany({
+    // ✅ Fetch all messages for this thread
+    const messages = await db.query.chatMessage.findMany({
       where: eq(tables.chatMessage.threadId, thread.id),
       orderBy: [tables.chatMessage.createdAt],
     });
 
-    // ✅ Get active messages for display using metadata.isActiveVariant
-    const activeMessages = allMessages.filter((msg) => {
-      const metadata = msg.metadata as MessageMetadata;
-      // User messages are always active, assistant messages check metadata
-      return msg.role === 'user' || (metadata?.isActiveVariant === true);
-    });
-
-    // ✅ Enrich active messages with ALL their variant siblings
-    const messagesWithVariants = await Promise.all(
-      activeMessages.map(async (message) => {
-        if (message.role !== 'assistant' || !message.participantId) {
-          return message;
-        }
-
-        try {
-          const messageMetadata = message.metadata as MessageMetadata;
-          const parentMsgId = messageMetadata?.parentMessageId as string || null;
-
-          // ✅ Filter variant siblings using metadata.parentMessageId
-          const variantSiblings = allMessages.filter((msg) => {
-            const msgMetadata = msg.metadata as MessageMetadata;
-            return msg.role === 'assistant'
-              && msg.participantId === message.participantId
-              && msgMetadata?.parentMessageId === parentMsgId;
-          });
-
-          // ✅ Map variants reading from metadata
-          const variants = variantSiblings.map((v) => {
-            const vMetadata = v.metadata as MessageMetadata;
-            return {
-              id: v.id,
-              content: v.content,
-              variantIndex: (vMetadata?.variantIndex as number) || 0,
-              isActive: (vMetadata?.isActiveVariant as boolean) || false,
-              createdAt: v.createdAt.toISOString(),
-              metadata: v.metadata,
-              participantId: v.participantId,
-              reasoning: v.reasoning || undefined,
-            };
-          });
-
-          const currentVariantIndex = (messageMetadata?.variantIndex as number) || 0;
-          const activeVariantIndex = variants.findIndex(v => v.isActive);
-
-          return {
-            ...message,
-            metadata: {
-              ...(typeof message.metadata === 'object' && message.metadata !== null ? message.metadata : {}),
-              variants,
-              currentVariantIndex,
-              activeVariantIndex: activeVariantIndex >= 0 ? activeVariantIndex : currentVariantIndex,
-              totalVariants: variants.length,
-              hasVariants: variants.length > 1,
-              roundId: message.id,
-              parentMessageId: parentMsgId,
-            },
-          };
-        } catch (error) {
-          apiLogger.error('[getThreadBySlug] Failed to process variants for message', {
-            messageId: message.id,
-            error: error instanceof Error ? error.message : String(error),
-          });
-          return message;
-        }
-      }),
-    );
-
-    // Fetch attached memories via junction table
-    const threadMemories = await db.query.chatThreadMemory.findMany({
-      where: eq(tables.chatThreadMemory.threadId, thread.id),
-      with: {
-        memory: true, // Include the full memory object
-      },
-    });
-
-    // Extract just the memory objects from the junction records
-    const memories = threadMemories.map(tm => tm.memory);
-
     // Return everything in one response (same pattern as getThreadHandler)
+    // Include user data for proper hydration (prevents client/server mismatch)
     return Responses.ok(c, {
       thread,
       participants,
-      messages: messagesWithVariants, // ✅ Return messages with variant metadata
-      memories,
+      messages,
+      user: {
+        name: user.name,
+        image: user.image,
+      },
     });
   },
 );
@@ -1060,8 +769,8 @@ export const addParticipantHandler: RouteHandler<typeof addParticipantRoute, Api
     const usageStats = await getUserUsageStats(user.id);
     const userTier = usageStats.subscription.tier as SubscriptionTier;
 
-    // Validate that user can access the requested model
-    const model = getModelById(body.modelId);
+    // ✅ SINGLE SOURCE OF TRUTH: Validate model access using backend service
+    const model = await openRouterModelsService.getModelById(body.modelId);
 
     if (!model) {
       throw createError.badRequest(
@@ -1073,9 +782,12 @@ export const addParticipantHandler: RouteHandler<typeof addParticipantRoute, Api
       );
     }
 
-    if (!canAccessModel(userTier, body.modelId)) {
+    // ✅ PRICING-BASED ACCESS: Check using dynamic pricing from OpenRouter
+    const canAccess = canAccessModelByPricing(userTier, model);
+    if (!canAccess) {
+      const requiredTier = getRequiredTierForModel(model);
       throw createError.unauthorized(
-        `Your ${getTierDisplayName(userTier)} plan does not include access to ${model.name}. Upgrade to ${getTierDisplayName(model.minTier)} or higher to use this model.`,
+        `Your ${getTierName(userTier)} plan does not include access to ${model.name}. Upgrade to ${getTierName(requiredTier)} or higher to use this model.`,
         {
           errorType: 'authorization',
           resource: 'model',
@@ -1091,12 +803,16 @@ export const addParticipantHandler: RouteHandler<typeof addParticipantRoute, Api
 
     const currentModelCount = existingParticipants.length;
 
-    if (!canAddMoreModels(currentModelCount, userTier)) {
-      const errorMessage = getMaxModelsErrorMessage(userTier);
-      throw createError.badRequest(errorMessage, {
-        errorType: 'validation',
-        field: 'modelId',
-      });
+    // ✅ SINGLE SOURCE OF TRUTH: Check maxModels limit from tier config
+    const tierConfig = getTierConfig(userTier);
+    if (currentModelCount >= tierConfig.maxModels) {
+      throw createError.badRequest(
+        `Your ${getTierName(userTier)} plan allows up to ${tierConfig.maxModels} AI models per conversation. You already have ${currentModelCount} models. Remove a model or upgrade your plan to add more.`,
+        {
+          errorType: 'validation',
+          field: 'modelId',
+        },
+      );
     }
 
     const participantId = ulid();
@@ -1145,11 +861,11 @@ export const updateParticipantHandler: RouteHandler<typeof updateParticipantRout
     });
 
     if (!participant) {
-      throw createError.notFound('Participant not found', createResourceNotFoundContext('participant', id));
+      throw createError.notFound('Participant not found', ErrorContextBuilders.resourceNotFound('participant', id));
     }
 
     if (participant.thread.userId !== user.id) {
-      throw createError.unauthorized('Not authorized to modify this participant', createAuthorizationErrorContext('participant', id));
+      throw createError.unauthorized('Not authorized to modify this participant', ErrorContextBuilders.authorization('participant', id));
     }
 
     const [updatedParticipant] = await db
@@ -1187,11 +903,11 @@ export const deleteParticipantHandler: RouteHandler<typeof deleteParticipantRout
     });
 
     if (!participant) {
-      throw createError.notFound('Participant not found', createResourceNotFoundContext('participant', id));
+      throw createError.notFound('Participant not found', ErrorContextBuilders.resourceNotFound('participant', id));
     }
 
     if (participant.thread.userId !== user.id) {
-      throw createError.unauthorized('Not authorized to delete this participant', createAuthorizationErrorContext('participant', id));
+      throw createError.unauthorized('Not authorized to delete this participant', ErrorContextBuilders.authorization('participant', id));
     }
 
     await db.delete(tables.chatParticipant).where(eq(tables.chatParticipant.id, id));
@@ -1224,16 +940,10 @@ export const getThreadMessagesHandler: RouteHandler<typeof getThreadMessagesRout
     // Verify thread ownership
     await verifyThreadOwnership(threadId, user.id, db);
 
-    // ✅ Fetch messages using metadata-based filtering
-    const allMessages = await db.query.chatMessage.findMany({
+    // Fetch all messages
+    const messages = await db.query.chatMessage.findMany({
       where: eq(tables.chatMessage.threadId, threadId),
       orderBy: [tables.chatMessage.createdAt],
-    });
-
-    // ✅ Filter active messages using metadata.isActiveVariant
-    const messages = allMessages.filter((msg) => {
-      const metadata = msg.metadata as MessageMetadata;
-      return msg.role === 'user' || (metadata?.isActiveVariant === true);
     });
 
     return Responses.ok(c, {
@@ -1319,7 +1029,6 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
       participantIndex: requestedParticipantIndex, // Optional - undefined for config-only updates
       mode: newMode,
       participants: newParticipants,
-      memoryIds: newMemoryIds,
     } = c.validated.body;
     const db = await getDbAsync();
 
@@ -1352,13 +1061,18 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
 
     // Update participants if provided
     if (newParticipants && newParticipants.length > 0) {
-      // Validate that user can access all requested models
-      for (const participant of newParticipants) {
-        const model = getModelById(participant.modelId);
+      // ✅ TIER-BASED MODEL VALIDATION: Validate that user can access all requested models
+      // Fetch all models from OpenRouter to check pricing-based access control
+      const allModels = await openRouterModelsService.fetchAllModels();
 
-        if (!model) {
+      for (const participant of newParticipants) {
+        // Find the model in OpenRouter's model list
+        const openRouterModel = allModels.find(m => m.id === participant.modelId);
+
+        if (!openRouterModel) {
+          // Model not found in OpenRouter - reject the request
           throw createError.badRequest(
-            `Model "${participant.modelId}" not found`,
+            `Model "${participant.modelId}" not found in OpenRouter catalog`,
             {
               errorType: 'validation',
               field: 'participants.modelId',
@@ -1366,9 +1080,12 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
           );
         }
 
-        if (!canAccessModel(userTier, participant.modelId)) {
+        // ✅ PRICING-BASED ACCESS CONTROL: Check if user's tier can access this model
+        if (!canAccessModelByPricing(userTier, openRouterModel)) {
+          const requiredTier = getRequiredTierForModel(openRouterModel);
+          const modelPricing = getModelPricingDisplay(openRouterModel);
           throw createError.unauthorized(
-            `Your ${getTierDisplayName(userTier)} plan does not include access to ${model.name}. Upgrade to ${getTierDisplayName(model.minTier)} or higher to use this model.`,
+            `Your ${getTierName(userTier)} plan does not include access to ${openRouterModel.name} (${modelPricing}). Upgrade to ${getTierName(requiredTier)} or higher to use this model.`,
             {
               errorType: 'authorization',
               resource: 'model',
@@ -1376,6 +1093,18 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
             },
           );
         }
+      }
+
+      // ✅ MODEL COUNT VALIDATION: Check if user can add this many models based on tier
+      const tierConfig = getTierConfig(userTier);
+      if (newParticipants.length > tierConfig.maxModels) {
+        throw createError.unauthorized(
+          `Your ${getTierName(userTier)} plan allows up to ${tierConfig.maxModels} AI models per conversation. You've selected ${newParticipants.length} models. Remove some models or upgrade your plan.`,
+          {
+            errorType: 'authorization',
+            resource: 'participants',
+          },
+        );
       }
 
       // Get existing participants before deletion for changelog
@@ -1523,73 +1252,10 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
       } // end of participantsChanged check
     }
 
-    // Update memories if provided
-    if (newMemoryIds !== undefined) {
-      // Get existing memory attachments before deletion for changelog
-      const oldMemoryAttachments = await db.query.chatThreadMemory.findMany({
-        where: eq(tables.chatThreadMemory.threadId, threadId),
-        with: {
-          memory: {
-            columns: { id: true, title: true },
-          },
-        },
-      });
-
-      // Delete existing memory attachments
-      await db
-        .delete(tables.chatThreadMemory)
-        .where(eq(tables.chatThreadMemory.threadId, threadId));
-
-      // Attach new memories
-      if (newMemoryIds.length > 0) {
-        const memoriesToAttach = newMemoryIds.map(memoryId => ({
-          id: ulid(),
-          threadId,
-          memoryId,
-        }));
-
-        await db.insert(tables.chatThreadMemory).values(memoriesToAttach);
-
-        // Fetch the newly attached memories for changelog
-        const newMemories = await db.query.chatMemory.findMany({
-          where: (fields, { inArray }) => inArray(fields.id, newMemoryIds),
-          columns: { id: true, title: true },
-        });
-
-        // Log memory changes to changelog
-        // Find removed memories (in old but not in new)
-        for (const oldM of oldMemoryAttachments) {
-          const stillExists = newMemoryIds.includes(oldM.memoryId);
-          if (!stillExists) {
-            await logMemoryRemoved(threadId, oldM.memory.id, oldM.memory.title);
-          }
-        }
-
-        // Find added memories (in new but not in old)
-        for (const newM of newMemories) {
-          const wasExisting = oldMemoryAttachments.some(oldM => oldM.memoryId === newM.id);
-          if (!wasExisting) {
-            await logMemoryAdded(threadId, newM.id, newM.title);
-          }
-        }
-      } else {
-        // All memories removed
-        for (const oldM of oldMemoryAttachments) {
-          await logMemoryRemoved(threadId, oldM.memory.id, oldM.memory.title);
-        }
-      }
-    }
-
-    // ✅ Load existing messages from database using metadata-based filtering
-    const allDbMessages = await db.query.chatMessage.findMany({
+    // Load existing messages from database
+    const dbMessages = await db.query.chatMessage.findMany({
       where: eq(tables.chatMessage.threadId, threadId),
       orderBy: [tables.chatMessage.createdAt],
-    });
-
-    // ✅ Filter active messages using metadata.isActiveVariant
-    const dbMessages = allDbMessages.filter((msg) => {
-      const metadata = msg.metadata as MessageMetadata;
-      return msg.role === 'user' || (metadata?.isActiveVariant === true);
     });
 
     // ✅ OFFICIAL AI SDK PATTERN: Runtime Validation + Type Assertion
@@ -1667,13 +1333,12 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
     // ==================================================
     if (requestedParticipantIndex === undefined) {
       // Configuration was updated but no streaming response requested
-      // This happens when user updates participants/mode/memories without sending a message
+      // This happens when user updates participants/mode without sending a message
       apiLogger.info('Configuration update only - no streaming', {
         threadId,
         userId: user.id,
         modeUpdated: !!newMode,
         participantsUpdated: !!newParticipants,
-        memoriesUpdated: newMemoryIds !== undefined,
       });
 
       return Responses.ok(c, {
@@ -1711,7 +1376,6 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
     //
     // Why direct usage instead of service wrapper?
     // - Full control over abort signals (timeout + client disconnect)
-    // - Full control over stream transformations (smoothStream)
     // - Full control over callbacks (onFinish, onError, onChunk)
     // - Full control over message metadata
     // - This is the RECOMMENDED pattern from AI SDK documentation
@@ -1722,26 +1386,56 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
     // - See openrouter.service.ts for non-streaming example
     // ====================================================================
 
-    // Use all messages as context for this participant
-    const currentHistory = [...uiMessages];
+    // ====================================================================
+    // ✅ BUILD PARTICIPANT INFO: Prepare participant data for prompt
+    // ====================================================================
+    const participantInfos: ParticipantInfo[] = participants.map((p, idx) => ({
+      id: p.id,
+      modelId: p.modelId,
+      modelName: undefined, // Will be extracted from modelId by service
+      role: p.role,
+      priority: idx,
+    }));
 
     // Stream ONLY the requested participant
     const participantIndex = requestedParticipantIndex;
     const participant = participants[participantIndex]!;
+    const currentParticipant = participantInfos[participantIndex]!;
 
-    // Build system prompt (only includes previous participants)
-    const systemPrompt = buildRoundtableSystemPrompt({
+    // ====================================================================
+    // ✅ BUILD IMPROVED PROMPTS: Using AI SDK best practices
+    // Separates system prompt (behavior) from context (memories, participants)
+    // ====================================================================
+    const promptConfig: RoundtablePromptConfig = {
       mode: thread.mode as ChatModeId,
-      participantIndex,
-      participantRole: participant.role,
+      currentParticipantIndex: participantIndex,
+      currentParticipant,
+      allParticipants: participantInfos,
       customSystemPrompt: participant.settings?.systemPrompt,
-      otherParticipants: participants
-        .slice(0, participantIndex)
-        .map((p, idx) => ({
-          index: idx,
-          role: p.role,
-        })),
-    });
+    };
+
+    const promptSetup = buildRoundtablePrompt(promptConfig, []);
+
+    // ====================================================================
+    // ✅ CONSTRUCT MESSAGE HISTORY: Inject context as user message
+    // AI SDK best practice: Context belongs in user messages, not system prompt
+    // ====================================================================
+    const currentHistory: UIMessage[] = [];
+
+    // Add context message as initial user message (if context exists)
+    if (promptSetup.contextMessage) {
+      currentHistory.push({
+        id: `context-${threadId}`,
+        role: 'user',
+        parts: [{ type: 'text', text: promptSetup.contextMessage }],
+        metadata: {
+          isContextMessage: true,
+        },
+      } as UIMessage);
+    }
+
+    // Add actual conversation history
+    currentHistory.push(...uiMessages);
 
     // ✅ Generate unique message ID ONCE per participant response
     // This prevents duplicate key errors in multi-participant scenarios
@@ -1774,71 +1468,149 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
     // and it gets misclassified as "unknown" instead of the correct type (rate_limit, etc.)
     let classifiedError: ClassifiedError | null = null;
 
-    // ✅ Cost Control: Calculate max output tokens based on tier and model
-    const modelConfig = getModelById(participant.modelId);
+    // ✅ Cost Control: Calculate max output tokens based on tier
+    // Note: OpenRouter models don't have maxOutputTokens config, use tier limits
     const tierMaxOutputTokens = getMaxOutputTokens(userTier);
-    const modelSpecificLimit = modelConfig?.defaultSettings?.maxOutputTokens;
+    const maxOutputTokensLimit = tierMaxOutputTokens;
 
-    // Use the most restrictive limit:
-    // 1. Model-specific limit (if set) - for expensive models
-    // 2. Tier-level limit (from subscription config)
-    const maxOutputTokensLimit = modelSpecificLimit || tierMaxOutputTokens;
+    // ✅ RETRY MECHANISM: Up to 10 attempts with fallback models (USER REQUIREMENT)
+    // Track retry metadata for storage in message
+    let retryMetadata: {
+      totalAttempts: number;
+      retryHistory: Array<{
+        attemptNumber: number;
+        modelId: string;
+        errorType: string;
+        errorMessage: string;
+        timestamp: string;
+        delayMs: number;
+      }>;
+      originalModel: string;
+      finalModel: string;
+      modelSwitched: boolean;
+    } = {
+      totalAttempts: 0,
+      retryHistory: [],
+      originalModel: participant.modelId,
+      finalModel: participant.modelId,
+      modelSwitched: false,
+    };
 
-    // ✅ OFFICIAL AI SDK PATTERN: Timeout Protection with AbortSignal.timeout()
-    // Documentation: https://sdk.vercel.ai/docs/ai-sdk-core/settings#abortsignal
-    // Prevents streams from hanging indefinitely if AI provider doesn't respond
-    const combinedSignal = AbortSignal.any([
-      c.req.raw.signal, // Client disconnect
-      AbortSignal.timeout(60000), // 60s timeout (built-in)
-    ]);
-
-    // ✅ OFFICIAL AI SDK PATTERN: streamText() Configuration
+    // ✅ OFFICIAL AI SDK PATTERN: streamText() Configuration wrapped in retry mechanism
     // Documentation: https://sdk.vercel.ai/docs/ai-sdk-core/generating-text#streaming
     //
     // Key features from AI SDK:
-    // - Built-in retry with `maxRetries` (replaces custom retry logic)
+    // - Built-in retry with `maxRetries` (disabled - we handle retries at higher level)
     // - Built-in transformations with `experimental_transform`
     // - Built-in telemetry with `experimental_telemetry`
     // - Built-in abort handling with `abortSignal`
-    const result = streamText({
-      model: client.chat(participant.modelId),
-      messages: convertToModelMessages(currentHistory),
-      system: systemPrompt,
-      temperature: participant.settings?.temperature || 0.7,
-      abortSignal: combinedSignal, // ✅ Use combined signal for both timeout and client disconnect
+    //
+    // ✅ IMPROVED PROMPT ENGINEERING:
+    // - System prompt: Clean behavior definition (from promptSetup.systemPrompt)
+    // - User messages: Dynamic context (memories, participants) injected into currentHistory
+    // - Message history: Properly formatted with participant labels
 
-      // ✅ Cost Control: Enforce output token limit based on subscription tier
-      maxOutputTokens: maxOutputTokensLimit,
+    // Create a stream function that can be retried with different models
+    // ✅ CRITICAL FIX: Create NEW AbortSignal for EACH retry attempt
+    // Each attempt gets its own fresh 30-second timeout
+    const streamWithModel = async (modelId: string) => {
+      // ✅ OFFICIAL AI SDK PATTERN: Timeout Protection with AbortSignal.timeout()
+      // Documentation: https://sdk.vercel.ai/docs/ai-sdk-core/settings#abortsignal
+      // ✅ USER REQUIREMENT: Timeout per attempt from centralized config
+      // ✅ CRITICAL: Create NEW signal for EACH retry attempt (not shared across attempts)
+      const attemptSignal = AbortSignal.any([
+        c.req.raw.signal, // Client disconnect
+        AbortSignal.timeout(AI_TIMEOUT_CONFIG.perAttemptMs), // ✅ Fresh timeout for THIS attempt from config
+      ]);
 
-      // ✅ AI SDK v5: Built-in retry (replaced 120 lines of manual retry)
-      maxRetries: 3,
+      return streamText({
+        model: client.chat(modelId),
+        messages: convertToModelMessages(currentHistory),
+        system: promptSetup.systemPrompt, // ✅ Clean system prompt without dynamic context
+        temperature: participant.settings?.temperature ?? DEFAULT_AI_PARAMS.temperature,
+        abortSignal: attemptSignal, // ✅ Use fresh signal for THIS attempt
 
-      // ✅ AI SDK v5: Smooth streaming for better UX
-      experimental_transform: smoothStream({
-        chunking: 'word',
-        delayInMs: 20,
-      }),
+        // ✅ Cost Control: Enforce output token limit based on subscription tier
+        maxOutputTokens: maxOutputTokensLimit,
 
-      // ✅ AI SDK v5: Telemetry for performance monitoring
-      experimental_telemetry: {
-        isEnabled: true,
-        functionId: `chat-participant-${participant.id}-${participantIndex}`,
+        // ✅ Disable AI SDK's built-in retry - we handle retries at higher level with fallback models
+        maxRetries: 0,
+
+        // ✅ AI SDK v5: Telemetry for performance monitoring
+        experimental_telemetry: {
+          isEnabled: true,
+          functionId: `chat-participant-${participant.id}-${participantIndex}-model-${modelId}`,
+        },
+
+        // ✅ OFFICIAL AI SDK PATTERN: onAbort callback
+        // Documentation: https://sdk.vercel.ai/docs/ai-sdk-core/error-handling#handling-stream-aborts
+        // Called when stream is aborted via AbortSignal (timeout or client disconnect)
+        onAbort: ({ steps }) => {
+          apiLogger.info('Stream aborted', {
+            threadId,
+            participantId: participant.id,
+            participantIndex,
+            model: modelId,
+            stepsCompleted: steps.length,
+            timestamp: new Date().toISOString(),
+          });
+        },
+      });
+    };
+
+    // ✅ Execute stream with retry mechanism (up to 10 attempts with fallback models - USER REQUIREMENT)
+    // Will NOT skip to next participant until all retries exhausted
+    const retryResult = await retryParticipantStream(
+      streamWithModel,
+      participant.modelId,
+      userTier,
+      {
+        threadId,
+        participantId: participant.id,
+        participantIndex,
       },
+    );
 
-      // ✅ OFFICIAL AI SDK PATTERN: onAbort callback
-      // Documentation: https://sdk.vercel.ai/docs/ai-sdk-core/error-handling#handling-stream-aborts
-      // Called when stream is aborted via AbortSignal (timeout or client disconnect)
-      onAbort: ({ steps }) => {
-        apiLogger.info('Stream aborted', {
-          threadId,
-          participantId: participant.id,
-          participantIndex,
-          model: participant.modelId,
-          stepsCompleted: steps.length,
-          timestamp: new Date().toISOString(),
-        });
-      },
-    });
+    // Store retry metadata for message persistence (map to our expected format)
+    retryMetadata = {
+      totalAttempts: retryResult.metadata.totalAttempts,
+      retryHistory: retryResult.metadata.retryHistory.map(attempt => ({
+        attemptNumber: attempt.attemptNumber,
+        modelId: attempt.modelId,
+        errorType: attempt.error.type,
+        errorMessage: attempt.error.message,
+        timestamp: attempt.timestamp,
+        delayMs: attempt.delayMs,
+      })),
+      originalModel: retryResult.metadata.originalModel,
+      finalModel: retryResult.metadata.finalModel,
+      modelSwitched: retryResult.metadata.modelSwitched,
+    };
+
+    // If all retries failed, throw the error (will be caught by onError in toUIMessageStreamResponse)
+    if (!retryResult.success || !retryResult.result) {
+      const error = retryResult.error || new Error('All retry attempts failed');
+      apiLogger.error('Participant stream failed after all retries', {
+        threadId,
+        participantId: participant.id,
+        participantIndex,
+        originalModel: retryMetadata.originalModel,
+        finalModel: retryMetadata.finalModel,
+        totalAttempts: retryMetadata.totalAttempts,
+        modelSwitched: retryMetadata.modelSwitched,
+        error: error.message,
+      });
+
+      // Classify and store the error
+      classifiedError = classifyOpenRouterError(error);
+      streamError = error;
+
+      // Throw to trigger error handling in toUIMessageStreamResponse
+      throw error;
+    }
+
+    // Get the successful result
+    const result = retryResult.result;
 
     // ✅ OFFICIAL AI SDK PATTERN: toUIMessageStreamResponse()
     // Documentation: https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot#streaming-responses
@@ -1868,6 +1640,12 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
       // ✅ Return consistent NEW ID for this participant's message
       generateMessageId: () => messageId,
 
+      // ✅ OFFICIAL AI SDK PATTERN: Enable reasoning streaming
+      // Documentation: https://ai-sdk.dev/docs/ai-sdk-ui/chatbot
+      // When enabled, AI SDK automatically emits reasoning-start, reasoning-delta, reasoning-end events
+      // for models that support reasoning (Claude extended thinking, GPT reasoning, DeepSeek R1, etc.)
+      sendReasoning: true,
+
       // ✅ CRITICAL: Send updated participant data when config changes
       // When participants are updated (reordered/added/removed), frontend needs new IDs
       // This prevents "Invalid participantIndex" errors and "losing memory" issues
@@ -1892,67 +1670,20 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
             // When participants change (reorder/add/remove), historical messages must not be affected
             // Field names match database schema for consistency
             participantId: participant.id,
-            model: participant.modelId, // ✅ Matches DB schema (not "modelId")
+            model: retryMetadata.finalModel, // ✅ Use final model (may be fallback)
             role: participant.role || '', // ✅ Matches DB schema (not "participantRole")
             // ✅ NEW: Add roundId for variant tracking (AI SDK pattern)
             roundId: messageId, // Unique identifier for this generation round
+            // ✅ NEW: Retry metadata for tracking attempts and fallbacks
+            retryAttempts: retryMetadata.totalAttempts,
+            originalModel: retryMetadata.originalModel,
+            modelSwitched: retryMetadata.modelSwitched,
+            hadRetries: retryMetadata.totalAttempts > 1,
           };
         }
 
-        // ✅ NEW: Include variant metadata in finish event
+        // ✅ Include error information in finish event if error occurred during streaming
         if (part.type === 'finish') {
-          // Find the parent user message (last user message before this assistant response)
-          const userMessages = await db.query.chatMessage.findMany({
-            where: and(
-              eq(tables.chatMessage.threadId, threadId),
-              eq(tables.chatMessage.role, 'user'),
-            ),
-            orderBy: [desc(tables.chatMessage.createdAt)],
-            limit: 1,
-          });
-
-          const parentUserMessage = userMessages[0];
-
-          // Fetch existing variants (previous regenerations) for this parent/participant
-          // The current streaming message will be added to this list when saved in onFinish
-          let variants: Array<{
-            id: string;
-            content: string;
-            variantIndex: number;
-            isActive: boolean;
-            createdAt: string;
-            metadata: Record<string, unknown> | null;
-          }> = [];
-
-          if (parentUserMessage) {
-            try {
-              variants = await getMessageVariantsForStream({
-                threadId,
-                parentMessageId: parentUserMessage.id,
-                participantId: participant.id,
-              });
-
-              apiLogger.info('[Stream Handler] Fetched variants for finish metadata', {
-                threadId,
-                participantId: participant.id,
-                parentMessageId: parentUserMessage.id,
-                variantCount: variants.length,
-              });
-            } catch (error) {
-              apiLogger.error('[Stream Handler] Failed to fetch variants for metadata', {
-                threadId,
-                participantId: participant.id,
-                error: error instanceof Error ? error.message : String(error),
-              });
-              // Continue without variants - don't fail the stream
-            }
-          }
-
-          // Calculate variant index for the current message
-          // It will be variants.length (0 for first, 1 for second, etc.)
-          const currentVariantIndex = variants.length;
-          const activeVariantIndex = variants.findIndex(v => v.isActive);
-
           // ✅ Include error information if error occurred during streaming
           // This allows frontend to display detailed error messages immediately
           const errorInfo = streamError
@@ -1998,17 +1729,28 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
               })()
             : {};
 
+          // ✅ USER REQUIREMENT: Flag to indicate moderator analysis is being generated
+          const isLastParticipant = participantIndex === participants.length - 1;
+          const analysisInfo = isLastParticipant && !streamError
+            ? {
+                isLastParticipant: true,
+                moderatorAnalysisGenerating: true,
+                moderatorAnalysisNote: 'Moderator analysis is being generated automatically and will be available via the analyses endpoint',
+              }
+            : {};
+
           return {
-            // ✅ NEW: Variant metadata following AI SDK patterns
-            variants, // All existing variants (previous regenerations)
-            currentVariantIndex, // Index of the message being streamed
-            activeVariantIndex: activeVariantIndex >= 0 ? activeVariantIndex : currentVariantIndex, // Which variant is active
-            totalVariants: variants.length + 1, // Total including current
-            hasVariants: variants.length > 0, // Whether regenerations exist
-            roundId: messageId, // Matches start event roundId
-            parentMessageId: parentUserMessage?.id || null, // For variant grouping
             // ✅ Include error information for frontend display
             ...errorInfo,
+            // ✅ Include retry metadata in finish event
+            retryAttempts: retryMetadata.totalAttempts,
+            originalModel: retryMetadata.originalModel,
+            finalModel: retryMetadata.finalModel,
+            modelSwitched: retryMetadata.modelSwitched,
+            hadRetries: retryMetadata.totalAttempts > 1,
+            retryHistory: retryMetadata.retryHistory,
+            // ✅ Include analysis generation info
+            ...analysisInfo,
           };
         }
 
@@ -2031,9 +1773,16 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
 
         const now = new Date();
 
-        // Extract text content from the assistant message
+        // ✅ USER REQUIREMENT: Check if this is the last participant
+        const isLastParticipant = participantIndex === participants.length - 1;
+
+        // Extract text content and reasoning from the assistant message
         const textPart = responseMessage.parts.find(p => p.type === 'text');
         let content = textPart?.type === 'text' ? textPart.text : '';
+
+        // Extract reasoning if present (for models that support extended thinking)
+        const reasoningPart = responseMessage.parts.find(p => p.type === 'reasoning');
+        const reasoning = reasoningPart?.type === 'reasoning' ? reasoningPart.text : null;
 
         // ✅ CRITICAL: Always save error messages to database for UI display
         // Following AI SDK error handling pattern: errors should be persisted
@@ -2060,6 +1809,12 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
 
         // ✅ If still no content after error handling, use a fallback message
         // Never skip saving - always persist the message for error display
+        //
+        // ⚠️ NOTE: Empty responses should now be caught earlier in retryParticipantStream
+        // via result.text validation. If we reach this code path, it suggests:
+        // 1. The AI SDK's behavior changed (result.text showed content but parts are empty)
+        // 2. Or there's an edge case in how empty responses are represented
+        // This should be very rare now that we validate in the retry mechanism.
         if (!content || content.trim().length === 0) {
           hasError = true;
 
@@ -2073,7 +1828,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
               participantId: participant.id,
               messageId: responseMessage.id,
               model: participant.modelId,
-              note: 'This indicates the AI SDK did not trigger onError callback despite generation failure',
+              note: 'This indicates the AI SDK did not trigger onError callback despite generation failure. Empty responses should normally be caught in retryParticipantStream validation.',
             });
           }
 
@@ -2152,7 +1907,9 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
 
         // ✅ Add hasError flag to metadata for frontend error detection
         const baseMetadata = {
-          model: participant.modelId,
+          model: retryMetadata.finalModel, // ✅ Use final model (may be fallback)
+          originalModel: retryMetadata.originalModel, // ✅ Track original model for transparency
+          modelSwitched: retryMetadata.modelSwitched, // ✅ Flag if fallback was used
           role: participant.role,
           mode: thread.mode,
           participantId: participant.id,
@@ -2160,26 +1917,28 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
           aborted: isAborted,
           partialResponse: isAborted,
           hasError, // ✅ Flag for frontend error display
+          // ✅ NEW: Retry metadata for tracking attempts and errors
+          retryAttempts: retryMetadata.totalAttempts,
+          hadRetries: retryMetadata.totalAttempts > 1,
+          retryHistory: retryMetadata.retryHistory,
         };
 
-        // ✅ Save message with variant support using service function
-        // This service handles all the complexity of variant tracking:
-        // - Links to parent user message
-        // - Tracks variant index (0 for original, 1+ for regenerations)
-        // - Marks active variant (only one active at a time)
-        // - Idempotent saves to prevent duplicates
-        await saveAssistantMessageWithVariants({
-          messageId: responseMessage.id,
+        // ✅ Save assistant message to database
+        // Simple insert without variant tracking
+        await db.insert(tables.chatMessage).values({
+          id: responseMessage.id,
           threadId,
           participantId: participant.id,
+          role: 'assistant',
           content,
+          reasoning, // ✅ Extracted from parts array (may be null)
           metadata: {
             ...baseMetadata,
             // Include error metadata if error occurred
             ...(errorMetadata || {}),
           },
           createdAt: now,
-        });
+        }).onConflictDoNothing(); // ✅ Prevent duplicates if onFinish called multiple times
 
         await db.update(tables.chatThread)
           .set({
@@ -2191,6 +1950,236 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
         // Increment usage
         const totalNewMessages = isNewMessage ? 2 : 1;
         await incrementMessageUsage(user.id, totalNewMessages);
+
+        // ✅ USER REQUIREMENT: Automatically trigger moderator analysis after last participant
+        // This analysis will be streamed to the frontend as part of the finish event
+        if (isLastParticipant && !isAborted && !hasError) {
+          apiLogger.info('Last participant completed - triggering automatic moderator analysis', {
+            threadId,
+            participantCount: participants.length,
+            participantIndex,
+          });
+
+          // Generate moderator analysis in background (fire-and-forget)
+          // This will be picked up by the frontend via the analyses endpoint
+          (async () => {
+            // Declare variables in outer scope so catch block can access them
+            let analysisId: string | undefined;
+            let roundNumber: number | undefined;
+
+            try {
+              // Collect all participant message IDs from this round
+              // A round consists of all participant responses after the last user message
+              const allMessages = await db.query.chatMessage.findMany({
+                where: eq(tables.chatMessage.threadId, threadId),
+                orderBy: [tables.chatMessage.createdAt],
+              });
+
+              // Find the last user message
+              const userMessages = allMessages.filter(m => m.role === 'user');
+              const lastUserMessage = userMessages[userMessages.length - 1];
+
+              if (!lastUserMessage) {
+                apiLogger.warn('No user message found for moderator analysis', { threadId });
+                return;
+              }
+
+              // Get all assistant messages after the last user message
+              const participantMessages = allMessages.filter(
+                m => m.role === 'assistant'
+                  && m.createdAt > lastUserMessage.createdAt
+                  && m.participantId !== null,
+              );
+
+              // Only analyze if we have responses from all participants
+              if (participantMessages.length !== participants.length) {
+                apiLogger.warn('Not all participants have responded yet', {
+                  threadId,
+                  expected: participants.length,
+                  actual: participantMessages.length,
+                });
+                return;
+              }
+
+              // Calculate round number (number of user messages so far)
+              roundNumber = userMessages.length;
+
+              // ✅ Create pending analysis record FIRST - enables loading state in frontend
+              // Frontend polls and sees this pending record, shows loading indicator
+              analysisId = ulid();
+              await db.insert(tables.chatModeratorAnalysis).values({
+                id: analysisId,
+                threadId,
+                roundNumber,
+                mode: thread.mode,
+                userQuestion: lastUserMessage.content,
+                status: 'pending', // ✅ Start as pending - will update to completed/failed
+                analysisData: null, // No data yet
+                participantMessageIds: participantMessages.map(m => m.id),
+                createdAt: new Date(),
+              });
+
+              apiLogger.info('Created pending analysis record - frontend can show loading state', {
+                threadId,
+                roundNumber,
+                analysisId,
+              });
+
+              // Build participant response data
+              const participantResponses = participantMessages.map((msg, index) => {
+                const msgParticipant = participants.find(p => p.id === msg.participantId);
+                if (!msgParticipant) {
+                  throw new Error(`Participant not found for message ${msg.id}`);
+                }
+
+                const modelName = extractModeratorModelName(msgParticipant.modelId);
+                return {
+                  participantIndex: index,
+                  participantRole: msgParticipant.role,
+                  modelId: msgParticipant.modelId,
+                  modelName,
+                  responseContent: msg.content,
+                };
+              });
+
+              // Build moderator prompts
+              const { buildModeratorSystemPrompt, buildModeratorUserPrompt, ModeratorAnalysisSchema }
+                = await import('@/api/services/moderator-analysis.service');
+
+              const moderatorConfig = {
+                mode: thread.mode as ChatModeId,
+                roundNumber,
+                userQuestion: lastUserMessage.content,
+                participantResponses,
+              };
+
+              const systemPrompt = buildModeratorSystemPrompt(moderatorConfig);
+              const userPrompt = buildModeratorUserPrompt(moderatorConfig);
+
+              // ✅ DYNAMIC MODEL SELECTION: Use optimal analysis model from OpenRouter
+              // Intelligently selects cheapest, fastest model for structured output
+              // Falls back to gpt-4o-mini if no suitable model found
+              const optimalModel = await openRouterModelsService.getOptimalAnalysisModel();
+              const analysisModelId = optimalModel?.id || 'openai/gpt-4o-mini';
+
+              apiLogger.info('Generating automatic moderator analysis', {
+                threadId,
+                roundNumber,
+                analysisModel: analysisModelId,
+                modelName: optimalModel?.name || 'GPT-4o Mini (fallback)',
+                dynamicallySelected: !!optimalModel,
+              });
+
+              // Initialize OpenRouter
+              initializeOpenRouter(c.env);
+              const client = openRouterService.getClient();
+
+              // ✅ AI SDK generateObject() Pattern: Generate complete structured JSON
+              // Non-streaming approach for background analysis
+              const { generateObject, NoObjectGeneratedError } = await import('ai');
+
+              let analysisResult;
+              try {
+                analysisResult = await generateObject({
+                  model: client.chat(analysisModelId),
+                  schema: ModeratorAnalysisSchema,
+                  schemaName: 'ModeratorAnalysis',
+                  schemaDescription: 'Structured analysis of a conversation round with participant ratings, skills, pros/cons, leaderboard, and summary',
+                  system: systemPrompt,
+                  prompt: userPrompt,
+                  mode: 'json',
+                  experimental_telemetry: {
+                    isEnabled: true,
+                    functionId: `moderator-analysis-background-round-${roundNumber}`,
+                  },
+                  abortSignal: AbortSignal.timeout(AI_TIMEOUT_CONFIG.moderatorAnalysisMs),
+                });
+              } catch (error) {
+                if (NoObjectGeneratedError.isInstance(error)) {
+                  throw new Error(`Failed to generate background analysis: ${error.message}`);
+                }
+                throw error;
+              }
+
+              const analysis = analysisResult.object;
+
+              // Validate schema structure before saving
+              const hasValidStructure = analysis.participantAnalyses
+                && Array.isArray(analysis.participantAnalyses)
+                && analysis.leaderboard
+                && Array.isArray(analysis.leaderboard)
+                && analysis.overallSummary
+                && analysis.conclusion;
+
+              if (!hasValidStructure) {
+                const actualKeys = Object.keys(analysis);
+                apiLogger.error('Background moderator analysis generated invalid structure', {
+                  threadId,
+                  roundNumber,
+                  expectedKeys: ['participantAnalyses', 'leaderboard', 'overallSummary', 'conclusion'],
+                  actualKeys,
+                  sampleData: JSON.stringify(analysis).substring(0, 500),
+                });
+                throw new Error('Background analysis generated invalid structure - AI model did not follow schema');
+              }
+
+              // ✅ Update analysis record to completed with results
+              // Frontend polls and sees status change, displays results
+              await db
+                .update(tables.chatModeratorAnalysis)
+                .set({
+                  status: 'completed',
+                  analysisData: {
+                    leaderboard: analysis.leaderboard,
+                    participantAnalyses: analysis.participantAnalyses,
+                    overallSummary: analysis.overallSummary,
+                    conclusion: analysis.conclusion,
+                  },
+                  completedAt: new Date(),
+                })
+                .where(eq(tables.chatModeratorAnalysis.id, analysisId));
+
+              apiLogger.info('Automatic moderator analysis completed successfully', {
+                threadId,
+                roundNumber,
+                analysisId,
+              });
+            } catch (error) {
+              const errorMessage = error instanceof Error ? error.message : String(error);
+
+              apiLogger.error('Failed to generate automatic moderator analysis', {
+                threadId,
+                roundNumber,
+                analysisId,
+                error: errorMessage,
+                stack: error instanceof Error ? error.stack : undefined,
+              });
+
+              // ✅ Update analysis record to failed
+              // Frontend polls and sees status change, displays error
+              if (analysisId) {
+                try {
+                  await db
+                    .update(tables.chatModeratorAnalysis)
+                    .set({
+                      status: 'failed',
+                      errorMessage,
+                    })
+                    .where(eq(tables.chatModeratorAnalysis.id, analysisId));
+                } catch (updateError) {
+                  apiLogger.error('Failed to update analysis status to failed', {
+                    analysisId,
+                    error: updateError instanceof Error ? updateError.message : String(updateError),
+                  });
+                }
+              }
+
+              // Don't throw - this is a background operation
+            }
+          })().catch(() => {
+            // Suppress unhandled rejection warnings
+          });
+        }
 
         // Generate title if needed
         if (thread.title === 'New Chat' && messages.length > 0) {
@@ -2293,195 +2282,20 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
 );
 
 // ============================================================================
-// Memory Handlers
-// ============================================================================
-
-export const listMemoriesHandler: RouteHandler<typeof listMemoriesRoute, ApiEnv> = createHandler(
-  {
-    auth: 'session',
-    operationName: 'listMemories',
-  },
-  async (c) => {
-    const { user } = c.auth();
-
-    // Parse cursor pagination query parameters
-    const query = CursorPaginationQuerySchema.parse(c.req.query());
-    const db = await getDbAsync();
-
-    // Fetch memories with cursor-based pagination (limit + 1 to check hasMore)
-    const memories = await db.query.chatMemory.findMany({
-      where: buildCursorWhereWithFilters(
-        tables.chatMemory.updatedAt,
-        query.cursor,
-        'desc',
-        [eq(tables.chatMemory.userId, user.id)],
-      ),
-      orderBy: getCursorOrderBy(tables.chatMemory.updatedAt, 'desc'),
-      limit: query.limit + 1,
-    });
-
-    // Apply cursor pagination and format response
-    return Responses.ok(c, applyCursorPagination(
-      memories,
-      query.limit,
-      memory => createTimestampCursor(memory.updatedAt),
-    ));
-  },
-);
-
-export const createMemoryHandler: RouteHandler<typeof createMemoryRoute, ApiEnv> = createHandler(
-  {
-    auth: 'session',
-    validateBody: CreateMemoryRequestSchema,
-    operationName: 'createMemory',
-  },
-  async (c) => {
-    const { user } = c.auth();
-
-    // Enforce memory quota BEFORE creating
-    await enforceMemoryQuota(user.id);
-
-    const body = c.validated.body;
-    const db = await getDbAsync();
-
-    const memoryId = ulid();
-    const now = new Date();
-
-    const [memory] = await db
-      .insert(tables.chatMemory)
-      .values({
-        id: memoryId,
-        userId: user.id,
-        threadId: body.threadId,
-        type: body.type || 'topic',
-        title: body.title,
-        description: body.description,
-        content: body.content,
-        isGlobal: body.isGlobal || false,
-        metadata: body.metadata,
-        createdAt: now,
-        updatedAt: now,
-      })
-      .returning();
-
-    // Increment memory usage AFTER successful creation
-    await incrementMemoryUsage(user.id);
-
-    return Responses.ok(c, {
-      memory,
-    });
-  },
-);
-
-export const getMemoryHandler: RouteHandler<typeof getMemoryRoute, ApiEnv> = createHandler(
-  {
-    auth: 'session',
-    validateParams: MemoryIdParamSchema,
-    operationName: 'getMemory',
-  },
-  async (c) => {
-    const { user } = c.auth();
-    const { id } = c.validated.params;
-    const db = await getDbAsync();
-
-    // Query with userId - memories are always user-scoped
-    const memory = await db.query.chatMemory.findFirst({
-      where: and(
-        eq(tables.chatMemory.id, id),
-        eq(tables.chatMemory.userId, user.id),
-      ),
-    });
-
-    if (!memory) {
-      throw createError.notFound('Memory not found', createResourceNotFoundContext('memory', id));
-    }
-
-    return Responses.ok(c, {
-      memory,
-    });
-  },
-);
-
-export const updateMemoryHandler: RouteHandler<typeof updateMemoryRoute, ApiEnv> = createHandler(
-  {
-    auth: 'session',
-    validateParams: MemoryIdParamSchema,
-    validateBody: UpdateMemoryRequestSchema,
-    operationName: 'updateMemory',
-  },
-  async (c) => {
-    const { user } = c.auth();
-    const { id } = c.validated.params;
-    const body = c.validated.body;
-    const db = await getDbAsync();
-
-    // Update with userId filter - memories are always user-scoped
-    const [updatedMemory] = await db
-      .update(tables.chatMemory)
-      .set({
-        ...body,
-        updatedAt: new Date(),
-      })
-      .where(and(
-        eq(tables.chatMemory.id, id),
-        eq(tables.chatMemory.userId, user.id),
-      ))
-      .returning();
-
-    if (!updatedMemory) {
-      throw createError.notFound('Memory not found', createResourceNotFoundContext('memory', id));
-    }
-
-    return Responses.ok(c, {
-      memory: updatedMemory,
-    });
-  },
-);
-
-export const deleteMemoryHandler: RouteHandler<typeof deleteMemoryRoute, ApiEnv> = createHandler(
-  {
-    auth: 'session',
-    validateParams: MemoryIdParamSchema,
-    operationName: 'deleteMemory',
-  },
-  async (c) => {
-    const { user } = c.auth();
-    const { id } = c.validated.params;
-    const db = await getDbAsync();
-
-    // Delete with userId filter - memories are always user-scoped
-    const result = await db
-      .delete(tables.chatMemory)
-      .where(and(
-        eq(tables.chatMemory.id, id),
-        eq(tables.chatMemory.userId, user.id),
-      ))
-      .returning();
-
-    if (result.length === 0) {
-      throw createError.notFound('Memory not found', createResourceNotFoundContext('memory', id));
-    }
-
-    return Responses.ok(c, {
-      deleted: true,
-    });
-  },
-);
-
-// ============================================================================
 // Custom Role Handlers
 // ============================================================================
 
 export const listCustomRolesHandler: RouteHandler<typeof listCustomRolesRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
+    validateQuery: CursorPaginationQuerySchema,
     operationName: 'listCustomRoles',
   },
   async (c) => {
     const { user } = c.auth();
 
-    // Parse cursor pagination query parameters
-    const query = CursorPaginationQuerySchema.parse(c.req.query());
+    // Use validated cursor pagination query parameters
+    const query = c.validated.query;
     const db = await getDbAsync();
 
     // Fetch custom roles with cursor-based pagination (limit + 1 to check hasMore)
@@ -2566,7 +2380,7 @@ export const getCustomRoleHandler: RouteHandler<typeof getCustomRoleRoute, ApiEn
     });
 
     if (!customRole) {
-      throw createError.notFound('Custom role not found', createResourceNotFoundContext('custom_role', id));
+      throw createError.notFound('Custom role not found', ErrorContextBuilders.resourceNotFound('custom_role', id));
     }
 
     return Responses.ok(c, {
@@ -2602,7 +2416,7 @@ export const updateCustomRoleHandler: RouteHandler<typeof updateCustomRoleRoute,
       .returning();
 
     if (!updatedCustomRole) {
-      throw createError.notFound('Custom role not found', createResourceNotFoundContext('custom_role', id));
+      throw createError.notFound('Custom role not found', ErrorContextBuilders.resourceNotFound('custom_role', id));
     }
 
     return Responses.ok(c, {
@@ -2632,7 +2446,7 @@ export const deleteCustomRoleHandler: RouteHandler<typeof deleteCustomRoleRoute,
       .returning();
 
     if (result.length === 0) {
-      throw createError.notFound('Custom role not found', createResourceNotFoundContext('custom_role', id));
+      throw createError.notFound('Custom role not found', ErrorContextBuilders.resourceNotFound('custom_role', id));
     }
 
     return Responses.ok(c, {
@@ -2640,3 +2454,520 @@ export const deleteCustomRoleHandler: RouteHandler<typeof deleteCustomRoleRoute,
     });
   },
 );
+
+// ============================================================================
+// Moderator Analysis Handler
+// ============================================================================
+
+/**
+ * Analyze Conversation Round Handler
+ *
+ * ✅ AI SDK streamObject() Pattern: Generates structured analysis instead of text
+ * ✅ Follows Existing Patterns: Similar to streamChatHandler but for analysis
+ * ✅ Cheap Model: Uses GPT-4o-mini for cost-effective moderation
+ * ✅ Integrated Flow: Not a separate service, part of the chat system
+ *
+ * This handler:
+ * 1. Fetches all participant messages for the round
+ * 2. Builds a moderator prompt with all responses
+ * 3. Streams structured JSON analysis using streamObject()
+ * 4. Returns ratings, pros/cons, leaderboard, and insights
+ *
+ * Frontend Integration:
+ * - Call this after all participants have responded in a round
+ * - Use AI SDK's useObject() hook to stream and display the analysis
+ * - Render skills matrix, leaderboard, and insights as they stream in
+ */
+export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv> = createHandler(
+  {
+    auth: 'session',
+    validateParams: RoundAnalysisParamSchema,
+    validateBody: ModeratorAnalysisRequestSchema,
+    operationName: 'analyzeRound',
+  },
+  async (c) => {
+    const { user } = c.auth();
+    const { threadId, roundNumber } = c.validated.params;
+    const body = c.validated.body;
+    const db = await getDbAsync();
+
+    // Convert roundNumber from string to number
+    const roundNum = Number.parseInt(roundNumber, 10);
+    if (Number.isNaN(roundNum) || roundNum < 1) {
+      throw createError.badRequest(
+        'Invalid round number. Must be a positive integer.',
+        {
+          errorType: 'validation',
+          field: 'roundNumber',
+        },
+      );
+    }
+
+    // Verify thread ownership
+    const thread = await verifyThreadOwnership(threadId, user.id, db);
+
+    // ✅ IDEMPOTENCY: Check if analysis exists in ANY state (pending, streaming, completed, failed)
+    // Prevents duplicate analyses if user refreshes during generation
+    const existingAnalysis = await db.query.chatModeratorAnalysis.findFirst({
+      where: (fields, { and: andOp, eq: eqOp }) =>
+        andOp(
+          eqOp(fields.threadId, threadId),
+          eqOp(fields.roundNumber, roundNum),
+        ),
+    });
+
+    if (existingAnalysis) {
+      // ✅ COMPLETED: Return existing analysis data
+      if (existingAnalysis.status === 'completed' && existingAnalysis.analysisData) {
+        apiLogger.info('Analysis already completed for this round - returning existing', {
+          threadId,
+          roundNumber: roundNum,
+          analysisId: existingAnalysis.id,
+          status: existingAnalysis.status,
+        });
+
+        return c.json({
+          object: {
+            ...existingAnalysis.analysisData,
+            mode: existingAnalysis.mode,
+            roundNumber: existingAnalysis.roundNumber,
+            userQuestion: existingAnalysis.userQuestion,
+          },
+        });
+      }
+
+      // ✅ STREAMING or PENDING: Return 202 Accepted to indicate in-progress
+      // Frontend should handle this by showing loading state without re-triggering
+      if (existingAnalysis.status === 'streaming' || existingAnalysis.status === 'pending') {
+        apiLogger.info('Analysis already in progress for this round - returning 202', {
+          threadId,
+          roundNumber: roundNum,
+          analysisId: existingAnalysis.id,
+          status: existingAnalysis.status,
+          createdAt: existingAnalysis.createdAt,
+        });
+
+        return c.json({
+          status: existingAnalysis.status,
+          message: 'Analysis is currently being generated. Please wait...',
+          analysisId: existingAnalysis.id,
+          createdAt: existingAnalysis.createdAt,
+        }, 202); // 202 Accepted - request accepted but not yet completed
+      }
+
+      // ✅ FAILED: Allow retry by creating new analysis
+      if (existingAnalysis.status === 'failed') {
+        apiLogger.info('Previous analysis failed - allowing retry', {
+          threadId,
+          roundNumber: roundNum,
+          analysisId: existingAnalysis.id,
+          errorMessage: existingAnalysis.errorMessage,
+        });
+
+        // Delete failed analysis to allow fresh retry
+        await db.delete(tables.chatModeratorAnalysis)
+          .where(eq(tables.chatModeratorAnalysis.id, existingAnalysis.id));
+      }
+    }
+
+    // Fetch all participant messages for this round
+    const participantMessages = await db.query.chatMessage.findMany({
+      where: (fields, { inArray, eq: eqOp, and: andOp }) =>
+        andOp(
+          inArray(fields.id, body.participantMessageIds),
+          eqOp(fields.threadId, threadId),
+          eqOp(fields.role, 'assistant'),
+        ),
+      with: {
+        participant: true, // Include participant info (model, role, etc.)
+      },
+      orderBy: [tables.chatMessage.createdAt], // Maintain response order
+    });
+
+    // Validation: Ensure we have all requested messages
+    if (participantMessages.length !== body.participantMessageIds.length) {
+      const foundIds = participantMessages.map(m => m.id);
+      const missingIds = body.participantMessageIds.filter(id => !foundIds.includes(id));
+      throw createError.badRequest(
+        `Some participant messages not found: ${missingIds.join(', ')}`,
+        {
+          errorType: 'validation',
+          field: 'participantMessageIds',
+        },
+      );
+    }
+
+    // Validation: Ensure all messages have participants
+    const invalidMessages = participantMessages.filter(m => !m.participant || !m.participantId);
+    if (invalidMessages.length > 0) {
+      throw createError.badRequest(
+        'Some messages do not have associated participants (they may be user messages)',
+        {
+          errorType: 'validation',
+          field: 'participantMessageIds',
+        },
+      );
+    }
+
+    // Find the user's question (the last user message before these assistant messages)
+    const userMessages = await db.query.chatMessage.findMany({
+      where: (fields, { and: andOp, eq: eqOp }) =>
+        andOp(
+          eqOp(fields.threadId, threadId),
+          eqOp(fields.role, 'user'),
+        ),
+      orderBy: [desc(tables.chatMessage.createdAt)],
+      limit: 10, // Get last 10 user messages to find the relevant one
+    });
+
+    // The user question is the last user message before the earliest participant message
+    const earliestParticipantTime = Math.min(...participantMessages.map(m => m.createdAt.getTime()));
+    const relevantUserMessage = userMessages.find(
+      m => m.createdAt.getTime() < earliestParticipantTime,
+    );
+
+    const userQuestion = relevantUserMessage?.content || 'N/A';
+
+    // Build participant response data for the moderator
+    const participantResponses = participantMessages.map((msg, index) => {
+      const participant = msg.participant!;
+      const modelName = extractModeratorModelName(participant.modelId);
+
+      return {
+        participantIndex: index,
+        participantRole: participant.role,
+        modelId: participant.modelId,
+        modelName,
+        responseContent: msg.content,
+      };
+    });
+
+    // Build moderator prompts using the service
+    const { buildModeratorSystemPrompt, buildModeratorUserPrompt, ModeratorAnalysisSchema } = await import('@/api/services/moderator-analysis.service');
+
+    const moderatorConfig = {
+      mode: thread.mode as ChatModeId,
+      roundNumber: roundNum,
+      userQuestion,
+      participantResponses,
+    };
+
+    const systemPrompt = buildModeratorSystemPrompt(moderatorConfig);
+    const userPrompt = buildModeratorUserPrompt(moderatorConfig);
+
+    // ✅ DYNAMIC MODEL SELECTION: Use optimal analysis model from OpenRouter
+    // Intelligently selects cheapest, fastest model for structured output
+    // Falls back to gpt-4o-mini if no suitable model found
+    const optimalModel = await openRouterModelsService.getOptimalAnalysisModel();
+    const analysisModelId = optimalModel?.id || 'openai/gpt-4o-mini';
+
+    c.logger.info('Using dynamically selected analysis model for moderator', {
+      logType: 'operation',
+      operationName: 'analyzeRound',
+      resource: `${analysisModelId} (${optimalModel?.name || 'GPT-4o Mini - fallback'}) - ${optimalModel ? 'dynamically selected' : 'fallback'}`,
+    });
+
+    // Initialize OpenRouter with selected optimal model
+    initializeOpenRouter(c.env);
+    const client = openRouterService.getClient();
+
+    // ✅ CRITICAL: Create pending analysis record BEFORE streaming starts
+    // This acts as a distributed lock to prevent duplicate analysis generation
+    // If another request comes in (e.g., page refresh), it will see this pending record
+    const analysisId = ulid();
+    await db.insert(tables.chatModeratorAnalysis).values({
+      id: analysisId,
+      threadId,
+      roundNumber: roundNum,
+      mode: thread.mode,
+      userQuestion,
+      status: 'streaming', // Mark as streaming immediately
+      participantMessageIds: body.participantMessageIds,
+      createdAt: new Date(),
+    });
+
+    apiLogger.info('Created pending analysis record - streaming will begin', {
+      threadId,
+      roundNumber: roundNum,
+      analysisId,
+      participantCount: participantMessages.length,
+    });
+
+    // ✅ AI SDK streamObject() Pattern: Stream structured JSON as it's generated
+    // Real streaming approach - sends partial objects as they arrive
+    // Frontend uses useObject() hook from @ai-sdk/react for consumption
+    //
+    // Reference: https://sdk.vercel.ai/docs/ai-sdk-core/generating-structured-data
+    // Reference: https://sdk.vercel.ai/docs/ai-sdk-ui/object-generation
+    const { streamObject } = await import('ai');
+
+    try {
+      const result = streamObject({
+        model: client.chat(analysisModelId),
+        schema: ModeratorAnalysisSchema,
+        schemaName: 'ModeratorAnalysis',
+        schemaDescription: 'Structured analysis of a conversation round with participant ratings, skills, pros/cons, leaderboard, and summary',
+        system: systemPrompt,
+        prompt: userPrompt,
+        mode: 'json', // Force JSON mode for better schema adherence
+
+        // ✅ Telemetry for monitoring
+        experimental_telemetry: {
+          isEnabled: true,
+          functionId: `moderator-analysis-round-${roundNum}`,
+        },
+
+        // ✅ Timeout protection
+        abortSignal: AbortSignal.any([
+          c.req.raw.signal, // Client disconnect
+          AbortSignal.timeout(AI_TIMEOUT_CONFIG.moderatorAnalysisMs), // Centralized timeout for analysis
+        ]),
+
+        // ✅ Stream callbacks for server-side logging and database persistence
+        onFinish: async ({ object: finalObject, error, usage }) => {
+          // ✅ FAILED: Update status to failed with error message
+          if (error) {
+            apiLogger.error('Moderator analysis failed', {
+              threadId,
+              roundNumber: roundNum,
+              analysisId,
+              error,
+            });
+
+            try {
+              await db.update(tables.chatModeratorAnalysis)
+                .set({
+                  status: 'failed',
+                  errorMessage: error instanceof Error ? error.message : String(error),
+                })
+                .where(eq(tables.chatModeratorAnalysis.id, analysisId));
+
+              apiLogger.info('Analysis status updated to failed', {
+                threadId,
+                roundNumber: roundNum,
+                analysisId,
+              });
+            } catch (updateError) {
+              apiLogger.error('Failed to update analysis status to failed', {
+                threadId,
+                roundNumber: roundNum,
+                analysisId,
+                updateError,
+              });
+            }
+            return;
+          }
+
+          // ✅ NO OBJECT: Mark as failed
+          if (!finalObject) {
+            apiLogger.warn('Moderator analysis completed with no object', {
+              threadId,
+              roundNumber: roundNum,
+              analysisId,
+            });
+
+            try {
+              await db.update(tables.chatModeratorAnalysis)
+                .set({
+                  status: 'failed',
+                  errorMessage: 'Analysis completed but no object was generated',
+                })
+                .where(eq(tables.chatModeratorAnalysis.id, analysisId));
+            } catch (updateError) {
+              apiLogger.error('Failed to update analysis status (no object)', {
+                threadId,
+                roundNumber: roundNum,
+                analysisId,
+                updateError,
+              });
+            }
+            return;
+          }
+
+          apiLogger.info('Moderator analysis completed successfully', {
+            threadId,
+            roundNumber: roundNum,
+            analysisId,
+            participantCount: participantMessages.length,
+            hasParticipantAnalyses: !!finalObject?.participantAnalyses,
+            hasLeaderboard: !!finalObject?.leaderboard,
+            usage,
+          });
+
+          // ✅ Validate schema before saving to prevent corrupt data
+          const hasValidStructure = finalObject.participantAnalyses
+            && Array.isArray(finalObject.participantAnalyses)
+            && finalObject.leaderboard
+            && Array.isArray(finalObject.leaderboard)
+            && finalObject.overallSummary
+            && finalObject.conclusion;
+
+          if (!hasValidStructure) {
+            apiLogger.error('Moderator analysis has invalid structure - schema not followed', {
+              threadId,
+              roundNumber: roundNum,
+              analysisId,
+              hasParticipantAnalyses: !!finalObject.participantAnalyses,
+              hasLeaderboard: !!finalObject.leaderboard,
+              hasOverallSummary: !!finalObject.overallSummary,
+              hasConclusion: !!finalObject.conclusion,
+              actualKeys: Object.keys(finalObject),
+            });
+
+            try {
+              await db.update(tables.chatModeratorAnalysis)
+                .set({
+                  status: 'failed',
+                  errorMessage: 'Analysis generated but structure is invalid',
+                })
+                .where(eq(tables.chatModeratorAnalysis.id, analysisId));
+            } catch (updateError) {
+              apiLogger.error('Failed to update analysis status (invalid structure)', {
+                threadId,
+                roundNumber: roundNum,
+                analysisId,
+                updateError,
+              });
+            }
+            return;
+          }
+
+          // ✅ SUCCESS: Update existing record with analysis data and mark as completed
+          try {
+            await db.update(tables.chatModeratorAnalysis)
+              .set({
+                status: 'completed',
+                analysisData: {
+                  leaderboard: finalObject.leaderboard,
+                  participantAnalyses: finalObject.participantAnalyses,
+                  overallSummary: finalObject.overallSummary,
+                  conclusion: finalObject.conclusion,
+                },
+                completedAt: new Date(),
+              })
+              .where(eq(tables.chatModeratorAnalysis.id, analysisId));
+
+            apiLogger.info('Moderator analysis updated to completed in database', {
+              threadId,
+              roundNumber: roundNum,
+              analysisId,
+            });
+          } catch (updateError) {
+            apiLogger.error('Failed to update moderator analysis to completed', {
+              threadId,
+              roundNumber: roundNum,
+              analysisId,
+              error: updateError,
+            });
+          }
+        },
+      });
+
+      // ✅ AI SDK Pattern: Return streaming text response using toTextStreamResponse()
+      // Sets content-type to 'text/plain; charset=utf-8' with streaming
+      // Frontend consumes via useObject() hook from @ai-sdk/react
+      // Reference: https://sdk.vercel.ai/docs/ai-sdk-ui/object-generation
+      return result.toTextStreamResponse();
+    } catch (error) {
+      // Handle NoObjectGeneratedError specifically
+      const { NoObjectGeneratedError } = await import('ai');
+      if (NoObjectGeneratedError.isInstance(error)) {
+        apiLogger.error('No object generated by AI model', {
+          threadId,
+          roundNumber: roundNum,
+          cause: error.cause,
+          text: error.text,
+          finishReason: error.finishReason,
+        });
+
+        throw createError.internal(
+          'Failed to generate analysis',
+          {
+            errorType: 'external_service',
+            service: 'OpenRouter AI',
+          },
+        );
+      }
+
+      // Re-throw other errors
+      throw error;
+    }
+  },
+);
+
+/**
+ * Get Thread Analyses Handler
+ *
+ * ✅ Fetches all persisted moderator analyses for a thread
+ * ✅ Returns analyses ordered by round number
+ *
+ * GET /api/v1/chat/threads/:id/analyses
+ */
+export const getThreadAnalysesHandler: RouteHandler<typeof getThreadAnalysesRoute, ApiEnv> = createHandler(
+  {
+    auth: 'session',
+    validateParams: ThreadIdParamSchema,
+    operationName: 'getThreadAnalyses',
+  },
+  async (c) => {
+    const { user } = c.auth();
+    const { id: threadId } = c.validated.params;
+
+    c.logger.info('Fetching moderator analyses', {
+      logType: 'operation',
+      operationName: 'getThreadAnalyses',
+      userId: user.id,
+      resource: threadId,
+    });
+
+    const db = await getDbAsync();
+
+    // Verify thread ownership
+    await verifyThreadOwnership(threadId, user.id, db);
+
+    // Fetch all analyses for this thread, ordered by round number DESC (latest first)
+    // ✅ CRITICAL: May have multiple analyses per round (pending, streaming, completed, failed)
+    // Return only the LATEST one for each round to avoid duplicate keys on frontend
+    const allAnalyses = await db.query.chatModeratorAnalysis.findMany({
+      where: eq(tables.chatModeratorAnalysis.threadId, threadId),
+      orderBy: [desc(tables.chatModeratorAnalysis.roundNumber), desc(tables.chatModeratorAnalysis.createdAt)],
+    });
+
+    // ✅ Deduplicate by round number - keep only the latest analysis for each round
+    const analysesMap = new Map<number, typeof allAnalyses[0]>();
+    for (const analysis of allAnalyses) {
+      if (!analysesMap.has(analysis.roundNumber)) {
+        analysesMap.set(analysis.roundNumber, analysis);
+      }
+    }
+
+    // Convert back to array and sort by round number ascending
+    const analyses = Array.from(analysesMap.values())
+      .sort((a, b) => a.roundNumber - b.roundNumber);
+
+    c.logger.info(`Moderator analyses fetched successfully: ${analyses.length} unique rounds (${allAnalyses.length} total records)`, {
+      logType: 'operation',
+      operationName: 'getThreadAnalyses',
+      resource: threadId,
+    });
+
+    return Responses.ok(c, {
+      analyses,
+      count: analyses.length,
+    });
+  },
+);
+
+/**
+ * Helper function to extract model name from model ID
+ * (Duplicated from moderator service to avoid circular dependency)
+ */
+function extractModeratorModelName(modelId: string): string {
+  const parts = modelId.split('/');
+  const modelPart = parts[parts.length - 1] || modelId;
+
+  return modelPart
+    .split('-')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+}

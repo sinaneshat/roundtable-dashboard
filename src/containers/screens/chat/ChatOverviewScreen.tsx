@@ -19,43 +19,62 @@ import { AnimatePresence, motion } from 'motion/react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { Conversation, ConversationContent, ConversationScrollButton } from '@/components/ai-elements/conversation';
 import { Message, MessageAvatar, MessageContent } from '@/components/ai-elements/message';
 import { Response } from '@/components/ai-elements/response';
 import { ChatInput } from '@/components/chat/chat-input';
-import { ChatMemoriesList } from '@/components/chat/chat-memories-list';
 import { ChatModeSelector } from '@/components/chat/chat-mode-selector';
 import { ChatParticipantsList } from '@/components/chat/chat-participants-list';
 import { ChatQuickStart } from '@/components/chat/chat-quick-start';
 import { ModelMessageCard } from '@/components/chat/model-message-card';
 import { StreamingParticipantsLoader } from '@/components/chat/streaming-participants-loader';
-import { toast } from '@/components/ui/use-toast';
 import { WavyBackground } from '@/components/ui/wavy-background';
 import { BRAND } from '@/constants/brand';
 import { useCreateThreadMutation } from '@/hooks/mutations/chat-mutations';
+import { useModelsQuery } from '@/hooks/queries/models';
 import { getAvatarPropsFromModelId } from '@/lib/ai/avatar-helpers';
 import { getMessageMetadata } from '@/lib/ai/message-helpers';
-import { getModelById } from '@/lib/ai/models-config';
 import { useSession } from '@/lib/auth/client';
 import type { ChatModeId } from '@/lib/config/chat-modes';
 import type { ParticipantConfig } from '@/lib/schemas/chat-forms';
 import { chatInputFormDefaults, chatInputFormToCreateThreadRequest } from '@/lib/schemas/chat-forms';
-import { getApiErrorMessage } from '@/lib/utils/error-handling';
+import { showApiErrorToast } from '@/lib/toast';
+
+// ✅ STABLE FILTER: Define outside component to prevent query key changes on re-render
+const MODELS_QUERY_FILTERS = { includeAll: true } as const;
 
 export default function ChatOverviewScreen() {
   const router = useRouter();
   const t = useTranslations();
   const { data: session } = useSession();
 
-  // Chat configuration state
+  // ✅ SINGLE SOURCE OF TRUTH: Fetch models from backend (includes default_model_id)
+  const { data: modelsData } = useModelsQuery(MODELS_QUERY_FILTERS);
+  const allModels = modelsData?.data?.models || [];
+  const defaultModelId = modelsData?.data?.default_model_id;
+
+  // ✅ INITIALIZE WITH PREFETCHED DEFAULT MODEL: Create initial participant from server-prefetched data
+  // Backend computes the best accessible model from top 10 for user's tier
+  // This ensures the default model is pre-selected immediately on page load (zero client requests)
+  const initialParticipants = useMemo<ParticipantConfig[]>(() => {
+    if (defaultModelId) {
+      return [
+        {
+          id: 'participant-default',
+          modelId: defaultModelId,
+          role: '',
+          order: 0,
+        },
+      ];
+    }
+    return [];
+  }, [defaultModelId]);
+
+  // Chat configuration state - initialize with prefetched default model
   const [selectedMode, setSelectedMode] = useState<ChatModeId>(chatInputFormDefaults.mode);
-  const [selectedParticipants, setSelectedParticipants] = useState<ParticipantConfig[]>([
-    // Default to cheapest model: Gemini Flash
-    { id: 'temp-1', modelId: 'google/gemini-flash-1.5', role: '', order: 0 },
-  ]);
-  const [selectedMemoryIds, setSelectedMemoryIds] = useState<string[]>([]);
+  const [selectedParticipants, setSelectedParticipants] = useState<ParticipantConfig[]>(initialParticipants);
   const [inputValue, setInputValue] = useState('');
 
   // Thread state
@@ -74,227 +93,310 @@ export default function ChatOverviewScreen() {
   messagesRef.current = messages;
   participantsRef.current = selectedParticipants;
 
+  // ✅ SYNC PREFETCHED DEFAULT MODEL: Update participants if default model loads after initial render
+  // This handles edge cases where prefetch data isn't immediately available (e.g., dev mode hot reload)
+  // In production with proper SSR prefetch, initialParticipants should already have the correct value
+  useEffect(() => {
+    if (defaultModelId && selectedParticipants.length === 0) {
+      setSelectedParticipants([
+        {
+          id: 'participant-default',
+          modelId: defaultModelId,
+          role: '',
+          order: 0,
+        },
+      ]);
+    }
+  }, [defaultModelId, selectedParticipants.length]);
+
   // Thread creation mutation
   const createThreadMutation = useCreateThreadMutation();
 
   // ✅ CALLBACK-DRIVEN: Stream all participants
   const streamAllParticipants = useCallback(
-    async (threadId: string, initialMessages: UIMessage[], participantCount: number, threadSlug: string) => {
+    async (threadId: string, initialMessages: UIMessage[], participantCount: number, slug: string) => {
       // ✅ Prefetch the thread page immediately so navigation is instant
-      router.prefetch(`/chat/${threadSlug}`);
+      router.prefetch(`/chat/${slug}`);
 
       for (let participantIndex = 0; participantIndex < participantCount; participantIndex++) {
         setStatus('streaming');
 
-        const abortController = new AbortController();
-        abortControllerRef.current = abortController;
+        // ✅ USER REQUIREMENT: Retry up to 10 times per participant
+        // Must get successful response before moving to next participant
+        const MAX_RETRIES = 10;
+        let participantSuccess = false;
+        let lastError: Error | null = null;
 
-        // Declare messageId outside try block so catch block can access it
-        let messageId = '';
+        for (let retryAttempt = 0; retryAttempt < MAX_RETRIES && !participantSuccess; retryAttempt++) {
+          const abortController = new AbortController();
+          abortControllerRef.current = abortController;
 
-        try {
-          const currentMessages = messagesRef.current; // Use ref for latest value
+          // ✅ USER REQUIREMENT: 30 second timeout per attempt
+          const timeoutId = setTimeout(() => {
+            abortController.abort();
+          }, 30000);
 
-          const response = await fetch(`/api/v1/chat/threads/${threadId}/stream`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              messages: currentMessages.map(m => ({
-                id: m.id,
-                role: m.role,
-                parts: m.parts,
-              })),
-              participantIndex,
-            }),
-            signal: abortController.signal,
-          });
+          // Declare messageId outside try block so catch block can access it
+          let messageId = '';
 
-          if (!response.ok) {
-            throw new Error(`HTTP ${response.status}`);
-          }
+          try {
+            if (retryAttempt > 0) {
+              console.info(`[RETRY] Participant ${participantIndex + 1}, attempt ${retryAttempt + 1}/${MAX_RETRIES}`);
+            }
 
-          const reader = response.body?.getReader();
-          if (!reader) {
-            throw new Error('No response body');
-          }
+            const currentMessages = messagesRef.current; // Use ref for latest value
 
-          const decoder = new TextDecoder();
-          let buffer = '';
-          let content = '';
-          let messageMetadata: Record<string, unknown> | null = null;
+            const response = await fetch(`/api/v1/chat/threads/${threadId}/stream`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                messages: currentMessages.map(m => ({
+                  id: m.id,
+                  role: m.role,
+                  parts: m.parts,
+                })),
+                participantIndex,
+              }),
+              signal: abortController.signal,
+            });
 
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done)
-              break;
+            // Clear timeout on successful fetch
+            clearTimeout(timeoutId);
 
-            buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split('\n');
-            buffer = lines.pop() || '';
+            if (!response.ok) {
+              throw new Error(`HTTP ${response.status}`);
+            }
 
-            for (const line of lines) {
-              if (!line.trim() || line.startsWith(':'))
-                continue;
+            const reader = response.body?.getReader();
+            if (!reader) {
+              throw new Error('No response body');
+            }
 
-              if (line.startsWith('data: ')) {
-                const data = line.slice(6);
-                if (data === '[DONE]')
+            const decoder = new TextDecoder();
+            let buffer = '';
+            let content = '';
+            let messageMetadata: Record<string, unknown> | null = null;
+
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done)
+                break;
+
+              buffer += decoder.decode(value, { stream: true });
+              const lines = buffer.split('\n');
+              buffer = lines.pop() || '';
+
+              for (const line of lines) {
+                if (!line.trim() || line.startsWith(':'))
                   continue;
 
-                try {
-                  const event = JSON.parse(data);
-                  console.warn('[STREAM EVENT]', event); // DEBUG
+                if (line.startsWith('data: ')) {
+                  const data = line.slice(6);
+                  if (data === '[DONE]')
+                    continue;
 
-                  if (event.type === 'start') {
-                    messageId = event.messageId;
-                    messageMetadata = event.messageMetadata || null;
-                    content = '';
+                  try {
+                    const event = JSON.parse(data);
+                    console.warn('[STREAM EVENT]', event); // DEBUG
 
-                    // Update participants if backend sent new data
-                    if (messageMetadata) {
-                      const updatedParticipants = (messageMetadata as Record<string, unknown>)
-                        .participants as Array<{ id: string; modelId: string; role: string; order: number }> | undefined;
-                      if (updatedParticipants && updatedParticipants.length > 0) {
-                        setSelectedParticipants(updatedParticipants);
-                        participantsRef.current = updatedParticipants;
+                    if (event.type === 'start') {
+                      messageId = event.messageId;
+                      messageMetadata = event.messageMetadata || null;
+                      content = '';
+
+                      // Update participants if backend sent new data
+                      if (messageMetadata) {
+                        const updatedParticipants = (messageMetadata as Record<string, unknown>)
+                          .participants as Array<{ id: string; modelId: string; role: string; order: number }> | undefined;
+                        if (updatedParticipants && updatedParticipants.length > 0) {
+                          setSelectedParticipants(updatedParticipants);
+                          participantsRef.current = updatedParticipants;
+                        }
                       }
-                    }
 
-                    // ✅ Get participant data for metadata
-                    const currentParticipants = participantsRef.current;
-                    const participant = currentParticipants[participantIndex];
+                      // ✅ Get participant data for metadata
+                      const currentParticipants = participantsRef.current;
+                      const participant = currentParticipants[participantIndex];
 
-                    // ✅ Add placeholder message with CRITICAL metadata fields pre-populated
-                    // Following useChatStreaming pattern (src/hooks/utils/use-chat-streaming.ts:110-124)
-                    setMessages((prev) => {
-                      const updated = [
-                        ...prev,
-                        {
-                          id: messageId,
-                          role: 'assistant' as const,
-                          parts: [{ type: 'text' as const, text: '' }],
-                          metadata: {
+                      // ✅ Add placeholder message with CRITICAL metadata fields pre-populated
+                      // Following useChatStreaming pattern (src/hooks/utils/use-chat-streaming.ts:110-124)
+                      setMessages((prev) => {
+                        const updated = [
+                          ...prev,
+                          {
+                            id: messageId,
+                            role: 'assistant' as const,
+                            parts: [{ type: 'text' as const, text: '' }],
+                            metadata: {
                             // ✅ CRITICAL: Pre-populate required fields for ModelMessageCard rendering
-                            participantId: participant?.id, // Required for participant lookup
-                            participantIndex, // Required for display
-                            model: participant?.modelId, // Required for avatar rendering
-                            role: participant?.role || '', // Required for display
-                            createdAt: new Date().toISOString(), // Required for timeline sorting
-                            // Merge backend metadata (will contain additional fields from start event)
-                            ...(messageMetadata || {}),
-                            // ✅ Initialize variant metadata (will be populated in finish event)
-                            variants: [],
-                            currentVariantIndex: 0,
-                            hasVariants: false,
+                              participantId: participant?.id, // Required for participant lookup
+                              participantIndex, // Required for display
+                              model: participant?.modelId, // Required for avatar rendering
+                              role: participant?.role || '', // Required for display
+                              createdAt: new Date().toISOString(), // Required for timeline sorting
+                              // Merge backend metadata (will contain additional fields from start event)
+                              ...(messageMetadata || {}),
+                            },
                           },
-                        },
-                      ];
-                      messagesRef.current = updated; // Keep ref in sync
-                      return updated;
-                    });
-                  } else if (event.type === 'text-delta' && event.delta) {
-                    content += event.delta;
-                    console.warn('[TEXT DELTA]', { messageId, content }); // DEBUG
+                        ];
+                        messagesRef.current = updated; // Keep ref in sync
+                        return updated;
+                      });
+                    } else if (event.type === 'text-delta' && event.delta) {
+                      // ✅ REAL-TIME STREAMING: Immediate updates for character-by-character display
+                      // React 18 automatic batching prevents excessive re-renders
+                      content += event.delta;
 
-                    // ✅ Update message with streamed content
-                    setMessages((prev) => {
-                      const updated = prev.map(m =>
-                        m.id === messageId
-                          ? { ...m, parts: [{ type: 'text' as const, text: content }] }
-                          : m,
-                      );
-                      messagesRef.current = updated; // Keep ref in sync
-                      console.warn('[MESSAGES UPDATED]', updated.length); // DEBUG
-                      return updated;
-                    });
-                  } else if (event.type === 'error') {
-                    // ✅ Handle error without exiting the loop - mark message as error
-                    const errorMessage = event.error?.message || 'Unknown error occurred';
-                    console.error('[STREAM ERROR]', errorMessage);
+                      // Update message immediately
+                      setMessages((prev) => {
+                        const updated = prev.map(m =>
+                          m.id === messageId
+                            ? { ...m, parts: [{ type: 'text' as const, text: content }] }
+                            : m,
+                        );
+                        messagesRef.current = updated; // Keep ref in sync
+                        return updated;
+                      });
+                    } else if (event.type === 'error') {
+                    // ✅ Handle error without exiting the loop - mark message as error and continue to next participant
+                      const errorData = event.error || {};
+                      const errorMessage = errorData.message || 'AI model encountered an error';
+                      const errorType = errorData.type || 'unknown';
 
-                    // Update the message with error content
-                    // ✅ CRITICAL: Preserve existing metadata fields (participantId, model, role, etc.)
-                    setMessages((prev) => {
-                      const updated = prev.map(m =>
-                        m.id === messageId
-                          ? {
-                              ...m,
-                              parts: [{ type: 'text' as const, text: `Error: ${errorMessage}` }],
-                              metadata: {
-                                ...(m.metadata || {}), // ✅ Preserve all existing metadata
-                                hasError: true, // Add hasError flag for consistent error detection
-                                error: errorMessage,
-                                errorType: event.error?.type || 'unknown',
-                                errorMessage,
-                              },
-                            }
-                          : m,
-                      );
-                      messagesRef.current = updated;
-                      return updated;
-                    });
+                      // Log error for debugging (not alarming - this is handled gracefully)
+                      console.info('[PARTICIPANT ERROR - CONTINUING]', {
+                        participant: participantIndex + 1,
+                        total: participantCount,
+                        errorType,
+                        message: errorMessage,
+                      });
 
-                    // ✅ CRITICAL: Reset state to prevent leak to next participant
-                    messageId = '';
-                    content = '';
-                    messageMetadata = null;
+                      // Update the message with error content
+                      // ✅ CRITICAL: Preserve existing metadata fields (participantId, model, role, etc.)
+                      setMessages((prev) => {
+                        const updated = prev.map(m =>
+                          m.id === messageId
+                            ? {
+                                ...m,
+                                parts: [{ type: 'text' as const, text: `${errorMessage}` }],
+                                metadata: {
+                                  ...(m.metadata || {}), // ✅ Preserve all existing metadata
+                                  hasError: true, // Add hasError flag for consistent error detection
+                                  error: errorMessage,
+                                  errorType,
+                                  errorMessage,
+                                  isTransient: errorData.isTransient || false,
+                                },
+                              }
+                            : m,
+                        );
+                        messagesRef.current = updated;
+                        return updated;
+                      });
 
-                    // Exit this participant's stream but continue to next participant
-                    break; // Break the inner while loop, not return
+                      // ✅ CRITICAL: Reset state to prevent leak to next participant
+                      messageId = '';
+                      content = '';
+                      messageMetadata = null;
+
+                      // Exit this participant's stream but continue to next participant
+                      break; // Break the inner while loop, not return
+                    }
+                  } catch (parseError) {
+                    console.error('Failed to parse SSE:', parseError);
                   }
-                } catch (parseError) {
-                  console.error('Failed to parse SSE:', parseError);
                 }
               }
             }
+
+            reader.releaseLock();
+
+            // ✅ SUCCESS: Participant completed successfully
+            participantSuccess = true;
+            clearTimeout(timeoutId);
+          } catch (error) {
+            clearTimeout(timeoutId);
+
+            if (error instanceof Error && error.name === 'AbortError') {
+              // Check if this was user-initiated or timeout
+              if (abortControllerRef.current === null) {
+                // User manually stopped streaming - exit entire flow
+                setStatus('ready');
+                return;
+              }
+              // Otherwise it's a timeout - will retry
+              lastError = new Error('Request timeout (30s)');
+              console.warn(`[TIMEOUT] Participant ${participantIndex + 1}, attempt ${retryAttempt + 1}/${MAX_RETRIES}`);
+            } else {
+              // Network/parsing errors - save for potential retry
+              lastError = error instanceof Error ? error : new Error(String(error));
+              console.warn(`[ERROR] Participant ${participantIndex + 1}, attempt ${retryAttempt + 1}/${MAX_RETRIES}:`, lastError.message);
+            }
+
+            // Update message with error if we have a messageId (for UI feedback)
+            // ✅ CRITICAL: Preserve existing metadata fields (participantId, model, role, etc.)
+            if (messageId) {
+              setMessages((prev) => {
+                const updated = prev.map(m =>
+                  m.id === messageId
+                    ? {
+                        ...m,
+                        parts: [{ type: 'text' as const, text: `Retrying... (attempt ${retryAttempt + 1}/${MAX_RETRIES})` }],
+                        metadata: {
+                          ...(m.metadata || {}),
+                          isRetrying: true,
+                          retryAttempt: retryAttempt + 1,
+                        },
+                      }
+                    : m,
+                );
+                messagesRef.current = updated;
+                return updated;
+              });
+            }
+
+            // Will retry in next iteration of retry loop
+          } finally {
+            abortControllerRef.current = null;
           }
+        }
 
-          reader.releaseLock();
-        } catch (error) {
-          if (error instanceof Error && error.name === 'AbortError') {
-            // User manually stopped streaming - exit entire flow
-            setStatus('ready');
-            return;
-          }
+        // ✅ Check if participant failed after all retries
+        if (!participantSuccess) {
+          console.error(`[FAILED] Participant ${participantIndex + 1} failed after ${MAX_RETRIES} attempts`);
 
-          // ✅ Network/parsing errors - show error in current message, continue to next participant
-          const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-          console.error('[NETWORK ERROR]', errorMessage, error);
-
-          // Update message with error if we have a messageId
-          // ✅ CRITICAL: Preserve existing metadata fields (participantId, model, role, etc.)
-          if (messageId) {
-            setMessages((prev) => {
-              const updated = prev.map(m =>
-                m.id === messageId
-                  ? {
-                      ...m,
-                      parts: [{ type: 'text' as const, text: `Error: ${errorMessage}` }],
-                      metadata: {
-                        ...(m.metadata || {}),
-                        hasError: true, // ✅ Add hasError flag for consistent error detection
-                        error: errorMessage,
-                      },
-                    }
-                  : m,
-              );
+          // Show final error message
+          setMessages((prev) => {
+            // Find the last message for this participant
+            const lastMessageIndex = prev.length - 1;
+            if (lastMessageIndex >= 0) {
+              const updated = [...prev];
+              updated[lastMessageIndex] = {
+                ...updated[lastMessageIndex]!,
+                parts: [{ type: 'text' as const, text: `Failed to get response after ${MAX_RETRIES} attempts: ${lastError?.message || 'Unknown error'}` }],
+                metadata: {
+                  ...(updated[lastMessageIndex]!.metadata || {}),
+                  hasError: true,
+                  error: lastError?.message || 'Unknown error',
+                  retryAttempts: MAX_RETRIES,
+                },
+              };
               messagesRef.current = updated;
               return updated;
-            });
-          }
+            }
+            return prev;
+          });
 
-          // Don't exit the participant loop - continue to next participant
-          // (Fall through to finally block and then continue loop)
-        } finally {
-          abortControllerRef.current = null;
+          // ✅ USER REQUIREMENT: Don't skip to next participant - they must see this failure
+          // Continue to next participant (they'll see the error message)
         }
       }
 
       setStatus('ready');
 
-      // ✅ Navigate immediately to thread page after all participants complete
-      // Data is already prefetched, so navigation will be instant
-      router.push(`/chat/${threadSlug}`);
+      // ✅ Automatically navigate to thread page after last participant completes
+      // All responses have been shown on overview screen, now show full thread view
+      router.push(`/chat/${slug}`);
     },
     [router],
   );
@@ -316,7 +418,6 @@ export default function ChatOverviewScreen() {
           message: messageText,
           mode: selectedMode,
           participants: selectedParticipants,
-          memoryIds: selectedMemoryIds,
         });
 
         const result = await createThreadMutation.mutateAsync({
@@ -359,12 +460,7 @@ export default function ChatOverviewScreen() {
           }
         }
       } catch (error) {
-        const errorMessage = getApiErrorMessage(error, t('chat.threadCreationFailed'));
-        toast({
-          variant: 'destructive',
-          title: t('notifications.error.createFailed'),
-          description: errorMessage,
-        });
+        showApiErrorToast(t('notifications.error.createFailed'), error);
         setStatus('error');
       }
     },
@@ -373,10 +469,8 @@ export default function ChatOverviewScreen() {
       status,
       selectedMode,
       selectedParticipants,
-      selectedMemoryIds,
       createThreadMutation,
       t,
-      toast,
       streamAllParticipants,
     ],
   );
@@ -522,7 +616,7 @@ export default function ChatOverviewScreen() {
                         // ✅ Assistant message: Use stored modelId from metadata (NOT current participants)
                         // Historical messages must remain associated with the model that generated them,
                         // regardless of current participant changes (reorder/add/remove)
-                        const model = storedModelId ? getModelById(storedModelId) : undefined;
+                        const model = storedModelId ? allModels.find(m => m.id === storedModelId) : undefined;
 
                         if (!model)
                           return null;
@@ -594,10 +688,6 @@ export default function ChatOverviewScreen() {
                 <ChatParticipantsList
                   participants={selectedParticipants}
                   onParticipantsChange={setSelectedParticipants}
-                />
-                <ChatMemoriesList
-                  selectedMemoryIds={selectedMemoryIds}
-                  onMemoryIdsChange={setSelectedMemoryIds}
                 />
                 <ChatModeSelector
                   selectedMode={selectedMode}

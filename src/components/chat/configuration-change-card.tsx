@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowRight, ListPlus, ListX, Settings2, Sparkles, UserMinus, UserPlus } from 'lucide-react';
+import { ArrowRight, Settings2, Sparkles, UserMinus, UserPlus } from 'lucide-react';
 
 import type { ChatThreadChangelog } from '@/api/routes/chat/schema';
 import {
@@ -13,17 +13,19 @@ import {
 } from '@/components/ai-elements/chain-of-thought';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
+import { useModelsQuery } from '@/hooks/queries/models';
 import {
-  parseMemoryAddedData,
-  parseMemoryRemovedData,
   parseModeChangeData,
   parseParticipantAddedData,
   parseParticipantRemovedData,
   parseParticipantUpdatedData,
 } from '@/lib/ai/changelog-schemas';
-import { getModelById } from '@/lib/ai/models-config';
+import { getProviderIcon } from '@/lib/ai/provider-icons';
 import { formatRelativeTime } from '@/lib/format/date';
 import { cn } from '@/lib/ui/cn';
+
+// ✅ STABLE FILTER: Define outside component to prevent query key changes on re-render
+const MODELS_QUERY_FILTERS = { includeAll: true } as const;
 
 type ConfigurationChangeCardProps = {
   change: ChatThreadChangelog;
@@ -33,11 +35,15 @@ type ConfigurationChangeCardProps = {
 /**
  * Configuration Change Card
  *
- * Displays a configuration change (mode, participant, memory) that occurred
+ * Displays a configuration change (mode, participant) that occurred
  * during a conversation thread. Shows between messages as a collapsible
  * Chain of Thought component to indicate what changed.
  */
 export function ConfigurationChangeCard({ change, className }: ConfigurationChangeCardProps) {
+  // ✅ SINGLE SOURCE OF TRUTH: Fetch models from backend
+  const { data: modelsData } = useModelsQuery(MODELS_QUERY_FILTERS);
+  const allModels = modelsData?.data?.models || [];
+
   // Map change types to icons and colors
   const changeConfig = {
     mode_change: {
@@ -65,16 +71,6 @@ export function ConfigurationChangeCard({ change, className }: ConfigurationChan
       color: 'text-blue-500',
       label: 'Participants Reordered',
     },
-    memory_added: {
-      icon: ListPlus,
-      color: 'text-cyan-500',
-      label: 'Memory Added',
-    },
-    memory_removed: {
-      icon: ListX,
-      color: 'text-orange-500',
-      label: 'Memory Removed',
-    },
   };
 
   const config = changeConfig[change.changeType] || {
@@ -90,27 +86,20 @@ export function ConfigurationChangeCard({ change, className }: ConfigurationChan
   const participantAddedData = parseParticipantAddedData(change.changeData);
   const participantRemovedData = parseParticipantRemovedData(change.changeData);
   const participantUpdatedData = parseParticipantUpdatedData(change.changeData);
-  const memoryAddedData = parseMemoryAddedData(change.changeData);
-  const memoryRemovedData = parseMemoryRemovedData(change.changeData);
   const modeChangeData = parseModeChangeData(change.changeData);
 
-  // Extract participant added/removed data
+  // ✅ SINGLE SOURCE OF TRUTH: Find models from backend data
   const modelId = participantAddedData?.modelId || participantRemovedData?.modelId;
   const role = participantAddedData?.role || participantRemovedData?.role;
-  const model = modelId ? getModelById(modelId) : undefined;
+  const model = modelId ? allModels.find(m => m.id === modelId) : undefined;
 
   // Extract participant updated data (before/after)
   const beforeModelId = participantUpdatedData?.before?.modelId;
   const afterModelId = participantUpdatedData?.after?.modelId;
-  const beforeModel = beforeModelId ? getModelById(beforeModelId) : undefined;
-  const afterModel = afterModelId ? getModelById(afterModelId) : undefined;
+  const beforeModel = beforeModelId ? allModels.find(m => m.id === beforeModelId) : undefined;
+  const afterModel = afterModelId ? allModels.find(m => m.id === afterModelId) : undefined;
   const beforeRole = participantUpdatedData?.before?.role;
   const afterRole = participantUpdatedData?.after?.role;
-
-  // Extract memory details
-  const memoryTitle = memoryAddedData?.title || memoryRemovedData?.title;
-  const memoryType = memoryAddedData?.type || memoryRemovedData?.type;
-  const memoryDescription = memoryAddedData?.description;
 
   // Extract mode change details
   const previousMode = modeChangeData?.previousMode;
@@ -145,7 +134,7 @@ export function ConfigurationChangeCard({ change, className }: ConfigurationChan
               <ChainOfThoughtSearchResults>
                 <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-muted/50">
                   <Avatar className="size-6">
-                    <AvatarImage src={model.metadata.icon} alt={model.name} />
+                    <AvatarImage src={getProviderIcon(model.provider)} alt={model.name} />
                     <AvatarFallback className="text-xs">
                       {model.name.slice(0, 2).toUpperCase()}
                     </AvatarFallback>
@@ -167,7 +156,7 @@ export function ConfigurationChangeCard({ change, className }: ConfigurationChan
               <ChainOfThoughtSearchResults>
                 <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-muted/50 opacity-60">
                   <Avatar className="size-6">
-                    <AvatarImage src={model.metadata.icon} alt={model.name} />
+                    <AvatarImage src={getProviderIcon(model.provider)} alt={model.name} />
                     <AvatarFallback className="text-xs">
                       {model.name.slice(0, 2).toUpperCase()}
                     </AvatarFallback>
@@ -190,7 +179,7 @@ export function ConfigurationChangeCard({ change, className }: ConfigurationChan
                 {beforeModel && (
                   <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-muted/50 opacity-60">
                     <Avatar className="size-6">
-                      <AvatarImage src={beforeModel.metadata.icon} alt={beforeModel.name} />
+                      <AvatarImage src={getProviderIcon(beforeModel.provider)} alt={beforeModel.name} />
                       <AvatarFallback className="text-xs">
                         {beforeModel.name.slice(0, 2).toUpperCase()}
                       </AvatarFallback>
@@ -207,7 +196,7 @@ export function ConfigurationChangeCard({ change, className }: ConfigurationChan
                 {afterModel && (
                   <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-muted/50">
                     <Avatar className="size-6">
-                      <AvatarImage src={afterModel.metadata.icon} alt={afterModel.name} />
+                      <AvatarImage src={getProviderIcon(afterModel.provider)} alt={afterModel.name} />
                       <AvatarFallback className="text-xs">
                         {afterModel.name.slice(0, 2).toUpperCase()}
                       </AvatarFallback>
@@ -237,27 +226,6 @@ export function ConfigurationChangeCard({ change, className }: ConfigurationChan
                     {newMode}
                   </ChainOfThoughtSearchResult>
                 )}
-              </ChainOfThoughtSearchResults>
-            )}
-
-            {/* Memory Added/Removed */}
-            {(change.changeType === 'memory_added' || change.changeType === 'memory_removed') && memoryTitle && (
-              <ChainOfThoughtSearchResults>
-                <div className="flex flex-col gap-1 px-3 py-2 rounded-lg bg-muted/50">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium">{memoryTitle}</span>
-                    {memoryType && (
-                      <Badge variant="outline" className="text-xs capitalize">
-                        {memoryType}
-                      </Badge>
-                    )}
-                  </div>
-                  {memoryDescription && (
-                    <span className="text-xs text-muted-foreground">
-                      {memoryDescription}
-                    </span>
-                  )}
-                </div>
               </ChainOfThoughtSearchResults>
             )}
           </ChainOfThoughtStep>

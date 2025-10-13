@@ -1,6 +1,7 @@
 /**
  * API Key Form Component
  *
+ * ✅ REUSES: API route schema from @/api/routes/api-keys/schema
  * Form for creating new API keys using RHF patterns
  * Following patterns from other forms in @/components/forms/
  */
@@ -14,25 +15,28 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
+import { CreateApiKeyRequestSchema } from '@/api/routes/api-keys/schema';
 import { FormProvider, RHFSelect, RHFTextField } from '@/components/forms';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useCreateApiKeyMutation } from '@/hooks';
-import { toastManager } from '@/lib/toast/toast-manager';
-import { getApiErrorMessage } from '@/lib/utils/error-handling';
+import { showApiErrorToast } from '@/lib/toast';
 
 type ApiKeyFormProps = {
   onCreated: () => void;
 };
 
 // ============================================================================
-// Form Schema
+// Form Schema (Reusing API Schema)
 // ============================================================================
 
-const formSchema = z.object({
-  name: z.string().min(3, 'API key name must be at least 3 characters').max(50, 'API key name must be at most 50 characters'),
-  expiresIn: z.string().optional(), // Stored as string, converted to number
+/**
+ * ✅ REUSE: API schema for creating API keys
+ * Extends with frontend-specific field transformation (expiresIn as string for select input)
+ */
+const formSchema = CreateApiKeyRequestSchema.omit({ expiresIn: true }).extend({
+  expiresIn: z.string().optional(), // Stored as string in form, converted to number on submit
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -92,11 +96,7 @@ export function ApiKeyForm({ onCreated, currentKeyCount = 0 }: ApiKeyFormProps &
         // Don't reset form or call onCreated() yet - let user see and copy the key first
       }
     } catch (error) {
-      const errorMessage = getApiErrorMessage(error, 'An unknown error occurred');
-      toastManager.error(
-        'Failed to create API key',
-        errorMessage,
-      );
+      showApiErrorToast('Failed to create API key', error);
     }
   };
 

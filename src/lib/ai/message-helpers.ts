@@ -62,11 +62,11 @@ export function chatMessageToUIMessage(message: ChatMessage): UIMessage {
   }
 
   // Build properly typed metadata
-  // ✅ Include createdAt from message and preserve parentMessageId from metadata
+  // ✅ Include createdAt from message
   // Handle null metadata from database by using empty object as base
   const baseMetadata = (message.metadata || {}) as Record<string, unknown>;
   const metadata: UIMessageMetadata = {
-    ...baseMetadata, // Spread metadata (includes parentMessageId, variantIndex, etc.)
+    ...baseMetadata, // Spread metadata from backend
     participantId: message.participantId, // Override with top-level participantId
     createdAt: message.createdAt, // Add timestamp for timeline sorting
   };
@@ -145,70 +145,7 @@ export type ConversationRound = {
   userMessage: UIMessage;
   /** All participant responses in this round */
   participantMessages: UIMessage[];
-  /** Current active variant index for this round (0 = original) */
-  activeVariantIndex?: number;
-  /** Total number of variants available for this round */
-  totalVariants?: number;
 };
-
-/**
- * Detect conversation rounds in a message array
- *
- * A round is defined as:
- * - One user message followed by
- * - All participant responses until the next user message (or end of array)
- *
- * @param messages - Array of UIMessages
- * @returns Array of conversation rounds
- */
-export function detectConversationRounds(messages: UIMessage[]): ConversationRound[] {
-  const rounds: ConversationRound[] = [];
-  let currentUserIndex = -1;
-  let currentParticipantMessages: UIMessage[] = [];
-
-  for (let i = 0; i < messages.length; i++) {
-    const message = messages[i];
-    if (!message)
-      continue; // Skip undefined messages
-
-    if (message.role === 'user') {
-      // Save previous round if it exists
-      if (currentUserIndex !== -1) {
-        const userMessage = messages[currentUserIndex];
-        if (userMessage) {
-          rounds.push({
-            userMessageIndex: currentUserIndex,
-            endMessageIndex: i - 1,
-            userMessage,
-            participantMessages: currentParticipantMessages,
-          });
-        }
-      }
-
-      // Start new round
-      currentUserIndex = i;
-      currentParticipantMessages = [];
-    } else if (message.role === 'assistant' && currentUserIndex !== -1) {
-      // Add to current round
-      currentParticipantMessages.push(message);
-    }
-  }
-
-  // Save final round if it exists
-  if (currentUserIndex !== -1) {
-    const userMessage = messages[currentUserIndex];
-    if (userMessage) {
-      rounds.push({
-        userMessageIndex: currentUserIndex,
-        endMessageIndex: messages.length - 1,
-        userMessage,
-        participantMessages: currentParticipantMessages,
-      });
-    }
-  }
-
-  return rounds;
-}
 
 /**
  * Check if a message index is the last message in its round
@@ -241,39 +178,8 @@ export function getRoundForMessage(
   );
 }
 
-/**
- * Enrich rounds with variant information
- *
- * Takes a map of message variants and adds variant metadata to rounds.
- * If all participant messages in a round share variant information,
- * the round is marked as having variants.
- *
- * @param rounds - Array of conversation rounds
- * @param variantsMap - Map of messageId to variant information
- * @returns Rounds with variant metadata
- */
-export function enrichRoundsWithVariants(
-  rounds: ConversationRound[],
-  variantsMap: Map<string, { totalVariants: number; activeVariantIndex: number }>,
-): ConversationRound[] {
-  return rounds.map((round) => {
-    // Check if any participant message has variant info
-    const participantVariants = round.participantMessages
-      .map(msg => variantsMap.get(msg.id))
-      .filter(Boolean);
-
-    // If we have variant info for at least one message
-    if (participantVariants.length > 0) {
-      // Use the first participant's variant info
-      // (all participants in a round should have same variant count)
-      const variantInfo = participantVariants[0];
-      return {
-        ...round,
-        activeVariantIndex: variantInfo?.activeVariantIndex ?? 0,
-        totalVariants: variantInfo?.totalVariants ?? 1,
-      };
-    }
-
-    return round;
-  });
-}
+// ============================================================================
+// REMOVED: Variant/Regeneration System
+// ============================================================================
+// The enrichRoundsWithVariants function has been removed as part of eliminating
+// the regeneration/branching feature. Rounds no longer track variant information.

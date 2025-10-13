@@ -4,8 +4,7 @@ import { useTranslations } from 'next-intl';
 
 import { Button } from '@/components/ui/button';
 import { authClient } from '@/lib/auth/client';
-import { toastManager } from '@/lib/toast/toast-manager';
-import { getApiErrorMessage } from '@/lib/utils/error-handling';
+import { showApiErrorToast } from '@/lib/toast';
 
 type GoogleButtonProps = {
   callbackURL?: string;
@@ -41,8 +40,7 @@ export function GoogleButton({
       });
     } catch (error) {
       console.error('Google sign-in failed:', error);
-      const errorMessage = getApiErrorMessage(error, 'Google sign-in failed. Please try again.');
-      toastManager.error('Sign-in Failed', errorMessage);
+      showApiErrorToast(t('auth.errors.signInFailed'), error);
     }
   };
 

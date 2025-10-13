@@ -1,15 +1,13 @@
 /**
  * ✅ SINGLE SOURCE OF TRUTH: Message Metadata Schemas
  *
- * This module defines the canonical metadata schemas used throughout the application.
- * Both backend and frontend import from this file to ensure zero divergence.
+ * This module imports the base metadata schema from the API and extends it with UI-specific fields.
+ * This ensures zero divergence between backend and frontend metadata definitions.
  *
  * ✅ ZOD INFERENCE PATTERN: All types inferred from schemas (no hardcoded types)
  * ✅ EXTENSIBILITY PATTERN: Uses .passthrough().nullable() for future extensibility
  *
- * Backend imports:
- * - src/api/services/message-variant.service.ts
- * - src/api/routes/chat/handler.ts
+ * Single source of truth: @/api/routes/chat/schema:MessageMetadataSchema
  *
  * Frontend imports:
  * - src/lib/ai/message-helpers.ts
@@ -20,75 +18,26 @@
 
 import { z } from 'zod';
 
+import { MessageMetadataSchema as BaseMessageMetadataSchema } from '@/api/routes/chat/schema';
+
 // ============================================================================
-// Core Message Metadata Schema
+// Core Message Metadata Schema (Re-exported from API)
 // ============================================================================
 
 /**
- * ✅ BASE METADATA SCHEMA: Core fields from backend ChatMessage.metadata
- * Defined in src/db/tables/chat.ts (metadata field)
- *
- * ✅ UPDATED: Now includes variant tracking fields (moved from columns)
- * - variantIndex: Which variant this is (0 = original, 1+ = regenerated)
- * - isActiveVariant: Currently displayed/active variant
- * - variantGroupId: Groups variants of the same response
- * - roundId: Groups messages from same conversation round
- * - parentMessageId: Reference to user message (for threading)
+ * ✅ REUSE: Base metadata schema from API routes
+ * Single source of truth: @/api/routes/chat/schema:MessageMetadataSchema
  *
  * Pattern: z.object({}).passthrough().nullable()
  * - .passthrough() allows additional fields for extensibility
  * - .nullable() allows null values from database
  */
-export const MessageMetadataSchema = z.object({
-  model: z.string().optional(),
-  finishReason: z.string().optional(),
-  usage: z.object({
-    promptTokens: z.number().optional(),
-    completionTokens: z.number().optional(),
-    totalTokens: z.number().optional(),
-  }).optional(),
-  // ✅ Variant tracking fields (moved from database columns to metadata)
-  variantIndex: z.number().optional(),
-  isActiveVariant: z.boolean().optional(),
-  variantGroupId: z.string().optional(),
-  roundId: z.string().optional(),
-  parentMessageId: z.string().nullable().optional(),
-}).passthrough().nullable();
+export const MessageMetadataSchema = BaseMessageMetadataSchema;
 
 /**
  * ✅ ZOD INFERENCE: Type inferred from schema (no hardcoded types)
  */
 export type MessageMetadata = z.infer<typeof MessageMetadataSchema>;
-
-// ============================================================================
-// Streaming Variant Schema
-// ============================================================================
-
-/**
- * ✅ STREAMING VARIANT SCHEMA: Full variant data for client-side switching
- * Used in SSE finish events and server-side pre-fetching
- *
- * ✅ UPDATED: Now includes full message data to enable client-side variant switching
- * without additional API calls
- *
- * Backend: src/api/services/message-variant.service.ts
- * Frontend: src/lib/ai/message-helpers.ts
- */
-export const StreamingVariantSchema = z.object({
-  id: z.string(),
-  content: z.string(),
-  variantIndex: z.number(),
-  isActive: z.boolean(),
-  createdAt: z.string(),
-  metadata: MessageMetadataSchema, // ✅ Reuses base metadata schema
-  participantId: z.string().nullable(), // ✅ NEW: Participant ID (nullable for legacy messages)
-  reasoning: z.string().optional(), // ✅ NEW: Optional reasoning/chain-of-thought data
-});
-
-/**
- * ✅ ZOD INFERENCE: Type inferred from schema (no hardcoded types)
- */
-export type StreamingVariant = z.infer<typeof StreamingVariantSchema>;
 
 // ============================================================================
 // UI Message Metadata Schema (Frontend Extension)
@@ -98,61 +47,42 @@ export type StreamingVariant = z.infer<typeof StreamingVariantSchema>;
  * ✅ FRONTEND EXTENSION: Extends backend MessageMetadata with UI-specific fields
  *
  * This schema adds frontend-specific fields while maintaining compatibility
- * with backend MessageMetadata through the .passthrough() pattern.
+ * with backend MessageMetadata through the .extend() pattern.
  *
  * UI-specific fields:
  * - participantId, participantIndex, role (for rendering)
- * - createdAt, parentMessageId (for timeline and variants)
- * - variants, currentVariantIndex, etc. (for branching UI)
+ * - createdAt (for timeline sorting)
  * - hasError, error, errorType, errorMessage (for error handling)
  * - mode, aborted, partialResponse (for streaming state)
+ *
+ * ✅ REUSE PATTERN: Uses .extend() to build upon base MessageMetadataSchema
  */
-export const UIMessageMetadataSchema = z.object({
-  // ✅ Backend metadata fields (from MessageMetadataSchema)
-  model: z.string().optional(),
-  finishReason: z.string().optional(),
-  usage: z.object({
-    promptTokens: z.number().optional(),
-    completionTokens: z.number().optional(),
-    totalTokens: z.number().optional(),
-  }).optional(),
+export const UIMessageMetadataSchema = MessageMetadataSchema
+  .unwrap() // Remove nullable wrapper to extend
+  .extend({
+    // ✅ UI-specific fields for rendering
+    participantId: z.string().nullable().optional(),
+    participantIndex: z.number().optional(),
+    role: z.string().nullable().optional(), // Allow null (backend sends null for participants without custom roles)
+    createdAt: z.string().optional(),
 
-  // ✅ UI-specific fields for rendering
-  participantId: z.string().nullable().optional(),
-  participantIndex: z.number().optional(),
-  role: z.string().nullable().optional(), // Allow null (backend sends null for participants without custom roles)
-  createdAt: z.string().optional(),
-  parentMessageId: z.string().nullable().optional(),
+    // ✅ Streaming state fields
+    mode: z.string().optional(), // Chat mode (brainstorming, etc.)
+    aborted: z.boolean().optional(), // Whether streaming was aborted
+    partialResponse: z.boolean().optional(), // Whether response is partial
 
-  // ✅ Streaming state fields
-  mode: z.string().optional(), // Chat mode (brainstorming, etc.)
-  aborted: z.boolean().optional(), // Whether streaming was aborted
-  partialResponse: z.boolean().optional(), // Whether response is partial
-
-  // ✅ Variant/branching fields (backend + UI fields)
-  // Backend fields (from MessageMetadataSchema - maintain parity)
-  variantIndex: z.number().optional(), // ✅ Which variant this is (0 = original, 1+ = regenerated)
-  isActiveVariant: z.boolean().optional(), // ✅ Currently displayed/active variant
-  variantGroupId: z.string().optional(), // ✅ Groups variants of the same response
-  roundId: z.string().optional(), // ✅ Groups messages from same conversation round
-  // UI-specific variant fields (for client-side variant switching)
-  variants: z.array(StreamingVariantSchema).optional(), // ✅ Pre-loaded variant data for switching
-  currentVariantIndex: z.number().optional(), // ✅ UI state: current variant being displayed
-  activeVariantIndex: z.number().optional(), // ✅ UI state: active variant index
-  totalVariants: z.number().optional(), // ✅ UI state: total number of variants available
-  hasVariants: z.boolean().optional(), // ✅ UI state: whether message has multiple variants
-
-  // ✅ Error handling fields (AI SDK error handling pattern)
-  hasError: z.boolean().optional(),
-  error: z.string().optional(),
-  errorType: z.string().optional(),
-  errorMessage: z.string().optional(),
-  isTransient: z.boolean().optional(),
-  // ✅ Additional error details for debugging
-  statusCode: z.number().optional(), // HTTP status code from API errors
-  responseBody: z.string().optional(), // Truncated response body for debugging
-  errorDetails: z.string().optional(), // JSON string with full error context
-}).passthrough(); // ✅ Allow additional fields (matches backend pattern)
+    // ✅ Error handling fields (AI SDK error handling pattern)
+    hasError: z.boolean().optional(),
+    error: z.string().optional(),
+    errorType: z.string().optional(),
+    errorMessage: z.string().optional(),
+    isTransient: z.boolean().optional(),
+    // ✅ Additional error details for debugging
+    statusCode: z.number().optional(), // HTTP status code from API errors
+    responseBody: z.string().optional(), // Truncated response body for debugging
+    errorDetails: z.string().optional(), // JSON string with full error context
+  })
+  .passthrough(); // ✅ Allow additional fields (matches backend pattern)
 
 /**
  * ✅ ZOD INFERENCE: Type inferred from schema (no hardcoded types)

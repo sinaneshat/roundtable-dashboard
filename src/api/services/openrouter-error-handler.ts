@@ -2,8 +2,7 @@
  * OpenRouter Error Handler Service
  *
  * ✅ AI SDK v5 COMPLIANT: Uses APICallError and proper error type checking
- * Provides error classification, retry logic, and user-friendly error messages
- * for OpenRouter API failures during AI model streaming
+ * ✅ ZOD-FIRST: All types imported from route schemas (single source of truth)
  *
  * Following AI SDK error handling best practices:
  * https://ai-sdk.dev/docs/ai-sdk-core/error-handling
@@ -11,37 +10,18 @@
 
 import { APICallError } from 'ai';
 
-/**
- * Error classification types for different failure scenarios
- */
-export type OpenRouterErrorType =
-  | 'rate_limit' // 429 - Rate limiting
-  | 'model_unavailable' // 503 - Model temporarily unavailable
-  | 'invalid_request' // 400 - Bad request format
-  | 'authentication' // 401/403 - Auth issues
-  | 'timeout' // Request timeout
-  | 'network' // Network/connection error
-  | 'empty_response' // Model generated no content
-  | 'model_error' // Model-specific error (safety, context length, etc.)
-  | 'unknown'; // Unclassified error
+import type { ClassifiedError, OpenRouterErrorType } from '@/api/routes/chat/schema';
 
 /**
- * Classified error information with retry guidance
+ * Error type metadata for classification and handling
+ *
+ * ⚠️ CLARIFICATION: This is metadata ONLY - not retry configuration
+ * Actual retry count is controlled by AI_RETRY_CONFIG.maxAttempts = 10 in @/api/routes/chat/schema
+ * The maxRetries field here indicates "suggested retries" but is NOT used for actual retry logic
+ * Per USER REQUIREMENT: All errors retry 10 times via AI_RETRY_CONFIG
  */
-export type ClassifiedError = {
-  type: OpenRouterErrorType;
-  message: string; // User-friendly message
-  technicalMessage: string; // Technical details for logging
-  shouldRetry: boolean;
-  retryAfterMs?: number; // Suggested retry delay
-  isTransient: boolean; // Whether error is likely temporary
-};
-
-/**
- * Retry configuration for different error types
- */
-const RETRY_CONFIG: Record<OpenRouterErrorType, {
-  maxRetries: number;
+const ERROR_TYPE_METADATA: Record<OpenRouterErrorType, {
+  maxRetries: number; // Metadata only - actual retries controlled by AI_RETRY_CONFIG
   baseDelayMs: number;
   shouldRetry: boolean;
   isTransient: boolean;
@@ -292,7 +272,7 @@ export function classifyOpenRouterError(error: unknown): ClassifiedError {
           type: 'rate_limit',
           message: userMessage,
           technicalMessage,
-          ...RETRY_CONFIG.rate_limit,
+          ...ERROR_TYPE_METADATA.rate_limit,
         };
       }
 
@@ -303,7 +283,7 @@ export function classifyOpenRouterError(error: unknown): ClassifiedError {
           type: 'model_unavailable',
           message: userMessage,
           technicalMessage,
-          ...RETRY_CONFIG.model_unavailable,
+          ...ERROR_TYPE_METADATA.model_unavailable,
         };
       }
 
@@ -314,7 +294,7 @@ export function classifyOpenRouterError(error: unknown): ClassifiedError {
           type: 'invalid_request',
           message: userMessage,
           technicalMessage,
-          ...RETRY_CONFIG.invalid_request,
+          ...ERROR_TYPE_METADATA.invalid_request,
         };
       }
 
@@ -326,7 +306,7 @@ export function classifyOpenRouterError(error: unknown): ClassifiedError {
           type: 'authentication',
           message: userMessage,
           technicalMessage,
-          ...RETRY_CONFIG.authentication,
+          ...ERROR_TYPE_METADATA.authentication,
         };
       }
 
@@ -339,7 +319,7 @@ export function classifyOpenRouterError(error: unknown): ClassifiedError {
           type: 'model_unavailable',
           message: userMessage,
           technicalMessage,
-          ...RETRY_CONFIG.model_unavailable,
+          ...ERROR_TYPE_METADATA.model_unavailable,
         };
       }
 
@@ -354,7 +334,7 @@ export function classifyOpenRouterError(error: unknown): ClassifiedError {
               type: 'model_error',
               message: `Context length exceeded: ${providerMessage}`,
               technicalMessage,
-              ...RETRY_CONFIG.model_error,
+              ...ERROR_TYPE_METADATA.model_error,
             };
           }
 
@@ -364,7 +344,7 @@ export function classifyOpenRouterError(error: unknown): ClassifiedError {
               type: 'model_error',
               message: `Content filtered: ${providerMessage}`,
               technicalMessage,
-              ...RETRY_CONFIG.model_error,
+              ...ERROR_TYPE_METADATA.model_error,
             };
           }
 
@@ -400,7 +380,7 @@ export function classifyOpenRouterError(error: unknown): ClassifiedError {
       type: 'timeout',
       message: ERROR_MESSAGES.timeout,
       technicalMessage: errorMessage,
-      ...RETRY_CONFIG.timeout,
+      ...ERROR_TYPE_METADATA.timeout,
     };
   }
 
@@ -409,7 +389,7 @@ export function classifyOpenRouterError(error: unknown): ClassifiedError {
       type: 'timeout',
       message: ERROR_MESSAGES.timeout,
       technicalMessage: errorMessage,
-      ...RETRY_CONFIG.timeout,
+      ...ERROR_TYPE_METADATA.timeout,
     };
   }
 
@@ -418,7 +398,18 @@ export function classifyOpenRouterError(error: unknown): ClassifiedError {
       type: 'network',
       message: ERROR_MESSAGES.network,
       technicalMessage: errorMessage,
-      ...RETRY_CONFIG.network,
+      ...ERROR_TYPE_METADATA.network,
+    };
+  }
+
+  // ✅ USER FIX: Check for "high demand" / rate limit messages
+  // Even if not HTTP 429, treat as rate limit for proper retry handling
+  if (errorLower.includes('high demand') || errorLower.includes('rate limit') || errorLower.includes('too many requests')) {
+    return {
+      type: 'rate_limit',
+      message: ERROR_MESSAGES.rate_limit,
+      technicalMessage: errorMessage,
+      ...ERROR_TYPE_METADATA.rate_limit,
     };
   }
 
@@ -427,7 +418,7 @@ export function classifyOpenRouterError(error: unknown): ClassifiedError {
       type: 'empty_response',
       message: ERROR_MESSAGES.empty_response,
       technicalMessage: errorMessage,
-      ...RETRY_CONFIG.empty_response,
+      ...ERROR_TYPE_METADATA.empty_response,
     };
   }
 
@@ -436,7 +427,7 @@ export function classifyOpenRouterError(error: unknown): ClassifiedError {
     type: 'unknown',
     message: errorMessage || ERROR_MESSAGES.unknown,
     technicalMessage: errorMessage,
-    ...RETRY_CONFIG.unknown,
+    ...ERROR_TYPE_METADATA.unknown,
   };
 }
 
@@ -447,7 +438,7 @@ export function calculateRetryDelay(
   errorType: OpenRouterErrorType,
   retryAttempt: number,
 ): number {
-  const config = RETRY_CONFIG[errorType];
+  const config = ERROR_TYPE_METADATA[errorType];
   if (!config.shouldRetry || retryAttempt >= config.maxRetries) {
     return 0;
   }
@@ -457,17 +448,6 @@ export function calculateRetryDelay(
   const exponentialDelay = config.baseDelayMs * 2 ** retryAttempt;
   const jitter = Math.random() * 500; // Add 0-500ms random jitter
   return exponentialDelay + jitter;
-}
-
-/**
- * Check if error should be retried
- */
-export function shouldRetryError(
-  errorType: OpenRouterErrorType,
-  retryAttempt: number,
-): boolean {
-  const config = RETRY_CONFIG[errorType];
-  return config.shouldRetry && retryAttempt < config.maxRetries;
 }
 
 /**

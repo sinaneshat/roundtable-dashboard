@@ -1,75 +1,68 @@
 /**
- * Chat Modes Configuration
- * Single source of truth for all conversation modes
+ * ✅ SINGLE SOURCE OF TRUTH: Chat Modes Configuration
  *
- * ✅ SINGLE SOURCE OF TRUTH for all allowed modes
- * ✅ Enum-based type safety - impossible to use invalid modes
- * ✅ Compile-time validation - typos caught before runtime
- * ✅ Centralized configuration for UI and business logic
+ * All conversation modes defined in ONE place using Zod-first pattern.
+ * Shared between backend API, database, and frontend.
  *
- * Following the same pattern as models-config.ts
+ * ✅ ZOD INFERENCE PATTERN: All types inferred from schemas (no hardcoded types)
+ * ✅ RUNTIME VALIDATION: Zod provides runtime type safety
+ * ✅ COMPILE-TIME SAFETY: TypeScript types derived from Zod schemas
+ *
+ * Following the same pattern as message-metadata.ts and subscription-tiers.ts
  */
 
 import type { LucideIcon } from 'lucide-react';
 import { Lightbulb, Scale, Search, Target } from 'lucide-react';
+import { z } from 'zod';
 
 // ============================================================================
-// ALLOWED MODES ENUM - Single Source of Truth
+// Chat Mode Schema & Type (Zod-First Pattern)
 // ============================================================================
 
 /**
- * Allowed Chat Mode IDs
- *
- * This is the ONLY place where mode IDs are defined.
- * ✅ Adding a mode here makes it available throughout the app
- * ✅ TypeScript prevents using any mode not listed here
- * ✅ No typos possible - compile-time safety
+ * Chat modes tuple - matches database enum
+ * ✅ SINGLE SOURCE: This is the ONLY place where mode IDs are defined
  */
-export const AllowedChatMode = {
-  ANALYZING: 'analyzing',
-  BRAINSTORMING: 'brainstorming',
-  DEBATING: 'debating',
-  SOLVING: 'solving',
-} as const;
+export const CHAT_MODES = ['analyzing', 'brainstorming', 'debating', 'solving'] as const;
 
 /**
- * Type-safe Chat Mode
- * Only allows mode IDs defined in AllowedChatMode enum
+ * Chat mode Zod schema - validates mode values
+ * ✅ ZOD VALIDATION: Runtime type safety for API requests and database operations
  */
-export type ChatModeId = typeof AllowedChatMode[keyof typeof AllowedChatMode];
+export const chatModeSchema = z.enum(CHAT_MODES);
 
 /**
- * Get all allowed chat mode values as an array
+ * Chat mode TypeScript type
+ * ✅ ZOD INFERENCE: Type automatically derived from schema (no hardcoded types)
  */
-export const ALLOWED_CHAT_MODES = Object.values(AllowedChatMode) as readonly ChatModeId[];
+export type ChatModeId = z.infer<typeof chatModeSchema>;
 
 /**
  * Tuple of chat modes for database enum definition
  * This is used in Drizzle schema to ensure database and TypeScript types match
  */
-export const CHAT_MODE_ENUM_VALUES = Object.values(AllowedChatMode) as [ChatModeId, ...ChatModeId[]];
+export const CHAT_MODE_ENUM_VALUES = CHAT_MODES as unknown as [ChatModeId, ...ChatModeId[]];
 
 /**
- * Validate if a string is an allowed chat mode
- * Type guard with compile-time safety
+ * Thread status tuple - matches database enum
  */
-export function isValidChatMode(mode: string): mode is ChatModeId {
-  return ALLOWED_CHAT_MODES.includes(mode as ChatModeId);
-}
+const THREAD_STATUSES = ['active', 'archived', 'deleted'] as const;
 
 /**
- * Assert that a chat mode is valid (throws if not)
- * Use for runtime validation when receiving modes from external sources
+ * Thread status Zod schema
  */
-export function assertValidChatMode(mode: string): asserts mode is ChatModeId {
-  if (!isValidChatMode(mode)) {
-    throw new Error(
-      `Invalid chat mode: "${mode}". `
-      + `Allowed modes: ${ALLOWED_CHAT_MODES.join(', ')}. `
-      + `Add new modes to AllowedChatMode enum in chat-modes.ts`,
-    );
-  }
-}
+export const threadStatusSchema = z.enum(THREAD_STATUSES);
+
+/**
+ * Thread status TypeScript type
+ * ✅ ZOD INFERENCE: Type automatically derived from schema
+ */
+export type ThreadStatus = z.infer<typeof threadStatusSchema>;
+
+/**
+ * Tuple for database enum definition
+ */
+export const THREAD_STATUS_ENUM_VALUES = THREAD_STATUSES as unknown as [ThreadStatus, ...ThreadStatus[]];
 
 // ============================================================================
 // Chat Mode Configuration Types
@@ -112,14 +105,14 @@ export const CHAT_MODE_SYSTEM_PROMPTS: Record<ChatModeId, string> = {
  * Chat Modes Configuration
  * All available conversation modes with their UI and behavior settings
  *
- * ✅ Uses AllowedChatMode enum for type safety
+ * ✅ Uses Zod-inferred ChatModeId for type safety
  * ✅ Compile-time validation of all mode IDs
  */
-export const CHAT_MODES: ChatModeConfig[] = [
+export const CHAT_MODE_CONFIGS: ChatModeConfig[] = [
   {
-    id: AllowedChatMode.BRAINSTORMING,
+    id: 'brainstorming',
     label: 'Brainstorming',
-    value: AllowedChatMode.BRAINSTORMING,
+    value: 'brainstorming',
     icon: Lightbulb,
     isEnabled: true,
     order: 1,
@@ -132,9 +125,9 @@ export const CHAT_MODES: ChatModeConfig[] = [
     },
   },
   {
-    id: AllowedChatMode.ANALYZING,
+    id: 'analyzing',
     label: 'Analyzing',
-    value: AllowedChatMode.ANALYZING,
+    value: 'analyzing',
     icon: Search,
     isEnabled: true,
     order: 2,
@@ -147,9 +140,9 @@ export const CHAT_MODES: ChatModeConfig[] = [
     },
   },
   {
-    id: AllowedChatMode.DEBATING,
+    id: 'debating',
     label: 'Debating',
-    value: AllowedChatMode.DEBATING,
+    value: 'debating',
     icon: Scale,
     isEnabled: true,
     order: 3,
@@ -162,9 +155,9 @@ export const CHAT_MODES: ChatModeConfig[] = [
     },
   },
   {
-    id: AllowedChatMode.SOLVING,
+    id: 'solving',
     label: 'Problem Solving',
-    value: AllowedChatMode.SOLVING,
+    value: 'solving',
     icon: Target,
     isEnabled: true,
     order: 4,
@@ -186,14 +179,14 @@ export const CHAT_MODES: ChatModeConfig[] = [
  * Get chat mode configuration by ID
  */
 export function getChatModeById(modeId: string): ChatModeConfig | undefined {
-  return CHAT_MODES.find(mode => mode.id === modeId || mode.value === modeId);
+  return CHAT_MODE_CONFIGS.find(mode => mode.id === modeId || mode.value === modeId);
 }
 
 /**
  * Get enabled chat modes only
  */
 export function getEnabledChatModes(): ChatModeConfig[] {
-  return CHAT_MODES.filter(mode => mode.isEnabled);
+  return CHAT_MODE_CONFIGS.filter(mode => mode.isEnabled);
 }
 
 /**
@@ -224,7 +217,7 @@ export function getChatModeSystemPrompt(modeId: ChatModeId): string {
  */
 export function getDefaultChatMode(): ChatModeId {
   const firstEnabled = getEnabledChatModes()[0];
-  return firstEnabled?.id ?? AllowedChatMode.BRAINSTORMING;
+  return firstEnabled?.id ?? 'brainstorming';
 }
 
 // ============================================================================
@@ -232,39 +225,15 @@ export function getDefaultChatMode(): ChatModeId {
 // ============================================================================
 
 // ============================================================================
-// Thread Status Types - Single Source of Truth
+// Thread Status Helpers
 // ============================================================================
 
 /**
- * Allowed Thread Status Values
- * Single source of truth for thread lifecycle states
- */
-export const AllowedThreadStatus = {
-  ACTIVE: 'active',
-  ARCHIVED: 'archived',
-  DELETED: 'deleted',
-} as const;
-
-/**
- * Type-safe Thread Status
- */
-export type ThreadStatus = typeof AllowedThreadStatus[keyof typeof AllowedThreadStatus];
-
-/**
- * Array of thread status values
- */
-export const ALLOWED_THREAD_STATUSES = Object.values(AllowedThreadStatus) as readonly ThreadStatus[];
-
-/**
- * Tuple of thread statuses for database enum definition
- */
-export const THREAD_STATUS_ENUM_VALUES = Object.values(AllowedThreadStatus) as [ThreadStatus, ...ThreadStatus[]];
-
-/**
  * Validate if a string is an allowed thread status
+ * ✅ Uses Zod schema for validation
  */
 export function isValidThreadStatus(status: string): status is ThreadStatus {
-  return ALLOWED_THREAD_STATUSES.includes(status as ThreadStatus);
+  return threadStatusSchema.safeParse(status).success;
 }
 
 // ============================================================================

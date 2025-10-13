@@ -1,8 +1,9 @@
 'use client';
 
 import type { UIMessage } from 'ai';
-import { Bot, Check, GripVertical, Plus, Trash2 } from 'lucide-react';
+import { Bot, Check, GripVertical, Lock, Plus, Trash2 } from 'lucide-react';
 import { motion, Reorder, useDragControls } from 'motion/react';
+import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 
 // ============================================================================
@@ -35,18 +36,32 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import type { SubscriptionTier } from '@/db/tables/usage';
+import type { SubscriptionTier } from '@/db/config/subscription-tiers';
+import { getTierName } from '@/db/config/subscription-tiers';
 import { useCreateCustomRoleMutation, useDeleteCustomRoleMutation } from '@/hooks/mutations/chat-mutations';
 import { useCustomRolesQuery } from '@/hooks/queries/chat-roles';
 import { useModelsQuery } from '@/hooks/queries/models';
-import { useUsageStatsQuery } from '@/hooks/queries/usage';
-import type { AIModel } from '@/lib/ai/models-config';
-import { canAccessModel, DEFAULT_ROLES, getModelById, getTierDisplayName } from '@/lib/ai/models-config';
+import { DEFAULT_ROLES } from '@/lib/ai/models-config';
 import { getProviderIcon } from '@/lib/ai/provider-icons';
 import type { ParticipantConfig } from '@/lib/schemas/chat-forms';
 import { toastManager } from '@/lib/toast/toast-manager';
 import { cn } from '@/lib/ui/cn';
 import { getApiErrorMessage } from '@/lib/utils/error-handling';
+
+// ✅ STABLE FILTER: Define outside component to prevent query key changes on re-render
+const MODELS_QUERY_FILTERS = { includeAll: true } as const;
+
+// UI Model Type: Backend type + UI-specific computed properties
+type UIModel = EnhancedModelResponse & {
+  modelId: string; // Alias for id
+  minTier: SubscriptionTier; // ✅ SINGLE SOURCE: Alias for required_tier
+  metadata: {
+    icon: string;
+    isAccessible: boolean;
+    pricing: { input: string; output: string };
+    category: string;
+  };
+};
 
 type ChatParticipantsListProps = {
   participants: ParticipantConfig[];
@@ -57,7 +72,7 @@ type ChatParticipantsListProps = {
 
 // Extended model type to track order in the unified list
 type OrderedModel = {
-  model: AIModel;
+  model: UIModel;
   participant: ParticipantConfig | null;
   order: number;
 };
@@ -470,7 +485,7 @@ function RoleSelector({
 }
 
 // ============================================================================
-// Unified Model Item (Reorderable and Selectable)
+// Model Item (Static - No Reordering)
 // ============================================================================
 
 function ModelItem({
@@ -480,7 +495,10 @@ function ModelItem({
   onRoleChange,
   onClearRole,
   isLastParticipant,
-  userTier,
+  selectedCount,
+  maxModels,
+  enableDrag = true,
+  userTierInfo,
 }: {
   orderedModel: OrderedModel;
   customRoles: ChatCustomRole[]; // ✅ Using backend schema type
@@ -488,141 +506,197 @@ function ModelItem({
   onRoleChange: (role: string, customRoleId?: string) => void;
   onClearRole: () => void;
   isLastParticipant: boolean;
-  userTier: SubscriptionTier;
+  selectedCount: number;
+  maxModels: number;
+  enableDrag?: boolean;
+  userTierInfo?: { tier_name: string; max_models: number; current_tier: SubscriptionTier; can_upgrade: boolean };
 }) {
   const controls = useDragControls();
   const { model, participant } = orderedModel;
   const isSelected = participant !== null;
-  const isAccessible = canAccessModel(userTier, model.modelId);
-  const isDisabledDueToTier = !isAccessible;
+
+  // ✅ BACKEND-COMPUTED ACCESS CONTROL: Use isAccessible flag from backend
+  const isAccessible = model.metadata.isAccessible ?? isSelected;
+
+  // Disable reasons (checked in order of priority):
+  // 1. Last participant - can't deselect if it's the only one
+  // 2. Tier restriction - can't select if tier too low (but can deselect if already selected)
+  // 3. Selection limit - can't select more when at limit (but can deselect)
   const isDisabledDueToLastParticipant = isSelected && isLastParticipant;
-  const isDisabled = isDisabledDueToTier || isDisabledDueToLastParticipant;
+  const isDisabledDueToTier = !isSelected && !isAccessible; // Only block NEW selections
+  const isDisabledDueToLimit = !isSelected && selectedCount >= maxModels; // Only block NEW selections
 
-  // Create upgrade tooltip content
-  const upgradeTooltipContent = isDisabledDueToTier
-    ? `Upgrade to ${getTierDisplayName(model.minTier)} to access this model`
-    : undefined;
+  // Selected models are NEVER disabled (except last participant rule)
+  // Unselected models can be disabled by tier or limit
+  const isDisabled = isDisabledDueToLastParticipant || isDisabledDueToTier || isDisabledDueToLimit;
 
-  return (
-    <Reorder.Item
-      value={orderedModel}
-      dragListener={false}
-      dragControls={controls}
-      className="relative"
-    >
-      <Tooltip delayDuration={300}>
-        <TooltipTrigger asChild>
-          <div
-            className={cn(
-              'px-2 py-2 border-b last:border-0 transition-colors',
-              !isDisabledDueToTier && 'hover:bg-accent/50',
-              isDisabledDueToTier && 'opacity-50 cursor-not-allowed',
-            )}
-          >
-            <div className="flex items-center gap-2">
-              {/* Drag Handle - Always visible, but only interactive when enabled */}
+  // Create upgrade tooltip content with proper messaging (using centralized getTierName)
+  let upgradeTooltipContent: string | undefined;
+  if (isDisabledDueToTier) {
+    upgradeTooltipContent = `Upgrade to ${getTierName(model.minTier)} to unlock this model`;
+  } else if (isDisabledDueToLimit) {
+    upgradeTooltipContent = `Your ${userTierInfo?.tier_name || 'current'} plan allows up to ${maxModels} models per conversation. Upgrade to select more models.`;
+  }
+
+  const itemContent = (
+    <Tooltip delayDuration={300}>
+      <TooltipTrigger asChild>
+        <div
+          className={cn(
+            'px-2 py-2 border-b last:border-0 transition-colors',
+            !isDisabled && 'hover:bg-accent/50',
+            isDisabled && 'opacity-50 cursor-not-allowed',
+          )}
+        >
+          <div className="flex items-center gap-2">
+            {/* Drag Handle - Only shown for selected models */}
+            {enableDrag && (
               <div
                 className={cn(
                   'flex-shrink-0 text-muted-foreground p-0.5',
-                  !isDisabledDueToTier && 'cursor-grab active:cursor-grabbing hover:text-foreground touch-none',
-                  isDisabledDueToTier && 'cursor-not-allowed opacity-30',
+                  !isDisabled && 'cursor-grab active:cursor-grabbing hover:text-foreground touch-none',
+                  isDisabled && 'cursor-not-allowed opacity-30',
                 )}
-                onPointerDown={isDisabledDueToTier ? undefined : e => controls.start(e)}
-                style={isDisabledDueToTier ? undefined : { touchAction: 'none' }}
-                aria-label={isDisabledDueToTier ? 'Drag disabled - upgrade required' : 'Drag to reorder'}
+                onPointerDown={isDisabled ? undefined : e => controls.start(e)}
+                style={isDisabled ? undefined : { touchAction: 'none' }}
+                aria-label={isDisabled ? 'Drag disabled' : 'Drag to reorder'}
                 onClick={e => e.stopPropagation()}
                 onKeyDown={(e) => {
-                  if (!isDisabledDueToTier && (e.key === 'Enter' || e.key === ' ')) {
+                  if (!isDisabled && (e.key === 'Enter' || e.key === ' ')) {
                     e.preventDefault();
                   }
                 }}
                 role="button"
-                tabIndex={isDisabledDueToTier ? -1 : 0}
+                tabIndex={isDisabled ? -1 : 0}
               >
                 <GripVertical className="size-4" />
               </div>
+            )}
 
-              {/* Checkbox for Selection */}
-              <Checkbox
-                checked={isSelected}
-                onCheckedChange={isDisabled ? undefined : onToggle}
-                disabled={isDisabled}
-                className="size-4 flex-shrink-0"
-                onClick={e => e.stopPropagation()}
-                title={isDisabledDueToLastParticipant ? 'At least one participant is required' : undefined}
-              />
+            {/* Checkbox for Selection */}
+            <Checkbox
+              checked={isSelected}
+              onCheckedChange={isDisabled ? undefined : onToggle}
+              disabled={isDisabled}
+              className="size-4 flex-shrink-0"
+              onClick={e => e.stopPropagation()}
+              title={isDisabledDueToLastParticipant ? 'At least one participant is required' : undefined}
+            />
 
-              {/* Clickable Row Content - triggers checkbox toggle */}
-              <div
-                role="button"
-                tabIndex={isDisabledDueToTier ? -1 : 0}
-                className={cn(
-                  'flex items-center gap-2 flex-1 min-w-0',
-                  !isDisabledDueToTier && 'cursor-pointer',
-                  isDisabledDueToTier && 'cursor-not-allowed',
-                )}
-                onClick={isDisabledDueToTier ? undefined : () => onToggle()}
-                onKeyDown={
-                  isDisabledDueToTier
-                    ? undefined
-                    : (e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          e.preventDefault();
-                          onToggle();
-                        }
+            {/* Clickable Row Content - triggers checkbox toggle */}
+            <div
+              role="button"
+              tabIndex={isDisabled ? -1 : 0}
+              className={cn(
+                'flex items-center gap-2 flex-1 min-w-0',
+                !isDisabled && 'cursor-pointer',
+                isDisabled && 'cursor-not-allowed',
+              )}
+              onClick={isDisabled ? undefined : () => onToggle()}
+              onKeyDown={
+                isDisabled
+                  ? undefined
+                  : (e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        onToggle();
                       }
-                }
-              >
-                {/* Model Avatar and Name */}
-                <Avatar className="size-8 flex-shrink-0">
-                  <AvatarImage src={model.metadata.icon} alt={model.name} />
-                  <AvatarFallback className="text-xs">
-                    {model.name.slice(0, 2).toUpperCase()}
-                  </AvatarFallback>
-                </Avatar>
+                    }
+              }
+            >
+              {/* Model Avatar and Name */}
+              <Avatar className="size-8 flex-shrink-0">
+                <AvatarImage src={model.metadata.icon} alt={model.name} />
+                <AvatarFallback className="text-xs">
+                  {model.name.slice(0, 2).toUpperCase()}
+                </AvatarFallback>
+              </Avatar>
 
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm font-medium truncate flex items-center gap-2">
-                    {model.name}
-                    {isDisabledDueToTier && (
-                      <span className="text-[10px] text-muted-foreground">
-                        (
-                        {getTierDisplayName(model.minTier)}
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-medium truncate flex items-center gap-2">
+                  {model.name}
+                  {isDisabledDueToTier && (
+                    <>
+                      <Lock className="size-3 text-muted-foreground flex-shrink-0" />
+                      <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 font-medium bg-primary/10 text-primary border-primary/20">
+                        {getTierName(model.minTier)}
                         {' '}
-                        required)
-                      </span>
-                    )}
-                  </div>
-                  <div className="text-xs text-muted-foreground truncate">
-                    {model.description}
-                  </div>
+                        Required
+                      </Badge>
+                    </>
+                  )}
+                  {isDisabledDueToLimit && !isDisabledDueToTier && (
+                    <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 border-warning/50 text-warning">
+                      Limit Reached
+                    </Badge>
+                  )}
+                </div>
+                <div className="text-xs text-muted-foreground truncate flex items-center gap-1.5">
+                  <span className="truncate">{model.description}</span>
+                  {model.metadata.pricing && (
+                    <span className="text-[10px] shrink-0">
+                      •
+                      {' '}
+                      {model.metadata.pricing.input}
+                    </span>
+                  )}
                 </div>
               </div>
+            </div>
 
-              {/* Role Selector - always shown with consistent styling */}
-              {!isDisabledDueToTier && (
-                <RoleSelector
-                  participant={participant}
-                  customRoles={customRoles}
-                  onRoleChange={onRoleChange}
-                  onClearRole={onClearRole}
-                  onRequestSelection={!participant ? onToggle : undefined}
-                />
-              )}
+            {/* Role Selector - only shown when enabled and model is selected or selectable */}
+            {!isDisabled && (
+              <RoleSelector
+                participant={participant}
+                customRoles={customRoles}
+                onRoleChange={onRoleChange}
+                onClearRole={onClearRole}
+                onRequestSelection={!participant ? onToggle : undefined}
+              />
+            )}
+          </div>
+        </div>
+      </TooltipTrigger>
+      {upgradeTooltipContent && (
+        <TooltipContent side="right" className="max-w-xs">
+          <div className="flex items-start gap-2">
+            <Lock className="size-4 text-primary flex-shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <p className="text-sm font-semibold text-foreground">{upgradeTooltipContent}</p>
+              <p className="text-xs text-muted-foreground">
+                Upgrade to
+                {' '}
+                {isDisabledDueToTier ? getTierName(model.minTier) : 'a higher tier'}
+                {' '}
+                to unlock this model
+              </p>
+              <Link
+                href="/chat/pricing"
+                className="text-xs text-primary font-medium mt-2 inline-block hover:underline"
+              >
+                View Pricing Plans →
+              </Link>
             </div>
           </div>
-        </TooltipTrigger>
-        {upgradeTooltipContent && (
-          <TooltipContent side="right" className="max-w-xs">
-            <p className="text-sm font-medium">{upgradeTooltipContent}</p>
-            <p className="text-xs text-muted-foreground mt-1">
-              View pricing plans to upgrade your account
-            </p>
-          </TooltipContent>
-        )}
-      </Tooltip>
-    </Reorder.Item>
+        </TooltipContent>
+      )}
+    </Tooltip>
   );
+
+  if (enableDrag) {
+    return (
+      <Reorder.Item
+        value={orderedModel}
+        dragListener={false}
+        dragControls={controls}
+        className="relative"
+      >
+        {itemContent}
+      </Reorder.Item>
+    );
+  }
+
+  return <div className="relative">{itemContent}</div>;
 }
 
 // ============================================================================
@@ -630,16 +704,16 @@ function ModelItem({
 // ============================================================================
 
 /**
- * ChatParticipantsList - Simplified AI model participant selector
+ * ChatParticipantsList - Tier-grouped AI model participant selector
  *
  * Features:
- * - Single unified list with ALL models
- * - Checkboxes for selection
- * - All items are reorderable (selected and unselected)
- * - Inline role assignment for selected models only
- * - Simplified UI with no separate groups
- *
- * Following shadcn MCP pattern with ultra-simplified design
+ * - Models grouped by subscription tier (Free, Starter, Pro, Power)
+ * - Sticky tier headers that remain visible while scrolling
+ * - Drag and drop to reorder models within each tier
+ * - Checkboxes for selection with tier-based access control
+ * - Inline role assignment for selected models
+ * - Visual tier progression showing upgrade path
+ * - Pricing indicators on each model
  */
 export function ChatParticipantsList({
   participants,
@@ -652,61 +726,36 @@ export function ChatParticipantsList({
 
   // Only fetch when popover is open (not on page load)
   const { data: customRolesData } = useCustomRolesQuery(open && !isStreaming);
-  const { data: usageData } = useUsageStatsQuery();
-  const { data: modelsData } = useModelsQuery(); // Fetch all OpenRouter models
+  const { data: modelsData } = useModelsQuery(MODELS_QUERY_FILTERS); // Fetch ALL models with tier groups
 
   const customRoles = customRolesData?.pages.flatMap(page =>
     (page?.success && page.data?.items) ? page.data.items : [],
   ) || [];
 
-  // Get user's subscription tier for filtering models
-  const userTier = (usageData?.success ? usageData.data.subscription.tier : 'free') as SubscriptionTier;
+  // ✅ BACKEND-COMPUTED DATA: Use tier info from backend (single source of truth)
+  const userTierInfo = modelsData?.data?.user_tier_info;
+  const tierGroups = modelsData?.data?.tier_groups || [];
+  const popularGroup = modelsData?.data?.popular_group;
+  const maxModels = userTierInfo?.max_models || 5;
 
-  // Map OpenRouter models to AIModel format and filter enabled ones
-  // Memoized to prevent infinite loops
-  const allEnabledModels = useMemo(() => {
-    if (!modelsData?.data?.models)
-      return [];
-
-    return modelsData.data.models
-      .filter((m: EnhancedModelResponse) => !m.id.includes('deepseek')) // Exclude DeepSeek models
-      .map((openRouterModel: EnhancedModelResponse): AIModel => {
-        // Extract provider from model ID (e.g., "anthropic/claude-3" -> "anthropic")
-        const provider = openRouterModel.id.split('/')[0] || 'openrouter';
-
-        return {
-          id: openRouterModel.id,
-          provider: 'openrouter' as const,
-          modelId: openRouterModel.id as string, // Dynamic OpenRouter models use string IDs
-          name: openRouterModel.name,
-          description: openRouterModel.description || '',
-          capabilities: {
-            streaming: openRouterModel.capabilities.streaming,
-            tools: openRouterModel.capabilities.tools,
-            vision: openRouterModel.capabilities.vision,
-            reasoning: openRouterModel.capabilities.reasoning,
-          },
-          defaultSettings: {
-            temperature: 0.7,
-            maxTokens: 4096,
-            topP: 0.9,
-          },
-          isEnabled: true,
-          order: 0,
-          minTier: openRouterModel.is_free ? 'free' : 'pro' as SubscriptionTier,
-          metadata: {
-            icon: getProviderIcon(provider), // ✅ Use provider icon utility with fallback
-            color: '#10A37F',
-            category: openRouterModel.category,
-            contextWindow: openRouterModel.context_length,
-            strengths: [],
-            pricing: {
-              input: openRouterModel.pricing_display.input,
-              output: openRouterModel.pricing_display.output,
-            },
-          },
-        };
-      });
+  // ✅ BACKEND MODELS + UI PROPERTIES: Add computed properties for component
+  const allEnabledModels: UIModel[] = useMemo(() => {
+    const models = modelsData?.data?.models || [];
+    return models.map((model): UIModel => ({
+      ...model,
+      // UI aliases for backward compatibility
+      modelId: model.id,
+      minTier: model.required_tier || 'free',
+      metadata: {
+        icon: getProviderIcon(model.provider),
+        isAccessible: model.is_accessible_to_user ?? true,
+        pricing: {
+          input: model.pricing_display.input,
+          output: model.pricing_display.output,
+        },
+        category: model.category,
+      },
+    }));
   }, [modelsData?.data?.models]);
 
   // Create a unified list of all models with their order
@@ -719,21 +768,21 @@ export function ChatParticipantsList({
 
     const selectedModels: OrderedModel[] = participants
       .sort((a, b) => a.order - b.order)
-      .map((p, index) => {
-        // Try to find model in dynamic models first, fallback to getModelById for validation
-        const dynamicModel = allEnabledModels.find(m => m.modelId === p.modelId);
-        const fallbackModel = getModelById(p.modelId);
-        return {
-          model: (dynamicModel || fallbackModel)!,
-          participant: p,
-          order: index,
-        };
-      })
-      .filter(om => om.model);
+      .flatMap((p, index) => {
+        // ✅ BACKEND DATA ONLY: Find model from backend response
+        const model = allEnabledModels.find(m => m.id === p.modelId);
+        return model
+          ? [{
+              model,
+              participant: p,
+              order: index,
+            }]
+          : [];
+      });
 
     const selectedIds = new Set(participants.map(p => p.modelId));
     const unselectedModels: OrderedModel[] = allEnabledModels
-      .filter(m => !selectedIds.has(m.modelId))
+      .filter(m => !selectedIds.has(m.id))
       .sort((a, b) => a.name.localeCompare(b.name))
       .map((m, index) => ({
         model: m,
@@ -800,10 +849,18 @@ export function ChatParticipantsList({
     if (!orderedModel)
       return;
 
-    // Check if user has access to this model (only for selection, allow deselection)
-    if (!orderedModel.participant && !canAccessModel(userTier, modelId)) {
-      // Prevent selection of models user doesn't have access to
-      return;
+    // ✅ BACKEND-COMPUTED ACCESS CONTROL: Use backend's is_accessible_to_user flag
+    if (!orderedModel.participant) {
+      // Check backend-computed accessibility flag
+      const openRouterModel = modelsData?.data?.models.find(m => m.id === modelId);
+      if (openRouterModel && !openRouterModel.is_accessible_to_user) {
+        // Prevent selection of models user doesn't have access to
+        toastManager.error(
+          'Model not accessible',
+          `Your ${userTierInfo?.tier_name || 'current'} plan does not include access to this model.`,
+        );
+        return;
+      }
     }
 
     if (orderedModel.participant) {
@@ -844,27 +901,84 @@ export function ChatParticipantsList({
     );
   };
 
-  // Handle reordering of the unified list
-  const handleReorder = (newOrder: OrderedModel[]) => {
-    setOrderedModels(newOrder);
+  // Handle reordering of selected models only
+  const handleReorderSelected = (newOrder: OrderedModel[]) => {
+    // Update participant order based on new drag position
+    const reorderedParticipants = newOrder.map((om, index) => ({
+      ...om.participant!,
+      order: index,
+    }));
 
-    // Extract selected participants and update their order
-    const selectedParticipants = newOrder
-      .filter(om => om.participant !== null)
-      .map((om, index) => ({
-        ...om.participant!,
-        order: index,
-      }));
-
-    onParticipantsChange(selectedParticipants);
+    onParticipantsChange(reorderedParticipants);
   };
 
   // Filter models based on search query
   const filteredModels = orderedModels.filter(om =>
     om.model.name.toLowerCase().includes(modelSearchQuery.toLowerCase())
-    || om.model.description.toLowerCase().includes(modelSearchQuery.toLowerCase())
+    || om.model.description?.toLowerCase().includes(modelSearchQuery.toLowerCase())
     || om.model.metadata.category.toLowerCase().includes(modelSearchQuery.toLowerCase()),
   );
+
+  // Separate selected and unselected models for better drag-and-drop UX
+  const selectedModels = useMemo(() => {
+    return filteredModels
+      .filter(om => om.participant !== null)
+      .sort((a, b) => a.participant!.order - b.participant!.order);
+  }, [filteredModels]);
+
+  const unselectedModels = useMemo(() => {
+    return filteredModels
+      .filter(om => om.participant === null);
+  }, [filteredModels]);
+
+  // ✅ BACKEND-COMPUTED POPULAR GROUP: Map popular models to OrderedModel format
+  const popularModels = useMemo(() => {
+    if (!popularGroup || !popularGroup.models) {
+      return [];
+    }
+
+    return popularGroup.models
+      .map((backendModel) => {
+        // Find matching model in orderedModels (unselected only)
+        return unselectedModels.find(om => om.model.modelId === backendModel.id);
+      })
+      .filter((om): om is OrderedModel => om !== undefined); // Type guard
+  }, [popularGroup, unselectedModels]);
+
+  // ✅ BACKEND-COMPUTED TIER GROUPING: Use tier_groups from backend (no frontend grouping logic)
+  const unselectedModelsByTier: Record<SubscriptionTier, OrderedModel[]> = useMemo(() => {
+    if (!tierGroups || tierGroups.length === 0) {
+      return {
+        free: [],
+        starter: [],
+        pro: [],
+        power: [],
+      };
+    }
+
+    const groups: Record<SubscriptionTier, OrderedModel[]> = {
+      free: [],
+      starter: [],
+      pro: [],
+      power: [],
+    };
+
+    // Map backend tier groups to frontend OrderedModel format
+    tierGroups.forEach((tierGroup) => {
+      const tieredModels = tierGroup.models
+        .map((backendModel) => {
+          // Find matching model in orderedModels (unselected only)
+          return unselectedModels.find(om => om.model.modelId === backendModel.id);
+        })
+        .filter((om): om is OrderedModel => om !== undefined); // Type guard
+
+      if (groups[tierGroup.tier]) {
+        groups[tierGroup.tier] = tieredModels;
+      }
+    });
+
+    return groups;
+  }, [tierGroups, unselectedModels]);
 
   return (
     <div className={cn('flex items-center gap-1.5', className)}>
@@ -899,8 +1013,8 @@ export function ChatParticipantsList({
                   {participants
                     .sort((a, b) => a.order - b.order)
                     .map((participant) => {
-                      // Use getModelById which handles both full modelId and short id formats
-                      const model = getModelById(participant.modelId);
+                      // ✅ SINGLE SOURCE OF TRUTH: Find model from backend data
+                      const model = allEnabledModels.find(m => m.id === participant.modelId);
                       if (!model)
                         return null;
 
@@ -939,28 +1053,172 @@ export function ChatParticipantsList({
                   <CommandEmpty>No models found.</CommandEmpty>
                 )}
 
-                {/* Unified Reorderable List - All Models */}
-                {filteredModels.length > 0 && (
-                  <Reorder.Group
-                    axis="y"
-                    values={filteredModels}
-                    onReorder={handleReorder}
-                    className="space-y-0"
-                    as="div"
-                  >
-                    {filteredModels.map(orderedModel => (
-                      <ModelItem
-                        key={orderedModel.participant ? orderedModel.participant.id : `unselected-${orderedModel.model.id}`}
-                        orderedModel={orderedModel}
-                        customRoles={customRoles}
-                        onToggle={() => handleToggleModel(orderedModel.model.modelId)}
-                        onRoleChange={(role, customRoleId) => handleRoleChange(orderedModel.model.modelId, role, customRoleId)}
-                        onClearRole={() => handleClearRole(orderedModel.model.modelId)}
-                        isLastParticipant={orderedModel.participant !== null && participants.length === 1}
-                        userTier={userTier}
-                      />
-                    ))}
-                  </Reorder.Group>
+                {/* Selected Models Section - Draggable for reordering */}
+                {selectedModels.length > 0 && (
+                  <div className="border-b">
+                    <div className="px-3 py-2 text-xs font-semibold text-foreground bg-primary/10 border-b border-primary/20 sticky top-0 z-20 backdrop-blur-sm" style={{ boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1)' }}>
+                      <div className="flex items-center justify-between">
+                        <span className="flex items-center gap-2">
+                          Selected Models
+                          <Badge variant="default" className="text-[10px] px-1.5 py-0 h-4">
+                            {selectedModels.length}
+                            /
+                            {maxModels}
+                          </Badge>
+                        </span>
+                        <span className="text-[10px] opacity-70">Drag to reorder</span>
+                      </div>
+                    </div>
+                    <Reorder.Group
+                      axis="y"
+                      values={selectedModels}
+                      onReorder={handleReorderSelected}
+                      className="space-y-0"
+                      as="div"
+                    >
+                      {selectedModels.map(orderedModel => (
+                        <ModelItem
+                          key={orderedModel.participant!.id}
+                          orderedModel={orderedModel}
+                          customRoles={customRoles}
+                          onToggle={() => handleToggleModel(orderedModel.model.modelId)}
+                          onRoleChange={(role, customRoleId) => handleRoleChange(orderedModel.model.modelId, role, customRoleId)}
+                          onClearRole={() => handleClearRole(orderedModel.model.modelId)}
+                          isLastParticipant={selectedModels.length === 1}
+                          selectedCount={participants.length}
+                          maxModels={maxModels}
+                          userTierInfo={userTierInfo}
+                        />
+                      ))}
+                    </Reorder.Group>
+                  </div>
+                )}
+
+                {/* Most Popular Models Section - Shown first, includes models from all tiers */}
+                {popularModels.length > 0 && popularGroup && (
+                  <div className="border-b">
+                    <div
+                      className="px-3 py-2.5 text-xs font-medium border-b bg-gradient-to-r from-primary/20 to-primary/10 text-primary sticky top-0 z-20 backdrop-blur-sm"
+                      style={{
+                        boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1)',
+                      }}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="flex items-center gap-2">
+                          <span className="font-semibold">{popularGroup.group_name}</span>
+                          <Badge variant="default" className="text-[10px] px-1.5 py-0 h-4 bg-primary text-primary-foreground">
+                            Top Models
+                          </Badge>
+                        </span>
+                        <span className="text-[10px] opacity-80">
+                          {popularModels.length}
+                          {' '}
+                          {popularModels.length === 1 ? 'model' : 'models'}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Popular Models List */}
+                    <div className="space-y-0">
+                      {popularModels.map((orderedModel: OrderedModel) => (
+                        <ModelItem
+                          key={`popular-${orderedModel.model.id}`}
+                          orderedModel={orderedModel}
+                          customRoles={customRoles}
+                          onToggle={() => handleToggleModel(orderedModel.model.modelId)}
+                          onRoleChange={(role, customRoleId) => handleRoleChange(orderedModel.model.modelId, role, customRoleId)}
+                          onClearRole={() => handleClearRole(orderedModel.model.modelId)}
+                          isLastParticipant={false}
+                          selectedCount={participants.length}
+                          maxModels={maxModels}
+                          enableDrag={false}
+                          userTierInfo={userTierInfo}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Available Models Section - Tier-grouped by backend, non-draggable */}
+                {unselectedModels.length > 0 && tierGroups.length > 0 && (
+                  <div className="space-y-0">
+                    {tierGroups.map((tierGroup) => {
+                      const tieredModels = unselectedModelsByTier[tierGroup.tier];
+                      if (!tieredModels || tieredModels.length === 0)
+                        return null;
+
+                      // ✅ USE BACKEND FLAGS: is_user_tier from backend
+                      const isUserTier = tierGroup.is_user_tier;
+                      const tierOrder: SubscriptionTier[] = ['free', 'starter', 'pro', 'power'];
+                      const tierIndex = tierOrder.indexOf(tierGroup.tier);
+                      const userTierIndex = tierOrder.indexOf(userTierInfo?.current_tier || 'free');
+                      const isLowerTier = tierIndex < userTierIndex;
+                      const isHigherTier = tierIndex > userTierIndex;
+
+                      return (
+                        <div key={tierGroup.tier}>
+                          {/* Tier Header - Sticky header showing upgrade path */}
+                          <div
+                            className={cn(
+                              'px-3 py-2.5 text-xs font-medium border-b',
+                              'sticky top-0 z-20', // Sticky positioning with high z-index
+                              'backdrop-blur-sm', // Subtle blur effect for better visibility
+                              isUserTier && 'bg-primary/15 text-primary border-primary/20',
+                              isLowerTier && 'bg-muted/50 text-muted-foreground',
+                              isHigherTier && 'bg-muted/60 text-muted-foreground border-muted',
+                            )}
+                            style={{
+                              // Ensure sticky header stays above content
+                              boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1)',
+                            }}
+                          >
+                            <div className="flex items-center justify-between">
+                              <span className="flex items-center gap-2">
+                                <span className="font-semibold">{tierGroup.tier_name}</span>
+                                {isUserTier && (
+                                  <Badge variant="default" className="text-[10px] px-1.5 py-0 h-4">
+                                    Your Plan
+                                  </Badge>
+                                )}
+                                {isHigherTier && (
+                                  <Lock className="size-3 opacity-70" />
+                                )}
+                              </span>
+                              <span className="text-[10px] opacity-80">
+                                {tieredModels.length}
+                                {' '}
+                                {tieredModels.length === 1 ? 'model' : 'models'}
+                              </span>
+                            </div>
+                            {isHigherTier && (
+                              <div className="text-[10px] opacity-70 mt-1">
+                                Upgrade to unlock these models
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Models in this tier - No reordering needed for unselected */}
+                          <div className="space-y-0">
+                            {tieredModels.map((orderedModel: OrderedModel) => (
+                              <ModelItem
+                                key={`unselected-${orderedModel.model.id}`}
+                                orderedModel={orderedModel}
+                                customRoles={customRoles}
+                                onToggle={() => handleToggleModel(orderedModel.model.modelId)}
+                                onRoleChange={(role, customRoleId) => handleRoleChange(orderedModel.model.modelId, role, customRoleId)}
+                                onClearRole={() => handleClearRole(orderedModel.model.modelId)}
+                                isLastParticipant={false}
+                                selectedCount={participants.length}
+                                maxModels={maxModels}
+                                enableDrag={false}
+                                userTierInfo={userTierInfo}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 )}
               </CommandList>
             </Command>
@@ -988,6 +1246,26 @@ export function ParticipantsPreview({
   className?: string;
   chatMessages?: UIMessage[];
 }) {
+  // ✅ FETCH MODELS: Each component manages its own data
+  const { data: modelsData } = useModelsQuery(MODELS_QUERY_FILTERS);
+  const allModels: UIModel[] = useMemo(() => {
+    const models = modelsData?.data?.models || [];
+    return models.map((model): UIModel => ({
+      ...model,
+      modelId: model.id,
+      minTier: model.required_tier || 'free',
+      metadata: {
+        icon: getProviderIcon(model.provider),
+        isAccessible: model.is_accessible_to_user ?? true,
+        pricing: {
+          input: model.pricing_display.input,
+          output: model.pricing_display.output,
+        },
+        category: model.category,
+      },
+    }));
+  }, [modelsData?.data?.models]);
+
   if (participants.length === 0) {
     return null;
   }
@@ -998,8 +1276,8 @@ export function ParticipantsPreview({
         {participants
           .sort((a, b) => a.order - b.order)
           .map((participant, index) => {
-            // Use getModelById which handles both full modelId and short id formats
-            const model = getModelById(participant.modelId);
+            // ✅ SINGLE SOURCE OF TRUTH: Find model from backend data
+            const model = allModels.find(m => m.id === participant.modelId);
             if (!model)
               return null;
 

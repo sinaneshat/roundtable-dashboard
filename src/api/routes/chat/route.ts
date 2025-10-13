@@ -7,17 +7,16 @@ import {
   AddParticipantRequestSchema,
   ChangelogListResponseSchema,
   CreateCustomRoleRequestSchema,
-  CreateMemoryRequestSchema,
   CreateThreadRequestSchema,
   CustomRoleDetailResponseSchema,
   CustomRoleIdParamSchema,
   CustomRoleListResponseSchema,
-  MemoryDetailResponseSchema,
-  MemoryIdParamSchema,
-  MemoryListResponseSchema,
   MessagesListResponseSchema,
+  ModeratorAnalysisListResponseSchema,
+  ModeratorAnalysisRequestSchema,
   ParticipantDetailResponseSchema,
   ParticipantIdParamSchema,
+  RoundAnalysisParamSchema,
   StreamChatRequestSchema,
   ThreadDetailResponseSchema,
   ThreadIdParamSchema,
@@ -25,7 +24,6 @@ import {
   ThreadListResponseSchema,
   ThreadSlugParamSchema,
   UpdateCustomRoleRequestSchema,
-  UpdateMemoryRequestSchema,
   UpdateParticipantRequestSchema,
   UpdateThreadRequestSchema,
 } from './schema';
@@ -334,7 +332,7 @@ export const getThreadChangelogRoute = createRoute({
   path: '/chat/threads/:id/changelog',
   tags: ['chat'],
   summary: 'Get thread configuration changelog',
-  description: 'Retrieve configuration changes (mode, participants, memories) for a thread',
+  description: 'Retrieve configuration changes (mode, participants) for a thread',
   request: {
     params: ThreadIdParamSchema,
   },
@@ -388,146 +386,6 @@ export const streamChatRoute = createRoute({
     [HttpStatusCodes.UNAUTHORIZED]: { description: 'Authentication required' },
     [HttpStatusCodes.NOT_FOUND]: { description: 'Thread not found' },
     [HttpStatusCodes.BAD_REQUEST]: { description: 'Invalid request data or no participants enabled' },
-    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: { description: 'Internal Server Error' },
-  },
-});
-
-// ============================================================================
-// Memory Routes
-// ============================================================================
-
-export const listMemoriesRoute = createRoute({
-  method: 'get',
-  path: '/chat/memories',
-  tags: ['chat'],
-  summary: 'List memories with cursor pagination',
-  description: 'Get memories for the authenticated user with infinite scroll support',
-  request: {
-    query: z.object({
-      cursor: z.string().optional().openapi({
-        description: 'Cursor for pagination (ISO timestamp)',
-        example: '2024-01-15T10:30:00Z',
-      }),
-      limit: z.coerce.number().int().min(1).max(100).default(20).openapi({
-        description: 'Maximum number of items to return',
-        example: 20,
-      }),
-    }).openapi('MemoryListQuery'),
-  },
-  responses: {
-    [HttpStatusCodes.OK]: {
-      description: 'Memories retrieved successfully',
-      content: {
-        'application/json': { schema: MemoryListResponseSchema },
-      },
-    },
-    [HttpStatusCodes.UNAUTHORIZED]: { description: 'Authentication required' },
-    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: { description: 'Internal Server Error' },
-  },
-});
-
-export const createMemoryRoute = createRoute({
-  method: 'post',
-  path: '/chat/memories',
-  tags: ['chat'],
-  summary: 'Create memory',
-  description: 'Create a new memory (user note, context, instruction) for AI models',
-  request: {
-    body: {
-      content: {
-        'application/json': {
-          schema: CreateMemoryRequestSchema,
-        },
-      },
-    },
-  },
-  responses: {
-    [HttpStatusCodes.OK]: {
-      description: 'Memory created successfully',
-      content: {
-        'application/json': { schema: MemoryDetailResponseSchema },
-      },
-    },
-    [HttpStatusCodes.UNAUTHORIZED]: { description: 'Authentication required' },
-    [HttpStatusCodes.BAD_REQUEST]: { description: 'Invalid request data' },
-    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: { description: 'Internal Server Error' },
-  },
-});
-
-export const getMemoryRoute = createRoute({
-  method: 'get',
-  path: '/chat/memories/:id',
-  tags: ['chat'],
-  summary: 'Get memory details',
-  description: 'Get details of a specific memory',
-  request: {
-    params: MemoryIdParamSchema,
-  },
-  responses: {
-    [HttpStatusCodes.OK]: {
-      description: 'Memory retrieved successfully',
-      content: {
-        'application/json': { schema: MemoryDetailResponseSchema },
-      },
-    },
-    [HttpStatusCodes.UNAUTHORIZED]: { description: 'Authentication required' },
-    [HttpStatusCodes.NOT_FOUND]: { description: 'Memory not found' },
-    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: { description: 'Internal Server Error' },
-  },
-});
-
-export const updateMemoryRoute = createRoute({
-  method: 'patch',
-  path: '/chat/memories/:id',
-  tags: ['chat'],
-  summary: 'Update memory',
-  description: 'Update memory title, content, type, or metadata',
-  request: {
-    params: MemoryIdParamSchema,
-    body: {
-      content: {
-        'application/json': {
-          schema: UpdateMemoryRequestSchema,
-        },
-      },
-    },
-  },
-  responses: {
-    [HttpStatusCodes.OK]: {
-      description: 'Memory updated successfully',
-      content: {
-        'application/json': { schema: MemoryDetailResponseSchema },
-      },
-    },
-    [HttpStatusCodes.UNAUTHORIZED]: { description: 'Authentication required' },
-    [HttpStatusCodes.NOT_FOUND]: { description: 'Memory not found' },
-    [HttpStatusCodes.BAD_REQUEST]: { description: 'Invalid request data' },
-    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: { description: 'Internal Server Error' },
-  },
-});
-
-export const deleteMemoryRoute = createRoute({
-  method: 'delete',
-  path: '/chat/memories/:id',
-  tags: ['chat'],
-  summary: 'Delete memory',
-  description: 'Delete a memory',
-  request: {
-    params: MemoryIdParamSchema,
-  },
-  responses: {
-    [HttpStatusCodes.OK]: {
-      description: 'Memory deleted successfully',
-      content: {
-        'application/json': {
-          schema: createApiResponseSchema(z.object({
-            deleted: z.boolean().openapi({ example: true }),
-          })),
-        },
-      },
-    },
-    [HttpStatusCodes.UNAUTHORIZED]: { description: 'Authentication required' },
-    [HttpStatusCodes.NOT_FOUND]: { description: 'Memory not found' },
     [HttpStatusCodes.INTERNAL_SERVER_ERROR]: { description: 'Internal Server Error' },
   },
 });
@@ -668,6 +526,86 @@ export const deleteCustomRoleRoute = createRoute({
     },
     [HttpStatusCodes.UNAUTHORIZED]: { description: 'Authentication required' },
     [HttpStatusCodes.NOT_FOUND]: { description: 'Custom role not found' },
+    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: { description: 'Internal Server Error' },
+  },
+});
+
+// ============================================================================
+// Moderator Analysis Routes
+// ============================================================================
+
+/**
+ * Moderator Analysis Route
+ *
+ * ✅ AI SDK streamObject(): Generates structured analysis with ratings, pros/cons, and insights
+ * ✅ Follows existing patterns: Similar to streamChatRoute but uses streamObject() instead of streamText()
+ * ✅ Integrated with participant flow: Not a separate service, part of the chat system
+ *
+ * This endpoint analyzes all participant responses in a conversation round and provides:
+ * - Individual ratings (1-10) for each participant
+ * - Skills matrix data for chart visualization
+ * - Pros and cons for each response
+ * - Leaderboard ranking
+ * - Overall summary and conclusion
+ */
+export const analyzeRoundRoute = createRoute({
+  method: 'post',
+  path: '/chat/threads/:threadId/rounds/:roundNumber/analyze',
+  tags: ['chat'],
+  summary: 'Analyze conversation round with AI moderator',
+  description: 'Generate AI-powered analysis, ratings, and insights for all participant responses in a conversation round. Uses structured object streaming for real-time updates.',
+  request: {
+    params: RoundAnalysisParamSchema,
+    body: {
+      content: {
+        'application/json': {
+          schema: ModeratorAnalysisRequestSchema,
+        },
+      },
+    },
+  },
+  responses: {
+    [HttpStatusCodes.OK]: {
+      description: 'Streaming moderator analysis (AI SDK text stream with structured JSON objects). Consumed via @ai-sdk/react useObject() hook.',
+      content: {
+        'text/plain; charset=utf-8': {
+          schema: z.object({
+            partialObject: z.any().openapi({
+              description: 'Partial ModeratorAnalysisPayload being streamed via AI SDK streamObject()',
+            }),
+          }),
+        },
+      },
+    },
+    [HttpStatusCodes.UNAUTHORIZED]: { description: 'Authentication required' },
+    [HttpStatusCodes.NOT_FOUND]: { description: 'Thread not found' },
+    [HttpStatusCodes.BAD_REQUEST]: { description: 'Invalid request data or missing participant messages' },
+    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: { description: 'Internal Server Error' },
+  },
+});
+
+/**
+ * Get moderator analyses for a thread
+ * Returns all persisted analyses ordered by round number
+ */
+export const getThreadAnalysesRoute = createRoute({
+  method: 'get',
+  path: '/chat/threads/:id/analyses',
+  tags: ['chat'],
+  summary: 'Get moderator analyses for thread',
+  description: 'Retrieve all moderator analyses for a thread, showing past analysis results for each round',
+  request: {
+    params: ThreadIdParamSchema,
+  },
+  responses: {
+    [HttpStatusCodes.OK]: {
+      description: 'Analyses retrieved successfully',
+      content: {
+        'application/json': { schema: ModeratorAnalysisListResponseSchema },
+      },
+    },
+    [HttpStatusCodes.UNAUTHORIZED]: { description: 'Authentication required' },
+    [HttpStatusCodes.NOT_FOUND]: { description: 'Thread not found' },
     [HttpStatusCodes.INTERNAL_SERVER_ERROR]: { description: 'Internal Server Error' },
   },
 });

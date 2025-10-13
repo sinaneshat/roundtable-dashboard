@@ -5,5 +5,4 @@ export * from '../format';
 export * from '../ui/cn';
 
 // Re-export utilities from utils directory
-export * from './error-logging';
 export * from './safe-logger';

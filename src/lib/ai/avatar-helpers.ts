@@ -1,11 +1,12 @@
 /**
  * Avatar Helpers - Shared utilities for chat avatars
  *
- * OFFICIAL AI SDK PATTERN: Avatar configuration for message rendering
- * Reusable across all chat screens
+ * ✅ SINGLE SOURCE OF TRUTH: Uses provider icons and model IDs directly
+ * No dependency on legacy model config
  */
 
-import { getModelById } from '@/lib/ai/models-config';
+import { getDisplayNameFromModelId, getProviderFromModelId } from '@/lib/ai/models-config';
+import { getProviderIcon } from '@/lib/ai/provider-icons';
 import type { ParticipantConfig } from '@/lib/schemas/chat-forms';
 
 // ============================================================================
@@ -22,11 +23,11 @@ export type AvatarProps = {
 // ============================================================================
 
 /**
- * Get avatar props for a participant based on model configuration
+ * Get avatar props for a participant based on model ID
  *
- * OFFICIAL PATTERN: Consistent avatar display across all chat screens
+ * ✅ SINGLE SOURCE: Derives all info from model ID directly
  * - User messages: Use authenticated user's image and name
- * - Assistant messages: Use AI model icon and name from config
+ * - Assistant messages: Use provider icon and display name from model ID
  *
  * @param role - Message role ('user' or 'assistant')
  * @param participants - Array of participant configurations
@@ -49,17 +50,16 @@ export function getAvatarProps(
     };
   }
 
-  // For assistant messages, find the participant and get model info from config
+  // For assistant messages, get model info from participant
   if (participantIndex !== undefined && participants[participantIndex]) {
     const participant = participants[participantIndex];
-    const model = getModelById(participant.modelId);
+    const provider = getProviderFromModelId(participant.modelId);
+    const displayName = getDisplayNameFromModelId(participant.modelId);
 
-    if (model) {
-      return {
-        src: model.metadata.icon || '/static/icons/ai-models/default.png',
-        name: model.name,
-      };
-    }
+    return {
+      src: getProviderIcon(provider),
+      name: displayName,
+    };
   }
 
   // Fallback for assistant messages without participant info
@@ -94,16 +94,15 @@ export function getAvatarPropsFromModelId(
     };
   }
 
-  // For assistant messages, get model info directly from modelId
+  // For assistant messages, derive info from model ID
   if (modelId) {
-    const model = getModelById(modelId);
+    const provider = getProviderFromModelId(modelId);
+    const displayName = getDisplayNameFromModelId(modelId);
 
-    if (model) {
-      return {
-        src: model.metadata.icon || '/static/icons/ai-models/default.png',
-        name: model.name,
-      };
-    }
+    return {
+      src: getProviderIcon(provider),
+      name: displayName,
+    };
   }
 
   // Fallback for assistant messages without model info

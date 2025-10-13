@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowRight, Clock, ListPlus, Minus, Pencil, Plus } from 'lucide-react';
+import { ArrowRight, Clock, Minus, Pencil, Plus } from 'lucide-react';
 
 import type { ChatThreadChangelog } from '@/api/routes/chat/schema';
 import {
@@ -9,21 +9,22 @@ import {
   ChainOfThoughtHeader,
 } from '@/components/ai-elements/chain-of-thought';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Badge } from '@/components/ui/badge';
+import { useModelsQuery } from '@/hooks/queries/models';
 import type { ChangeAction, ChangeGroup } from '@/lib/ai/changelog-helpers';
 import { sortChangesByAction } from '@/lib/ai/changelog-helpers';
 import {
-  parseMemoryAddedData,
-  parseMemoryRemovedData,
   parseModeChangeData,
   parseParticipantAddedData,
   parseParticipantRemovedData,
   parseParticipantsReorderedData,
   parseParticipantUpdatedData,
 } from '@/lib/ai/changelog-schemas';
-import { getModelById } from '@/lib/ai/models-config';
+import { getProviderIcon } from '@/lib/ai/provider-icons';
 import { formatRelativeTime } from '@/lib/format/date';
 import { cn } from '@/lib/ui/cn';
+
+// ✅ STABLE FILTER: Define outside component to prevent query key changes on re-render
+const MODELS_QUERY_FILTERS = { includeAll: true } as const;
 
 type ConfigurationChangesGroupProps = {
   group: ChangeGroup;
@@ -145,19 +146,21 @@ export function ConfigurationChangesGroup({ group, className }: ConfigurationCha
  * Matches the ParticipantsPreview badge design
  */
 function ChangeItem({ change }: { change: ChatThreadChangelog }) {
+  // ✅ SINGLE SOURCE OF TRUTH: Fetch models from backend
+  const { data: modelsData } = useModelsQuery(MODELS_QUERY_FILTERS);
+  const allModels = modelsData?.data?.models || [];
+
   // ✅ ZOD PATTERN: Parse changeData using type-safe schemas (no inline casting)
   const participantAddedData = parseParticipantAddedData(change.changeData);
   const participantRemovedData = parseParticipantRemovedData(change.changeData);
   const participantUpdatedData = parseParticipantUpdatedData(change.changeData);
   const participantsReorderedData = parseParticipantsReorderedData(change.changeData);
-  const memoryAddedData = parseMemoryAddedData(change.changeData);
-  const memoryRemovedData = parseMemoryRemovedData(change.changeData);
   const modeChangeData = parseModeChangeData(change.changeData);
 
-  // Extract model information from changeData for participant changes
+  // ✅ SINGLE SOURCE OF TRUTH: Find model from backend data
   const modelId = participantAddedData?.modelId || participantRemovedData?.modelId || participantUpdatedData?.modelId;
   const role = participantAddedData?.role || participantRemovedData?.role;
-  const model = modelId ? getModelById(modelId) : undefined;
+  const model = modelId ? allModels.find(m => m.id === modelId) : undefined;
 
   // Extract data for participant_updated (role changes)
   // Note: The service stores modelId, oldRole, newRole (not separate before/after objects)
@@ -166,11 +169,6 @@ function ChangeItem({ change }: { change: ChatThreadChangelog }) {
 
   // Extract participants data for reordering
   const participants = participantsReorderedData?.participants;
-
-  // Extract memory details
-  const memoryTitle = memoryAddedData?.title || memoryRemovedData?.title;
-  const memoryType = memoryAddedData?.type || memoryRemovedData?.type;
-  const memoryDescription = memoryAddedData?.description;
 
   // Extract mode change details
   const previousMode = modeChangeData?.previousMode;
@@ -189,7 +187,7 @@ function ChangeItem({ change }: { change: ChatThreadChangelog }) {
           )}
         >
           <Avatar className="size-4 sm:size-5 shrink-0">
-            <AvatarImage src={model.metadata.icon} alt={model.name} />
+            <AvatarImage src={getProviderIcon(model.provider)} alt={model.name} />
             <AvatarFallback className="text-[8px] sm:text-[10px]">
               {model.name.slice(0, 2).toUpperCase()}
             </AvatarFallback>
@@ -221,7 +219,7 @@ function ChangeItem({ change }: { change: ChatThreadChangelog }) {
           )}
         >
           <Avatar className="size-4 sm:size-5 shrink-0">
-            <AvatarImage src={model.metadata.icon} alt={model.name} />
+            <AvatarImage src={getProviderIcon(model.provider)} alt={model.name} />
             <AvatarFallback className="text-[8px] sm:text-[10px]">
               {model.name.slice(0, 2).toUpperCase()}
             </AvatarFallback>
@@ -255,7 +253,7 @@ function ChangeItem({ change }: { change: ChatThreadChangelog }) {
           {participants
             .sort((a, b) => a.order - b.order)
             .map((p, index) => {
-              const pModel = getModelById(p.modelId);
+              const pModel = allModels.find(m => m.id === p.modelId);
               if (!pModel)
                 return null;
 
@@ -273,7 +271,7 @@ function ChangeItem({ change }: { change: ChatThreadChangelog }) {
                     <span className="text-[8px] sm:text-[10px] font-bold">{index + 1}</span>
                   </div>
                   <Avatar className="size-4 sm:size-5 shrink-0">
-                    <AvatarImage src={pModel.metadata.icon} alt={pModel.name} />
+                    <AvatarImage src={getProviderIcon(pModel.provider)} alt={pModel.name} />
                     <AvatarFallback className="text-[8px] sm:text-[10px]">
                       {pModel.name.slice(0, 2).toUpperCase()}
                     </AvatarFallback>
@@ -310,39 +308,6 @@ function ChangeItem({ change }: { change: ChatThreadChangelog }) {
           {newMode && (
             <span className="text-[10px] sm:text-xs font-medium">{newMode}</span>
           )}
-        </div>
-      )}
-
-      {/* Memory Added/Removed */}
-      {(change.changeType === 'memory_added' || change.changeType === 'memory_removed') && memoryTitle && (
-        <div
-          className={cn(
-            'relative flex items-center gap-1.5 sm:gap-2 px-2 sm:px-2.5 py-1 sm:py-1.5 shrink-0',
-            'backdrop-blur-md border rounded-lg shadow-md',
-            'bg-background/10 border-white/30 dark:border-white/20',
-            change.changeType === 'memory_removed' && 'opacity-60',
-          )}
-        >
-          <ListPlus className="size-3 sm:size-4 shrink-0 text-muted-foreground" />
-          <div className="flex flex-col gap-0.5 min-w-0">
-            <span className={cn(
-              'text-[10px] sm:text-xs font-medium truncate whitespace-nowrap text-foreground/90',
-              change.changeType === 'memory_removed' && 'line-through',
-            )}
-            >
-              {memoryTitle}
-            </span>
-            {memoryDescription && (
-              <span className="text-[9px] sm:text-[10px] text-muted-foreground/70 truncate whitespace-nowrap">
-                {memoryDescription}
-              </span>
-            )}
-            {memoryType && (
-              <Badge variant="outline" className="text-[9px] px-1 py-0 h-3.5 capitalize w-fit">
-                {memoryType}
-              </Badge>
-            )}
-          </div>
         </div>
       )}
     </>

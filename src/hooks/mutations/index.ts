@@ -21,16 +21,13 @@ export {
 export {
   useAddParticipantMutation,
   useCreateCustomRoleMutation,
-  useCreateMemoryMutation,
   useCreateThreadMutation,
   useDeleteCustomRoleMutation,
-  useDeleteMemoryMutation,
   useDeleteParticipantMutation,
   useDeleteThreadMutation,
   useToggleFavoriteMutation,
   useTogglePublicMutation,
   useUpdateCustomRoleMutation,
-  useUpdateMemoryMutation,
   useUpdateParticipantMutation,
   useUpdateThreadMutation,
 } from './chat-mutations';

@@ -5,6 +5,7 @@ import { motion } from 'motion/react';
 import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 
+import type { Product, Subscription } from '@/api/routes/billing/schema';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { FreePricingCard } from '@/components/ui/free-pricing-card';
@@ -12,30 +13,6 @@ import { PricingCard } from '@/components/ui/pricing-card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 type BillingInterval = 'month' | 'year';
-
-type Product = {
-  id: string;
-  name: string;
-  description?: string | null;
-  features?: string[] | null;
-  prices?: Array<{
-    id: string;
-    interval?: string | null;
-    currency: string;
-    unitAmount: number;
-    trialPeriodDays?: number | null;
-  }>;
-};
-
-type Subscription = {
-  id: string;
-  status: string;
-  priceId: string;
-  productId: string;
-  currentPeriodEnd?: string | null;
-  cancelAtPeriodEnd: boolean;
-  canceledAt?: string | null;
-};
 
 type PricingContentProps = {
   products: Product[];
@@ -114,7 +91,8 @@ export function PricingContent({
     const monthlyPrice = product.prices.find(p => p.interval === 'month');
     const yearlyPrice = product.prices.find(p => p.interval === 'year');
 
-    if (!monthlyPrice || !yearlyPrice)
+    // Check for valid prices with non-null unitAmount
+    if (!monthlyPrice || !yearlyPrice || !monthlyPrice.unitAmount || !yearlyPrice.unitAmount)
       return 0;
 
     const monthlyYearlyCost = monthlyPrice.unitAmount * 12;
@@ -337,8 +315,9 @@ function ProductGrid({
         {products.map((product, index) => {
           const price = product.prices?.[0]; // Get first price for this interval
 
-          if (!price) {
-            return null; // Skip products without prices for this interval
+          // Skip products without valid prices
+          if (!price || !price.unitAmount) {
+            return null;
           }
 
           // Check subscription by specific price ID (differentiates monthly vs annual)

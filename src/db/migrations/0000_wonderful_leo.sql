@@ -221,25 +221,6 @@ CREATE TABLE `chat_custom_role` (
 --> statement-breakpoint
 CREATE INDEX `chat_custom_role_user_idx` ON `chat_custom_role` (`user_id`);--> statement-breakpoint
 CREATE INDEX `chat_custom_role_name_idx` ON `chat_custom_role` (`name`);--> statement-breakpoint
-CREATE TABLE `chat_memory` (
-	`id` text PRIMARY KEY NOT NULL,
-	`user_id` text NOT NULL,
-	`thread_id` text,
-	`type` text DEFAULT 'topic' NOT NULL,
-	`title` text NOT NULL,
-	`description` text,
-	`content` text NOT NULL,
-	`is_global` integer DEFAULT false NOT NULL,
-	`metadata` text,
-	`created_at` integer DEFAULT (cast((julianday('now') - 2440587.5)*86400000 as integer)) NOT NULL,
-	`updated_at` integer DEFAULT (cast((julianday('now') - 2440587.5)*86400000 as integer)) NOT NULL,
-	FOREIGN KEY (`user_id`) REFERENCES `user`(`id`) ON UPDATE no action ON DELETE cascade,
-	FOREIGN KEY (`thread_id`) REFERENCES `chat_thread`(`id`) ON UPDATE no action ON DELETE cascade
-);
---> statement-breakpoint
-CREATE INDEX `chat_memory_user_idx` ON `chat_memory` (`user_id`);--> statement-breakpoint
-CREATE INDEX `chat_memory_thread_idx` ON `chat_memory` (`thread_id`);--> statement-breakpoint
-CREATE INDEX `chat_memory_global_idx` ON `chat_memory` (`is_global`);--> statement-breakpoint
 CREATE TABLE `chat_message` (
 	`id` text PRIMARY KEY NOT NULL,
 	`thread_id` text NOT NULL,
@@ -257,6 +238,21 @@ CREATE TABLE `chat_message` (
 CREATE INDEX `chat_message_thread_idx` ON `chat_message` (`thread_id`);--> statement-breakpoint
 CREATE INDEX `chat_message_created_idx` ON `chat_message` (`created_at`);--> statement-breakpoint
 CREATE INDEX `chat_message_participant_idx` ON `chat_message` (`participant_id`);--> statement-breakpoint
+CREATE TABLE `chat_moderator_analysis` (
+	`id` text PRIMARY KEY NOT NULL,
+	`thread_id` text NOT NULL,
+	`round_number` integer NOT NULL,
+	`mode` text NOT NULL,
+	`user_question` text NOT NULL,
+	`analysis_data` text NOT NULL,
+	`participant_message_ids` text NOT NULL,
+	`created_at` integer DEFAULT (cast((julianday('now') - 2440587.5)*86400000 as integer)) NOT NULL,
+	FOREIGN KEY (`thread_id`) REFERENCES `chat_thread`(`id`) ON UPDATE no action ON DELETE cascade
+);
+--> statement-breakpoint
+CREATE INDEX `chat_moderator_analysis_thread_idx` ON `chat_moderator_analysis` (`thread_id`);--> statement-breakpoint
+CREATE INDEX `chat_moderator_analysis_round_idx` ON `chat_moderator_analysis` (`thread_id`,`round_number`);--> statement-breakpoint
+CREATE INDEX `chat_moderator_analysis_created_idx` ON `chat_moderator_analysis` (`created_at`);--> statement-breakpoint
 CREATE TABLE `chat_participant` (
 	`id` text PRIMARY KEY NOT NULL,
 	`thread_id` text NOT NULL,
@@ -311,47 +307,15 @@ CREATE TABLE `chat_thread_changelog` (
 CREATE INDEX `chat_thread_changelog_thread_idx` ON `chat_thread_changelog` (`thread_id`);--> statement-breakpoint
 CREATE INDEX `chat_thread_changelog_type_idx` ON `chat_thread_changelog` (`change_type`);--> statement-breakpoint
 CREATE INDEX `chat_thread_changelog_created_idx` ON `chat_thread_changelog` (`created_at`);--> statement-breakpoint
-CREATE TABLE `chat_thread_memory` (
-	`id` text PRIMARY KEY NOT NULL,
-	`thread_id` text NOT NULL,
-	`memory_id` text NOT NULL,
-	`attached_at` integer DEFAULT (cast((julianday('now') - 2440587.5)*86400000 as integer)) NOT NULL,
-	FOREIGN KEY (`thread_id`) REFERENCES `chat_thread`(`id`) ON UPDATE no action ON DELETE cascade,
-	FOREIGN KEY (`memory_id`) REFERENCES `chat_memory`(`id`) ON UPDATE no action ON DELETE cascade
-);
---> statement-breakpoint
-CREATE INDEX `chat_thread_memory_thread_idx` ON `chat_thread_memory` (`thread_id`);--> statement-breakpoint
-CREATE INDEX `chat_thread_memory_memory_idx` ON `chat_thread_memory` (`memory_id`);--> statement-breakpoint
-CREATE INDEX `chat_thread_memory_unique_idx` ON `chat_thread_memory` (`thread_id`,`memory_id`);--> statement-breakpoint
-CREATE TABLE `model_configuration` (
-	`id` text PRIMARY KEY NOT NULL,
-	`provider` text NOT NULL,
-	`model_id` text NOT NULL,
-	`name` text NOT NULL,
-	`description` text,
-	`capabilities` text,
-	`default_settings` text,
-	`is_enabled` integer DEFAULT true NOT NULL,
-	`order` integer DEFAULT 0 NOT NULL,
-	`metadata` text,
-	`created_at` integer DEFAULT (cast((julianday('now') - 2440587.5)*86400000 as integer)) NOT NULL,
-	`updated_at` integer DEFAULT (cast((julianday('now') - 2440587.5)*86400000 as integer)) NOT NULL
-);
---> statement-breakpoint
-CREATE UNIQUE INDEX `model_configuration_model_id_unique` ON `model_configuration` (`model_id`);--> statement-breakpoint
-CREATE INDEX `model_configuration_provider_idx` ON `model_configuration` (`provider`);--> statement-breakpoint
-CREATE INDEX `model_configuration_enabled_idx` ON `model_configuration` (`is_enabled`);--> statement-breakpoint
 CREATE TABLE `subscription_tier_quotas` (
 	`id` text PRIMARY KEY NOT NULL,
 	`tier` text NOT NULL,
 	`is_annual` integer DEFAULT false NOT NULL,
 	`threads_per_month` integer NOT NULL,
 	`messages_per_month` integer NOT NULL,
-	`memories_per_month` integer DEFAULT 0 NOT NULL,
 	`custom_roles_per_month` integer DEFAULT 0 NOT NULL,
 	`max_ai_models` integer DEFAULT 5 NOT NULL,
 	`allow_custom_roles` integer DEFAULT false NOT NULL,
-	`allow_memories` integer DEFAULT false NOT NULL,
 	`allow_thread_export` integer DEFAULT false NOT NULL,
 	`metadata` text,
 	`created_at` integer NOT NULL,
@@ -370,8 +334,6 @@ CREATE TABLE `user_chat_usage` (
 	`threads_limit` integer NOT NULL,
 	`messages_created` integer DEFAULT 0 NOT NULL,
 	`messages_limit` integer NOT NULL,
-	`memories_created` integer DEFAULT 0 NOT NULL,
-	`memories_limit` integer NOT NULL,
 	`custom_roles_created` integer DEFAULT 0 NOT NULL,
 	`custom_roles_limit` integer NOT NULL,
 	`subscription_tier` text DEFAULT 'free' NOT NULL,
@@ -396,8 +358,6 @@ CREATE TABLE `user_chat_usage_history` (
 	`threads_limit` integer NOT NULL,
 	`messages_created` integer DEFAULT 0 NOT NULL,
 	`messages_limit` integer NOT NULL,
-	`memories_created` integer DEFAULT 0 NOT NULL,
-	`memories_limit` integer NOT NULL,
 	`custom_roles_created` integer DEFAULT 0 NOT NULL,
 	`custom_roles_limit` integer NOT NULL,
 	`subscription_tier` text NOT NULL,

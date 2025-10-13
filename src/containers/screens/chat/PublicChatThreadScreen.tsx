@@ -17,10 +17,13 @@ import { ModelMessageCard } from '@/components/chat/model-message-card';
 import { Button } from '@/components/ui/button';
 import { BRAND } from '@/constants';
 import { usePublicThreadQuery } from '@/hooks/queries/chat-threads';
+import { useModelsQuery } from '@/hooks/queries/models';
 import { getAvatarPropsFromModelId } from '@/lib/ai/avatar-helpers';
 import { groupChangelogByTime } from '@/lib/ai/changelog-helpers';
 import { chatMessagesToUIMessages, getMessageMetadata } from '@/lib/ai/message-helpers';
-import { getModelById } from '@/lib/ai/models-config';
+
+// ✅ STABLE FILTER: Define outside component to prevent query key changes on re-render
+const MODELS_QUERY_FILTERS = { includeAll: true } as const;
 
 /**
  * Public Chat Thread Screen - Client Component
@@ -35,6 +38,10 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
   const { data: threadData, isLoading: isLoadingThread, error: threadError } = usePublicThreadQuery(slug);
   const threadResponse = threadData?.success ? threadData.data : null;
   const thread = threadResponse?.thread || null;
+
+  // ✅ SINGLE SOURCE OF TRUTH: Fetch models from backend
+  const { data: modelsData } = useModelsQuery(MODELS_QUERY_FILTERS);
+  const allModels = modelsData?.data?.models || [];
 
   // Memoize derived data to prevent unnecessary re-renders
   const serverMessages = useMemo(() => threadResponse?.messages || [], [threadResponse]);
@@ -209,7 +216,7 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
                     );
 
                     // Use stored modelId from metadata, not current participants array
-                    const model = storedModelId ? getModelById(storedModelId) : undefined;
+                    const model = storedModelId ? allModels.find(m => m.id === storedModelId) : undefined;
 
                     if (!model) {
                       return null;

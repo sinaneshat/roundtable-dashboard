@@ -1,69 +1,43 @@
 /**
  * Toast Notification Utilities
- * Clean utilities for consistent toast messaging
+ *
+ * ✅ SINGLE SOURCE OF TRUTH FOR ALL TOAST MESSAGES
+ *
+ * This file re-exports the unified API error toast system.
+ * Always use these functions for displaying toasts across the application.
+ *
+ * Key Principles:
+ * 1. For API errors, ALWAYS use showApiErrorToast() - it automatically extracts backend error messages
+ * 2. For success messages, use showApiSuccessToast()
+ * 3. For warnings, use showApiWarningToast()
+ * 4. For info messages, use showApiInfoToast()
+ * 5. For loading states, use showApiLoadingToast()
+ *
+ * @example API Error Handling
+ * ```typescript
+ * import { showApiErrorToast, showApiSuccessToast } from '@/lib/toast';
+ *
+ * try {
+ *   await api.createThread(data);
+ *   showApiSuccessToast('Thread created successfully');
+ * } catch (error) {
+ *   showApiErrorToast('Failed to create thread', error);
+ * }
+ * ```
  */
 
-import { toast } from '@/components/ui/use-toast';
+// ============================================================================
+// PRIMARY EXPORTS - UNIFIED API ERROR TOAST SYSTEM
+// ============================================================================
 
-/**
- * Show success toast with consistent styling
- */
-export function showSuccessToast(message: string, options?: string | { description?: string; [key: string]: unknown }) {
-  const description = typeof options === 'string' ? options : options?.description;
-
-  return toast({
-    title: 'Success',
-    description: message,
-    variant: 'default',
-    ...(description && { description }),
-  });
-}
-
-/**
- * Show error toast with consistent styling
- */
-export function showErrorToast(message: string, options?: string | { description?: string; [key: string]: unknown }) {
-  const description = typeof options === 'string' ? options : options?.description;
-
-  return toast({
-    title: 'Error',
-    description: message,
-    variant: 'destructive',
-    ...(description && { description }),
-  });
-}
-
-/**
- * Show warning toast with consistent styling
- */
-export function showWarningToast(message: string, description?: string) {
-  return toast({
-    title: 'Warning',
-    description: message,
-    variant: 'default',
-    ...(description && { description }),
-  });
-}
-
-/**
- * Show info toast with consistent styling
- */
-export function showInfoToast(message: string, description?: string) {
-  return toast({
-    title: 'ℹ️ Info',
-    description: message,
-    variant: 'default',
-    ...(description && { description }),
-  });
-}
-
-/**
- * Show loading toast (useful for async operations)
- */
-export function showLoadingToast(message: string = 'Loading...') {
-  return toast({
-    title: '⏳ Loading',
-    description: message,
-    variant: 'default',
-  });
-}
+export {
+  clearAllToasts,
+  dismissToast,
+  showApiErrorToast,
+  showApiErrorWithRetry,
+  showApiInfoToast,
+  showApiLoadingToast,
+  showApiSuccessToast,
+  showApiWarningToast,
+  toastManager,
+} from './api-error-toast';

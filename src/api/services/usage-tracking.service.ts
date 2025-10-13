@@ -19,13 +19,10 @@ import { createError } from '@/api/common/error-handling';
 import type { ErrorContext } from '@/api/core';
 import { apiLogger } from '@/api/middleware/hono-logger';
 import { getDbAsync } from '@/db';
+import type { SubscriptionTier } from '@/db/config/subscription-tiers';
+import { getTierConfig } from '@/db/config/subscription-tiers';
 import * as tables from '@/db/schema';
-import type {
-  QuotaCheck,
-  SubscriptionTier,
-  UsageStats,
-} from '@/db/validation/usage';
-import { SUBSCRIPTION_TIER_CONFIG } from '@/lib/ai/models-config';
+import type { QuotaCheck, UsageStats } from '@/db/validation/usage';
 
 /**
  * Get tier quotas from database (with fallback to SUBSCRIPTION_TIER_CONFIG)
@@ -41,16 +38,20 @@ async function getTierQuotas(tier: SubscriptionTier, isAnnual: boolean) {
     ),
   });
 
-  // Fallback to hardcoded config if DB query fails
+  // Fallback to backend config if DB query fails
   if (!quotaConfig) {
     apiLogger.warn('Quota config not found in DB, using fallback', { tier, isAnnual });
-    return SUBSCRIPTION_TIER_CONFIG[tier].quotas;
+    const tierConfig = getTierConfig(tier);
+    return {
+      threadsPerMonth: tierConfig.threadsPerMonth,
+      messagesPerMonth: tierConfig.messagesPerMonth,
+      customRolesPerMonth: tierConfig.customRolesPerMonth,
+    };
   }
 
   return {
     threadsPerMonth: quotaConfig.threadsPerMonth,
     messagesPerMonth: quotaConfig.messagesPerMonth,
-    memoriesPerMonth: quotaConfig.memoriesPerMonth,
     customRolesPerMonth: quotaConfig.customRolesPerMonth,
   };
 }
@@ -88,8 +89,6 @@ async function ensureUserUsageRecord(userId: string): Promise<typeof tables.user
         threadsLimit: freeTierQuotas.threadsPerMonth,
         messagesCreated: 0,
         messagesLimit: freeTierQuotas.messagesPerMonth,
-        memoriesCreated: 0,
-        memoriesLimit: freeTierQuotas.memoriesPerMonth,
         customRolesCreated: 0,
         customRolesLimit: freeTierQuotas.customRolesPerMonth,
         subscriptionTier: 'free',
@@ -157,25 +156,6 @@ async function rolloverBillingPeriod(
   const db = await getDbAsync();
   const now = new Date();
 
-  // Archive current usage to history
-  await db.insert(tables.userChatUsageHistory).values({
-    id: ulid(),
-    userId,
-    periodStart: currentUsage.currentPeriodStart,
-    periodEnd: currentUsage.currentPeriodEnd,
-    threadsCreated: currentUsage.threadsCreated,
-    threadsLimit: currentUsage.threadsLimit,
-    messagesCreated: currentUsage.messagesCreated,
-    messagesLimit: currentUsage.messagesLimit,
-    memoriesCreated: currentUsage.memoriesCreated,
-    memoriesLimit: currentUsage.memoriesLimit,
-    customRolesCreated: currentUsage.customRolesCreated,
-    customRolesLimit: currentUsage.customRolesLimit,
-    subscriptionTier: currentUsage.subscriptionTier,
-    isAnnual: currentUsage.isAnnual,
-    createdAt: now,
-  });
-
   // Check if user has an active Stripe subscription
   // If currentPeriodEnd has passed and no Stripe sync updated it, subscription has ended
   const user = await db.query.user.findFirst({
@@ -217,6 +197,23 @@ async function rolloverBillingPeriod(
   const periodStart = new Date(now.getFullYear(), now.getMonth(), 1);
   const periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
 
+  // Prepare history archive entry
+  const historyInsert = db.insert(tables.userChatUsageHistory).values({
+    id: ulid(),
+    userId,
+    periodStart: currentUsage.currentPeriodStart,
+    periodEnd: currentUsage.currentPeriodEnd,
+    threadsCreated: currentUsage.threadsCreated,
+    threadsLimit: currentUsage.threadsLimit,
+    messagesCreated: currentUsage.messagesCreated,
+    messagesLimit: currentUsage.messagesLimit,
+    customRolesCreated: currentUsage.customRolesCreated,
+    customRolesLimit: currentUsage.customRolesLimit,
+    subscriptionTier: currentUsage.subscriptionTier,
+    isAnnual: currentUsage.isAnnual,
+    createdAt: now,
+  });
+
   if (hasPendingTierChange) {
     // Apply scheduled downgrade from pending tier change
     const pendingTier = currentUsage.pendingTierChange!;
@@ -230,20 +227,17 @@ async function rolloverBillingPeriod(
     });
 
     if (pendingTierQuota) {
-      await db
-        .update(tables.userChatUsage)
+      const usageUpdate = db.update(tables.userChatUsage)
         .set({
           subscriptionTier: pendingTier,
           isAnnual: pendingIsAnnual,
           threadsLimit: pendingTierQuota.threadsPerMonth,
           messagesLimit: pendingTierQuota.messagesPerMonth,
-          memoriesLimit: pendingTierQuota.memoriesPerMonth,
           customRolesLimit: pendingTierQuota.customRolesPerMonth,
           currentPeriodStart: periodStart,
           currentPeriodEnd: periodEnd,
           threadsCreated: 0,
           messagesCreated: 0,
-          memoriesCreated: 0,
           customRolesCreated: 0,
           // Clear pending tier change fields
           pendingTierChange: null,
@@ -252,6 +246,16 @@ async function rolloverBillingPeriod(
           updatedAt: now,
         })
         .where(eq(tables.userChatUsage.userId, userId));
+
+      // ✅ ATOMIC: Archive history + Update usage in single batch (Cloudflare D1)
+      if ('batch' in db && typeof db.batch === 'function') {
+        await db.batch([historyInsert, usageUpdate]);
+      } else {
+        // Local SQLite fallback - sequential operations
+        await historyInsert;
+        await usageUpdate;
+      }
+      return; // Exit after batch
     } else {
       apiLogger.error('Pending tier quota not found, falling back to free tier', {
         userId,
@@ -274,24 +278,20 @@ async function rolloverBillingPeriod(
     const freeLimits = freeTierQuota || {
       threadsPerMonth: 2,
       messagesPerMonth: 20,
-      memoriesPerMonth: 5,
       customRolesPerMonth: 5,
     };
 
-    await db
-      .update(tables.userChatUsage)
+    const freeUpdate = db.update(tables.userChatUsage)
       .set({
         subscriptionTier: 'free',
         isAnnual: false,
         threadsLimit: freeLimits.threadsPerMonth,
         messagesLimit: freeLimits.messagesPerMonth,
-        memoriesLimit: freeLimits.memoriesPerMonth,
         customRolesLimit: freeLimits.customRolesPerMonth,
         currentPeriodStart: periodStart,
         currentPeriodEnd: periodEnd,
         threadsCreated: 0,
         messagesCreated: 0,
-        memoriesCreated: 0,
         customRolesCreated: 0,
         // Clear any pending tier change fields
         pendingTierChange: null,
@@ -300,22 +300,38 @@ async function rolloverBillingPeriod(
         updatedAt: now,
       })
       .where(eq(tables.userChatUsage.userId, userId));
+
+    // ✅ ATOMIC: Archive history + Downgrade to free tier in single batch (Cloudflare D1)
+    if ('batch' in db && typeof db.batch === 'function') {
+      await db.batch([historyInsert, freeUpdate]);
+    } else {
+      // Local SQLite fallback - sequential operations
+      await historyInsert;
+      await freeUpdate;
+    }
   } else if (!hasPendingTierChange) {
     // Active subscription exists but period expired
     // This shouldn't normally happen (Stripe sync should handle it)
     // Reset usage but keep current tier limits
-    await db
-      .update(tables.userChatUsage)
+    const resetUpdate = db.update(tables.userChatUsage)
       .set({
         currentPeriodStart: periodStart,
         currentPeriodEnd: periodEnd,
         threadsCreated: 0,
         messagesCreated: 0,
-        memoriesCreated: 0,
         customRolesCreated: 0,
         updatedAt: now,
       })
       .where(eq(tables.userChatUsage.userId, userId));
+
+    // ✅ ATOMIC: Archive history + Reset usage in single batch (Cloudflare D1)
+    if ('batch' in db && typeof db.batch === 'function') {
+      await db.batch([historyInsert, resetUpdate]);
+    } else {
+      // Local SQLite fallback - sequential operations
+      await historyInsert;
+      await resetUpdate;
+    }
 
     apiLogger.warn('Rolled over billing period with active subscription', {
       userId,
@@ -361,26 +377,6 @@ export async function checkMessageQuota(userId: string): Promise<QuotaCheck> {
     canCreate,
     current: usage.messagesCreated,
     limit: usage.messagesLimit,
-    remaining,
-    resetDate: usage.currentPeriodEnd,
-    tier: usage.subscriptionTier,
-  };
-}
-
-/**
- * Check memory creation quota
- * Returns whether user can create a new memory and current usage stats
- */
-export async function checkMemoryQuota(userId: string): Promise<QuotaCheck> {
-  const usage = await ensureUserUsageRecord(userId);
-
-  const canCreate = usage.memoriesCreated < usage.memoriesLimit;
-  const remaining = Math.max(0, usage.memoriesLimit - usage.memoriesCreated);
-
-  return {
-    canCreate,
-    current: usage.memoriesCreated,
-    limit: usage.memoriesLimit,
     remaining,
     resetDate: usage.currentPeriodEnd,
     tier: usage.subscriptionTier,
@@ -444,24 +440,6 @@ export async function incrementMessageUsage(userId: string, count = 1): Promise<
 }
 
 /**
- * Increment memory creation counter
- * Must be called AFTER successfully creating a memory
- * Does NOT decrement when memories are deleted
- */
-export async function incrementMemoryUsage(userId: string, count = 1): Promise<void> {
-  const db = await getDbAsync();
-  const usage = await ensureUserUsageRecord(userId);
-
-  await db
-    .update(tables.userChatUsage)
-    .set({
-      memoriesCreated: usage.memoriesCreated + count,
-      updatedAt: new Date(),
-    })
-    .where(eq(tables.userChatUsage.userId, userId));
-}
-
-/**
  * Increment custom role creation counter
  * Must be called AFTER successfully creating a custom role
  * Does NOT decrement when custom roles are deleted
@@ -489,7 +467,6 @@ export async function getUserUsageStats(userId: string): Promise<UsageStats> {
 
   const threadsRemaining = Math.max(0, usage.threadsLimit - usage.threadsCreated);
   const messagesRemaining = Math.max(0, usage.messagesLimit - usage.messagesCreated);
-  const memoriesRemaining = Math.max(0, usage.memoriesLimit - usage.memoriesCreated);
   const customRolesRemaining = Math.max(0, usage.customRolesLimit - usage.customRolesCreated);
 
   const threadsPercentage = usage.threadsLimit > 0
@@ -498,10 +475,6 @@ export async function getUserUsageStats(userId: string): Promise<UsageStats> {
 
   const messagesPercentage = usage.messagesLimit > 0
     ? Math.round((usage.messagesCreated / usage.messagesLimit) * 100)
-    : 0;
-
-  const memoriesPercentage = usage.memoriesLimit > 0
-    ? Math.round((usage.memoriesCreated / usage.memoriesLimit) * 100)
     : 0;
 
   const customRolesPercentage = usage.customRolesLimit > 0
@@ -525,12 +498,6 @@ export async function getUserUsageStats(userId: string): Promise<UsageStats> {
       remaining: messagesRemaining,
       percentage: messagesPercentage,
     },
-    memories: {
-      used: usage.memoriesCreated,
-      limit: usage.memoriesLimit,
-      remaining: memoriesRemaining,
-      percentage: memoriesPercentage,
-    },
     customRoles: {
       used: usage.customRolesCreated,
       limit: usage.customRolesLimit,
@@ -549,50 +516,6 @@ export async function getUserUsageStats(userId: string): Promise<UsageStats> {
       pendingTierIsAnnual: usage.pendingTierIsAnnual !== null ? usage.pendingTierIsAnnual : null,
     },
   };
-}
-
-/**
- * Update user subscription tier and quotas
- * Called when user subscribes, upgrades, or downgrades
- */
-export async function updateUserSubscriptionTier(
-  userId: string,
-  tier: SubscriptionTier,
-  isAnnual: boolean,
-): Promise<void> {
-  const db = await getDbAsync();
-
-  // Get quota config for this tier
-  const quotaConfig = await db.query.subscriptionTierQuotas.findFirst({
-    where: and(
-      eq(tables.subscriptionTierQuotas.tier, tier),
-      eq(tables.subscriptionTierQuotas.isAnnual, isAnnual),
-    ),
-  });
-
-  if (!quotaConfig) {
-    const context: ErrorContext = {
-      errorType: 'resource',
-      resource: 'subscription_tier_quotas',
-      resourceId: `${tier}-${isAnnual ? 'annual' : 'monthly'}`,
-    };
-    throw createError.notFound(`Quota configuration not found for tier: ${tier}`, context);
-  }
-
-  // Ensure usage record exists
-  await ensureUserUsageRecord(userId);
-
-  // Update subscription tier and limits
-  await db
-    .update(tables.userChatUsage)
-    .set({
-      subscriptionTier: tier,
-      isAnnual,
-      threadsLimit: quotaConfig.threadsPerMonth,
-      messagesLimit: quotaConfig.messagesPerMonth,
-      updatedAt: new Date(),
-    })
-    .where(eq(tables.userChatUsage.userId, userId));
 }
 
 /**
@@ -630,26 +553,6 @@ export async function enforceMessageQuota(userId: string): Promise<void> {
     };
     throw createError.badRequest(
       `Message creation limit reached. You have used ${quota.current} of ${quota.limit} messages this month. Upgrade your plan for more messages.`,
-      context,
-    );
-  }
-}
-
-/**
- * Enforce memory quota before creation
- * Throws error if user has exceeded quota
- */
-export async function enforceMemoryQuota(userId: string): Promise<void> {
-  const quota = await checkMemoryQuota(userId);
-
-  if (!quota.canCreate) {
-    const context: ErrorContext = {
-      errorType: 'resource',
-      resource: 'chat_memory',
-      userId,
-    };
-    throw createError.badRequest(
-      `Memory creation limit reached. You have used ${quota.current} of ${quota.limit} memories this month. Upgrade your plan for more memories.`,
       context,
     );
   }
@@ -778,31 +681,11 @@ export async function syncUserQuotaFromSubscription(
   // Calculate quota updates based on subscription change type
   let updatedThreadsLimit = newThreadsLimit;
   let updatedMessagesLimit = newMessagesLimit;
-  let updatedMemoriesLimit = quotaConfig.memoriesPerMonth;
   let updatedCustomRolesLimit = quotaConfig.customRolesPerMonth;
 
   // Reset usage counters if new billing period has started
   let resetUsage = {};
   if (isPeriodReset) {
-    // Archive old period to history before resetting
-    await db.insert(tables.userChatUsageHistory).values({
-      id: ulid(),
-      userId,
-      periodStart: currentUsage.currentPeriodStart,
-      periodEnd: currentUsage.currentPeriodEnd,
-      threadsCreated: currentUsage.threadsCreated,
-      threadsLimit: currentUsage.threadsLimit,
-      messagesCreated: currentUsage.messagesCreated,
-      messagesLimit: currentUsage.messagesLimit,
-      memoriesCreated: currentUsage.memoriesCreated,
-      memoriesLimit: currentUsage.memoriesLimit,
-      customRolesCreated: currentUsage.customRolesCreated,
-      customRolesLimit: currentUsage.customRolesLimit,
-      subscriptionTier: currentUsage.subscriptionTier,
-      isAnnual: currentUsage.isAnnual,
-      createdAt: new Date(),
-    });
-
     resetUsage = {
       threadsCreated: 0,
       messagesCreated: 0,
@@ -825,7 +708,6 @@ export async function syncUserQuotaFromSubscription(
     // This ensures user keeps access they paid for until period ends
     updatedThreadsLimit = oldThreadsLimit; // Keep current limits
     updatedMessagesLimit = oldMessagesLimit; // Keep current limits
-    updatedMemoriesLimit = currentUsage.memoriesLimit; // Keep current limits
     updatedCustomRolesLimit = currentUsage.customRolesLimit; // Keep current limits
 
     // Store pending tier change to apply at period end
@@ -844,15 +726,13 @@ export async function syncUserQuotaFromSubscription(
     return; // Exit early - don't update tier or limits yet
   }
 
-  // Update user usage record with new subscription tier, limits, and billing period
-  await db
-    .update(tables.userChatUsage)
+  // Build update operation
+  const usageUpdate = db.update(tables.userChatUsage)
     .set({
       subscriptionTier: tier,
       isAnnual,
       threadsLimit: updatedThreadsLimit,
       messagesLimit: updatedMessagesLimit,
-      memoriesLimit: updatedMemoriesLimit,
       customRolesLimit: updatedCustomRolesLimit,
       currentPeriodStart, // Always update to Stripe's billing period
       currentPeriodEnd, // Always update to Stripe's billing period
@@ -864,4 +744,34 @@ export async function syncUserQuotaFromSubscription(
       updatedAt: new Date(),
     })
     .where(eq(tables.userChatUsage.userId, userId));
+
+  // ✅ ATOMIC: If period reset, archive old period + update usage in single batch
+  if (isPeriodReset) {
+    const historyArchive = db.insert(tables.userChatUsageHistory).values({
+      id: ulid(),
+      userId,
+      periodStart: currentUsage.currentPeriodStart,
+      periodEnd: currentUsage.currentPeriodEnd,
+      threadsCreated: currentUsage.threadsCreated,
+      threadsLimit: currentUsage.threadsLimit,
+      messagesCreated: currentUsage.messagesCreated,
+      messagesLimit: currentUsage.messagesLimit,
+      customRolesCreated: currentUsage.customRolesCreated,
+      customRolesLimit: currentUsage.customRolesLimit,
+      subscriptionTier: currentUsage.subscriptionTier,
+      isAnnual: currentUsage.isAnnual,
+      createdAt: new Date(),
+    });
+
+    // Execute atomically with batch (Cloudflare D1) or sequentially (local SQLite)
+    if ('batch' in db && typeof db.batch === 'function') {
+      await db.batch([historyArchive, usageUpdate]);
+    } else {
+      await historyArchive;
+      await usageUpdate;
+    }
+  } else {
+    // No period reset, just update usage
+    await usageUpdate;
+  }
 }

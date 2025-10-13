@@ -1,133 +1,135 @@
+/* eslint-disable simple-import-sort/imports */
 /**
  * API Keys Route Schemas
  *
- * Zod schemas for API key management endpoints
- * Following patterns from billing/schema.ts and chat/schema.ts
+ * ✅ REUSES: Database validation schemas from /src/db/validation/api-keys.ts
+ * Following established patterns from chat/schema.ts and billing/schema.ts
  */
 
 import { z } from '@hono/zod-openapi';
 
 import { CoreSchemas, createApiResponseSchema } from '@/api/core/schemas';
+import {
+  apiKeySelectSchema,
+  apiKeyIdParamSchema as dbApiKeyIdParamSchema,
+  createApiKeyRequestSchema as dbCreateApiKeyRequestSchema,
+  updateApiKeyRequestSchema as dbUpdateApiKeyRequestSchema,
+} from '@/db/validation/api-keys';
 
 // ============================================================================
-// Path Parameter Schemas
-// ============================================================================
-
-export const ApiKeyIdParamSchema = z.object({
-  keyId: CoreSchemas.id().openapi({
-    description: 'API key ID',
-    example: 'key_abc123xyz',
-    param: {
-      name: 'keyId',
-      in: 'path',
-    },
-  }),
-});
-
-// ============================================================================
-// Request Body Schemas
+// Path Parameter Schemas (Reusing Database Validation)
 // ============================================================================
 
 /**
- * Schema for creating a new API key
+ * ✅ REUSE: API key ID parameter from database validation
+ * Extended with OpenAPI metadata
+ */
+export const ApiKeyIdParamSchema = dbApiKeyIdParamSchema
+  .extend({
+    keyId: CoreSchemas.id().openapi({
+      description: 'API key ID',
+      example: 'key_abc123xyz',
+      param: {
+        name: 'keyId',
+        in: 'path',
+      },
+    }),
+  })
+  .openapi('ApiKeyIdParam');
+
+// ============================================================================
+// Request Body Schemas (Reusing Database Validation)
+// ============================================================================
+
+/**
+ * ✅ REUSE: Create API key schema from database validation
+ * Adds OpenAPI metadata to existing validation rules
  */
 export const CreateApiKeyRequestSchema = z.object({
-  name: z.string().min(3).max(50).openapi({
+  name: dbCreateApiKeyRequestSchema.shape.name.openapi({
     description: 'A descriptive name for the API key',
     example: 'My API Key',
   }),
-  expiresIn: z.number().int().positive().min(1).max(365).optional().openapi({
+  expiresIn: dbCreateApiKeyRequestSchema.shape.expiresIn.openapi({
     description: 'Expiration time in days (1-365, optional)',
     example: 30,
   }),
-  remaining: z.number().int().positive().nullable().optional().openapi({
+  remaining: dbCreateApiKeyRequestSchema.shape.remaining.openapi({
     description: 'Maximum number of requests (null for unlimited)',
     example: 1000,
   }),
-  metadata: z.record(z.string(), z.unknown()).optional().nullable().openapi({
+  metadata: dbCreateApiKeyRequestSchema.shape.metadata.openapi({
     description: 'Custom metadata for the API key',
     example: { environment: 'production', project: 'main' },
   }),
-});
+}).openapi('CreateApiKeyRequest');
 
 /**
- * Schema for updating an existing API key
+ * ✅ REUSE: Update API key schema from database validation
+ * Adds OpenAPI metadata to existing validation rules (keyId excluded - comes from path)
  */
 export const UpdateApiKeyRequestSchema = z.object({
-  name: z.string().min(3).max(50).optional().openapi({
+  name: dbUpdateApiKeyRequestSchema.shape.name.openapi({
     description: 'Update the API key name',
     example: 'Updated API Key Name',
   }),
-  enabled: z.boolean().optional().openapi({
+  enabled: dbUpdateApiKeyRequestSchema.shape.enabled.openapi({
     description: 'Enable or disable the API key',
     example: true,
   }),
-  remaining: z.number().int().positive().nullable().optional().openapi({
+  remaining: dbUpdateApiKeyRequestSchema.shape.remaining.openapi({
     description: 'Update remaining requests (null for unlimited)',
     example: 5000,
   }),
-  refillAmount: z.number().int().positive().nullable().optional().openapi({
+  refillAmount: dbUpdateApiKeyRequestSchema.shape.refillAmount.openapi({
     description: 'Amount to refill on each refill interval',
     example: 1000,
   }),
-  refillInterval: z.number().int().positive().nullable().optional().openapi({
+  refillInterval: dbUpdateApiKeyRequestSchema.shape.refillInterval.openapi({
     description: 'Refill interval in milliseconds',
     example: 86400000, // 24 hours
   }),
-  metadata: z.record(z.string(), z.unknown()).optional().nullable().openapi({
+  metadata: dbUpdateApiKeyRequestSchema.shape.metadata.openapi({
     description: 'Update custom metadata',
     example: { environment: 'staging' },
   }),
-});
-
-// ============================================================================
-// Response Schemas
-// ============================================================================
-
-/**
- * API Key schema (without the actual key value)
- */
-export const ApiKeySchema = z.object({
-  id: z.string().openapi({ example: 'key_abc123xyz' }),
-  name: z.string().nullable().openapi({ example: 'My API Key' }),
-  start: z.string().nullable().openapi({
-    description: 'First few characters of the key for identification',
-    example: 'rpnd_abc',
+  rateLimitEnabled: dbUpdateApiKeyRequestSchema.shape.rateLimitEnabled.openapi({
+    description: 'Enable or disable rate limiting for this API key',
+    example: true,
   }),
-  prefix: z.string().nullable().openapi({ example: 'rpnd_' }),
-  userId: z.string().openapi({ example: 'user_123456' }),
-  enabled: z.boolean().openapi({ example: true }),
-  remaining: z.number().nullable().openapi({
-    description: 'Remaining requests (null for unlimited)',
-    example: 950,
-  }),
-  rateLimitEnabled: z.boolean().openapi({ example: true }),
-  rateLimitTimeWindow: z.number().nullable().openapi({
+  rateLimitTimeWindow: dbUpdateApiKeyRequestSchema.shape.rateLimitTimeWindow.openapi({
     description: 'Rate limit time window in milliseconds',
-    example: 86400000,
+    example: 86400000, // 24 hours
   }),
-  rateLimitMax: z.number().nullable().openapi({
-    description: 'Maximum requests in rate limit window',
+  rateLimitMax: dbUpdateApiKeyRequestSchema.shape.rateLimitMax.openapi({
+    description: 'Maximum requests allowed within the time window',
     example: 1000,
   }),
-  requestCount: z.number().openapi({ example: 50 }),
-  lastRequest: z.string().nullable().openapi({ example: '2024-01-15T10:30:00Z' }),
-  expiresAt: z.string().nullable().openapi({ example: '2024-12-31T23:59:59Z' }),
-  createdAt: z.string().openapi({ example: '2024-01-01T00:00:00Z' }),
-  updatedAt: z.string().openapi({ example: '2024-01-15T10:30:00Z' }),
-  refillInterval: z.number().nullable().openapi({ example: 86400000 }),
-  refillAmount: z.number().nullable().openapi({ example: 1000 }),
-  lastRefillAt: z.string().nullable().openapi({ example: '2024-01-15T00:00:00Z' }),
-  permissions: z.record(z.string(), z.array(z.string())).nullable().openapi({
-    example: { chat: ['read', 'write'] },
-  }),
-  metadata: z.record(z.string(), z.unknown()).nullable().openapi({
-    example: { environment: 'production' },
-  }),
-}).openapi('ApiKey');
+}).openapi('UpdateApiKeyRequest');
+
+// ============================================================================
+// Response Schemas (Reusing Database Validation)
+// ============================================================================
 
 /**
- * API Key with the actual key value (only returned on creation)
+ * ✅ REUSE: API Key schema from database validation
+ * Picked fields for API response (excludes sensitive hashed key)
+ */
+export const ApiKeySchema = apiKeySelectSchema
+  .omit({ key: true }) // Exclude hashed key from responses
+  .extend({
+    // Transform Date objects to ISO strings for API responses
+    createdAt: z.coerce.date().transform(d => d.toISOString()).openapi({ example: '2024-01-01T00:00:00Z' }),
+    updatedAt: z.coerce.date().transform(d => d.toISOString()).openapi({ example: '2024-01-15T10:30:00Z' }),
+    expiresAt: z.coerce.date().nullable().transform(d => d?.toISOString() ?? null).openapi({ example: '2024-12-31T23:59:59Z' }),
+    lastRequest: z.coerce.date().nullable().transform(d => d?.toISOString() ?? null).openapi({ example: '2024-01-15T10:30:00Z' }),
+    lastRefillAt: z.coerce.date().nullable().transform(d => d?.toISOString() ?? null).openapi({ example: '2024-01-15T00:00:00Z' }),
+  })
+  .openapi('ApiKey');
+
+/**
+ * ✅ REUSE: API Key with the actual key value (only returned on creation)
+ * Extends the base schema with the plaintext key
  */
 export const ApiKeyWithKeySchema = ApiKeySchema.extend({
   key: z.string().openapi({
@@ -169,3 +171,12 @@ export const DeleteApiKeyResponseSchema = createApiResponseSchema(
     success: z.boolean(),
   }).openapi('DeleteApiKeyPayload'),
 ).openapi('DeleteApiKeyResponse');
+
+// ============================================================================
+// TYPE EXPORTS FOR FRONTEND & BACKEND
+// ============================================================================
+
+export type ApiKey = z.infer<typeof ApiKeySchema>;
+export type ApiKeyWithKey = z.infer<typeof ApiKeyWithKeySchema>;
+export type CreateApiKeyRequest = z.infer<typeof CreateApiKeyRequestSchema>;
+export type UpdateApiKeyRequest = z.infer<typeof UpdateApiKeyRequestSchema>;

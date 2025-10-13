@@ -7,6 +7,7 @@ import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 
 import { CancelSubscriptionDialog } from '@/components/chat/cancel-subscription-dialog';
+import { UsageMetrics } from '@/components/chat/usage-metrics';
 import { ApiKeysModal } from '@/components/modals/api-keys-modal';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
@@ -31,8 +32,7 @@ import {
   useUsageStatsQuery,
 } from '@/hooks';
 import { signOut, useSession } from '@/lib/auth/client';
-import { toastManager } from '@/lib/toast/toast-manager';
-import { getApiErrorMessage } from '@/lib/utils/error-handling';
+import { showApiErrorToast } from '@/lib/toast';
 
 export function NavUser() {
   const router = useRouter();
@@ -80,8 +80,7 @@ export function NavUser() {
         window.open(result.data.url, '_blank', 'noopener,noreferrer');
       }
     } catch (error) {
-      const errorMessage = getApiErrorMessage(error, 'Failed to open customer portal');
-      toastManager.error('Portal Error', errorMessage);
+      showApiErrorToast('Portal Error', error);
     }
   };
 
@@ -100,8 +99,7 @@ export function NavUser() {
         // Success is obvious from the dialog closing and UI update - no toast needed
       }
     } catch (error) {
-      const errorMessage = getApiErrorMessage(error, 'Failed to cancel subscription');
-      toastManager.error('Cancellation Failed', errorMessage);
+      showApiErrorToast('Cancellation Failed', error);
     }
   };
 
@@ -156,6 +154,12 @@ export function NavUser() {
                   </div>
                 </div>
               </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+
+              {/* Usage & Plan Section */}
+              <div className="px-2 py-2">
+                <UsageMetrics />
+              </div>
               <DropdownMenuSeparator />
 
               {/* Account Actions */}

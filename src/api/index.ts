@@ -44,7 +44,7 @@ import {
   listApiKeysRoute,
   updateApiKeyRoute,
 } from './routes/api-keys/route';
-// Import routes and handlers directly for proper RPC type inference
+// Auth routes
 import { secureMeHandler } from './routes/auth/handler';
 import { secureMeRoute } from './routes/auth/route';
 // Billing routes
@@ -72,63 +72,55 @@ import {
   switchSubscriptionRoute,
   syncAfterCheckoutRoute,
 } from './routes/billing/route';
-// Chat routes - Core endpoints only (ChatGPT pattern)
+// Chat routes
 import {
   addParticipantHandler,
   createCustomRoleHandler,
-  createMemoryHandler,
   createThreadHandler,
   deleteCustomRoleHandler,
-  deleteMemoryHandler,
   deleteParticipantHandler,
   deleteThreadHandler,
   getCustomRoleHandler,
-  getMemoryHandler,
   getPublicThreadHandler,
+  getThreadAnalysesHandler,
   getThreadBySlugHandler,
   getThreadChangelogHandler,
   getThreadHandler,
   getThreadMessagesHandler,
   listCustomRolesHandler,
-  listMemoriesHandler,
   listThreadsHandler,
   streamChatHandler,
   updateCustomRoleHandler,
-  updateMemoryHandler,
   updateParticipantHandler,
   updateThreadHandler,
 } from './routes/chat/handler';
 import {
   addParticipantRoute,
   createCustomRoleRoute,
-  createMemoryRoute,
   createThreadRoute,
   deleteCustomRoleRoute,
-  deleteMemoryRoute,
   deleteParticipantRoute,
   deleteThreadRoute,
   getCustomRoleRoute,
-  getMemoryRoute,
   getPublicThreadRoute,
+  getThreadAnalysesRoute,
   getThreadBySlugRoute,
   getThreadChangelogRoute,
   getThreadMessagesRoute,
   getThreadRoute,
   listCustomRolesRoute,
-  listMemoriesRoute,
   listThreadsRoute,
   streamChatRoute,
   updateCustomRoleRoute,
-  updateMemoryRoute,
   updateParticipantRoute,
   updateThreadRoute,
 } from './routes/chat/route';
 // Models routes (dynamic OpenRouter models)
 import {
-  handleClearCache,
-  handleGetModel,
-  handleListModels,
-  handleListProviders,
+  clearCacheHandler,
+  getModelHandler,
+  listModelsHandler,
+  listProvidersHandler,
 } from './routes/models/handler';
 import {
   clearCacheRoute,
@@ -136,6 +128,9 @@ import {
   listModelsRoute,
   listProvidersRoute,
 } from './routes/models/route';
+// ============================================================================
+// Route and Handler Imports (organized to match registration order below)
+// ============================================================================
 // System/health routes
 import {
   detailedHealthHandler,
@@ -148,14 +143,12 @@ import {
 // Usage tracking routes
 import {
   checkCustomRoleQuotaHandler,
-  checkMemoryQuotaHandler,
   checkMessageQuotaHandler,
   checkThreadQuotaHandler,
   getUserUsageStatsHandler,
 } from './routes/usage/handler';
 import {
   checkCustomRoleQuotaRoute,
-  checkMemoryQuotaRoute,
   checkMessageQuotaRoute,
   checkThreadQuotaRoute,
   getUserUsageStatsRoute,
@@ -187,8 +180,8 @@ app.use('*', requestId());
 app.use('*', timing());
 // Apply timeout to all routes except streaming endpoints
 app.use('*', async (c, next) => {
-  // Skip timeout for streaming endpoints
-  if (c.req.path.includes('/stream')) {
+  // Skip timeout for streaming endpoints (chat streaming and moderator analysis)
+  if (c.req.path.includes('/stream') || c.req.path.includes('/analyze')) {
     return next();
   }
   return timeout(15000)(c, next);
@@ -310,82 +303,100 @@ app.use('/chat/threads/:id/stream', csrfProtection, requireSession);
 app.use('/chat/threads/:id/participants', csrfProtection, requireSession);
 app.use('/chat/participants/:id', csrfProtection, requireSession);
 
-// Memory system routes (protected)
-app.use('/chat/memories', csrfProtection, requireSession);
-app.use('/chat/memories/:id', csrfProtection, requireSession);
-
 // Custom role routes (protected)
 app.use('/chat/custom-roles', csrfProtection, requireSession);
 app.use('/chat/custom-roles/:id', csrfProtection, requireSession);
 
+// Moderator analysis routes (protected)
+app.use('/chat/threads/:threadId/rounds/:roundNumber/analyze', csrfProtection, requireSession);
+app.use('/chat/threads/:id/analyses', requireSession); // GET analyses for thread
+
 // Register all routes directly on the app
 const appRoutes = app
-  // System/health routes
-  .openapi(healthRoute, healthHandler)
-  .openapi(detailedHealthRoute, detailedHealthHandler)
-  // Auth routes
-  .openapi(secureMeRoute, secureMeHandler)
-  // API Keys routes (protected)
-  .openapi(listApiKeysRoute, listApiKeysHandler)
-  .openapi(getApiKeyRoute, getApiKeyHandler)
-  .openapi(createApiKeyRoute, createApiKeyHandler)
-  .openapi(updateApiKeyRoute, updateApiKeyHandler)
-  .openapi(deleteApiKeyRoute, deleteApiKeyHandler)
-  // Billing routes - Products (public)
-  .openapi(listProductsRoute, listProductsHandler)
-  .openapi(getProductRoute, getProductHandler)
-  // Billing routes - Checkout (protected)
-  .openapi(createCheckoutSessionRoute, createCheckoutSessionHandler)
-  // Billing routes - Customer Portal (protected)
-  .openapi(createCustomerPortalSessionRoute, createCustomerPortalSessionHandler)
-  // Billing routes - Sync (protected)
-  .openapi(syncAfterCheckoutRoute, syncAfterCheckoutHandler)
-  // Billing routes - Subscriptions (protected)
-  .openapi(listSubscriptionsRoute, listSubscriptionsHandler)
-  .openapi(getSubscriptionRoute, getSubscriptionHandler)
-  // Billing routes - Subscription Management (protected)
-  .openapi(switchSubscriptionRoute, switchSubscriptionHandler)
-  .openapi(cancelSubscriptionRoute, cancelSubscriptionHandler)
-  // Billing routes - Webhooks (public with signature verification)
-  .openapi(handleWebhookRoute, handleWebhookHandler)
-  // Chat routes - Core endpoints only (ChatGPT pattern)
-  .openapi(listThreadsRoute, listThreadsHandler) // List threads with pagination
-  .openapi(createThreadRoute, createThreadHandler) // Create thread with participants + first message
-  .openapi(getThreadRoute, getThreadHandler) // Get thread with participants + messages
+  // ============================================================================
+  // System Routes - Health monitoring and diagnostics
+  // ============================================================================
+  .openapi(healthRoute, healthHandler) // Basic health check for monitoring
+  .openapi(detailedHealthRoute, detailedHealthHandler) // Detailed health check with environment and dependencies
+
+  // ============================================================================
+  // Auth Routes - User authentication and session management (protected)
+  // ============================================================================
+  .openapi(secureMeRoute, secureMeHandler) // Get current authenticated user
+
+  // ============================================================================
+  // API Keys Routes - API key management and authentication (protected)
+  // ============================================================================
+  .openapi(listApiKeysRoute, listApiKeysHandler) // List user API keys (without key values)
+  .openapi(getApiKeyRoute, getApiKeyHandler) // Get API key details (without key value)
+  .openapi(createApiKeyRoute, createApiKeyHandler) // Create new API key (returns key value once)
+  .openapi(updateApiKeyRoute, updateApiKeyHandler) // Update API key settings
+  .openapi(deleteApiKeyRoute, deleteApiKeyHandler) // Delete API key
+
+  // ============================================================================
+  // Billing Routes - Stripe billing, subscriptions, and payments
+  // ============================================================================
+  // Products (public)
+  .openapi(listProductsRoute, listProductsHandler) // List all active products with pricing
+  .openapi(getProductRoute, getProductHandler) // Get specific product with all pricing plans
+  // Checkout (protected)
+  .openapi(createCheckoutSessionRoute, createCheckoutSessionHandler) // Create Stripe checkout session
+  // Customer Portal (protected)
+  .openapi(createCustomerPortalSessionRoute, createCustomerPortalSessionHandler) // Create customer portal session
+  // Sync (protected)
+  .openapi(syncAfterCheckoutRoute, syncAfterCheckoutHandler) // Sync Stripe data after checkout
+  // Subscriptions (protected)
+  .openapi(listSubscriptionsRoute, listSubscriptionsHandler) // List user subscriptions
+  .openapi(getSubscriptionRoute, getSubscriptionHandler) // Get subscription details
+  // Subscription Management (protected)
+  .openapi(switchSubscriptionRoute, switchSubscriptionHandler) // Switch subscription plan
+  .openapi(cancelSubscriptionRoute, cancelSubscriptionHandler) // Cancel subscription
+  // Webhooks (public with signature verification)
+  .openapi(handleWebhookRoute, handleWebhookHandler) // Handle Stripe webhook events
+
+  // ============================================================================
+  // Chat Routes - Multi-model AI conversations (ChatGPT pattern)
+  // ============================================================================
+  // Thread Management
+  .openapi(listThreadsRoute, listThreadsHandler) // List threads with cursor pagination
+  .openapi(createThreadRoute, createThreadHandler) // Create thread with mode and configuration
+  .openapi(getThreadRoute, getThreadHandler) // Get thread details with participants
   .openapi(getThreadBySlugRoute, getThreadBySlugHandler) // Get thread by slug (authenticated)
-  .openapi(updateThreadRoute, updateThreadHandler) // Update thread (title, favorite, public, etc.)
-  .openapi(deleteThreadRoute, deleteThreadHandler) // Delete thread
-  .openapi(getThreadMessagesRoute, getThreadMessagesHandler) // Get messages
-  .openapi(getThreadChangelogRoute, getThreadChangelogHandler) // Get configuration changelog
-  .openapi(streamChatRoute, streamChatHandler) // Stream AI response via SSE (replaces sendMessage)
+  .openapi(updateThreadRoute, updateThreadHandler) // Update thread (title, mode, status, metadata)
+  .openapi(deleteThreadRoute, deleteThreadHandler) // Delete thread (soft delete)
   .openapi(getPublicThreadRoute, getPublicThreadHandler) // Get public thread by slug (no auth)
-  // Chat routes - Participant management
-  .openapi(addParticipantRoute, addParticipantHandler) // Add model to thread
+  // Message Management
+  .openapi(getThreadMessagesRoute, getThreadMessagesHandler) // Get thread messages
+  .openapi(getThreadChangelogRoute, getThreadChangelogHandler) // Get configuration changelog
+  .openapi(streamChatRoute, streamChatHandler) // Stream AI responses via SSE
+  // Participant Management (protected)
+  .openapi(addParticipantRoute, addParticipantHandler) // Add AI model participant to thread
   .openapi(updateParticipantRoute, updateParticipantHandler) // Update participant role/priority/settings
   .openapi(deleteParticipantRoute, deleteParticipantHandler) // Remove participant from thread
-  // Chat routes - Memory system
-  .openapi(listMemoriesRoute, listMemoriesHandler) // List user memories
-  .openapi(createMemoryRoute, createMemoryHandler) // Create memory/preset
-  .openapi(getMemoryRoute, getMemoryHandler) // Get memory details
-  .openapi(updateMemoryRoute, updateMemoryHandler) // Update memory
-  .openapi(deleteMemoryRoute, deleteMemoryHandler) // Delete memory
-  // Chat routes - Custom Role system
-  .openapi(listCustomRolesRoute, listCustomRolesHandler) // List user custom roles
+  // Custom Role System (protected)
+  .openapi(listCustomRolesRoute, listCustomRolesHandler) // List user custom role templates
   .openapi(createCustomRoleRoute, createCustomRoleHandler) // Create custom role template
   .openapi(getCustomRoleRoute, getCustomRoleHandler) // Get custom role details
-  .openapi(updateCustomRoleRoute, updateCustomRoleHandler) // Update custom role
-  .openapi(deleteCustomRoleRoute, deleteCustomRoleHandler) // Delete custom role
-  // Usage tracking routes (protected)
-  .openapi(getUserUsageStatsRoute, getUserUsageStatsHandler)
-  .openapi(checkThreadQuotaRoute, checkThreadQuotaHandler)
-  .openapi(checkMessageQuotaRoute, checkMessageQuotaHandler)
-  .openapi(checkMemoryQuotaRoute, checkMemoryQuotaHandler)
-  .openapi(checkCustomRoleQuotaRoute, checkCustomRoleQuotaHandler)
-  // Models routes (dynamic OpenRouter models - public)
-  .openapi(listModelsRoute, handleListModels)
-  .openapi(getModelRoute, handleGetModel)
-  .openapi(listProvidersRoute, handleListProviders)
-  .openapi(clearCacheRoute, handleClearCache)
+  .openapi(updateCustomRoleRoute, updateCustomRoleHandler) // Update custom role template
+  .openapi(deleteCustomRoleRoute, deleteCustomRoleHandler) // Delete custom role template
+  // Moderator Analysis (protected, backend-triggered only)
+  .openapi(getThreadAnalysesRoute, getThreadAnalysesHandler) // Get persisted moderator analyses (read-only)
+
+  // ============================================================================
+  // Usage Routes - Usage tracking and quota management (protected)
+  // ============================================================================
+  .openapi(getUserUsageStatsRoute, getUserUsageStatsHandler) // Get user usage statistics
+  .openapi(checkThreadQuotaRoute, checkThreadQuotaHandler) // Check thread creation quota
+  .openapi(checkMessageQuotaRoute, checkMessageQuotaHandler) // Check message sending quota
+  .openapi(checkCustomRoleQuotaRoute, checkCustomRoleQuotaHandler) // Check custom role creation quota
+
+  // ============================================================================
+  // Models Routes - Dynamic OpenRouter models discovery (public)
+  // ============================================================================
+  .openapi(listModelsRoute, listModelsHandler) // List all available OpenRouter models (includes default_model_id)
+  .openapi(getModelRoute, getModelHandler) // Get specific model by ID
+  .openapi(listProvidersRoute, listProvidersHandler) // List all model providers
+  .openapi(clearCacheRoute, clearCacheHandler) // Clear models cache (admin only)
 ;
 
 // ============================================================================
@@ -415,7 +426,7 @@ appRoutes.doc('/doc', c => ({
     { name: 'auth', description: 'Authentication and authorization' },
     { name: 'api-keys', description: 'API key management and authentication' },
     { name: 'billing', description: 'Stripe billing, subscriptions, and payments' },
-    { name: 'chat', description: 'Multi-model AI chat threads, messages, and memories' },
+    { name: 'chat', description: 'Multi-model AI chat threads and messages' },
     { name: 'usage', description: 'Usage tracking and quota management' },
     { name: 'models', description: 'Dynamic OpenRouter AI models discovery and management' },
   ],

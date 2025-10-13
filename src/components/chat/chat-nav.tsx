@@ -1,11 +1,11 @@
 'use client';
 
-import { Flame, MessageSquare, Plus, Search, Sparkles, Star } from 'lucide-react';
+import { Flame, MessageSquare, Plus, Search, Star } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { ChatList } from '@/components/chat/chat-list';
 import {
@@ -13,10 +13,8 @@ import {
   ChatSidebarSkeleton,
 } from '@/components/chat/chat-sidebar-skeleton';
 import { CommandSearch } from '@/components/chat/command-search';
-import { MemoriesSection } from '@/components/chat/memories-section';
 import { NavUser } from '@/components/chat/nav-user';
 import { SidebarSection } from '@/components/chat/sidebar-section';
-import { UsageMetrics } from '@/components/chat/usage-metrics';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
@@ -34,13 +32,14 @@ import {
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { BRAND } from '@/constants/brand';
 import { useDeleteThreadMutation } from '@/hooks/mutations/chat-mutations';
-import { useMemoriesQuery } from '@/hooks/queries/chat-memories';
 import { useThreadsQuery } from '@/hooks/queries/chat-threads';
 import { toastManager } from '@/lib/toast/toast-manager';
 import type { Chat } from '@/lib/types/chat';
 import { groupChatsByPeriod } from '@/lib/types/chat';
 
-export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+// ✅ CRITICAL: Memoize sidebar to prevent re-renders during message streaming
+// Without this, every message update triggers sidebar re-render, causing Next.js prefetch requests
+function AppSidebarComponent({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const router = useRouter();
   const t = useTranslations();
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -58,9 +57,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     isError,
     error,
   } = useThreadsQuery();
-
-  // Fetch memories for count display in sidebar
-  const { data: memoriesData } = useMemoriesQuery();
 
   // Mutations
   const deleteThreadMutation = useDeleteThreadMutation();
@@ -147,15 +143,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
   const chatGroups = groupChatsByPeriod(nonFavoriteChats);
 
-  // Calculate memories count for sidebar section
-  const memoriesCount = useMemo(() => {
-    if (!memoriesData?.pages)
-      return 0;
-    return memoriesData.pages.flatMap(page =>
-      (page?.success && page.data?.items) ? page.data.items : [],
-    ).length;
-  }, [memoriesData]);
-
   // Extract loading states from mutations
   const deletingChatId = deleteThreadMutation.isPending ? deleteThreadMutation.variables : null;
 
@@ -194,7 +181,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 <SidebarMenuButton size="lg" asChild>
                   <Link
                     href="/chat"
-                    prefetch={false}
+                    // ✅ OPTIMIZATION: Enable prefetch for instant navigation to main chat page
                     onClick={() => {
                       if (isMobile) {
                         setOpenMobile(false);
@@ -300,19 +287,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                   </div>
                 )}
 
-                {/* Memories Section - Memory management */}
-                <div className="group-data-[collapsible=icon]:hidden">
-                  <SidebarSection
-                    title={t('chat.memories')}
-                    icon={<Sparkles className="size-3.5" />}
-                    count={memoriesCount}
-                    defaultOpen={false}
-                    collapsible
-                  >
-                    <MemoriesSection />
-                  </SidebarSection>
-                </div>
-
                 {/* Trending Section - Coming soon */}
                 <div className="group-data-[collapsible=icon]:hidden">
                   <div className="space-y-1 opacity-60 cursor-not-allowed">
@@ -393,7 +367,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           </SidebarContent>
 
           <SidebarFooter>
-            <UsageMetrics />
             <NavUser />
           </SidebarFooter>
 
@@ -409,3 +382,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     </>
   );
 }
+
+// Export memoized version to prevent unnecessary re-renders
+export const AppSidebar = React.memo(AppSidebarComponent);

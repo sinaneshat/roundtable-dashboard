@@ -1,11 +1,11 @@
 'use client';
 
+import type { EnhancedModelResponse } from '@/api/routes/models/schema';
 import { Message, MessageAvatar, MessageContent } from '@/components/ai-elements/message';
 import { Reasoning, ReasoningContent, ReasoningTrigger } from '@/components/ai-elements/reasoning';
 import { Response } from '@/components/ai-elements/response';
 import { MessageErrorDetails } from '@/components/chat/message-error-details';
-import type { AIModel } from '@/lib/ai/models-config';
-import { getTierDisplayName } from '@/lib/ai/models-config';
+import { getTierName } from '@/db/config/subscription-tiers';
 import type { UIMessageMetadata } from '@/lib/schemas/message-metadata';
 
 /**
@@ -18,8 +18,12 @@ type MessagePart =
 
 type ModelStatus = 'thinking' | 'streaming' | 'completed' | 'error';
 
+/**
+ * ✅ ZOD-INFERRED TYPE: Uses backend EnhancedModelResponse
+ * Single source of truth from OpenRouter API via backend
+ */
 type ModelMessageCardProps = {
-  model: AIModel;
+  model: EnhancedModelResponse;
   role?: string | null;
   participantIndex: number;
   status: ModelStatus;
@@ -59,7 +63,7 @@ export function ModelMessageCard({
   className,
   messageId,
   metadata,
-  isAccessible = true, // Default to true for backward compatibility
+  isAccessible = true,
 }: ModelMessageCardProps) {
   const showStatusIndicator = status === 'thinking' || status === 'streaming';
   const isError = status === 'error';
@@ -88,12 +92,12 @@ export function ModelMessageCard({
                 </>
               )}
 
-              {/* ✅ DYNAMIC PRICING: Show tier requirement if model not accessible */}
-              {!isAccessible && (
+              {/* ✅ BACKEND-COMPUTED TIER: Show tier requirement if model not accessible */}
+              {!isAccessible && model.required_tier && (
                 <>
                   <span className="text-muted-foreground/50 text-xs">•</span>
                   <span className="text-muted-foreground/70 text-xs">
-                    {getTierDisplayName(model.minTier)}
+                    {getTierName(model.required_tier)}
                     {' '}
                     required
                   </span>

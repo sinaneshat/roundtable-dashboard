@@ -8,6 +8,8 @@
 
 import { eq } from 'drizzle-orm';
 
+import { normalizeError } from '@/api/common/error-handling';
+import { apiLogger } from '@/api/middleware/hono-logger';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db/schema';
 
@@ -53,32 +55,32 @@ export async function generateUniqueSlug(title: string): Promise<string> {
     const shortId = generateShortId();
     const slug = `${baseSlug}-${shortId}`;
 
-    // Check if slug already exists
-    const db = await getDbAsync();
-    const existing = await db.query.chatThread.findFirst({
-      where: eq(tables.chatThread.slug, slug),
-    });
+    try {
+      // Check if slug already exists
+      const db = await getDbAsync();
+      const existing = await db.query.chatThread.findFirst({
+        where: eq(tables.chatThread.slug, slug),
+      });
 
-    if (!existing) {
-      return slug;
+      if (!existing) {
+        return slug;
+      }
+
+      // If collision, try again with new short ID
+    } catch (error) {
+      apiLogger.error('Failed to check slug uniqueness', normalizeError(error));
+      // Continue to next attempt on error
     }
-
-    // If collision, try again with new short ID
   }
 
   // If still can't generate unique slug after 5 attempts, add timestamp
   const timestamp = Date.now().toString(36);
+  apiLogger.warn('Using timestamp fallback for slug generation', {
+    title,
+    baseSlug,
+    fallbackSlug: `${baseSlug}-${timestamp}`,
+  });
   return `${baseSlug}-${timestamp}`;
-}
-
-/**
- * Generate slug from a temporary title (for threads without AI-generated titles yet)
- * Uses "New Chat" as base with timestamp
- */
-export async function generateTemporarySlug(): Promise<string> {
-  const timestamp = Date.now().toString(36);
-  const shortId = generateShortId();
-  return `new-chat-${timestamp}-${shortId}`;
 }
 
 /**
@@ -86,28 +88,21 @@ export async function generateTemporarySlug(): Promise<string> {
  * Useful when AI generates a better title after thread creation
  */
 export async function updateThreadSlug(threadId: string, newTitle: string): Promise<string> {
-  const db = await getDbAsync();
-  const newSlug = await generateUniqueSlug(newTitle);
+  try {
+    const db = await getDbAsync();
+    const newSlug = await generateUniqueSlug(newTitle);
 
-  await db
-    .update(tables.chatThread)
-    .set({
-      slug: newSlug,
-      updatedAt: new Date(),
-    })
-    .where(eq(tables.chatThread.id, threadId));
+    await db
+      .update(tables.chatThread)
+      .set({
+        slug: newSlug,
+        updatedAt: new Date(),
+      })
+      .where(eq(tables.chatThread.id, threadId));
 
-  return newSlug;
-}
-
-/**
- * Validate slug format
- * Returns true if slug follows the correct format
- */
-export function isValidSlug(slug: string): boolean {
-  // Slug should be kebab-case with optional short ID suffix
-  // Min length: 3 chars, Max length: 60 chars
-  // Format: lowercase letters, numbers, hyphens only
-  const slugRegex = /^[a-z0-9-]{3,60}$/;
-  return slugRegex.test(slug);
+    return newSlug;
+  } catch (error) {
+    apiLogger.error('Failed to update thread slug', normalizeError(error));
+    throw error; // Re-throw to propagate error to caller
+  }
 }

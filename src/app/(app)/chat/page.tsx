@@ -6,7 +6,7 @@ import { ChatOverviewScreen } from '@/containers/screens/chat';
 import { getQueryClient } from '@/lib/data/query-client';
 import { queryKeys } from '@/lib/data/query-keys';
 import { STALE_TIMES } from '@/lib/data/stale-times';
-import { listModelsService } from '@/services/api';
+import { listModelsService } from '@/services/api/models';
 import { createMetadata } from '@/utils/metadata';
 
 /**
@@ -28,28 +28,39 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 /**
- * Chat Overview Page - Server Component with SSG Prefetching
+ * Chat Overview Page - Server Component
  *
  * Landing page for authenticated users showing:
  * - Quick access to start new conversations
  * - Recent chat history
  * - Favorite conversations
  *
- * Prefetching Strategy:
- * - Models: Prefetched at BUILD TIME (SSG), cached indefinitely
- * - Memories: Already prefetched in layout (no duplicate needed)
- * - Threads: Already prefetched in layout (no duplicate needed)
+ * Prefetching Strategy (SSG-like):
+ * - ✅ Models: SERVER-SIDE prefetch with includeAll=true (all models + default_model_id cached at page load)
+ * - ✅ Threads: Already prefetched in layout
+ * - ✅ Infinite stale time: Models cached indefinitely (no refetches)
+ *
+ * IMPORTANT: Models are prefetched server-side so they're immediately available
+ * when the input box renders. Backend returns ALL models with tier information
+ * AND the default_model_id (best accessible model from top 10 for user's tier).
+ * Client components filter based on user's subscription tier and use default_model_id
+ * for initial participant selection - all computed on backend, zero client requests.
  */
 export default async function ChatOverviewPage() {
   const queryClient = getQueryClient();
 
-  // Prefetch all OpenRouter models at BUILD TIME (SSG)
-  // This data is baked into the HTML during build
-  // Same model data served to all users, cached indefinitely
+  // ✅ SSG STRATEGY: Prefetch all models on server at page load time
+  // Models are cached with infinite stale time and available immediately
+  // Response includes default_model_id computed on backend for user's tier
   await queryClient.prefetchQuery({
-    queryKey: queryKeys.models.list(),
-    queryFn: () => listModelsService(),
-    staleTime: STALE_TIMES.models, // Infinity - never stale
+    queryKey: queryKeys.models.list({ includeAll: true }),
+    queryFn: () =>
+      listModelsService({
+        query: {
+          includeAll: 'true',
+        },
+      }),
+    staleTime: STALE_TIMES.models, // Infinity - cached indefinitely
   });
 
   return (

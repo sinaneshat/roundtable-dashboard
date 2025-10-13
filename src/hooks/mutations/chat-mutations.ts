@@ -13,14 +13,11 @@ import { invalidationPatterns, queryKeys } from '@/lib/data/query-keys';
 import {
   addParticipantService,
   createCustomRoleService,
-  createMemoryService,
   createThreadService,
   deleteCustomRoleService,
-  deleteMemoryService,
   deleteParticipantService,
   deleteThreadService,
   updateCustomRoleService,
-  updateMemoryService,
   updateParticipantService,
   updateThreadService,
 } from '@/services/api';
@@ -518,92 +515,6 @@ export function useDeleteParticipantMutation() {
     onError: (error) => {
       if (process.env.NODE_ENV === 'development') {
         console.error('Failed to delete participant', error);
-      }
-    },
-    retry: false,
-    throwOnError: false,
-  });
-}
-
-// ============================================================================
-// Memory Mutations
-// ============================================================================
-
-/**
- * Hook to create a new memory
- * Protected endpoint - requires authentication
- *
- * After successful creation, invalidates memory lists and usage stats
- */
-export function useCreateMemoryMutation() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: createMemoryService,
-    onSuccess: () => {
-      // Invalidate memory lists and usage stats
-      invalidationPatterns.memories.forEach((key) => {
-        queryClient.invalidateQueries({ queryKey: key });
-      });
-    },
-    onError: (error) => {
-      if (process.env.NODE_ENV === 'development') {
-        console.error('Failed to create memory', error);
-      }
-    },
-    retry: false,
-    throwOnError: false,
-  });
-}
-
-/**
- * Hook to update memory details
- * Protected endpoint - requires authentication
- *
- * After successful update, invalidates specific memory and lists
- */
-export function useUpdateMemoryMutation() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: ({ memoryId, data }: Parameters<typeof updateMemoryService>[0] extends string ? { memoryId: string; data: Parameters<typeof updateMemoryService>[1] } : never) =>
-      updateMemoryService(memoryId, data),
-    onSuccess: (_data, variables) => {
-      // Invalidate specific memory and lists
-      invalidationPatterns.memoryDetail(variables.memoryId).forEach((key) => {
-        queryClient.invalidateQueries({ queryKey: key });
-      });
-    },
-    onError: (error) => {
-      if (process.env.NODE_ENV === 'development') {
-        console.error('Failed to update memory', error);
-      }
-    },
-    retry: false,
-    throwOnError: false,
-  });
-}
-
-/**
- * Hook to delete a memory
- * Protected endpoint - requires authentication
- *
- * After successful deletion, invalidates memory lists and usage stats
- */
-export function useDeleteMemoryMutation() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: deleteMemoryService,
-    onSuccess: () => {
-      // Invalidate memory lists and usage stats
-      invalidationPatterns.memories.forEach((key) => {
-        queryClient.invalidateQueries({ queryKey: key });
-      });
-    },
-    onError: (error) => {
-      if (process.env.NODE_ENV === 'development') {
-        console.error('Failed to delete memory', error);
       }
     },
     retry: false,

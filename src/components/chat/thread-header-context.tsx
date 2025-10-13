@@ -1,7 +1,7 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import { createContext, use, useState } from 'react';
+import { createContext, use, useMemo, useState } from 'react';
 
 /**
  * Thread Header Context
@@ -25,14 +25,22 @@ export function ThreadHeaderProvider({ children }: { children: ReactNode }) {
   const [threadActions, setThreadActions] = useState<ReactNode | null>(null);
   const [threadTitle, setThreadTitle] = useState<string | null>(null);
 
+  // ✅ CRITICAL: Memoize context value to prevent infinite re-renders
+  // Without this, a new object is created on every render, causing all consumers to re-render
+  // This was causing infinite RSC prefetch requests to /chat route
+  const value = useMemo(
+    () => ({
+      threadActions,
+      setThreadActions,
+      threadTitle,
+      setThreadTitle,
+    }),
+    [threadActions, threadTitle],
+  );
+
   return (
     <ThreadHeaderContext
-      value={{
-        threadActions,
-        setThreadActions,
-        threadTitle,
-        setThreadTitle,
-      }}
+      value={value}
     >
       {children}
     </ThreadHeaderContext>

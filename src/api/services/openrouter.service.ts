@@ -18,12 +18,12 @@ import { createOpenRouter } from '@openrouter/ai-sdk-provider';
 import type { UIMessage } from 'ai';
 import { convertToModelMessages, generateText } from 'ai';
 
-import { createError } from '@/api/common/error-handling';
+import { createError, normalizeError } from '@/api/common/error-handling';
 import type { ErrorContext } from '@/api/core';
 import { apiLogger } from '@/api/middleware/hono-logger';
+import { DEFAULT_AI_PARAMS } from '@/api/routes/chat/schema';
 import type { ApiEnv } from '@/api/types';
-import type { AIModel } from '@/lib/ai/models-config';
-import { AI_MODELS, getModelById, isValidOpenRouterModelId } from '@/lib/ai/models-config';
+import { isValidOpenRouterModelId } from '@/lib/ai/models-config';
 
 /**
  * OpenRouter service configuration
@@ -92,15 +92,14 @@ class OpenRouterService {
   }
 
   /**
-   * Get model configuration by ID
-   * Throws if model not found, disabled, or not a valid OpenRouter model
+   * Validate model ID format
+   * ✅ SINGLE SOURCE OF TRUTH: OpenRouter API is the authority on what models exist
+   * We only validate format here - OpenRouter API will error if model doesn't exist
    */
-  private getModelConfig(modelId: string): AIModel {
-    // First validate against known OpenRouter models
+  private validateModelId(modelId: string): void {
     if (!isValidOpenRouterModelId(modelId)) {
-      apiLogger.error('Invalid OpenRouter model ID', {
+      apiLogger.error('Invalid OpenRouter model ID format', {
         requestedModelId: modelId,
-        message: 'Model ID not found in OpenRouter API. Check https://openrouter.ai/api/v1/models',
       });
 
       const context: ErrorContext = {
@@ -108,38 +107,10 @@ class OpenRouterService {
         field: 'modelId',
       };
       throw createError.badRequest(
-        `Invalid OpenRouter model ID: ${modelId}. Check https://openrouter.ai/api/v1/models for valid model IDs.`,
+        `Invalid model ID format: ${modelId}. Must be in format provider/model-name`,
         context,
       );
     }
-
-    // Then check if it exists in our configuration
-    const model = getModelById(modelId);
-
-    if (!model) {
-      apiLogger.error('Model not found in configuration', {
-        requestedModelId: modelId,
-      });
-
-      const context: ErrorContext = {
-        errorType: 'resource',
-        resource: 'model',
-        resourceId: modelId,
-        service: 'openrouter',
-      };
-      throw createError.notFound(`Model ${modelId} not found in configuration`, context);
-    }
-
-    // Finally check if it's enabled
-    if (!model.isEnabled) {
-      const context: ErrorContext = {
-        errorType: 'validation',
-        field: 'modelId',
-      };
-      throw createError.badRequest(`Model ${modelId} is disabled`, context);
-    }
-
-    return model;
   }
 
   // ============================================================================
@@ -160,7 +131,9 @@ class OpenRouterService {
     };
   }> {
     const client = this.getClient();
-    const modelConfig = this.getModelConfig(params.modelId);
+
+    // ✅ Validate model ID format only - OpenRouter API will error if model doesn't exist
+    this.validateModelId(params.modelId);
 
     // Build system prompt with simplified plain text guidance
     const systemPrompt = params.system
@@ -169,12 +142,13 @@ class OpenRouterService {
 
     try {
       const result = await generateText({
-        model: client.chat(modelConfig.modelId),
+        model: client.chat(params.modelId),
         messages: convertToModelMessages(params.messages),
         system: systemPrompt,
-        temperature: params.temperature ?? modelConfig.defaultSettings.temperature,
-        maxOutputTokens: params.maxTokens ?? modelConfig.defaultSettings.maxTokens,
-        topP: params.topP ?? modelConfig.defaultSettings.topP,
+        // Use provided params or defaults from consolidated config
+        temperature: params.temperature ?? DEFAULT_AI_PARAMS.temperature,
+        maxOutputTokens: params.maxTokens ?? DEFAULT_AI_PARAMS.maxTokens,
+        topP: params.topP ?? DEFAULT_AI_PARAMS.topP,
       });
 
       return {
@@ -187,10 +161,7 @@ class OpenRouterService {
         },
       };
     } catch (error) {
-      apiLogger.error('OpenRouter text generation failed', {
-        modelId: params.modelId,
-        error: error instanceof Error ? error.message : String(error),
-      });
+      apiLogger.error('OpenRouter text generation failed', normalizeError(error));
 
       const context: ErrorContext = {
         errorType: 'external_service',
@@ -246,57 +217,6 @@ class OpenRouterService {
    * @/lib/ai/models-config instead of this service-level constant
    */
   private readonly PLAIN_TEXT_INSTRUCTION = 'Please respond in clear, natural language. Avoid heavy markdown formatting when possible.';
-
-  /**
-   * Validate model supports required capabilities
-   */
-  validateModelCapabilities(
-    modelId: string,
-    requiredCapabilities: {
-      streaming?: boolean;
-      vision?: boolean;
-      reasoning?: boolean;
-    },
-  ): { valid: boolean; missing: string[] } {
-    const model = getModelById(modelId);
-
-    if (!model) {
-      return { valid: false, missing: ['model_not_found'] };
-    }
-
-    const missing: string[] = [];
-
-    if (requiredCapabilities.streaming && !model.capabilities.streaming) {
-      missing.push('streaming');
-    }
-    if (requiredCapabilities.vision && !model.capabilities.vision) {
-      missing.push('vision');
-    }
-    if (requiredCapabilities.reasoning && !model.capabilities.reasoning) {
-      missing.push('reasoning');
-    }
-
-    return {
-      valid: missing.length === 0,
-      missing,
-    };
-  }
-
-  /**
-   * Get available models for selection
-   */
-  getAvailableModels(): AIModel[] {
-    return AI_MODELS.filter(model => model.isEnabled);
-  }
-
-  /**
-   * Get models by category
-   */
-  getModelsByCategory(category: 'research' | 'reasoning' | 'general' | 'creative'): AIModel[] {
-    return AI_MODELS.filter(
-      model => model.isEnabled && model.metadata.category === category,
-    );
-  }
 }
 
 /**

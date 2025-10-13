@@ -1,51 +1,37 @@
 import { createInsertSchema, createSelectSchema } from 'drizzle-zod';
 import { z } from 'zod';
 
-import type { SubscriptionTier } from '../tables/usage';
+import type { SubscriptionTier } from '@/db/config/subscription-tiers';
 import {
+  getTierName as getSubscriptionTierName,
+  isValidSubscriptionTier,
+  SUBSCRIPTION_TIER_NAMES,
   SUBSCRIPTION_TIERS,
+  subscriptionTierSchema,
+} from '@/db/config/subscription-tiers';
+
+import {
   subscriptionTierQuotas,
   userChatUsage,
   userChatUsageHistory,
 } from '../tables/usage';
 
 // ============================================================================
-// Subscription Tier Validation
+// Re-exports from Single Source of Truth
 // ============================================================================
 
 /**
- * Subscription Tier Enum - Zod Schema
- * Use this for validation in API routes, database schemas, and forms
+ * ✅ SINGLE SOURCE OF TRUTH: All tier-related exports from @/db/config/subscription-tiers
+ * Re-exported for backward compatibility with existing imports
  */
-export const subscriptionTierSchema = z.enum(SUBSCRIPTION_TIERS);
-
-/**
- * Subscription Tier Display Names
- * Human-readable names for each tier
- */
-export const SUBSCRIPTION_TIER_NAMES: Record<SubscriptionTier, string> = {
-  free: 'Free',
-  starter: 'Starter',
-  pro: 'Pro',
-  power: 'Power',
-} as const;
-
-/**
- * Helper function to validate if a string is a valid subscription tier
- */
-export function isValidSubscriptionTier(tier: unknown): tier is SubscriptionTier {
-  return subscriptionTierSchema.safeParse(tier).success;
-}
-
-/**
- * Helper function to get tier display name
- */
-export function getSubscriptionTierName(tier: SubscriptionTier): string {
-  return SUBSCRIPTION_TIER_NAMES[tier];
-}
-
-// Re-export for convenience
-export { SUBSCRIPTION_TIERS, type SubscriptionTier };
+export {
+  getSubscriptionTierName,
+  isValidSubscriptionTier,
+  SUBSCRIPTION_TIER_NAMES,
+  SUBSCRIPTION_TIERS,
+  type SubscriptionTier,
+  subscriptionTierSchema,
+};
 
 // ============================================================================
 // User Chat Usage Schemas
@@ -93,7 +79,6 @@ export const subscriptionTierQuotasInsertSchema = createInsertSchema(subscriptio
   messagesPerMonth: schema => schema.min(0),
   maxAiModels: schema => schema.min(1).max(50),
   allowCustomRoles: () => z.boolean(),
-  allowMemories: () => z.boolean(),
   allowThreadExport: () => z.boolean(),
 });
 
@@ -129,12 +114,6 @@ export const usageStatsSchema = z.object({
     percentage: z.number(),
   }),
   messages: z.object({
-    used: z.number(),
-    limit: z.number(),
-    remaining: z.number(),
-    percentage: z.number(),
-  }),
-  memories: z.object({
     used: z.number(),
     limit: z.number(),
     remaining: z.number(),

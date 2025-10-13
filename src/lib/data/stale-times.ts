@@ -36,11 +36,11 @@ export const STALE_TIMES = {
   subscriptions: 2 * 60 * 1000, // 2 minutes - subscription status changes occasionally
 
   // ============================================================================
-  // AI Models (static - fetched from OpenRouter API, cached indefinitely)
+  // AI Models (static - cached indefinitely)
   // ============================================================================
-  models: Infinity, // Never stale - static data cached at build time (SSG strategy)
-  modelDetail: Infinity, // Never stale - individual model details cached indefinitely
-  providers: Infinity, // Never stale - provider list cached indefinitely
+  models: Infinity, // Infinity - models list never changes during session (only refetch on mount if needed)
+  modelDetail: Infinity, // Infinity - individual model details static
+  providers: Infinity, // Infinity - provider list static
 
   // ============================================================================
   // Usage & Quota (change frequently)
@@ -66,8 +66,8 @@ export const STALE_TIMES = {
   // Chat Configuration (semi-static)
   // ============================================================================
   chatRoles: 10 * 60 * 1000, // 10 minutes - roles are fairly static
-  chatMemories: 2 * 60 * 1000, // 2 minutes - memories can be added during chat
   changelog: 30 * 1000, // 30 seconds - configuration changes tracked in real-time
+  analyses: 30 * 1000, // 30 seconds - moderator analyses update per round
 
   // ============================================================================
   // Special Cases

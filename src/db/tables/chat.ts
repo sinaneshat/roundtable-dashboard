@@ -120,7 +120,7 @@ export const chatParticipant = sqliteTable('chat_participant', {
 
 /**
  * Chat Thread Changelog
- * Tracks configuration changes to threads (participants, memories, mode)
+ * Tracks configuration changes to threads (participants, mode)
  * Provides audit trail without the overhead of denormalized junction tables
  */
 export const chatThreadChangelog = sqliteTable('chat_thread_changelog', {
@@ -135,8 +135,6 @@ export const chatThreadChangelog = sqliteTable('chat_thread_changelog', {
       'participant_removed',
       'participant_updated',
       'participants_reordered',
-      'memory_added',
-      'memory_removed',
     ],
   }).notNull(),
   changeSummary: text('change_summary').notNull(), // Human-readable summary
@@ -157,9 +155,6 @@ export const chatThreadChangelog = sqliteTable('chat_thread_changelog', {
       role: string | null;
       order: number;
     }>;
-    // For memory changes
-    memoryId?: string;
-    memoryTitle?: string;
     [key: string]: unknown;
   }>(),
   createdAt: integer('created_at', { mode: 'timestamp' })
@@ -204,12 +199,6 @@ export const chatMessage = sqliteTable('chat_message', {
       completionTokens?: number;
       totalTokens?: number;
     };
-    // Variant tracking (moved from columns to metadata)
-    variantIndex?: number; // 0 = original, 1+ = regenerated variants
-    isActiveVariant?: boolean; // Currently displayed variant
-    variantGroupId?: string; // Groups variants of the same response
-    roundId?: string; // Groups messages from same conversation round
-    parentMessageId?: string; // Reference to user message (for threading)
     [key: string]: unknown;
   }>(),
   createdAt: integer('created_at', { mode: 'timestamp_ms' })
@@ -222,109 +211,66 @@ export const chatMessage = sqliteTable('chat_message', {
 ]);
 
 /**
- * Chat Memories
- * User-provided context, notes, and memories for threads
- * Can be reused across multiple threads
+ * Moderator Round Analysis
+ * Stores AI-generated analysis results for each conversation round
+ * Allows users to view past analyses when revisiting threads
  */
-export const chatMemory = sqliteTable('chat_memory', {
-  id: text('id').primaryKey(),
-  userId: text('user_id')
-    .notNull()
-    .references(() => user.id, { onDelete: 'cascade' }),
-  threadId: text('thread_id')
-    .references(() => chatThread.id, { onDelete: 'cascade' }), // null = reusable memory, non-null = thread-specific
-  type: text('type', { enum: ['personal', 'topic', 'instruction', 'fact'] })
-    .notNull()
-    .default('topic'),
-  title: text('title').notNull(),
-  description: text('description'), // Brief description of the memory
-  content: text('content').notNull(),
-  isGlobal: integer('is_global', { mode: 'boolean' })
-    .notNull()
-    .default(false), // If true, auto-applies to all threads
-  metadata: text('metadata', { mode: 'json' }).$type<{
-    tags?: string[];
-    relevance?: number;
-    [key: string]: unknown;
-  }>(),
-  createdAt: integer('created_at', { mode: 'timestamp' })
-    .defaultNow()
-    .notNull(),
-  updatedAt: integer('updated_at', { mode: 'timestamp' })
-    .defaultNow()
-    .$onUpdate(() => /* @__PURE__ */ new Date())
-    .notNull(),
-}, table => [
-  index('chat_memory_user_idx').on(table.userId),
-  index('chat_memory_thread_idx').on(table.threadId),
-  index('chat_memory_global_idx').on(table.isGlobal),
-]);
-
-/**
- * Chat Thread-Memory Junction Table
- * Many-to-many relationship: allows attaching reusable memories to threads
- */
-export const chatThreadMemory = sqliteTable('chat_thread_memory', {
+export const chatModeratorAnalysis = sqliteTable('chat_moderator_analysis', {
   id: text('id').primaryKey(),
   threadId: text('thread_id')
     .notNull()
     .references(() => chatThread.id, { onDelete: 'cascade' }),
-  memoryId: text('memory_id')
+  roundNumber: integer('round_number').notNull(), // 1-indexed round number
+  mode: text('mode', { enum: CHAT_MODE_ENUM_VALUES }).notNull(), // Mode when analysis was performed
+  userQuestion: text('user_question').notNull(), // The user's question/prompt for this round
+  // ✅ CRITICAL: Status field for idempotency and state tracking
+  // Prevents duplicate analysis generation on page refresh
+  status: text('status', { enum: ['pending', 'streaming', 'completed', 'failed'] as const })
     .notNull()
-    .references(() => chatMemory.id, { onDelete: 'cascade' }),
-  attachedAt: integer('attached_at', { mode: 'timestamp' })
-    .defaultNow()
-    .notNull(),
-}, table => [
-  index('chat_thread_memory_thread_idx').on(table.threadId),
-  index('chat_thread_memory_memory_idx').on(table.memoryId),
-  // Prevent duplicate memory attachments to the same thread
-  index('chat_thread_memory_unique_idx').on(table.threadId, table.memoryId),
-]);
-
-/**
- * Model Configurations
- * Supported models and their default settings
- */
-export const modelConfiguration = sqliteTable('model_configuration', {
-  id: text('id').primaryKey(),
-  provider: text('provider', { enum: ['openrouter', 'anthropic', 'openai', 'google', 'xai', 'perplexity'] })
-    .notNull(),
-  modelId: text('model_id').notNull().unique(), // Full model ID (e.g., 'anthropic/claude-sonnet-4.5')
-  name: text('name').notNull(), // Display name
-  description: text('description'),
-  capabilities: text('capabilities', { mode: 'json' }).$type<{
-    streaming?: boolean;
-    tools?: boolean;
-    vision?: boolean;
-    reasoning?: boolean;
+    .default('pending'), // pending -> streaming -> completed/failed
+  // Store the full analysis as JSON (leaderboard, participant analyses, summary, conclusion)
+  // ✅ NULLABLE: Only populated once streaming completes successfully
+  analysisData: text('analysis_data', { mode: 'json' }).$type<{
+    leaderboard: Array<{
+      rank: number;
+      participantIndex: number;
+      participantRole: string | null;
+      modelName: string;
+      overallRating: number;
+      badge: string | null;
+    }>;
+    participantAnalyses: Array<{
+      participantIndex: number;
+      participantRole: string | null;
+      modelId: string;
+      modelName: string;
+      overallRating: number;
+      skillsMatrix: Array<{
+        skillName: string;
+        rating: number;
+      }>;
+      pros: string[];
+      cons: string[];
+      summary: string;
+    }>;
+    overallSummary: string;
+    conclusion: string;
   }>(),
-  defaultSettings: text('default_settings', { mode: 'json' }).$type<{
-    temperature?: number;
-    maxTokens?: number;
-    topP?: number;
-    [key: string]: unknown;
-  }>(),
-  isEnabled: integer('is_enabled', { mode: 'boolean' })
-    .notNull()
-    .default(true),
-  order: integer('order').notNull().default(0), // Display order
-  metadata: text('metadata', { mode: 'json' }).$type<{
-    icon?: string;
-    color?: string;
-    category?: string;
-    [key: string]: unknown;
-  }>(),
+  // Store participant message IDs that were analyzed
+  participantMessageIds: text('participant_message_ids', { mode: 'json' }).notNull().$type<string[]>(),
+  // ✅ Error tracking for failed analyses
+  errorMessage: text('error_message'),
+  // ✅ Completion timestamp (null until status = 'completed')
+  completedAt: integer('completed_at', { mode: 'timestamp' }),
   createdAt: integer('created_at', { mode: 'timestamp' })
     .defaultNow()
     .notNull(),
-  updatedAt: integer('updated_at', { mode: 'timestamp' })
-    .defaultNow()
-    .$onUpdate(() => /* @__PURE__ */ new Date())
-    .notNull(),
 }, table => [
-  index('model_configuration_provider_idx').on(table.provider),
-  index('model_configuration_enabled_idx').on(table.isEnabled),
+  index('chat_moderator_analysis_thread_idx').on(table.threadId),
+  index('chat_moderator_analysis_round_idx').on(table.threadId, table.roundNumber),
+  index('chat_moderator_analysis_created_idx').on(table.createdAt),
+  // ✅ NEW: Index on status for efficient querying of in-progress analyses
+  index('chat_moderator_analysis_status_idx').on(table.status),
 ]);
 
 /**
@@ -337,9 +283,8 @@ export const chatThreadRelations = relations(chatThread, ({ one, many }) => ({
   }),
   participants: many(chatParticipant),
   messages: many(chatMessage),
-  memories: many(chatMemory), // Thread-specific memories (threadId is set)
-  threadMemories: many(chatThreadMemory), // Attached reusable memories via junction table
   changelog: many(chatThreadChangelog), // Configuration change history
+  moderatorAnalyses: many(chatModeratorAnalysis), // AI-generated round analyses
 }));
 
 export const chatCustomRoleRelations = relations(chatCustomRole, ({ one, many }) => ({
@@ -375,35 +320,22 @@ export const chatMessageRelations = relations(chatMessage, ({ one }) => ({
   // Parent message relationship is now tracked via metadata.parentMessageId
 }));
 
-export const chatMemoryRelations = relations(chatMemory, ({ one, many }) => ({
-  user: one(user, {
-    fields: [chatMemory.userId],
-    references: [user.id],
-  }),
-  thread: one(chatThread, {
-    fields: [chatMemory.threadId],
-    references: [chatThread.id],
-  }),
-  threadMemories: many(chatThreadMemory), // Threads this memory is attached to via junction table
-}));
-
-export const chatThreadMemoryRelations = relations(chatThreadMemory, ({ one }) => ({
-  thread: one(chatThread, {
-    fields: [chatThreadMemory.threadId],
-    references: [chatThread.id],
-  }),
-  memory: one(chatMemory, {
-    fields: [chatThreadMemory.memoryId],
-    references: [chatMemory.id],
-  }),
-}));
-
 /**
  * Changelog Relations
  */
 export const chatThreadChangelogRelations = relations(chatThreadChangelog, ({ one }) => ({
   thread: one(chatThread, {
     fields: [chatThreadChangelog.threadId],
+    references: [chatThread.id],
+  }),
+}));
+
+/**
+ * Moderator Analysis Relations
+ */
+export const chatModeratorAnalysisRelations = relations(chatModeratorAnalysis, ({ one }) => ({
+  thread: one(chatThread, {
+    fields: [chatModeratorAnalysis.threadId],
     references: [chatThread.id],
   }),
 }));

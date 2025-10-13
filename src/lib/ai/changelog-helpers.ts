@@ -28,10 +28,8 @@ export type ChangeGroup = {
 export function categorizeChangeAction(changeType: ChatThreadChangelog['changeType']): ChangeAction {
   switch (changeType) {
     case 'participant_added':
-    case 'memory_added':
       return 'added';
     case 'participant_removed':
-    case 'memory_removed':
       return 'removed';
     case 'participant_updated':
     case 'participants_reordered':

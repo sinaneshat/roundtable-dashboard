@@ -65,12 +65,12 @@ export function PricingCard({
   // Determine button text and loading state based on state
   const getButtonText = () => {
     if (isCurrentPlan) {
-      return t('cancelSubscription');
+      return t('pricing.card.cancelSubscription');
     }
     if (hasOtherSubscription) {
-      return t('switchPlan');
+      return t('pricing.card.switchPlan');
     }
-    return t('subscribe');
+    return t('pricing.card.subscribe');
   };
 
   const isActionButtonLoading = isCurrentPlan ? isProcessingCancel : isProcessingSubscribe;

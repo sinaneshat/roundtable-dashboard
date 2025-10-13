@@ -124,44 +124,6 @@ export const checkMessageQuotaRoute = createRoute({
 });
 
 /**
- * Check memory creation quota
- * Returns whether user can create more memories
- */
-export const checkMemoryQuotaRoute = createRoute({
-  method: 'get',
-  path: '/usage/quota/memories',
-  tags: ['usage'],
-  summary: 'Check memory creation quota',
-  description: 'Check if user can create more memories based on their subscription tier',
-  responses: {
-    [HttpStatusCodes.OK]: {
-      description: HttpStatusPhrases.OK,
-      content: {
-        'application/json': {
-          schema: QuotaCheckResponseSchema,
-        },
-      },
-    },
-    [HttpStatusCodes.UNAUTHORIZED]: {
-      description: HttpStatusPhrases.UNAUTHORIZED,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
-    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: {
-      description: HttpStatusPhrases.INTERNAL_SERVER_ERROR,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
-  },
-});
-
-/**
  * Check custom role creation quota
  * Returns whether user can create more custom roles
  */

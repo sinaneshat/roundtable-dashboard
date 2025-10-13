@@ -147,6 +147,12 @@
       "emailCreateAccount": "Account Creation Error",
       "emailCreateAccountDesc": "Could not create your account. Please try a different email address.",
       "errorCode": "Error code:",
+      "invalidEmailAddress": "Invalid email address",
+      "googleSignInFailed": "Google sign-in failed. Please try again.",
+      "signInFailed": "Sign-in Failed",
+      "threadNotFound": "Thread Not Found",
+      "threadUnavailable": "Thread Unavailable",
+      "notice": "Notice",
       "oauthCallback": "Authentication Error",
       "oauthCallbackDesc": "There was a problem with the authentication process. Please try signing in again.",
       "oauthCreateAccount": "Account Creation Error",
@@ -221,7 +227,7 @@
       "confirmingPayment": "Please wait while we confirm your payment",
       "description": "Your subscription has been activated",
       "autoRedirect": "Redirecting to chat in {seconds} seconds...",
-      "startChat": "Start Your First Chat",
+      "startChat": "Start Your Roundtable",
       "title": "Payment Successful!",
       "viewPricing": "View Pricing Plans",
       "planLimits": {
@@ -270,11 +276,8 @@
   "chat": {
     "actions": {
       "copy": "Copy message",
-      "edit": "Edit and regenerate",
       "messageCopied": "Message copied",
       "messageCopiedDescription": "Message content copied to clipboard",
-      "regenerate": "Regenerate response",
-      "regenerateRound": "Regenerate this round",
       "scrollToBottom": "Scroll to bottom"
     },
     "addToFavorites": "Add to favorites",
@@ -288,12 +291,6 @@
     "deleteThread": "Delete Thread",
     "deleteThreadConfirmDescription": "This action cannot be undone. The thread and all its messages will be permanently deleted.",
     "deleteThreadConfirmTitle": "Delete this thread?",
-    "editMessage": {
-      "description": "Edit your message and regenerate AI responses based on the new prompt",
-      "saveAndRegenerate": "Save & Regenerate",
-      "title": "Edit Message"
-    },
-    "memories": "Memories",
     "error": {
       "generic": "An error occurred. Please try again."
     },
@@ -428,8 +425,6 @@
       "participantAdded": "Participant Added",
       "participantRemoved": "Participant Removed",
       "participantUpdated": "Participant Updated",
-      "memoryAdded": "Memory Added",
-      "memoryRemoved": "Memory Removed",
       "configurationChange": "Configuration Change"
     },
     "variants": {
@@ -597,6 +592,85 @@
   "makePrivate": "Make Private",
   "makePublic": "Make Public",
   "manageBilling": "Manage Billing",
+  "moderator": {
+    "analyzeRound": "Analyze Round",
+    "analyzing": "Analyzing responses...",
+    "roundAnalysis": "Round {number} Analysis",
+    "overallRating": "Overall Rating",
+    "rating": "Rating",
+    "outOfTen": "out of 10",
+    "skillsMatrix": "Skills Matrix",
+    "skillsComparison": "Skills Comparison",
+    "strengths": "Strengths",
+    "areasForImprovement": "Areas for Improvement",
+    "leaderboard": "Leaderboard",
+    "rank": "Rank #{rank}",
+    "summary": "Summary",
+    "conclusion": "Conclusion",
+    "topPerformer": "Top Performer",
+    "participantNumber": "Participant #{number}",
+    "participants": "Participants",
+    "noParticipants": "No participants to display",
+    "noAnalysis": "Click 'Analyze Round' to get AI-powered insights on participant responses",
+    "errorAnalyzing": "Failed to analyze round. Please try again.",
+    "stop": "Stop",
+    "stopAnalysis": "Stop Analysis",
+    "retry": "Retry",
+    "viewFullAnalysis": "View Full Analysis",
+    "participantAnalysis": "Participant Analysis",
+    "thinkingMessages": [
+      "Evaluating participant insights...",
+      "Comparing response quality...",
+      "Assessing analytical depth...",
+      "Measuring creativity levels...",
+      "Ranking contributions...",
+      "Identifying key strengths...",
+      "Spotting areas for growth...",
+      "Synthesizing feedback...",
+      "Calculating performance scores...",
+      "Weighing evidence and reasoning...",
+      "Examining clarity and structure...",
+      "Judging overall impact...",
+      "Building comprehensive analysis...",
+      "Crafting detailed insights...",
+      "Preparing final verdict..."
+    ],
+    "mode": {
+      "analyzing": "Analyzing",
+      "brainstorming": "Brainstorming",
+      "debating": "Debating",
+      "solving": "Problem Solving"
+    },
+    "skills": {
+      "analyticalDepth": "Analytical Depth",
+      "evidence": "Evidence & Reasoning",
+      "clarity": "Clarity",
+      "insight": "Insight",
+      "objectivity": "Objectivity",
+      "creativity": "Creativity",
+      "diversity": "Diversity",
+      "practicality": "Practicality",
+      "buildingOnOthers": "Building on Others",
+      "inspiration": "Inspiration",
+      "argumentStrength": "Argument Strength",
+      "counterArguments": "Counter-Arguments",
+      "logic": "Logic",
+      "respect": "Respect",
+      "persuasiveness": "Persuasiveness",
+      "solutionQuality": "Solution Quality",
+      "feasibility": "Feasibility",
+      "tradeoffAnalysis": "Trade-off Analysis",
+      "actionability": "Actionability",
+      "riskMitigation": "Risk Mitigation"
+    },
+    "badges": {
+      "mostCreative": "Most Creative",
+      "bestAnalysis": "Best Analysis",
+      "mostPractical": "Most Practical",
+      "bestArgument": "Best Argument",
+      "strongestLogic": "Strongest Logic"
+    }
+  },
   "mostPopular": "Most Popular",
   "name": "Name",
   "namespace": "Namespace",
@@ -686,6 +760,38 @@
     "title": "Title"
   },
   "processing": "Processing",
+  "seo": {
+    "keywords": {
+      "aiCollaboration": "AI collaboration",
+      "multipleAiModels": "multiple AI models",
+      "brainstorming": "brainstorming",
+      "chatgpt": "ChatGPT",
+      "claude": "Claude",
+      "gemini": "Gemini",
+      "collaborativeAi": "collaborative AI",
+      "teamProductivity": "team productivity",
+      "artificialIntelligence": "artificial intelligence",
+      "aiChat": "AI chat"
+    },
+    "aeo": {
+      "primaryQuestion": "What is {brand}?",
+      "primaryAnswer": "A collaborative AI platform where multiple AI models work together to brainstorm, solve problems, and generate ideas in real-time conversations.",
+      "contentType": "guide",
+      "relatedQuestions": {
+        "howItWorks": "How does AI collaboration work?",
+        "benefits": "What are the benefits of multiple AI models?",
+        "howToUse": "How to use {brand} for brainstorming?"
+      }
+    },
+    "features": {
+      "multiModelCollaboration": "Multi-model AI collaboration",
+      "realtimeChat": "Real-time chat interface",
+      "sessionManagement": "Session management",
+      "publicSharing": "Public sharing capabilities",
+      "usageTracking": "Usage tracking and analytics",
+      "multipleParticipants": "Multiple AI participants per conversation"
+    }
+  },
   "products": "Products",
   "refreshPage": "RefreshPage",
   "refreshing": "Refreshing",
@@ -731,10 +837,22 @@
     "changingTo": "Changing to",
     "planChangeInfo": "Upgrades apply instantly. Downgrades take effect at period end.",
     "tiers": {
-      "free": "Free",
-      "starter": "Starter",
-      "pro": "Pro",
-      "power": "Power"
+      "free": {
+        "name": "Free",
+        "description": "Basic access to free AI models with limited features"
+      },
+      "starter": {
+        "name": "Starter",
+        "description": "Budget-friendly models with better performance and increased limits"
+      },
+      "pro": {
+        "name": "Pro",
+        "description": "Professional-grade models with excellent quality and advanced features"
+      },
+      "power": {
+        "name": "Power",
+        "description": "Flagship models with maximum capabilities and unlimited access"
+      }
     }
   },
   "subscriptions": "Subscriptions",
@@ -755,6 +873,13 @@
     "title": "Title"
   },
   "threads": "Threads",
+  "time": {
+    "today": "Today",
+    "yesterday": "Yesterday",
+    "daysAgo": "{count} days ago",
+    "oneWeekAgo": "1 week ago",
+    "weeksAgo": "{count} weeks ago"
+  },
   "title": "Title",
   "token": "Token",
   "transfer-encoding": "Transfer-encoding",
@@ -765,6 +890,7 @@
     "messages": "Messages",
     "messagesRemaining": "messages remaining",
     "plan": "Plan",
+    "planUsage": "Plan & Usage",
     "threads": "Threads",
     "threadsRemaining": "threads remaining",
     "upgradeNow": "Upgrade Now",
@@ -772,7 +898,19 @@
     "changingTo": "Switching to",
     "onPeriodEnd": "at period end",
     "keepAccessUntil": "Keep current access until",
-    "remaining": "left"
+    "remaining": "left",
+    "currentPeriod": "Current Period",
+    "resetsOn": "Resets on {date}",
+    "status": {
+      "healthy": "Healthy usage",
+      "warning": "Approaching limit",
+      "critical": "Limit reached",
+      "nearLimit": "Getting close to limit"
+    },
+    "viewDetails": "View usage details",
+    "managePlan": "Manage Plan",
+    "of": "of",
+    "used": "used"
   },
   "user": {
     "defaultName": "User"

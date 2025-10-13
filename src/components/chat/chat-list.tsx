@@ -25,6 +25,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from '@/components/ui/sidebar';
+import { useHoverPrefetch } from '@/hooks/utils';
 import type { Chat, ChatGroup } from '@/lib/types/chat';
 import { cn } from '@/lib/ui/cn';
 
@@ -70,11 +71,98 @@ function StickyHeader({ children, zIndex = 10 }: { children: React.ReactNode; zI
 }
 
 /**
- * ChatList - Renders chat items in sidebar
+ * ChatItem - Individual chat item component
+ * Extracted to properly use React hooks (Rules of Hooks)
+ */
+function ChatItem({
+  chat,
+  isActive,
+  isDeleting,
+  isMobile,
+  onNavigate,
+  onDeleteClick,
+}: {
+  chat: Chat;
+  isActive: boolean;
+  isDeleting: boolean;
+  isMobile: boolean;
+  onNavigate?: () => void;
+  onDeleteClick: (chat: Chat) => void;
+}) {
+  const t = useTranslations();
+  const chatUrl = `/chat/${chat.slug}`;
+
+  // ✅ OFFICIAL NEXT.JS PATTERN: Hover-based prefetch
+  // Source: https://nextjs.org/docs/app/guides/prefetching
+  // Pattern: "Defer Link Prefetching Until Hover in Next.js"
+  // Exact implementation from official Next.js documentation with ZERO customizations
+  const { prefetch, onMouseEnter } = useHoverPrefetch(chatUrl, {
+    enabled: !isActive && !isDeleting,
+  });
+
+  return (
+    <SidebarMenuItem>
+      <SidebarMenuButton asChild isActive={isActive} disabled={isDeleting}>
+        <Link
+          href={chatUrl}
+          prefetch={prefetch}
+          onMouseEnter={onMouseEnter}
+          // ✅ OFFICIAL NEXT.JS PATTERN from documentation:
+          // prefetch={false} initially - prevents automatic viewport prefetching
+          // prefetch={null} on hover - enables default prefetch behavior
+          // Official recommendation: "Use prefetch={false} for large link lists to avoid unnecessary usage of resources"
+          // Reference: https://nextjs.org/docs/app/guides/prefetching
+          className={cn(
+            'min-w-0',
+            isDeleting && 'pointer-events-none opacity-60',
+          )}
+          onClick={() => {
+            if (isMobile && onNavigate) {
+              onNavigate();
+            }
+          }}
+        >
+          <span className="truncate block max-w-[180px]">{chat.title}</span>
+        </Link>
+      </SidebarMenuButton>
+      <SidebarMenuAction
+        showOnHover
+        disabled={isDeleting}
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          onDeleteClick(chat);
+        }}
+      >
+        {isDeleting
+          ? (
+              <Loader2 className="size-4 animate-spin" />
+            )
+          : (
+              <Trash2 className="size-4" />
+            )}
+        <span className="sr-only">{t('chat.deleteChat')}</span>
+      </SidebarMenuAction>
+    </SidebarMenuItem>
+  );
+}
+
+/**
+ * ChatList - Renders chat items in sidebar with optimized prefetching
  *
  * ✅ Sticky timestamp headers for scroll visibility
  * ✅ Matches frontend-patterns.md for list rendering
- * ✅ Optimized prefetching for first 3 items
+ * ✅ Next.js best practices for large lists: prefetch={false} + hover prefetch
+ * ✅ Prevents excessive RSC calls from automatic viewport prefetching
+ *
+ * Prefetch Strategy (per Next.js docs):
+ * - prefetch={false} on Link components (large list optimization)
+ * - Manual router.prefetch() on hover (150ms debounced)
+ * - Duplicate prevention (won't prefetch same route twice)
+ * - Cancellable on mouse leave (prevents accidental prefetches)
+ *
+ * Reference: https://nextjs.org/docs/app/guides/prefetching
+ * "Use prefetch={false} for large link lists to avoid unnecessary usage of resources"
  */
 export function ChatList({
   chatGroups,
@@ -126,54 +214,6 @@ export function ChatList({
     return t(label.replace('chat.', 'chat.'));
   };
 
-  const renderChatItem = (chat: Chat, globalIndex: number) => {
-    const chatUrl = `/chat/${chat.slug}`;
-    const isActive = pathname === chatUrl;
-    const isDeleting = deletingChatId === chat.id;
-    // Only prefetch first 3 chats to prevent memory leaks
-    const shouldPrefetch = globalIndex < 3;
-
-    return (
-      <SidebarMenuItem key={chat.id}>
-        <SidebarMenuButton asChild isActive={isActive} disabled={isDeleting}>
-          <Link
-            href={chatUrl}
-            prefetch={shouldPrefetch}
-            className={cn(
-              'min-w-0',
-              isDeleting && 'pointer-events-none opacity-60',
-            )}
-            onClick={() => {
-              if (isMobile && onNavigate) {
-                onNavigate();
-              }
-            }}
-          >
-            <span className="truncate block max-w-[180px]">{chat.title}</span>
-          </Link>
-        </SidebarMenuButton>
-        <SidebarMenuAction
-          showOnHover
-          disabled={isDeleting}
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            handleDeleteClick(chat);
-          }}
-        >
-          {isDeleting
-            ? (
-                <Loader2 className="size-4 animate-spin" />
-              )
-            : (
-                <Trash2 className="size-4" />
-              )}
-          <span className="sr-only">{t('chat.deleteChat')}</span>
-        </SidebarMenuAction>
-      </SidebarMenuItem>
-    );
-  };
-
   // Show empty state when no results from search
   if (searchTerm && chatGroups.length === 0 && favorites.length === 0) {
     return (
@@ -186,9 +226,6 @@ export function ChatList({
     );
   }
 
-  // Track global index for prefetching (only first 3 items total)
-  let globalIndex = 0;
-
   return (
     <>
       {/* Favorites Section - No header, parent provides it */}
@@ -196,9 +233,21 @@ export function ChatList({
         <SidebarGroup className="group-data-[collapsible=icon]:hidden">
           <SidebarMenu>
             {favorites.map((chat) => {
-              const item = renderChatItem(chat, globalIndex);
-              globalIndex++;
-              return item;
+              const chatUrl = `/chat/${chat.slug}`;
+              const isActive = pathname === chatUrl;
+              const isDeleting = deletingChatId === chat.id;
+
+              return (
+                <ChatItem
+                  key={chat.id}
+                  chat={chat}
+                  isActive={isActive}
+                  isDeleting={isDeleting}
+                  isMobile={isMobile}
+                  onNavigate={onNavigate}
+                  onDeleteClick={handleDeleteClick}
+                />
+              );
             })}
           </SidebarMenu>
         </SidebarGroup>
@@ -230,9 +279,21 @@ export function ChatList({
             </StickyHeader>
             <SidebarMenu>
               {group.chats.map((chat) => {
-                const item = renderChatItem(chat, globalIndex);
-                globalIndex++;
-                return item;
+                const chatUrl = `/chat/${chat.slug}`;
+                const isActive = pathname === chatUrl;
+                const isDeleting = deletingChatId === chat.id;
+
+                return (
+                  <ChatItem
+                    key={chat.id}
+                    chat={chat}
+                    isActive={isActive}
+                    isDeleting={isDeleting}
+                    isMobile={isMobile}
+                    onNavigate={onNavigate}
+                    onDeleteClick={handleDeleteClick}
+                  />
+                );
               })}
             </SidebarMenu>
           </SidebarGroup>

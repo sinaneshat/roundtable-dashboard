@@ -7,7 +7,7 @@ import { ChatThreadScreen } from '@/containers/screens/chat';
 import { getQueryClient } from '@/lib/data/query-client';
 import { queryKeys } from '@/lib/data/query-keys';
 import { STALE_TIMES } from '@/lib/data/stale-times';
-import { getThreadBySlugService, getThreadChangelogService, listModelsService } from '@/services/api';
+import { getThreadAnalysesService, getThreadBySlugService, getThreadChangelogService, listModelsService } from '@/services/api';
 import { createMetadata } from '@/utils/metadata';
 
 // Force dynamic rendering for user-specific thread data
@@ -68,7 +68,7 @@ export default async function ChatThreadPage({
     redirect('/chat');
   }
 
-  const { thread, participants, messages, memories } = threadResult.data;
+  const { thread, participants, messages, user } = threadResult.data;
 
   // Prefetch changelog using proper TanStack Query pattern
   // This populates the cache so useThreadChangelogQuery has data immediately
@@ -78,12 +78,26 @@ export default async function ChatThreadPage({
     staleTime: STALE_TIMES.changelog, // 30 seconds - matches client-side query
   });
 
-  // Prefetch all OpenRouter models (SSG strategy - cached indefinitely)
-  // This ensures models are available immediately when adding participants
+  // Prefetch moderator analyses for the thread
+  // This ensures analyses are available immediately without extra client-side requests
   await queryClient.prefetchQuery({
-    queryKey: queryKeys.models.list(),
-    queryFn: () => listModelsService(),
-    staleTime: STALE_TIMES.models, // Infinity - never stale
+    queryKey: queryKeys.threads.analyses(thread.id),
+    queryFn: () => getThreadAnalysesService(thread.id),
+    staleTime: STALE_TIMES.changelog, // 30 seconds - same as changelog
+  });
+
+  // ✅ SSG STRATEGY: Prefetch all OpenRouter models (cached indefinitely)
+  // Models fetched with includeAll=true so all models are available immediately
+  // Backend returns ALL models with tier info, client filters by user's tier
+  await queryClient.prefetchQuery({
+    queryKey: queryKeys.models.list({ includeAll: true }),
+    queryFn: () =>
+      listModelsService({
+        query: {
+          includeAll: 'true',
+        },
+      }),
+    staleTime: STALE_TIMES.models, // Infinity - cached indefinitely
   });
 
   // OFFICIAL PATTERN: Pass raw data as props to Client Component
@@ -96,8 +110,8 @@ export default async function ChatThreadPage({
         thread={thread}
         participants={participants}
         initialMessages={messages}
-        memories={memories}
         slug={slug}
+        user={user}
       />
     </HydrationBoundary>
   );

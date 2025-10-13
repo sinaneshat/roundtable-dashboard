@@ -6,6 +6,8 @@
 
 import { z } from 'zod';
 
+import { API } from '@/constants/application';
+
 // ============================================================================
 // ADVANCED HTTP HEADER TYPES (Context7 Pattern)
 // ============================================================================
@@ -66,11 +68,11 @@ export type HttpHeaders = z.infer<typeof HttpHeadersSchema>;
  * Replaces generic Record<string, string>
  */
 export const QueryParametersSchema = z.discriminatedUnion('category', [
-  // Pagination queries
+  // Pagination queries (using constants from single source of truth)
   z.object({
     category: z.literal('pagination'),
     page: z.coerce.number().int().positive().default(1),
-    limit: z.coerce.number().int().positive().max(100).default(20),
+    limit: z.coerce.number().int().positive().max(API.MAX_PAGE_SIZE).default(API.DEFAULT_PAGE_SIZE),
     offset: z.coerce.number().int().min(0).optional(),
     cursor: z.string().optional(),
   }),

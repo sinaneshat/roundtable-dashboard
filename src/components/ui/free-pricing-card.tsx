@@ -48,7 +48,7 @@ export function FreePricingCard({
         className="absolute -top-3 left-1/2 z-20 -translate-x-1/2"
       >
         <div className="whitespace-nowrap rounded-full bg-gradient-to-r from-emerald-500 to-green-600 px-3 py-1 text-xs font-medium text-white shadow-lg shadow-emerald-500/30">
-          {t('alwaysActive')}
+          {t('pricing.free.alwaysActive')}
         </div>
       </motion.div>
 

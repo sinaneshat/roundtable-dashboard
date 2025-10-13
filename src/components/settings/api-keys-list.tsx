@@ -28,8 +28,7 @@ import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import type { ApiKeyResponse } from '@/db/validation/api-keys';
 import { useDeleteApiKeyMutation } from '@/hooks';
-import { toastManager } from '@/lib/toast/toast-manager';
-import { getApiErrorMessage } from '@/lib/utils/error-handling';
+import { showApiErrorToast } from '@/lib/toast';
 
 // ============================================================================
 // Types
@@ -63,11 +62,7 @@ export function ApiKeysList({ apiKeys, isLoading, onCreateNew }: ApiKeysListProp
       await deleteMutation.mutateAsync(deleteKeyId);
       // Success is obvious from the item disappearing - no toast needed
     } catch (error) {
-      const errorMessage = getApiErrorMessage(error, t('apiKeys.list.deleteFailedDescription'));
-      toastManager.error(
-        t('apiKeys.list.deleteFailed'),
-        errorMessage,
-      );
+      showApiErrorToast(t('apiKeys.list.deleteFailed'), error);
     } finally {
       setDeleteKeyId(null);
     }

@@ -17,6 +17,7 @@ import { queryKeys } from '@/lib/data/query-keys';
 import { STALE_TIMES } from '@/lib/data/stale-times';
 import {
   getPublicThreadService,
+  getThreadAnalysesService,
   getThreadBySlugService,
   getThreadChangelogService,
   getThreadMessagesService,
@@ -183,6 +184,57 @@ export function useThreadChangelogQuery(threadId: string | null | undefined, ena
     refetchOnWindowFocus: false, // Don't refetch on window focus - prevents excessive network calls
     refetchOnMount: false, // Don't refetch on component mount - rely on staleTime
     enabled: isAuthenticated && !!threadId && enabled, // Only fetch when authenticated and threadId exists
+    retry: false,
+    throwOnError: false,
+  });
+}
+
+/**
+ * Hook to fetch moderator analyses for a thread
+ * Protected endpoint - requires authentication and ownership
+ *
+ * @param threadId - Thread ID
+ * @param enabled - Optional control over whether to fetch (default: true when threadId exists)
+ *
+ * Cache strategy:
+ * - Polls only when analyses are pending/streaming
+ * - Stops polling when all analyses are completed or failed
+ * - Refetches on window focus to pick up new analyses
+ */
+export function useThreadAnalysesQuery(
+  threadId: string | null | undefined,
+  enabled = true,
+) {
+  const { data: session, isPending } = useSession();
+  const isAuthenticated = !isPending && !!session?.user?.id;
+
+  return useQuery({
+    queryKey: queryKeys.threads.analyses(threadId || ''),
+    queryFn: () => getThreadAnalysesService(threadId!),
+    staleTime: STALE_TIMES.changelog, // 30 seconds - match changelog pattern
+    // ✅ SMART POLLING: Only poll when analyses are in progress
+    // Stops automatically when all analyses reach terminal state (completed/failed)
+    refetchInterval: (query) => {
+      const data = query.state.data;
+      if (!data || !('success' in data) || !data.success) {
+        return false; // Stop polling on error
+      }
+
+      const analyses = data.data?.analyses || [];
+      if (analyses.length === 0) {
+        return 10000; // Keep polling if no analyses yet (backend might create one)
+      }
+
+      // Check if any analysis is still pending or streaming
+      const hasInProgress = analyses.some(
+        a => a.status === 'pending' || a.status === 'streaming',
+      );
+
+      return hasInProgress ? 10000 : false; // Poll every 10s if in progress, stop if all complete
+    },
+    refetchOnWindowFocus: true, // Refetch when user returns to check for new analyses
+    refetchOnMount: true, // Fetch fresh data on mount
+    enabled: isAuthenticated && !!threadId && enabled,
     retry: false,
     throwOnError: false,
   });

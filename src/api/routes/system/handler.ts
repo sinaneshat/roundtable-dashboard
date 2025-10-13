@@ -1,6 +1,8 @@
 import type { RouteHandler } from '@hono/zod-openapi';
 
+import { normalizeError } from '@/api/common/error-handling';
 import { createHandler, Responses } from '@/api/core';
+import { apiLogger } from '@/api/middleware/hono-logger';
 import type { ApiEnv } from '@/api/types';
 import { getDbAsync } from '@/db';
 
@@ -132,6 +134,7 @@ async function checkDatabase(_c: { env: ApiEnv['Bindings'] }) {
       duration: Date.now() - startTime,
     };
   } catch (error) {
+    apiLogger.error('Database health check failed', normalizeError(error));
     return {
       status: 'unhealthy' as const,
       message: `Database connection failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
@@ -166,6 +169,7 @@ function checkEnvironment(c: { env: ApiEnv['Bindings'] }) {
       message: 'All required environment variables are present',
     };
   } catch (error) {
+    apiLogger.error('Environment health check failed', normalizeError(error));
     return {
       status: 'unhealthy' as const,
       message: `Environment check failed: ${error instanceof Error ? error.message : 'Unknown error'}`,

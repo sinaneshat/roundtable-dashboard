@@ -6,7 +6,6 @@ import { useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { z } from 'zod';
 
 import RHFTextField from '@/components/forms/rhf-text-field';
 import { Button } from '@/components/ui/button';
@@ -18,18 +17,17 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { Form } from '@/components/ui/form';
+import type { AuthEmailValues } from '@/db/validation/auth';
+import { authEmailSchema } from '@/db/validation/auth';
 import { authClient } from '@/lib/auth/client';
-import { toastManager } from '@/lib/toast/toast-manager';
-import { getApiErrorMessage } from '@/lib/utils/error-handling';
+import { showApiErrorToast, showApiInfoToast } from '@/lib/toast';
+import { getApiErrorDetails } from '@/lib/utils/error-handling';
 
 import { GoogleButton } from './google-button';
 
-// Zod schema for email validation
-const magicLinkSchema = z.object({
-  email: z.string().email('Invalid email address'),
-});
-
-type MagicLinkFormData = z.infer<typeof magicLinkSchema>;
+// ✅ REUSE: Email validation schema from db/validation/auth.ts
+const magicLinkSchema = authEmailSchema;
+type MagicLinkFormData = AuthEmailValues;
 
 export function AuthForm() {
   const t = useTranslations();
@@ -46,11 +44,11 @@ export function AuthForm() {
     if (toastType && message) {
       // Display appropriate toast based on type
       if (toastType === 'error') {
-        toastManager.error('Thread Not Found', message);
+        showApiErrorToast(t('auth.errors.threadNotFound'), new Error(message));
       } else if (toastType === 'info') {
-        toastManager.info('Thread Unavailable', message);
+        showApiInfoToast(t('auth.errors.threadUnavailable'), message);
       } else {
-        toastManager.info('Notice', message);
+        showApiInfoToast(t('auth.errors.notice'), message);
       }
 
       // Clean up URL parameters after displaying toast
@@ -63,7 +61,7 @@ export function AuthForm() {
         window.history.replaceState({}, '', url.toString());
       }
     }
-  }, [searchParams]);
+  }, [searchParams, t]);
 
   // Initialize RHF with Zod validation
   const form = useForm<MagicLinkFormData>({
@@ -86,10 +84,10 @@ export function AuthForm() {
       setMagicLinkSent(true);
     } catch (error) {
       console.error('Magic link failed:', error);
-      const errorMessage = getApiErrorMessage(error, t('auth.magicLink.error'));
+      const errorDetails = getApiErrorDetails(error);
       form.setError('email', {
         type: 'manual',
-        message: errorMessage,
+        message: errorDetails.message || t('auth.magicLink.error'),
       });
     } finally {
       setIsLoading(false);

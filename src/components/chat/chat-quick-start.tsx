@@ -6,10 +6,10 @@ import { useMemo } from 'react';
 import { canAccessModelByPricing } from '@/api/services/model-pricing-tiers.service';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Card } from '@/components/ui/card';
-import type { SubscriptionTier } from '@/db/tables/usage';
+import type { SubscriptionTier } from '@/db/config/subscription-tiers';
 import { useModelsQuery } from '@/hooks/queries/models';
 import { useUsageStatsQuery } from '@/hooks/queries/usage';
-import { canAccessModel, getModelById } from '@/lib/ai/models-config';
+import { getProviderIcon } from '@/lib/ai/provider-icons';
 import type { ChatModeId } from '@/lib/config/chat-modes';
 import type { ParticipantConfig } from '@/lib/schemas/chat-forms';
 import { cn } from '@/lib/ui/cn';
@@ -58,23 +58,52 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
     return allModels.filter(model => canAccessModelByPricing(userTier, model));
   }, [allModels, userTier]);
 
-  // Helper to select models by criteria
-  const selectModel = useMemo(() => {
-    return (preferredIds: string[], fallback?: string): string | null => {
-      // Try preferred models first
-      for (const modelId of preferredIds) {
-        const model = accessibleModels.find(m => m.id === modelId);
-        if (model)
-          return model.id;
+  // ✅ DYNAMIC: Helper to select models by criteria (pricing tier and capabilities)
+  // NO HARDCODED MODEL IDS - selects based on pricing and capabilities
+  // ✅ IMPROVED: Randomizes selection for diversity across suggestions
+  const selectModelByTier = useMemo(() => {
+    // Track already selected models to avoid duplicates within the same suggestion set
+    const usedModelIds = new Set<string>();
+
+    return (tierRequirement: SubscriptionTier, preferVision?: boolean, allowReuse = false): string | null => {
+      // Filter models by required tier
+      let tieredModels = accessibleModels.filter(m => m.required_tier === tierRequirement);
+
+      if (tieredModels.length === 0) {
+        // Fallback to any accessible model
+        tieredModels = accessibleModels;
       }
-      // Try fallback
-      if (fallback) {
-        const model = accessibleModels.find(m => m.id === fallback);
-        if (model)
-          return model.id;
+
+      if (tieredModels.length === 0) {
+        return null;
       }
-      // Return first accessible model as last resort
-      return accessibleModels[0]?.id || null;
+
+      // If vision is preferred, try to find a vision-capable model first
+      if (preferVision) {
+        const visionModels = tieredModels.filter(m => m.supports_vision);
+        if (visionModels.length > 0) {
+          tieredModels = visionModels;
+        }
+      }
+
+      // Filter out already used models (unless reuse is allowed)
+      if (!allowReuse) {
+        const availableModels = tieredModels.filter(m => !usedModelIds.has(m.id));
+        if (availableModels.length > 0) {
+          tieredModels = availableModels;
+        }
+      }
+
+      // ✅ RANDOMIZE: Select a random model from available tier models for diversity
+      const randomIndex = Math.floor(Math.random() * tieredModels.length);
+      const selectedModel = tieredModels[randomIndex];
+
+      if (selectedModel) {
+        usedModelIds.add(selectedModel.id);
+        return selectedModel.id;
+      }
+
+      return null;
     };
   }, [accessibleModels]);
 
@@ -86,9 +115,9 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
     if (modelsLoading || accessibleModels.length === 0) {
       return [];
     }
-    // ✅ DYNAMIC: Select best free models (prefer cheap, fast models)
-    const freeModel1 = selectModel(['google/gemini-flash-1.5', 'anthropic/claude-3-haiku', 'qwen/qwen-2.5-72b-instruct:free']);
-    const freeModel2 = selectModel(['anthropic/claude-3-haiku', 'google/gemini-flash-1.5', 'qwen/qwen-2.5-72b-instruct:free']);
+    // ✅ FULLY DYNAMIC: Select free tier models from OpenRouter API
+    const freeModel1 = selectModelByTier('free');
+    const freeModel2 = selectModelByTier('free');
 
     const freeTierSuggestions: QuickStartSuggestion[] = freeModel1 && freeModel2
       ? [
@@ -122,10 +151,10 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
         ]
       : [];
 
-    // ✅ DYNAMIC: Select starter tier models (3 models max)
-    const starterModel1 = selectModel(['qwen/qwen-2.5-72b-instruct', 'google/gemini-flash-1.5']);
-    const starterModel2 = selectModel(['google/gemini-flash-1.5', 'anthropic/claude-3-haiku']);
-    const starterModel3 = selectModel(['anthropic/claude-3-haiku', 'qwen/qwen-2.5-72b-instruct']);
+    // ✅ FULLY DYNAMIC: Select starter tier models (3 models max)
+    const starterModel1 = selectModelByTier('starter');
+    const starterModel2 = selectModelByTier('starter');
+    const starterModel3 = selectModelByTier('starter');
 
     const starterTierSuggestions: QuickStartSuggestion[] = starterModel1 && starterModel2 && starterModel3
       ? [
@@ -162,11 +191,11 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
         ]
       : [];
 
-    // ✅ DYNAMIC: Select pro tier models (5 models max)
-    const proModel1 = selectModel(['anthropic/claude-3.5-sonnet', 'openai/gpt-4o']);
-    const proModel2 = selectModel(['openai/gpt-4o', 'google/gemini-pro-1.5']);
-    const proModel3 = selectModel(['google/gemini-pro-1.5', 'qwen/qwen-2.5-72b-instruct']);
-    const proModel4 = selectModel(['qwen/qwen-2.5-72b-instruct', 'anthropic/claude-3.5-sonnet']);
+    // ✅ FULLY DYNAMIC: Select pro tier models (5 models max)
+    const proModel1 = selectModelByTier('pro');
+    const proModel2 = selectModelByTier('pro');
+    const proModel3 = selectModelByTier('pro');
+    const proModel4 = selectModelByTier('pro');
 
     const proTierSuggestions: QuickStartSuggestion[] = proModel1 && proModel2 && proModel3
       ? [
@@ -205,13 +234,13 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
         ]
       : [];
 
-    // ✅ DYNAMIC: Select power tier models (10 models max - premium models)
-    const powerModel1 = selectModel(['anthropic/claude-3-opus', 'anthropic/claude-3.5-sonnet', 'openai/gpt-4-turbo']);
-    const powerModel2 = selectModel(['openai/gpt-4-turbo', 'openai/gpt-4o', 'google/gemini-pro-1.5']);
-    const powerModel3 = selectModel(['openai/o1-preview', 'openai/o1-mini', 'anthropic/claude-3-opus']);
-    const powerModel4 = selectModel(['anthropic/claude-3.5-sonnet', 'openai/gpt-4o']);
-    const powerModel5 = selectModel(['openai/gpt-4o', 'google/gemini-pro-1.5']);
-    const powerModel6 = selectModel(['google/gemini-pro-1.5', 'anthropic/claude-3-opus']);
+    // ✅ FULLY DYNAMIC: Select power tier models (10 models max - premium models)
+    const powerModel1 = selectModelByTier('power');
+    const powerModel2 = selectModelByTier('power');
+    const powerModel3 = selectModelByTier('power');
+    const powerModel4 = selectModelByTier('power');
+    const powerModel5 = selectModelByTier('power');
+    const powerModel6 = selectModelByTier('power');
 
     const powerTierSuggestions: QuickStartSuggestion[] = powerModel1 && powerModel2 && powerModel3
       ? [
@@ -273,7 +302,7 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
 
     // Suggestions are already tier-appropriate, no filtering needed
     return tierSuggestions;
-  }, [userTier, modelsLoading, accessibleModels, selectModel]);
+  }, [userTier, modelsLoading, accessibleModels, selectModelByTier]);
 
   return (
     <div className={cn('w-full relative z-20', className)}>
@@ -305,11 +334,15 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
                   {suggestion.participants
                     .sort((a, b) => a.order - b.order)
                     .map((participant) => {
-                      // Use getModelById which handles both full modelId and short id formats
-                      const model = getModelById(participant.modelId);
+                      // ✅ SINGLE SOURCE: Find model from backend API data
+                      const model = allModels.find(m => m.id === participant.modelId);
                       if (!model)
                         return null;
-                      const isAccessible = canAccessModel(userTier, model.modelId);
+
+                      // ✅ SINGLE SOURCE: Use backend-computed accessibility
+                      const isAccessible = model.is_accessible_to_user ?? true;
+                      const provider = model.id.split('/')[0] || 'unknown';
+
                       return (
                         <div
                           key={participant.id}
@@ -319,7 +352,7 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
                           )}
                         >
                           <Avatar className="size-4 ring-1 ring-white/10">
-                            <AvatarImage src={model.metadata.icon} alt={model.name} />
+                            <AvatarImage src={getProviderIcon(provider)} alt={model.name} />
                             <AvatarFallback className="text-[8px]">
                               {model.name.slice(0, 2).toUpperCase()}
                             </AvatarFallback>

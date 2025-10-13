@@ -31,7 +31,7 @@ type ChatInputProps = {
   disabled?: boolean;
   /** Auto focus */
   autoFocus?: boolean;
-  /** Toolbar content (participants, memories, mode selectors) */
+  /** Toolbar content (participants, mode selectors) */
   toolbar?: React.ReactNode;
   /** Additional className */
   className?: string;
@@ -106,7 +106,7 @@ export function ChatInput({
 
           {/* Toolbar */}
           <div className="flex items-center justify-between px-2 pb-2">
-            {/* Left: Toolbar content (participants, memories, mode) */}
+            {/* Left: Toolbar content (participants, mode) */}
             {toolbar && (
               <div className="flex items-center gap-1.5">
                 {toolbar}

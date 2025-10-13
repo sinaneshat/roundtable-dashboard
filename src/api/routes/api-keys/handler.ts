@@ -9,8 +9,8 @@
 import type { RouteHandler } from '@hono/zod-openapi';
 import { eq } from 'drizzle-orm';
 
+import { ErrorContextBuilders } from '@/api/common/error-contexts';
 import { createError } from '@/api/common/error-handling';
-import type { ErrorContext } from '@/api/core';
 import { createHandler, Responses } from '@/api/core';
 import type { ApiEnv } from '@/api/types';
 import { getDbAsync } from '@/db';
@@ -24,35 +24,7 @@ import type {
   listApiKeysRoute,
   updateApiKeyRoute,
 } from './route';
-import { CreateApiKeyRequestSchema } from './schema';
-
-// ============================================================================
-// Internal Helper Functions
-// ============================================================================
-
-/**
- * Error Context Builders - Following billing/handler.ts pattern
- */
-function createAuthErrorContext(operation?: string): ErrorContext {
-  return {
-    errorType: 'authentication',
-    operation: operation || 'session_required',
-  };
-}
-
-function createResourceNotFoundContext(
-  resource: string,
-  resourceId?: string,
-): ErrorContext {
-  return {
-    errorType: 'resource',
-    resource: resourceId,
-    resourceId,
-  };
-}
-
-// Removed custom generateApiKey and hashApiKey functions
-// Now using Better Auth's official API which handles key generation and hashing internally
+import { ApiKeyIdParamSchema, CreateApiKeyRequestSchema, UpdateApiKeyRequestSchema } from './schema';
 
 // ============================================================================
 // API Key Handlers
@@ -71,7 +43,7 @@ export const listApiKeysHandler: RouteHandler<typeof listApiKeysRoute, ApiEnv> =
     const user = c.get('user');
 
     if (!user) {
-      throw createError.unauthenticated('Authentication required', createAuthErrorContext('listApiKeys'));
+      throw createError.unauthenticated('Authentication required', ErrorContextBuilders.auth('listApiKeys'));
     }
 
     c.logger.info('Listing API keys for user', {
@@ -103,22 +75,15 @@ export const listApiKeysHandler: RouteHandler<typeof listApiKeysRoute, ApiEnv> =
 export const getApiKeyHandler: RouteHandler<typeof getApiKeyRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
+    validateParams: ApiKeyIdParamSchema,
     operationName: 'getApiKey',
   },
   async (c) => {
     const user = c.get('user');
-    const params = c.req.param();
-    const keyId = params.keyId as string;
+    const { keyId } = c.validated.params;
 
     if (!user) {
-      throw createError.unauthenticated('Authentication required', createAuthErrorContext('getApiKey'));
-    }
-
-    if (!keyId) {
-      throw createError.badRequest('API key ID is required', {
-        errorType: 'validation',
-        field: 'keyId',
-      });
+      throw createError.unauthenticated('Authentication required', ErrorContextBuilders.auth('getApiKey'));
     }
 
     c.logger.info('Getting API key', {
@@ -136,7 +101,7 @@ export const getApiKeyHandler: RouteHandler<typeof getApiKeyRoute, ApiEnv> = cre
     });
 
     if (!apiKey) {
-      throw createError.notFound('API key not found', createResourceNotFoundContext('apiKey', keyId));
+      throw createError.notFound('API key not found', ErrorContextBuilders.resourceNotFound('apiKey', keyId));
     }
 
     c.logger.info('API key retrieved successfully', {
@@ -167,7 +132,7 @@ export const createApiKeyHandler: RouteHandler<typeof createApiKeyRoute, ApiEnv>
       logType: 'operation',
       operationName: 'createApiKey',
       userId: user.id,
-      resource: body.name,
+      resource: body.name ?? undefined,
     });
 
     const db = await getDbAsync();
@@ -178,20 +143,17 @@ export const createApiKeyHandler: RouteHandler<typeof createApiKeyRoute, ApiEnv>
     });
 
     if (existingKeys.length >= 5) {
-      throw createError.badRequest('Maximum API key limit reached. You can only have 5 API keys.', {
-        errorType: 'validation',
-        field: 'apiKeys',
-      });
+      throw createError.badRequest('Maximum API key limit reached. You can only have 5 API keys.', ErrorContextBuilders.validation('apiKeys'));
     }
 
     // Use Better Auth's official API to create the API key
     // This ensures proper hashing and compatibility with Better Auth's validation
     const result = await auth.api.createApiKey({
       body: {
-        name: body.name,
+        name: body.name ?? undefined, // Convert null to undefined for Better Auth
         userId: user.id,
         expiresIn: body.expiresIn ? body.expiresIn * 24 * 60 * 60 : undefined, // Convert days to seconds
-        remaining: body.remaining || undefined,
+        remaining: body.remaining ?? undefined, // Convert null to undefined
         metadata: body.metadata || undefined,
         prefix: 'rpnd_',
         rateLimitEnabled: true,
@@ -201,10 +163,7 @@ export const createApiKeyHandler: RouteHandler<typeof createApiKeyRoute, ApiEnv>
     });
 
     if (!result) {
-      throw createError.internal('Failed to create API key', {
-        errorType: 'external_service',
-        operation: 'createApiKey',
-      });
+      throw createError.internal('Failed to create API key', ErrorContextBuilders.externalService('betterauth', 'createApiKey'));
     }
 
     c.logger.info('API key created successfully', {
@@ -228,23 +187,17 @@ export const createApiKeyHandler: RouteHandler<typeof createApiKeyRoute, ApiEnv>
 export const updateApiKeyHandler: RouteHandler<typeof updateApiKeyRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
+    validateParams: ApiKeyIdParamSchema,
+    validateBody: UpdateApiKeyRequestSchema,
     operationName: 'updateApiKey',
   },
   async (c) => {
     const user = c.get('user');
-    const params = c.req.param();
-    const keyId = params.keyId as string;
-    const body = await c.req.json();
+    const { keyId } = c.validated.params;
+    const body = c.validated.body;
 
     if (!user) {
-      throw createError.unauthenticated('Authentication required', createAuthErrorContext('updateApiKey'));
-    }
-
-    if (!keyId) {
-      throw createError.badRequest('API key ID is required', {
-        errorType: 'validation',
-        field: 'keyId',
-      });
+      throw createError.unauthenticated('Authentication required', ErrorContextBuilders.auth('updateApiKey'));
     }
 
     c.logger.info('Updating API key', {
@@ -260,23 +213,20 @@ export const updateApiKeyHandler: RouteHandler<typeof updateApiKeyRoute, ApiEnv>
       body: {
         keyId,
         userId: user.id, // Server-only field for ownership verification
-        name: body.name,
+        name: body.name ?? undefined, // Convert null to undefined for Better Auth
         enabled: body.enabled,
-        remaining: body.remaining,
-        refillAmount: body.refillAmount,
-        refillInterval: body.refillInterval,
+        remaining: body.remaining ?? undefined, // Convert null to undefined
+        refillAmount: body.refillAmount ?? undefined, // Convert null to undefined
+        refillInterval: body.refillInterval ?? undefined, // Convert null to undefined
         metadata: body.metadata,
         rateLimitEnabled: body.rateLimitEnabled,
-        rateLimitTimeWindow: body.rateLimitTimeWindow,
-        rateLimitMax: body.rateLimitMax,
+        rateLimitTimeWindow: body.rateLimitTimeWindow ?? undefined, // Convert null to undefined
+        rateLimitMax: body.rateLimitMax ?? undefined, // Convert null to undefined
       },
     });
 
     if (!result) {
-      throw createError.internal('Failed to update API key', {
-        errorType: 'external_service',
-        operation: 'updateApiKey',
-      });
+      throw createError.internal('Failed to update API key', ErrorContextBuilders.externalService('betterauth', 'updateApiKey'));
     }
 
     c.logger.info('API key updated successfully', {
@@ -296,22 +246,15 @@ export const updateApiKeyHandler: RouteHandler<typeof updateApiKeyRoute, ApiEnv>
 export const deleteApiKeyHandler: RouteHandler<typeof deleteApiKeyRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
+    validateParams: ApiKeyIdParamSchema,
     operationName: 'deleteApiKey',
   },
   async (c) => {
     const user = c.get('user');
-    const params = c.req.param();
-    const keyId = params.keyId as string;
+    const { keyId } = c.validated.params;
 
     if (!user) {
-      throw createError.unauthenticated('Authentication required', createAuthErrorContext('deleteApiKey'));
-    }
-
-    if (!keyId) {
-      throw createError.badRequest('API key ID is required', {
-        errorType: 'validation',
-        field: 'keyId',
-      });
+      throw createError.unauthenticated('Authentication required', ErrorContextBuilders.auth('deleteApiKey'));
     }
 
     c.logger.info('Deleting API key', {
@@ -331,10 +274,7 @@ export const deleteApiKeyHandler: RouteHandler<typeof deleteApiKeyRoute, ApiEnv>
     });
 
     if (!result?.success) {
-      throw createError.internal('Failed to delete API key', {
-        errorType: 'external_service',
-        operation: 'deleteApiKey',
-      });
+      throw createError.internal('Failed to delete API key', ErrorContextBuilders.externalService('betterauth', 'deleteApiKey'));
     }
 
     c.logger.info('API key deleted successfully', {

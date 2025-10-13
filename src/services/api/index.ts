@@ -27,29 +27,6 @@ export {
 } from './api-keys';
 
 // ============================================================================
-// Chat Memories Service Exports
-// ============================================================================
-
-export {
-  type CreateMemoryRequest,
-  type CreateMemoryResponse,
-  createMemoryService,
-  type DeleteMemoryRequest,
-  type DeleteMemoryResponse,
-  deleteMemoryService,
-  type GetMemoryRequest,
-  type GetMemoryResponse,
-  getMemoryService,
-  type ListMemoriesRequest,
-  type ListMemoriesResponse,
-  listMemoriesService,
-  type MemoryType,
-  type UpdateMemoryRequest,
-  type UpdateMemoryResponse,
-  updateMemoryService,
-} from './chat-memories';
-
-// ============================================================================
 // Chat Messages Service Exports
 // All messages use streaming for better UX (sendMessage endpoint removed)
 // ============================================================================
@@ -112,6 +89,7 @@ export {
   type GetPublicThreadRequest,
   type GetPublicThreadResponse,
   getPublicThreadService,
+  getThreadAnalysesService,
   getThreadBySlugService,
   getThreadChangelogService,
   getThreadMessagesService,
@@ -168,7 +146,7 @@ export {
 } from './models';
 
 // ============================================================================
-// Chat Memories Service Exports
+// Products Service Exports
 // ============================================================================
 
 export {

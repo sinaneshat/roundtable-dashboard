@@ -2,6 +2,7 @@ import type { RouteHandler } from '@hono/zod-openapi';
 import { eq } from 'drizzle-orm';
 import type Stripe from 'stripe';
 
+import { ErrorContextBuilders } from '@/api/common/error-contexts';
 import { AppError, createError, normalizeError } from '@/api/common/error-handling';
 import type { ErrorContext } from '@/api/core';
 import { createHandler, createHandlerWithBatch, Responses } from '@/api/core';
@@ -37,70 +38,6 @@ import {
 // ============================================================================
 // Internal Helper Functions (Following 3-file pattern: handler, route, schema)
 // ============================================================================
-
-/**
- * Error Context Builders - Following src/api/core/responses.ts patterns
- */
-function createAuthErrorContext(operation?: string): ErrorContext {
-  return {
-    errorType: 'authentication',
-    operation: operation || 'session_required',
-  };
-}
-
-function createResourceNotFoundContext(
-  resource: string,
-  resourceId?: string,
-  _userId?: string,
-): ErrorContext {
-  return {
-    errorType: 'resource',
-    resource,
-    resourceId,
-  };
-}
-
-function createAuthorizationErrorContext(
-  resource: string,
-  resourceId?: string,
-  _userId?: string,
-): ErrorContext {
-  return {
-    errorType: 'authorization',
-    resource,
-    resourceId,
-  };
-}
-
-function createValidationErrorContext(field?: string): ErrorContext {
-  return {
-    errorType: 'validation',
-    field,
-  };
-}
-
-function createStripeErrorContext(
-  operation?: string,
-  resourceId?: string,
-): ErrorContext {
-  return {
-    errorType: 'external_service',
-    service: 'stripe',
-    operation,
-    resourceId,
-  };
-}
-
-function createDatabaseErrorContext(
-  operation: 'select' | 'insert' | 'update' | 'delete' | 'batch',
-  table?: string,
-): ErrorContext {
-  return {
-    errorType: 'database',
-    operation,
-    table,
-  };
-}
 
 /**
  * Subscription Response Builder - Type-Safe Transformation
@@ -898,7 +835,7 @@ export const switchSubscriptionHandler: RouteHandler<typeof switchSubscriptionRo
     const { newPriceId } = c.validated.body;
 
     if (!user) {
-      throw createError.unauthenticated('Valid session required to switch subscription', createAuthErrorContext());
+      throw createError.unauthenticated('Valid session required to switch subscription', ErrorContextBuilders.auth());
     }
 
     c.logger.info('Switching subscription', {
@@ -919,14 +856,14 @@ export const switchSubscriptionHandler: RouteHandler<typeof switchSubscriptionRo
       if (!subscription) {
         throw createError.notFound(
           `Subscription ${subscriptionId} not found`,
-          createResourceNotFoundContext('subscription', subscriptionId, user.id),
+          ErrorContextBuilders.resourceNotFound('subscription', subscriptionId, user.id),
         );
       }
 
       if (!validateSubscriptionOwnership(subscription, user)) {
         throw createError.unauthorized(
           'You do not have access to this subscription',
-          createAuthorizationErrorContext('subscription', subscriptionId, user.id),
+          ErrorContextBuilders.authorization('subscription', subscriptionId, user.id),
         );
       }
 
@@ -938,7 +875,7 @@ export const switchSubscriptionHandler: RouteHandler<typeof switchSubscriptionRo
       if (!newPrice) {
         throw createError.badRequest(
           `Price ${newPriceId} not found`,
-          createResourceNotFoundContext('price', newPriceId),
+          ErrorContextBuilders.resourceNotFound('price', newPriceId),
         );
       }
 
@@ -949,7 +886,7 @@ export const switchSubscriptionHandler: RouteHandler<typeof switchSubscriptionRo
       if (!currentPrice) {
         throw createError.internal(
           'Current subscription price not found',
-          createResourceNotFoundContext('price', subscription.priceId),
+          ErrorContextBuilders.resourceNotFound('price', subscription.priceId),
         );
       }
 
@@ -961,7 +898,7 @@ export const switchSubscriptionHandler: RouteHandler<typeof switchSubscriptionRo
       if (!subscriptionItemId) {
         throw createError.internal(
           'Subscription has no items',
-          createStripeErrorContext('retrieve_subscription', subscriptionId),
+          ErrorContextBuilders.stripe('retrieve_subscription', subscriptionId),
         );
       }
 
@@ -1048,7 +985,7 @@ export const switchSubscriptionHandler: RouteHandler<typeof switchSubscriptionRo
       if (!refreshedSubscription) {
         throw createError.internal(
           'Failed to fetch updated subscription',
-          createDatabaseErrorContext('select', 'stripeSubscription'),
+          ErrorContextBuilders.database('select', 'stripeSubscription'),
         );
       }
 
@@ -1070,7 +1007,7 @@ export const switchSubscriptionHandler: RouteHandler<typeof switchSubscriptionRo
       c.logger.error('Failed to switch subscription', normalizeError(error));
       throw createError.internal(
         'Failed to switch subscription',
-        createStripeErrorContext('update_subscription', subscriptionId),
+        ErrorContextBuilders.stripe('update_subscription', subscriptionId),
       );
     }
   },
@@ -1096,7 +1033,7 @@ export const cancelSubscriptionHandler: RouteHandler<typeof cancelSubscriptionRo
     const { immediately = false } = c.validated.body;
 
     if (!user) {
-      throw createError.unauthenticated('Valid session required to cancel subscription', createAuthErrorContext());
+      throw createError.unauthenticated('Valid session required to cancel subscription', ErrorContextBuilders.auth());
     }
 
     c.logger.info(`Canceling subscription${immediately ? ' immediately' : ' at period end'}`, {
@@ -1117,14 +1054,14 @@ export const cancelSubscriptionHandler: RouteHandler<typeof cancelSubscriptionRo
       if (!subscription) {
         throw createError.notFound(
           `Subscription ${subscriptionId} not found`,
-          createResourceNotFoundContext('subscription', subscriptionId, user.id),
+          ErrorContextBuilders.resourceNotFound('subscription', subscriptionId, user.id),
         );
       }
 
       if (!validateSubscriptionOwnership(subscription, user)) {
         throw createError.unauthorized(
           'You do not have access to this subscription',
-          createAuthorizationErrorContext('subscription', subscriptionId, user.id),
+          ErrorContextBuilders.authorization('subscription', subscriptionId, user.id),
         );
       }
 
@@ -1132,7 +1069,7 @@ export const cancelSubscriptionHandler: RouteHandler<typeof cancelSubscriptionRo
       if (subscription.status === 'canceled') {
         throw createError.badRequest(
           'Subscription is already canceled',
-          createValidationErrorContext('subscription'),
+          ErrorContextBuilders.validation('subscription'),
         );
       }
 
@@ -1157,7 +1094,7 @@ export const cancelSubscriptionHandler: RouteHandler<typeof cancelSubscriptionRo
       if (!refreshedSubscription) {
         throw createError.internal(
           'Failed to fetch updated subscription',
-          createDatabaseErrorContext('select', 'stripeSubscription'),
+          ErrorContextBuilders.database('select', 'stripeSubscription'),
         );
       }
 
@@ -1183,7 +1120,7 @@ export const cancelSubscriptionHandler: RouteHandler<typeof cancelSubscriptionRo
       c.logger.error('Failed to cancel subscription', normalizeError(error));
       throw createError.internal(
         'Failed to cancel subscription',
-        createStripeErrorContext('cancel_subscription', subscriptionId),
+        ErrorContextBuilders.stripe('cancel_subscription', subscriptionId),
       );
     }
   },

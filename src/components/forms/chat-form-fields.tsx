@@ -11,7 +11,6 @@
 
 import { useFormContext } from 'react-hook-form';
 
-import { ChatMemoriesList } from '@/components/chat/chat-memories-list';
 import { ChatParticipantsList } from '@/components/chat/chat-participants-list';
 import {
   Select,
@@ -50,33 +49,6 @@ export function ChatParticipantsField({
       participants={participants}
       onParticipantsChange={newParticipants => setValue('participants', newParticipants)}
       isStreaming={isStreaming}
-      className={className}
-    />
-  );
-}
-
-// ============================================================================
-// Memories Field
-// ============================================================================
-
-type ChatMemoriesFieldProps = {
-  className?: string;
-};
-
-/**
- * Chat Memories Field
- *
- * Uses form context to access and update memory IDs
- * No prop drilling needed
- */
-export function ChatMemoriesField({ className }: ChatMemoriesFieldProps) {
-  const { watch, setValue } = useFormContext<ChatInputFormData>();
-  const memoryIds = watch('memoryIds') || [];
-
-  return (
-    <ChatMemoriesList
-      selectedMemoryIds={memoryIds}
-      onMemoryIdsChange={newMemoryIds => setValue('memoryIds', newMemoryIds)}
       className={className}
     />
   );

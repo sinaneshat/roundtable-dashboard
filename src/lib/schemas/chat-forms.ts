@@ -30,7 +30,7 @@ export const ParticipantConfigSchema = z.object({
   modelId: z.string().refine(isValidModelId, {
     message: 'Invalid model ID. Must be a valid model from AI configuration.',
   }),
-  role: z.string(),
+  role: z.string().nullable(), // ✅ Matches database schema - role can be null
   customRoleId: z.string().optional(),
   order: z.number().int().nonnegative(),
   settings: z.object({
@@ -50,13 +50,20 @@ export type ParticipantConfig = z.infer<typeof ParticipantConfigSchema>;
 // ============================================================================
 
 /**
- * Default model ID for new chats (cheapest free-tier model)
- * ✅ Dynamic: Uses OpenRouter model ID directly
+ * Default model ID for new chats
+ * ✅ Dynamic: Uses first accessible model from top 10 most popular models
+ *
+ * Note: This fallback is used for form initialization. The actual default model
+ * is determined dynamically by the backend based on user's subscription tier.
+ * See: GET /api/v1/models/default endpoint
+ *
+ * This fallback should be a popular, widely accessible model that exists in most tiers.
  */
-export const DEFAULT_MODEL_ID = 'google/gemini-flash-1.5';
+export const DEFAULT_MODEL_ID = 'anthropic/claude-3-haiku';
 
 /**
- * Default participant configuration
+ * Default participant configuration for form initialization
+ * The actual default model will be fetched from the backend on component mount
  */
 export const DEFAULT_PARTICIPANT: ParticipantConfig = {
   id: 'participant-default',
@@ -64,11 +71,6 @@ export const DEFAULT_PARTICIPANT: ParticipantConfig = {
   role: '',
   order: 0,
 };
-
-/**
- * Memory IDs array schema
- */
-export const MemoryIdsSchema = z.array(z.string());
 
 // ============================================================================
 // Chat Input Form Schema (New Thread Creation)
@@ -87,18 +89,23 @@ export const ChatInputFormSchema = z.object({
   message: MessageContentSchema,
   mode: ThreadModeSchema,
   participants: z.array(ParticipantConfigSchema).min(1, 'At least one participant is required'),
-  memoryIds: MemoryIdsSchema,
 });
 
 /**
  * Default values for chat input form
  * Uses centralized config for default mode
+ *
+ * NOTE: The participants array with DEFAULT_PARTICIPANT is just a fallback.
+ * In practice, components should use the default_model_id from the models list response:
+ * - Backend computes default model in GET /api/v1/models endpoint
+ * - Response includes default_model_id field (best accessible model from top 10)
+ * - Frontend consumes this from the prefetched models data (zero additional requests)
+ * This ensures users get the best accessible model from top 10 popular models for their tier.
  */
 export const chatInputFormDefaults = {
   message: '',
   mode: getDefaultChatMode(),
   participants: [DEFAULT_PARTICIPANT] as ParticipantConfig[],
-  memoryIds: [] as string[],
 };
 
 // ============================================================================
@@ -133,7 +140,6 @@ export const threadInputFormDefaults = {
 export const ThreadConfigSchema = z.object({
   mode: ThreadModeSchema,
   participants: z.array(ParticipantConfigSchema).min(1, 'At least one participant is required'),
-  memoryIds: MemoryIdsSchema,
 });
 
 // ============================================================================
@@ -178,7 +184,6 @@ export function chatInputFormToCreateThreadRequest(
     mode: data.mode,
     participants: data.participants.map(participantConfigToCreateThreadFormat),
     firstMessage: data.message,
-    memoryIds: data.memoryIds && data.memoryIds.length > 0 ? data.memoryIds : undefined,
   };
 }
 
@@ -194,12 +199,16 @@ export function threadConfigToStreamChatFormat(config: Partial<ThreadConfig>) {
       customRoleId: p.customRoleId,
       order: p.order,
     })),
-    memoryIds: config.memoryIds,
   };
 }
 
 /**
  * Ensure at least one participant exists (validation helper)
+ *
+ * NOTE: This returns DEFAULT_PARTICIPANT as a fallback only.
+ * For initial participant selection, use the default_model_id from models list:
+ * - Backend includes default_model_id in GET /api/v1/models response
+ * - Frontend uses this from prefetched data (no additional request)
  */
 export function ensureMinimumParticipants(
   participants: ParticipantConfig[],

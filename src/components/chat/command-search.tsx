@@ -9,7 +9,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { useThreadsQuery } from '@/hooks/queries/chat-threads';
-import { useDebouncedValue } from '@/hooks/utils/use-debounced-value';
+import { useDebouncedValue, useHoverPrefetch } from '@/hooks/utils';
 import { cn } from '@/lib/ui/cn';
 import { glassOverlay } from '@/lib/ui/glassmorphism';
 
@@ -17,6 +17,59 @@ type CommandSearchProps = {
   isOpen: boolean;
   onClose: () => void;
 };
+
+/**
+ * SearchResultItem - Individual search result with hover prefetching
+ * Extracted to properly use React hooks (Rules of Hooks)
+ *
+ * Uses OFFICIAL Next.js hover prefetch pattern from documentation
+ * Source: https://nextjs.org/docs/app/guides/prefetching
+ */
+function SearchResultItem({
+  thread,
+  index,
+  selectedIndex,
+  onClose,
+  onSelect,
+}: {
+  thread: { id: string; slug: string; title: string; updatedAt: string; isFavorite?: boolean | null };
+  index: number;
+  selectedIndex: number;
+  onClose: () => void;
+  onSelect: (index: number) => void;
+}) {
+  const href = `/chat/${thread.slug}`;
+
+  // ✅ OFFICIAL NEXT.JS PATTERN: Prefetch on hover
+  // Exact implementation from Next.js official documentation
+  const { prefetch, onMouseEnter: onPrefetchEnter } = useHoverPrefetch(href);
+
+  return (
+    <Link
+      href={href}
+      prefetch={prefetch}
+      onClick={onClose}
+      className={cn(
+        'flex items-center gap-3 px-4 py-3 hover:bg-accent/50 transition-colors cursor-pointer',
+        selectedIndex === index && 'bg-accent',
+      )}
+      onMouseEnter={() => {
+        onSelect(index);
+        onPrefetchEnter();
+      }}
+    >
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium truncate">{thread.title}</p>
+        <p className="text-xs text-muted-foreground truncate">
+          {new Date(thread.updatedAt).toLocaleDateString()}
+        </p>
+      </div>
+      {thread.isFavorite && (
+        <div className="size-2 rounded-full bg-yellow-500" />
+      )}
+    </Link>
+  );
+}
 
 export function CommandSearch({ isOpen, onClose }: CommandSearchProps) {
   const router = useRouter();
@@ -203,26 +256,14 @@ export function CommandSearch({ isOpen, onClose }: CommandSearchProps) {
                       ? (
                           <div>
                             {threads.map((thread, index) => (
-                              <Link
+                              <SearchResultItem
                                 key={thread.id}
-                                href={`/chat/${thread.slug}`}
-                                onClick={onClose}
-                                className={cn(
-                                  'flex items-center gap-3 px-4 py-3 hover:bg-accent/50 transition-colors cursor-pointer',
-                                  selectedIndex === index && 'bg-accent',
-                                )}
-                                onMouseEnter={() => setSelectedIndex(index)}
-                              >
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-sm font-medium truncate">{thread.title}</p>
-                                  <p className="text-xs text-muted-foreground truncate">
-                                    {new Date(thread.updatedAt).toLocaleDateString()}
-                                  </p>
-                                </div>
-                                {thread.isFavorite && (
-                                  <div className="size-2 rounded-full bg-yellow-500" />
-                                )}
-                              </Link>
+                                thread={thread}
+                                index={index}
+                                selectedIndex={selectedIndex}
+                                onClose={onClose}
+                                onSelect={setSelectedIndex}
+                              />
                             ))}
                             {/* Loading more indicator */}
                             {isFetchingNextPage && (

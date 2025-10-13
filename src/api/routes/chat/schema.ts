@@ -6,8 +6,22 @@ import {
   createCursorPaginatedResponseSchema,
   CursorPaginationQuerySchema,
 } from '@/api/core/schemas';
+import {
+  chatCustomRoleInsertSchema,
+  chatCustomRoleSelectSchema,
+  chatCustomRoleUpdateSchema,
+  chatMessageSelectSchema,
+  chatModeratorAnalysisSelectSchema,
+  chatParticipantInsertSchema,
+  chatParticipantSelectSchema,
+  chatParticipantUpdateSchema,
+  chatThreadChangelogSelectSchema,
+  chatThreadInsertSchema,
+  chatThreadSelectSchema,
+  chatThreadUpdateSchema,
+} from '@/db/validation/chat';
 import { isValidModelId } from '@/lib/ai/models-config';
-import { ALLOWED_CHAT_MODES } from '@/lib/config/chat-modes';
+import { CHAT_MODES } from '@/lib/config/chat-modes';
 
 // ============================================================================
 // Shared Validation Schemas - Used by Frontend and Backend
@@ -31,9 +45,9 @@ export const MessageContentSchema = z.string()
  * Matches chatThread.mode column in database
  *
  * Shared with frontend to ensure consistent validation rules
- * Uses centralized ALLOWED_CHAT_MODES for type safety
+ * Uses centralized CHAT_MODES for type safety
  */
-export const ThreadModeSchema = z.enum(ALLOWED_CHAT_MODES as [string, ...string[]]);
+export const ThreadModeSchema = z.enum(CHAT_MODES);
 
 /**
  * Message edit validation schema
@@ -69,269 +83,226 @@ export const MessageIdParamSchema = z.object({
   }),
 });
 
-export const MemoryIdParamSchema = z.object({
-  id: CoreSchemas.id().openapi({
-    description: 'Chat memory ID',
-    example: 'memory_abc123',
-  }),
-});
-
-// ============================================================================
-// Base Entity Schemas (ordered for dependencies)
-// ============================================================================
-
-// Participant Schema (needed by ThreadDetailPayloadSchema)
-const ChatParticipantSchema = z.object({
-  id: z.string().openapi({
-    description: 'Participant ID',
-    example: 'participant_abc123',
-  }),
-  threadId: z.string().openapi({
-    description: 'Thread ID',
-    example: 'thread_abc123',
-  }),
-  modelId: z.string().openapi({
-    description: 'Model ID (e.g., anthropic/claude-sonnet-4.5, openai/gpt-5)',
-    example: 'anthropic/claude-sonnet-4.5',
-  }),
-  customRoleId: z.string().nullable().openapi({
-    description: 'Custom role ID (references saved role template)',
-    example: 'role_abc123',
-  }),
-  role: z.string().openapi({
-    description: 'Assigned role for this model',
-    example: 'The Ideator',
-  }),
-  priority: z.number().int().nonnegative().openapi({
-    description: 'Response priority (lower = responds first)',
-    example: 0,
-  }),
-  isEnabled: z.boolean().openapi({
-    description: 'Whether this participant is active',
-    example: true,
-  }),
-  settings: z.object({
-    temperature: z.number().min(0).max(2).optional(),
-    maxTokens: z.number().int().positive().optional(),
-    systemPrompt: z.string().optional(),
-  }).passthrough().nullable().openapi({
-    description: 'Model-specific settings',
-  }),
-  createdAt: CoreSchemas.timestamp().openapi({
-    description: 'Participant creation timestamp',
-  }),
-  updatedAt: CoreSchemas.timestamp().openapi({
-    description: 'Participant last update timestamp',
-  }),
-}).openapi('ChatParticipant');
-
-// Message Schema (needed by ThreadDetailPayloadSchema)
-const ChatMessageSchema = z.object({
-  id: z.string().openapi({
-    description: 'Message ID',
-    example: 'msg_abc123',
-  }),
-  threadId: z.string().openapi({
-    description: 'Thread ID',
-    example: 'thread_abc123',
-  }),
-  participantId: z.string().nullable().openapi({
-    description: 'Participant ID (null for user messages)',
-    example: 'participant_abc123',
-  }),
-  role: z.enum(['user', 'assistant']).openapi({
-    description: 'Message role',
-    example: 'assistant',
-  }),
-  content: z.string().openapi({
-    description: 'Message content',
-    example: 'Here are some innovative ideas...',
-  }),
-  reasoning: z.string().nullable().openapi({
-    description: 'Model reasoning/thinking process (for models that support it)',
-    example: null,
-  }),
-  toolCalls: z.array(z.object({
-    id: z.string(),
-    type: z.string(),
-    function: z.object({
-      name: z.string(),
-      arguments: z.string(),
-    }),
-  })).nullable().openapi({
-    description: 'Tool/function calls made by the model',
-  }),
-  metadata: z.object({
-    model: z.string().optional(),
-    finishReason: z.string().optional(),
-    usage: z.object({
-      promptTokens: z.number().optional(),
-      completionTokens: z.number().optional(),
-      totalTokens: z.number().optional(),
-    }).optional(),
-  }).passthrough().nullable().openapi({
-    description: 'Message metadata (model, usage stats, etc.)',
-  }),
-  parentMessageId: z.string().nullable().openapi({
-    description: 'Parent message ID (for threading)',
-    example: null,
-  }),
-  variantIndex: z.number().int().nonnegative().openapi({
-    description: 'Variant index (0 = original, 1+ = regenerations)',
-    example: 0,
-  }),
-  isActiveVariant: z.boolean().openapi({
-    description: 'Whether this is the currently active/displayed variant',
-    example: true,
-  }),
-  createdAt: CoreSchemas.timestamp().openapi({
-    description: 'Message creation timestamp',
-  }),
-}).openapi('ChatMessage');
-
-// ============================================================================
-// Thread Schemas
-// ============================================================================
-
-const ChatThreadSchema = z.object({
-  id: z.string().openapi({
-    description: 'Thread ID',
-    example: 'thread_abc123',
-  }),
-  userId: z.string().openapi({
-    description: 'User ID who owns the thread',
-    example: 'user_123',
-  }),
-  title: z.string().openapi({
-    description: 'Thread title',
-    example: 'Product strategy brainstorm',
-  }),
-  slug: z.string().openapi({
-    description: 'SEO-friendly URL slug',
-    example: 'product-strategy-brainstorm-abc123',
-  }),
-  mode: z.enum(['analyzing', 'brainstorming', 'debating', 'solving']).openapi({
-    description: 'Conversation mode that determines how models interact',
-    example: 'brainstorming',
-  }),
-  status: z.enum(['active', 'archived', 'deleted']).openapi({
-    description: 'Thread status',
-    example: 'active',
-  }),
-  isFavorite: z.boolean().openapi({
-    description: 'Whether thread is marked as favorite',
-    example: false,
-  }),
-  isPublic: z.boolean().openapi({
-    description: 'Whether thread is publicly accessible',
-    example: false,
-  }),
-  metadata: z.object({
-    tags: z.array(z.string()).optional(),
-    summary: z.string().optional(),
-  }).passthrough().nullable().openapi({
-    description: 'Thread metadata (tags, summary, etc.)',
-  }),
-  createdAt: CoreSchemas.timestamp().openapi({
-    description: 'Thread creation timestamp',
-  }),
-  updatedAt: CoreSchemas.timestamp().openapi({
-    description: 'Thread last update timestamp',
-  }),
-  lastMessageAt: CoreSchemas.timestamp().nullable().openapi({
-    description: 'Last message timestamp',
-  }),
-}).openapi('ChatThread');
-
-export const CreateThreadRequestSchema = z.object({
-  title: z.string().min(1).max(200).optional().default('New Chat').openapi({
-    description: 'Thread title (auto-generated from first message if "New Chat")',
-    example: 'Product strategy brainstorm',
-  }),
-  mode: ThreadModeSchema.optional().default('brainstorming').openapi({
-    description: 'Conversation mode',
-    example: 'brainstorming',
-  }),
-  participants: z.array(z.object({
-    modelId: z.string().refine(isValidModelId, {
-      message: 'Invalid model ID. Must be a valid model from AI configuration.',
-    }).openapi({
-      description: 'Model ID (e.g., anthropic/claude-3.5-sonnet, openai/gpt-4o)',
-      example: 'anthropic/claude-3.5-sonnet',
-    }),
-    role: z.string().nullish().openapi({ // ✅ Allow null, undefined, or string
-      description: 'Optional assigned role for this model (immutable)',
-      example: 'The Ideator',
-    }),
-    customRoleId: z.string().nullish().openapi({ // ✅ Allow null, undefined, or string
-      description: 'Optional custom role ID to load system prompt from',
-      example: '01HXYZ123ABC',
-    }),
-    systemPrompt: z.string().optional().openapi({
-      description: 'Optional system prompt override (takes precedence over customRoleId)',
-    }),
-    temperature: z.number().min(0).max(2).optional().openapi({
-      description: 'Temperature setting',
-    }),
-    maxTokens: z.number().int().positive().optional().openapi({
-      description: 'Max tokens setting',
-    }),
-  })).min(1).openapi({
-    description: 'Participants array (order determines priority - immutable after creation)',
-  }),
-  firstMessage: MessageContentSchema.openapi({
-    description: 'Initial user message to start the conversation',
-    example: 'What are innovative product ideas for sustainability?',
-  }),
-  memoryIds: z.array(z.string()).optional().openapi({
-    description: 'Optional array of memory IDs to attach to this thread',
-    example: ['01HXYZ123ABC', '01HXYZ456DEF'],
-  }),
-  metadata: z.object({
-    tags: z.array(z.string()).optional(),
-    summary: z.string().optional(),
-  }).passthrough().optional().openapi({
-    description: 'Thread metadata',
-  }),
-}).openapi('CreateThreadRequest');
-
-export const UpdateThreadRequestSchema = z.object({
-  title: z.string().min(1).max(200).optional().openapi({
-    description: 'Thread title',
-    example: 'Updated brainstorm session',
-  }),
-  mode: ThreadModeSchema.optional().openapi({
-    description: 'Conversation mode',
-    example: 'debating',
-  }),
-  status: z.enum(['active', 'archived', 'deleted']).optional().openapi({
-    description: 'Thread status',
-    example: 'archived',
-  }),
-  isFavorite: z.boolean().optional().openapi({
-    description: 'Whether thread is marked as favorite',
-    example: true,
-  }),
-  isPublic: z.boolean().optional().openapi({
-    description: 'Whether thread is publicly accessible',
-    example: false,
-  }),
-  metadata: z.object({
-    tags: z.array(z.string()).optional(),
-    summary: z.string().optional(),
-  }).passthrough().optional().openapi({
-    description: 'Thread metadata',
-  }),
-}).openapi('UpdateThreadRequest');
-
 export const ThreadSlugParamSchema = z.object({
   slug: z.string().openapi({
     description: 'Thread slug for public access',
     example: 'product-strategy-brainstorm-abc123',
   }),
-}).openapi('ThreadSlugParam');
+});
 
-// Query parameters for cursor-based pagination with search support
+export const CustomRoleIdParamSchema = z.object({
+  id: CoreSchemas.id().openapi({
+    description: 'Custom role ID',
+    example: 'role_abc123',
+  }),
+});
+
+export const RoundAnalysisParamSchema = z.object({
+  threadId: z.string().openapi({
+    description: 'Thread ID',
+    example: 'thread_abc123',
+  }),
+  roundNumber: z.string().openapi({
+    description: 'Round number (1-indexed)',
+    example: '1',
+  }),
+});
+
+// ============================================================================
+// Entity Schemas for OpenAPI (Reusing Database Validation Schemas)
+// ============================================================================
+
+/**
+ * ✅ REUSE: Chat participant schema from database validation
+ * Extended with OpenAPI metadata and Date-to-string transforms for JSON serialization
+ */
+const ChatParticipantSchema = chatParticipantSelectSchema
+  .extend({
+    createdAt: z.coerce.date().transform(d => d.toISOString()).openapi({
+      description: 'Participant creation timestamp',
+      example: '2024-01-01T00:00:00Z',
+    }),
+    updatedAt: z.coerce.date().transform(d => d.toISOString()).openapi({
+      description: 'Participant last update timestamp',
+      example: '2024-01-15T10:30:00Z',
+    }),
+    settings: z.object({
+      temperature: z.number().min(0).max(2).optional(),
+      maxTokens: z.number().int().positive().optional(),
+      systemPrompt: z.string().optional(),
+    }).passthrough().nullable().optional(),
+  })
+  .openapi('ChatParticipant');
+
+/**
+ * ✅ SHARED: Message metadata schema
+ * Extracted as a shared schema to avoid duplication
+ */
+export const MessageMetadataSchema = z.object({
+  model: z.string().optional(),
+  finishReason: z.string().optional(),
+  usage: z.object({
+    promptTokens: z.number().optional(),
+    completionTokens: z.number().optional(),
+    totalTokens: z.number().optional(),
+  }).optional(),
+}).passthrough().nullable();
+
+/**
+ * ✅ REUSE: Chat message schema from database validation
+ * Extended with OpenAPI metadata and Date-to-string transforms for JSON serialization
+ */
+const ChatMessageSchema = chatMessageSelectSchema
+  .extend({
+    createdAt: z.coerce.date().transform(d => d.toISOString()).openapi({
+      description: 'Message creation timestamp',
+      example: '2024-01-01T00:00:00Z',
+    }),
+    toolCalls: z.array(z.object({
+      id: z.string(),
+      type: z.string(),
+      function: z.object({
+        name: z.string(),
+        arguments: z.string(),
+      }),
+    })).nullable().optional(),
+    metadata: MessageMetadataSchema.optional(),
+  })
+  .openapi('ChatMessage');
+
+/**
+ * ✅ REUSE: Chat thread schema from database validation
+ * Extended with OpenAPI metadata and Date-to-string transforms for JSON serialization
+ */
+const ChatThreadSchema = chatThreadSelectSchema
+  .extend({
+    createdAt: z.coerce.date().transform(d => d.toISOString()).openapi({
+      description: 'Thread creation timestamp',
+      example: '2024-01-01T00:00:00Z',
+    }),
+    updatedAt: z.coerce.date().transform(d => d.toISOString()).openapi({
+      description: 'Thread last update timestamp',
+      example: '2024-01-15T10:30:00Z',
+    }),
+    lastMessageAt: z.coerce.date().nullable().transform(d => d?.toISOString() ?? null).openapi({
+      description: 'Last message timestamp (null if no messages)',
+      example: '2024-01-15T10:30:00Z',
+    }),
+    metadata: z.object({
+      tags: z.array(z.string()).optional(),
+      summary: z.string().optional(),
+    }).passthrough().nullable().optional(),
+  })
+  .openapi('ChatThread');
+
+/**
+ * ✅ REUSE: Chat thread changelog schema from database validation
+ * Extended with Date-to-string transforms for JSON serialization
+ */
+const ChatThreadChangelogSchema = chatThreadChangelogSelectSchema
+  .extend({
+    createdAt: z.coerce.date().transform(d => d.toISOString()).openapi({
+      description: 'Changelog entry creation timestamp',
+      example: '2024-01-01T00:00:00Z',
+    }),
+  })
+  .openapi('ChatThreadChangelog');
+
+/**
+ * ✅ REUSE: Chat custom role schema from database validation
+ * Extended with Date-to-string transforms for JSON serialization
+ */
+const ChatCustomRoleSchema = chatCustomRoleSelectSchema
+  .extend({
+    createdAt: z.coerce.date().transform(d => d.toISOString()).openapi({
+      description: 'Custom role creation timestamp',
+      example: '2024-01-01T00:00:00Z',
+    }),
+    updatedAt: z.coerce.date().transform(d => d.toISOString()).openapi({
+      description: 'Custom role last update timestamp',
+      example: '2024-01-15T10:30:00Z',
+    }),
+    metadata: z.object({
+      tags: z.array(z.string()).optional(),
+      category: z.string().optional(),
+    }).passthrough().nullable().optional(),
+  })
+  .openapi('ChatCustomRole');
+
+// ============================================================================
+// Thread Request/Response Schemas
+// ============================================================================
+
+/**
+ * ✅ REUSE: Extends chatThreadInsertSchema from database validation
+ * Adds API-specific fields (participants, firstMessage)
+ */
+export const CreateThreadRequestSchema = chatThreadInsertSchema
+  .pick({
+    title: true,
+    mode: true,
+    metadata: true,
+  })
+  .extend({
+    title: z.string().min(1).max(200).optional().default('New Chat').openapi({
+      description: 'Thread title (auto-generated from first message if "New Chat")',
+      example: 'Product strategy brainstorm',
+    }),
+    mode: ThreadModeSchema.optional().default('brainstorming').openapi({
+      description: 'Conversation mode',
+      example: 'brainstorming',
+    }),
+    participants: z.array(z.object({
+      modelId: z.string().refine(isValidModelId, {
+        message: 'Invalid model ID. Must be a valid model from AI configuration.',
+      }).openapi({
+        description: 'Model ID (e.g., anthropic/claude-3.5-sonnet, openai/gpt-4o)',
+        example: 'anthropic/claude-3.5-sonnet',
+      }),
+      role: z.string().nullish().openapi({
+        description: 'Optional assigned role for this model (immutable)',
+        example: 'The Ideator',
+      }),
+      customRoleId: z.string().nullish().openapi({
+        description: 'Optional custom role ID to load system prompt from',
+        example: '01HXYZ123ABC',
+      }),
+      systemPrompt: z.string().optional().openapi({
+        description: 'Optional system prompt override (takes precedence over customRoleId)',
+      }),
+      temperature: z.number().min(0).max(2).optional().openapi({
+        description: 'Temperature setting',
+      }),
+      maxTokens: z.number().int().positive().optional().openapi({
+        description: 'Max tokens setting',
+      }),
+    })).min(1).openapi({
+      description: 'Participants array (order determines priority - immutable after creation)',
+    }),
+    firstMessage: MessageContentSchema.openapi({
+      description: 'Initial user message to start the conversation',
+      example: 'What are innovative product ideas for sustainability?',
+    }),
+  })
+  .openapi('CreateThreadRequest');
+
+/**
+ * ✅ REUSE: Uses chatThreadUpdateSchema from database validation
+ */
+export const UpdateThreadRequestSchema = chatThreadUpdateSchema
+  .pick({
+    title: true,
+    mode: true,
+    status: true,
+    isFavorite: true,
+    isPublic: true,
+    metadata: true,
+  })
+  .openapi('UpdateThreadRequest');
+
+/**
+ * Query parameters for cursor-based pagination with search support
+ */
 export const ThreadListQuerySchema = CursorPaginationQuerySchema.extend({
   search: z.string().optional().openapi({
     description: 'Search query to filter threads by title',
@@ -339,123 +310,17 @@ export const ThreadListQuerySchema = CursorPaginationQuerySchema.extend({
   }),
 }).openapi('ThreadListQuery');
 
-// ============================================================================
-// Memory Schemas (moved before ThreadDetailPayloadSchema to fix order)
-// ============================================================================
-
-const ChatMemorySchema = z.object({
-  id: z.string().openapi({
-    description: 'Memory ID',
-    example: 'memory_abc123',
-  }),
-  userId: z.string().openapi({
-    description: 'User ID who owns the memory',
-    example: 'user_123',
-  }),
-  threadId: z.string().nullable().openapi({
-    description: 'Thread ID (null for global memories)',
-    example: 'thread_abc123',
-  }),
-  type: z.enum(['personal', 'topic', 'instruction', 'fact']).openapi({
-    description: 'Memory type',
-    example: 'topic',
-  }),
-  title: z.string().openapi({
-    description: 'Memory title',
-    example: 'Product development preferences',
-  }),
-  description: z.string().nullable().openapi({
-    description: 'Brief description of the memory',
-    example: 'Key considerations for product development',
-  }),
-  content: z.string().openapi({
-    description: 'Memory content',
-    example: 'Focus on sustainability and eco-friendly solutions',
-  }),
-  isGlobal: z.boolean().openapi({
-    description: 'Whether memory applies to all threads',
-    example: false,
-  }),
-  metadata: z.object({
-    tags: z.array(z.string()).optional(),
-    relevance: z.number().optional(),
-  }).passthrough().nullable().openapi({
-    description: 'Memory metadata',
-  }),
-  createdAt: CoreSchemas.timestamp().openapi({
-    description: 'Memory creation timestamp',
-  }),
-  updatedAt: CoreSchemas.timestamp().openapi({
-    description: 'Memory last update timestamp',
-  }),
-}).openapi('ChatMemory');
-
-// ============================================================================
-// Changelog Schemas (moved before ThreadDetailPayloadSchema to fix order)
-// ============================================================================
-
-const ChatThreadChangelogSchema = z.object({
-  id: z.string().openapi({
-    description: 'Changelog entry ID',
-    example: 'changelog_abc123',
-  }),
-  threadId: z.string().openapi({
-    description: 'Thread ID',
-    example: 'thread_abc123',
-  }),
-  changeType: z.enum([
-    'mode_change',
-    'participant_added',
-    'participant_removed',
-    'participant_updated',
-    'participants_reordered',
-    'memory_added',
-    'memory_removed',
-  ]).openapi({
-    description: 'Type of configuration change',
-    example: 'participant_added',
-  }),
-  changeSummary: z.string().openapi({
-    description: 'Human-readable summary of the change',
-    example: 'Added Claude 3.5 Sonnet as The Ideator',
-  }),
-  changeData: z.record(z.string(), z.unknown()).nullable().openapi({
-    description: 'Additional structured data about the change',
-  }),
-  createdAt: CoreSchemas.timestamp().openapi({
-    description: 'When the change was made',
-    example: '2024-01-15T10:30:00Z',
-  }),
-}).openapi('ChatThreadChangelog');
-
-// Thread detail with participants, messages, and memories
+/**
+ * Thread detail with participants, messages, and changelog
+ */
 const ThreadDetailPayloadSchema = z.object({
-  thread: ChatThreadSchema.openapi({
-    description: 'Thread details',
-  }),
-  participants: z.array(ChatParticipantSchema).openapi({
-    description: 'Thread participants (AI models with roles)',
-  }),
-  messages: z.array(ChatMessageSchema).openapi({
-    description: 'Thread messages',
-  }),
-  memories: z.array(ChatMemorySchema).openapi({
-    description: 'Attached memories for context',
-  }),
-  changelog: z.array(ChatThreadChangelogSchema).openapi({
-    description: 'Thread configuration change history',
-  }),
+  thread: ChatThreadSchema,
+  participants: z.array(ChatParticipantSchema),
+  messages: z.array(ChatMessageSchema),
+  changelog: z.array(ChatThreadChangelogSchema),
   user: z.object({
-    name: z.string().openapi({
-      description: 'Thread owner name',
-      example: 'John Doe',
-    }),
-    image: z.string().nullable().openapi({
-      description: 'Thread owner profile image URL',
-      example: 'https://example.com/avatar.jpg',
-    }),
-  }).openapi({
-    description: 'Thread owner public information (name and avatar only)',
+    name: z.string(),
+    image: z.string().nullable(),
   }),
 }).openapi('ThreadDetailPayload');
 
@@ -463,54 +328,38 @@ export const ThreadListResponseSchema = createCursorPaginatedResponseSchema(Chat
 export const ThreadDetailResponseSchema = createApiResponseSchema(ThreadDetailPayloadSchema).openapi('ThreadDetailResponse');
 
 // ============================================================================
-// Participant Schemas
+// Participant Request/Response Schemas
 // ============================================================================
 
-export const AddParticipantRequestSchema = z.object({
-  modelId: z.string().min(1).refine(isValidModelId, {
-    message: 'Invalid model ID. Must be a valid model from AI configuration.',
-  }).openapi({
-    description: 'Model ID to add (e.g., anthropic/claude-3.5-sonnet, openai/gpt-4o)',
-    example: 'anthropic/claude-3.5-sonnet',
-  }),
-  role: z.string().min(1).max(100).nullish().openapi({ // ✅ Optional: Allow null, undefined, or string
-    description: 'Optional assigned role',
-    example: 'The Ideator',
-  }),
-  priority: z.number().int().nonnegative().optional().default(0).openapi({
-    description: 'Response priority',
-    example: 0,
-  }),
-  settings: z.object({
-    temperature: z.number().min(0).max(2).optional(),
-    maxTokens: z.number().int().positive().optional(),
-    systemPrompt: z.string().optional(),
-  }).passthrough().optional().openapi({
-    description: 'Model settings override',
-  }),
-}).openapi('AddParticipantRequest');
+/**
+ * ✅ REUSE: Derives from chatParticipantInsertSchema
+ */
+export const AddParticipantRequestSchema = chatParticipantInsertSchema
+  .pick({
+    modelId: true,
+    role: true,
+    priority: true,
+    settings: true,
+  })
+  .extend({
+    role: z.string().min(1).max(100).nullish().openapi({
+      description: 'Optional assigned role',
+      example: 'The Ideator',
+    }),
+  })
+  .openapi('AddParticipantRequest');
 
-export const UpdateParticipantRequestSchema = z.object({
-  role: z.string().min(1).max(100).nullish().openapi({ // ✅ Optional: Allow null, undefined, or string
-    description: 'Optional updated role',
-    example: 'Devil\'s Advocate',
-  }),
-  priority: z.number().int().nonnegative().optional().openapi({
-    description: 'Updated priority',
-    example: 1,
-  }),
-  isEnabled: z.boolean().optional().openapi({
-    description: 'Enable/disable participant',
-    example: true,
-  }),
-  settings: z.object({
-    temperature: z.number().min(0).max(2).optional(),
-    maxTokens: z.number().int().positive().optional(),
-    systemPrompt: z.string().optional(),
-  }).passthrough().optional().openapi({
-    description: 'Updated model settings',
-  }),
-}).openapi('UpdateParticipantRequest');
+/**
+ * ✅ REUSE: Derives from chatParticipantUpdateSchema
+ */
+export const UpdateParticipantRequestSchema = chatParticipantUpdateSchema
+  .pick({
+    role: true,
+    priority: true,
+    isEnabled: true,
+    settings: true,
+  })
+  .openapi('UpdateParticipantRequest');
 
 export const ReorderParticipantsRequestSchema = z.object({
   participants: z.array(z.object({
@@ -528,28 +377,20 @@ export const ReorderParticipantsRequestSchema = z.object({
 }).openapi('ReorderParticipantsRequest');
 
 const ParticipantListPayloadSchema = z.object({
-  participants: z.array(ChatParticipantSchema).openapi({
-    description: 'List of thread participants',
-  }),
-  count: z.number().int().nonnegative().openapi({
-    description: 'Total number of participants',
-    example: 3,
-  }),
+  participants: z.array(ChatParticipantSchema),
+  count: z.number().int().nonnegative(),
 }).openapi('ParticipantListPayload');
 
 const ParticipantDetailPayloadSchema = z.object({
-  participant: ChatParticipantSchema.openapi({
-    description: 'Participant details',
-  }),
+  participant: ChatParticipantSchema,
 }).openapi('ParticipantDetailPayload');
 
 export const ParticipantListResponseSchema = createApiResponseSchema(ParticipantListPayloadSchema).openapi('ParticipantListResponse');
 export const ParticipantDetailResponseSchema = createApiResponseSchema(ParticipantDetailPayloadSchema).openapi('ParticipantDetailResponse');
 
 // ============================================================================
-// Message Schemas
+// Message Request/Response Schemas
 // ============================================================================
-// Note: SendMessageRequestSchema removed - use StreamChatRequestSchema for all chat operations
 
 /**
  * ✅ AI SDK v5 Streaming Request - OFFICIAL PATTERN
@@ -557,52 +398,310 @@ export const ParticipantDetailResponseSchema = createApiResponseSchema(Participa
  *
  * AI SDK uses runtime validation with validateUIMessages(), not compile-time schemas.
  * We accept messages as unknown and validate with AI SDK's validateUIMessages() in the handler.
- * This avoids type conflicts between Zod inference and AI SDK's UIMessage type.
- *
- * Pattern from AI SDK examples:
- * const { messages }: { messages: UIMessage[] } = await req.json();
- * validateUIMessages({ messages });
  */
 export const StreamChatRequestSchema = z.object({
-  // ✅ AI SDK v5: Accept messages as unknown array, validate with validateUIMessages() in handler
   messages: z.array(z.unknown()).min(1).openapi({
     description: 'All conversation messages in AI SDK UIMessage format (validated at runtime)',
   }),
-  // Dynamic configuration updates (optional)
   mode: ThreadModeSchema.optional().openapi({
     description: 'Updated conversation mode',
   }),
   participants: z.array(z.object({
     modelId: z.string(),
-    role: z.string().nullish(), // ✅ Allow null, undefined, or string
-    customRoleId: z.string().nullish(), // ✅ Allow null, undefined, or string
+    role: z.string().nullish(),
+    customRoleId: z.string().nullish(),
     order: z.number().int().nonnegative(),
   })).optional().openapi({
     description: 'Updated participant configuration',
   }),
-  memoryIds: z.array(z.string()).optional().openapi({
-    description: 'Updated memory IDs to attach',
-  }),
-  // ✅ OFFICIAL AI SDK PATTERN: One participant per HTTP request
-  // Optional: Only required when streaming a response (not for config-only updates)
   participantIndex: z.number().int().nonnegative().optional().openapi({
     description: 'Which participant to stream in this request (0-based). Omit when only updating configuration without streaming.',
     example: 0,
   }),
 }).openapi('StreamChatRequest');
 
-// Message list response
 const MessagesListPayloadSchema = z.object({
-  messages: z.array(ChatMessageSchema).openapi({
-    description: 'List of messages',
-  }),
-  count: z.number().int().nonnegative().openapi({
-    description: 'Total number of messages',
-    example: 10,
-  }),
+  messages: z.array(ChatMessageSchema),
+  count: z.number().int().nonnegative(),
 }).openapi('MessagesListPayload');
 
 export const MessagesListResponseSchema = createApiResponseSchema(MessagesListPayloadSchema).openapi('MessagesListResponse');
+
+// ============================================================================
+// Custom Role Request/Response Schemas
+// ============================================================================
+
+/**
+ * ✅ REUSE: Derives from chatCustomRoleInsertSchema
+ */
+export const CreateCustomRoleRequestSchema = chatCustomRoleInsertSchema
+  .pick({
+    name: true,
+    description: true,
+    systemPrompt: true,
+    metadata: true,
+  })
+  .openapi('CreateCustomRoleRequest');
+
+/**
+ * ✅ REUSE: Derives from chatCustomRoleUpdateSchema
+ */
+export const UpdateCustomRoleRequestSchema = chatCustomRoleUpdateSchema
+  .pick({
+    name: true,
+    description: true,
+    systemPrompt: true,
+    metadata: true,
+  })
+  .openapi('UpdateCustomRoleRequest');
+
+const CustomRoleDetailPayloadSchema = z.object({
+  customRole: ChatCustomRoleSchema,
+}).openapi('CustomRoleDetailPayload');
+
+export const CustomRoleListResponseSchema = createCursorPaginatedResponseSchema(ChatCustomRoleSchema).openapi('CustomRoleListResponse');
+export const CustomRoleDetailResponseSchema = createApiResponseSchema(CustomRoleDetailPayloadSchema).openapi('CustomRoleDetailResponse');
+
+// ============================================================================
+// Changelog Response Schemas
+// ============================================================================
+
+const ChangelogListPayloadSchema = z.object({
+  changelog: z.array(ChatThreadChangelogSchema),
+  count: z.number().int().nonnegative(),
+}).openapi('ChangelogListPayload');
+
+export const ChangelogListResponseSchema = createApiResponseSchema(ChangelogListPayloadSchema).openapi('ChangelogListResponse');
+
+// ============================================================================
+// Changelog Creation Schema (for services)
+// ============================================================================
+
+/**
+ * Changelog type enum
+ * ✅ SINGLE SOURCE: Used across changelog operations
+ */
+export const ChangelogTypeSchema = z.enum([
+  'mode_change',
+  'participant_added',
+  'participant_removed',
+  'participant_updated',
+  'participants_reordered',
+]);
+
+export type ChangelogType = z.infer<typeof ChangelogTypeSchema>;
+
+/**
+ * Create changelog entry parameters
+ * ✅ SINGLE SOURCE: Used by thread-changelog.service.ts
+ */
+export const CreateChangelogParamsSchema = z.object({
+  threadId: CoreSchemas.id(),
+  changeType: ChangelogTypeSchema,
+  changeSummary: z.string().min(1).max(500),
+  changeData: z.record(z.string(), z.unknown()).optional(),
+}).openapi('CreateChangelogParams');
+
+export type CreateChangelogParams = z.infer<typeof CreateChangelogParamsSchema>;
+
+// ============================================================================
+// Roundtable Prompt Schemas (for services)
+// ============================================================================
+
+/**
+ * Participant info schema for roundtable prompt building
+ * ✅ SINGLE SOURCE: Used by roundtable-prompt.service.ts
+ */
+export const ParticipantInfoSchema = z.object({
+  id: CoreSchemas.id(),
+  modelId: z.string(),
+  modelName: z.string().optional(),
+  role: z.string().nullable(),
+  priority: z.number().int().nonnegative(),
+}).openapi('ParticipantInfo');
+
+export type ParticipantInfo = z.infer<typeof ParticipantInfoSchema>;
+
+/**
+ * Roundtable prompt configuration schema
+ * ✅ SINGLE SOURCE: Internal configuration for prompt building
+ */
+export const RoundtablePromptConfigSchema = z.object({
+  mode: z.string(),
+  currentParticipantIndex: z.number().int().nonnegative(),
+  currentParticipant: ParticipantInfoSchema,
+  allParticipants: z.array(ParticipantInfoSchema),
+  customSystemPrompt: z.string().nullable().optional(),
+}).openapi('RoundtablePromptConfig');
+
+export type RoundtablePromptConfig = z.infer<typeof RoundtablePromptConfigSchema>;
+
+// ============================================================================
+// Moderator Analysis Schemas
+// ============================================================================
+
+/**
+ * Request to generate moderator analysis for a conversation round
+ */
+export const ModeratorAnalysisRequestSchema = z.object({
+  threadId: CoreSchemas.id().openapi({
+    description: 'Thread ID to analyze',
+    example: 'thread_abc123',
+  }),
+  roundNumber: z.number().int().min(1).openapi({
+    description: 'Round number (1-indexed) of the conversation to analyze',
+    example: 1,
+  }),
+  participantMessageIds: z.array(CoreSchemas.id()).min(1).openapi({
+    description: 'Array of message IDs from all participants in this round (in order)',
+    example: ['msg_abc123', 'msg_def456', 'msg_ghi789'],
+  }),
+}).openapi('ModeratorAnalysisRequest');
+
+/**
+ * Individual skill rating for skills matrix visualization
+ */
+const SkillRatingSchema = z.object({
+  skillName: z.string().openapi({
+    description: 'Name of the skill being evaluated',
+    example: 'Creativity',
+  }),
+  rating: z.number().min(1).max(10).openapi({
+    description: 'Rating out of 10 for this specific skill',
+    example: 8,
+  }),
+}).openapi('SkillRating');
+
+/**
+ * Complete analysis for a single participant's response
+ */
+const ParticipantAnalysisSchema = z.object({
+  participantIndex: z.number().int().min(0).openapi({
+    description: 'Index of the participant in the conversation (0-based)',
+    example: 0,
+  }),
+  participantRole: z.string().nullable().openapi({
+    description: 'The role assigned to this participant',
+    example: 'The Ideator',
+  }),
+  modelId: z.string().openapi({
+    description: 'AI model ID',
+    example: 'anthropic/claude-sonnet-4.5',
+  }),
+  modelName: z.string().openapi({
+    description: 'Human-readable model name',
+    example: 'Claude Sonnet 4.5',
+  }),
+  overallRating: z.number().min(1).max(10).openapi({
+    description: 'Overall rating out of 10 for this response',
+    example: 8.5,
+  }),
+  skillsMatrix: z.array(SkillRatingSchema).openapi({
+    description: 'Individual skill ratings for visualization',
+  }),
+  pros: z.array(z.string()).min(1).openapi({
+    description: 'List of strengths in this response',
+    example: ['Creative and diverse ideas', 'Built effectively on previous suggestions'],
+  }),
+  cons: z.array(z.string()).min(1).openapi({
+    description: 'List of weaknesses or areas for improvement',
+    example: ['Could have explored more unconventional approaches'],
+  }),
+  summary: z.string().min(20).max(300).openapi({
+    description: 'Brief summary of this participant\'s contribution',
+    example: 'Provided innovative solutions with strong creative direction.',
+  }),
+}).openapi('ParticipantAnalysis');
+
+/**
+ * Leaderboard entry for ranking participants
+ */
+const LeaderboardEntrySchema = z.object({
+  rank: z.number().int().min(1).openapi({
+    description: 'Rank position (1 = best)',
+    example: 1,
+  }),
+  participantIndex: z.number().int().min(0).openapi({
+    description: 'Index of the participant',
+    example: 0,
+  }),
+  participantRole: z.string().nullable().openapi({
+    description: 'The role assigned to this participant',
+    example: 'The Ideator',
+  }),
+  modelId: z.string().openapi({
+    description: 'Model ID for proper icon display',
+    example: 'anthropic/claude-sonnet-4.5',
+  }),
+  modelName: z.string().openapi({
+    description: 'Human-readable model name',
+    example: 'Claude Sonnet 4.5',
+  }),
+  overallRating: z.number().min(1).max(10).openapi({
+    description: 'Overall rating for ranking',
+    example: 8.5,
+  }),
+  badge: z.string().nullable().openapi({
+    description: 'Optional badge/award',
+    example: 'Most Creative',
+  }),
+}).openapi('LeaderboardEntry');
+
+/**
+ * Complete moderator analysis output
+ */
+export const ModeratorAnalysisPayloadSchema = z.object({
+  roundNumber: z.number().int().min(1).openapi({
+    description: 'The conversation round number',
+    example: 1,
+  }),
+  mode: z.string().openapi({
+    description: 'Conversation mode',
+    example: 'brainstorming',
+  }),
+  userQuestion: z.string().openapi({
+    description: 'The user\'s original question/prompt',
+    example: 'What are some innovative product ideas?',
+  }),
+  participantAnalyses: z.array(ParticipantAnalysisSchema).min(1).openapi({
+    description: 'Detailed analysis for each participant',
+  }),
+  leaderboard: z.array(LeaderboardEntrySchema).min(1).openapi({
+    description: 'Ranked list of participants by overall performance',
+  }),
+  overallSummary: z.string().min(100).max(800).openapi({
+    description: 'Comprehensive summary of the round',
+    example: 'This brainstorming round showcased diverse creative approaches...',
+  }),
+  conclusion: z.string().min(50).max(400).openapi({
+    description: 'Final conclusion and recommendation',
+    example: 'The combination of Participant 1\'s creative ideas with Participant 2\'s practical insights provides the best path forward...',
+  }),
+}).openapi('ModeratorAnalysisPayload');
+
+export const ModeratorAnalysisResponseSchema = createApiResponseSchema(ModeratorAnalysisPayloadSchema).openapi('ModeratorAnalysisResponse');
+
+/**
+ * ✅ REUSE: Stored moderator analysis from database validation
+ * Extended with computed analysisData structure
+ */
+export const StoredModeratorAnalysisSchema = chatModeratorAnalysisSelectSchema
+  .extend({
+    analysisData: z.object({
+      leaderboard: z.array(LeaderboardEntrySchema),
+      participantAnalyses: z.array(ParticipantAnalysisSchema),
+      overallSummary: z.string(),
+      conclusion: z.string(),
+    }).nullable().optional(),
+  })
+  .openapi('StoredModeratorAnalysis');
+
+const ModeratorAnalysisListPayloadSchema = z.object({
+  analyses: z.array(StoredModeratorAnalysisSchema),
+  count: z.number().int().nonnegative(),
+}).openapi('ModeratorAnalysisListPayload');
+
+export const ModeratorAnalysisListResponseSchema = createApiResponseSchema(ModeratorAnalysisListPayloadSchema).openapi('ModeratorAnalysisListResponse');
 
 // ============================================================================
 // Helper Schemas (Service Layer)
@@ -639,195 +738,10 @@ export const RoundtablePromptParamsSchema = z.object({
   })).optional().openapi({
     description: 'Other participants (excluding current)',
   }),
-  memories: z.array(z.object({
-    title: z.string(),
-    content: z.string(),
-  })).optional().openapi({
-    description: 'Relevant memory contexts to include in prompt',
-  }),
   customSystemPrompt: z.string().nullable().optional().openapi({
     description: 'Custom system prompt override',
   }),
 }).openapi('RoundtablePromptParams');
-
-// ============================================================================
-// Memory Request/Response Schemas
-// ============================================================================
-// Note: ChatMemorySchema moved before ThreadDetailPayloadSchema (line 346)
-
-export const CreateMemoryRequestSchema = z.object({
-  threadId: z.string().optional().openapi({
-    description: 'Thread ID (omit for global memory)',
-    example: 'thread_abc123',
-  }),
-  type: z.enum(['personal', 'topic', 'instruction', 'fact']).optional().default('topic').openapi({
-    description: 'Memory type',
-    example: 'topic',
-  }),
-  title: z.string().min(1).max(200).openapi({
-    description: 'Memory title',
-    example: 'Product preferences',
-  }),
-  description: z.string().max(500).optional().openapi({
-    description: 'Brief description of the memory',
-    example: 'Key considerations for product development',
-  }),
-  content: z.string().min(1).openapi({
-    description: 'Memory content',
-    example: 'Focus on sustainability',
-  }),
-  isGlobal: z.boolean().optional().default(false).openapi({
-    description: 'Apply to all threads',
-    example: false,
-  }),
-  metadata: z.object({
-    tags: z.array(z.string()).optional(),
-  }).passthrough().optional().openapi({
-    description: 'Memory metadata',
-  }),
-}).openapi('CreateMemoryRequest');
-
-export const UpdateMemoryRequestSchema = z.object({
-  title: z.string().min(1).max(200).optional().openapi({
-    description: 'Updated memory title',
-  }),
-  description: z.string().max(500).optional().openapi({
-    description: 'Updated memory description',
-  }),
-  content: z.string().min(1).optional().openapi({
-    description: 'Updated memory content',
-  }),
-  type: z.enum(['personal', 'topic', 'instruction', 'fact']).optional().openapi({
-    description: 'Updated memory type',
-  }),
-  isGlobal: z.boolean().optional().openapi({
-    description: 'Update global status',
-  }),
-  metadata: z.object({
-    tags: z.array(z.string()).optional(),
-  }).passthrough().optional().openapi({
-    description: 'Updated metadata',
-  }),
-}).openapi('UpdateMemoryRequest');
-
-const MemoryDetailPayloadSchema = z.object({
-  memory: ChatMemorySchema.openapi({
-    description: 'Memory details',
-  }),
-}).openapi('MemoryDetailPayload');
-
-export const MemoryListResponseSchema = createCursorPaginatedResponseSchema(ChatMemorySchema).openapi('MemoryListResponse');
-export const MemoryDetailResponseSchema = createApiResponseSchema(MemoryDetailPayloadSchema).openapi('MemoryDetailResponse');
-
-// ============================================================================
-// Custom Role Schemas
-// ============================================================================
-
-export const CustomRoleIdParamSchema = z.object({
-  id: CoreSchemas.id().openapi({
-    description: 'Custom role ID',
-    example: 'role_abc123',
-  }),
-}).openapi('CustomRoleIdParam');
-
-const ChatCustomRoleSchema = z.object({
-  id: z.string().openapi({
-    description: 'Custom role ID',
-    example: 'role_abc123',
-  }),
-  userId: z.string().openapi({
-    description: 'User ID who owns the custom role',
-    example: 'user_123',
-  }),
-  name: z.string().openapi({
-    description: 'Role name',
-    example: 'The Devil\'s Advocate',
-  }),
-  description: z.string().nullable().openapi({
-    description: 'Brief description of the role',
-    example: 'Challenges ideas and identifies potential flaws',
-  }),
-  systemPrompt: z.string().openapi({
-    description: 'System prompt that defines role behavior',
-    example: 'You are a critical thinker who challenges ideas and identifies potential flaws...',
-  }),
-  metadata: z.object({
-    tags: z.array(z.string()).optional(),
-    category: z.string().optional(),
-  }).passthrough().nullable().openapi({
-    description: 'Custom role metadata',
-  }),
-  createdAt: CoreSchemas.timestamp().openapi({
-    description: 'Role creation timestamp',
-  }),
-  updatedAt: CoreSchemas.timestamp().openapi({
-    description: 'Role last update timestamp',
-  }),
-}).openapi('ChatCustomRole');
-
-export const CreateCustomRoleRequestSchema = z.object({
-  name: z.string().min(1).max(100).openapi({
-    description: 'Role name',
-    example: 'The Devil\'s Advocate',
-  }),
-  description: z.string().max(500).optional().openapi({
-    description: 'Brief description of the role',
-    example: 'Challenges ideas and identifies potential flaws',
-  }),
-  systemPrompt: z.string().min(1).openapi({
-    description: 'System prompt that defines role behavior',
-    example: 'You are a critical thinker who challenges ideas...',
-  }),
-  metadata: z.object({
-    tags: z.array(z.string()).optional(),
-    category: z.string().optional(),
-  }).passthrough().optional().openapi({
-    description: 'Custom role metadata',
-  }),
-}).openapi('CreateCustomRoleRequest');
-
-export const UpdateCustomRoleRequestSchema = z.object({
-  name: z.string().min(1).max(100).optional().openapi({
-    description: 'Updated role name',
-  }),
-  description: z.string().max(500).optional().openapi({
-    description: 'Updated role description',
-  }),
-  systemPrompt: z.string().min(1).optional().openapi({
-    description: 'Updated system prompt',
-  }),
-  metadata: z.object({
-    tags: z.array(z.string()).optional(),
-    category: z.string().optional(),
-  }).passthrough().optional().openapi({
-    description: 'Updated metadata',
-  }),
-}).openapi('UpdateCustomRoleRequest');
-
-const CustomRoleDetailPayloadSchema = z.object({
-  customRole: ChatCustomRoleSchema.openapi({
-    description: 'Custom role details',
-  }),
-}).openapi('CustomRoleDetailPayload');
-
-export const CustomRoleListResponseSchema = createCursorPaginatedResponseSchema(ChatCustomRoleSchema).openapi('CustomRoleListResponse');
-export const CustomRoleDetailResponseSchema = createApiResponseSchema(CustomRoleDetailPayloadSchema).openapi('CustomRoleDetailResponse');
-
-// ============================================================================
-// Changelog Response Schemas
-// ============================================================================
-
-const ChangelogListPayloadSchema = z.object({
-  changelog: z.array(ChatThreadChangelogSchema).openapi({
-    description: 'List of configuration changes',
-  }),
-  count: z.number().int().nonnegative().openapi({
-    description: 'Total number of changelog entries',
-    example: 5,
-  }),
-}).openapi('ChangelogListPayload');
-
-export const ChangelogListResponseSchema = createApiResponseSchema(ChangelogListPayloadSchema).openapi('ChangelogListResponse');
 
 // ============================================================================
 // TYPE EXPORTS FOR FRONTEND & BACKEND
@@ -844,14 +758,113 @@ export type UpdateParticipantRequest = z.infer<typeof UpdateParticipantRequestSc
 export type ChatMessage = z.infer<typeof ChatMessageSchema>;
 export type StreamChatRequest = z.infer<typeof StreamChatRequestSchema>;
 
-export type ChatMemory = z.infer<typeof ChatMemorySchema>;
-export type CreateMemoryRequest = z.infer<typeof CreateMemoryRequestSchema>;
-export type UpdateMemoryRequest = z.infer<typeof UpdateMemoryRequestSchema>;
-
 export type ChatCustomRole = z.infer<typeof ChatCustomRoleSchema>;
 export type CreateCustomRoleRequest = z.infer<typeof CreateCustomRoleRequestSchema>;
 export type UpdateCustomRoleRequest = z.infer<typeof UpdateCustomRoleRequestSchema>;
 
+// ============================================================================
+// Error Handler Schemas (for retry logic and error classification)
+// ============================================================================
+
+/**
+ * OpenRouter error type enum
+ * ✅ SINGLE SOURCE: All error types defined here
+ */
+export const OpenRouterErrorTypeSchema = z.enum([
+  'rate_limit',
+  'model_unavailable',
+  'invalid_request',
+  'authentication',
+  'timeout',
+  'network',
+  'empty_response',
+  'model_error',
+  'unknown',
+]);
+
+export type OpenRouterErrorType = z.infer<typeof OpenRouterErrorTypeSchema>;
+
+/**
+ * Classified error with retry guidance
+ */
+export const ClassifiedErrorSchema = z.object({
+  type: OpenRouterErrorTypeSchema,
+  message: z.string(),
+  technicalMessage: z.string(),
+  shouldRetry: z.boolean(),
+  retryAfterMs: z.number().int().nonnegative().optional(),
+  isTransient: z.boolean(),
+});
+
+export type ClassifiedError = z.infer<typeof ClassifiedErrorSchema>;
+
+/**
+ * Retry attempt metadata
+ */
+export const RetryAttemptMetadataSchema = z.object({
+  attemptNumber: z.number().int().min(1),
+  modelId: z.string().min(1),
+  error: ClassifiedErrorSchema,
+  timestamp: z.string(),
+  delayMs: z.number().int().nonnegative(),
+});
+
+export type RetryAttemptMetadata = z.infer<typeof RetryAttemptMetadataSchema>;
+
+// ============================================================================
+// AI Configuration Constants (Single Source of Truth)
+// ============================================================================
+
+/**
+ * Default AI generation parameters
+ * ✅ SINGLE SOURCE: All AI defaults defined here
+ */
+export const DEFAULT_AI_PARAMS = {
+  temperature: 0.7,
+  maxTokens: 4096,
+  topP: 0.9,
+} as const;
+
+/**
+ * Title generation configuration
+ */
+export const TITLE_GENERATION_CONFIG = {
+  temperature: 0.3,
+  maxTokens: 15,
+  topP: 0.9,
+  systemPrompt: 'Generate a 5-word title from this message. Title only, no quotes.',
+  preferredModels: [
+    'google/gemini-flash-1.5',
+    'anthropic/claude-3-haiku',
+    'qwen/qwen-2.5-72b-instruct',
+    'anthropic/claude-3.5-sonnet',
+  ],
+} as const;
+
+/**
+ * Retry configuration
+ * ✅ USER REQUIREMENT: 10 retry attempts
+ */
+export const AI_RETRY_CONFIG = {
+  maxAttempts: 10,
+  baseDelayMs: 1000,
+  maxDelayMs: 60000,
+  backoffMultiplier: 2,
+} as const;
+
+/**
+ * Timeout configuration for AI operations
+ */
+export const AI_TIMEOUT_CONFIG = {
+  perAttemptMs: 30000, // 30 seconds per attempt
+  totalMs: 300000, // 5 minutes total
+  moderatorAnalysisMs: 90000, // 90 seconds for moderator analysis (structured output generation)
+} as const;
+
 export type ChatThreadChangelog = z.infer<typeof ChatThreadChangelogSchema>;
 
 export type RoundtablePromptParams = z.infer<typeof RoundtablePromptParamsSchema>;
+
+export type ModeratorAnalysisRequest = z.infer<typeof ModeratorAnalysisRequestSchema>;
+export type ModeratorAnalysisPayload = z.infer<typeof ModeratorAnalysisPayloadSchema>;
+export type StoredModeratorAnalysis = z.infer<typeof StoredModeratorAnalysisSchema>;

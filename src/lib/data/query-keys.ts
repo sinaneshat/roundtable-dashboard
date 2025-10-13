@@ -74,18 +74,7 @@ export const queryKeys = {
     bySlug: (slug: string) => QueryKeyFactory.action('threads', 'slug', slug),
     messages: (id: string) => QueryKeyFactory.action('threads', 'messages', id),
     changelog: (id: string) => QueryKeyFactory.action('threads', 'changelog', id),
-  },
-
-  // Chat Memories
-  memories: {
-    all: QueryKeyFactory.base('memories'),
-    lists: () => [...queryKeys.memories.all, 'list'] as const,
-    list: (cursor?: string) =>
-      cursor
-        ? QueryKeyFactory.action('memories', 'list', cursor)
-        : QueryKeyFactory.list('memories'),
-    details: () => [...queryKeys.memories.all, 'detail'] as const,
-    detail: (id: string) => QueryKeyFactory.detail('memories', id),
+    analyses: (id: string) => QueryKeyFactory.action('threads', 'analyses', id),
   },
 
   // Chat Custom Roles
@@ -112,17 +101,18 @@ export const queryKeys = {
   // OpenRouter Models
   models: {
     all: QueryKeyFactory.base('models'),
-    lists: (filters?: { provider?: string; category?: string; freeOnly?: boolean; search?: string; supportsVision?: boolean }) =>
+    lists: (filters?: { provider?: string; category?: string; freeOnly?: boolean; search?: string; supportsVision?: boolean; includeAll?: boolean }) =>
       filters
         ? [...queryKeys.models.all, 'list', filters] as const
         : [...queryKeys.models.all, 'list'] as const,
-    list: (filters?: { provider?: string; category?: string; freeOnly?: boolean; search?: string; supportsVision?: boolean }) =>
+    list: (filters?: { provider?: string; category?: string; freeOnly?: boolean; search?: string; supportsVision?: boolean; includeAll?: boolean }) =>
       filters
         ? QueryKeyFactory.action('models', 'list', JSON.stringify(filters))
         : QueryKeyFactory.list('models'),
     details: () => [...queryKeys.models.all, 'detail'] as const,
     detail: (id: string) => QueryKeyFactory.detail('models', id),
     providers: () => QueryKeyFactory.action('models', 'providers'),
+    default: () => QueryKeyFactory.action('models', 'default'), // Default model for user's tier
   },
 } as const;
 
@@ -193,17 +183,6 @@ export const invalidationPatterns = {
     queryKeys.threads.lists(),
     queryKeys.usage.stats(),
     queryKeys.usage.messageQuota(),
-  ],
-
-  // Memory operations
-  memories: [
-    queryKeys.memories.lists(),
-    queryKeys.usage.stats(),
-  ],
-
-  memoryDetail: (memoryId: string) => [
-    queryKeys.memories.detail(memoryId),
-    queryKeys.memories.lists(),
   ],
 
   // Custom role operations

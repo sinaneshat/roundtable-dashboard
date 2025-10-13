@@ -41,24 +41,10 @@ function createApiHandler() {
       || (response.body !== null && typeof response.body === 'object');
 
     if (isStreamingResponse) {
-      // For streaming responses, clone headers and preserve the stream
-      const headers = new Headers(response.headers);
-
-      // Ensure proper streaming headers are set
-      headers.set('Cache-Control', 'no-cache, no-transform');
-      headers.set('Connection', 'keep-alive');
-      headers.set('X-Accel-Buffering', 'no'); // Disable nginx buffering if present
-
-      // Preserve the original content type
-      if (contentType) {
-        headers.set('Content-Type', contentType);
-      }
-
-      return new Response(response.body, {
-        status: response.status,
-        statusText: response.statusText,
-        headers,
-      });
+      // For streaming responses, return the response directly
+      // AI SDK's toTextStreamResponse() already includes proper streaming headers
+      // We cannot create a new Response from response.body as it locks the stream
+      return response;
     }
 
     return response;

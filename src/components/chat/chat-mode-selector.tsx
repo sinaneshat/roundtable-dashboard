@@ -34,14 +34,13 @@ type ChatModeSelectorProps = {
 /**
  * ChatModeSelector - Icon-based mode selector matching toolbar button style
  *
- * Follows exact styling patterns from ChatParticipantsList and ChatMemoriesList:
+ * Follows exact styling patterns from ChatParticipantsList:
  * - Same button variant, size, and spacing
  * - Icon + text label with responsive visibility
  * - Popover interaction with Command component
  * - Tooltip showing current mode description
  *
  * Pattern from: /src/components/chat/chat-participants-list.tsx:772-784
- *               /src/components/chat/chat-memories-list.tsx:209-222
  */
 export function ChatModeSelector({
   selectedMode,

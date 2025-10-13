@@ -2,33 +2,10 @@
 
 import { useTranslations } from 'next-intl';
 
+import type { Product, Subscription } from '@/api/routes/billing/schema';
 import { PricingContent } from '@/components/pricing/pricing-content';
 
 import { BaseModal } from './base-modal';
-
-type Product = {
-  id: string;
-  name: string;
-  description?: string | null;
-  prices?: Array<{
-    id: string;
-    currency: string;
-    unitAmount: number;
-    interval?: string | null;
-    trialPeriodDays?: number | null;
-  }>;
-  features?: string[] | null;
-};
-
-type Subscription = {
-  id: string;
-  status: string;
-  priceId: string;
-  productId: string;
-  currentPeriodEnd?: string | null;
-  cancelAtPeriodEnd: boolean;
-  canceledAt?: string | null;
-};
 
 type PricingModalProps = {
   open: boolean;

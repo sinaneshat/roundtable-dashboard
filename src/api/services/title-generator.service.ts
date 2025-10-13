@@ -1,6 +1,7 @@
 /**
  * Title Generator Service
  *
+ * ✅ CONSOLIDATED CONFIG: Title generation settings from lib/config/ai-defaults.ts
  * Auto-generates descriptive titles for chat threads using AI
  * Similar to ChatGPT's automatic title generation
  * Uses the first user message to create a concise, descriptive title
@@ -8,42 +9,23 @@
 
 import { eq } from 'drizzle-orm';
 
-import { createError } from '@/api/common/error-handling';
+import { createError, normalizeError } from '@/api/common/error-handling';
 import type { ErrorContext } from '@/api/core';
 import { apiLogger } from '@/api/middleware/hono-logger';
+import { TITLE_GENERATION_CONFIG } from '@/api/routes/chat/schema';
 import type { ApiEnv } from '@/api/types';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db/schema';
 
 import { initializeOpenRouter, openRouterService } from './openrouter.service';
-import { updateThreadSlug } from './slug-generator.service';
-
-/**
- * System prompt for title generation
- * Ultra-short and simple for fastest, cheapest title generation
- */
-const TITLE_GENERATION_PROMPT = `Generate a 5-word title from this message. Title only, no quotes.`;
-
-/**
- * ✅ DYNAMIC: Preferred models for title generation
- * Priority order: cheapest/fastest models first
- * Uses actual OpenRouter model IDs (no hardcoded enum)
- */
-const TITLE_GENERATION_PREFERRED_MODELS = [
-  'google/gemini-flash-1.5', // Free or very cheap
-  'anthropic/claude-3-haiku', // Fast and affordable
-  'qwen/qwen-2.5-72b-instruct', // Good budget option
-  'anthropic/claude-3.5-sonnet', // Fallback to quality model
-];
+import { generateUniqueSlug } from './slug-generator.service';
 
 /**
  * Get the best model for title generation
- * Uses first available model from preferred list
+ * ✅ SINGLE SOURCE: Uses config from ai-defaults.ts
  */
 function getTitleGenerationModel(): string {
-  // Return first preferred model (they're all available via OpenRouter)
-  // In a production system, you could validate availability via API
-  return TITLE_GENERATION_PREFERRED_MODELS[0] || 'google/gemini-flash-1.5';
+  return TITLE_GENERATION_CONFIG.preferredModels[0] || 'google/gemini-flash-1.5';
 }
 
 /**
@@ -61,7 +43,7 @@ export async function generateTitleFromMessage(
     // Get best model for title generation from configuration
     const titleModel = getTitleGenerationModel();
 
-    // Using AI SDK v5 UIMessage format
+    // Using AI SDK v5 UIMessage format with consolidated config
     const result = await openRouterService.generateText({
       modelId: titleModel,
       messages: [
@@ -76,9 +58,9 @@ export async function generateTitleFromMessage(
           ],
         },
       ],
-      system: TITLE_GENERATION_PROMPT,
-      temperature: 0.3, // Lower temperature for more predictable, concise output
-      maxTokens: 15, // Very low limit: ~5 words at ~3 tokens/word
+      system: TITLE_GENERATION_CONFIG.systemPrompt,
+      temperature: TITLE_GENERATION_CONFIG.temperature,
+      maxTokens: TITLE_GENERATION_CONFIG.maxTokens,
     });
 
     // Clean up the generated title
@@ -105,9 +87,7 @@ export async function generateTitleFromMessage(
 
     return title;
   } catch (error) {
-    apiLogger.error('Title generation failed, using fallback', {
-      error: error instanceof Error ? error.message : String(error),
-    });
+    apiLogger.error('Title generation failed, using fallback', normalizeError(error));
 
     // Fallback: Use first 5 words of message (enforcing 5-word constraint)
     const words = firstMessage.split(/\s+/).slice(0, 5).join(' ');
@@ -118,6 +98,9 @@ export async function generateTitleFromMessage(
 /**
  * Update thread title and slug
  * Called after generating a title from the first message
+ *
+ * ✅ OPTIMIZED: Single atomic update for both title and slug
+ * Following backend-patterns.md - Combine related updates into single operation
  */
 export async function updateThreadTitleAndSlug(
   threadId: string,
@@ -125,14 +108,15 @@ export async function updateThreadTitleAndSlug(
 ): Promise<{ title: string; slug: string }> {
   const db = await getDbAsync();
 
-  // Generate new slug from title
-  const newSlug = await updateThreadSlug(threadId, newTitle);
+  // Generate new slug from title (without DB update)
+  const newSlug = await generateUniqueSlug(newTitle);
 
-  // Update title in database (slug already updated by updateThreadSlug)
+  // ✅ SINGLE ATOMIC UPDATE: Both title and slug in one operation
   await db
     .update(tables.chatThread)
     .set({
       title: newTitle,
+      slug: newSlug,
       updatedAt: new Date(),
     })
     .where(eq(tables.chatThread.id, threadId));

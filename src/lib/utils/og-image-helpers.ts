@@ -108,22 +108,6 @@ export async function getModelIconBase64(modelId: string): Promise<string> {
 }
 
 /**
- * Extract provider name from OpenRouter model ID
- * ⚠️ DEPRECATED: Use getModelIconInfo from '@/lib/ai/provider-icons' instead
- *
- * This function is kept for backward compatibility but should not be used in new code.
- * The comprehensive provider mapping is now in provider-icons.ts
- *
- * @param modelId - OpenRouter model ID (e.g., "anthropic/claude-3.5-sonnet")
- * @returns Provider name (e.g., "anthropic")
- * @deprecated Use getModelIconInfo from provider-icons.ts for comprehensive provider support
- */
-export function getProviderFromModelId(modelId: string): string {
-  const { provider } = getModelIconInfo(modelId);
-  return provider;
-}
-
-/**
  * Get Roundtable logo as base64 data URL
  * @returns Base64 data URL for the logo
  */
@@ -313,26 +297,4 @@ export function truncateText(text: string, maxLength: number): string {
   if (text.length <= maxLength)
     return text;
   return `${text.slice(0, maxLength)}...`;
-}
-
-/**
- * Get display name for AI model
- * Extracts a human-readable name from model ID
- *
- * @param modelId - OpenRouter model ID
- * @returns Display name
- */
-export function getModelDisplayName(modelId: string): string {
-  const [, model] = modelId.split('/');
-
-  if (!model) {
-    return modelId;
-  }
-
-  // Clean up model name
-  const cleanModel = model
-    .replace(/-/g, ' ')
-    .replace(/\b\w/g, l => l.toUpperCase());
-
-  return cleanModel;
 }

@@ -15,12 +15,6 @@ export {
   useApiKeysQuery,
 } from './api-keys';
 
-// Chat memory queries (protected)
-export {
-  useMemoriesQuery,
-  useMemoryQuery,
-} from './chat-memories';
-
 // Chat custom role queries (protected)
 export {
   useCustomRoleQuery,

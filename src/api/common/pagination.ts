@@ -91,7 +91,7 @@ export function applyCursorPagination<T>(
  *
  * // For ascending order (oldest first)
  * const whereClause = buildCursorWhere(
- *   chatMemory.createdAt,
+ *   chatThread.createdAt,
  *   query.cursor,
  *   'asc'
  * );

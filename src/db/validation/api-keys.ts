@@ -22,15 +22,25 @@ export const apiKeySelectSchema = createSelectSchema(apiKey);
 
 /**
  * Insert schema - For creating new API keys
- * Automatically validates required fields and types
+ * With validation refinements for business rules
  */
-export const apiKeyInsertSchema = createInsertSchema(apiKey);
+export const apiKeyInsertSchema = createInsertSchema(apiKey, {
+  name: schema => schema.min(3, 'Name must be at least 3 characters').max(50, 'Name must be at most 50 characters'),
+  remaining: schema => schema.positive().nullable(),
+  refillAmount: schema => schema.positive().nullable(),
+  refillInterval: schema => schema.positive().nullable(),
+});
 
 /**
  * Update schema - For modifying existing API keys
- * Makes all fields optional for partial updates
+ * Makes all fields optional for partial updates with refinements
  */
-export const apiKeyUpdateSchema = createUpdateSchema(apiKey);
+export const apiKeyUpdateSchema = createUpdateSchema(apiKey, {
+  name: schema => schema.min(3, 'Name must be at least 3 characters').max(50, 'Name must be at most 50 characters'),
+  remaining: schema => schema.positive().nullable(),
+  refillAmount: schema => schema.positive().nullable(),
+  refillInterval: schema => schema.positive().nullable(),
+});
 
 // ============================================================================
 // Type Exports
@@ -45,36 +55,46 @@ export type ApiKeyInsert = z.infer<typeof apiKeyInsertSchema>;
 export type ApiKeyUpdate = z.infer<typeof apiKeyUpdateSchema>;
 
 // ============================================================================
-// Custom Validation Schemas for API Operations
+// Request Schemas (Derived from Drizzle-Zod)
 // ============================================================================
 
 /**
- * Schema for creating an API key via Better Auth
- * Includes only fields that users can provide
+ * ✅ REUSE: Create API key schema derived from insert schema
+ * Pick only user-provided fields and refine validation
  */
-export const createApiKeyRequestSchema = z.object({
-  name: z.string().min(3, 'Name must be at least 3 characters').max(50, 'Name must be at most 50 characters'),
-  expiresIn: z.number().int().positive().min(1, 'Expiration must be at least 1 day').max(365, 'Expiration cannot exceed 365 days').optional(),
-  remaining: z.number().int().positive().nullable().optional(),
-  metadata: z.record(z.string(), z.unknown()).optional().nullable(),
-});
+export const createApiKeyRequestSchema = apiKeyInsertSchema
+  .pick({
+    name: true,
+    metadata: true,
+  })
+  .extend({
+    // Additional user-facing fields not in table
+    expiresIn: z.number().int().positive().min(1, 'Expiration must be at least 1 day').max(365, 'Expiration cannot exceed 365 days').optional(),
+    remaining: z.number().int().positive().nullable().optional(),
+  });
 
 /**
- * Schema for updating an API key via Better Auth
- * All fields are optional for partial updates
+ * ✅ REUSE: Update API key schema derived from update schema
+ * Pick relevant fields for API updates
  */
-export const updateApiKeyRequestSchema = z.object({
-  keyId: z.string().min(1, 'API key ID is required'),
-  name: z.string().min(3, 'Name must be at least 3 characters').max(50, 'Name must be at most 50 characters').optional(),
-  enabled: z.boolean().optional(),
-  remaining: z.number().int().positive().nullable().optional(),
-  refillAmount: z.number().int().positive().nullable().optional(),
-  refillInterval: z.number().int().positive().nullable().optional(),
-  metadata: z.record(z.string(), z.unknown()).optional().nullable(),
-});
+export const updateApiKeyRequestSchema = apiKeyUpdateSchema
+  .pick({
+    name: true,
+    enabled: true,
+    remaining: true,
+    refillAmount: true,
+    refillInterval: true,
+    metadata: true,
+    rateLimitEnabled: true,
+    rateLimitTimeWindow: true,
+    rateLimitMax: true,
+  })
+  .extend({
+    keyId: z.string().min(1, 'API key ID is required'),
+  });
 
 /**
- * Schema for API key ID parameter
+ * ✅ Simple param schema - no table mapping needed
  */
 export const apiKeyIdParamSchema = z.object({
   keyId: z.string().min(1, 'API key ID is required'),

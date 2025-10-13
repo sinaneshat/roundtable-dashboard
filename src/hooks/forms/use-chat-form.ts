@@ -20,7 +20,6 @@ export function useChatFormState() {
     message: watch('message'),
     mode: watch('mode'),
     participants: watch('participants'),
-    memoryIds: watch('memoryIds'),
     setValue,
     errors: formState.errors,
     isSubmitting: formState.isSubmitting,

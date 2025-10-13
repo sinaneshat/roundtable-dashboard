@@ -2,6 +2,11 @@ import { z } from '@hono/zod-openapi';
 import type Stripe from 'stripe';
 
 import { CoreSchemas, createApiResponseSchema } from '@/api/core/schemas';
+import {
+  stripePriceSelectSchema,
+  stripeProductSelectSchema,
+  stripeSubscriptionSelectSchema,
+} from '@/db/validation/billing';
 
 // ============================================================================
 // Path Parameter Schemas
@@ -22,65 +27,43 @@ export const SubscriptionIdParamSchema = z.object({
 });
 
 // ============================================================================
-// Product & Price Schemas
+// Product & Price Schemas (Reusing Database Validation Schemas)
 // ============================================================================
 
-const PriceSchema = z.object({
-  id: z.string().openapi({
-    example: 'price_1ABC123',
-    description: 'Stripe price ID',
-  }),
-  productId: z.string().openapi({
-    example: 'prod_ABC123',
-    description: 'Stripe product ID',
-  }),
-  unitAmount: z.number().int().nonnegative().openapi({
-    example: 999,
-    description: 'Price in cents',
-  }),
-  currency: z.string().openapi({
-    example: 'usd',
-    description: 'Currency code',
-  }),
-  interval: z.enum(['month', 'year']).openapi({
-    example: 'month',
-    description: 'Billing interval',
-  }),
-  trialPeriodDays: z.number().int().nonnegative().nullable().openapi({
-    example: 14,
-    description: 'Trial days',
-  }),
-  active: z.boolean().openapi({
-    example: true,
-    description: 'Active status',
-  }),
-}).openapi('Price');
+/**
+ * ✅ REUSE: Price schema from database validation
+ * Extended with OpenAPI metadata for API documentation
+ */
+const PriceSchema = stripePriceSelectSchema
+  .pick({
+    id: true,
+    productId: true,
+    unitAmount: true,
+    currency: true,
+    interval: true,
+    trialPeriodDays: true,
+    active: true,
+  })
+  .openapi('Price');
 
-const ProductSchema = z.object({
-  id: z.string().openapi({
-    example: 'prod_ABC123',
-    description: 'Stripe product ID',
-  }),
-  name: z.string().openapi({
-    example: 'Professional Plan',
-    description: 'Product name',
-  }),
-  description: z.string().nullable().openapi({
-    example: 'For growing teams',
-    description: 'Product description',
-  }),
-  features: z.array(z.string()).nullable().openapi({
-    example: ['Feature 1', 'Feature 2'],
-    description: 'Product features',
-  }),
-  active: z.boolean().openapi({
-    example: true,
-    description: 'Active status',
-  }),
-  prices: z.array(PriceSchema).optional().openapi({
-    description: 'Available prices',
-  }),
-}).openapi('Product');
+/**
+ * ✅ REUSE: Product schema from database validation
+ * Extended with prices relationship for API response
+ */
+const ProductSchema = stripeProductSelectSchema
+  .pick({
+    id: true,
+    name: true,
+    description: true,
+    active: true,
+    features: true,
+  })
+  .extend({
+    prices: z.array(PriceSchema).optional().openapi({
+      description: 'Available prices for this product',
+    }),
+  })
+  .openapi('Product');
 
 const ProductListPayloadSchema = z.object({
   products: z.array(ProductSchema).openapi({
@@ -155,60 +138,48 @@ const CustomerPortalPayloadSchema = z.object({
 export const CustomerPortalResponseSchema = createApiResponseSchema(CustomerPortalPayloadSchema).openapi('CustomerPortalResponse');
 
 // ============================================================================
-// Subscription Schemas
+// Subscription Schemas (Reusing Database Validation Schemas)
 // ============================================================================
 
-const SubscriptionSchema = z.object({
-  id: z.string().openapi({
-    description: 'Stripe subscription ID',
-    example: 'sub_ABC123',
-  }),
-  status: z.enum([
-    'active',
-    'past_due',
-    'unpaid',
-    'canceled',
-    'incomplete',
-    'incomplete_expired',
-    'trialing',
-    'paused',
-  ] as const).openapi({
-    description: 'Subscription status (matches Stripe.Subscription.Status)',
-    example: 'active',
-  }),
-  priceId: z.string().openapi({
-    description: 'Stripe price ID',
-    example: 'price_1ABC123',
-  }),
-  productId: z.string().openapi({
-    description: 'Stripe product ID',
-    example: 'prod_ABC123',
-  }),
-  currentPeriodStart: CoreSchemas.timestamp().openapi({
-    description: 'Current billing period start timestamp',
-    example: '2025-01-01T00:00:00.000Z',
-  }),
-  currentPeriodEnd: CoreSchemas.timestamp().openapi({
-    description: 'Current billing period end timestamp',
-    example: '2025-02-01T00:00:00.000Z',
-  }),
-  cancelAtPeriodEnd: z.boolean().openapi({
-    description: 'Whether subscription will cancel at period end',
-    example: false,
-  }),
-  canceledAt: CoreSchemas.timestamp().nullable().openapi({
-    description: 'Timestamp when subscription was canceled',
-    example: null,
-  }),
-  trialStart: CoreSchemas.timestamp().nullable().openapi({
-    description: 'Trial period start timestamp',
-    example: null,
-  }),
-  trialEnd: CoreSchemas.timestamp().nullable().openapi({
-    description: 'Trial period end timestamp',
-    example: null,
-  }),
-}).openapi('Subscription');
+/**
+ * ✅ REUSE: Subscription schema from database validation
+ * Picked fields relevant for API responses with Date-to-string transforms
+ */
+const SubscriptionSchema = stripeSubscriptionSelectSchema
+  .pick({
+    id: true,
+    status: true,
+    priceId: true,
+    cancelAtPeriodEnd: true,
+  })
+  .extend({
+    // Transform all timestamp fields to ISO strings for JSON serialization
+    currentPeriodStart: z.coerce.date().transform(d => d.toISOString()).openapi({
+      description: 'Current billing period start',
+      example: '2024-01-01T00:00:00Z',
+    }),
+    currentPeriodEnd: z.coerce.date().transform(d => d.toISOString()).openapi({
+      description: 'Current billing period end',
+      example: '2024-02-01T00:00:00Z',
+    }),
+    canceledAt: z.coerce.date().nullable().transform(d => d?.toISOString() ?? null).openapi({
+      description: 'Cancellation timestamp',
+      example: '2024-01-15T10:30:00Z',
+    }),
+    trialStart: z.coerce.date().nullable().transform(d => d?.toISOString() ?? null).openapi({
+      description: 'Trial period start',
+      example: '2024-01-01T00:00:00Z',
+    }),
+    trialEnd: z.coerce.date().nullable().transform(d => d?.toISOString() ?? null).openapi({
+      description: 'Trial period end',
+      example: '2024-01-08T00:00:00Z',
+    }),
+    productId: z.string().openapi({
+      description: 'Stripe product ID (from price relationship)',
+      example: 'prod_ABC123',
+    }),
+  })
+  .openapi('Subscription');
 
 const SubscriptionListPayloadSchema = z.object({
   subscriptions: z.array(SubscriptionSchema).openapi({
@@ -293,10 +264,6 @@ export const SubscriptionChangeResponseSchema = createApiResponseSchema(Subscrip
 // TYPE EXPORTS FOR FRONTEND & BACKEND
 // ============================================================================
 
-// ============================================================================
-// TYPE EXPORTS - Using Official Stripe SDK Types
-// ============================================================================
-
 export type Product = z.infer<typeof ProductSchema>;
 export type Price = z.infer<typeof PriceSchema>;
 export type CheckoutRequest = z.infer<typeof CheckoutRequestSchema>;
@@ -311,16 +278,17 @@ export type CancelSubscriptionRequest = z.infer<typeof CancelSubscriptionRequest
 /**
  * Type-safe subscription response payload
  * Uses official Stripe.Subscription.Status type
+ * Timestamps are serialized as ISO strings for API responses
  */
 export type SubscriptionResponsePayload = {
   id: string;
   status: SubscriptionStatus; // Stripe.Subscription.Status
   priceId: string;
   productId: string;
-  currentPeriodStart: string;
-  currentPeriodEnd: string;
+  currentPeriodStart: string; // ISO 8601 timestamp string
+  currentPeriodEnd: string; // ISO 8601 timestamp string
   cancelAtPeriodEnd: boolean;
-  canceledAt: string | null;
-  trialStart: string | null;
-  trialEnd: string | null;
+  canceledAt: string | null; // ISO 8601 timestamp string
+  trialStart: string | null; // ISO 8601 timestamp string
+  trialEnd: string | null; // ISO 8601 timestamp string
 };

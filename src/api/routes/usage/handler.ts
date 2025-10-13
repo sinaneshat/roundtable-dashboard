@@ -1,11 +1,8 @@
 import type { RouteHandler } from '@hono/zod-openapi';
 
-import { createError } from '@/api/common/error-handling';
-import type { ErrorContext } from '@/api/core';
 import { createHandler, Responses } from '@/api/core';
 import {
   checkCustomRoleQuota,
-  checkMemoryQuota,
   checkMessageQuota,
   checkThreadQuota,
   getUserUsageStats,
@@ -14,22 +11,10 @@ import type { ApiEnv } from '@/api/types';
 
 import type {
   checkCustomRoleQuotaRoute,
-  checkMemoryQuotaRoute,
   checkMessageQuotaRoute,
   checkThreadQuotaRoute,
   getUserUsageStatsRoute,
 } from './route';
-
-// ============================================================================
-// Helper Functions
-// ============================================================================
-
-function createAuthErrorContext(operation?: string): ErrorContext {
-  return {
-    errorType: 'authentication',
-    operation: operation || 'session_required',
-  };
-}
 
 // ============================================================================
 // Usage Statistics Handlers
@@ -48,10 +33,7 @@ export const getUserUsageStatsHandler: RouteHandler<
     operationName: 'getUserUsageStats',
   },
   async (c) => {
-    const user = c.var.user;
-    if (!user) {
-      throw createError.unauthenticated('Authentication required', createAuthErrorContext());
-    }
+    const { user } = c.auth();
 
     const stats = await getUserUsageStats(user.id);
 
@@ -72,10 +54,7 @@ export const checkThreadQuotaHandler: RouteHandler<
     operationName: 'checkThreadQuota',
   },
   async (c) => {
-    const user = c.var.user;
-    if (!user) {
-      throw createError.unauthenticated('Authentication required', createAuthErrorContext());
-    }
+    const { user } = c.auth();
 
     const quota = await checkThreadQuota(user.id);
 
@@ -96,36 +75,9 @@ export const checkMessageQuotaHandler: RouteHandler<
     operationName: 'checkMessageQuota',
   },
   async (c) => {
-    const user = c.var.user;
-    if (!user) {
-      throw createError.unauthenticated('Authentication required', createAuthErrorContext());
-    }
+    const { user } = c.auth();
 
     const quota = await checkMessageQuota(user.id);
-
-    return Responses.ok(c, quota);
-  },
-);
-
-/**
- * Check memory creation quota
- * Used by UI to show whether "Create Memory" button should be enabled
- */
-export const checkMemoryQuotaHandler: RouteHandler<
-  typeof checkMemoryQuotaRoute,
-  ApiEnv
-> = createHandler(
-  {
-    auth: 'session',
-    operationName: 'checkMemoryQuota',
-  },
-  async (c) => {
-    const user = c.var.user;
-    if (!user) {
-      throw createError.unauthenticated('Authentication required', createAuthErrorContext());
-    }
-
-    const quota = await checkMemoryQuota(user.id);
 
     return Responses.ok(c, quota);
   },
@@ -144,10 +96,7 @@ export const checkCustomRoleQuotaHandler: RouteHandler<
     operationName: 'checkCustomRoleQuota',
   },
   async (c) => {
-    const user = c.var.user;
-    if (!user) {
-      throw createError.unauthenticated('Authentication required', createAuthErrorContext());
-    }
+    const { user } = c.auth();
 
     const quota = await checkCustomRoleQuota(user.id);
 

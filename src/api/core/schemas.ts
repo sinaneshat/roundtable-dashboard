@@ -14,6 +14,8 @@
 
 import { z } from '@hono/zod-openapi';
 
+import { API } from '@/constants/application';
+
 // ============================================================================
 // CORE PRIMITIVE SCHEMAS (Context7 Pattern)
 // ============================================================================
@@ -72,15 +74,35 @@ export const CoreSchemas = {
     description: 'ISO 8601 timestamp',
   }),
 
-  // Pagination
+  /**
+   * Date transformation helper - converts Date to ISO string
+   * Use for required date fields that need custom descriptions
+   */
+  isoDate: (description: string, example: string) =>
+    z.coerce.date().transform(d => d.toISOString()).openapi({
+      description,
+      example,
+    }),
+
+  /**
+   * Nullable date transformation helper - converts Date? to ISO string | null
+   * Use for optional date fields that need custom descriptions
+   */
+  isoDateNullable: (description: string, example: string) =>
+    z.coerce.date().nullable().transform(d => d?.toISOString() ?? null).openapi({
+      description,
+      example,
+    }),
+
+  // Pagination (using constants from single source of truth)
   page: () => z.coerce.number().int().min(1).default(1).openapi({
     example: 1,
     description: 'Page number (1-based)',
   }),
 
-  limit: () => z.coerce.number().int().min(1).max(100).default(20).openapi({
-    example: 20,
-    description: 'Results per page (max 100)',
+  limit: () => z.coerce.number().int().min(1).max(API.MAX_PAGE_SIZE).default(API.DEFAULT_PAGE_SIZE).openapi({
+    example: API.DEFAULT_PAGE_SIZE,
+    description: `Results per page (max ${API.MAX_PAGE_SIZE})`,
   }),
 
   // Common enums
@@ -99,6 +121,61 @@ export const CoreSchemas = {
     example: 'active',
     description: 'Entity status',
   }),
+
+  // ============================================================================
+  // Query Parameter Helpers
+  // ============================================================================
+
+  /**
+   * Boolean query parameter helper - converts string to boolean
+   * Use for URL query parameters that represent boolean flags
+   */
+  booleanQuery: (description: string, example: string = 'false') =>
+    z.string().optional().transform(val => val === 'true').openapi({
+      description,
+      example,
+    }),
+
+  // ============================================================================
+  // Path Parameter Factories
+  // ============================================================================
+
+  /**
+   * ID parameter factory - creates standardized ID param schemas
+   * Use for route path parameters that represent resource IDs
+   */
+  idParam: (resourceName: string, example: string) => z.object({
+    id: CoreSchemas.id().openapi({
+      description: `${resourceName} ID`,
+      example,
+      param: { name: 'id', in: 'path' },
+    }),
+  }),
+
+  // ============================================================================
+  // Metadata Factories
+  // ============================================================================
+
+  /**
+   * Generic metadata factory - creates passthrough nullable optional object
+   * Use for flexible metadata fields that allow arbitrary key-value pairs
+   */
+  metadata: <T extends z.ZodRawShape>(shape: T) =>
+    z.object(shape).passthrough().nullable().optional(),
+
+  /**
+   * Tags metadata factory - common pattern for tagging resources
+   * Use for resources that support categorization via tags
+   */
+  tagsMetadata: () => z.object({
+    tags: z.array(z.string()).optional(),
+  }).passthrough().nullable().optional(),
+
+  /**
+   * Key-value metadata factory - simple string-keyed metadata
+   * Use for resources with simple metadata requirements
+   */
+  keyValueMetadata: () => z.record(z.string(), z.unknown()).nullable().optional(),
 } as const;
 
 // ============================================================================

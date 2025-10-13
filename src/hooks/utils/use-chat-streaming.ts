@@ -44,7 +44,6 @@ type UseChatStreamingOptions = {
   threadId: string;
   selectedMode: string;
   selectedParticipants: ParticipantConfig[];
-  selectedMemoryIds: string[];
   onError?: (error: Error) => void;
 };
 
@@ -64,7 +63,7 @@ export function useChatStreaming(
   setMessages: React.Dispatch<React.SetStateAction<UIMessage[]>>,
   setSelectedParticipants: React.Dispatch<React.SetStateAction<ParticipantConfig[]>>,
 ): UseChatStreamingResult {
-  const { threadId, selectedMode, selectedParticipants, selectedMemoryIds, onError } = options;
+  const { threadId, selectedMode, selectedParticipants, onError } = options;
 
   // ✅ Get QueryClient for invalidating usage stats after messages are sent
   const queryClient = useQueryClient();
@@ -135,7 +134,6 @@ export function useChatStreaming(
           participantIndex,
           mode: selectedMode,
           participantCount: selectedParticipants.length,
-          memoryCount: selectedMemoryIds.length,
           messageCount: messages.length,
         });
 
@@ -149,7 +147,6 @@ export function useChatStreaming(
             messages,
             mode: selectedMode,
             participants: selectedParticipants,
-            memoryIds: selectedMemoryIds,
             participantIndex,
           }),
           signal: abortSignal,
@@ -178,7 +175,6 @@ export function useChatStreaming(
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
         let buffer = '';
-        let currentContent = '';
         let eventCount = 0;
 
         console.warn('[STREAMING] Starting SSE stream processing');
@@ -189,67 +185,10 @@ export function useChatStreaming(
           if (done) {
             console.warn('[STREAMING] Stream completed:', {
               totalEvents: eventCount,
-              finalContentLength: currentContent.length,
-              hasContent: currentContent.length > 0,
             });
 
-            // ✅ Handle empty response case (model failed silently)
-            // The backend should have sent error details in the finish event's metadata
-            // If we have no content, it means the error prevented any generation
-            if (currentContent.length === 0) {
-              console.warn('[STREAMING] Stream completed with no content - checking for error in metadata');
-
-              setMessages(prev =>
-                prev.map((msg) => {
-                  if (msg.id !== messageId)
-                    return msg;
-
-                  const metadata = (msg.metadata || {}) as Record<string, unknown>;
-
-                  // Check if backend sent error details in metadata (from finish event)
-                  const hasErrorMetadata = metadata.error || metadata.errorMessage || metadata.hasError;
-
-                  if (hasErrorMetadata) {
-                    console.warn('[STREAMING] Using error details from backend metadata:', {
-                      error: metadata.error,
-                      errorMessage: metadata.errorMessage,
-                      errorType: metadata.errorType,
-                    });
-
-                    // Backend sent error details - use them
-                    return {
-                      ...msg,
-                      parts: msg.parts.length > 0
-                        ? msg.parts
-                        : [{
-                            type: 'text' as const,
-                            text: String(metadata.errorMessage || metadata.error || 'Generation failed'),
-                          }],
-                      metadata: msg.metadata, // Use original metadata
-                    };
-                  }
-
-                  // No error metadata from backend - this is truly an unknown error
-                  console.error('[STREAMING] No content and no error metadata - unknown failure');
-                  return {
-                    ...msg,
-                    parts: [{
-                      type: 'text' as const,
-                      text: 'Generation failed with no error details. Check server logs.',
-                    }],
-                    metadata: {
-                      ...metadata,
-                      error: 'unknown',
-                      errorMessage: 'Generation failed with no error details. Check server logs.',
-                      errorType: 'unknown',
-                      hasError: true,
-                      isTransient: true,
-                    },
-                  };
-                }),
-              );
-            }
-
+            // ✅ Empty check removed - AI SDK handles all parts natively via SSE events
+            // Reasoning and text parts are built automatically by the AI SDK's stream protocol
             break;
           }
 
@@ -288,7 +227,7 @@ export function useChatStreaming(
                 if (event.type === 'start' && event.messageMetadata) {
                   const startMetadata = event.messageMetadata;
                   // Merge start metadata into message immediately
-                  // ✅ NEW: Now includes roundId for variant tracking
+                  // Update message metadata with start event data
                   setMessages(prev =>
                     prev.map(msg =>
                       msg.id === messageId
@@ -297,10 +236,6 @@ export function useChatStreaming(
                             metadata: {
                               ...(msg.metadata || {}),
                               ...startMetadata,
-                              // ✅ Initialize variant metadata (will be populated in finish event)
-                              variants: [],
-                              currentVariantIndex: 0,
-                              hasVariants: false,
                             },
                           }
                         : msg,
@@ -308,21 +243,99 @@ export function useChatStreaming(
                   );
                 }
 
-                // Handle text delta - update message content
-                if (event.type === 'text-delta' && event.delta) {
-                  currentContent += event.delta;
-
-                  // Update message with accumulated content
+                // ✅ OFFICIAL AI SDK SSE PROTOCOL: reasoning-start event
+                // Documentation: https://ai-sdk.dev/docs/ai-sdk-ui/stream-protocol
+                if (event.type === 'reasoning-start') {
+                  console.warn('[STREAMING] Reasoning started:', { id: event.id });
                   setMessages(prev =>
                     prev.map(msg =>
                       msg.id === messageId
                         ? {
                             ...msg,
-                            parts: [{ type: 'text' as const, text: currentContent }],
+                            parts: [
+                              ...msg.parts,
+                              { type: 'reasoning' as const, text: '' },
+                            ],
                           }
                         : msg,
                     ),
                   );
+                }
+
+                // ✅ OFFICIAL AI SDK SSE PROTOCOL: reasoning-delta event
+                // ⚡ REAL-TIME STREAMING: Immediate state updates (React 18 automatic batching)
+                if (event.type === 'reasoning-delta' && event.delta) {
+                  setMessages(prev =>
+                    prev.map((msg) => {
+                      if (msg.id !== messageId)
+                        return msg;
+
+                      const parts = [...msg.parts];
+                      const lastPartIndex = parts.length - 1;
+                      const lastPart = parts[lastPartIndex];
+
+                      if (lastPart && lastPart.type === 'reasoning') {
+                        parts[lastPartIndex] = {
+                          ...lastPart,
+                          text: lastPart.text + event.delta,
+                        };
+                      }
+
+                      return { ...msg, parts };
+                    }),
+                  );
+                }
+
+                // ✅ OFFICIAL AI SDK SSE PROTOCOL: reasoning-end event
+                if (event.type === 'reasoning-end') {
+                  console.warn('[STREAMING] Reasoning ended:', { id: event.id });
+                }
+
+                // ✅ OFFICIAL AI SDK SSE PROTOCOL: text-start event
+                if (event.type === 'text-start') {
+                  setMessages(prev =>
+                    prev.map(msg =>
+                      msg.id === messageId
+                        ? {
+                            ...msg,
+                            parts: [
+                              ...msg.parts,
+                              { type: 'text' as const, text: '' },
+                            ],
+                          }
+                        : msg,
+                    ),
+                  );
+                }
+
+                // ✅ OFFICIAL AI SDK SSE PROTOCOL: text-delta event
+                // ⚡ REAL-TIME STREAMING: Immediate state updates for character-by-character display
+                // React 18's automatic batching prevents excessive re-renders naturally
+                if (event.type === 'text-delta' && event.delta) {
+                  setMessages(prev =>
+                    prev.map((msg) => {
+                      if (msg.id !== messageId)
+                        return msg;
+
+                      const parts = [...msg.parts];
+                      const lastPartIndex = parts.length - 1;
+                      const lastPart = parts[lastPartIndex];
+
+                      if (lastPart && lastPart.type === 'text') {
+                        parts[lastPartIndex] = {
+                          ...lastPart,
+                          text: lastPart.text + event.delta,
+                        };
+                      }
+
+                      return { ...msg, parts };
+                    }),
+                  );
+                }
+
+                // ✅ OFFICIAL AI SDK SSE PROTOCOL: text-end event
+                if (event.type === 'text-end') {
+                  // Text part complete
                 }
 
                 // Handle finish - update with metadata from backend
@@ -332,66 +345,50 @@ export function useChatStreaming(
                   // Check if backend sent error information in metadata
                   const hasBackendError = finishMetadata.hasError || finishMetadata.error || finishMetadata.errorMessage;
 
-                  if (hasBackendError) {
-                    console.warn('[STREAMING] Backend reported error in finish event:', {
-                      hasError: finishMetadata.hasError,
-                      error: finishMetadata.error,
-                      errorMessage: finishMetadata.errorMessage,
-                      errorType: finishMetadata.errorType,
-                      statusCode: finishMetadata.statusCode,
-                      providerMessage: finishMetadata.providerMessage,
-                      isTransient: finishMetadata.isTransient,
-                      hasContent: currentContent.length > 0,
-                    });
-                  }
-
-                  // ✅ NEW: Log variant metadata received from backend
-                  if (finishMetadata.variants) {
-                    console.warn('[STREAMING] Variant metadata received:', {
-                      messageId,
-                      variantCount: finishMetadata.variants.length,
-                      currentVariantIndex: finishMetadata.currentVariantIndex,
-                      activeVariantIndex: finishMetadata.activeVariantIndex,
-                      totalVariants: finishMetadata.totalVariants,
-                      hasVariants: finishMetadata.hasVariants,
-                      roundId: finishMetadata.roundId,
-                    });
-                  }
-
                   setMessages(prev =>
-                    prev.map(msg =>
-                      msg.id === messageId
-                        ? {
-                            ...msg,
-                            metadata: {
-                              ...(msg.metadata || {}),
-                              ...finishMetadata,
-                              // ✅ NEW: Store variant metadata from backend
-                              // This eliminates the need for separate API calls to get variants
-                              variants: finishMetadata.variants || [],
-                              currentVariantIndex: finishMetadata.currentVariantIndex ?? 0,
-                              activeVariantIndex: finishMetadata.activeVariantIndex ?? 0,
-                              totalVariants: finishMetadata.totalVariants ?? 1,
-                              hasVariants: finishMetadata.hasVariants ?? false,
-                              roundId: finishMetadata.roundId || messageId,
-                              parentMessageId: finishMetadata.parentMessageId,
-                            },
-                            // If backend sent error but no content, show error message
-                            // Prioritize providerMessage for most accurate error details
-                            ...(hasBackendError && currentContent.length === 0
-                              ? {
-                                  parts: [{
-                                    type: 'text' as const,
-                                    text: finishMetadata.providerMessage
-                                      || finishMetadata.errorMessage
-                                      || finishMetadata.error
-                                      || '⚠️ An unexpected error occurred. Retrying...',
-                                  }],
-                                }
-                              : {}),
-                          }
-                        : msg,
-                    ),
+                    prev.map((msg) => {
+                      if (msg.id !== messageId)
+                        return msg;
+
+                      // Check if message has any parts with content
+                      const hasContent = msg.parts.some(part =>
+                        (part.type === 'text' || part.type === 'reasoning') && 'text' in part && part.text && part.text.length > 0,
+                      );
+
+                      if (hasBackendError) {
+                        console.warn('[STREAMING] Backend reported error in finish event:', {
+                          hasError: finishMetadata.hasError,
+                          error: finishMetadata.error,
+                          errorMessage: finishMetadata.errorMessage,
+                          errorType: finishMetadata.errorType,
+                          statusCode: finishMetadata.statusCode,
+                          providerMessage: finishMetadata.providerMessage,
+                          isTransient: finishMetadata.isTransient,
+                          hasContent,
+                          partsCount: msg.parts.length,
+                        });
+                      }
+
+                      return {
+                        ...msg,
+                        metadata: {
+                          ...(msg.metadata || {}),
+                          ...finishMetadata,
+                        },
+                        // If backend sent error AND no content, show error message
+                        ...(hasBackendError && !hasContent
+                          ? {
+                              parts: [{
+                                type: 'text' as const,
+                                text: finishMetadata.providerMessage
+                                  || finishMetadata.errorMessage
+                                  || finishMetadata.error
+                                  || '⚠️ An unexpected error occurred. Retrying...',
+                              }],
+                            }
+                          : {}),
+                      };
+                    }),
                   );
 
                   // Sync participants if backend sent updates
@@ -538,7 +535,7 @@ export function useChatStreaming(
         throw error; // Re-throw to stop the participant loop
       }
     },
-    [threadId, selectedMode, selectedParticipants, selectedMemoryIds, setMessages, setSelectedParticipants, onError],
+    [threadId, selectedMode, selectedParticipants, setMessages, setSelectedParticipants, onError],
   );
 
   /**
@@ -628,6 +625,8 @@ export function useChatStreaming(
 
           console.warn('[STREAMING] Streaming participant', i, 'with', currentMessages.length, 'messages');
 
+          // ✅ USER REQUIREMENT: Backend handles retries (10 attempts, 30s timeout each)
+          // Frontend just needs to wait for backend to exhaust retries
           await streamSingleParticipant(i, currentMessages, abortController.signal);
         }
 

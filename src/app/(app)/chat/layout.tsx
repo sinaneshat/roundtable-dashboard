@@ -1,12 +1,15 @@
 import { dehydrate, HydrationBoundary } from '@tanstack/react-query';
 import type { Metadata } from 'next';
 import type React from 'react';
+import { Suspense } from 'react';
 
 import { NavigationHeader } from '@/components/chat/chat-header';
 import { AppSidebar } from '@/components/chat/chat-nav';
+import { ChatSidebarSkeleton } from '@/components/chat/chat-sidebar-skeleton';
 import { ThreadHeaderProvider } from '@/components/chat/thread-header-context';
 import { BreadcrumbStructuredData } from '@/components/seo';
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
+import { Skeleton } from '@/components/ui/skeleton';
 import { BRAND } from '@/constants/brand';
 import { getQueryClient } from '@/lib/data/query-client';
 import { queryKeys } from '@/lib/data/query-keys';
@@ -14,9 +17,9 @@ import { STALE_TIMES } from '@/lib/data/stale-times';
 import {
   getSubscriptionsService,
   getUserUsageStatsService,
-  listMemoriesService,
   listThreadsService,
 } from '@/services/api';
+import { listModelsService } from '@/services/api/models';
 import { createMetadata } from '@/utils/metadata';
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -37,7 +40,7 @@ export async function generateMetadata(): Promise<Metadata> {
  * ✅ Threads list (infinite query) - First 50 items for sidebar
  * ✅ Usage stats - For usage metrics display
  * ✅ Subscriptions - For NavUser billing info
- * ✅ Memories list (infinite query) - For MemoriesSection
+ * ✅ Models list - 100 dynamic models from OpenRouter (24h cache)
  *
  * Why this approach:
  * ✅ Eliminates loading states on initial page load
@@ -50,11 +53,13 @@ export async function generateMetadata(): Promise<Metadata> {
  * - Threads: prefetchInfiniteQuery with 50 items (staleTime: 30s)
  * - Usage: prefetchQuery (staleTime: 1min)
  * - Subscriptions: prefetchQuery (staleTime: 2min)
- * - Memories: prefetchInfiniteQuery (staleTime: 2min)
+ * - Models: prefetchQuery (staleTime: Infinity - never refetch)
  *
  * First load experience:
  * - Zero loading states (data pre-hydrated)
  * - Instant sidebar rendering with full data
+ * - Model selection dropdowns immediately populated
+ * - Quick start cards instantly available with proper models
  * - Subsequent navigations: instant (cached)
  *
  * Pattern from Next.js 15 + TanStack Query best practices:
@@ -71,7 +76,7 @@ export default async function ChatLayout({
 }) {
   const queryClient = getQueryClient();
 
-  // Prefetch all critical sidebar data in parallel for optimal performance
+  // Prefetch all critical data in parallel for optimal performance
   // This eliminates loading states and provides instant data on first load
   await Promise.all([
     // 1. Prefetch threads list (infinite query) - First 50 items for sidebar
@@ -107,24 +112,14 @@ export default async function ChatLayout({
       staleTime: STALE_TIMES.subscriptions, // 2 minutes - matches client hook
     }),
 
-    // 4. Prefetch memories list (infinite query) for MemoriesSection
-    queryClient.prefetchInfiniteQuery({
-      queryKey: queryKeys.memories.lists(),
-      queryFn: async ({ pageParam }) => {
-        return listMemoriesService(
-          pageParam ? { query: { cursor: pageParam } } : undefined,
-        );
-      },
-      initialPageParam: undefined as string | undefined,
-      getNextPageParam: (lastPage) => {
-        // Return nextCursor from pagination metadata, or undefined if no more pages
-        if (lastPage?.success && lastPage.data?.pagination?.nextCursor) {
-          return lastPage.data.pagination.nextCursor;
-        }
-        return undefined;
-      },
-      pages: 1, // Only prefetch first page (sufficient for initial display)
-      staleTime: STALE_TIMES.chatMemories, // 2 minutes - matches client hook
+    // 4. ✅ Prefetch models list - 100 dynamic models from OpenRouter
+    // SINGLE SOURCE OF TRUTH: All model data comes from backend
+    // 24h cache on server, Infinity staleTime on client
+    // Ensures model dropdowns, quick start, and participant selection are instantly available
+    queryClient.prefetchQuery({
+      queryKey: queryKeys.models.list(undefined), // No filters for initial load
+      queryFn: () => listModelsService(),
+      staleTime: STALE_TIMES.models, // Infinity - never refetch (models are cached 24h on server)
     }),
   ]);
 
@@ -138,11 +133,34 @@ export default async function ChatLayout({
       />
       <ThreadHeaderProvider>
         <SidebarProvider>
-          <AppSidebar />
+          {/* ✅ OPTIMIZATION: Suspense boundary for sidebar streaming */}
+          <Suspense
+            fallback={(
+              <div className="w-[280px] border-r bg-sidebar">
+                <div className="p-4 space-y-4">
+                  <Skeleton className="h-10 w-full" />
+                  <ChatSidebarSkeleton count={10} showFavorites={false} />
+                </div>
+              </div>
+            )}
+          >
+            <AppSidebar />
+          </Suspense>
+
           <SidebarInset className="h-svh flex flex-col min-h-0 overflow-y-auto">
             <NavigationHeader />
+
+            {/* ✅ OPTIMIZATION: Suspense boundary for main content streaming */}
             <div className="flex flex-1 flex-col w-full min-w-0 min-h-0">
-              {children}
+              <Suspense
+                fallback={(
+                  <div className="flex items-center justify-center p-8">
+                    <Skeleton className="h-64 w-full max-w-3xl" />
+                  </div>
+                )}
+              >
+                {children}
+              </Suspense>
             </div>
           </SidebarInset>
         </SidebarProvider>

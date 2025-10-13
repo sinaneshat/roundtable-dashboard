@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import type { ReactNode } from 'react';
+import React from 'react';
 
 import { Logo } from '@/components/logo';
 import {
@@ -57,7 +58,8 @@ type NavigationHeaderProps = {
   maxWidth?: boolean;
 };
 
-export function NavigationHeader({
+// ✅ CRITICAL: Memoize navigation header to prevent re-renders during message streaming
+function NavigationHeaderComponent({
   className,
   threadTitle: threadTitleProp,
   threadParent: threadParentProp,
@@ -162,6 +164,9 @@ export function NavigationHeader({
     </header>
   );
 }
+
+// Export memoized version to prevent unnecessary re-renders
+export const NavigationHeader = React.memo(NavigationHeaderComponent);
 
 // Page Header - replaces page-header.tsx
 type PageHeaderProps = {
