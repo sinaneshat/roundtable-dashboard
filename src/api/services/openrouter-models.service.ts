@@ -10,38 +10,42 @@
  * Provides dynamic model discovery instead of hardcoded model lists
  */
 
-import { z } from 'zod';
-
 import { apiLogger } from '@/api/middleware/hono-logger';
-import type { BaseModelResponse } from '@/api/routes/models/schema';
-import { BaseModelSchema } from '@/api/routes/models/schema';
+import type { BaseModelResponse, RawOpenRouterModel } from '@/api/routes/models/schema';
+import { OpenRouterModelsResponseSchema } from '@/api/routes/models/schema';
 import type { SubscriptionTier } from '@/db/config/subscription-tiers';
 
 import { canAccessModelByPricing, getRequiredTierForModel } from './model-pricing-tiers.service';
 
 // ============================================================================
-// ZOD SCHEMAS - IMPORTED FROM SINGLE SOURCE OF TRUTH
+// SCHEMA IMPORTS - SINGLE SOURCE OF TRUTH
 // ============================================================================
 
 /**
- * ✅ REUSE: OpenRouter model schema imported from routes/models/schema.ts
- * All model schemas defined in @/api/routes/models/schema.ts
+ * ✅ SCHEMA REUSABILITY PATTERN: Import schemas from @/api/routes/models/schema
  *
- * OpenRouter API Response Schema - wraps the base model schema
+ * Following backend-patterns.md:
+ * - All schemas defined in schema.ts files (route-specific)
+ * - Services import schemas, never define them
+ * - Ensures consistency and reusability across the codebase
+ *
+ * Imported schemas:
+ * - RawOpenRouterModel: Raw API response type (before enhancement)
+ * - OpenRouterModelsResponseSchema: Full API response validation
+ * - BaseModelResponse: Enhanced model type (after adding computed fields)
+ *
+ * Reference: src/api/routes/models/schema.ts:89-171
  */
-const openRouterModelsResponseSchema = z.object({
-  data: z.array(BaseModelSchema),
-});
 
 // ============================================================================
-// TYPE INFERENCE - USES ROUTE SCHEMA TYPES
+// TYPE ALIASES - ENHANCED MODEL TYPE
 // ============================================================================
 
 /**
- * ✅ TYPE INFERENCE: Use route schema types for consistency
- * Single source of truth: @/api/routes/models/schema.ts
+ * ✅ TYPE INFERENCE: Separate types for raw and enhanced models
+ * - RawOpenRouterModel: Data from OpenRouter API before enhancement (imported from schema)
+ * - EnhancedOpenRouterModel: After adding computed fields (provider, category, capabilities, etc.)
  */
-type OpenRouterModel = BaseModelResponse;
 type EnhancedOpenRouterModel = BaseModelResponse;
 
 /**
@@ -85,8 +89,8 @@ class OpenRouterModelsService {
 
       const rawData = await response.json();
 
-      // ✅ ZOD VALIDATION: Validate API response at runtime
-      const parseResult = openRouterModelsResponseSchema.safeParse(rawData);
+      // ✅ ZOD VALIDATION: Validate API response at runtime using imported schema
+      const parseResult = OpenRouterModelsResponseSchema.safeParse(rawData);
 
       if (!parseResult.success) {
         apiLogger.error('Failed to validate OpenRouter API response', {
@@ -130,7 +134,7 @@ class OpenRouterModelsService {
   /**
    * Enhance a model with computed fields for better UI experience
    */
-  private enhanceModel(model: OpenRouterModel): EnhancedOpenRouterModel {
+  private enhanceModel(model: RawOpenRouterModel): EnhancedOpenRouterModel {
     // Extract provider from model ID (e.g., "anthropic/claude-4" -> "anthropic")
     const provider = model.id.split('/')[0] || 'unknown';
 
@@ -169,7 +173,7 @@ class OpenRouterModelsService {
   /**
    * Determine model category based on name and description
    */
-  private determineCategory(model: OpenRouterModel): 'reasoning' | 'general' | 'creative' | 'research' {
+  private determineCategory(model: RawOpenRouterModel): 'reasoning' | 'general' | 'creative' | 'research' {
     const nameLower = model.name.toLowerCase();
     const descLower = model.description?.toLowerCase() || '';
     const idLower = model.id.toLowerCase();
@@ -215,7 +219,7 @@ class OpenRouterModelsService {
   /**
    * Detect vision support based on architecture modality
    */
-  private detectVisionSupport(model: OpenRouterModel): boolean {
+  private detectVisionSupport(model: RawOpenRouterModel): boolean {
     const modality = model.architecture?.modality?.toLowerCase() || '';
     return modality.includes('image') || modality.includes('vision');
   }
@@ -223,7 +227,7 @@ class OpenRouterModelsService {
   /**
    * Detect reasoning model based on name patterns
    */
-  private detectReasoningModel(model: OpenRouterModel): boolean {
+  private detectReasoningModel(model: RawOpenRouterModel): boolean {
     const nameLower = model.name.toLowerCase();
     const idLower = model.id.toLowerCase();
 

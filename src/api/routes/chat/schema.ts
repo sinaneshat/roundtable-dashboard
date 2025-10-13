@@ -826,6 +826,45 @@ export const DEFAULT_AI_PARAMS = {
 } as const;
 
 /**
+ * Mode-specific AI parameters for maximum stability and consistency
+ * ✅ OPTIMIZED FOR STABILITY: Lower temperature = more deterministic outputs
+ * ✅ FOCUSED SAMPLING: Lower topP = more focused, less random outputs
+ * ✅ MODE-ALIGNED: Each mode has parameters tuned for its specific goals
+ *
+ * Temperature scale:
+ * - 0.3-0.4: Highly deterministic (analyzing, solving)
+ * - 0.5-0.6: Balanced creativity (debating)
+ * - 0.6-0.7: Moderate creativity (brainstorming)
+ *
+ * TopP scale:
+ * - 0.7-0.75: Very focused (analyzing, solving)
+ * - 0.8: Balanced (debating)
+ * - 0.85: Slightly diverse (brainstorming)
+ */
+export const MODE_SPECIFIC_AI_PARAMS: Record<string, { temperature: number; topP: number; maxTokens: number }> = {
+  analyzing: {
+    temperature: 0.3, // Highly deterministic for logical analysis
+    topP: 0.7, // Very focused sampling for consistent reasoning
+    maxTokens: 4096,
+  },
+  brainstorming: {
+    temperature: 0.6, // Moderate creativity for idea generation
+    topP: 0.85, // Slightly diverse for creative exploration
+    maxTokens: 4096,
+  },
+  debating: {
+    temperature: 0.5, // Balanced for structured argumentation
+    topP: 0.8, // Balanced sampling for logical counter-arguments
+    maxTokens: 4096,
+  },
+  solving: {
+    temperature: 0.4, // Low for practical, actionable solutions
+    topP: 0.75, // Focused for concrete implementation steps
+    maxTokens: 4096,
+  },
+} as const;
+
+/**
  * Title generation configuration
  */
 export const TITLE_GENERATION_CONFIG = {
@@ -864,6 +903,21 @@ export const AI_TIMEOUT_CONFIG = {
 export type ChatThreadChangelog = z.infer<typeof ChatThreadChangelogSchema>;
 
 export type RoundtablePromptParams = z.infer<typeof RoundtablePromptParamsSchema>;
+
+// ============================================================================
+// Utility Functions - AI Parameters
+// ============================================================================
+
+/**
+ * Get AI parameters optimized for a specific chat mode
+ * ✅ STABILITY: Returns mode-specific parameters for consistent, deterministic outputs
+ *
+ * @param mode - Chat mode (analyzing, brainstorming, debating, solving)
+ * @returns Optimized temperature, topP, and maxTokens for the mode
+ */
+export function getAIParamsForMode(mode: string): { temperature: number; topP: number; maxTokens: number } {
+  return MODE_SPECIFIC_AI_PARAMS[mode] || DEFAULT_AI_PARAMS;
+}
 
 export type ModeratorAnalysisRequest = z.infer<typeof ModeratorAnalysisRequestSchema>;
 export type ModeratorAnalysisPayload = z.infer<typeof ModeratorAnalysisPayloadSchema>;
