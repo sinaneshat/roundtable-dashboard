@@ -7,8 +7,8 @@
 import { z } from 'zod';
 
 import type { ModeratorAnalysisPayloadSchema } from '@/api/routes/chat/schema';
-import { extractModelName } from '@/api/routes/chat/schema';
 import type { ChatModeId } from '@/lib/config/chat-modes';
+import { extractModelName } from '@/lib/utils/ai-display';
 
 // Internal schemas with .describe() for AI SDK streamObject()
 // Route schemas in @/api/routes/chat/schema.ts have OpenAPI metadata but AI SDK needs .describe()

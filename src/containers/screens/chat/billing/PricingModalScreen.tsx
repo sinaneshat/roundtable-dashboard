@@ -35,8 +35,8 @@ export default function PricingModalScreen() {
   const switchMutation = useSwitchSubscriptionMutation();
   const customerPortalMutation = useCreateCustomerPortalSessionMutation();
 
-  const products = productsData?.success ? productsData.data?.products || [] : [];
-  const subscriptions = subscriptionsData?.success ? subscriptionsData.data?.subscriptions || [] : [];
+  const products = productsData?.success ? productsData.data?.items || [] : [];
+  const subscriptions = subscriptionsData?.success ? subscriptionsData.data?.items || [] : [];
 
   const activeSubscription = subscriptions.find(
     sub => (sub.status === 'active' || sub.status === 'trialing') && !sub.cancelAtPeriodEnd,

@@ -1,7 +1,5 @@
-import { createRoute, z } from '@hono/zod-openapi';
+import { createRoute } from '@hono/zod-openapi';
 import * as HttpStatusCodes from 'stoker/http-status-codes';
-
-import { createApiResponseSchema } from '@/api/core/schemas';
 
 import {
   CancelSubscriptionRequestSchema,
@@ -17,6 +15,8 @@ import {
   SubscriptionIdParamSchema,
   SubscriptionListResponseSchema,
   SwitchSubscriptionRequestSchema,
+  SyncAfterCheckoutResponseSchema,
+  WebhookHeadersSchema,
   WebhookResponseSchema,
 } from './schema';
 
@@ -260,26 +260,7 @@ export const syncAfterCheckoutRoute = createRoute({
       description: 'Stripe data synced successfully',
       content: {
         'application/json': {
-          schema: createApiResponseSchema(
-            z.object({
-              synced: z.boolean().openapi({
-                description: 'Whether sync was successful',
-                example: true,
-              }),
-              subscription: z.object({
-                status: z.string().openapi({
-                  description: 'Subscription status',
-                  example: 'active',
-                }),
-                subscriptionId: z.string().openapi({
-                  description: 'Stripe subscription ID',
-                  example: 'sub_ABC123',
-                }),
-              }).nullable().openapi({
-                description: 'Synced subscription state',
-              }).openapi('SyncedSubscriptionState'),
-            }).openapi('SyncAfterCheckoutPayload'),
-          ),
+          schema: SyncAfterCheckoutResponseSchema,
         },
       },
     },
@@ -309,16 +290,7 @@ export const handleWebhookRoute = createRoute({
 
     Tracked events: checkout.session.completed, customer.subscription.*, invoice.*, payment_intent.*`,
   request: {
-    headers: z.object({
-      'stripe-signature': z.string().min(1).openapi({
-        param: {
-          name: 'stripe-signature',
-          in: 'header',
-        },
-        example: 't=1234567890,v1=abcdef...',
-        description: 'Stripe webhook signature for verification',
-      }),
-    }),
+    headers: WebhookHeadersSchema,
   },
   responses: {
     [HttpStatusCodes.OK]: {

@@ -70,7 +70,7 @@ const ProductSchema = stripeProductSelectSchema
   .openapi('Product');
 
 const ProductListPayloadSchema = z.object({
-  products: z.array(ProductSchema).openapi({
+  items: z.array(ProductSchema).openapi({
     description: 'List of available products with prices',
   }),
   count: z.number().int().nonnegative().openapi({
@@ -171,7 +171,7 @@ const SubscriptionSchema = stripeSubscriptionSelectSchema
   .openapi('Subscription');
 
 const SubscriptionListPayloadSchema = z.object({
-  subscriptions: z.array(SubscriptionSchema).openapi({
+  items: z.array(SubscriptionSchema).openapi({
     description: 'List of user subscriptions',
   }),
   count: z.number().int().nonnegative().openapi({
@@ -257,6 +257,54 @@ export type Product = z.infer<typeof ProductSchema>;
 export type Price = z.infer<typeof PriceSchema>;
 export type CheckoutRequest = z.infer<typeof CheckoutRequestSchema>;
 
+// ============================================================================
+// Sync Response Schemas
+// ============================================================================
+
+export const SyncedSubscriptionStateSchema = z.object({
+  status: z.string().openapi({
+    description: 'Subscription status',
+    example: 'active',
+  }),
+  subscriptionId: z.string().openapi({
+    description: 'Stripe subscription ID',
+    example: 'sub_ABC123',
+  }),
+}).openapi('SyncedSubscriptionState');
+
+export const SyncAfterCheckoutPayloadSchema = z.object({
+  synced: z.boolean().openapi({
+    description: 'Whether sync was successful',
+    example: true,
+  }),
+  subscription: SyncedSubscriptionStateSchema.nullable().openapi({
+    description: 'Synced subscription state',
+  }),
+}).openapi('SyncAfterCheckoutPayload');
+
+export const SyncAfterCheckoutResponseSchema = createApiResponseSchema(
+  SyncAfterCheckoutPayloadSchema,
+).openapi('SyncAfterCheckoutResponse');
+
+// ============================================================================
+// Webhook Schemas
+// ============================================================================
+
+export const WebhookHeadersSchema = z.object({
+  'stripe-signature': z.string().min(1).openapi({
+    param: {
+      name: 'stripe-signature',
+      in: 'header',
+    },
+    example: 't=1234567890,v1=abcdef...',
+    description: 'Stripe webhook signature for verification',
+  }),
+});
+
+// ============================================================================
+// Type Exports
+// ============================================================================
+
 /**
  * Subscription type for API responses
  * Note: Date objects are automatically serialized to ISO strings by Hono/JSON.stringify
@@ -268,3 +316,5 @@ export type SubscriptionStatus = Stripe.Subscription.Status;
 
 export type SwitchSubscriptionRequest = z.infer<typeof SwitchSubscriptionRequestSchema>;
 export type CancelSubscriptionRequest = z.infer<typeof CancelSubscriptionRequestSchema>;
+export type SyncAfterCheckoutPayload = z.infer<typeof SyncAfterCheckoutPayloadSchema>;
+export type WebhookHeaders = z.infer<typeof WebhookHeadersSchema>;

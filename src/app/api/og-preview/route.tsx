@@ -27,7 +27,9 @@ import {
 export const runtime = 'nodejs';
 
 // Mock data for preview - Showcasing diverse AI model providers
-// ✅ DYNAMIC: Uses modelId for icon resolution, role for display names
+// ✅ MOCK DATA FOR OG PREVIEW: Example model IDs for preview generation only
+// ⚠️ NOT PRODUCTION DATA: Actual models are selected dynamically via OpenRouter API
+// This mock uses example model IDs to demonstrate icon resolution across different providers
 const MOCK_THREAD = {
   title: 'How to Build a Scalable SaaS Platform',
   mode: 'analyzing' as const,

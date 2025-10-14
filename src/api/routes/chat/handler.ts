@@ -19,8 +19,9 @@ import {
   Responses,
 } from '@/api/core';
 import { apiLogger } from '@/api/middleware/hono-logger';
-import type { ClassifiedError, ParticipantInfo, RoundtablePromptConfig } from '@/api/routes/chat/schema';
+import type { ParticipantInfo, RoundtablePromptConfig } from '@/api/routes/chat/schema';
 import { initializeOpenRouter, openRouterService } from '@/api/services/openrouter.service';
+import type { ClassifiedError } from '@/api/services/openrouter-error-handler';
 import {
   classifyOpenRouterError,
   extractErrorDetails,
@@ -971,10 +972,7 @@ export const getThreadMessagesHandler: RouteHandler<typeof getThreadMessagesRout
       orderBy: [tables.chatMessage.createdAt],
     });
 
-    return Responses.ok(c, {
-      messages,
-      count: messages.length,
-    });
+    return Responses.collection(c, messages);
   },
 );
 
@@ -1002,10 +1000,7 @@ export const getThreadChangelogHandler: RouteHandler<typeof getThreadChangelogRo
       orderBy: [desc(tables.chatThreadChangelog.createdAt)],
     });
 
-    return Responses.ok(c, {
-      changelog,
-      count: changelog.length,
-    });
+    return Responses.collection(c, changelog);
   },
 );
 
@@ -2990,10 +2985,7 @@ export const getThreadAnalysesHandler: RouteHandler<typeof getThreadAnalysesRout
       resource: threadId,
     });
 
-    return Responses.ok(c, {
-      analyses,
-      count: analyses.length,
-    });
+    return Responses.collection(c, analyses);
   },
 );
 

@@ -29,7 +29,6 @@ import type { ChatModeId } from '@/lib/config/chat-modes';
 import { invalidationPatterns } from '@/lib/data/query-keys';
 import type { ParticipantConfig } from '@/lib/schemas/chat-forms';
 import { getAvatarPropsFromModelId } from '@/lib/utils/ai-display';
-import { groupChangelogByTime } from '@/lib/utils/changelog-helpers';
 import {
   chatMessagesToUIMessages,
   getMessageMetadata,
@@ -38,7 +37,7 @@ import {
  * ✅ RPC-INFERRED TYPES: Import runtime types from types layer
  * These types automatically have correct runtime representation (dates as ISO strings)
  */
-import type { ChatMessage, Participant, Thread } from '@/types/chat';
+import type { Changelog, ChatMessage, Participant, Thread } from '@/types/chat';
 
 type ChatThreadScreenProps = {
   thread: Thread;
@@ -82,7 +81,7 @@ export default function ChatThreadScreen({
 
   // ✅ SINGLE SOURCE OF TRUTH: Fetch models from backend
   const { data: modelsData } = useModelsQuery();
-  const allModels = modelsData?.data?.models || [];
+  const allModels = modelsData?.data?.items || [];
 
   // ✅ Fetch changelog reactively - prefetched on server, updates when configuration changes happen
   const { data: changelogResponse } = useThreadChangelogQuery(thread.id);
@@ -95,7 +94,7 @@ export default function ChatThreadScreen({
   // Polling is always enabled (3s interval) to discover new analyses
   const { data: analysesResponse } = useThreadAnalysesQuery(thread.id, true);
   const analyses = useMemo(
-    () => (analysesResponse?.success ? analysesResponse.data.analyses || [] : []),
+    () => (analysesResponse?.success ? analysesResponse.data.items || [] : []),
     [analysesResponse],
   );
 
@@ -123,11 +122,37 @@ export default function ChatThreadScreen({
       }));
   });
 
-  // ✅ Optimize: Only recalculate changelog/analysis items when they actually change
-  // During streaming, only messages change, so we can memoize the expensive changelog/analysis processing
+  // ✅ Group changelog entries by time window (2s) inline - no helper file needed
+  // This is a simple UI transformation following patterns in chat-participants-list.tsx
   const changelogItems = useMemo(() => {
-    const changelogGroups = groupChangelogByTime(changelog);
-    return changelogGroups.map(group => ({
+    if (changelog.length === 0)
+      return [];
+
+    // Sort by timestamp (newest first, matching backend order)
+    const sorted = [...changelog].sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    );
+
+    const groups: Array<{ timestamp: Date; changes: Changelog[] }> = [];
+    let currentGroup: { timestamp: Date; changes: Changelog[] } | null = null;
+    const TIME_WINDOW_MS = 2000; // Group changes within 2 seconds
+
+    for (const change of sorted) {
+      const timestamp = new Date(change.createdAt);
+
+      // Start new group if outside time window
+      if (
+        !currentGroup
+        || Math.abs(timestamp.getTime() - currentGroup.timestamp.getTime()) > TIME_WINDOW_MS
+      ) {
+        currentGroup = { timestamp, changes: [] };
+        groups.push(currentGroup);
+      }
+
+      currentGroup.changes.push(change);
+    }
+
+    return groups.map(group => ({
       type: 'changelog_group' as const,
       data: group,
       timestamp: group.timestamp,

@@ -18,19 +18,36 @@ import { getDbAsync } from '@/db';
 import * as tables from '@/db/schema';
 
 import { initializeOpenRouter, openRouterService } from './openrouter.service';
+import { openRouterModelsService } from './openrouter-models.service';
 import { generateUniqueSlug } from './slug-generator.service';
 
 /**
  * Get the best model for title generation
- * ✅ SINGLE SOURCE: Uses config from ai-defaults.ts
+ * ✅ FULLY DYNAMIC: Selects cheapest available model from OpenRouter API
+ * No hard-coded model preferences
  */
-function getTitleGenerationModel(): string {
-  return TITLE_GENERATION_CONFIG.preferredModels[0] || 'google/gemini-flash-1.5';
+async function getTitleGenerationModel(): Promise<string> {
+  // ✅ DYNAMIC MODEL SELECTION: Get cheapest available model for title generation
+  const cheapestModel = await openRouterModelsService.getCheapestAvailableModel();
+
+  if (!cheapestModel) {
+    apiLogger.error('No models available from OpenRouter for title generation');
+    throw new Error('No models available for title generation');
+  }
+
+  apiLogger.info('Selected model for title generation', {
+    modelId: cheapestModel.id,
+    modelName: cheapestModel.name,
+    provider: cheapestModel.provider,
+    isFree: cheapestModel.is_free,
+  });
+
+  return cheapestModel.id;
 }
 
 /**
  * Generate title from first user message
- * Uses the most cost-effective model from configuration
+ * ✅ FULLY DYNAMIC: Uses cheapest available model from OpenRouter API
  */
 export async function generateTitleFromMessage(
   firstMessage: string,
@@ -40,8 +57,8 @@ export async function generateTitleFromMessage(
     // Initialize OpenRouter with API key
     initializeOpenRouter(env);
 
-    // Get best model for title generation from configuration
-    const titleModel = getTitleGenerationModel();
+    // ✅ DYNAMIC MODEL SELECTION: Get best model for title generation
+    const titleModel = await getTitleGenerationModel();
 
     // Using AI SDK v5 UIMessage format with consolidated config
     const result = await openRouterService.generateText({

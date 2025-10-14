@@ -148,20 +148,17 @@ export const listModelsHandler: RouteHandler<typeof listModelsRoute, ApiEnv> = c
       resource: 'user-tier-config',
     });
 
-    const payload = {
-      models: modelsWithTierInfo,
-      total: modelsWithTierInfo.length,
-      default_model_id: defaultModelId, // ✅ Include default model (computed on backend)
-      tier_groups: tierGroups, // ✅ Include tier grouping (computed on backend)
-      user_tier_config: userTierConfig, // ✅ NEW: Include user tier configuration (computed on backend)
-    };
-
     c.logger.info(`OpenRouter models fetched successfully: ${modelsWithTierInfo.length} models`, {
       logType: 'operation',
       operationName: 'listModels',
       resource: `${modelsWithTierInfo.length}-models`,
     });
 
-    return Responses.ok(c, payload);
+    return Responses.collection(c, modelsWithTierInfo, {
+      total: modelsWithTierInfo.length,
+      default_model_id: defaultModelId,
+      tier_groups: tierGroups,
+      user_tier_config: userTierConfig,
+    });
   },
 );

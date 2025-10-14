@@ -58,7 +58,7 @@ export function NavUser() {
     : user?.email?.[0]?.toUpperCase() || 'U';
 
   // Get active subscription
-  const subscriptions = subscriptionsData?.success ? subscriptionsData.data?.subscriptions || [] : [];
+  const subscriptions = subscriptionsData?.success ? subscriptionsData.data?.items || [] : [];
   const activeSubscription = subscriptions.find(
     sub => (sub.status === 'active' || sub.status === 'trialing') && !sub.cancelAtPeriodEnd,
   );

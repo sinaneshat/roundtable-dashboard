@@ -575,6 +575,165 @@ export function redirect(
 }
 
 // ============================================================================
+// COLLECTION RESPONSE BUILDER
+// ============================================================================
+
+/**
+ * Create a collection response with items and metadata
+ * Standardizes list/collection endpoints with consistent format
+ *
+ * @example
+ * // Simple collection with auto-count
+ * return Responses.collection(c, products);
+ *
+ * @example
+ * // Collection with custom metadata
+ * return Responses.collection(c, models, {
+ *   total: 100,
+ *   defaultModelId: 'gpt-4',
+ *   tierGroups: [...]
+ * });
+ */
+export function collection<T, M extends Record<string, unknown> = Record<string, never>>(
+  c: Context,
+  items: T[],
+  metadata?: M,
+  additionalMeta?: ResponseMetadata,
+): Response {
+  const data = {
+    ...(metadata && Object.keys(metadata).length > 0 ? metadata : {}),
+    items,
+    count: items.length,
+  };
+
+  const response: ApiResponse<typeof data> = {
+    success: true,
+    data,
+    meta: {
+      ...extractResponseMetadata(c),
+      ...getPerformanceMetadata(c),
+      ...additionalMeta,
+    },
+  };
+
+  return c.json(response, HttpStatusCodes.OK);
+}
+
+// ============================================================================
+// HEALTH CHECK RESPONSE BUILDERS
+// ============================================================================
+
+/**
+ * Health check dependency status
+ */
+export type HealthDependency = {
+  status: 'healthy' | 'degraded' | 'unhealthy';
+  message: string;
+  duration?: number;
+  details?: Record<string, unknown>;
+};
+
+/**
+ * Health check summary counts
+ */
+export type HealthSummary = {
+  total: number;
+  healthy: number;
+  degraded: number;
+  unhealthy: number;
+};
+
+/**
+ * Create a basic health check response
+ * For simple health endpoints that return overall status
+ *
+ * @example
+ * return Responses.health(c, 'healthy');
+ */
+export function health(
+  c: Context,
+  status: 'healthy' | 'degraded' | 'unhealthy',
+): Response {
+  const data = {
+    ok: status === 'healthy',
+    status,
+    timestamp: new Date().toISOString(),
+  };
+
+  const response: ApiResponse<typeof data> = {
+    success: true,
+    data,
+    meta: extractResponseMetadata(c),
+  };
+
+  // Return appropriate HTTP status code
+  const httpStatus = status === 'healthy'
+    ? HttpStatusCodes.OK
+    : HttpStatusCodes.SERVICE_UNAVAILABLE;
+
+  return c.json(response, httpStatus);
+}
+
+/**
+ * Create a detailed health check response
+ * For comprehensive health endpoints with dependency checks
+ *
+ * @example
+ * return Responses.detailedHealth(c, 'healthy', {
+ *   database: { status: 'healthy', message: 'Connected', duration: 45 },
+ *   cache: { status: 'healthy', message: 'Responsive', duration: 12 }
+ * }, 150);
+ */
+export function detailedHealth(
+  c: Context,
+  status: 'healthy' | 'degraded' | 'unhealthy',
+  dependencies: Record<string, HealthDependency>,
+  duration?: number,
+): Response {
+  // Calculate summary
+  const summary = Object.values(dependencies).reduce(
+    (acc, dep) => {
+      acc.total++;
+      if (dep.status === 'healthy')
+        acc.healthy++;
+      else if (dep.status === 'degraded')
+        acc.degraded++;
+      else
+        acc.unhealthy++;
+      return acc;
+    },
+    { total: 0, healthy: 0, degraded: 0, unhealthy: 0 } as HealthSummary,
+  );
+
+  const data = {
+    ok: status === 'healthy',
+    status,
+    timestamp: new Date().toISOString(),
+    duration,
+    env: {
+      runtime: 'cloudflare-workers',
+      version: globalThis.navigator?.userAgent || 'unknown',
+      nodeEnv: c.env.NODE_ENV || 'unknown',
+    },
+    dependencies,
+    summary,
+  };
+
+  const response: ApiResponse<typeof data> = {
+    success: true,
+    data,
+    meta: extractResponseMetadata(c),
+  };
+
+  // Return appropriate HTTP status code
+  const httpStatus = status === 'healthy'
+    ? HttpStatusCodes.OK
+    : HttpStatusCodes.SERVICE_UNAVAILABLE;
+
+  return c.json(response, httpStatus);
+}
+
+// ============================================================================
 // RESPONSE HELPERS OBJECT
 // ============================================================================
 
@@ -589,6 +748,11 @@ export const Responses = {
   noContent,
   paginated,
   cursorPaginated,
+  collection,
+
+  // Health checks
+  health,
+  detailedHealth,
 
   // Error responses
   validationError,

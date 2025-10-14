@@ -48,7 +48,7 @@ export function BillingSuccessClient() {
 
   // ✅ REACT 19 PATTERN: Derive display subscription during render, no useEffect setState
   // Query data is stable during render, no need to "capture" it in state
-  const displaySubscription = currentSubscription || subscriptionData?.data?.subscriptions?.[0] || null;
+  const displaySubscription = currentSubscription || subscriptionData?.data?.items?.[0] || null;
 
   // ✅ Initiate sync once on mount (billing success page requires immediate sync)
   // Ref guard prevents double-calls in React.StrictMode

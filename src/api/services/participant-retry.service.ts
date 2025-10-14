@@ -19,15 +19,26 @@
 import type { streamText } from 'ai';
 
 import { apiLogger } from '@/api/middleware/hono-logger';
-import type { RetryAttemptMetadata } from '@/api/routes/chat/schema';
 import type { SubscriptionTier } from '@/api/services/product-logic.service';
 import { AI_RETRY_CONFIG, canAccessModelByPricing } from '@/api/services/product-logic.service';
 
+import type { ClassifiedError } from './openrouter-error-handler';
 import {
   calculateRetryDelay,
   classifyOpenRouterError,
 } from './openrouter-error-handler';
 import { openRouterModelsService } from './openrouter-models.service';
+
+/**
+ * Metadata for each retry attempt
+ */
+type RetryAttemptMetadata = {
+  attemptNumber: number;
+  modelId: string;
+  error: ClassifiedError;
+  timestamp: string;
+  delayMs: number;
+};
 
 /**
  * Maximum retry attempts per participant

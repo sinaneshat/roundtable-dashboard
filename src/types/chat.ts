@@ -61,31 +61,3 @@ type CustomRolesResponseData = NonNullable<
 >;
 
 export type CustomRole = CustomRolesResponseData['items'][number];
-
-// ============================================================================
-// FRONTEND UI HELPER TYPES
-// ============================================================================
-
-/**
- * Change action categorization for UI display
- */
-export type ChangeAction = 'added' | 'modified' | 'removed';
-
-/**
- * Grouped change entry with action categorization
- * Frontend-only type for organizing changelog display
- */
-export type GroupedChange = {
-  id: string;
-  action: ChangeAction;
-  change: Changelog;
-};
-
-/**
- * Group of changes that occurred together
- * Frontend-only type for timeline grouping
- */
-export type ChangeGroup = {
-  timestamp: Date;
-  changes: GroupedChange[];
-};

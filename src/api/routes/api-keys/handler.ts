@@ -64,7 +64,7 @@ export const listApiKeysHandler: RouteHandler<typeof listApiKeysRoute, ApiEnv> =
       resource: `${apiKeys?.length || 0} keys`,
     });
 
-    return Responses.ok(c, { apiKeys: apiKeys || [] });
+    return Responses.collection(c, apiKeys || []);
   },
 );
 
@@ -283,6 +283,6 @@ export const deleteApiKeyHandler: RouteHandler<typeof deleteApiKeyRoute, ApiEnv>
       resource: keyId,
     });
 
-    return Responses.ok(c, { success: true });
+    return Responses.ok(c, { deleted: true });
   },
 );

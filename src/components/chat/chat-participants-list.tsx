@@ -743,8 +743,8 @@ export function ChatParticipantsList({
   // ✅ ZERO TRANSFORMATION: Use RPC types directly from backend
   // ✅ REACT 19: Memoize to prevent unnecessary recalculations in dependent useMemos
   const allEnabledModels: EnhancedModelResponse[] = useMemo(
-    () => modelsData?.data?.models || [],
-    [modelsData?.data?.models],
+    () => modelsData?.data?.items || [],
+    [modelsData?.data?.items],
   );
 
   // ✅ REACT 19 PATTERN: Derive state using useMemo instead of useEffect
@@ -801,7 +801,7 @@ export function ChatParticipantsList({
     // ✅ BACKEND-COMPUTED ACCESS CONTROL: Use backend's is_accessible_to_user flag
     if (!orderedModel.participant) {
       // Check backend-computed accessibility flag
-      const openRouterModel = modelsData?.data?.models.find(m => m.id === modelId);
+      const openRouterModel = modelsData?.data?.items.find(m => m.id === modelId);
       if (openRouterModel && !openRouterModel.is_accessible_to_user) {
         // Prevent selection of models user doesn't have access to
         toastManager.error(
@@ -1133,7 +1133,7 @@ export function ParticipantsPreview({
 }) {
   // ✅ ZERO TRANSFORMATION: Use RPC types directly from backend
   const { data: modelsData } = useModelsQuery();
-  const allModels: EnhancedModelResponse[] = modelsData?.data?.models || [];
+  const allModels: EnhancedModelResponse[] = modelsData?.data?.items || [];
 
   if (participants.length === 0) {
     return null;

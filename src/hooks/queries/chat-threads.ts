@@ -220,7 +220,7 @@ export function useThreadAnalysesQuery(
         return false; // Stop polling on error
       }
 
-      const analyses = data.data?.analyses || [];
+      const analyses = data.data?.items || [];
       if (analyses.length === 0) {
         return 10000; // Keep polling if no analyses yet (backend might create one)
       }

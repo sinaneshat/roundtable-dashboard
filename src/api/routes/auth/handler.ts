@@ -32,24 +32,23 @@ export const secureMeHandler: RouteHandler<typeof secureMeRoute, ApiEnv> = creat
       resource: session.id,
     });
 
-    // Return user data according to Better Auth user schema
-    // Dates serialized to ISO strings for JSON compatibility
-    const payload = {
-      userId: user.id,
-      email: user.email,
-      name: user.name,
-      emailVerified: user.emailVerified,
-      image: user.image,
-      createdAt: user.createdAt,
-      updatedAt: user.updatedAt,
-    } as const;
-
+    // Return user data directly from Better Auth session
+    // No transformation needed - Hono automatically serializes dates to ISO strings
     c.logger.info('User information retrieved successfully from Better Auth', {
       logType: 'operation',
       operationName: 'getMe',
       resource: user.id,
     });
 
-    return Responses.ok(c, payload);
+    // Return user object directly - matches SecureMePayloadSchema shape
+    return Responses.ok(c, {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      emailVerified: user.emailVerified,
+      image: user.image,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
+    });
   },
 );

@@ -43,12 +43,12 @@ export function useSwitchSubscriptionMutation() {
         queryClient.setQueryData<Awaited<ReturnType<typeof getSubscriptionsService>>>(
           queryKeys.subscriptions.list(),
           (oldData) => {
-            if (!oldData?.success || !oldData.data?.subscriptions) {
+            if (!oldData?.success || !oldData.data?.items) {
               return oldData;
             }
 
             // Replace the updated subscription in the list
-            const updatedSubscriptions = oldData.data.subscriptions.map(sub =>
+            const updatedSubscriptions = oldData.data.items.map(sub =>
               sub.id === updatedSubscription.id ? updatedSubscription : sub,
             );
 
@@ -56,7 +56,7 @@ export function useSwitchSubscriptionMutation() {
               ...oldData,
               data: {
                 ...oldData.data,
-                subscriptions: updatedSubscriptions,
+                items: updatedSubscriptions,
               },
             };
           },
@@ -108,12 +108,12 @@ export function useCancelSubscriptionMutation() {
         queryClient.setQueryData<Awaited<ReturnType<typeof getSubscriptionsService>>>(
           queryKeys.subscriptions.list(),
           (oldData) => {
-            if (!oldData?.success || !oldData.data?.subscriptions) {
+            if (!oldData?.success || !oldData.data?.items) {
               return oldData;
             }
 
             // Replace the updated subscription in the list
-            const updatedSubscriptions = oldData.data.subscriptions.map(sub =>
+            const updatedSubscriptions = oldData.data.items.map(sub =>
               sub.id === updatedSubscription.id ? updatedSubscription : sub,
             );
 
@@ -121,7 +121,7 @@ export function useCancelSubscriptionMutation() {
               ...oldData,
               data: {
                 ...oldData.data,
-                subscriptions: updatedSubscriptions,
+                items: updatedSubscriptions,
               },
             };
           },

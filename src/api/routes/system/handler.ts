@@ -23,19 +23,13 @@ export const healthHandler: RouteHandler<typeof healthRoute, ApiEnv> = createHan
       operationName: 'healthCheck',
     });
 
-    const payload = {
-      ok: true,
-      status: 'healthy' as const,
-      timestamp: new Date().toISOString(),
-    };
-
     c.logger.info('Basic health check completed successfully', {
       logType: 'operation',
       operationName: 'healthCheck',
       resource: 'healthy',
     });
 
-    return Responses.ok(c, payload);
+    return Responses.health(c, 'healthy');
   },
 );
 
@@ -62,44 +56,20 @@ export const detailedHealthHandler: RouteHandler<typeof detailedHealthRoute, Api
     // Check environment configuration
     const envCheck = checkEnvironment(c);
 
-    // Calculate overall status
+    // Build dependencies object
     const dependencies = {
       database: dbCheck,
       environment: envCheck,
     };
 
-    const healthCounts = Object.values(dependencies).reduce(
-      (acc, check) => {
-        acc.total++;
-        if (check.status === 'healthy')
-          acc.healthy++;
-        else if (check.status === 'degraded')
-          acc.degraded++;
-        else acc.unhealthy++;
-        return acc;
-      },
-      { total: 0, healthy: 0, degraded: 0, unhealthy: 0 },
-    );
-
-    const overallStatus = healthCounts.unhealthy > 0
+    // Calculate overall status based on dependency health
+    const overallStatus = Object.values(dependencies).some(dep => dep.status === 'unhealthy')
       ? 'unhealthy'
-      : healthCounts.degraded > 0 ? 'degraded' : 'healthy';
+      : Object.values(dependencies).some(dep => dep.status === 'degraded')
+        ? 'degraded'
+        : 'healthy';
 
     const duration = Date.now() - startTime;
-
-    const payload = {
-      ok: overallStatus === 'healthy',
-      status: overallStatus,
-      timestamp: new Date().toISOString(),
-      duration,
-      env: {
-        runtime: 'cloudflare-workers',
-        version: globalThis.navigator?.userAgent || 'unknown',
-        nodeEnv: c.env.NODE_ENV || 'unknown',
-      },
-      dependencies,
-      summary: healthCounts,
-    };
 
     c.logger.info('Detailed health check completed', {
       logType: 'operation',
@@ -108,12 +78,7 @@ export const detailedHealthHandler: RouteHandler<typeof detailedHealthRoute, Api
       duration,
     });
 
-    // For health endpoints, we need to return proper HTTP status codes
-    if (overallStatus === 'healthy') {
-      return Responses.ok(c, payload);
-    } else {
-      return Responses.serviceUnavailable(c, 'System is unhealthy', payload);
-    }
+    return Responses.detailedHealth(c, overallStatus, dependencies, duration);
   },
 );
 

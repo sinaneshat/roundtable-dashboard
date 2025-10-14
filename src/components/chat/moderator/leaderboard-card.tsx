@@ -64,7 +64,7 @@ export function LeaderboardCard({ leaderboard }: LeaderboardCardProps) {
 
   // ✅ SINGLE SOURCE OF TRUTH: Fetch models from backend
   const { data: modelsData } = useModelsQuery();
-  const allModels = modelsData?.data?.models || [];
+  const allModels = modelsData?.data?.items || [];
 
   // If no leaderboard data, don't render anything
   if (leaderboard.length === 0) {

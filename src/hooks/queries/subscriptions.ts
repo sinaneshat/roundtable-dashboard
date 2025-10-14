@@ -77,11 +77,11 @@ export function useCurrentSubscriptionQuery() {
     throwOnError: false,
     // Transform data to get current subscription
     select: (data) => {
-      if (data.success && data.data && Array.isArray(data.data.subscriptions)) {
+      if (data.success && data.data && Array.isArray(data.data.items)) {
         // Find active subscription or return first one
         return (
-          data.data.subscriptions.find(sub => sub.status === 'active')
-          || data.data.subscriptions[0]
+          data.data.items.find(sub => sub.status === 'active')
+          || data.data.items[0]
         );
       }
       return null;

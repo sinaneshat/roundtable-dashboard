@@ -43,8 +43,8 @@ export function ApiKeysModal({ open, onOpenChange }: ApiKeysModalProps) {
   const t = useTranslations();
 
   // Extract API keys from response
-  const apiKeys = apiKeysResponse?.success && apiKeysResponse.data?.apiKeys
-    ? apiKeysResponse.data.apiKeys
+  const apiKeys = apiKeysResponse?.success && apiKeysResponse.data?.items
+    ? apiKeysResponse.data.items
     : [];
 
   const handleCreated = () => {

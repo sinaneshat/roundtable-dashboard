@@ -23,13 +23,13 @@
 -- metadata.tier links to SUBSCRIPTION_TIERS in product-logic.service.ts
 
 INSERT INTO stripe_product (id, name, description, active, default_price_id, metadata, images, features, created_at, updated_at) VALUES
-('prod_TAbABj98toEKg7', 'Starter', 'Budget-friendly AI models with enhanced performance', 1, 'price_1SEFyVGx4IA5m8Qe8Wo4WGYK', '{"tier":"starter","displayOrder":"2"}', '[]', '["150 messages per month","Up to 5 AI models","30 conversations per month","Advanced AI models","3 custom AI roles","Access to Gemini Flash, Claude Haiku, Llama"]', 1759761697591, 1759761697591);
+('prod_TAbABj98toEKg7', 'Starter', 'Budget-friendly AI models with enhanced performance', 1, 'price_1SEFyVGx4IA5m8Qe8Wo4WGYK', '{"tier":"starter","displayOrder":"2"}', '[]', '["150 messages per month","Up to 5 AI models","30 conversations per month","Advanced AI models","3 custom AI roles","Access to affordable, fast AI models"]', 1759761697591, 1759761697591);
 
 INSERT INTO stripe_product (id, name, description, active, default_price_id, metadata, images, features, created_at, updated_at) VALUES
-('prod_TAbATZPEiE2y9o', 'Pro', 'Professional-grade AI models with excellent quality', 1, 'price_1SEFyWGx4IA5m8QesQBukr4b', '{"tier":"pro","displayOrder":"3","badge":"most_popular"}', '[]', '["400 messages per month","Up to 7 AI models","75 conversations per month","Advanced AI models","10 custom AI roles","Thread export","Access to GPT-4o, Claude Sonnet 3.5, Gemini Pro"]', 1759761697591, 1759761697591);
+('prod_TAbATZPEiE2y9o', 'Pro', 'Professional-grade AI models with excellent quality', 1, 'price_1SEFyWGx4IA5m8QesQBukr4b', '{"tier":"pro","displayOrder":"3","badge":"most_popular"}', '[]', '["400 messages per month","Up to 7 AI models","75 conversations per month","Advanced AI models","10 custom AI roles","Thread export","Access to professional-grade AI models"]', 1759761697591, 1759761697591);
 
 INSERT INTO stripe_product (id, name, description, active, default_price_id, metadata, images, features, created_at, updated_at) VALUES
-('prod_TAbA8kAHcag3Kb', 'Power', 'Flagship AI models with maximum capabilities', 1, 'price_1SEFyYGx4IA5m8QeXhso3m35', '{"tier":"power","displayOrder":"4"}', '[]', '["1,800 messages per month","Up to 15 AI models","300 conversations per month","Advanced AI models","50 custom AI roles","Thread export","Access to Claude Opus, GPT-4 Turbo, O1-Preview"]', 1759761697591, 1759761697591);
+('prod_TAbA8kAHcag3Kb', 'Power', 'Flagship AI models with maximum capabilities', 1, 'price_1SEFyYGx4IA5m8QeXhso3m35', '{"tier":"power","displayOrder":"4"}', '[]', '["1,800 messages per month","Up to 15 AI models","300 conversations per month","Advanced AI models","50 custom AI roles","Thread export","Access to all available flagship AI models"]', 1759761697591, 1759761697591);
 
 -- ============================================================================
 -- STRIPE PRICES

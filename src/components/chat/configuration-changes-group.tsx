@@ -20,13 +20,36 @@ import { useModelsQuery } from '@/hooks/queries/models';
 import { formatRelativeTime } from '@/lib/format/date';
 import { cn } from '@/lib/ui/cn';
 import { getProviderIcon } from '@/lib/utils/ai-display';
-import { sortChangesByAction } from '@/lib/utils/changelog-helpers';
-import type { ChangeAction, ChangeGroup, Changelog } from '@/types/chat';
+import type { Changelog } from '@/types/chat';
 
 type ConfigurationChangesGroupProps = {
-  group: ChangeGroup;
+  group: {
+    timestamp: Date;
+    changes: Changelog[];
+  };
   className?: string;
 };
+
+// ============================================================================
+// Simple inline categorization - no separate file needed
+// ============================================================================
+
+type ChangeAction = 'added' | 'modified' | 'removed';
+
+function getChangeAction(changeType: Changelog['changeType']): ChangeAction {
+  switch (changeType) {
+    case 'participant_added':
+      return 'added';
+    case 'participant_removed':
+      return 'removed';
+    case 'participant_updated':
+    case 'participants_reordered':
+    case 'mode_change':
+      return 'modified';
+    default:
+      return 'modified';
+  }
+}
 
 /**
  * Action configuration for consistent icons and colors
@@ -57,20 +80,22 @@ export function ConfigurationChangesGroup({ group, className }: ConfigurationCha
   const t = useTranslations('chat.configuration');
   const tActionSummary = useTranslations('chat.configuration.actionSummary');
 
-  // Sort changes by action type: added -> modified -> removed
-  const sortedChanges = sortChangesByAction(group.changes);
-
-  // Group changes by action type for organized display
-  const changesByAction = sortedChanges.reduce(
+  // Group changes by action type for organized display - simple inline logic
+  const changesByAction = group.changes.reduce(
     (acc, change) => {
-      if (!acc[change.action]) {
-        acc[change.action] = [];
+      const action = getChangeAction(change.changeType);
+      if (!acc[action]) {
+        acc[action] = [];
       }
-      acc[change.action].push(change.change);
+      acc[action].push(change);
       return acc;
     },
     {} as Record<ChangeAction, Changelog[]>,
   );
+
+  // Sort by action order: added -> modified -> removed
+  const actionOrder: ChangeAction[] = ['added', 'modified', 'removed'];
+  const sortedActions = actionOrder.filter(action => changesByAction[action]);
 
   // Create summary text for header
   const actionSummaries: string[] = [];
@@ -105,33 +130,32 @@ export function ConfigurationChangesGroup({ group, className }: ConfigurationCha
         <ChainOfThoughtContent>
           <div className="space-y-4">
             {/* Render each action group */}
-            {(Object.entries(changesByAction) as [ChangeAction, Changelog[]][]).map(
-              ([action, changes]) => {
-                const config = actionConfig[action];
-                const Icon = config.icon;
+            {sortedActions.map((action) => {
+              const changes = changesByAction[action];
+              const config = actionConfig[action];
+              const Icon = config.icon;
 
-                return (
-                  <div key={action} className="space-y-2">
-                    {/* Action header */}
-                    <div className="flex items-center gap-2 px-1">
-                      <Icon className={cn('size-4', config.color)} />
-                      <span className={cn('text-sm font-medium', config.color)}>
-                        {t(action)}
-                      </span>
-                    </div>
+              return (
+                <div key={action} className="space-y-2">
+                  {/* Action header */}
+                  <div className="flex items-center gap-2 px-1">
+                    <Icon className={cn('size-4', config.color)} />
+                    <span className={cn('text-sm font-medium', config.color)}>
+                      {t(action)}
+                    </span>
+                  </div>
 
-                    {/* Changes for this action - Responsive: horizontal scroll on desktop, vertical stack on mobile */}
-                    <div className="w-full overflow-x-auto md:overflow-x-auto">
-                      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 pb-2 pl-6">
-                        {changes.map(change => (
-                          <ChangeItem key={change.id} change={change} />
-                        ))}
-                      </div>
+                  {/* Changes for this action - Responsive: horizontal scroll on desktop, vertical stack on mobile */}
+                  <div className="w-full overflow-x-auto md:overflow-x-auto">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 pb-2 pl-6">
+                      {changes.map(change => (
+                        <ChangeItem key={change.id} change={change} />
+                      ))}
                     </div>
                   </div>
-                );
-              },
-            )}
+                </div>
+              );
+            })}
           </div>
         </ChainOfThoughtContent>
       </ChainOfThought>
@@ -146,7 +170,7 @@ export function ConfigurationChangesGroup({ group, className }: ConfigurationCha
 function ChangeItem({ change }: { change: Changelog }) {
   // ✅ SINGLE SOURCE OF TRUTH: Fetch models from backend
   const { data: modelsData } = useModelsQuery();
-  const allModels = modelsData?.data?.models || [];
+  const allModels = modelsData?.data?.items || [];
 
   // ✅ ZOD PATTERN: Parse changeData using type-safe schemas (no inline casting)
   const participantAddedData = parseParticipantAddedData(change.changeData);

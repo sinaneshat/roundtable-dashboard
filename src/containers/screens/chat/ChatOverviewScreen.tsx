@@ -49,7 +49,7 @@ export default function ChatOverviewScreen() {
 
   // ✅ SINGLE SOURCE OF TRUTH: Fetch models from backend (includes default_model_id)
   const { data: modelsData } = useModelsQuery();
-  const allModels = modelsData?.data?.models || [];
+  const allModels = modelsData?.data?.items || [];
   const defaultModelId = modelsData?.data?.default_model_id;
 
   // ✅ INITIALIZE WITH PREFETCHED DEFAULT MODEL: Create initial participant from server-prefetched data

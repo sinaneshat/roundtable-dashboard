@@ -212,7 +212,8 @@ export type UserTierConfig = z.infer<typeof UserTierConfigSchema>;
  */
 export const ListModelsResponseSchema = createApiResponseSchema(
   z.object({
-    models: z.array(EnhancedModelSchema),
+    items: z.array(EnhancedModelSchema),
+    count: z.number(),
     total: z.number(),
     default_model_id: z.string(), // Default model selected based on user's tier and popularity
     tier_groups: z.array(TierGroupSchema), // Models grouped by subscription tier

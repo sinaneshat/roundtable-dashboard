@@ -149,7 +149,8 @@ export const ApiKeyWithKeySchema = ApiKeySchema.extend({
 
 export const ListApiKeysResponseSchema = createApiResponseSchema(
   z.object({
-    apiKeys: z.array(ApiKeySchema),
+    items: z.array(ApiKeySchema),
+    count: z.number().int().nonnegative(),
   }).openapi('ListApiKeysPayload'),
 ).openapi('ListApiKeysResponse');
 

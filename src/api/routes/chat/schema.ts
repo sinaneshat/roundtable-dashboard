@@ -23,40 +23,6 @@ import {
 import { CHAT_MODES } from '@/lib/config/chat-modes';
 
 // ============================================================================
-// Model ID Validation Functions
-// ============================================================================
-
-/**
- * Validate if a model ID is a non-empty string
- * Used for basic model ID validation in schemas
- */
-export function isValidModelId(modelId: unknown): modelId is string {
-  return typeof modelId === 'string' && modelId.length > 0;
-}
-
-/**
- * Validate if a model ID follows OpenRouter format: provider/model-name
- * Used for OpenRouter-specific model ID validation
- */
-export function isValidOpenRouterModelId(modelId: string): boolean {
-  return typeof modelId === 'string' && modelId.includes('/');
-}
-
-/**
- * Extract formatted model name from model ID
- * e.g., "anthropic/claude-sonnet-4.5" → "Claude Sonnet 4.5"
- */
-export function extractModelName(modelId: string): string {
-  const parts = modelId.split('/');
-  const modelPart = parts[parts.length - 1] || modelId;
-
-  return modelPart
-    .split('-')
-    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(' ');
-}
-
-// ============================================================================
 // Shared Validation Schemas - Used by Frontend and Backend
 // ============================================================================
 
@@ -82,15 +48,6 @@ export const MessageContentSchema = z.string()
  */
 export const ThreadModeSchema = z.enum(CHAT_MODES);
 export type ThreadMode = z.infer<typeof ThreadModeSchema>;
-
-/**
- * Message edit validation schema
- *
- * Shared with frontend to ensure consistent validation rules
- */
-export const EditMessageSchema = z.object({
-  content: MessageContentSchema,
-});
 
 // ============================================================================
 // Path Parameter Schemas
@@ -272,9 +229,7 @@ export const CreateThreadRequestSchema = chatThreadInsertSchema
       example: 'brainstorming',
     }),
     participants: z.array(z.object({
-      modelId: z.string().refine(isValidModelId, {
-        message: 'Invalid model ID. Must be a valid model from AI configuration.',
-      }).openapi({
+      modelId: z.string().min(1, 'Model ID is required').openapi({
         description: 'Model ID (e.g., anthropic/claude-3.5-sonnet, openai/gpt-4o)',
         example: 'anthropic/claude-3.5-sonnet',
       }),
@@ -380,31 +335,10 @@ export const UpdateParticipantRequestSchema = chatParticipantUpdateSchema
   })
   .openapi('UpdateParticipantRequest');
 
-export const ReorderParticipantsRequestSchema = z.object({
-  participants: z.array(z.object({
-    id: z.string().openapi({
-      description: 'Participant ID',
-      example: 'participant_abc123',
-    }),
-    priority: z.number().int().nonnegative().openapi({
-      description: 'New priority/order for this participant',
-      example: 0,
-    }),
-  })).min(1).openapi({
-    description: 'Array of participant IDs with their new priorities',
-  }),
-}).openapi('ReorderParticipantsRequest');
-
-const ParticipantListPayloadSchema = z.object({
-  participants: z.array(ChatParticipantSchema),
-  count: z.number().int().nonnegative(),
-}).openapi('ParticipantListPayload');
-
 const ParticipantDetailPayloadSchema = z.object({
   participant: ChatParticipantSchema,
 }).openapi('ParticipantDetailPayload');
 
-export const ParticipantListResponseSchema = createApiResponseSchema(ParticipantListPayloadSchema).openapi('ParticipantListResponse');
 export const ParticipantDetailResponseSchema = createApiResponseSchema(ParticipantDetailPayloadSchema).openapi('ParticipantDetailResponse');
 
 // ============================================================================
@@ -716,51 +650,11 @@ export const StoredModeratorAnalysisSchema = chatModeratorAnalysisSelectSchema
   .openapi('StoredModeratorAnalysis');
 
 const ModeratorAnalysisListPayloadSchema = z.object({
-  analyses: z.array(StoredModeratorAnalysisSchema),
+  items: z.array(StoredModeratorAnalysisSchema),
   count: z.number().int().nonnegative(),
 }).openapi('ModeratorAnalysisListPayload');
 
 export const ModeratorAnalysisListResponseSchema = createApiResponseSchema(ModeratorAnalysisListPayloadSchema).openapi('ModeratorAnalysisListResponse');
-
-// ============================================================================
-// Helper Schemas (Service Layer)
-// ============================================================================
-
-/**
- * Roundtable System Prompt Parameters Schema
- * Used by chat handler to build context-aware prompts for multi-model discussions
- * ✅ Zod-first: Single source of truth for prompt building
- */
-export const RoundtablePromptParamsSchema = z.object({
-  mode: z.string().openapi({
-    description: 'Chat mode (debating, analyzing, brainstorming, etc.)',
-    example: 'debating',
-  }),
-  participantIndex: z.number().int().nonnegative().openapi({
-    description: 'Index of the current participant in the participants array',
-    example: 0,
-  }),
-  participantRole: z.string().nullable().openapi({
-    description: 'Role assigned to this participant',
-    example: 'The Ideator',
-  }),
-  participants: z.array(z.object({
-    role: z.string().nullable(),
-    modelId: z.string(),
-  })).optional().openapi({
-    description: 'All participants in the discussion',
-  }),
-  otherParticipants: z.array(z.object({
-    index: z.number().int().optional(),
-    role: z.string().nullable(),
-    modelId: z.string().optional(),
-  })).optional().openapi({
-    description: 'Other participants (excluding current)',
-  }),
-  customSystemPrompt: z.string().nullable().optional().openapi({
-    description: 'Custom system prompt override',
-  }),
-}).openapi('RoundtablePromptParams');
 
 // ============================================================================
 // TYPE EXPORTS FOR FRONTEND & BACKEND
@@ -786,55 +680,6 @@ export type CreateCustomRoleRequest = z.infer<typeof CreateCustomRoleRequestSche
 export type UpdateCustomRoleRequest = z.infer<typeof UpdateCustomRoleRequestSchema>;
 
 // ============================================================================
-// Error Handler Schemas (for retry logic and error classification)
-// ============================================================================
-
-/**
- * OpenRouter error type enum
- * ✅ SINGLE SOURCE: All error types defined here
- */
-export const OpenRouterErrorTypeSchema = z.enum([
-  'rate_limit',
-  'model_unavailable',
-  'invalid_request',
-  'authentication',
-  'timeout',
-  'network',
-  'empty_response',
-  'model_error',
-  'unknown',
-]);
-
-export type OpenRouterErrorType = z.infer<typeof OpenRouterErrorTypeSchema>;
-
-/**
- * Classified error with retry guidance
- */
-export const ClassifiedErrorSchema = z.object({
-  type: OpenRouterErrorTypeSchema,
-  message: z.string(),
-  technicalMessage: z.string(),
-  shouldRetry: z.boolean(),
-  retryAfterMs: z.number().int().nonnegative().optional(),
-  isTransient: z.boolean(),
-});
-
-export type ClassifiedError = z.infer<typeof ClassifiedErrorSchema>;
-
-/**
- * Retry attempt metadata
- */
-export const RetryAttemptMetadataSchema = z.object({
-  attemptNumber: z.number().int().min(1),
-  modelId: z.string().min(1),
-  error: ClassifiedErrorSchema,
-  timestamp: z.string(),
-  delayMs: z.number().int().nonnegative(),
-});
-
-export type RetryAttemptMetadata = z.infer<typeof RetryAttemptMetadataSchema>;
-
-// ============================================================================
 // Changelog Change Data Schemas
 // ============================================================================
 
@@ -853,7 +698,7 @@ export const ParticipantAddedDataSchema = z.object({
   modelId: z.string(),
   role: z.string().nullable().optional(),
   priority: z.number().optional(),
-}).passthrough();
+});
 
 export type ParticipantAddedData = z.infer<typeof ParticipantAddedDataSchema>;
 
@@ -863,7 +708,7 @@ export type ParticipantAddedData = z.infer<typeof ParticipantAddedDataSchema>;
 export const ParticipantRemovedDataSchema = z.object({
   modelId: z.string(),
   role: z.string().nullable().optional(),
-}).passthrough();
+});
 
 export type ParticipantRemovedData = z.infer<typeof ParticipantRemovedDataSchema>;
 
@@ -875,16 +720,16 @@ export const ParticipantUpdatedDataSchema = z.object({
     modelId: z.string().optional(),
     role: z.string().nullable().optional(),
     priority: z.number().optional(),
-  }).passthrough().optional(),
+  }).optional(),
   after: z.object({
     modelId: z.string().optional(),
     role: z.string().nullable().optional(),
     priority: z.number().optional(),
-  }).passthrough().optional(),
+  }).optional(),
   modelId: z.string().optional(),
   oldRole: z.string().nullable().optional(),
   newRole: z.string().nullable().optional(),
-}).passthrough();
+});
 
 export type ParticipantUpdatedData = z.infer<typeof ParticipantUpdatedDataSchema>;
 
@@ -900,30 +745,9 @@ export const ParticipantsReorderedDataSchema = z.object({
     role: z.string().nullable(),
     order: z.number(),
   })).optional(),
-}).passthrough();
+});
 
 export type ParticipantsReorderedData = z.infer<typeof ParticipantsReorderedDataSchema>;
-
-/**
- * Schema for memory_added changeData
- */
-export const MemoryAddedDataSchema = z.object({
-  title: z.string(),
-  type: z.string().optional(),
-  description: z.string().nullable().optional(),
-}).passthrough();
-
-export type MemoryAddedData = z.infer<typeof MemoryAddedDataSchema>;
-
-/**
- * Schema for memory_removed changeData
- */
-export const MemoryRemovedDataSchema = z.object({
-  title: z.string(),
-  type: z.string().optional(),
-}).passthrough();
-
-export type MemoryRemovedData = z.infer<typeof MemoryRemovedDataSchema>;
 
 /**
  * Schema for mode_change changeData
@@ -931,7 +755,7 @@ export type MemoryRemovedData = z.infer<typeof MemoryRemovedDataSchema>;
 export const ModeChangeDataSchema = z.object({
   previousMode: z.string(),
   newMode: z.string(),
-}).passthrough();
+});
 
 export type ModeChangeData = z.infer<typeof ModeChangeDataSchema>;
 
@@ -943,8 +767,6 @@ export const ChangeDataSchema = z.union([
   ParticipantRemovedDataSchema,
   ParticipantUpdatedDataSchema,
   ParticipantsReorderedDataSchema,
-  MemoryAddedDataSchema,
-  MemoryRemovedDataSchema,
   ModeChangeDataSchema,
 ]);
 
@@ -999,20 +821,6 @@ export function parseParticipantsReorderedData(data: unknown): ParticipantsReord
 }
 
 /**
- * Parse memory added data safely
- */
-export function parseMemoryAddedData(data: unknown): MemoryAddedData | undefined {
-  return parseChangeData(MemoryAddedDataSchema, data);
-}
-
-/**
- * Parse memory removed data safely
- */
-export function parseMemoryRemovedData(data: unknown): MemoryRemovedData | undefined {
-  return parseChangeData(MemoryRemovedDataSchema, data);
-}
-
-/**
  * Parse mode change data safely
  */
 export function parseModeChangeData(data: unknown): ModeChangeData | undefined {
@@ -1024,8 +832,6 @@ export function parseModeChangeData(data: unknown): ModeChangeData | undefined {
 // ============================================================================
 
 export type ChatThreadChangelog = z.infer<typeof ChatThreadChangelogSchema>;
-
-export type RoundtablePromptParams = z.infer<typeof RoundtablePromptParamsSchema>;
 
 export type ParticipantAnalysis = z.infer<typeof ParticipantAnalysisSchema>;
 export type LeaderboardEntry = z.infer<typeof LeaderboardEntrySchema>;

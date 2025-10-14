@@ -51,7 +51,7 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
   // ✅ DYNAMIC: Fetch all models from OpenRouter API with tier access info
   const { data: modelsResponse, isLoading: modelsLoading } = useModelsQuery();
   const allModels = useMemo(
-    () => (modelsResponse?.success ? modelsResponse.data.models : []),
+    () => (modelsResponse?.success ? modelsResponse.data.items : []),
     [modelsResponse],
   );
 

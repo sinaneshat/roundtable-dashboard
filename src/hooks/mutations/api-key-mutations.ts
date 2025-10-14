@@ -73,12 +73,12 @@ export function useUpdateApiKeyMutation() {
         queryClient.setQueryData<Awaited<ReturnType<typeof listApiKeysService>>>(
           queryKeys.apiKeys.list(),
           (oldData) => {
-            if (!oldData?.success || !oldData.data?.apiKeys) {
+            if (!oldData?.success || !oldData.data?.items) {
               return oldData;
             }
 
             // Replace the updated API key in the list
-            const updatedApiKeys = oldData.data.apiKeys.map(key =>
+            const updatedApiKeys = oldData.data.items.map(key =>
               key.id === updatedApiKey.id ? updatedApiKey : key,
             );
 
@@ -86,7 +86,7 @@ export function useUpdateApiKeyMutation() {
               ...oldData,
               data: {
                 ...oldData.data,
-                apiKeys: updatedApiKeys,
+                items: updatedApiKeys,
               },
             };
           },
@@ -140,18 +140,18 @@ export function useDeleteApiKeyMutation() {
       queryClient.setQueryData<Awaited<ReturnType<typeof listApiKeysService>>>(
         queryKeys.apiKeys.list(),
         (oldData) => {
-          if (!oldData?.success || !oldData.data?.apiKeys) {
+          if (!oldData?.success || !oldData.data?.items) {
             return oldData;
           }
 
           // Filter out the deleted key
-          const filteredApiKeys = oldData.data.apiKeys.filter(key => key.id !== keyId);
+          const filteredApiKeys = oldData.data.items.filter(key => key.id !== keyId);
 
           return {
             ...oldData,
             data: {
               ...oldData.data,
-              apiKeys: filteredApiKeys,
+              items: filteredApiKeys,
             },
           };
         },

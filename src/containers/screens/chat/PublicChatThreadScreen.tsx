@@ -19,8 +19,8 @@ import { BRAND } from '@/constants';
 import { usePublicThreadQuery } from '@/hooks/queries/chat-threads';
 import { useModelsQuery } from '@/hooks/queries/models';
 import { getAvatarPropsFromModelId } from '@/lib/utils/ai-display';
-import { groupChangelogByTime } from '@/lib/utils/changelog-helpers';
 import { chatMessagesToUIMessages, getMessageMetadata } from '@/lib/utils/message-transforms';
+import type { Changelog } from '@/types/chat';
 
 /**
  * Public Chat Thread Screen - Client Component
@@ -39,7 +39,7 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
 
   // ✅ SINGLE SOURCE OF TRUTH: Fetch models from backend
   const { data: modelsData } = useModelsQuery();
-  const allModels = modelsData?.data?.models || [];
+  const allModels = modelsData?.data?.items || [];
 
   // Memoize derived data to prevent unnecessary re-renders
   const serverMessages = useMemo(() => threadResponse?.messages || [], [threadResponse]);
@@ -67,8 +67,31 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
       };
     });
 
-    // Group changelog entries by timestamp
-    const changelogGroups = groupChangelogByTime(changelog);
+    // ✅ Group changelog entries inline - simple transformation like ChatThreadScreen
+    const changelogGroups: Array<{ timestamp: Date; changes: Changelog[] }> = [];
+    if (changelog.length > 0) {
+      const sorted = [...changelog].sort(
+        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+      );
+
+      let currentGroup: { timestamp: Date; changes: Changelog[] } | null = null;
+      const TIME_WINDOW_MS = 2000;
+
+      for (const change of sorted) {
+        const timestamp = new Date(change.createdAt);
+
+        if (
+          !currentGroup
+          || Math.abs(timestamp.getTime() - currentGroup.timestamp.getTime()) > TIME_WINDOW_MS
+        ) {
+          currentGroup = { timestamp, changes: [] };
+          changelogGroups.push(currentGroup);
+        }
+
+        currentGroup.changes.push(change);
+      }
+    }
+
     const changelogItems = changelogGroups.map(group => ({
       type: 'changelog_group' as const,
       data: group,

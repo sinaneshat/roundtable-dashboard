@@ -10,7 +10,32 @@
 
 import { APICallError } from 'ai';
 
-import type { ClassifiedError, OpenRouterErrorType } from '@/api/routes/chat/schema';
+/**
+ * OpenRouter error types for classification
+ */
+export type OpenRouterErrorType =
+  | 'rate_limit'
+  | 'model_unavailable'
+  | 'invalid_request'
+  | 'authentication'
+  | 'model_error'
+  | 'timeout'
+  | 'network'
+  | 'empty_response'
+  | 'unknown';
+
+/**
+ * Classified error with type metadata
+ */
+export type ClassifiedError = {
+  type: OpenRouterErrorType;
+  message: string;
+  technicalMessage: string;
+  maxRetries: number;
+  baseDelayMs: number;
+  shouldRetry: boolean;
+  isTransient: boolean;
+};
 
 /**
  * Error type metadata for classification and handling
@@ -228,7 +253,7 @@ export function classifyOpenRouterError(error: unknown): ClassifiedError {
 
   // ✅ STEP 1: Check if this is an AI SDK APICallError
   if (APICallError.isInstance(error)) {
-    const { statusCode, responseBody, isRetryable, url } = error;
+    const { statusCode, responseBody, url } = error;
 
     // Extract detailed error message from response body
     const { providerMessage, providerCode } = extractErrorDetails(responseBody);
@@ -353,8 +378,7 @@ export function classifyOpenRouterError(error: unknown): ClassifiedError {
             type: 'unknown',
             message: providerMessage,
             technicalMessage,
-            shouldRetry: isRetryable,
-            isTransient: isRetryable,
+            ...ERROR_TYPE_METADATA.unknown,
           };
         }
 
@@ -363,8 +387,7 @@ export function classifyOpenRouterError(error: unknown): ClassifiedError {
           type: 'unknown',
           message: ERROR_MESSAGES.unknown,
           technicalMessage,
-          shouldRetry: isRetryable,
-          isTransient: isRetryable,
+          ...ERROR_TYPE_METADATA.unknown,
         };
       }
     }

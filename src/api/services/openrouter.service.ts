@@ -21,9 +21,16 @@ import { convertToModelMessages, generateText } from 'ai';
 import { createError, normalizeError } from '@/api/common/error-handling';
 import type { ErrorContext } from '@/api/core';
 import { apiLogger } from '@/api/middleware/hono-logger';
-import { isValidOpenRouterModelId } from '@/api/routes/chat/schema';
 import { DEFAULT_AI_PARAMS } from '@/api/services/product-logic.service';
 import type { ApiEnv } from '@/api/types';
+
+/**
+ * Validate OpenRouter model ID format
+ * Format: "provider/model-name" (e.g., "anthropic/claude-3.5-sonnet")
+ */
+function isValidOpenRouterModelId(modelId: string): boolean {
+  return /^[\w-]+\/[\w.-]+$/.test(modelId);
+}
 
 /**
  * OpenRouter service configuration

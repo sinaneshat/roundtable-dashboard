@@ -31,6 +31,22 @@ export function getDisplayNameFromModelId(modelId: string): string {
   return modelId.includes('/') ? modelId.split('/').pop() || modelId : modelId;
 }
 
+/**
+ * Extract formatted model name from model ID
+ * e.g., "anthropic/claude-sonnet-4.5" → "Claude Sonnet 4.5"
+ *
+ * Used by API services and schemas for displaying user-friendly model names
+ */
+export function extractModelName(modelId: string): string {
+  const parts = modelId.split('/');
+  const modelPart = parts[parts.length - 1] || modelId;
+
+  return modelPart
+    .split('-')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+}
+
 // ============================================================================
 // ROLE DEFINITIONS (UI Constants Only)
 // ============================================================================
@@ -54,22 +70,27 @@ export const DEFAULT_ROLES = [
 export type DefaultRole = typeof DEFAULT_ROLES[number];
 
 // ============================================================================
-// PROVIDER ICON MAPPING
+// PROVIDER ICON MAPPING (UI Preferences Only)
 // ============================================================================
 
 /**
- * Provider icon mapping
- * Maps OpenRouter provider slugs to icon filenames in public/static/icons/ai-models/
+ * ✅ 100% OPTIONAL UI PREFERENCES: Icon mappings for visual polish only
  *
- * ✅ DYNAMIC: Add new providers here as they become available
- * Icons are sourced from reliable CDN and optimized for web use
+ * IMPORTANT:
+ * - This is NOT validation or provider filtering
+ * - This does NOT limit which providers work
+ * - ALL providers from OpenRouter work automatically with fallback icon
+ * - This map is purely for UI polish for common providers we have icons for
+ *
+ * To add a new icon:
+ * 1. Add icon file to public/static/icons/ai-models/[provider].png
+ * 2. Add mapping below (optional - not required for provider to work)
+ *
+ * Icons are auto-discovered from OpenRouter API provider slugs
  */
 const PROVIDER_ICON_MAP: Record<string, string> = {
-  // ============================================================================
-  // MAJOR AI LABS & COMPANIES
-  // ============================================================================
-
-  // US-based AI Labs
+  // Only map providers we actually have icon files for
+  // If a provider is not in this list, it automatically gets the OpenRouter fallback icon
   'anthropic': 'anthropic.png',
   'openai': 'openai.png',
   'google': 'google.png',
@@ -80,20 +101,13 @@ const PROVIDER_ICON_MAP: Record<string, string> = {
   'cohere': 'cohere.png',
   'inflection': 'inflection.png',
   'ai21': 'ai21.png',
-
-  // Cloud Providers
   'amazon': 'aws.png',
   'aws': 'aws.png',
   'azure': 'azure.png',
-
-  // ============================================================================
-  // CHINESE AI COMPANIES
-  // ============================================================================
-
   'alibaba': 'alibaba.png',
   'baidu': 'baidu.png',
   'bytedance': 'bytedance.png',
-  'tencent': 'bytedance.png', // Using ByteDance as closest match
+  'tencent': 'bytedance.png',
   'baichuan': 'baichuan.png',
   'zhipu': 'zhipu.png',
   'moonshot': 'moonshot.png',
@@ -101,16 +115,11 @@ const PROVIDER_ICON_MAP: Record<string, string> = {
   'qwen': 'qwen.png',
   'deepseek': 'deepseek.png',
   'yi': 'yi.png',
-  '01-ai': 'yi.png', // Yi is from 01.AI
+  '01-ai': 'yi.png',
   '01ai': 'yi.png',
   'minimax': 'minimax.png',
   'hunyuan': 'hunyuan.png',
   'kimi': 'kimi.png',
-
-  // ============================================================================
-  // SPECIALIZED AI COMPANIES
-  // ============================================================================
-
   'perplexity': 'perplexity.png',
   'x-ai': 'xai.png',
   'xai': 'xai.png',
@@ -121,102 +130,39 @@ const PROVIDER_ICON_MAP: Record<string, string> = {
   'replicate': 'replicate.png',
   'together': 'together.png',
 
-  // ============================================================================
-  // MODEL-SPECIFIC ALIASES
-  // ============================================================================
+  // Model name aliases (for backward compatibility)
+  'claude': 'anthropic.png',
+  'gemini': 'google.png',
+  'gpt': 'openai.png',
 
-  'claude': 'anthropic.png', // Claude is Anthropic's model
-  'gemini': 'google.png', // Gemini is Google's model
-  'gpt': 'openai.png', // GPT is OpenAI's model series
-
-  // ============================================================================
-  // FALLBACK
-  // ============================================================================
-
-  'openrouter': 'openrouter.png', // Generic OpenRouter logo for unknown providers
+  // Fallback icon for ALL unknown providers
+  'openrouter': 'openrouter.png',
 };
 
 // ============================================================================
-// PROVIDER NAME MAPPING
+// PROVIDER NAME FORMATTING (Dynamic with minimal overrides)
 // ============================================================================
 
 /**
- * Provider name display mapping
- * Maps provider slugs to human-readable names
+ * ✅ MINIMAL OVERRIDES: Only for providers that need special capitalization
  *
- * ✅ DYNAMIC: Covers all major AI providers from OpenRouter
+ * IMPORTANT:
+ * - This is NOT validation or limiting which providers work
+ * - ALL providers work automatically - auto-formatted as title case
+ * - This map only exists for special cases (e.g., "OpenAI" not "Openai")
+ * - New providers from OpenRouter automatically work without updates here
  */
-const PROVIDER_NAME_MAP: Record<string, string> = {
-  // Major US Labs
-  'anthropic': 'Anthropic',
+const PROVIDER_NAME_OVERRIDES: Record<string, string> = {
+  // Only include providers that need special capitalization/branding
   'openai': 'OpenAI',
-  'google': 'Google',
-  'microsoft': 'Microsoft',
-  'meta': 'Meta',
-  'meta-llama': 'Meta (Llama)',
   'nvidia': 'NVIDIA',
-  'cohere': 'Cohere',
-  'inflection': 'Inflection AI',
   'ai21': 'AI21 Labs',
-
-  // Cloud Providers
-  'amazon': 'Amazon (AWS)',
-  'aws': 'Amazon Web Services',
-  'azure': 'Microsoft Azure',
-
-  // Chinese AI Companies
-  'alibaba': 'Alibaba',
-  'baidu': 'Baidu',
-  'bytedance': 'ByteDance',
-  'tencent': 'Tencent',
-  'baichuan': 'Baichuan',
-  'zhipu': 'Zhipu AI',
-  'moonshot': 'Moonshot AI',
-  'moonshotai': 'Moonshot AI',
-  'qwen': 'Qwen (Alibaba)',
-  'deepseek': 'DeepSeek',
-  'yi': 'Yi (01.AI)',
+  'aws': 'AWS',
+  'xai': 'xAI',
+  'x-ai': 'xAI',
   '01-ai': '01.AI',
   '01ai': '01.AI',
-  'minimax': 'MiniMax',
-  'hunyuan': 'Hunyuan (Tencent)',
-  'kimi': 'Kimi',
-
-  // Specialized Companies
-  'perplexity': 'Perplexity AI',
-  'x-ai': 'xAI',
-  'xai': 'xAI',
-  'mistral': 'Mistral AI',
-  'mistralai': 'Mistral AI',
-  'liquid': 'Liquid AI',
-  'groq': 'Groq',
-  'replicate': 'Replicate',
-  'together': 'Together AI',
-
-  // Model Aliases
-  'claude': 'Claude (Anthropic)',
-  'gemini': 'Gemini (Google)',
-  'gpt': 'GPT (OpenAI)',
-
-  // Fallback
   'openrouter': 'OpenRouter',
-
-  // Additional Community Providers (no dedicated icons)
-  'nousresearch': 'Nous Research',
-  'cognitivecomputations': 'Cognitive Computations',
-  'alpindale': 'Alpindale',
-  'gryphe': 'Gryphe',
-  'sao10k': 'Sao10k',
-  'neversleep': 'NeverSleep',
-  'undi95': 'Undi95',
-  'thedrummer': 'The Drummer',
-  'mancer': 'Mancer',
-  'arcee-ai': 'Arcee AI',
-  'eleutherai': 'EleutherAI',
-  'allenai': 'Allen AI',
-  'thudm': 'THU DMG',
-  'opengvlab': 'OpenGVLab',
-  'stepfun-ai': 'StepFun AI',
 };
 
 // ============================================================================
@@ -242,25 +188,33 @@ export function getProviderIcon(provider: string): string {
 }
 
 /**
- * Get human-readable provider name with automatic formatting fallback
+ * ✅ 100% DYNAMIC: Get human-readable provider name with auto-formatting
  *
- * ✅ DYNAMIC: Returns display name or formats slug as title case
+ * IMPORTANT:
+ * - ALL providers from OpenRouter work automatically
+ * - Auto-formats any provider slug to Title Case
+ * - Only uses overrides for special capitalization (OpenAI, NVIDIA, etc.)
+ * - Does NOT limit which providers are supported
  *
  * @param provider - Provider slug from OpenRouter (e.g., "anthropic")
  * @returns Human-readable provider name
  *
  * @example
- * getProviderName('anthropic') // returns 'Anthropic'
- * getProviderName('unknown-provider') // returns 'Unknown Provider'
+ * getProviderName('anthropic') // returns 'Anthropic' (auto-formatted)
+ * getProviderName('openai') // returns 'OpenAI' (override for correct caps)
+ * getProviderName('unknown-provider') // returns 'Unknown Provider' (auto-formatted)
+ * getProviderName('new-ai-company') // returns 'New Ai Company' (auto-formatted, works immediately)
  */
 export function getProviderName(provider: string): string {
   const normalizedProvider = provider.toLowerCase().trim();
 
-  if (PROVIDER_NAME_MAP[normalizedProvider]) {
-    return PROVIDER_NAME_MAP[normalizedProvider];
+  // Check for special capitalization override
+  if (PROVIDER_NAME_OVERRIDES[normalizedProvider]) {
+    return PROVIDER_NAME_OVERRIDES[normalizedProvider];
   }
 
-  // Format slug as title case as fallback
+  // ✅ FULLY DYNAMIC: Auto-format any provider slug as title case
+  // This means ANY provider from OpenRouter works immediately
   return provider
     .split('-')
     .map(word => word.charAt(0).toUpperCase() + word.slice(1))
@@ -334,12 +288,15 @@ export function getSupportedProviderCount(): number {
 }
 
 /**
- * Get all available providers (both with and without dedicated icons)
+ * ✅ DYNAMIC: Get all providers we have icons for
  *
- * @returns Array of all known provider slugs
+ * Note: This does NOT represent "all supported providers"
+ * ALL providers from OpenRouter are supported automatically via fallback
+ *
+ * @returns Array of provider slugs with dedicated icon files
  */
 export function getAllKnownProviders(): string[] {
-  return Object.keys(PROVIDER_NAME_MAP);
+  return Object.keys(PROVIDER_ICON_MAP).filter(p => p !== 'openrouter');
 }
 
 // ============================================================================

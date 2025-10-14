@@ -22,4 +22,4 @@ type SubscriptionsResponseData = NonNullable<
   Extract<GetSubscriptionsResponse, { success: true }>['data']
 >;
 
-export type Subscription = SubscriptionsResponseData['subscriptions'][number];
+export type Subscription = SubscriptionsResponseData['items'][number];

@@ -13,7 +13,6 @@ import { z } from 'zod';
 
 import type { CreateThreadRequestSchema } from '@/api/routes/chat/schema';
 import {
-  isValidModelId,
   MessageContentSchema,
   ThreadModeSchema,
 } from '@/api/routes/chat/schema';
@@ -30,9 +29,12 @@ import { getDefaultChatMode } from '@/lib/config/chat-modes';
  */
 export const ParticipantConfigSchema = z.object({
   id: z.string(),
-  modelId: z.string().refine(isValidModelId, {
-    message: 'Invalid model ID. Must be a valid model from AI configuration.',
-  }),
+  // ✅ 100% DYNAMIC: Model ID validation happens on backend via OpenRouter API
+  // Format: "provider/model-name" (e.g., "anthropic/claude-3.5-sonnet")
+  modelId: z.string().min(1, 'Model ID is required').regex(
+    /^[\w-]+\/[\w.-]+$/,
+    'Model ID must be in format: provider/model-name',
+  ),
   role: z.string().nullable(), // ✅ Matches database schema - role can be null
   customRoleId: z.string().optional(),
   order: z.number().int().nonnegative(),

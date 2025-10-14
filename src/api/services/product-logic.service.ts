@@ -392,16 +392,14 @@ export function getAIParamsForMode(mode: string): { temperature: number; topP: n
 
 /**
  * Title generation configuration
+ *
+ * ✅ FULLY DYNAMIC: No hard-coded model preferences
+ * Model selection is handled dynamically by openRouterModelsService.getCheapestAvailableModel()
  */
 export const TITLE_GENERATION_CONFIG = {
   temperature: 0.3,
   maxTokens: 15,
   topP: 0.7,
-  preferredModels: [
-    'google/gemini-2.0-flash-exp:free',
-    'google/gemini-flash-1.5',
-    'anthropic/claude-3-haiku',
-  ],
   systemPrompt: 'Generate a concise, descriptive title (5 words max) for this conversation. Output only the title, no quotes or extra text.',
 } as const;
 
