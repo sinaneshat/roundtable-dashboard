@@ -1,6 +1,7 @@
 'use client';
 
 import { Check } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -47,6 +48,7 @@ export function ChatModeSelector({
   onModeChange,
   className,
 }: ChatModeSelectorProps) {
+  const t = useTranslations('chat.modes');
   const open = useBoolean(false);
   const chatModeOptions = getChatModeOptions();
   const currentMode = getChatModeById(selectedMode);
@@ -67,7 +69,7 @@ export function ChatModeSelector({
                 >
                   {ModeIcon && <ModeIcon className="size-3.5 sm:size-4" />}
                   <span className="hidden xs:inline sm:inline">
-                    {currentMode?.label || 'Mode'}
+                    {currentMode?.label || t('mode')}
                   </span>
                 </Button>
               </PopoverTrigger>
@@ -75,7 +77,7 @@ export function ChatModeSelector({
 
             <TooltipContent side="top" className="max-w-xs">
               <div className="space-y-1">
-                <div className="font-semibold text-xs">Current Mode:</div>
+                <div className="font-semibold text-xs">{t('currentMode')}</div>
                 <div className="text-xs">{currentMode?.label}</div>
                 {currentMode?.metadata.description && (
                   <p className="text-xs text-muted-foreground mt-1">
@@ -89,7 +91,7 @@ export function ChatModeSelector({
           <PopoverContent className="w-[calc(100vw-2rem)] sm:w-[280px] p-0" align="start">
             <Command>
               <CommandList>
-                <CommandGroup heading="Chat Modes">
+                <CommandGroup heading={t('chatModes')}>
                   {chatModeOptions.map((option) => {
                     const OptionIcon = option.icon;
                     const isSelected = option.value === selectedMode;

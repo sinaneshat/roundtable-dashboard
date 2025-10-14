@@ -1,6 +1,7 @@
 'use client';
 
 import Image from 'next/image';
+import { useTranslations } from 'next-intl';
 import { useTheme } from 'next-themes';
 import { useEffect, useState } from 'react';
 
@@ -18,6 +19,7 @@ function Logo(props: Props) {
   const { size = 'sm', variant = 'icon', theme = 'auto', className } = props;
   const { theme: systemTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
+  const t = useTranslations('common');
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -71,7 +73,7 @@ function Logo(props: Props) {
     <Image
       src={logoSrc}
       className={cn('object-contain', className)}
-      alt="Logo"
+      alt={t('logo')}
       width={logoSize.width}
       height={logoSize.height}
       priority

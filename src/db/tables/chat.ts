@@ -1,5 +1,5 @@
-import { relations } from 'drizzle-orm';
-import { index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
+import { relations, sql } from 'drizzle-orm';
+import { check, index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 
 import { CHAT_MODE_ENUM_VALUES, THREAD_STATUS_ENUM_VALUES } from '@/lib/config/chat-modes';
 
@@ -115,9 +115,18 @@ export const chatParticipant = sqliteTable('chat_participant', {
     .$onUpdate(() => /* @__PURE__ */ new Date())
     .notNull(),
 }, table => [
+  // Indexes for query performance
   index('chat_participant_thread_idx').on(table.threadId),
   index('chat_participant_priority_idx').on(table.priority),
   index('chat_participant_custom_role_idx').on(table.customRoleId),
+
+  // ============================================================================
+  // DATABASE-LEVEL CONSTRAINTS (Second layer of protection)
+  // ============================================================================
+
+  // ✅ PRIORITY CONSTRAINT: Ensure priority is non-negative
+  // Rationale: Priority determines response order, must be >= 0
+  check('check_priority_non_negative', sql`${table.priority} >= 0`),
 ]);
 
 /**

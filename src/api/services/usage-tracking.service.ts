@@ -26,8 +26,8 @@ import type { ErrorContext } from '@/api/core';
 import { apiLogger } from '@/api/middleware/hono-logger';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db/schema';
-import type { QuotaCheck, UsageStats } from '@/db/validation/usage';
 
+import type { QuotaCheck, UsageStats, UsageStatus } from '../routes/usage/schema';
 import type { SubscriptionTier } from './product-logic.service';
 import { TIER_QUOTAS } from './product-logic.service';
 
@@ -320,6 +320,23 @@ export async function checkMessageQuota(userId: string): Promise<QuotaCheck> {
 }
 
 /**
+ * ✅ BUSINESS LOGIC: Compute usage status based on percentage thresholds
+ * Single source of truth for warning/critical thresholds
+ *
+ * @param percentage - Usage percentage (0-100+)
+ * @returns 'default' | 'warning' | 'critical'
+ */
+function computeUsageStatus(percentage: number): UsageStatus {
+  if (percentage >= 100) {
+    return 'critical'; // At or over limit
+  }
+  if (percentage >= 80) {
+    return 'warning'; // Approaching limit (80%+)
+  }
+  return 'default'; // Normal usage (<80%)
+}
+
+/**
  * Check custom role creation quota
  * Returns whether user can create a new custom role and current usage stats
  */
@@ -454,6 +471,11 @@ export async function getUserUsageStats(userId: string): Promise<UsageStats> {
     ? Math.round((usage.customRolesCreated / quotas.customRolesPerMonth) * 100)
     : 0;
 
+  // ✅ COMPUTE STATUS: Business logic for warning thresholds (single source of truth)
+  const threadsStatus = computeUsageStatus(threadsPercentage);
+  const messagesStatus = computeUsageStatus(messagesPercentage);
+  const customRolesStatus = computeUsageStatus(customRolesPercentage);
+
   const daysRemaining = Math.ceil(
     (usage.currentPeriodEnd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24),
   );
@@ -464,18 +486,21 @@ export async function getUserUsageStats(userId: string): Promise<UsageStats> {
       limit: quotas.threadsPerMonth,
       remaining: threadsRemaining,
       percentage: threadsPercentage,
+      status: threadsStatus, // ✅ NEW: Backend-computed status
     },
     messages: {
       used: usage.messagesCreated,
       limit: quotas.messagesPerMonth,
       remaining: messagesRemaining,
       percentage: messagesPercentage,
+      status: messagesStatus, // ✅ NEW: Backend-computed status
     },
     customRoles: {
       used: usage.customRolesCreated,
       limit: quotas.customRolesPerMonth,
       remaining: customRolesRemaining,
       percentage: customRolesPercentage,
+      status: customRolesStatus, // ✅ NEW: Backend-computed status
     },
     period: {
       start: usage.currentPeriodStart,

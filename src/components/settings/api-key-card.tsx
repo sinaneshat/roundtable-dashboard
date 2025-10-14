@@ -12,6 +12,7 @@ import { format } from 'date-fns';
 import { Key, Loader2, Trash2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
+import type { ApiKeyResponse } from '@/api/routes/api-keys/schema';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -22,7 +23,6 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import type { ApiKeyResponse } from '@/db/validation/api-keys';
 import { cn } from '@/lib/ui/cn';
 
 // ============================================================================

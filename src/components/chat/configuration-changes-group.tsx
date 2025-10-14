@@ -1,6 +1,7 @@
 'use client';
 
 import { ArrowRight, Clock, Minus, Pencil, Plus } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 
 import type { ChatThreadChangelog } from '@/api/routes/chat/schema';
 import {
@@ -30,22 +31,20 @@ type ConfigurationChangesGroupProps = {
 
 /**
  * Action configuration for consistent icons and colors
+ * Note: labels are now provided via translation hooks in the component
  */
-const actionConfig: Record<ChangeAction, { icon: typeof Plus; color: string; label: string }> = {
+const actionConfig: Record<ChangeAction, { icon: typeof Plus; color: string }> = {
   added: {
     icon: Plus,
     color: 'text-green-500',
-    label: 'Added',
   },
   modified: {
     icon: Pencil,
     color: 'text-blue-500',
-    label: 'Modified',
   },
   removed: {
     icon: Minus,
     color: 'text-red-500',
-    label: 'Removed',
   },
 };
 
@@ -56,6 +55,9 @@ const actionConfig: Record<ChangeAction, { icon: typeof Plus; color: string; lab
  * grouped by action type (Added, Modified, Removed) for better organization.
  */
 export function ConfigurationChangesGroup({ group, className }: ConfigurationChangesGroupProps) {
+  const t = useTranslations('chat.configuration');
+  const tActionSummary = useTranslations('chat.configuration.actionSummary');
+
   // Sort changes by action type: added -> modified -> removed
   const sortedChanges = sortChangesByAction(group.changes);
 
@@ -74,13 +76,13 @@ export function ConfigurationChangesGroup({ group, className }: ConfigurationCha
   // Create summary text for header
   const actionSummaries: string[] = [];
   if (changesByAction.added?.length) {
-    actionSummaries.push(`${changesByAction.added.length} added`);
+    actionSummaries.push(`${changesByAction.added.length} ${tActionSummary('added')}`);
   }
   if (changesByAction.modified?.length) {
-    actionSummaries.push(`${changesByAction.modified.length} modified`);
+    actionSummaries.push(`${changesByAction.modified.length} ${tActionSummary('modified')}`);
   }
   if (changesByAction.removed?.length) {
-    actionSummaries.push(`${changesByAction.removed.length} removed`);
+    actionSummaries.push(`${changesByAction.removed.length} ${tActionSummary('removed')}`);
   }
 
   return (
@@ -89,7 +91,7 @@ export function ConfigurationChangesGroup({ group, className }: ConfigurationCha
         <ChainOfThoughtHeader>
           <div className="flex items-center gap-2">
             <Clock className="size-4 text-muted-foreground flex-shrink-0" />
-            <span className="text-sm">Configuration changed</span>
+            <span className="text-sm">{t('configurationChanged')}</span>
             {/* Show detailed info only on desktop */}
             <span className="hidden md:inline text-xs text-muted-foreground">•</span>
             <span className="hidden md:inline text-xs text-muted-foreground truncate">
@@ -115,7 +117,7 @@ export function ConfigurationChangesGroup({ group, className }: ConfigurationCha
                     <div className="flex items-center gap-2 px-1">
                       <Icon className={cn('size-4', config.color)} />
                       <span className={cn('text-sm font-medium', config.color)}>
-                        {config.label}
+                        {t(action)}
                       </span>
                     </div>
 

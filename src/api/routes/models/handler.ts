@@ -13,7 +13,7 @@ import { createError } from '@/api/common/error-handling';
 import { createHandler, Responses } from '@/api/core';
 import { openRouterModelsService } from '@/api/services/openrouter-models.service';
 import type { SubscriptionTier } from '@/api/services/product-logic.service';
-import { canAccessModelByPricing, getRequiredTierForModel, getTiersInOrder, SUBSCRIPTION_TIER_NAMES, SUBSCRIPTION_TIERS } from '@/api/services/product-logic.service';
+import { canAccessModelByPricing, getMaxModelsForTier, getRequiredTierForModel, getTierName, getTiersInOrder, SUBSCRIPTION_TIER_NAMES, SUBSCRIPTION_TIERS } from '@/api/services/product-logic.service';
 import type { ApiEnv } from '@/api/types';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db/schema';
@@ -80,11 +80,13 @@ export const listModelsHandler: RouteHandler<typeof listModelsRoute, ApiEnv> = c
     // Uses proven model-pricing-tiers.service.ts logic
     const modelsWithTierInfo = models.map((model) => {
       const requiredTier = getRequiredTierForModel(model);
+      const requiredTierName = SUBSCRIPTION_TIER_NAMES[requiredTier];
       const isAccessible = canAccessModelByPricing(userTier, model);
 
       return {
         ...model,
         required_tier: requiredTier,
+        required_tier_name: requiredTierName, // ✅ Human-readable tier name
         is_accessible_to_user: isAccessible,
       };
     });
@@ -116,11 +118,30 @@ export const listModelsHandler: RouteHandler<typeof listModelsRoute, ApiEnv> = c
       resource: 'tier-groups',
     });
 
+    // ✅ COMPUTE USER TIER CONFIG: All limits and metadata for frontend
+    const maxModels = getMaxModelsForTier(userTier);
+    const tierName = getTierName(userTier);
+    const canUpgrade = userTier !== 'power'; // Power tier is the highest
+
+    const userTierConfig = {
+      tier: userTier,
+      tier_name: tierName,
+      max_models: maxModels,
+      can_upgrade: canUpgrade,
+    };
+
+    c.logger.info(`User tier config computed: ${tierName} (max ${maxModels} models)`, {
+      logType: 'operation',
+      operationName: 'listModels',
+      resource: 'user-tier-config',
+    });
+
     const payload = {
       models: modelsWithTierInfo,
       total: modelsWithTierInfo.length,
       default_model_id: defaultModelId, // ✅ Include default model (computed on backend)
       tier_groups: tierGroups, // ✅ Include tier grouping (computed on backend)
+      user_tier_config: userTierConfig, // ✅ NEW: Include user tier configuration (computed on backend)
     };
 
     c.logger.info(`OpenRouter models fetched successfully: ${modelsWithTierInfo.length} models`, {

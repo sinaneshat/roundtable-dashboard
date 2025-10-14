@@ -1,4 +1,3 @@
-/* eslint-disable simple-import-sort/imports */
 /**
  * API Keys Route Schemas
  *
@@ -10,102 +9,115 @@ import { z } from '@hono/zod-openapi';
 
 import { CoreSchemas, createApiResponseSchema } from '@/api/core/schemas';
 import {
+  apiKeyInsertSchema,
   apiKeySelectSchema,
-  apiKeyIdParamSchema as dbApiKeyIdParamSchema,
-  createApiKeyRequestSchema as dbCreateApiKeyRequestSchema,
-  updateApiKeyRequestSchema as dbUpdateApiKeyRequestSchema,
+  apiKeyUpdateSchema,
 } from '@/db/validation/api-keys';
 
 // ============================================================================
-// Path Parameter Schemas (Reusing Database Validation)
+// Path Parameter Schemas
+// ============================================================================
+
+export const ApiKeyIdParamSchema = z.object({
+  keyId: CoreSchemas.id().openapi({
+    description: 'API key ID',
+    example: 'key_abc123xyz',
+    param: {
+      name: 'keyId',
+      in: 'path',
+    },
+  }),
+}).openapi('ApiKeyIdParam');
+
+// ============================================================================
+// Request Body Schemas (Derived from Database Validation)
 // ============================================================================
 
 /**
- * ✅ REUSE: API key ID parameter from database validation
- * Extended with OpenAPI metadata
+ * ✅ REUSE: Create API key schema derived from insert schema
+ * Pick only user-provided fields and refine validation
  */
-export const ApiKeyIdParamSchema = dbApiKeyIdParamSchema
+export const CreateApiKeyRequestSchema = apiKeyInsertSchema
+  .pick({
+    name: true,
+    metadata: true,
+  })
   .extend({
-    keyId: CoreSchemas.id().openapi({
-      description: 'API key ID',
-      example: 'key_abc123xyz',
-      param: {
-        name: 'keyId',
-        in: 'path',
-      },
+    // Additional user-facing fields not in table
+    name: z.string().min(3, 'Name must be at least 3 characters').max(50, 'Name must be at most 50 characters').openapi({
+      description: 'A descriptive name for the API key',
+      example: 'My API Key',
+    }),
+    expiresIn: z.number().int().positive().min(1, 'Expiration must be at least 1 day').max(365, 'Expiration cannot exceed 365 days').optional().openapi({
+      description: 'Expiration time in days (1-365, optional)',
+      example: 30,
+    }),
+    remaining: z.number().int().positive().nullable().optional().openapi({
+      description: 'Maximum number of requests (null for unlimited)',
+      example: 1000,
+    }),
+    metadata: z.record(z.string(), z.unknown()).nullable().optional().openapi({
+      description: 'Custom metadata for the API key',
+      example: { environment: 'production', project: 'main' },
     }),
   })
-  .openapi('ApiKeyIdParam');
-
-// ============================================================================
-// Request Body Schemas (Reusing Database Validation)
-// ============================================================================
+  .openapi('CreateApiKeyRequest');
 
 /**
- * ✅ REUSE: Create API key schema from database validation
- * Adds OpenAPI metadata to existing validation rules
+ * ✅ REUSE: Update API key schema derived from update schema
+ * Pick relevant fields for API updates
  */
-export const CreateApiKeyRequestSchema = z.object({
-  name: dbCreateApiKeyRequestSchema.shape.name.openapi({
-    description: 'A descriptive name for the API key',
-    example: 'My API Key',
-  }),
-  expiresIn: dbCreateApiKeyRequestSchema.shape.expiresIn.openapi({
-    description: 'Expiration time in days (1-365, optional)',
-    example: 30,
-  }),
-  remaining: dbCreateApiKeyRequestSchema.shape.remaining.openapi({
-    description: 'Maximum number of requests (null for unlimited)',
-    example: 1000,
-  }),
-  metadata: dbCreateApiKeyRequestSchema.shape.metadata.openapi({
-    description: 'Custom metadata for the API key',
-    example: { environment: 'production', project: 'main' },
-  }),
-}).openapi('CreateApiKeyRequest');
-
-/**
- * ✅ REUSE: Update API key schema from database validation
- * Adds OpenAPI metadata to existing validation rules (keyId excluded - comes from path)
- */
-export const UpdateApiKeyRequestSchema = z.object({
-  name: dbUpdateApiKeyRequestSchema.shape.name.openapi({
-    description: 'Update the API key name',
-    example: 'Updated API Key Name',
-  }),
-  enabled: dbUpdateApiKeyRequestSchema.shape.enabled.openapi({
-    description: 'Enable or disable the API key',
-    example: true,
-  }),
-  remaining: dbUpdateApiKeyRequestSchema.shape.remaining.openapi({
-    description: 'Update remaining requests (null for unlimited)',
-    example: 5000,
-  }),
-  refillAmount: dbUpdateApiKeyRequestSchema.shape.refillAmount.openapi({
-    description: 'Amount to refill on each refill interval',
-    example: 1000,
-  }),
-  refillInterval: dbUpdateApiKeyRequestSchema.shape.refillInterval.openapi({
-    description: 'Refill interval in milliseconds',
-    example: 86400000, // 24 hours
-  }),
-  metadata: dbUpdateApiKeyRequestSchema.shape.metadata.openapi({
-    description: 'Update custom metadata',
-    example: { environment: 'staging' },
-  }),
-  rateLimitEnabled: dbUpdateApiKeyRequestSchema.shape.rateLimitEnabled.openapi({
-    description: 'Enable or disable rate limiting for this API key',
-    example: true,
-  }),
-  rateLimitTimeWindow: dbUpdateApiKeyRequestSchema.shape.rateLimitTimeWindow.openapi({
-    description: 'Rate limit time window in milliseconds',
-    example: 86400000, // 24 hours
-  }),
-  rateLimitMax: dbUpdateApiKeyRequestSchema.shape.rateLimitMax.openapi({
-    description: 'Maximum requests allowed within the time window',
-    example: 1000,
-  }),
-}).openapi('UpdateApiKeyRequest');
+export const UpdateApiKeyRequestSchema = apiKeyUpdateSchema
+  .pick({
+    name: true,
+    enabled: true,
+    remaining: true,
+    refillAmount: true,
+    refillInterval: true,
+    metadata: true,
+    rateLimitEnabled: true,
+    rateLimitTimeWindow: true,
+    rateLimitMax: true,
+  })
+  .extend({
+    name: z.string().min(3, 'Name must be at least 3 characters').max(50, 'Name must be at most 50 characters').optional().openapi({
+      description: 'Update the API key name',
+      example: 'Updated API Key Name',
+    }),
+    enabled: z.boolean().optional().openapi({
+      description: 'Enable or disable the API key',
+      example: true,
+    }),
+    remaining: z.number().int().positive().nullable().optional().openapi({
+      description: 'Update remaining requests (null for unlimited)',
+      example: 5000,
+    }),
+    refillAmount: z.number().int().positive().nullable().optional().openapi({
+      description: 'Amount to refill on each refill interval',
+      example: 1000,
+    }),
+    refillInterval: z.number().int().positive().nullable().optional().openapi({
+      description: 'Refill interval in milliseconds',
+      example: 86400000, // 24 hours
+    }),
+    metadata: z.record(z.string(), z.unknown()).nullable().optional().openapi({
+      description: 'Update custom metadata',
+      example: { environment: 'staging' },
+    }),
+    rateLimitEnabled: z.boolean().optional().openapi({
+      description: 'Enable or disable rate limiting for this API key',
+      example: true,
+    }),
+    rateLimitTimeWindow: z.number().int().positive().nullable().optional().openapi({
+      description: 'Rate limit time window in milliseconds',
+      example: 86400000, // 24 hours
+    }),
+    rateLimitMax: z.number().int().positive().nullable().optional().openapi({
+      description: 'Maximum requests allowed within the time window',
+      example: 1000,
+    }),
+  })
+  .openapi('UpdateApiKeyRequest');
 
 // ============================================================================
 // Response Schemas (Reusing Database Validation)
@@ -180,3 +192,9 @@ export type ApiKey = z.infer<typeof ApiKeySchema>;
 export type ApiKeyWithKey = z.infer<typeof ApiKeyWithKeySchema>;
 export type CreateApiKeyRequest = z.infer<typeof CreateApiKeyRequestSchema>;
 export type UpdateApiKeyRequest = z.infer<typeof UpdateApiKeyRequestSchema>;
+
+/**
+ * API Key response type (excludes sensitive hashed key)
+ * Alias for ApiKey type for backward compatibility
+ */
+export type ApiKeyResponse = ApiKey;

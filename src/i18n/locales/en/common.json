@@ -46,7 +46,8 @@
     "scrollToBottom": "Scroll to bottom",
     "select": "Select",
     "tryAgain": "Try Again",
-    "updating": "Updating"
+    "updating": "Updating",
+    "toggleSidebar": "Toggle Sidebar"
   },
   "addToFavorites": "Add To Favorites",
   "apiKeys": {
@@ -298,21 +299,75 @@
       "messageCopiedDescription": "Message content copied to clipboard",
       "scrollToBottom": "Scroll to bottom"
     },
-    "addToFavorites": "Add to favorites",
-    "addingToFavorites": "Adding to favorites...",
-    "addedToFavorites": "Added to favorites",
-    "addedToFavoritesDescription": "Thread has been added to your favorites",
-    "copyFailed": "Failed to copy link",
-    "copyFailedDescription": "Could not copy link to clipboard. Please try again.",
-    "copyLink": "Copy link",
-    "deleteChat": "Delete Chat",
-    "deleteThread": "Delete Thread",
-    "deleteThreadConfirmDescription": "This action cannot be undone. The thread and all its messages will be permanently deleted.",
-    "deleteThreadConfirmTitle": "Delete this thread?",
-    "error": {
-      "generic": "An error occurred. Please try again."
+    "models": {
+      "aiModels": "AI Models",
+      "searchModels": "Search AI models...",
+      "noModelsFound": "No models found.",
+      "selectedModels": "Selected Models",
+      "selectedModelsLabel": "Selected Models:",
+      "dragToReorder": "Drag to reorder",
+      "dragDisabled": "Drag disabled",
+      "limitReached": "Limit Reached",
+      "yourPlan": "Your Plan",
+      "model": "model",
+      "models": "models",
+      "upgradeToUnlock": "Upgrade to unlock these models",
+      "minimumRequired": "At least one participant is required"
+    },
+    "roles": {
+      "addRole": "+ Role",
+      "searchOrCreateRole": "Search or create role...",
+      "createCustomRole": "Create Custom Role",
+      "defaultRoles": "Default Roles",
+      "customRoles": "Custom Roles",
+      "create": "Create",
+      "creating": "Creating...",
+      "noRolesFound": "No roles found.",
+      "deleteCustomRole": "Delete custom role"
+    },
+    "modes": {
+      "mode": "Mode",
+      "currentMode": "Current Mode:",
+      "chatModes": "Chat Modes"
+    },
+    "configuration": {
+      "configurationChanged": "Configuration changed",
+      "added": "Added",
+      "modified": "Modified",
+      "removed": "Removed",
+      "actionSummary": {
+        "added": "added",
+        "modified": "modified",
+        "removed": "removed"
+      }
     },
     "errors": {
+      "unknownModel": "Unknown model",
+      "generationCancelled": "Generation cancelled",
+      "rateLimitReached": "Rate limit reached",
+      "contextTooLong": "Context too long",
+      "apiError": "API error",
+      "networkError": "Network error",
+      "requestTimeout": "Request timeout",
+      "generationFailed": "Generation failed",
+      "hideDetails": "− Hide details",
+      "showDetails": "+ Show details",
+      "errorType": "Error Type:",
+      "model": "Model:",
+      "participant": "Participant:",
+      "statusCode": "Status code:",
+      "providerMessage": "Provider message:",
+      "status": "Status:",
+      "requestAborted": "Request was aborted",
+      "responseFromProvider": "Response from AI provider:",
+      "whatToDo": "💡 What to do:",
+      "waitAndRegenerate": "Wait a few moments and use the regenerate button below",
+      "addOwnApiKey": "Or add your own API key to avoid rate limits",
+      "shortenMessage": "💡 Try shortening your message or starting a new chat",
+      "checkConnection": "💡 Check your connection and use regenerate button below",
+      "requestTookTooLong": "💡 Request took too long - use regenerate button below to retry",
+      "useRegenerateButton": "💡 Use regenerate button below to retry this round",
+      "fullMetadata": "Full metadata (dev only)",
       "rateLimitTitle": "Rate Limit Exceeded",
       "rateLimitSolution": "This model is experiencing high demand. Wait a moment and try again, or select a different model.",
       "modelUnavailableTitle": "Model Unavailable",
@@ -338,6 +393,20 @@
       "technicalDetails": "Technical Details",
       "howToFix": "How to fix"
     },
+    "addToFavorites": "Add to favorites",
+    "addingToFavorites": "Adding to favorites...",
+    "addedToFavorites": "Added to favorites",
+    "addedToFavoritesDescription": "Thread has been added to your favorites",
+    "copyFailed": "Failed to copy link",
+    "copyFailedDescription": "Could not copy link to clipboard. Please try again.",
+    "copyLink": "Copy link",
+    "deleteChat": "Delete Chat",
+    "deleteThread": "Delete Thread",
+    "deleteThreadConfirmDescription": "This action cannot be undone. The thread and all its messages will be permanently deleted.",
+    "deleteThreadConfirmTitle": "Delete this thread?",
+    "error": {
+      "generic": "An error occurred. Please try again."
+    },
     "public": {
       "threadNotFound": "Thread Not Found",
       "threadNotFoundDescription": "This public chat thread doesn't exist or has been made private.",
@@ -346,7 +415,12 @@
       "learnMore": "Learn More",
       "tryNow": "Try Now",
       "tryRoundtable": "Try Roundtable",
-      "description": "lets you chat with multiple AI models simultaneously for deeper insights and better solutions."
+      "description": "lets you chat with multiple AI models simultaneously for deeper insights and better solutions.",
+      "loadingPublicChat": "Loading public chat...",
+      "privateChat": "Private Chat",
+      "privateChatDescription": "This chat is private and cannot be viewed publicly.",
+      "goHome": "Go Home",
+      "experiencePower": "Experience the power of multi-AI collaboration."
     },
     "favoriteFailed": "Failed to update favorite",
     "favorites": "Favorites",
@@ -474,7 +548,10 @@
   "common": {
     "error": "An error occurred",
     "loading": "Loading...",
-    "or": "Or"
+    "or": "Or",
+    "logo": "Logo",
+    "more": "More",
+    "statusLabel": "Status: {status}"
   },
   "componentError": "ComponentError",
   "componentUnavailable": "ComponentUnavailable",
@@ -501,7 +578,9 @@
     "noResultsFound": "NoResultsFound",
     "pickDate": "PickDate",
     "searchPlaceholder": "Search...",
-    "selectOption": "Select an option"
+    "selectOption": "Select an option",
+    "hidePassword": "Hide password",
+    "showPassword": "Show password"
   },
   "goHome": "GoHome",
   "id": "Id",
@@ -866,7 +945,9 @@
     },
     "loading": {
       "default": "Loading...",
-      "please_wait": "Please wait while we fetch your data..."
+      "please_wait": "Please wait while we fetch your data...",
+      "authentication": "Loading authentication...",
+      "errorDetails": "Loading error details..."
     }
   },
   "status": {

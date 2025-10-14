@@ -8,7 +8,6 @@ import {
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { useMemo } from 'react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -33,28 +32,12 @@ export function UsageMetrics() {
   const router = useRouter();
   const { data: usageData, isLoading, isError } = useUsageStatsQuery();
 
-  // Calculate usage statuses before any conditional returns (React Hooks rules)
-  const threadsPercentage = usageData?.success ? usageData.data.threads.percentage : 0;
-  const messagesPercentage = usageData?.success ? usageData.data.messages.percentage : 0;
+  // ✅ BACKEND-COMPUTED STATUS: Use status field from backend (no threshold logic here)
+  const threadsStatus = usageData?.success ? usageData.data.threads.status : 'default';
+  const messagesStatus = usageData?.success ? usageData.data.messages.status : 'default';
 
-  const threadsStatus = useMemo(() => {
-    if (threadsPercentage >= 100)
-      return 'critical';
-    if (threadsPercentage >= 80)
-      return 'warning';
-    return 'default';
-  }, [threadsPercentage]);
-
-  const messagesStatus = useMemo(() => {
-    if (messagesPercentage >= 100)
-      return 'critical';
-    if (messagesPercentage >= 80)
-      return 'warning';
-    return 'default';
-  }, [messagesPercentage]);
-
-  const isMaxedOut = threadsPercentage >= 100 || messagesPercentage >= 100;
-  const hasWarning = threadsPercentage >= 80 || messagesPercentage >= 80;
+  const isMaxedOut = threadsStatus === 'critical' || messagesStatus === 'critical';
+  const hasWarning = threadsStatus === 'warning' || messagesStatus === 'warning' || isMaxedOut;
 
   // Loading state - improved skeleton
   if (isLoading) {
@@ -73,6 +56,10 @@ export function UsageMetrics() {
   }
 
   const usage = usageData.data;
+
+  // Extract percentage values from backend response
+  const threadsPercentage = usage.threads.percentage;
+  const messagesPercentage = usage.messages.percentage;
 
   const handleUpgrade = () => {
     router.push('/chat/pricing');

@@ -1,4 +1,5 @@
 import { dehydrate, HydrationBoundary } from '@tanstack/react-query';
+import { useTranslations } from 'next-intl';
 import type React from 'react';
 import { Suspense } from 'react';
 
@@ -11,6 +12,16 @@ type AuthLayoutPageProps = {
   children: React.ReactNode;
 };
 
+function AuthLayoutContent({ children }: { children: React.ReactNode }) {
+  const t = useTranslations('states.loading');
+
+  return (
+    <Suspense fallback={<PageLoadingFallback text={t('authentication')} />}>
+      <AuthLayout>{children}</AuthLayout>
+    </Suspense>
+  );
+}
+
 export default async function AuthLayoutPage({ children }: AuthLayoutPageProps) {
   // Redirect authenticated users to dashboard
   await redirectIfAuthenticated();
@@ -20,9 +31,7 @@ export default async function AuthLayoutPage({ children }: AuthLayoutPageProps) 
 
   return (
     <HydrationBoundary state={dehydrate(queryClient)}>
-      <Suspense fallback={<PageLoadingFallback text="Loading authentication..." />}>
-        <AuthLayout>{children}</AuthLayout>
-      </Suspense>
+      <AuthLayoutContent>{children}</AuthLayoutContent>
     </HydrationBoundary>
   );
 }

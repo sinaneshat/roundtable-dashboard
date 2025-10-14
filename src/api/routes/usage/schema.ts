@@ -1,11 +1,77 @@
 import { z } from '@hono/zod-openapi';
 
 import { createApiResponseSchema } from '@/api/core/schemas';
-import { SUBSCRIPTION_TIERS } from '@/api/services/product-logic.service';
-import { quotaCheckSchema, usageStatsSchema } from '@/db/validation/usage';
+import { SUBSCRIPTION_TIERS, subscriptionTierSchema } from '@/api/services/product-logic.service';
 
 // ============================================================================
-// Usage Statistics Schemas (Reusing Database Validation)
+// Business Logic Schemas (Moved from DB Validation)
+// ============================================================================
+
+/**
+ * Usage status enum
+ * ✅ SERVER-COMPUTED: Business logic for warning thresholds
+ */
+export const usageStatusSchema = z.enum(['default', 'warning', 'critical']);
+export type UsageStatus = z.infer<typeof usageStatusSchema>;
+
+/**
+ * Schema for quota check response
+ * ✅ BUSINESS LOGIC: Computed fields for quota management
+ */
+export const quotaCheckSchema = z.object({
+  canCreate: z.boolean(),
+  current: z.number(),
+  limit: z.number(),
+  remaining: z.number(),
+  resetDate: z.date(),
+  tier: subscriptionTierSchema,
+});
+
+export type QuotaCheck = z.infer<typeof quotaCheckSchema>;
+
+/**
+ * Schema for usage statistics response
+ * ✅ BUSINESS LOGIC: Computed fields including status, percentage, etc.
+ */
+export const usageStatsSchema = z.object({
+  threads: z.object({
+    used: z.number(),
+    limit: z.number(),
+    remaining: z.number(),
+    percentage: z.number(),
+    status: usageStatusSchema,
+  }),
+  messages: z.object({
+    used: z.number(),
+    limit: z.number(),
+    remaining: z.number(),
+    percentage: z.number(),
+    status: usageStatusSchema,
+  }),
+  customRoles: z.object({
+    used: z.number(),
+    limit: z.number(),
+    remaining: z.number(),
+    percentage: z.number(),
+    status: usageStatusSchema,
+  }),
+  period: z.object({
+    start: z.date(),
+    end: z.date(),
+    daysRemaining: z.number(),
+  }),
+  subscription: z.object({
+    tier: subscriptionTierSchema,
+    isAnnual: z.boolean(),
+    pendingTierChange: subscriptionTierSchema.nullable().optional(),
+    pendingTierIsAnnual: z.boolean().nullable().optional(),
+  }),
+});
+
+export type UsageStats = z.infer<typeof usageStatsSchema>;
+
+// ============================================================================
+// Usage Statistics API Schemas (OpenAPI-Enhanced)
 // ============================================================================
 
 /**

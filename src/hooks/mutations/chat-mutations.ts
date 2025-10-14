@@ -63,6 +63,8 @@ export function useCreateThreadMutation() {
             period: unknown;
           };
 
+          // ✅ OPTIMISTIC UPDATE: Only increment 'used' count
+          // Backend will recompute remaining, percentage, and status on next fetch
           return {
             ...oldData,
             data: {
@@ -70,11 +72,10 @@ export function useCreateThreadMutation() {
               threads: {
                 ...data.threads,
                 used: data.threads.used + 1,
-                remaining: Math.max(0, data.threads.remaining - 1),
-                percentage: Math.min(
-                  100,
-                  ((data.threads.used + 1) / data.threads.limit) * 100,
-                ),
+                // Keep existing values - backend will provide correct values on refetch
+                remaining: data.threads.remaining,
+                percentage: data.threads.percentage,
+                status: 'status' in data.threads ? data.threads.status : 'default',
               },
             },
           };

@@ -573,6 +573,8 @@ export function useChatStreaming(
           // Calculate expected message count increase (user message + participant responses)
           const messageCount = 1 + selectedParticipants.length;
 
+          // ✅ OPTIMISTIC UPDATE: Only increment 'used' count
+          // Backend will recompute remaining, percentage, and status on next fetch
           return {
             ...oldData,
             data: {
@@ -580,11 +582,10 @@ export function useChatStreaming(
               messages: {
                 ...data.messages,
                 used: data.messages.used + messageCount,
-                remaining: Math.max(0, data.messages.remaining - messageCount),
-                percentage: Math.min(
-                  100,
-                  ((data.messages.used + messageCount) / data.messages.limit) * 100,
-                ),
+                // Keep existing values - backend will provide correct values on refetch
+                remaining: data.messages.remaining,
+                percentage: data.messages.percentage,
+                status: 'status' in data.messages ? data.messages.status : 'default',
               },
             },
           };

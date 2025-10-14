@@ -4,7 +4,6 @@ import { motion } from 'motion/react';
 import { useCallback, useMemo } from 'react';
 
 import type { SubscriptionTier } from '@/api/services/product-logic.service';
-import { getQuickStartModelsByTier } from '@/api/services/product-logic.service';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Card } from '@/components/ui/card';
 import { useModelsQuery } from '@/hooks/queries/models';
@@ -58,10 +57,10 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
     return allModels.filter(model => model.is_accessible_to_user ?? true);
   }, [allModels]);
 
-  // Use the centralized model selection service directly
+  // ✅ SELECT MODELS: Simply take first N accessible models (backend already filtered by tier)
   const selectQuickStartModels = useCallback(
-    (tier: SubscriptionTier, count: number = 4): string[] => {
-      return getQuickStartModelsByTier(accessibleModels, tier, count);
+    (count: number = 4): string[] => {
+      return accessibleModels.slice(0, count).map(m => m.id);
     },
     [accessibleModels],
   );
@@ -75,11 +74,12 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
       return [];
     }
 
-    // ✅ FULLY DYNAMIC: Get models for each tier using centralized service
-    const freeModels = selectQuickStartModels('free', 2);
-    const starterModels = selectQuickStartModels('starter', 3);
-    const proModels = selectQuickStartModels('pro', 4);
-    const powerModels = selectQuickStartModels('power', 6);
+    // ✅ BACKEND FILTERING: Backend already filtered models by user's tier
+    // Just select first N models for each suggestion tier
+    const freeModels = selectQuickStartModels(2);
+    const starterModels = selectQuickStartModels(3);
+    const proModels = selectQuickStartModels(4);
+    const powerModels = selectQuickStartModels(6);
 
     // Destructure models for use in suggestions
     const [starterModel1, starterModel2, starterModel3] = starterModels;

@@ -1,7 +1,15 @@
+/**
+ * Auth Validation Schemas
+ *
+ * ✅ DATABASE-ONLY: Pure Drizzle-Zod schemas derived from database tables
+ * ❌ NO CUSTOM LOGIC: No form schemas or UI-specific validations
+ *
+ * For form-specific schemas (authEmailSchema, profileUpdateSchema), see:
+ * @/components/auth/ or relevant form components
+ */
+
 import { createInsertSchema, createSelectSchema, createUpdateSchema } from 'drizzle-zod';
 import { z } from 'zod';
-
-import { STRING_LIMITS } from '@/constants';
 
 import {
   account,
@@ -10,7 +18,10 @@ import {
   verification,
 } from '../tables/auth';
 
-// User schemas
+// ============================================================================
+// User Schemas
+// ============================================================================
+
 export const userSelectSchema = createSelectSchema(user);
 export const userInsertSchema = createInsertSchema(user, {
   email: schema => schema.email(),
@@ -21,34 +32,23 @@ export const userUpdateSchema = createUpdateSchema(user, {
   image: () => z.string().url().optional(),
 });
 
-// Auth form schemas derived from DB constraints where applicable
-export const authEmailSchema = z.object({
-  email: z.string().email(),
-});
+// ============================================================================
+// Session Schemas
+// ============================================================================
 
-export const authFormSchema = authEmailSchema.extend({
-  name: z.string().min(1).max(STRING_LIMITS.NAME_MAX).optional(),
-});
-
-export type AuthEmailValues = z.infer<typeof authEmailSchema>;
-export type AuthFormValues = z.infer<typeof authFormSchema>;
-
-export const profileUpdateSchema = z.object({
-  name: userUpdateSchema.shape.name,
-  image: userUpdateSchema.shape.image.or(z.literal('')),
-  email: z.string().email('Invalid email address'),
-});
-
-export type ProfileUpdateValues = z.infer<typeof profileUpdateSchema>;
-
-// Session schemas
 export const sessionSelectSchema = createSelectSchema(session);
 export const sessionInsertSchema = createInsertSchema(session);
 
-// Account schemas
+// ============================================================================
+// Account Schemas
+// ============================================================================
+
 export const accountSelectSchema = createSelectSchema(account);
 export const accountInsertSchema = createInsertSchema(account);
 
-// Verification schemas
+// ============================================================================
+// Verification Schemas
+// ============================================================================
+
 export const verificationSelectSchema = createSelectSchema(verification);
 export const verificationInsertSchema = createInsertSchema(verification);

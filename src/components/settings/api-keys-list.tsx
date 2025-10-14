@@ -13,6 +13,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 
+import type { ApiKeyResponse } from '@/api/routes/api-keys/schema';
 import { ApiKeyCard } from '@/components/settings/api-key-card';
 import {
   AlertDialog,
@@ -26,7 +27,6 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import type { ApiKeyResponse } from '@/db/validation/api-keys';
 import { useDeleteApiKeyMutation } from '@/hooks';
 import { showApiErrorToast } from '@/lib/toast';
 

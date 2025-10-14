@@ -1,7 +1,15 @@
-import { createInsertSchema, createSelectSchema } from 'drizzle-zod';
-import { z } from 'zod';
+/**
+ * User Chat Usage Validation Schemas
+ *
+ * ✅ DATABASE-ONLY: Pure Drizzle-Zod schemas derived from database tables
+ * ❌ NO CUSTOM LOGIC: No business logic, API schemas, or computed fields
+ *
+ * For API-specific schemas (quotaCheckSchema, usageStatsSchema), see:
+ * @/api/routes/usage/schema.ts
+ */
 
-import { subscriptionTierSchema } from '@/api/services/product-logic.service';
+import { createInsertSchema, createSelectSchema } from 'drizzle-zod';
+import type { z } from 'zod';
 
 import {
   userChatUsage,
@@ -16,8 +24,6 @@ export const userChatUsageSelectSchema = createSelectSchema(userChatUsage);
 export const userChatUsageInsertSchema = createInsertSchema(userChatUsage, {
   threadsCreated: schema => schema.min(0),
   messagesCreated: schema => schema.min(0),
-  subscriptionTier: () => subscriptionTierSchema,
-  isAnnual: () => z.boolean(),
 });
 
 export type UserChatUsage = z.infer<typeof userChatUsageSelectSchema>;
@@ -32,64 +38,7 @@ export const userChatUsageHistoryInsertSchema = createInsertSchema(userChatUsage
   threadsCreated: schema => schema.min(0),
   messagesCreated: schema => schema.min(0),
   customRolesCreated: schema => schema.min(0),
-  subscriptionTier: () => subscriptionTierSchema,
-  isAnnual: () => z.boolean(),
 });
 
 export type UserChatUsageHistory = z.infer<typeof userChatUsageHistorySelectSchema>;
 export type UserChatUsageHistoryInsert = z.infer<typeof userChatUsageHistoryInsertSchema>;
-
-// ============================================================================
-// Helper Schemas for Usage Tracking
-// ============================================================================
-
-/**
- * Schema for quota check response
- */
-export const quotaCheckSchema = z.object({
-  canCreate: z.boolean(),
-  current: z.number(),
-  limit: z.number(),
-  remaining: z.number(),
-  resetDate: z.date(),
-  tier: subscriptionTierSchema,
-});
-
-export type QuotaCheck = z.infer<typeof quotaCheckSchema>;
-
-/**
- * Schema for usage statistics response
- */
-export const usageStatsSchema = z.object({
-  threads: z.object({
-    used: z.number(),
-    limit: z.number(),
-    remaining: z.number(),
-    percentage: z.number(),
-  }),
-  messages: z.object({
-    used: z.number(),
-    limit: z.number(),
-    remaining: z.number(),
-    percentage: z.number(),
-  }),
-  customRoles: z.object({
-    used: z.number(),
-    limit: z.number(),
-    remaining: z.number(),
-    percentage: z.number(),
-  }),
-  period: z.object({
-    start: z.date(),
-    end: z.date(),
-    daysRemaining: z.number(),
-  }),
-  subscription: z.object({
-    tier: subscriptionTierSchema,
-    isAnnual: z.boolean(),
-    pendingTierChange: subscriptionTierSchema.nullable().optional(),
-    pendingTierIsAnnual: z.boolean().nullable().optional(),
-  }),
-});
-
-export type UsageStats = z.infer<typeof usageStatsSchema>;

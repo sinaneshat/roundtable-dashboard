@@ -1,3 +1,13 @@
+/**
+ * Chat Validation Schemas
+ *
+ * ✅ DATABASE-ONLY: Pure Drizzle-Zod schemas derived from database tables
+ * ❌ NO CUSTOM LOGIC: No business logic validations (e.g., isValidModelId)
+ *
+ * For API-specific validations and business logic, see:
+ * @/api/routes/chat/schema.ts
+ */
+
 import { createInsertSchema, createSelectSchema, createUpdateSchema } from 'drizzle-zod';
 import { z } from 'zod';
 
@@ -9,42 +19,29 @@ import {
   chatThread,
   chatThreadChangelog,
 } from '@/db/tables/chat';
-import { isValidModelId } from '@/lib/ai/models-config';
-import { CHAT_MODES } from '@/lib/config/chat-modes';
 
 /**
  * Chat Thread Schemas
- * Uses centralized CHAT_MODES for type safety
  */
 export const chatThreadSelectSchema = createSelectSchema(chatThread);
 export const chatThreadInsertSchema = createInsertSchema(chatThread, {
   title: schema => schema.min(1).max(200),
-  mode: () => z.enum(CHAT_MODES),
 });
 export const chatThreadUpdateSchema = createUpdateSchema(chatThread, {
   title: schema => schema.min(1).max(200).optional(),
-  mode: () => z.enum(CHAT_MODES).optional(),
 });
 
 /**
  * Chat Participant Schemas
- * ✅ DYNAMIC: Validates modelId as string (accepts any OpenRouter model)
  */
 export const chatParticipantSelectSchema = createSelectSchema(chatParticipant);
 export const chatParticipantInsertSchema = createInsertSchema(chatParticipant, {
-  modelId: () => z.string()
-    .min(1)
-    .refine(isValidModelId, { message: 'Must be a valid model ID' })
-    .describe('Must be a valid OpenRouter model ID'),
+  modelId: schema => schema.min(1),
   role: schema => schema.min(1).max(100).optional(),
   priority: schema => schema.min(0).max(100),
 });
 export const chatParticipantUpdateSchema = createUpdateSchema(chatParticipant, {
-  modelId: () => z.string()
-    .min(1)
-    .refine(isValidModelId, { message: 'Must be a valid model ID' })
-    .describe('Must be a valid OpenRouter model ID')
-    .optional(),
+  modelId: schema => schema.min(1).optional(),
   role: schema => schema.min(1).max(100).optional(),
   priority: schema => schema.min(0).max(100).optional(),
 });
@@ -63,21 +60,10 @@ export const chatMessageUpdateSchema = createUpdateSchema(chatMessage, {
 
 /**
  * Chat Thread Changelog Schemas
- * ✅ Tracks configuration changes to threads
- * ✅ SINGLE SOURCE: Matches ChangelogTypeSchema in @/api/routes/chat/schema.ts
  */
-const CHANGELOG_TYPES = [
-  'mode_change',
-  'participant_added',
-  'participant_removed',
-  'participant_updated',
-  'participants_reordered',
-] as const;
-
 export const chatThreadChangelogSelectSchema = createSelectSchema(chatThreadChangelog);
 export const chatThreadChangelogInsertSchema = createInsertSchema(chatThreadChangelog, {
-  changeType: () => z.enum(CHANGELOG_TYPES).describe('Type of configuration change'),
-  changeSummary: schema => schema.min(1).max(500).describe('Human-readable summary of the change'),
+  changeSummary: schema => schema.min(1).max(500),
 });
 export const chatThreadChangelogUpdateSchema = createUpdateSchema(chatThreadChangelog);
 

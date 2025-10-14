@@ -30,6 +30,7 @@ import { chatMessagesToUIMessages, getMessageMetadata } from '@/lib/ai/message-h
  */
 export default function PublicChatThreadScreen({ slug }: { slug: string }) {
   const t = useTranslations();
+  const tPublic = useTranslations('chat.public');
 
   // Fetch public thread details by slug (no authentication required)
   const { data: threadData, isLoading: isLoadingThread, error: threadError } = usePublicThreadQuery(slug);
@@ -85,7 +86,7 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
       <div className="flex flex-1 items-center justify-center min-h-[60vh]">
         <div className="text-center space-y-4">
           <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto" />
-          <p className="text-sm text-muted-foreground">Loading public chat...</p>
+          <p className="text-sm text-muted-foreground">{tPublic('loadingPublicChat')}</p>
         </div>
       </div>
     );
@@ -122,13 +123,13 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
             <Lock className="w-8 h-8 text-destructive" />
           </div>
           <div className="space-y-2">
-            <h2 className="text-2xl font-bold">Private Chat</h2>
+            <h2 className="text-2xl font-bold">{tPublic('privateChat')}</h2>
             <p className="text-muted-foreground">
-              This chat is private and cannot be viewed publicly.
+              {tPublic('privateChatDescription')}
             </p>
           </div>
           <Button variant="default" onClick={() => window.location.href = '/'}>
-            Go Home
+            {tPublic('goHome')}
           </Button>
         </div>
       </div>
@@ -254,14 +255,14 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
                       </div>
                       <div className="space-y-3">
                         <h3 className="text-2xl sm:text-3xl font-bold">
-                          {t('chat.public.tryRoundtable')}
+                          {tPublic('tryRoundtable')}
                         </h3>
                         <p className="text-muted-foreground max-w-xl mx-auto text-base">
-                          Experience the power of multi-AI collaboration.
+                          {tPublic('experiencePower')}
                           {' '}
                           {BRAND.displayName}
                           {' '}
-                          {t('chat.public.description')}
+                          {tPublic('description')}
                         </p>
                       </div>
                       <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-4">
@@ -270,7 +271,7 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
                           onClick={() => window.location.href = signUpUrl}
                           className="gap-2 w-full sm:w-auto text-base px-8"
                         >
-                          {t('chat.public.tryRoundtable')}
+                          {tPublic('tryRoundtable')}
                           <ArrowRight className="w-4 h-4" />
                         </Button>
                         <Button
@@ -279,7 +280,7 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
                           onClick={() => window.location.href = '/?utm_source=public_chat&utm_medium=cta&utm_campaign=learn_more'}
                           className="w-full sm:w-auto text-base px-8"
                         >
-                          {t('chat.public.learnMore')}
+                          {tPublic('learnMore')}
                         </Button>
                       </div>
                     </div>

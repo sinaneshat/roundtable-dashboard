@@ -6,6 +6,7 @@ import { useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
+import { z } from 'zod';
 
 import RHFTextField from '@/components/forms/rhf-text-field';
 import { Button } from '@/components/ui/button';
@@ -17,8 +18,6 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { Form } from '@/components/ui/form';
-import type { AuthEmailValues } from '@/db/validation/auth';
-import { authEmailSchema } from '@/db/validation/auth';
 import { useBoolean } from '@/hooks/utils';
 import { authClient } from '@/lib/auth/client';
 import { showApiErrorToast, showApiInfoToast } from '@/lib/toast';
@@ -26,9 +25,15 @@ import { getApiErrorDetails } from '@/lib/utils/error-handling';
 
 import { GoogleButton } from './google-button';
 
-// ✅ REUSE: Email validation schema from db/validation/auth.ts
-const magicLinkSchema = authEmailSchema;
-type MagicLinkFormData = AuthEmailValues;
+/**
+ * ✅ FORM-SPECIFIC: Email validation schema for magic link authentication
+ * This is UI/form validation, NOT database validation
+ */
+const magicLinkSchema = z.object({
+  email: z.string().email('Please enter a valid email address'),
+});
+
+type MagicLinkFormData = z.infer<typeof magicLinkSchema>;
 
 export function AuthForm() {
   const t = useTranslations();

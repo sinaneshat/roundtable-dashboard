@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { useTranslations } from 'next-intl';
 import { Suspense } from 'react';
 
 import { PageLoadingFallback } from '@/components/loading';
@@ -14,10 +15,16 @@ export async function generateMetadata(): Promise<Metadata> {
   });
 }
 
-export default function AuthErrorPage() {
+function AuthErrorContent() {
+  const t = useTranslations('states.loading');
+
   return (
-    <Suspense fallback={<PageLoadingFallback text="Loading error details..." />}>
+    <Suspense fallback={<PageLoadingFallback text={t('errorDetails')} />}>
       <AuthErrorScreen />
     </Suspense>
   );
+}
+
+export default function AuthErrorPage() {
+  return <AuthErrorContent />;
 }

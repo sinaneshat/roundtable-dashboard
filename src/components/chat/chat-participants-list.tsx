@@ -4,6 +4,7 @@ import type { UIMessage } from 'ai';
 import { Bot, Check, GripVertical, Lock, Plus, Trash2 } from 'lucide-react';
 import { motion, Reorder, useDragControls } from 'motion/react';
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import { useEffect, useMemo, useState } from 'react';
 
 // ============================================================================
@@ -13,7 +14,6 @@ import type { ChatCustomRole } from '@/api/routes/chat/schema';
 // ✅ ZOD-INFERRED TYPE: Import from schema (no hardcoded interfaces)
 import type { BaseModelResponse } from '@/api/routes/models/schema';
 import type { SubscriptionTier } from '@/api/services/product-logic.service';
-import { getMaxModelsForTier, getTierName, getTiersInOrder, SUBSCRIPTION_TIER_NAMES } from '@/api/services/product-logic.service';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -41,7 +41,6 @@ import {
 import { useCreateCustomRoleMutation, useDeleteCustomRoleMutation } from '@/hooks/mutations/chat-mutations';
 import { useCustomRolesQuery } from '@/hooks/queries/chat-roles';
 import { useModelsQuery } from '@/hooks/queries/models';
-import { useUsageStatsQuery } from '@/hooks/queries/usage';
 import { useFuzzySearch } from '@/hooks/utils/use-fuzzy-search';
 import { DEFAULT_ROLES } from '@/lib/ai/models-config';
 import { getProviderIcon } from '@/lib/ai/provider-icons';
@@ -93,6 +92,7 @@ function RoleSelector({
   onClearRole: () => void;
   onRequestSelection?: () => void; // Called when model needs to be selected first
 }) {
+  const t = useTranslations('chat.roles');
   const [rolePopoverOpen, setRolePopoverOpen] = useState(false);
   const [roleSearchQuery, setRoleSearchQuery] = useState('');
 
@@ -182,13 +182,13 @@ function RoleSelector({
               size="sm"
               className="h-6 text-xs px-2 text-muted-foreground hover:text-foreground rounded-lg"
             >
-              + Role
+              {t('addRole')}
             </Button>
           </PopoverTrigger>
           <PopoverContent className="w-[calc(100vw-2rem)] max-w-[320px] sm:w-64 p-0" align="start" side="bottom" sideOffset={4}>
             <Command>
               <CommandInput
-                placeholder="Search or create role..."
+                placeholder={t('searchOrCreateRole')}
                 className="h-9"
                 value={roleSearchQuery}
                 onValueChange={setRoleSearchQuery}
@@ -204,14 +204,14 @@ function RoleSelector({
                     className="gap-2 text-primary font-medium"
                   >
                     <Plus className="size-4" />
-                    <span>Create Custom Role</span>
+                    <span>{t('createCustomRole')}</span>
                   </CommandItem>
                 </CommandGroup>
 
                 <CommandSeparator />
 
                 {/* Default Roles */}
-                <CommandGroup heading="Default Roles">
+                <CommandGroup heading={t('defaultRoles')}>
                   {DEFAULT_ROLES.map(role => (
                     <CommandItem
                       key={role}
@@ -233,7 +233,7 @@ function RoleSelector({
                 {customRoles.length > 0 && (
                   <>
                     <CommandSeparator />
-                    <CommandGroup heading="Custom Roles">
+                    <CommandGroup heading={t('customRoles')}>
                       {customRoles.map(role => (
                         <CommandItem
                           key={role.id}
@@ -262,7 +262,7 @@ function RoleSelector({
                             onClick={e => handleDeleteRole(role.id, role.name, e)}
                             disabled={deleteRoleMutation.isPending}
                             className="ml-2 opacity-60 sm:opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-sm hover:bg-destructive/10 hover:text-destructive disabled:opacity-50 flex-shrink-0"
-                            aria-label="Delete custom role"
+                            aria-label={t('deleteCustomRole')}
                           >
                             {deleteRoleMutation.isPending
                               ? (
@@ -282,7 +282,7 @@ function RoleSelector({
                 {isNewRole && (
                   <>
                     <CommandSeparator />
-                    <CommandGroup heading="Create">
+                    <CommandGroup heading={t('create')}>
                       <CommandItem
                         value={roleSearchQuery}
                         onSelect={() => handleCreateRole(roleSearchQuery.trim())}
@@ -293,7 +293,7 @@ function RoleSelector({
                           ? (
                               <>
                                 <div className="size-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-                                <span>Creating...</span>
+                                <span>{t('creating')}</span>
                               </>
                             )
                           : (
@@ -311,7 +311,7 @@ function RoleSelector({
                   </>
                 )}
 
-                <CommandEmpty>No roles found.</CommandEmpty>
+                <CommandEmpty>{t('noRolesFound')}</CommandEmpty>
               </CommandList>
             </Command>
           </PopoverContent>
@@ -351,7 +351,7 @@ function RoleSelector({
         <PopoverContent className="w-[calc(100vw-2rem)] max-w-[320px] sm:w-64 p-0" align="start" side="bottom" sideOffset={4}>
           <Command>
             <CommandInput
-              placeholder="Search or create role..."
+              placeholder={t('searchOrCreateRole')}
               className="h-9"
               value={roleSearchQuery}
               onValueChange={setRoleSearchQuery}
@@ -367,14 +367,14 @@ function RoleSelector({
                   className="gap-2 text-primary font-medium"
                 >
                   <Plus className="size-4" />
-                  <span>Create Custom Role</span>
+                  <span>{t('createCustomRole')}</span>
                 </CommandItem>
               </CommandGroup>
 
               <CommandSeparator />
 
               {/* Default Roles */}
-              <CommandGroup heading="Default Roles">
+              <CommandGroup heading={t('defaultRoles')}>
                 {DEFAULT_ROLES.map(role => (
                   <CommandItem
                     key={role}
@@ -396,7 +396,7 @@ function RoleSelector({
               {customRoles.length > 0 && (
                 <>
                   <CommandSeparator />
-                  <CommandGroup heading="Custom Roles">
+                  <CommandGroup heading={t('customRoles')}>
                     {customRoles.map(role => (
                       <CommandItem
                         key={role.id}
@@ -425,7 +425,7 @@ function RoleSelector({
                           onClick={e => handleDeleteRole(role.id, role.name, e)}
                           disabled={deleteRoleMutation.isPending}
                           className="ml-2 opacity-60 sm:opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-sm hover:bg-destructive/10 hover:text-destructive disabled:opacity-50 flex-shrink-0"
-                          aria-label="Delete custom role"
+                          aria-label={t('deleteCustomRole')}
                         >
                           {deleteRoleMutation.isPending
                             ? (
@@ -445,7 +445,7 @@ function RoleSelector({
               {isNewRole && (
                 <>
                   <CommandSeparator />
-                  <CommandGroup heading="Create">
+                  <CommandGroup heading={t('create')}>
                     <CommandItem
                       value={roleSearchQuery}
                       onSelect={() => handleCreateRole(roleSearchQuery.trim())}
@@ -456,7 +456,7 @@ function RoleSelector({
                         ? (
                             <>
                               <div className="size-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-                              <span>Creating...</span>
+                              <span>{t('creating')}</span>
                             </>
                           )
                         : (
@@ -474,7 +474,7 @@ function RoleSelector({
                 </>
               )}
 
-              <CommandEmpty>No roles found.</CommandEmpty>
+              <CommandEmpty>{t('noRolesFound')}</CommandEmpty>
             </CommandList>
           </Command>
         </PopoverContent>
@@ -511,6 +511,7 @@ function ModelItem({
   userTierInfo?: { tier_name: string; max_models: number; current_tier: SubscriptionTier; can_upgrade: boolean };
 }) {
   const controls = useDragControls();
+  const tModels = useTranslations('chat.models');
   const { model, participant } = orderedModel;
   const isSelected = participant !== null;
 
@@ -529,10 +530,12 @@ function ModelItem({
   // Unselected models can be disabled by tier or limit
   const isDisabled = isDisabledDueToLastParticipant || isDisabledDueToTier || isDisabledDueToLimit;
 
-  // Create upgrade tooltip content with proper messaging (using centralized getTierName)
+  // Create upgrade tooltip content with proper messaging (using backend tier names)
   let upgradeTooltipContent: string | undefined;
   if (isDisabledDueToTier) {
-    upgradeTooltipContent = `Upgrade to ${SUBSCRIPTION_TIER_NAMES[model.minTier]} to unlock this model`;
+    // ✅ USE BACKEND DATA: required_tier_name comes from backend
+    const requiredTierName = (model).required_tier_name || model.minTier;
+    upgradeTooltipContent = `Upgrade to ${requiredTierName} to unlock this model`;
   } else if (isDisabledDueToLimit) {
     upgradeTooltipContent = `Your ${userTierInfo?.tier_name || 'current'} plan allows up to ${maxModels} models per conversation. Upgrade to select more models.`;
   }
@@ -558,7 +561,7 @@ function ModelItem({
                 )}
                 onPointerDown={isDisabled ? undefined : e => controls.start(e)}
                 style={isDisabled ? undefined : { touchAction: 'none' }}
-                aria-label={isDisabled ? 'Drag disabled' : 'Drag to reorder'}
+                aria-label={isDisabled ? tModels('dragDisabled') : tModels('dragToReorder')}
                 onClick={e => e.stopPropagation()}
                 onKeyDown={(e) => {
                   if (!isDisabled && (e.key === 'Enter' || e.key === ' ')) {
@@ -579,7 +582,7 @@ function ModelItem({
               disabled={isDisabled}
               className="size-4 flex-shrink-0"
               onClick={e => e.stopPropagation()}
-              title={isDisabledDueToLastParticipant ? 'At least one participant is required' : undefined}
+              title={isDisabledDueToLastParticipant ? tModels('minimumRequired') : undefined}
             />
 
             {/* Clickable Row Content - triggers checkbox toggle */}
@@ -618,7 +621,7 @@ function ModelItem({
                     <>
                       <Lock className="size-3 text-muted-foreground flex-shrink-0" />
                       <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 font-medium bg-primary/10 text-primary border-primary/20">
-                        {SUBSCRIPTION_TIER_NAMES[model.minTier]}
+                        {(model).required_tier_name || model.minTier}
                         {' '}
                         Required
                       </Badge>
@@ -626,7 +629,7 @@ function ModelItem({
                   )}
                   {isDisabledDueToLimit && !isDisabledDueToTier && (
                     <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 border-warning/50 text-warning">
-                      Limit Reached
+                      {tModels('limitReached')}
                     </Badge>
                   )}
                 </div>
@@ -665,7 +668,7 @@ function ModelItem({
               <p className="text-xs text-muted-foreground">
                 Upgrade to
                 {' '}
-                {isDisabledDueToTier ? SUBSCRIPTION_TIER_NAMES[model.minTier] : 'a higher tier'}
+                {isDisabledDueToTier ? ((model).required_tier_name || model.minTier) : 'a higher tier'}
                 {' '}
                 to unlock this model
               </p>
@@ -720,6 +723,8 @@ export function ChatParticipantsList({
   className,
   isStreaming = false,
 }: ChatParticipantsListProps) {
+  const t = useTranslations('chat');
+  const tModels = useTranslations('chat.models');
   const [open, setOpen] = useState(false);
   const [modelSearchQuery, setModelSearchQuery] = useState('');
 
@@ -731,13 +736,17 @@ export function ChatParticipantsList({
     (page?.success && page.data?.items) ? page.data.items : [],
   ) || [];
 
-  // ✅ USER TIER: Get from usage stats
-  const { data: usageStatsData } = useUsageStatsQuery();
-  const userTier = usageStatsData?.data?.subscription?.tier || 'free';
+  // ✅ BACKEND TIER CONFIG: Get ALL tier data from backend (max_models, tier_name, etc.)
+  const userTierConfig = modelsData?.data?.user_tier_config || {
+    tier: 'free' as SubscriptionTier,
+    tier_name: 'Free',
+    max_models: 2,
+    can_upgrade: true,
+  };
 
-  // ✅ TIER CONFIG: Get max models from tier configuration (synchronous for UI)
-  const maxModels = getMaxModelsForTier(userTier);
-  const tierName = getTierName(userTier);
+  const maxModels = userTierConfig.max_models;
+  const tierName = userTierConfig.tier_name;
+  const userTier = userTierConfig.tier;
 
   // ✅ BACKEND MODELS + UI PROPERTIES: Add computed properties for component
   const allEnabledModels: UIModel[] = useMemo(() => {
@@ -950,7 +959,7 @@ export function ChatParticipantsList({
       .filter(om => om.participant === null);
   }, [filteredModels]);
 
-  // ✅ BACKEND TIER GROUPS: Use tier groups from backend response
+  // ✅ BACKEND TIER GROUPS: Get tier groups from backend response
   const tierGroups = modelsData?.data?.tier_groups || [];
 
   // ✅ Group unselected models by tier for display
@@ -987,7 +996,7 @@ export function ChatParticipantsList({
                   className="h-8 sm:h-9 rounded-lg gap-1.5 sm:gap-2 text-xs relative px-3 sm:px-4"
                 >
                   <Bot className="size-3.5 sm:size-4" />
-                  <span className="hidden xs:inline sm:inline">AI Models</span>
+                  <span className="hidden xs:inline sm:inline">{tModels('aiModels')}</span>
                   {participants.length > 0 && (
                     <Badge variant="default" className="ml-1 sm:ml-1.5 size-5 sm:size-6 flex items-center justify-center p-0 text-[10px] sm:text-xs">
                       {participants.length}
@@ -1001,7 +1010,7 @@ export function ChatParticipantsList({
             {participants.length > 0 && (
               <TooltipContent side="top" className="max-w-xs">
                 <div className="space-y-1">
-                  <div className="font-semibold text-xs">Selected Models:</div>
+                  <div className="font-semibold text-xs">{tModels('selectedModelsLabel')}</div>
                   {participants
                     .sort((a, b) => a.order - b.order)
                     .map((participant) => {
@@ -1034,7 +1043,7 @@ export function ChatParticipantsList({
           <PopoverContent className="p-0 w-[calc(100vw-2rem)] sm:w-[420px] lg:w-[480px]" align="start">
             <Command shouldFilter={false}>
               <CommandInput
-                placeholder="Search AI models..."
+                placeholder={t('searchModels')}
                 className="h-9"
                 value={modelSearchQuery}
                 onValueChange={setModelSearchQuery}
@@ -1042,7 +1051,7 @@ export function ChatParticipantsList({
 
               <CommandList>
                 {filteredModels.length === 0 && (
-                  <CommandEmpty>No models found.</CommandEmpty>
+                  <CommandEmpty>{tModels('noModelsFound')}</CommandEmpty>
                 )}
 
                 {/* Selected Models Section - Draggable for reordering */}
@@ -1051,14 +1060,14 @@ export function ChatParticipantsList({
                     <div className="px-3 py-2 text-xs font-semibold text-foreground bg-primary/10 border-b border-primary/20 sticky top-0 z-20 backdrop-blur-sm" style={{ boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1)' }}>
                       <div className="flex items-center justify-between">
                         <span className="flex items-center gap-2">
-                          Selected Models
+                          {tModels('selectedModels')}
                           <Badge variant="default" className="text-[10px] px-1.5 py-0 h-4">
                             {selectedModels.length}
                             /
                             {maxModels}
                           </Badge>
                         </span>
-                        <span className="text-[10px] opacity-70">Drag to reorder</span>
+                        <span className="text-[10px] opacity-70">{tModels('dragToReorder')}</span>
                       </div>
                     </div>
                     <Reorder.Group
@@ -1089,16 +1098,14 @@ export function ChatParticipantsList({
                 {/* Available Models Section - Tier-grouped by backend */}
                 {unselectedModels.length > 0 && tierGroups.length > 0 && (
                   <div className="space-y-0">
-                    {tierGroups.map((tierGroup) => {
+                    {tierGroups.map((tierGroup, tierIndex) => {
                       const tieredModels = unselectedModelsByTier[tierGroup.tier];
                       if (!tieredModels || tieredModels.length === 0)
                         return null;
 
-                      // ✅ USE BACKEND FLAGS: is_user_tier from backend
+                      // ✅ USE BACKEND DATA: Tier ordering from backend tier_groups array
                       const isUserTier = tierGroup.is_user_tier;
-                      const tierOrder = getTiersInOrder();
-                      const tierIndex = tierOrder.indexOf(tierGroup.tier);
-                      const userTierIndex = tierOrder.indexOf(userTierInfo?.current_tier || 'free');
+                      const userTierIndex = tierGroups.findIndex(g => g.is_user_tier);
                       const isLowerTier = tierIndex < userTierIndex;
                       const isHigherTier = tierIndex > userTierIndex;
 
@@ -1124,7 +1131,7 @@ export function ChatParticipantsList({
                                 <span className="font-semibold">{tierGroup.tier_name}</span>
                                 {isUserTier && (
                                   <Badge variant="default" className="text-[10px] px-1.5 py-0 h-4">
-                                    Your Plan
+                                    {tModels('yourPlan')}
                                   </Badge>
                                 )}
                                 {isHigherTier && (
@@ -1134,12 +1141,12 @@ export function ChatParticipantsList({
                               <span className="text-[10px] opacity-80">
                                 {tieredModels.length}
                                 {' '}
-                                {tieredModels.length === 1 ? 'model' : 'models'}
+                                {tieredModels.length === 1 ? tModels('model') : tModels('models')}
                               </span>
                             </div>
                             {isHigherTier && (
                               <div className="text-[10px] opacity-70 mt-1">
-                                Upgrade to unlock these models
+                                {tModels('upgradeToUnlock')}
                               </div>
                             )}
                           </div>

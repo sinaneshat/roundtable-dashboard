@@ -1,5 +1,5 @@
-import { relations } from 'drizzle-orm';
-import { index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
+import { relations, sql } from 'drizzle-orm';
+import { check, index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 
 import { SUBSCRIPTION_TIERS } from '@/api/services/product-logic.service';
 
@@ -81,8 +81,29 @@ export const userChatUsage = sqliteTable(
       .notNull(),
   },
   table => [
+    // Indexes for query performance
     index('user_chat_usage_user_idx').on(table.userId),
     index('user_chat_usage_period_idx').on(table.currentPeriodEnd),
+
+    // ============================================================================
+    // DATABASE-LEVEL CONSTRAINTS (Second layer of protection)
+    // ============================================================================
+    // These constraints enforce business logic rules defined in product-logic.service.ts
+    // They provide data integrity protection even if application code has bugs
+
+    // ✅ COUNTER CONSTRAINTS: Prevent negative usage counts
+    // Rationale: Usage counters are cumulative and never decremented
+    check('check_threads_non_negative', sql`${table.threadsCreated} >= 0`),
+    check('check_messages_non_negative', sql`${table.messagesCreated} >= 0`),
+    check('check_custom_roles_non_negative', sql`${table.customRolesCreated} >= 0`),
+
+    // ✅ VERSION CONSTRAINT: Ensure optimistic locking version is positive
+    // Rationale: Version starts at 1 and increments, should never be 0 or negative
+    check('check_version_positive', sql`${table.version} > 0`),
+
+    // ✅ PERIOD CONSTRAINT: Ensure billing period end is after start
+    // Rationale: Logical date ordering for billing periods
+    check('check_period_order', sql`${table.currentPeriodEnd} > ${table.currentPeriodStart}`),
   ],
 );
 
@@ -128,8 +149,23 @@ export const userChatUsageHistory = sqliteTable(
     createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
   },
   table => [
+    // Indexes for query performance
     index('user_chat_usage_history_user_idx').on(table.userId),
     index('user_chat_usage_history_period_idx').on(table.periodStart, table.periodEnd),
+
+    // ============================================================================
+    // DATABASE-LEVEL CONSTRAINTS (Second layer of protection)
+    // ============================================================================
+
+    // ✅ COUNTER CONSTRAINTS: Prevent negative historical usage counts
+    // Rationale: Historical snapshots should never have negative values
+    check('check_history_threads_non_negative', sql`${table.threadsCreated} >= 0`),
+    check('check_history_messages_non_negative', sql`${table.messagesCreated} >= 0`),
+    check('check_history_custom_roles_non_negative', sql`${table.customRolesCreated} >= 0`),
+
+    // ✅ PERIOD CONSTRAINT: Ensure historical period end is after start
+    // Rationale: Logical date ordering for archived billing periods
+    check('check_history_period_order', sql`${table.periodEnd} > ${table.periodStart}`),
   ],
 );
 

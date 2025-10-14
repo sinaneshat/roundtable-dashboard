@@ -267,6 +267,7 @@ export function PasswordField({
   const [password, setPassword] = useState('');
   const [strength, setStrength] = useState(0);
   const t = useTranslations();
+  const tForms = useTranslations('forms');
 
   const calculateStrength = (pwd: string): number => {
     let score = 0;
@@ -320,7 +321,7 @@ export function PasswordField({
           size="sm"
           className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
           onClick={() => setShowPassword(!showPassword)}
-          aria-label={showPassword ? 'Hide password' : 'Show password'}
+          aria-label={showPassword ? tForms('hidePassword') : tForms('showPassword')}
         >
           {showPassword ? (
             <EyeOff className="h-4 w-4 text-muted-foreground" />

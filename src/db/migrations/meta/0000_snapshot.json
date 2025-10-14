@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "5594bd5e-bf5b-4929-b265-d0c1aca080fe",
+  "id": "d7f7c603-f06d-470c-9f78-ff5c4b588db8",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "account": {
@@ -1959,7 +1959,12 @@
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "checkConstraints": {}
+      "checkConstraints": {
+        "check_priority_non_negative": {
+          "name": "check_priority_non_negative",
+          "value": "\"chat_participant\".\"priority\" >= 0"
+        }
+      }
     },
     "chat_thread": {
       "name": "chat_thread",
@@ -2370,7 +2375,28 @@
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "checkConstraints": {}
+      "checkConstraints": {
+        "check_threads_non_negative": {
+          "name": "check_threads_non_negative",
+          "value": "\"user_chat_usage\".\"threads_created\" >= 0"
+        },
+        "check_messages_non_negative": {
+          "name": "check_messages_non_negative",
+          "value": "\"user_chat_usage\".\"messages_created\" >= 0"
+        },
+        "check_custom_roles_non_negative": {
+          "name": "check_custom_roles_non_negative",
+          "value": "\"user_chat_usage\".\"custom_roles_created\" >= 0"
+        },
+        "check_version_positive": {
+          "name": "check_version_positive",
+          "value": "\"user_chat_usage\".\"version\" > 0"
+        },
+        "check_period_order": {
+          "name": "check_period_order",
+          "value": "\"user_chat_usage\".\"current_period_end\" > \"user_chat_usage\".\"current_period_start\""
+        }
+      }
     },
     "user_chat_usage_history": {
       "name": "user_chat_usage_history",
@@ -2484,7 +2510,24 @@
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "checkConstraints": {}
+      "checkConstraints": {
+        "check_history_threads_non_negative": {
+          "name": "check_history_threads_non_negative",
+          "value": "\"user_chat_usage_history\".\"threads_created\" >= 0"
+        },
+        "check_history_messages_non_negative": {
+          "name": "check_history_messages_non_negative",
+          "value": "\"user_chat_usage_history\".\"messages_created\" >= 0"
+        },
+        "check_history_custom_roles_non_negative": {
+          "name": "check_history_custom_roles_non_negative",
+          "value": "\"user_chat_usage_history\".\"custom_roles_created\" >= 0"
+        },
+        "check_history_period_order": {
+          "name": "check_history_period_order",
+          "value": "\"user_chat_usage_history\".\"period_end\" > \"user_chat_usage_history\".\"period_start\""
+        }
+      }
     }
   },
   "views": {},

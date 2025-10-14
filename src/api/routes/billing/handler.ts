@@ -119,13 +119,8 @@ export const listProductsHandler: RouteHandler<typeof listProductsRoute, ApiEnv>
       });
 
       const products = dbProducts
-        .map(product => ({
-          id: product.id,
-          name: product.name,
-          description: product.description,
-          features: product.features,
-          active: product.active,
-          prices: product.prices
+        .map((product) => {
+          const prices = product.prices
             .map(price => ({
               id: price.id,
               productId: price.productId,
@@ -135,8 +130,31 @@ export const listProductsHandler: RouteHandler<typeof listProductsRoute, ApiEnv>
               trialPeriodDays: price.trialPeriodDays,
               active: price.active,
             }))
-            .sort((a, b) => a.unitAmount - b.unitAmount), // Sort prices by amount (low to high)
-        }))
+            .sort((a, b) => a.unitAmount - b.unitAmount); // Sort prices by amount (low to high)
+
+          // ✅ BUSINESS LOGIC: Calculate annual savings percentage
+          // Single source of truth for savings calculation
+          const monthlyPrice = prices.find(p => p.interval === 'month');
+          const yearlyPrice = prices.find(p => p.interval === 'year');
+
+          let annualSavingsPercent: number | undefined;
+          if (monthlyPrice && yearlyPrice && monthlyPrice.unitAmount && yearlyPrice.unitAmount) {
+            const monthlyYearlyCost = monthlyPrice.unitAmount * 12;
+            const yearlyCost = yearlyPrice.unitAmount;
+            const savings = ((monthlyYearlyCost - yearlyCost) / monthlyYearlyCost) * 100;
+            annualSavingsPercent = Math.round(savings);
+          }
+
+          return {
+            id: product.id,
+            name: product.name,
+            description: product.description,
+            features: product.features,
+            active: product.active,
+            prices,
+            annualSavingsPercent, // ✅ Backend-computed savings
+          };
+        })
         .sort((a, b) => {
           // Sort products by their lowest price (low to high)
           const lowestPriceA = a.prices[0]?.unitAmount ?? 0;

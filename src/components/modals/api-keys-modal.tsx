@@ -17,6 +17,7 @@ import { Book, ExternalLink, FileJson, FileText } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 
+import type { ApiKeyResponse } from '@/api/routes/api-keys/schema';
 import { BaseModal } from '@/components/modals/base-modal';
 import { ApiKeyForm } from '@/components/settings/api-key-form';
 import {
@@ -27,7 +28,6 @@ import {
 } from '@/components/ui/accordion';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import type { ApiKeyResponse } from '@/db/validation/api-keys';
 import { useApiKeysQuery } from '@/hooks';
 
 import { ApiKeysList } from '../settings/api-keys-list';

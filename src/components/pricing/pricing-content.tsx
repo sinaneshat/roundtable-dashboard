@@ -82,24 +82,10 @@ export function PricingContent({
       .filter(product => product.prices && product.prices.length > 0);
   };
 
-  // Calculate annual savings percentage for a product
-  const calculateAnnualSavings = (productId: string): number => {
+  // ✅ BACKEND-COMPUTED: Get annual savings from product data (no frontend calculation)
+  const getAnnualSavings = (productId: string): number => {
     const product = products.find(p => p.id === productId);
-    if (!product || !product.prices)
-      return 0;
-
-    const monthlyPrice = product.prices.find(p => p.interval === 'month');
-    const yearlyPrice = product.prices.find(p => p.interval === 'year');
-
-    // Check for valid prices with non-null unitAmount
-    if (!monthlyPrice || !yearlyPrice || !monthlyPrice.unitAmount || !yearlyPrice.unitAmount)
-      return 0;
-
-    const monthlyYearlyCost = monthlyPrice.unitAmount * 12;
-    const yearlyCost = yearlyPrice.unitAmount;
-    const savings = ((monthlyYearlyCost - yearlyCost) / monthlyYearlyCost) * 100;
-
-    return Math.round(savings);
+    return product?.annualSavingsPercent ?? 0;
   };
 
   // Loading state
@@ -200,7 +186,7 @@ export function PricingContent({
               onSubscribe={onSubscribe}
               onCancel={onCancel}
               onManageBilling={onManageBilling}
-              calculateAnnualSavings={calculateAnnualSavings}
+              getAnnualSavings={getAnnualSavings}
               t={t}
             />
           </TabsContent>
@@ -219,7 +205,7 @@ export function PricingContent({
               onSubscribe={onSubscribe}
               onCancel={onCancel}
               onManageBilling={onManageBilling}
-              calculateAnnualSavings={calculateAnnualSavings}
+              getAnnualSavings={getAnnualSavings}
               t={t}
             />
           </TabsContent>
@@ -242,7 +228,7 @@ type ProductGridProps = {
   onSubscribe: (priceId: string) => void | Promise<void>;
   onCancel: (subscriptionId: string) => void | Promise<void>;
   onManageBilling: () => void;
-  calculateAnnualSavings: (productId: string) => number;
+  getAnnualSavings: (productId: string) => number;
   t: (key: string) => string;
 };
 
@@ -258,7 +244,7 @@ function ProductGrid({
   onSubscribe,
   onCancel,
   onManageBilling,
-  calculateAnnualSavings,
+  getAnnualSavings,
   t,
 }: ProductGridProps) {
   if (products.length === 0) {
@@ -354,7 +340,7 @@ function ProductGrid({
                 onCancel={subscription ? () => onCancel(subscription.id) : undefined}
                 onManageBilling={hasSubscription ? onManageBilling : undefined}
                 delay={(index + 1) * 0.1} // Add 1 to account for free tier being first
-                annualSavingsPercent={interval === 'year' ? calculateAnnualSavings(product.id) : undefined}
+                annualSavingsPercent={interval === 'year' ? getAnnualSavings(product.id) : undefined}
               />
             </motion.div>
           );

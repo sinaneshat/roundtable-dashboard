@@ -273,7 +273,8 @@ CREATE TABLE `chat_participant` (
 	`created_at` integer DEFAULT (cast((julianday('now') - 2440587.5)*86400000 as integer)) NOT NULL,
 	`updated_at` integer DEFAULT (cast((julianday('now') - 2440587.5)*86400000 as integer)) NOT NULL,
 	FOREIGN KEY (`thread_id`) REFERENCES `chat_thread`(`id`) ON UPDATE no action ON DELETE cascade,
-	FOREIGN KEY (`custom_role_id`) REFERENCES `chat_custom_role`(`id`) ON UPDATE no action ON DELETE set null
+	FOREIGN KEY (`custom_role_id`) REFERENCES `chat_custom_role`(`id`) ON UPDATE no action ON DELETE set null,
+	CONSTRAINT "check_priority_non_negative" CHECK("chat_participant"."priority" >= 0)
 );
 --> statement-breakpoint
 CREATE INDEX `chat_participant_thread_idx` ON `chat_participant` (`thread_id`);--> statement-breakpoint
@@ -331,7 +332,12 @@ CREATE TABLE `user_chat_usage` (
 	`version` integer DEFAULT 1 NOT NULL,
 	`created_at` integer NOT NULL,
 	`updated_at` integer NOT NULL,
-	FOREIGN KEY (`user_id`) REFERENCES `user`(`id`) ON UPDATE no action ON DELETE cascade
+	FOREIGN KEY (`user_id`) REFERENCES `user`(`id`) ON UPDATE no action ON DELETE cascade,
+	CONSTRAINT "check_threads_non_negative" CHECK("user_chat_usage"."threads_created" >= 0),
+	CONSTRAINT "check_messages_non_negative" CHECK("user_chat_usage"."messages_created" >= 0),
+	CONSTRAINT "check_custom_roles_non_negative" CHECK("user_chat_usage"."custom_roles_created" >= 0),
+	CONSTRAINT "check_version_positive" CHECK("user_chat_usage"."version" > 0),
+	CONSTRAINT "check_period_order" CHECK("user_chat_usage"."current_period_end" > "user_chat_usage"."current_period_start")
 );
 --> statement-breakpoint
 CREATE UNIQUE INDEX `user_chat_usage_user_id_unique` ON `user_chat_usage` (`user_id`);--> statement-breakpoint
@@ -348,7 +354,11 @@ CREATE TABLE `user_chat_usage_history` (
 	`subscription_tier` text NOT NULL,
 	`is_annual` integer DEFAULT false NOT NULL,
 	`created_at` integer NOT NULL,
-	FOREIGN KEY (`user_id`) REFERENCES `user`(`id`) ON UPDATE no action ON DELETE cascade
+	FOREIGN KEY (`user_id`) REFERENCES `user`(`id`) ON UPDATE no action ON DELETE cascade,
+	CONSTRAINT "check_history_threads_non_negative" CHECK("user_chat_usage_history"."threads_created" >= 0),
+	CONSTRAINT "check_history_messages_non_negative" CHECK("user_chat_usage_history"."messages_created" >= 0),
+	CONSTRAINT "check_history_custom_roles_non_negative" CHECK("user_chat_usage_history"."custom_roles_created" >= 0),
+	CONSTRAINT "check_history_period_order" CHECK("user_chat_usage_history"."period_end" > "user_chat_usage_history"."period_start")
 );
 --> statement-breakpoint
 CREATE INDEX `user_chat_usage_history_user_idx` ON `user_chat_usage_history` (`user_id`);--> statement-breakpoint

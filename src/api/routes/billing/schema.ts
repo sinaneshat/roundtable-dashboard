@@ -62,6 +62,10 @@ const ProductSchema = stripeProductSelectSchema
     prices: z.array(PriceSchema).optional().openapi({
       description: 'Available prices for this product',
     }),
+    annualSavingsPercent: z.number().int().nonnegative().optional().openapi({
+      description: 'Percentage saved when choosing annual over monthly billing (backend-computed)',
+      example: 20,
+    }),
   })
   .openapi('Product');
 

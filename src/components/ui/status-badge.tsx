@@ -3,6 +3,7 @@
 import * as React from 'react'
 import { CheckCircle, Clock, AlertCircle, X } from 'lucide-react'
 import { cva } from 'class-variance-authority'
+import { useTranslations } from 'next-intl'
 import { z } from 'zod'
 
 import { Badge } from '@/components/ui/badge'
@@ -117,6 +118,7 @@ export function StatusBadge({
   children,
   ...props
 }: StatusBadgeProps) {
+  const t = useTranslations('common');
   const normalizedStatus = status.toLowerCase() as keyof typeof statusIcons
   const IconComponent = icon || statusIcons[normalizedStatus] || AlertCircle
 
@@ -141,7 +143,7 @@ export function StatusBadge({
         className
       )}
       role="status"
-      aria-label={`Status: ${statusLabel}`}
+      aria-label={t('statusLabel', { status: String(statusLabel) })}
       {...props}
     >
       {showIcon && (

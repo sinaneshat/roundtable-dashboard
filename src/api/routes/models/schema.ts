@@ -173,6 +173,7 @@ export type BaseModelResponse = z.infer<typeof BaseModelSchema>;
 export const EnhancedModelSchema = BaseModelSchema.extend({
   // ✅ SERVER-COMPUTED TIER ACCESS (Single Source of Truth)
   required_tier: subscriptionTierSchema,
+  required_tier_name: z.string(), // Human-readable tier name (e.g., "Pro")
   is_accessible_to_user: z.boolean(),
 });
 
@@ -192,7 +193,22 @@ export const TierGroupSchema = z.object({
 export type TierGroup = z.infer<typeof TierGroupSchema>;
 
 /**
+ * User Tier Configuration Schema
+ * ✅ SERVER-COMPUTED: All tier limits and metadata from backend
+ * Provides everything frontend needs to enforce tier restrictions without business logic
+ */
+export const UserTierConfigSchema = z.object({
+  tier: subscriptionTierSchema,
+  tier_name: z.string(), // Human-readable tier name (e.g., "Free", "Pro")
+  max_models: z.number(), // Maximum models allowed per conversation for this tier
+  can_upgrade: z.boolean(), // Whether user can upgrade to a higher tier
+});
+
+export type UserTierConfig = z.infer<typeof UserTierConfigSchema>;
+
+/**
  * List models response with top 50 models, tier grouping, and default model selection
+ * ✅ INCLUDES: user_tier_config - All tier limits computed on backend
  */
 export const ListModelsResponseSchema = createApiResponseSchema(
   z.object({
@@ -200,6 +216,7 @@ export const ListModelsResponseSchema = createApiResponseSchema(
     total: z.number(),
     default_model_id: z.string(), // Default model selected based on user's tier and popularity
     tier_groups: z.array(TierGroupSchema), // Models grouped by subscription tier
+    user_tier_config: UserTierConfigSchema, // ✅ NEW: User's tier configuration with limits
   }),
 );
 
