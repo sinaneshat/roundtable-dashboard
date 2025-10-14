@@ -64,6 +64,8 @@ export async function generateMetadata({
       title: `${thread.title} - ${BRAND.fullName}`,
       description,
       keywords,
+      url: `/public/chat/${slug}`,
+      canonicalUrl: `/public/chat/${slug}`,
       // Dynamic OG image with thread content
       image: `/public/chat/${slug}/opengraph-image`,
       type: 'article',

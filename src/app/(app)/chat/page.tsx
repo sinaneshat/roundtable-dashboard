@@ -17,6 +17,9 @@ export async function generateMetadata(): Promise<Metadata> {
     title: `Dashboard - ${BRAND.fullName}`,
     description: 'Start a new AI conversation or continue your existing chats with multiple AI models collaborating together.',
     robots: 'noindex, nofollow', // Private dashboard - don't index
+    url: '/chat',
+    canonicalUrl: '/chat',
+    image: '/chat/opengraph-image',
     keywords: [
       'AI dashboard',
       'chat overview',

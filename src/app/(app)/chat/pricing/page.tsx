@@ -16,6 +16,9 @@ export async function generateMetadata(): Promise<Metadata> {
     title: `Pricing - ${BRAND.fullName}`,
     description: 'Choose the perfect plan for your AI collaboration needs. Flexible pricing for teams of all sizes with multiple AI models working together.',
     robots: 'noindex, nofollow', // Private pricing page - users must be authenticated
+    url: '/chat/pricing',
+    canonicalUrl: '/chat/pricing',
+    image: '/chat/pricing/opengraph-image',
     keywords: [
       'AI pricing',
       'subscription plans',

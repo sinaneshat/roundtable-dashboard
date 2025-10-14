@@ -7,6 +7,7 @@ import { createMetadata } from '@/utils/metadata';
 export const metadata: Metadata = createMetadata({
   title: `Payment Successful - ${BRAND.fullName}`,
   description: 'Your payment has been processed successfully. Your subscription is now active.',
+  url: '/chat/billing/success',
   robots: 'noindex, nofollow', // Transient page - don't index
 });
 

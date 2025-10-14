@@ -8,6 +8,8 @@ export async function generateMetadata(): Promise<Metadata> {
   return createMetadata({
     title: BRAND.tagline,
     description: BRAND.description,
+    url: '/',
+    canonicalUrl: '/',
   });
 }
 

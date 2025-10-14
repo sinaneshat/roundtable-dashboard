@@ -181,6 +181,16 @@
       "description": "Enter your email for a magic link or sign in with Google",
       "title": "Sign In"
     },
+    "signUp": {
+      "title": "Sign Up",
+      "join": "Join",
+      "getStartedFree": "Get Started Free",
+      "features": {
+        "multipleModels": "Multiple AI models collaborate together",
+        "realtimeBrainstorming": "Real-time brainstorming and problem solving",
+        "publicSharing": "Share conversations publicly"
+      }
+    },
     "signInWithGoogle": "Sign in with Google"
   },
   "billing": {
@@ -274,6 +284,14 @@
   },
   "canvas": "Canvas",
   "chat": {
+    "dashboard": {
+      "title": "AI Collaboration Dashboard",
+      "features": {
+        "multipleModels": "Multiple AI Models",
+        "realtimeCollaboration": "Real-time Collaboration",
+        "publicSharing": "Public Sharing"
+      }
+    },
     "actions": {
       "copy": "Copy message",
       "messageCopied": "Message copied",
@@ -491,7 +509,17 @@
   "info": "Info",
   "key": "Key",
   "legal": {
+    "trustBadges": {
+      "secure": "Secure",
+      "protected": "Protected",
+      "transparent": "Transparent",
+      "fairUse": "Fair Use",
+      "legalCompliance": "Legal Compliance",
+      "userRights": "User Rights"
+    },
     "privacy": {
+      "tagline": "Your privacy and data protection matter to us",
+      "lastUpdatedYear": "Last updated: {year}",
       "changes": {
         "content": "We may update our Privacy Policy from time to time. We will notify you of any changes by posting the new Privacy Policy on this page.",
         "title": "8. Changes to This Policy"
@@ -532,6 +560,8 @@
       }
     },
     "terms": {
+      "tagline": "Guidelines for using our AI collaboration platform",
+      "effectiveYear": "Effective: {year}",
       "acceptance": {
         "content": "By accessing and using this service, you accept and agree to be bound by the terms and provision of this agreement. If you do not agree to abide by the above, please do not use this service.",
         "title": "1. Acceptance of Terms"
@@ -572,20 +602,24 @@
   "meta": {
     "signIn": {
       "title": "Sign In",
-      "description": "Sign in to your account to access AI collaboration tools and manage your conversations."
+      "description": "Sign in to your account to access AI collaboration tools and manage your conversations.",
+      "keywords": ["sign in", "login", "authentication"]
     },
     "signUp": {
       "title": "Sign Up",
-      "description": "Create an account to start collaborating with multiple AI models in real-time conversations."
+      "description": "Create an account to start collaborating with multiple AI models in real-time conversations.",
+      "keywords": ["sign up", "register"]
     },
     "legal": {
       "privacy": {
         "title": "Privacy Policy",
-        "description": "Learn how we collect, use, and protect your personal information when you use our AI collaboration platform."
+        "description": "Learn how we collect, use, and protect your personal information when you use our AI collaboration platform.",
+        "keywords": ["privacy", "user data"]
       },
       "terms": {
         "title": "Terms of Service",
-        "description": "Read our terms and conditions for using the AI collaboration platform and managing your account."
+        "description": "Read our terms and conditions for using the AI collaboration platform and managing your account.",
+        "keywords": ["legal", "compliance"]
       }
     }
   },
@@ -771,7 +805,14 @@
       "collaborativeAi": "collaborative AI",
       "teamProductivity": "team productivity",
       "artificialIntelligence": "artificial intelligence",
-      "aiChat": "AI chat"
+      "aiChat": "AI chat",
+      "createAccount": "create account",
+      "privacyPolicy": "privacy policy",
+      "dataProtection": "data protection",
+      "gdpr": "GDPR",
+      "termsOfService": "terms of service",
+      "termsAndConditions": "terms and conditions",
+      "userAgreement": "user agreement"
     },
     "aeo": {
       "primaryQuestion": "What is {brand}?",

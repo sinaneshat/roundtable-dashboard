@@ -11,6 +11,7 @@ import { capturePaymentFailure } from './actions';
 export const metadata: Metadata = createMetadata({
   title: `Payment Failed - ${BRAND.fullName}`,
   description: 'Payment processing encountered an error. Please try again or contact support.',
+  url: '/chat/billing/failure',
   robots: 'noindex, nofollow', // Transient error page - don't index
 });
 

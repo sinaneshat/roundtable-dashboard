@@ -29,6 +29,8 @@ export async function generateMetadata({
     description: 'Collaborate with AI models in real-time conversations',
     robots: 'noindex, nofollow', // Don't index private chat pages
     url: `/chat/${slug}`,
+    canonicalUrl: `/chat/${slug}`,
+    image: `/chat/${slug}/opengraph-image`,
   });
 }
 

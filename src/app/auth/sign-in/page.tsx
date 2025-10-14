@@ -2,14 +2,25 @@ import type { Metadata } from 'next';
 import { getTranslations } from 'next-intl/server';
 
 import { AuthForm } from '@/components/auth/auth-form';
+import { BRAND } from '@/constants/brand';
+import { createMetadata } from '@/utils/metadata';
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations('meta.signIn');
+  const tSeo = await getTranslations('seo.keywords');
 
-  return {
+  return createMetadata({
     title: t('title'),
     description: t('description'),
-  };
+    url: '/auth/sign-in',
+    canonicalUrl: '/auth/sign-in',
+    image: '/auth/sign-in/opengraph-image',
+    keywords: [
+      ...(t.raw('keywords') as string[]),
+      tSeo('aiCollaboration'),
+      BRAND.name,
+    ],
+  });
 }
 
 export default async function SignInPage() {
