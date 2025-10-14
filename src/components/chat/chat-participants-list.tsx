@@ -42,6 +42,7 @@ import { useCreateCustomRoleMutation, useDeleteCustomRoleMutation } from '@/hook
 import { useCustomRolesQuery } from '@/hooks/queries/chat-roles';
 import { useModelsQuery } from '@/hooks/queries/models';
 import { useUsageStatsQuery } from '@/hooks/queries/usage';
+import { useFuzzySearch } from '@/hooks/utils/use-fuzzy-search';
 import { DEFAULT_ROLES } from '@/lib/ai/models-config';
 import { getProviderIcon } from '@/lib/ai/provider-icons';
 import type { ParticipantConfig } from '@/lib/schemas/chat-forms';
@@ -920,11 +921,21 @@ export function ChatParticipantsList({
     onParticipantsChange(reorderedParticipants);
   };
 
-  // Filter models based on search query
-  const filteredModels = orderedModels.filter(om =>
-    om.model.name.toLowerCase().includes(modelSearchQuery.toLowerCase())
-    || om.model.description?.toLowerCase().includes(modelSearchQuery.toLowerCase())
-    || om.model.metadata.category.toLowerCase().includes(modelSearchQuery.toLowerCase()),
+  // Filter models based on search query using fuzzy search
+  const filteredModels = useFuzzySearch(
+    orderedModels,
+    modelSearchQuery,
+    {
+      keys: [
+        'model.name',
+        'model.description',
+        'model.metadata.category',
+        'model.provider',
+      ],
+      threshold: 0.3, // Lower = stricter matching, Higher = more lenient
+      ignoreLocation: true,
+      minMatchCharLength: 1,
+    },
   );
 
   // Separate selected and unselected models for better drag-and-drop UX

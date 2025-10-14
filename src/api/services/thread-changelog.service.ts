@@ -5,6 +5,7 @@
 import { desc, eq } from 'drizzle-orm';
 import { ulid } from 'ulid';
 
+import { executeBatch } from '@/api/common/batch-operations';
 import type { CreateChangelogParams } from '@/api/routes/chat/schema';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db/schema';
@@ -35,37 +36,21 @@ export async function createChangelogEntry(params: CreateChangelogParams): Promi
   const now = new Date();
 
   // ✅ ATOMIC BATCH: Insert changelog + update thread timestamp
-  // Following backend-patterns.md:980-1090 - Use db.batch() for Cloudflare D1
-  // Fallback to sequential for local SQLite (Better-SQLite3 doesn't support batch)
-  if ('batch' in db && typeof db.batch === 'function') {
-    await db.batch([
-      db.insert(tables.chatThreadChangelog).values({
-        id: changelogId,
-        threadId: params.threadId,
-        changeType: params.changeType,
-        changeSummary: params.changeSummary,
-        changeData: params.changeData,
-        createdAt: now,
-      }),
-      // Update thread.updatedAt to trigger ISR revalidation for public pages
-      db.update(tables.chatThread)
-        .set({ updatedAt: now })
-        .where(eq(tables.chatThread.id, params.threadId)),
-    ]);
-  } else {
-    // Local SQLite fallback - sequential operations
-    await db.insert(tables.chatThreadChangelog).values({
+  // Using reusable batch helper from @/api/common/batch-operations
+  await executeBatch(db, [
+    db.insert(tables.chatThreadChangelog).values({
       id: changelogId,
       threadId: params.threadId,
       changeType: params.changeType,
       changeSummary: params.changeSummary,
       changeData: params.changeData,
       createdAt: now,
-    });
-    await db.update(tables.chatThread)
+    }),
+    // Update thread.updatedAt to trigger ISR revalidation for public pages
+    db.update(tables.chatThread)
       .set({ updatedAt: now })
-      .where(eq(tables.chatThread.id, params.threadId));
-  }
+      .where(eq(tables.chatThread.id, params.threadId)),
+  ]);
 
   return changelogId;
 }

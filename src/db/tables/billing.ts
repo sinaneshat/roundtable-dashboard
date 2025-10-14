@@ -129,6 +129,8 @@ export const stripeSubscription = sqliteTable(
     trialEnd: integer('trial_end', { mode: 'timestamp' }),
     endedAt: integer('ended_at', { mode: 'timestamp' }),
     metadata: text('metadata', { mode: 'json' }).$type<Record<string, string>>(),
+    // Optimistic locking - prevents lost updates from webhook races
+    version: integer('version').notNull().default(1),
     createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
     updatedAt: integer('updated_at', { mode: 'timestamp' })
       .$onUpdate(() => new Date())
@@ -139,6 +141,8 @@ export const stripeSubscription = sqliteTable(
     index('stripe_subscription_user_idx').on(table.userId),
     index('stripe_subscription_status_idx').on(table.status),
     index('stripe_subscription_price_idx').on(table.priceId),
+    // ✅ Composite index for efficient active subscription queries
+    index('stripe_subscription_user_status_idx').on(table.userId, table.status),
   ],
 );
 

@@ -14,6 +14,7 @@
 import { eq } from 'drizzle-orm';
 import type Stripe from 'stripe';
 
+import { executeBatch } from '@/api/common/batch-operations';
 import { createError, normalizeError } from '@/api/common/error-handling';
 import type { ErrorContext } from '@/api/core';
 import { apiLogger } from '@/api/middleware/hono-logger';
@@ -421,26 +422,13 @@ export async function syncStripeDataFromStripe(
   });
 
   // Execute all operations atomically using batch (Cloudflare D1 batch-first architecture)
-  // For local development with SQLite, operations execute sequentially (acceptable for dev)
-  if ('batch' in db && typeof db.batch === 'function') {
-    // Cloudflare D1 - atomic batch execution
-    await db.batch([
-      customerUpdate,
-      subscriptionUpsert,
-      ...invoiceUpserts,
-      ...paymentMethodUpserts,
-    ]);
-  } else {
-    // Local SQLite fallback - execute sequentially
-    await customerUpdate;
-    await subscriptionUpsert;
-    for (const invoiceUpsert of invoiceUpserts) {
-      await invoiceUpsert;
-    }
-    for (const paymentMethodUpsert of paymentMethodUpserts) {
-      await paymentMethodUpsert;
-    }
-  }
+  // Using reusable batch helper from @/api/common/batch-operations
+  await executeBatch(db, [
+    customerUpdate,
+    subscriptionUpsert,
+    ...invoiceUpserts,
+    ...paymentMethodUpserts,
+  ]);
 
   // Sync user quotas based on subscription changes
   // Handles upgrades (compounds quotas), downgrades, cancellations, and billing period resets

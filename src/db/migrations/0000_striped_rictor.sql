@@ -183,6 +183,7 @@ CREATE TABLE `stripe_subscription` (
 	`trial_end` integer,
 	`ended_at` integer,
 	`metadata` text,
+	`version` integer DEFAULT 1 NOT NULL,
 	`created_at` integer NOT NULL,
 	`updated_at` integer NOT NULL,
 	FOREIGN KEY (`customer_id`) REFERENCES `stripe_customer`(`id`) ON UPDATE no action ON DELETE cascade,
@@ -194,6 +195,7 @@ CREATE INDEX `stripe_subscription_customer_idx` ON `stripe_subscription` (`custo
 CREATE INDEX `stripe_subscription_user_idx` ON `stripe_subscription` (`user_id`);--> statement-breakpoint
 CREATE INDEX `stripe_subscription_status_idx` ON `stripe_subscription` (`status`);--> statement-breakpoint
 CREATE INDEX `stripe_subscription_price_idx` ON `stripe_subscription` (`price_id`);--> statement-breakpoint
+CREATE INDEX `stripe_subscription_user_status_idx` ON `stripe_subscription` (`user_id`,`status`);--> statement-breakpoint
 CREATE TABLE `stripe_webhook_event` (
 	`id` text PRIMARY KEY NOT NULL,
 	`type` text NOT NULL,
@@ -238,6 +240,8 @@ CREATE TABLE `chat_message` (
 CREATE INDEX `chat_message_thread_idx` ON `chat_message` (`thread_id`);--> statement-breakpoint
 CREATE INDEX `chat_message_created_idx` ON `chat_message` (`created_at`);--> statement-breakpoint
 CREATE INDEX `chat_message_participant_idx` ON `chat_message` (`participant_id`);--> statement-breakpoint
+CREATE INDEX `chat_message_role_idx` ON `chat_message` (`role`);--> statement-breakpoint
+CREATE INDEX `chat_message_thread_created_idx` ON `chat_message` (`thread_id`,`created_at`);--> statement-breakpoint
 CREATE TABLE `chat_moderator_analysis` (
 	`id` text PRIMARY KEY NOT NULL,
 	`thread_id` text NOT NULL,
@@ -285,6 +289,7 @@ CREATE TABLE `chat_thread` (
 	`is_favorite` integer DEFAULT false NOT NULL,
 	`is_public` integer DEFAULT false NOT NULL,
 	`metadata` text,
+	`version` integer DEFAULT 1 NOT NULL,
 	`created_at` integer DEFAULT (cast((julianday('now') - 2440587.5)*86400000 as integer)) NOT NULL,
 	`updated_at` integer DEFAULT (cast((julianday('now') - 2440587.5)*86400000 as integer)) NOT NULL,
 	`last_message_at` integer,
@@ -323,6 +328,7 @@ CREATE TABLE `user_chat_usage` (
 	`is_annual` integer DEFAULT false NOT NULL,
 	`pending_tier_change` text,
 	`pending_tier_is_annual` integer,
+	`version` integer DEFAULT 1 NOT NULL,
 	`created_at` integer NOT NULL,
 	`updated_at` integer NOT NULL,
 	FOREIGN KEY (`user_id`) REFERENCES `user`(`id`) ON UPDATE no action ON DELETE cascade
@@ -339,9 +345,6 @@ CREATE TABLE `user_chat_usage_history` (
 	`threads_created` integer DEFAULT 0 NOT NULL,
 	`messages_created` integer DEFAULT 0 NOT NULL,
 	`custom_roles_created` integer DEFAULT 0 NOT NULL,
-	`threads_limit` integer NOT NULL,
-	`messages_limit` integer NOT NULL,
-	`custom_roles_limit` integer NOT NULL,
 	`subscription_tier` text NOT NULL,
 	`is_annual` integer DEFAULT false NOT NULL,
 	`created_at` integer NOT NULL,

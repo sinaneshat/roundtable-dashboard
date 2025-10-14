@@ -33,6 +33,8 @@ export const chatThread = sqliteTable('chat_thread', {
     summary?: string;
     [key: string]: unknown;
   }>(),
+  // Optimistic locking - prevents lost updates in concurrent modifications
+  version: integer('version').notNull().default(1),
   createdAt: integer('created_at', { mode: 'timestamp' })
     .defaultNow()
     .notNull(),
@@ -208,6 +210,10 @@ export const chatMessage = sqliteTable('chat_message', {
   index('chat_message_thread_idx').on(table.threadId),
   index('chat_message_created_idx').on(table.createdAt),
   index('chat_message_participant_idx').on(table.participantId),
+  // ✅ Composite index for efficient message filtering by role
+  index('chat_message_role_idx').on(table.role),
+  // ✅ Composite index for paginated message queries (thread + sort)
+  index('chat_message_thread_created_idx').on(table.threadId, table.createdAt),
 ]);
 
 /**

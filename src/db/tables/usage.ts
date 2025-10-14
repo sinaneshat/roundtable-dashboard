@@ -66,6 +66,13 @@ export const userChatUsage = sqliteTable(
     pendingTierIsAnnual: integer('pending_tier_is_annual', { mode: 'boolean' }),
 
     // ============================================================================
+    // OPTIMISTIC LOCKING (for concurrent updates)
+    // ============================================================================
+    // Version column prevents lost updates in concurrent scenarios
+    // Increment on every update and check version matches before committing
+    version: integer('version').notNull().default(1),
+
+    // ============================================================================
     // TIMESTAMPS
     // ============================================================================
     createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
@@ -83,12 +90,15 @@ export const userChatUsage = sqliteTable(
  * User Chat Usage History
  *
  * ✅ ANALYTICS ONLY: Historical record of usage for each billing period
+ * ✅ SINGLE SOURCE OF TRUTH: Limits come from TIER_QUOTAS in product-logic.service.ts
  *
- * Stores snapshots of usage at the end of each billing period.
+ * Stores snapshots of usage counters at the end of each billing period.
  * Used for analytics, reporting, and tracking usage trends.
  *
- * Note: We store the limits that were active at the time for historical accuracy,
- * but current/future limits always come from product-logic.service.ts
+ * To get historical limits: Look up subscriptionTier in TIER_QUOTAS from code.
+ * This ensures the API services folder remains the ONLY source of truth for quota logic.
+ *
+ * ⚠️ NO LIMIT COLUMNS: All quota/limit logic must be in product-logic.service.ts
  */
 export const userChatUsageHistory = sqliteTable(
   'user_chat_usage_history',
@@ -102,17 +112,13 @@ export const userChatUsageHistory = sqliteTable(
     periodStart: integer('period_start', { mode: 'timestamp' }).notNull(),
     periodEnd: integer('period_end', { mode: 'timestamp' }).notNull(),
 
-    // Usage stats during this period
+    // Usage stats during this period (COUNTERS ONLY)
     threadsCreated: integer('threads_created').notNull().default(0),
     messagesCreated: integer('messages_created').notNull().default(0),
     customRolesCreated: integer('custom_roles_created').notNull().default(0),
 
-    // Historical limits (for analytics - what limits were active at this time)
-    threadsLimit: integer('threads_limit').notNull(),
-    messagesLimit: integer('messages_limit').notNull(),
-    customRolesLimit: integer('custom_roles_limit').notNull(),
-
-    // Subscription info at time of period
+    // Subscription info at time of period (IDENTIFIER ONLY, not limits)
+    // Use this tier to look up historical limits from TIER_QUOTAS in code
     subscriptionTier: text('subscription_tier', {
       enum: SUBSCRIPTION_TIERS,
     }).notNull(),

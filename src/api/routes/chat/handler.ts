@@ -2,9 +2,11 @@ import type { RouteHandler } from '@hono/zod-openapi';
 import type { UIMessage } from 'ai';
 import { APICallError, consumeStream, convertToModelMessages, streamText, validateUIMessages } from 'ai';
 import type { SQL } from 'drizzle-orm';
-import { and, desc, eq, like, ne } from 'drizzle-orm';
+import { and, desc, eq, ne, sql } from 'drizzle-orm';
+import Fuse from 'fuse.js';
 import { ulid } from 'ulid';
 
+import { executeBatch } from '@/api/common/batch-operations';
 import { ErrorContextBuilders } from '@/api/common/error-contexts';
 import { createError } from '@/api/common/error-handling';
 import {
@@ -201,19 +203,17 @@ export const listThreadsHandler: RouteHandler<typeof listThreadsRoute, ApiEnv> =
     const query = c.validated.query;
     const db = await getDbAsync();
 
-    // Build filters for thread query
+    // Build filters for thread query (no search filter - we'll use fuzzy search)
     const filters: SQL[] = [
       eq(tables.chatThread.userId, user.id),
       ne(tables.chatThread.status, 'deleted'), // Exclude deleted threads
     ];
 
-    // Add search filter if search query is provided
-    if (query.search && query.search.trim().length > 0) {
-      filters.push(like(tables.chatThread.title, `%${query.search.trim()}%`));
-    }
+    // Fetch threads with cursor-based pagination
+    // For search: fetch more threads initially for fuzzy filtering (up to 200)
+    const fetchLimit = query.search ? 200 : (query.limit + 1);
 
-    // Fetch threads with cursor-based pagination (limit + 1 to check hasMore)
-    const threads = await db.query.chatThread.findMany({
+    const allThreads = await db.query.chatThread.findMany({
       where: buildCursorWhereWithFilters(
         tables.chatThread.updatedAt,
         query.cursor,
@@ -221,8 +221,27 @@ export const listThreadsHandler: RouteHandler<typeof listThreadsRoute, ApiEnv> =
         filters,
       ),
       orderBy: getCursorOrderBy(tables.chatThread.updatedAt, 'desc'),
-      limit: query.limit + 1,
+      limit: fetchLimit,
     });
+
+    // Apply fuzzy search if search query is provided
+    let threads = allThreads;
+    if (query.search && query.search.trim().length > 0) {
+      // Use fuse.js for fuzzy search on title
+      const fuse = new Fuse(allThreads, {
+        keys: ['title', 'slug'],
+        threshold: 0.3, // Lower = stricter matching, Higher = more lenient
+        ignoreLocation: true,
+        minMatchCharLength: 2,
+        includeScore: false,
+      });
+
+      const searchResults = fuse.search(query.search.trim());
+      threads = searchResults.map(result => result.item);
+
+      // Limit fuzzy search results to requested page size + 1
+      threads = threads.slice(0, query.limit + 1);
+    }
 
     // Apply cursor pagination and format response
     return Responses.ok(c, applyCursorPagination(
@@ -1927,69 +1946,40 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
         // ✅ ATOMIC BATCH: Save message + update thread + increment usage
         // All three operations must succeed or fail together for data consistency
         const totalNewMessages = isNewMessage ? 2 : 1;
-        const usage = await ensureUserUsageRecord(user.id);
+        await ensureUserUsageRecord(user.id);
 
-        if ('batch' in db && typeof db.batch === 'function') {
-          await db.batch([
-            db.insert(tables.chatMessage).values({
-              id: responseMessage.id,
-              threadId,
-              participantId: participant.id,
-              role: 'assistant',
-              content,
-              reasoning, // ✅ Extracted from parts array (may be null)
-              metadata: {
-                ...baseMetadata,
-                // Include error metadata if error occurred
-                ...(errorMetadata || {}),
-              },
-              createdAt: now,
-            }).onConflictDoNothing(), // ✅ Prevent duplicates if onFinish called multiple times
-
-            db.update(tables.chatThread)
-              .set({
-                lastMessageAt: now,
-                updatedAt: now,
-              })
-              .where(eq(tables.chatThread.id, threadId)),
-
-            db.update(tables.userChatUsage)
-              .set({
-                messagesCreated: usage.messagesCreated + totalNewMessages,
-                updatedAt: new Date(),
-              })
-              .where(eq(tables.userChatUsage.userId, user.id)),
-          ]);
-        } else {
-          // Local SQLite fallback - sequential operations
-          await db.insert(tables.chatMessage).values({
+        // Using reusable batch helper from @/api/common/batch-operations
+        await executeBatch(db, [
+          db.insert(tables.chatMessage).values({
             id: responseMessage.id,
             threadId,
             participantId: participant.id,
             role: 'assistant',
             content,
-            reasoning,
+            reasoning, // ✅ Extracted from parts array (may be null)
             metadata: {
               ...baseMetadata,
+              // Include error metadata if error occurred
               ...(errorMetadata || {}),
             },
             createdAt: now,
-          }).onConflictDoNothing();
+          }).onConflictDoNothing(), // ✅ Prevent duplicates if onFinish called multiple times
 
-          await db.update(tables.chatThread)
+          db.update(tables.chatThread)
             .set({
               lastMessageAt: now,
               updatedAt: now,
             })
-            .where(eq(tables.chatThread.id, threadId));
+            .where(eq(tables.chatThread.id, threadId)),
 
-          await db.update(tables.userChatUsage)
+          // ✅ ATOMIC: SQL-level increment prevents race conditions
+          db.update(tables.userChatUsage)
             .set({
-              messagesCreated: usage.messagesCreated + totalNewMessages,
+              messagesCreated: sql`${tables.userChatUsage.messagesCreated} + ${totalNewMessages}`,
               updatedAt: new Date(),
             })
-            .where(eq(tables.userChatUsage.userId, user.id));
-        }
+            .where(eq(tables.userChatUsage.userId, user.id)),
+        ]);
 
         // ✅ USER REQUIREMENT: Automatically trigger moderator analysis after last participant
         // This analysis will be streamed to the frontend as part of the finish event

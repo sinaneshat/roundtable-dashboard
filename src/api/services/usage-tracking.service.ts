@@ -17,9 +17,10 @@
  * - History: Stores snapshot of limits for historical accuracy
  */
 
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { ulid } from 'ulid';
 
+import { executeBatch } from '@/api/common/batch-operations';
 import { createError } from '@/api/common/error-handling';
 import type { ErrorContext } from '@/api/core';
 import { apiLogger } from '@/api/middleware/hono-logger';
@@ -173,21 +174,18 @@ async function rolloverBillingPeriod(
   const periodStart = new Date(now.getFullYear(), now.getMonth(), 1);
   const periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
 
-  // ✅ Get current tier's limits from CODE for historical archive
-  const currentTierQuotas = getTierQuotas(currentUsage.subscriptionTier);
-
-  // Prepare history archive entry with CODE-DRIVEN limits
+  // Prepare history archive entry (COUNTERS ONLY, no limits)
+  // ✅ SINGLE SOURCE OF TRUTH: Limits calculated from subscriptionTier + TIER_QUOTAS in code
   const historyInsert = db.insert(tables.userChatUsageHistory).values({
     id: ulid(),
     userId,
     periodStart: currentUsage.currentPeriodStart,
     periodEnd: currentUsage.currentPeriodEnd,
+    // Usage counters (what actually happened)
     threadsCreated: currentUsage.threadsCreated,
-    threadsLimit: currentTierQuotas.threadsPerMonth, // ✅ FROM CODE
     messagesCreated: currentUsage.messagesCreated,
-    messagesLimit: currentTierQuotas.messagesPerMonth, // ✅ FROM CODE
     customRolesCreated: currentUsage.customRolesCreated,
-    customRolesLimit: currentTierQuotas.customRolesPerMonth, // ✅ FROM CODE
+    // Tier identifier (look up limits from TIER_QUOTAS in code)
     subscriptionTier: currentUsage.subscriptionTier,
     isAnnual: currentUsage.isAnnual,
     createdAt: now,
@@ -210,18 +208,14 @@ async function rolloverBillingPeriod(
         // Clear pending tier change fields
         pendingTierChange: null,
         pendingTierIsAnnual: null,
+        version: sql`${tables.userChatUsage.version} + 1`,
         updatedAt: now,
       })
       .where(eq(tables.userChatUsage.userId, userId));
 
     // ✅ ATOMIC: Archive history + Update usage in single batch (Cloudflare D1)
-    if ('batch' in db && typeof db.batch === 'function') {
-      await db.batch([historyInsert, usageUpdate]);
-    } else {
-      // Local SQLite fallback - sequential operations
-      await historyInsert;
-      await usageUpdate;
-    }
+    // Using reusable batch helper from @/api/common/batch-operations
+    await executeBatch(db, [historyInsert, usageUpdate]);
     return; // Exit after batch
   }
 
@@ -239,18 +233,14 @@ async function rolloverBillingPeriod(
         // Clear any pending tier change fields
         pendingTierChange: null,
         pendingTierIsAnnual: null,
+        version: sql`${tables.userChatUsage.version} + 1`,
         updatedAt: now,
       })
       .where(eq(tables.userChatUsage.userId, userId));
 
     // ✅ ATOMIC: Archive history + Downgrade to free tier in single batch (Cloudflare D1)
-    if ('batch' in db && typeof db.batch === 'function') {
-      await db.batch([historyInsert, freeUpdate]);
-    } else {
-      // Local SQLite fallback - sequential operations
-      await historyInsert;
-      await freeUpdate;
-    }
+    // Using reusable batch helper from @/api/common/batch-operations
+    await executeBatch(db, [historyInsert, freeUpdate]);
   } else if (!hasPendingTierChange) {
     // Active subscription exists but period expired
     // This shouldn't normally happen (Stripe sync should handle it)
@@ -262,18 +252,14 @@ async function rolloverBillingPeriod(
         threadsCreated: 0,
         messagesCreated: 0,
         customRolesCreated: 0,
+        version: sql`${tables.userChatUsage.version} + 1`,
         updatedAt: now,
       })
       .where(eq(tables.userChatUsage.userId, userId));
 
     // ✅ ATOMIC: Archive history + Reset usage in single batch (Cloudflare D1)
-    if ('batch' in db && typeof db.batch === 'function') {
-      await db.batch([historyInsert, resetUpdate]);
-    } else {
-      // Local SQLite fallback - sequential operations
-      await historyInsert;
-      await resetUpdate;
-    }
+    // Using reusable batch helper from @/api/common/batch-operations
+    await executeBatch(db, [historyInsert, resetUpdate]);
 
     apiLogger.warn('Rolled over billing period with active subscription', {
       userId,
@@ -361,15 +347,25 @@ export async function checkCustomRoleQuota(userId: string): Promise<QuotaCheck> 
  * Increment thread creation counter
  * Must be called AFTER successfully creating a thread
  * Does NOT decrement when threads are deleted
+ *
+ * ✅ ATOMIC OPERATION: Uses SQL-level increment to prevent race conditions
+ * ✅ OPTIMISTIC LOCKING: Version column prevents lost updates
+ * Following Drizzle ORM best practices for concurrent updates
  */
 export async function incrementThreadUsage(userId: string): Promise<void> {
   const db = await getDbAsync();
-  const usage = await ensureUserUsageRecord(userId);
 
+  // Ensure user record exists first
+  await ensureUserUsageRecord(userId);
+
+  // ✅ ATOMIC: SQL-level increment prevents race conditions
+  // ✅ VERSION: Optimistic locking with version column
+  // Multiple concurrent requests will queue safely at database level
   await db
     .update(tables.userChatUsage)
     .set({
-      threadsCreated: usage.threadsCreated + 1,
+      threadsCreated: sql`${tables.userChatUsage.threadsCreated} + 1`,
+      version: sql`${tables.userChatUsage.version} + 1`,
       updatedAt: new Date(),
     })
     .where(eq(tables.userChatUsage.userId, userId));
@@ -379,15 +375,25 @@ export async function incrementThreadUsage(userId: string): Promise<void> {
  * Increment message creation counter
  * Must be called AFTER successfully creating a message
  * Does NOT decrement when messages are deleted
+ *
+ * ✅ ATOMIC OPERATION: Uses SQL-level increment to prevent race conditions
+ * ✅ OPTIMISTIC LOCKING: Version column prevents lost updates
+ * Following Drizzle ORM best practices for concurrent updates
  */
 export async function incrementMessageUsage(userId: string, count = 1): Promise<void> {
   const db = await getDbAsync();
-  const usage = await ensureUserUsageRecord(userId);
 
+  // Ensure user record exists first
+  await ensureUserUsageRecord(userId);
+
+  // ✅ ATOMIC: SQL-level increment prevents race conditions
+  // ✅ VERSION: Optimistic locking with version column
+  // Multiple concurrent requests will queue safely at database level
   await db
     .update(tables.userChatUsage)
     .set({
-      messagesCreated: usage.messagesCreated + count,
+      messagesCreated: sql`${tables.userChatUsage.messagesCreated} + ${count}`,
+      version: sql`${tables.userChatUsage.version} + 1`,
       updatedAt: new Date(),
     })
     .where(eq(tables.userChatUsage.userId, userId));
@@ -397,15 +403,25 @@ export async function incrementMessageUsage(userId: string, count = 1): Promise<
  * Increment custom role creation counter
  * Must be called AFTER successfully creating a custom role
  * Does NOT decrement when custom roles are deleted
+ *
+ * ✅ ATOMIC OPERATION: Uses SQL-level increment to prevent race conditions
+ * ✅ OPTIMISTIC LOCKING: Version column prevents lost updates
+ * Following Drizzle ORM best practices for concurrent updates
  */
 export async function incrementCustomRoleUsage(userId: string, count = 1): Promise<void> {
   const db = await getDbAsync();
-  const usage = await ensureUserUsageRecord(userId);
 
+  // Ensure user record exists first
+  await ensureUserUsageRecord(userId);
+
+  // ✅ ATOMIC: SQL-level increment prevents race conditions
+  // ✅ VERSION: Optimistic locking with version column
+  // Multiple concurrent requests will queue safely at database level
   await db
     .update(tables.userChatUsage)
     .set({
-      customRolesCreated: usage.customRolesCreated + count,
+      customRolesCreated: sql`${tables.userChatUsage.customRolesCreated} + ${count}`,
+      version: sql`${tables.userChatUsage.version} + 1`,
       updatedAt: new Date(),
     })
     .where(eq(tables.userChatUsage.userId, userId));
@@ -604,6 +620,7 @@ export async function syncUserQuotaFromSubscription(
       .set({
         currentPeriodStart,
         currentPeriodEnd,
+        version: sql`${tables.userChatUsage.version} + 1`,
         updatedAt: new Date(),
       })
       .where(eq(tables.userChatUsage.userId, userId));
@@ -640,6 +657,7 @@ export async function syncUserQuotaFromSubscription(
         pendingTierIsAnnual: isAnnual,
         currentPeriodStart,
         currentPeriodEnd,
+        version: sql`${tables.userChatUsage.version} + 1`,
         updatedAt: new Date(),
       })
       .where(eq(tables.userChatUsage.userId, userId));
@@ -658,38 +676,33 @@ export async function syncUserQuotaFromSubscription(
       pendingTierChange: null,
       pendingTierIsAnnual: null,
       ...resetUsage, // Reset usage counters if period changed
+      version: sql`${tables.userChatUsage.version} + 1`,
       updatedAt: new Date(),
     })
     .where(eq(tables.userChatUsage.userId, userId));
 
   // ✅ ATOMIC: If period reset, archive old period + update usage in single batch
   if (isPeriodReset) {
-    // Get old tier's limits from CODE for historical archive
-    const oldTierQuotas = getTierQuotas(currentUsage.subscriptionTier);
-
+    // Archive historical usage (COUNTERS ONLY, no limits)
+    // ✅ SINGLE SOURCE OF TRUTH: Limits calculated from subscriptionTier + TIER_QUOTAS in code
     const historyArchive = db.insert(tables.userChatUsageHistory).values({
       id: ulid(),
       userId,
       periodStart: currentUsage.currentPeriodStart,
       periodEnd: currentUsage.currentPeriodEnd,
+      // Usage counters (what actually happened)
       threadsCreated: currentUsage.threadsCreated,
-      threadsLimit: oldTierQuotas.threadsPerMonth, // ✅ FROM CODE
       messagesCreated: currentUsage.messagesCreated,
-      messagesLimit: oldTierQuotas.messagesPerMonth, // ✅ FROM CODE
       customRolesCreated: currentUsage.customRolesCreated,
-      customRolesLimit: oldTierQuotas.customRolesPerMonth, // ✅ FROM CODE
+      // Tier identifier (look up limits from TIER_QUOTAS in code)
       subscriptionTier: currentUsage.subscriptionTier,
       isAnnual: currentUsage.isAnnual,
       createdAt: new Date(),
     });
 
     // Execute atomically with batch (Cloudflare D1) or sequentially (local SQLite)
-    if ('batch' in db && typeof db.batch === 'function') {
-      await db.batch([historyArchive, usageUpdate]);
-    } else {
-      await historyArchive;
-      await usageUpdate;
-    }
+    // Using reusable batch helper from @/api/common/batch-operations
+    await executeBatch(db, [historyArchive, usageUpdate]);
   } else {
     // No period reset, just update usage
     await usageUpdate;

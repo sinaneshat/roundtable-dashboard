@@ -13,11 +13,13 @@
  */
 
 import type { RouteConfig, RouteHandler } from '@hono/zod-openapi';
+import type { BatchItem } from 'drizzle-orm/batch';
 import type { Context, Env } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import * as HttpStatusCodes from 'stoker/http-status-codes';
 import type { z } from 'zod';
 
+import { executeBatch, validateBatchSize } from '@/api/common/batch-operations';
 import type { ErrorCode } from '@/api/common/error-handling';
 import { AppError } from '@/api/common/error-handling';
 import { apiLogger } from '@/api/middleware/hono-logger';
@@ -130,10 +132,15 @@ export type RegularHandler<
 
 /**
  * D1 Batch Context - Provides utilities for building batch operations
+ *
+ * ✅ DRIZZLE BEST PRACTICE: Uses BatchItem type for full type safety
+ * - insert(), update(), delete(), select() builders are all valid
+ * - Runtime validation ensures correctness
+ * - Type safety maintained through Drizzle's query builder API
  */
 export type BatchContext = {
   /** Add a prepared statement to the batch */
-  add: (statement: unknown) => void;
+  add: (statement: BatchItem<'sqlite'>) => void;
   /** Execute all statements in the batch and return results */
   execute: () => Promise<unknown[]>;
   /** Get the database instance for read operations */
@@ -592,7 +599,9 @@ export function createHandlerWithBatch<
       const db = await getDbAsync();
 
       // D1 batch operations collector - follows D1 best practices
-      const statements: unknown[] = [];
+      // ✅ DRIZZLE BEST PRACTICE: Use BatchItem type for full type safety
+      // Drizzle's BatchItem type supports all query builders (insert/update/delete/select)
+      const statements: BatchItem<'sqlite'>[] = [];
       const batchMetrics = {
         addedCount: 0,
         maxBatchSize: 100, // D1 recommended limit
@@ -600,7 +609,7 @@ export function createHandlerWithBatch<
       };
 
       const batchContext: BatchContext = {
-        add: (statement: unknown) => {
+        add: (statement: BatchItem<'sqlite'>) => {
           // Validate batch size limit
           if (statements.length >= batchMetrics.maxBatchSize) {
             throw new AppError({
@@ -626,10 +635,12 @@ export function createHandlerWithBatch<
             return [];
           }
 
-          // Validate batch isn't too large
-          if (statements.length > batchMetrics.maxBatchSize) {
+          // Validate batch size using shared utility
+          try {
+            validateBatchSize(statements.length, batchMetrics.maxBatchSize);
+          } catch (error) {
             throw new AppError({
-              message: `Cannot execute batch with ${statements.length} statements. Maximum is ${batchMetrics.maxBatchSize}.`,
+              message: (error as Error).message,
               code: 'BATCH_SIZE_EXCEEDED' as ErrorCode,
               statusCode: HttpStatusCodes.BAD_REQUEST,
             });
@@ -644,14 +655,14 @@ export function createHandlerWithBatch<
           const batchStartTime = performance.now();
 
           try {
-            // Execute atomic batch operation - D1 handles implicit transaction
-            // All operations succeed or all fail - automatic rollback on failure
-            // @ts-expect-error - D1 batch type issue with Drizzle ORM
-            const results = await db.batch(statements);
+            // ✅ ATOMIC BATCH: Using shared executeBatch helper
+            // Following Drizzle ORM best practices with automatic D1/SQLite fallback
+            // No type assertion needed - statements is already typed as BatchItem<'sqlite'>[]
+            const results = await executeBatch(db, statements);
 
             const batchDuration = performance.now() - batchStartTime;
 
-            logger.info('D1 batch executed successfully', {
+            logger.info('Batch executed successfully', {
               logType: 'performance' as const,
               duration: batchDuration,
               dbQueries: statements.length,
@@ -660,7 +671,7 @@ export function createHandlerWithBatch<
             // Clear statements after successful execution
             statements.length = 0;
 
-            return [...results] as unknown[];
+            return results;
           } catch (error) {
             const batchDuration = performance.now() - batchStartTime;
 

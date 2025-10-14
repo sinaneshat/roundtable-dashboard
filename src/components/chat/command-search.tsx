@@ -82,10 +82,10 @@ export function CommandSearch({ isOpen, onClose }: CommandSearchProps) {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
 
-  // Debounce search query for API calls (300ms delay)
+  // Debounce search query for backend fuzzy search API (300ms delay)
   const debouncedSearch = useDebouncedValue(searchQuery, 300);
 
-  // Fetch threads with debounced search (10 items per page for search)
+  // Fetch threads with debounced search (backend will use fuse.js)
   const {
     data: threadsData,
     fetchNextPage,

@@ -30,9 +30,8 @@ export type UserChatUsageInsert = z.infer<typeof userChatUsageInsertSchema>;
 export const userChatUsageHistorySelectSchema = createSelectSchema(userChatUsageHistory);
 export const userChatUsageHistoryInsertSchema = createInsertSchema(userChatUsageHistory, {
   threadsCreated: schema => schema.min(0),
-  threadsLimit: schema => schema.min(0),
   messagesCreated: schema => schema.min(0),
-  messagesLimit: schema => schema.min(0),
+  customRolesCreated: schema => schema.min(0),
   subscriptionTier: () => subscriptionTierSchema,
   isAnnual: () => z.boolean(),
 });

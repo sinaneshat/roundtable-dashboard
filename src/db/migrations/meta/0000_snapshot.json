@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "e44935d4-61f5-4c36-a831-d13635d91167",
+  "id": "5594bd5e-bf5b-4929-b265-d0c1aca080fe",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "account": {
@@ -1271,6 +1271,14 @@
           "notNull": false,
           "autoincrement": false
         },
+        "version": {
+          "name": "version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 1
+        },
         "created_at": {
           "name": "created_at",
           "type": "integer",
@@ -1312,6 +1320,14 @@
           "name": "stripe_subscription_price_idx",
           "columns": [
             "price_id"
+          ],
+          "isUnique": false
+        },
+        "stripe_subscription_user_status_idx": {
+          "name": "stripe_subscription_user_status_idx",
+          "columns": [
+            "user_id",
+            "status"
           ],
           "isUnique": false
         }
@@ -1628,6 +1644,21 @@
           "name": "chat_message_participant_idx",
           "columns": [
             "participant_id"
+          ],
+          "isUnique": false
+        },
+        "chat_message_role_idx": {
+          "name": "chat_message_role_idx",
+          "columns": [
+            "role"
+          ],
+          "isUnique": false
+        },
+        "chat_message_thread_created_idx": {
+          "name": "chat_message_thread_created_idx",
+          "columns": [
+            "thread_id",
+            "created_at"
           ],
           "isUnique": false
         }
@@ -2000,6 +2031,14 @@
           "notNull": false,
           "autoincrement": false
         },
+        "version": {
+          "name": "version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 1
+        },
         "created_at": {
           "name": "created_at",
           "type": "integer",
@@ -2268,6 +2307,14 @@
           "notNull": false,
           "autoincrement": false
         },
+        "version": {
+          "name": "version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 1
+        },
         "created_at": {
           "name": "created_at",
           "type": "integer",
@@ -2379,27 +2426,6 @@
           "notNull": true,
           "autoincrement": false,
           "default": 0
-        },
-        "threads_limit": {
-          "name": "threads_limit",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "messages_limit": {
-          "name": "messages_limit",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "custom_roles_limit": {
-          "name": "custom_roles_limit",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
         },
         "subscription_tier": {
           "name": "subscription_tier",
