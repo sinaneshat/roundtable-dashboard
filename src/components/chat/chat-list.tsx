@@ -25,7 +25,6 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from '@/components/ui/sidebar';
-import { useHoverPrefetch } from '@/hooks/utils';
 import type { Chat, ChatGroup } from '@/lib/types/chat';
 import { cn } from '@/lib/ui/cn';
 
@@ -72,7 +71,8 @@ function StickyHeader({ children, zIndex = 10 }: { children: React.ReactNode; zI
 
 /**
  * ChatItem - Individual chat item component
- * Extracted to properly use React hooks (Rules of Hooks)
+ * Uses Next.js Link component with built-in prefetching behavior
+ * Source: https://nextjs.org/docs/app/api-reference/components/link
  */
 function ChatItem({
   chat,
@@ -92,26 +92,11 @@ function ChatItem({
   const t = useTranslations();
   const chatUrl = `/chat/${chat.slug}`;
 
-  // ✅ OFFICIAL NEXT.JS PATTERN: Hover-based prefetch
-  // Source: https://nextjs.org/docs/app/guides/prefetching
-  // Pattern: "Defer Link Prefetching Until Hover in Next.js"
-  // Exact implementation from official Next.js documentation with ZERO customizations
-  const { prefetch, onMouseEnter } = useHoverPrefetch(chatUrl, {
-    enabled: !isActive && !isDeleting,
-  });
-
   return (
     <SidebarMenuItem>
       <SidebarMenuButton asChild isActive={isActive} disabled={isDeleting}>
         <Link
           href={chatUrl}
-          prefetch={prefetch}
-          onMouseEnter={onMouseEnter}
-          // ✅ OFFICIAL NEXT.JS PATTERN from documentation:
-          // prefetch={false} initially - prevents automatic viewport prefetching
-          // prefetch={null} on hover - enables default prefetch behavior
-          // Official recommendation: "Use prefetch={false} for large link lists to avoid unnecessary usage of resources"
-          // Reference: https://nextjs.org/docs/app/guides/prefetching
           className={cn(
             'min-w-0',
             isDeleting && 'pointer-events-none opacity-60',
@@ -148,21 +133,18 @@ function ChatItem({
 }
 
 /**
- * ChatList - Renders chat items in sidebar with optimized prefetching
+ * ChatList - Renders chat items in sidebar
  *
- * ✅ Sticky timestamp headers for scroll visibility
- * ✅ Matches frontend-patterns.md for list rendering
- * ✅ Next.js best practices for large lists: prefetch={false} + hover prefetch
- * ✅ Prevents excessive RSC calls from automatic viewport prefetching
+ * Uses Next.js Link component with default prefetching behavior.
+ * Links are automatically prefetched when they enter the viewport in production.
  *
- * Prefetch Strategy (per Next.js docs):
- * - prefetch={false} on Link components (large list optimization)
- * - Manual router.prefetch() on hover (150ms debounced)
- * - Duplicate prevention (won't prefetch same route twice)
- * - Cancellable on mouse leave (prevents accidental prefetches)
+ * Features:
+ * - Sticky timestamp headers for scroll visibility
+ * - Grouped chats by time period
+ * - Favorites section
+ * - Delete confirmation dialog
  *
- * Reference: https://nextjs.org/docs/app/guides/prefetching
- * "Use prefetch={false} for large link lists to avoid unnecessary usage of resources"
+ * Reference: https://nextjs.org/docs/app/api-reference/components/link
  */
 export function ChatList({
   chatGroups,

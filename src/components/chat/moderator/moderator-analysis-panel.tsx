@@ -17,10 +17,9 @@
 
 import { useTranslations } from 'next-intl';
 
-import type { StoredModeratorAnalysis } from '@/api/routes/chat/schema';
+import type { ParticipantAnalysis, StoredModeratorAnalysis } from '@/api/routes/chat/schema';
 
 import { LeaderboardCard } from './leaderboard-card';
-import type { ParticipantAnalysis } from './participant-analysis-card';
 import { ParticipantAnalysisCard } from './participant-analysis-card';
 import { SkillsComparisonChart } from './skills-comparison-chart';
 

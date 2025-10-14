@@ -9,7 +9,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { useThreadsQuery } from '@/hooks/queries/chat-threads';
-import { useDebouncedValue, useHoverPrefetch } from '@/hooks/utils';
+import { useDebouncedValue } from '@/hooks/utils';
 import { cn } from '@/lib/ui/cn';
 import { glassOverlay } from '@/lib/ui/glassmorphism';
 
@@ -19,11 +19,9 @@ type CommandSearchProps = {
 };
 
 /**
- * SearchResultItem - Individual search result with hover prefetching
- * Extracted to properly use React hooks (Rules of Hooks)
- *
- * Uses OFFICIAL Next.js hover prefetch pattern from documentation
- * Source: https://nextjs.org/docs/app/guides/prefetching
+ * SearchResultItem - Individual search result
+ * Uses Next.js Link component with built-in prefetching behavior
+ * Source: https://nextjs.org/docs/app/api-reference/components/link
  */
 function SearchResultItem({
   thread,
@@ -40,14 +38,9 @@ function SearchResultItem({
 }) {
   const href = `/chat/${thread.slug}`;
 
-  // ✅ OFFICIAL NEXT.JS PATTERN: Prefetch on hover
-  // Exact implementation from Next.js official documentation
-  const { prefetch, onMouseEnter: onPrefetchEnter } = useHoverPrefetch(href);
-
   return (
     <Link
       href={href}
-      prefetch={prefetch}
       onClick={onClose}
       className={cn(
         'flex items-center gap-3 px-4 py-3 hover:bg-accent/50 transition-colors cursor-pointer',
@@ -55,7 +48,6 @@ function SearchResultItem({
       )}
       onMouseEnter={() => {
         onSelect(index);
-        onPrefetchEnter();
       }}
     >
       <div className="flex-1 min-w-0">
@@ -100,15 +92,17 @@ export function CommandSearch({ isOpen, onClose }: CommandSearchProps) {
       page.success && page.data?.items ? page.data.items : [],
     ) || [], [threadsData]);
 
-  // Reset search when modal closes
+  // ✅ REACT 19 PATTERN: Wrap onClose to include cleanup logic
+  // Move state resets from useEffect to event handler where they belong
+  const handleClose = useCallback(() => {
+    setSearchQuery('');
+    setSelectedIndex(0);
+    onClose();
+  }, [onClose]);
+
+  // Focus search input when modal opens (side effect - keeps useEffect)
   useEffect(() => {
-    if (!isOpen) {
-      // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- Cleanup state when modal closes
-      setSearchQuery('');
-      // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- Cleanup state when modal closes
-      setSelectedIndex(0);
-    } else {
-      // Focus search input when modal opens
+    if (isOpen) {
       const timeoutId = setTimeout(() => {
         searchInputRef.current?.focus();
       }, 100);
@@ -136,19 +130,19 @@ export function CommandSearch({ isOpen, onClose }: CommandSearchProps) {
           e.preventDefault();
           if (threads[selectedIndex]) {
             router.push(`/chat/${threads[selectedIndex].slug}`);
-            onClose();
+            handleClose();
           }
           break;
         case 'Escape':
           e.preventDefault();
-          onClose();
+          handleClose();
           break;
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, threads, selectedIndex, router, onClose]);
+  }, [isOpen, threads, selectedIndex, router, handleClose]);
 
   // Handle click outside to close
   useEffect(() => {
@@ -157,7 +151,7 @@ export function CommandSearch({ isOpen, onClose }: CommandSearchProps) {
 
     const handleClickOutside = (event: MouseEvent) => {
       if (modalRef.current && !modalRef.current.contains(event.target as Node)) {
-        onClose();
+        handleClose();
       }
     };
 
@@ -170,7 +164,7 @@ export function CommandSearch({ isOpen, onClose }: CommandSearchProps) {
       clearTimeout(timeoutId);
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [isOpen, onClose]);
+  }, [isOpen, handleClose]);
 
   // Infinite scroll handler
   const handleScroll = useCallback(() => {
@@ -234,7 +228,7 @@ export function CommandSearch({ isOpen, onClose }: CommandSearchProps) {
                   <Button
                     variant="ghost"
                     size="icon"
-                    onClick={onClose}
+                    onClick={handleClose}
                     className="size-8"
                   >
                     <X className="size-4" />
@@ -261,7 +255,7 @@ export function CommandSearch({ isOpen, onClose }: CommandSearchProps) {
                                 thread={thread}
                                 index={index}
                                 selectedIndex={selectedIndex}
-                                onClose={onClose}
+                                onClose={handleClose}
                                 onSelect={setSelectedIndex}
                               />
                             ))}

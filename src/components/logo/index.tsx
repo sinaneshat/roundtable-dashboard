@@ -1,9 +1,5 @@
-'use client';
-
 import Image from 'next/image';
 import { useTranslations } from 'next-intl';
-import { useTheme } from 'next-themes';
-import { useEffect, useState } from 'react';
 
 import { BRAND } from '@/constants/brand';
 import { cn } from '@/lib/ui/cn';
@@ -11,23 +7,22 @@ import { cn } from '@/lib/ui/cn';
 type Props = {
   size?: 'sm' | 'md' | 'lg';
   variant?: 'icon' | 'full';
-  theme?: 'light' | 'dark' | 'auto';
   className?: string;
 };
 
+/**
+ * Logo Component - Simplified (React 19 Pattern)
+ *
+ * ✅ No useEffect - eliminates lifecycle unpredictability
+ * ✅ No state - pure render from props
+ * ✅ Single logo variant - no theme switching needed
+ * ✅ Server and client render identically - no hydration issues
+ */
 function Logo(props: Props) {
-  const { size = 'sm', variant = 'icon', theme = 'auto', className } = props;
-  const { theme: systemTheme } = useTheme();
-  const [mounted, setMounted] = useState(false);
+  const { size = 'sm', variant = 'icon', className } = props;
   const t = useTranslations('common');
 
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setMounted(true);
-    }, 0);
-    return () => clearTimeout(timer);
-  }, []);
-
+  // ✅ Compute dimensions during render (no useEffect needed)
   const logoSize = (() => {
     if (variant === 'icon') {
       switch (size) {
@@ -54,20 +49,8 @@ function Logo(props: Props) {
     }
   })();
 
-  // Determine which logo to use based on theme
-  const getLogoSrc = () => {
-    const isDark = theme === 'dark' || (theme === 'auto' && systemTheme === 'dark');
-
-    if (variant === 'icon') {
-      return isDark ? BRAND.logos.iconDark : BRAND.logos.iconLight;
-    } else {
-      // For full variant, use the round PNG logo
-      return BRAND.logos.round;
-    }
-  };
-
-  // Use a default logo before mounting to prevent hydration mismatch
-  const logoSrc = mounted ? getLogoSrc() : BRAND.logos.round;
+  // ✅ Single logo source - works universally on light/dark themes
+  const logoSrc = BRAND.logos.main;
 
   return (
     <Image

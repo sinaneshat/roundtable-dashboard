@@ -2,7 +2,7 @@
 
 import { AlertCircle, CheckCircle, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { z } from 'zod';
 
 import { Button } from '@/components/ui/button';
@@ -56,7 +56,8 @@ export function FormProvider({
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const [isSubmitting, _setIsSubmitting] = useState(false);
   const [isValidating, setIsValidating] = useState(false);
-  const [validationTimeouts, setValidationTimeouts] = useState<Record<string, NodeJS.Timeout>>({});
+  // ✅ REACT 19 FIX: Use ref instead of state for timeouts to prevent stale closures
+  const validationTimeoutsRef = useRef<Record<string, NodeJS.Timeout>>({});
 
   const setFieldError = (field: string, error?: string) => {
     setErrors(prev => ({
@@ -77,10 +78,10 @@ export function FormProvider({
 
     try {
       setIsValidating(true);
-      
-      // Clear existing timeout for this field
-      if (validationTimeouts[field]) {
-        clearTimeout(validationTimeouts[field]);
+
+      // ✅ REACT 19 FIX: Access ref.current directly to get latest timeouts
+      if (validationTimeoutsRef.current[field]) {
+        clearTimeout(validationTimeoutsRef.current[field]);
       }
 
       return new Promise((resolve) => {
@@ -105,10 +106,8 @@ export function FormProvider({
           }
         }, debounceValidation);
 
-        setValidationTimeouts(prev => ({
-          ...prev,
-          [field]: timeout,
-        }));
+        // ✅ REACT 19 FIX: Store in ref instead of state to prevent stale closures
+        validationTimeoutsRef.current[field] = timeout;
       });
     } catch (error) {
       setIsValidating(false);
@@ -121,12 +120,12 @@ export function FormProvider({
     setTouched({});
   };
 
-  // Cleanup timeouts on unmount
+  // ✅ REACT 19 FIX: Cleanup timeouts on unmount using ref (no dependencies needed)
   useEffect(() => {
     return () => {
-      Object.values(validationTimeouts).forEach(timeout => clearTimeout(timeout));
+      Object.values(validationTimeoutsRef.current).forEach(timeout => clearTimeout(timeout));
     };
-  }, [validationTimeouts]);
+  }, []); // Empty deps - cleanup only runs on unmount
 
   const contextValue: FormContextValue = {
     errors,

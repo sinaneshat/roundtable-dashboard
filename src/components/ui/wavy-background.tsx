@@ -30,7 +30,14 @@ export const WavyBackground = ({
   // Use ref to preserve noise function across re-renders
   const noiseRef = useRef(createNoise3D());
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [isSafari, setIsSafari] = useState(false);
+
+  // ✅ REACT 19 PATTERN: Compute Safari detection during initialization, not in useEffect
+  // This is a one-time computation that doesn't change, so no useEffect needed
+  const [isSafari] = useState(() =>
+    typeof window !== 'undefined' &&
+    navigator.userAgent.includes('Safari') &&
+    !navigator.userAgent.includes('Chrome')
+  );
 
   const getSpeed = () => {
     switch (speed) {
@@ -42,15 +49,6 @@ export const WavyBackground = ({
         return 0.001;
     }
   };
-
-  useEffect(() => {
-    // Detect Safari for blur filter fallback
-    setIsSafari(
-      typeof window !== 'undefined' &&
-        navigator.userAgent.includes('Safari') &&
-        !navigator.userAgent.includes('Chrome'),
-    );
-  }, []);
 
   useEffect(() => {
     const canvas = canvasRef.current;

@@ -3,9 +3,8 @@
 import { AlertCircle, CheckCircle, Loader2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
-import type { Subscription } from '@/api/routes/billing/schema';
 import type { SubscriptionTier } from '@/api/services/product-logic.service';
 import { getMaxModelsForTier, getTierFromProductId, SUBSCRIPTION_TIER_NAMES } from '@/api/services/product-logic.service';
 import { Button } from '@/components/ui/button';
@@ -33,7 +32,6 @@ export function BillingSuccessClient() {
   const router = useRouter();
   const t = useTranslations();
   const [countdown, setCountdown] = useState(10); // 10 second countdown
-  const [displaySubscription, setDisplaySubscription] = useState<Subscription | null>(null);
 
   // Sync mutation
   const syncMutation = useSyncAfterCheckoutMutation();
@@ -45,20 +43,21 @@ export function BillingSuccessClient() {
   // Get usage stats for tier quotas
   const { data: usageStats } = useUsageStatsQuery();
 
-  // Store subscription data once fetched to prevent disappearing
-  useEffect(() => {
-    if (syncMutation.isSuccess && (currentSubscription || subscriptionData?.data?.subscriptions?.[0])) {
-      const sub = currentSubscription || subscriptionData?.data?.subscriptions?.[0];
-      if (sub)
-        setDisplaySubscription(sub);
-    }
-  }, [syncMutation.isSuccess, currentSubscription, subscriptionData]);
+  // Track initialization to prevent double-calls in React.StrictMode
+  const hasInitiatedSync = useRef(false);
 
-  // Initiate sync on mount
+  // ✅ REACT 19 PATTERN: Derive display subscription during render, no useEffect setState
+  // Query data is stable during render, no need to "capture" it in state
+  const displaySubscription = currentSubscription || subscriptionData?.data?.subscriptions?.[0] || null;
+
+  // ✅ Initiate sync once on mount (billing success page requires immediate sync)
+  // Ref guard prevents double-calls in React.StrictMode
   useEffect(() => {
-    syncMutation.mutate(undefined);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    if (!hasInitiatedSync.current) {
+      syncMutation.mutate(undefined);
+      hasInitiatedSync.current = true;
+    }
+  }, [syncMutation]);
 
   // Countdown timer for auto-redirect
   useEffect(() => {
@@ -150,13 +149,19 @@ export function BillingSuccessClient() {
 
   // Success state - show subscription details
   // Use centralized tier mapping from ai-config service
-  const tier = displaySubscription?.productId
+  const tierString = displaySubscription?.productId
     ? getTierFromProductId(displaySubscription.productId)
     : 'free';
 
+  // ✅ RUNTIME VALIDATION: Validate tier is a valid SubscriptionTier
+  const validTiers: SubscriptionTier[] = ['free', 'starter', 'pro', 'power'];
+  const tier: SubscriptionTier = validTiers.includes(tierString as SubscriptionTier)
+    ? (tierString as SubscriptionTier)
+    : 'free'; // Fallback to free if invalid
+
   // ✅ SINGLE SOURCE OF TRUTH: Get tier quotas from usage stats (database-driven)
-  const tierName = SUBSCRIPTION_TIER_NAMES[tier as SubscriptionTier];
-  const maxModels = getMaxModelsForTier(tier as SubscriptionTier);
+  const tierName = SUBSCRIPTION_TIER_NAMES[tier];
+  const maxModels = getMaxModelsForTier(tier);
   const threadsLimit = usageStats?.data?.threads?.limit || 0;
   const messagesLimit = usageStats?.data?.messages?.limit || 0;
   const customRolesLimit = usageStats?.data?.customRoles?.limit || 0;

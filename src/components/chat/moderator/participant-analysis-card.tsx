@@ -9,32 +9,17 @@
  * - Uses getAvatarPropsFromModelId for proper icon loading
  * - Simple card with pros/cons and summary
  * - High contrast text
+ * ✅ ZERO HARDCODING: Import types from RPC schema
  */
 
 import { motion } from 'framer-motion';
 import { CheckCircle2, XCircle } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
+import type { ParticipantAnalysis } from '@/api/routes/chat/schema';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { getAvatarPropsFromModelId } from '@/lib/ai/avatar-helpers';
 import { cn } from '@/lib/ui/cn';
-
-type SkillRating = {
-  skillName: string;
-  rating: number;
-};
-
-export type ParticipantAnalysis = {
-  participantIndex: number;
-  participantRole: string | null;
-  modelId: string;
-  modelName: string;
-  overallRating: number;
-  skillsMatrix: SkillRating[];
-  pros: string[];
-  cons: string[];
-  summary: string;
-};
 
 type ParticipantAnalysisCardProps = {
   analysis: ParticipantAnalysis;

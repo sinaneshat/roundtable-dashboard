@@ -19,7 +19,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 
 import { Conversation, ConversationContent, ConversationScrollButton } from '@/components/ai-elements/conversation';
 import { Message, MessageAvatar, MessageContent } from '@/components/ai-elements/message';
@@ -90,21 +90,10 @@ export default function ChatOverviewScreen() {
   messagesRef.current = messages;
   participantsRef.current = selectedParticipants;
 
-  // ✅ SYNC PREFETCHED DEFAULT MODEL: Update participants if default model loads after initial render
-  // This handles edge cases where prefetch data isn't immediately available (e.g., dev mode hot reload)
-  // In production with proper SSR prefetch, initialParticipants should already have the correct value
-  useEffect(() => {
-    if (defaultModelId && selectedParticipants.length === 0) {
-      setSelectedParticipants([
-        {
-          id: 'participant-default',
-          modelId: defaultModelId,
-          role: '',
-          order: 0,
-        },
-      ]);
-    }
-  }, [defaultModelId, selectedParticipants.length]);
+  // ✅ REACT 19 PATTERN: No useEffect for initialization
+  // initialParticipants useMemo + useState handles initialization correctly
+  // If defaultModelId loads after mount, user can manually add participant via UI
+  // This eliminates lifecycle unpredictability from useEffect setState
 
   // Thread creation mutation
   const createThreadMutation = useCreateThreadMutation();

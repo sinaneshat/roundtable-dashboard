@@ -5,14 +5,15 @@ import { Bot, Check, GripVertical, Lock, Plus, Trash2 } from 'lucide-react';
 import { motion, Reorder, useDragControls } from 'motion/react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 
 // ============================================================================
 // Types - ✅ Inferred from Backend Schema (Zero Hardcoding)
 // ============================================================================
 import type { ChatCustomRole } from '@/api/routes/chat/schema';
 // ✅ ZOD-INFERRED TYPE: Import from schema (no hardcoded interfaces)
-import type { BaseModelResponse } from '@/api/routes/models/schema';
+// EnhancedModelResponse includes tier access fields (is_accessible_to_user, required_tier, required_tier_name)
+import type { EnhancedModelResponse } from '@/api/routes/models/schema';
 import type { SubscriptionTier } from '@/api/services/product-logic.service';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
@@ -49,18 +50,6 @@ import { toastManager } from '@/lib/toast/toast-manager';
 import { cn } from '@/lib/ui/cn';
 import { getApiErrorMessage } from '@/lib/utils/error-handling';
 
-// UI Model Type: Backend type + UI-specific computed properties
-type UIModel = BaseModelResponse & {
-  modelId: string; // Alias for id
-  minTier: SubscriptionTier; // ✅ SINGLE SOURCE: Alias for required_tier
-  metadata: {
-    icon: string;
-    isAccessible: boolean;
-    pricing: { input: string; output: string };
-    category: string;
-  };
-};
-
 type ChatParticipantsListProps = {
   participants: ParticipantConfig[];
   onParticipantsChange: (participants: ParticipantConfig[]) => void;
@@ -68,9 +57,9 @@ type ChatParticipantsListProps = {
   isStreaming?: boolean; // Disable queries during streaming to prevent excessive refetches
 };
 
-// Extended model type to track order in the unified list
+// ✅ ZERO TRANSFORMATION: Use RPC types directly
 type OrderedModel = {
-  model: UIModel;
+  model: EnhancedModelResponse; // ✅ Direct RPC type - no wrapper
   participant: ParticipantConfig | null;
   order: number;
 };
@@ -515,8 +504,8 @@ function ModelItem({
   const { model, participant } = orderedModel;
   const isSelected = participant !== null;
 
-  // ✅ BACKEND-COMPUTED ACCESS CONTROL: Use isAccessible flag from backend
-  const isAccessible = model.metadata.isAccessible ?? isSelected;
+  // ✅ BACKEND-COMPUTED ACCESS CONTROL: Use is_accessible_to_user flag from RPC type
+  const isAccessible = model.is_accessible_to_user ?? isSelected;
 
   // Disable reasons (checked in order of priority):
   // 1. Last participant - can't deselect if it's the only one
@@ -533,8 +522,8 @@ function ModelItem({
   // Create upgrade tooltip content with proper messaging (using backend tier names)
   let upgradeTooltipContent: string | undefined;
   if (isDisabledDueToTier) {
-    // ✅ USE BACKEND DATA: required_tier_name comes from backend
-    const requiredTierName = (model).required_tier_name || model.minTier;
+    // ✅ USE BACKEND DATA: required_tier_name comes from RPC type
+    const requiredTierName = model.required_tier_name || model.required_tier || 'free';
     upgradeTooltipContent = `Upgrade to ${requiredTierName} to unlock this model`;
   } else if (isDisabledDueToLimit) {
     upgradeTooltipContent = `Your ${userTierInfo?.tier_name || 'current'} plan allows up to ${maxModels} models per conversation. Upgrade to select more models.`;
@@ -608,7 +597,7 @@ function ModelItem({
             >
               {/* Model Avatar and Name */}
               <Avatar className="size-8 flex-shrink-0">
-                <AvatarImage src={model.metadata.icon} alt={model.name} />
+                <AvatarImage src={getProviderIcon(model.provider)} alt={model.name} />
                 <AvatarFallback className="text-xs">
                   {model.name.slice(0, 2).toUpperCase()}
                 </AvatarFallback>
@@ -621,7 +610,7 @@ function ModelItem({
                     <>
                       <Lock className="size-3 text-muted-foreground flex-shrink-0" />
                       <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 font-medium bg-primary/10 text-primary border-primary/20">
-                        {(model).required_tier_name || model.minTier}
+                        {model.required_tier_name || model.required_tier || 'free'}
                         {' '}
                         Required
                       </Badge>
@@ -635,11 +624,11 @@ function ModelItem({
                 </div>
                 <div className="text-xs text-muted-foreground truncate flex items-center gap-1.5">
                   <span className="truncate">{model.description}</span>
-                  {model.metadata.pricing && (
+                  {model.pricing_display && (
                     <span className="text-[10px] shrink-0">
                       •
                       {' '}
-                      {model.metadata.pricing.input}
+                      {model.pricing_display.input}
                     </span>
                   )}
                 </div>
@@ -668,7 +657,7 @@ function ModelItem({
               <p className="text-xs text-muted-foreground">
                 Upgrade to
                 {' '}
-                {isDisabledDueToTier ? ((model).required_tier_name || model.minTier) : 'a higher tier'}
+                {isDisabledDueToTier ? (model.required_tier_name || model.required_tier || 'free') : 'a higher tier'}
                 {' '}
                 to unlock this model
               </p>
@@ -723,7 +712,6 @@ export function ChatParticipantsList({
   className,
   isStreaming = false,
 }: ChatParticipantsListProps) {
-  const t = useTranslations('chat');
   const tModels = useTranslations('chat.models');
   const [open, setOpen] = useState(false);
   const [modelSearchQuery, setModelSearchQuery] = useState('');
@@ -748,34 +736,22 @@ export function ChatParticipantsList({
   const tierName = userTierConfig.tier_name;
   const userTier = userTierConfig.tier;
 
-  // ✅ BACKEND MODELS + UI PROPERTIES: Add computed properties for component
-  const allEnabledModels: UIModel[] = useMemo(() => {
-    const models = modelsData?.data?.models || [];
-    return models.map((model): UIModel => ({
-      ...model,
-      // UI aliases for backward compatibility
-      modelId: model.id,
-      minTier: model.required_tier || 'free',
-      metadata: {
-        icon: getProviderIcon(model.provider),
-        isAccessible: model.is_accessible_to_user ?? true,
-        pricing: {
-          input: model.pricing_display.input,
-          output: model.pricing_display.output,
-        },
-        category: model.category,
-      },
-    }));
-  }, [modelsData?.data?.models]);
+  // ✅ ZERO TRANSFORMATION: Use RPC types directly from backend
+  // ✅ REACT 19: Memoize to prevent unnecessary recalculations in dependent useMemos
+  const allEnabledModels: EnhancedModelResponse[] = useMemo(
+    () => modelsData?.data?.models || [],
+    [modelsData?.data?.models],
+  );
 
-  // Create a unified list of all models with their order
-  // Selected models maintain their participant order, unselected go to the end
-  // Now showing ALL models (both accessible and inaccessible)
-  const [orderedModels, setOrderedModels] = useState<OrderedModel[]>(() => {
-    // Wait for models to load before initializing
+  // ✅ REACT 19 PATTERN: Derive state using useMemo instead of useEffect
+  // This eliminates extra render passes and prevents potential infinite loops
+  // Reference: React docs - "Calculate what you can during rendering"
+  const orderedModels = useMemo<OrderedModel[]>(() => {
+    // Wait for models to load before computing
     if (allEnabledModels.length === 0)
       return [];
 
+    // Selected models maintain their participant order
     const selectedModels: OrderedModel[] = participants
       .sort((a, b) => a.order - b.order)
       .flatMap((p, index) => {
@@ -790,6 +766,7 @@ export function ChatParticipantsList({
           : [];
       });
 
+    // Unselected models go to the end, sorted alphabetically
     const selectedIds = new Set(participants.map(p => p.modelId));
     const unselectedModels: OrderedModel[] = allEnabledModels
       .filter(m => !selectedIds.has(m.id))
@@ -801,56 +778,6 @@ export function ChatParticipantsList({
       }));
 
     return [...selectedModels, ...unselectedModels];
-  });
-
-  // Sync orderedModels when participants change externally
-  // Preserve existing order to allow dragging unselected models
-  // OFFICIAL AI SDK PATTERN: Only update state when data actually changes (not just reference)
-  // CRITICAL FIX: Check for changes BEFORE creating new objects to prevent infinite re-renders
-  useEffect(() => {
-    const participantMap = new Map(participants.map(p => [p.modelId, p]));
-
-    setOrderedModels((currentOrder) => {
-      // STEP 1: Check if any participant references changed (efficient check first)
-      let hasParticipantChanges = false;
-      for (const om of currentOrder) {
-        const newParticipant = participantMap.get(om.model.modelId) || null;
-        if (om.participant !== newParticipant) {
-          hasParticipantChanges = true;
-          break;
-        }
-      }
-
-      // STEP 2: Check for new models that need to be added
-      const existingIds = new Set(currentOrder.map(om => om.model.modelId));
-      const hasNewModels = allEnabledModels.some(m => !existingIds.has(m.modelId));
-
-      // STEP 3: If nothing changed, return same reference (prevents re-render)
-      if (!hasParticipantChanges && !hasNewModels) {
-        return currentOrder;
-      }
-
-      // STEP 4: Only now create new objects since we know something changed
-      const updatedModels = currentOrder.map(om => ({
-        ...om,
-        participant: participantMap.get(om.model.modelId) || null,
-      }));
-
-      // STEP 5: Add new models if any exist
-      if (!hasNewModels) {
-        return updatedModels;
-      }
-
-      const newModels = allEnabledModels
-        .filter(m => !existingIds.has(m.modelId))
-        .map((m, index) => ({
-          model: m,
-          participant: participantMap.get(m.modelId) || null,
-          order: updatedModels.length + index,
-        }));
-
-      return [...updatedModels, ...newModels];
-    });
   }, [participants, allEnabledModels]);
 
   // ✅ USER TIER INFO: Construct from computed values for backward compatibility
@@ -863,7 +790,7 @@ export function ChatParticipantsList({
 
   // Toggle model selection
   const handleToggleModel = (modelId: string) => {
-    const orderedModel = orderedModels.find(om => om.model.modelId === modelId);
+    const orderedModel = orderedModels.find(om => om.model.id === modelId);
     if (!orderedModel)
       return;
 
@@ -972,7 +899,7 @@ export function ChatParticipantsList({
     };
 
     unselectedModels.forEach((om) => {
-      const tier = om.model.minTier;
+      const tier = (om.model.required_tier || 'free') as SubscriptionTier;
       if (grouped[tier]) {
         grouped[tier]!.push(om);
       }
@@ -1022,7 +949,7 @@ export function ChatParticipantsList({
                       return (
                         <div key={participant.id} className="flex items-center gap-2 text-xs">
                           <Avatar className="size-4">
-                            <AvatarImage src={model.metadata.icon} alt={model.name} />
+                            <AvatarImage src={getProviderIcon(model.provider)} alt={model.name} />
                           </Avatar>
                           <span className="font-medium">{model.name}</span>
                           {participant.role && (
@@ -1043,7 +970,7 @@ export function ChatParticipantsList({
           <PopoverContent className="p-0 w-[calc(100vw-2rem)] sm:w-[420px] lg:w-[480px]" align="start">
             <Command shouldFilter={false}>
               <CommandInput
-                placeholder={t('searchModels')}
+                placeholder={tModels('searchModels')}
                 className="h-9"
                 value={modelSearchQuery}
                 onValueChange={setModelSearchQuery}
@@ -1082,9 +1009,9 @@ export function ChatParticipantsList({
                           key={orderedModel.participant!.id}
                           orderedModel={orderedModel}
                           customRoles={customRoles}
-                          onToggle={() => handleToggleModel(orderedModel.model.modelId)}
-                          onRoleChange={(role, customRoleId) => handleRoleChange(orderedModel.model.modelId, role, customRoleId)}
-                          onClearRole={() => handleClearRole(orderedModel.model.modelId)}
+                          onToggle={() => handleToggleModel(orderedModel.model.id)}
+                          onRoleChange={(role, customRoleId) => handleRoleChange(orderedModel.model.id, role, customRoleId)}
+                          onClearRole={() => handleClearRole(orderedModel.model.id)}
                           isLastParticipant={selectedModels.length === 1}
                           selectedCount={participants.length}
                           maxModels={maxModels}
@@ -1158,9 +1085,9 @@ export function ChatParticipantsList({
                                 key={`unselected-${orderedModel.model.id}`}
                                 orderedModel={orderedModel}
                                 customRoles={customRoles}
-                                onToggle={() => handleToggleModel(orderedModel.model.modelId)}
-                                onRoleChange={(role, customRoleId) => handleRoleChange(orderedModel.model.modelId, role, customRoleId)}
-                                onClearRole={() => handleClearRole(orderedModel.model.modelId)}
+                                onToggle={() => handleToggleModel(orderedModel.model.id)}
+                                onRoleChange={(role, customRoleId) => handleRoleChange(orderedModel.model.id, role, customRoleId)}
+                                onClearRole={() => handleClearRole(orderedModel.model.id)}
                                 isLastParticipant={false}
                                 selectedCount={participants.length}
                                 maxModels={maxModels}
@@ -1200,25 +1127,9 @@ export function ParticipantsPreview({
   className?: string;
   chatMessages?: UIMessage[];
 }) {
-  // ✅ FETCH MODELS: Each component manages its own data
+  // ✅ ZERO TRANSFORMATION: Use RPC types directly from backend
   const { data: modelsData } = useModelsQuery();
-  const allModels: UIModel[] = useMemo(() => {
-    const models = modelsData?.data?.models || [];
-    return models.map((model): UIModel => ({
-      ...model,
-      modelId: model.id,
-      minTier: model.required_tier || 'free',
-      metadata: {
-        icon: getProviderIcon(model.provider),
-        isAccessible: model.is_accessible_to_user ?? true,
-        pricing: {
-          input: model.pricing_display.input,
-          output: model.pricing_display.output,
-        },
-        category: model.category,
-      },
-    }));
-  }, [modelsData?.data?.models]);
+  const allModels: EnhancedModelResponse[] = modelsData?.data?.models || [];
 
   if (participants.length === 0) {
     return null;
@@ -1258,7 +1169,7 @@ export function ParticipantsPreview({
                 {/* Content - minimalistic display */}
                 <div className="flex items-center gap-1.5 sm:gap-2">
                   <Avatar className="size-6 sm:size-7 shrink-0">
-                    <AvatarImage src={model.metadata.icon} alt={model.name} />
+                    <AvatarImage src={getProviderIcon(model.provider)} alt={model.name} />
                     <AvatarFallback className="text-[10px] sm:text-xs">
                       {model.name.slice(0, 2).toUpperCase()}
                     </AvatarFallback>

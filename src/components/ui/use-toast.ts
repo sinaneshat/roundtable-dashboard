@@ -175,6 +175,7 @@ function toast({ ...props }: Toast) {
 function useToast() {
   const [state, setState] = React.useState<State>(memoryState);
 
+  // ✅ REACT 19 FIX: Remove state from dependencies - setState is stable, doesn't change between renders
   React.useEffect(() => {
     listeners.push(setState);
     return () => {
@@ -183,7 +184,7 @@ function useToast() {
         listeners.splice(index, 1);
       }
     };
-  }, [state]);
+  }, []); // Empty deps - setState is stable
 
   return {
     ...state,

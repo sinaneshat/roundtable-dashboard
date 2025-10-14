@@ -5,7 +5,7 @@ import type { UIMessage } from 'ai';
 import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import type { ChatMessage, ChatParticipant, ChatThread } from '@/api/routes/chat/schema';
+import type { ChatMessage, ChatParticipant, ChatThread, MessageStatus } from '@/api/routes/chat/schema';
 import { canAccessModelByPricing } from '@/api/services/product-logic.service';
 import { Message, MessageAvatar, MessageContent } from '@/components/ai-elements/message';
 import { Response } from '@/components/ai-elements/response';
@@ -235,9 +235,7 @@ export default function ChatThreadScreen({
     };
 
     refetchData();
-    // queryClient is intentionally omitted - it's a stable reference from useQueryClient()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status, thread.id]);
+  }, [status, thread.id, queryClient]);
 
   // ✅ REMOVED: Polling control logic
   // Polling is now always enabled in useThreadAnalysesQuery (3s interval)
@@ -283,6 +281,7 @@ export default function ChatThreadScreen({
   );
 
   // ✅ Set thread actions in header context - minimal dependencies
+  // setThreadActions and setThreadTitle are stable context functions (don't need to be in dependencies)
   useEffect(() => {
     setThreadActions(threadActions);
     setThreadTitle(thread.title);
@@ -292,9 +291,7 @@ export default function ChatThreadScreen({
       setThreadActions(null);
       setThreadTitle(null);
     };
-    // Only depend on the memoized actions and title, not the setters (they're stable context functions)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [threadActions, thread.title]);
+  }, [threadActions, thread.title, setThreadActions, setThreadTitle]);
 
   // ✅ Auto-scroll to bottom when messages change (during streaming or new messages)
   useEffect(() => {
@@ -427,7 +424,8 @@ export default function ChatThreadScreen({
           const isCurrentlyStreaming = streamingState.messageId === message.id;
           const hasContent = message.parts.some(p => p.type === 'text' && p.text.trim().length > 0);
 
-          const messageStatus: 'thinking' | 'streaming' | 'completed' | 'error' = hasError
+          // ✅ RPC TYPE: MessageStatus from backend schema
+          const messageStatus: MessageStatus = hasError
             ? 'error'
             : isCurrentlyStreaming && !hasContent
               ? 'thinking'

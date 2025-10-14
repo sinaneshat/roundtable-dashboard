@@ -10,28 +10,20 @@
  * - High contrast text
  * - Compact, minimal design
  * - Framer motion animations
+ * ✅ ZERO HARDCODING: Import types from RPC schema
  */
 
 import { motion } from 'framer-motion';
 import { Award, Medal, Trophy } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
+import type { LeaderboardEntry } from '@/api/routes/chat/schema';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { useModelsQuery } from '@/hooks/queries/models';
 import { getAvatarPropsFromModelId } from '@/lib/ai/avatar-helpers';
 import { cn } from '@/lib/ui/cn';
-
-export type LeaderboardEntry = {
-  rank: number;
-  participantIndex: number;
-  participantRole: string | null;
-  modelId: string;
-  modelName: string;
-  overallRating: number;
-  badge: string | null;
-};
 
 type LeaderboardCardProps = {
   leaderboard: LeaderboardEntry[];

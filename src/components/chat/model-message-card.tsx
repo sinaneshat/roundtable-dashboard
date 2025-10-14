@@ -1,5 +1,7 @@
 'use client';
 
+// ✅ ZERO HARDCODING: Import all types from RPC schemas
+import type { MessagePart, MessageStatus } from '@/api/routes/chat/schema';
 import type { EnhancedModelResponse } from '@/api/routes/models/schema';
 import { Message, MessageAvatar, MessageContent } from '@/components/ai-elements/message';
 import { Reasoning, ReasoningContent, ReasoningTrigger } from '@/components/ai-elements/reasoning';
@@ -8,25 +10,15 @@ import { MessageErrorDetails } from '@/components/chat/message-error-details';
 import type { UIMessageMetadata } from '@/lib/schemas/message-metadata';
 
 /**
- * ✅ OFFICIAL AI SDK PATTERN: Message part types
- * See: https://github.com/vercel/ai/blob/main/content/docs/04-ai-sdk-ui/02-chatbot.mdx
- */
-type MessagePart =
-  | { type: 'text'; text: string }
-  | { type: 'reasoning'; text: string };
-
-type ModelStatus = 'thinking' | 'streaming' | 'completed' | 'error';
-
-/**
- * ✅ ZOD-INFERRED TYPE: Uses backend EnhancedModelResponse
- * Single source of truth from OpenRouter API via backend with tier access info
+ * ✅ ZOD-INFERRED TYPES: All types imported from RPC schemas
+ * Single source of truth from backend schemas
  */
 type ModelMessageCardProps = {
-  model: EnhancedModelResponse;
+  model: EnhancedModelResponse; // ✅ RPC type from models schema
   role?: string | null;
   participantIndex: number;
-  status: ModelStatus;
-  parts?: MessagePart[];
+  status: MessageStatus; // ✅ RPC type from chat schema
+  parts?: MessagePart[]; // ✅ RPC type from chat schema
   avatarSrc: string;
   avatarName: string;
   className?: string;

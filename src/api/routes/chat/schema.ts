@@ -149,6 +149,25 @@ export const MessageMetadataSchema = z.object({
 }).passthrough().nullable();
 
 /**
+ * ✅ SHARED: Message part schema for AI SDK message parts
+ * Used for rendering different types of content in messages
+ */
+export const MessagePartSchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('text'), text: z.string() }),
+  z.object({ type: z.literal('reasoning'), text: z.string() }),
+]).openapi('MessagePart');
+
+export type MessagePart = z.infer<typeof MessagePartSchema>;
+
+/**
+ * ✅ SHARED: Message status schema for UI rendering states
+ * Represents the current state of a message during streaming
+ */
+export const MessageStatusSchema = z.enum(['thinking', 'streaming', 'completed', 'error']).openapi('MessageStatus');
+
+export type MessageStatus = z.infer<typeof MessageStatusSchema>;
+
+/**
  * ✅ REUSE: Chat message schema from database validation
  * Extended with OpenAPI metadata and Date-to-string transforms for JSON serialization
  */
@@ -815,6 +834,8 @@ export type ChatThreadChangelog = z.infer<typeof ChatThreadChangelogSchema>;
 
 export type RoundtablePromptParams = z.infer<typeof RoundtablePromptParamsSchema>;
 
+export type ParticipantAnalysis = z.infer<typeof ParticipantAnalysisSchema>;
+export type LeaderboardEntry = z.infer<typeof LeaderboardEntrySchema>;
 export type ModeratorAnalysisRequest = z.infer<typeof ModeratorAnalysisRequestSchema>;
 export type ModeratorAnalysisPayload = z.infer<typeof ModeratorAnalysisPayloadSchema>;
 export type StoredModeratorAnalysis = z.infer<typeof StoredModeratorAnalysisSchema>;
