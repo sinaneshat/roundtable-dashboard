@@ -81,6 +81,7 @@ export const MessageContentSchema = z.string()
  * Uses centralized CHAT_MODES for type safety
  */
 export const ThreadModeSchema = z.enum(CHAT_MODES);
+export type ThreadMode = z.infer<typeof ThreadModeSchema>;
 
 /**
  * Message edit validation schema
@@ -147,18 +148,11 @@ export const RoundAnalysisParamSchema = z.object({
 
 /**
  * ✅ REUSE: Chat participant schema from database validation
- * Extended with OpenAPI metadata and Date-to-string transforms for JSON serialization
+ * Extended with OpenAPI metadata
+ * NO TRANSFORMS: Handler serializes dates, schema only validates
  */
 const ChatParticipantSchema = chatParticipantSelectSchema
   .extend({
-    createdAt: z.coerce.date().transform(d => d.toISOString()).openapi({
-      description: 'Participant creation timestamp',
-      example: '2024-01-01T00:00:00Z',
-    }),
-    updatedAt: z.coerce.date().transform(d => d.toISOString()).openapi({
-      description: 'Participant last update timestamp',
-      example: '2024-01-15T10:30:00Z',
-    }),
     settings: z.object({
       temperature: z.number().min(0).max(2).optional(),
       maxTokens: z.number().int().positive().optional(),
@@ -202,14 +196,11 @@ export type MessageStatus = z.infer<typeof MessageStatusSchema>;
 
 /**
  * ✅ REUSE: Chat message schema from database validation
- * Extended with OpenAPI metadata and Date-to-string transforms for JSON serialization
+ * Extended with OpenAPI metadata
+ * NO TRANSFORMS: Handler serializes dates, schema only validates
  */
 const ChatMessageSchema = chatMessageSelectSchema
   .extend({
-    createdAt: z.coerce.date().transform(d => d.toISOString()).openapi({
-      description: 'Message creation timestamp',
-      example: '2024-01-01T00:00:00Z',
-    }),
     toolCalls: z.array(z.object({
       id: z.string(),
       type: z.string(),
@@ -224,22 +215,11 @@ const ChatMessageSchema = chatMessageSelectSchema
 
 /**
  * ✅ REUSE: Chat thread schema from database validation
- * Extended with OpenAPI metadata and Date-to-string transforms for JSON serialization
+ * Extended with OpenAPI metadata
+ * NO TRANSFORMS: Handler serializes dates, schema only validates
  */
 const ChatThreadSchema = chatThreadSelectSchema
   .extend({
-    createdAt: z.coerce.date().transform(d => d.toISOString()).openapi({
-      description: 'Thread creation timestamp',
-      example: '2024-01-01T00:00:00Z',
-    }),
-    updatedAt: z.coerce.date().transform(d => d.toISOString()).openapi({
-      description: 'Thread last update timestamp',
-      example: '2024-01-15T10:30:00Z',
-    }),
-    lastMessageAt: z.coerce.date().nullable().transform(d => d?.toISOString() ?? null).openapi({
-      description: 'Last message timestamp (null if no messages)',
-      example: '2024-01-15T10:30:00Z',
-    }),
     metadata: z.object({
       tags: z.array(z.string()).optional(),
       summary: z.string().optional(),
@@ -249,31 +229,18 @@ const ChatThreadSchema = chatThreadSelectSchema
 
 /**
  * ✅ REUSE: Chat thread changelog schema from database validation
- * Extended with Date-to-string transforms for JSON serialization
+ * NO TRANSFORMS: Handler serializes dates, schema only validates
  */
 const ChatThreadChangelogSchema = chatThreadChangelogSelectSchema
-  .extend({
-    createdAt: z.coerce.date().transform(d => d.toISOString()).openapi({
-      description: 'Changelog entry creation timestamp',
-      example: '2024-01-01T00:00:00Z',
-    }),
-  })
   .openapi('ChatThreadChangelog');
 
 /**
  * ✅ REUSE: Chat custom role schema from database validation
- * Extended with Date-to-string transforms for JSON serialization
+ * Extended with OpenAPI metadata
+ * NO TRANSFORMS: Handler serializes dates, schema only validates
  */
 const ChatCustomRoleSchema = chatCustomRoleSelectSchema
   .extend({
-    createdAt: z.coerce.date().transform(d => d.toISOString()).openapi({
-      description: 'Custom role creation timestamp',
-      example: '2024-01-01T00:00:00Z',
-    }),
-    updatedAt: z.coerce.date().transform(d => d.toISOString()).openapi({
-      description: 'Custom role last update timestamp',
-      example: '2024-01-15T10:30:00Z',
-    }),
     metadata: z.object({
       tags: z.array(z.string()).optional(),
       category: z.string().optional(),
@@ -799,6 +766,10 @@ export const RoundtablePromptParamsSchema = z.object({
 // TYPE EXPORTS FOR FRONTEND & BACKEND
 // ============================================================================
 
+/**
+ * API response types
+ * Note: Date objects are automatically serialized to ISO strings by Hono/JSON.stringify
+ */
 export type ChatThread = z.infer<typeof ChatThreadSchema>;
 export type CreateThreadRequest = z.infer<typeof CreateThreadRequestSchema>;
 export type UpdateThreadRequest = z.infer<typeof UpdateThreadRequestSchema>;
@@ -982,34 +953,6 @@ export type ChangeData = z.infer<typeof ChangeDataSchema>;
 // ============================================================================
 // Changelog UI Helper Schemas
 // ============================================================================
-
-/**
- * Action types for grouped changes
- */
-export const ChangeActionSchema = z.enum(['added', 'modified', 'removed']);
-export type ChangeAction = z.infer<typeof ChangeActionSchema>;
-
-/**
- * Grouped change entry with action categorization
- * Note: change field matches ChatThreadChangelog type (with string createdAt for API compatibility)
- */
-export const GroupedChangeSchema = z.object({
-  id: z.string(),
-  action: ChangeActionSchema,
-  change: chatThreadChangelogSelectSchema.extend({
-    createdAt: z.coerce.date().transform(d => d.toISOString()),
-  }),
-});
-export type GroupedChange = z.infer<typeof GroupedChangeSchema>;
-
-/**
- * Group of changes that occurred together
- */
-export const ChangeGroupSchema = z.object({
-  timestamp: z.coerce.date(),
-  changes: z.array(GroupedChangeSchema),
-});
-export type ChangeGroup = z.infer<typeof ChangeGroupSchema>;
 
 // ============================================================================
 // Changelog Data Parsing Helpers

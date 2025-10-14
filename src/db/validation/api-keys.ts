@@ -12,6 +12,7 @@ import { createInsertSchema, createSelectSchema, createUpdateSchema } from 'driz
 import type { z } from 'zod';
 
 import { apiKey } from '../tables/auth';
+import { Refinements } from './refinements';
 
 // ============================================================================
 // Base Drizzle-Zod Schemas
@@ -20,17 +21,17 @@ import { apiKey } from '../tables/auth';
 export const apiKeySelectSchema = createSelectSchema(apiKey);
 
 export const apiKeyInsertSchema = createInsertSchema(apiKey, {
-  name: schema => schema.min(3).max(50),
-  remaining: schema => schema.positive().nullable(),
-  refillAmount: schema => schema.positive().nullable(),
-  refillInterval: schema => schema.positive().nullable(),
+  name: Refinements.shortName(),
+  remaining: Refinements.positiveIntNullable(),
+  refillAmount: Refinements.positiveIntNullable(),
+  refillInterval: Refinements.positiveIntNullable(),
 });
 
 export const apiKeyUpdateSchema = createUpdateSchema(apiKey, {
-  name: schema => schema.min(3).max(50).optional(),
-  remaining: schema => schema.positive().nullable().optional(),
-  refillAmount: schema => schema.positive().nullable().optional(),
-  refillInterval: schema => schema.positive().nullable().optional(),
+  name: Refinements.shortNameOptional(),
+  remaining: Refinements.positiveIntNullableOptional(),
+  refillAmount: Refinements.positiveIntNullableOptional(),
+  refillInterval: Refinements.positiveIntNullableOptional(),
 });
 
 // ============================================================================

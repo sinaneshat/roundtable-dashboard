@@ -817,7 +817,7 @@ export const HandlerResponses = {
   },
 
   /**
-   * Paginated response with automatic logging
+   * Page-based paginated response with automatic logging
    */
   paginated: <T>(
     c: HandlerContext,
@@ -833,6 +833,30 @@ export const HandlerResponses = {
       });
     }
     return Responses.paginated(c, items, pagination);
+  },
+
+  /**
+   * Cursor-based paginated response with automatic logging
+   * Optimized for infinite scroll and React Query
+   */
+  cursorPaginated: <T>(
+    c: HandlerContext,
+    items: T[],
+    pagination: {
+      nextCursor: string | null;
+      hasMore: boolean;
+      count: number;
+    },
+    logMessage?: string,
+  ) => {
+    if (logMessage) {
+      c.logger.info(logMessage, {
+        logType: 'api',
+        method: c.req.method as 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH',
+        path: c.req.path,
+      });
+    }
+    return Responses.cursorPaginated(c, items, pagination);
   },
 
   /**

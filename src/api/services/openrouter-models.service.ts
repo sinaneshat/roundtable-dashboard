@@ -43,22 +43,22 @@ import {
  */
 
 // ============================================================================
-// TYPE ALIASES - ENHANCED MODEL TYPE
+// TYPE INFERENCE: Model Types
 // ============================================================================
 
 /**
  * ✅ TYPE INFERENCE: Separate types for raw and enhanced models
  * - RawOpenRouterModel: Data from OpenRouter API before enhancement (imported from schema)
- * - EnhancedOpenRouterModel: After adding computed fields (provider, category, capabilities, etc.)
+ * - BaseModelResponse: After adding computed fields (provider, category, capabilities, etc.)
+ *   Used directly instead of creating redundant alias
  */
-type EnhancedOpenRouterModel = BaseModelResponse;
 
 /**
  * OpenRouter Models Fetcher Service
  */
 class OpenRouterModelsService {
   private readonly OPENROUTER_MODELS_API = 'https://openrouter.ai/api/v1/models';
-  private cachedModels: EnhancedOpenRouterModel[] | null = null;
+  private cachedModels: BaseModelResponse[] | null = null;
   private cacheTimestamp: number = 0;
   private readonly CACHE_TTL = 1000 * 60 * 60 * 24; // 24 hour cache - aggressive caching to minimize API calls
 
@@ -66,7 +66,7 @@ class OpenRouterModelsService {
    * Fetch all models from OpenRouter API
    * Uses caching to avoid excessive API calls
    */
-  async fetchAllModels(): Promise<EnhancedOpenRouterModel[]> {
+  async fetchAllModels(): Promise<BaseModelResponse[]> {
     // Return cached models if still valid
     const now = Date.now();
     if (this.cachedModels && (now - this.cacheTimestamp) < this.CACHE_TTL) {
@@ -139,7 +139,7 @@ class OpenRouterModelsService {
   /**
    * Enhance a model with computed fields for better UI experience
    */
-  private enhanceModel(model: RawOpenRouterModel): EnhancedOpenRouterModel {
+  private enhanceModel(model: RawOpenRouterModel): BaseModelResponse {
     // Extract provider from model ID (e.g., "anthropic/claude-4" -> "anthropic")
     const provider = model.id.split('/')[0] || 'unknown';
 
@@ -279,7 +279,7 @@ class OpenRouterModelsService {
   /**
    * Get a specific model by ID
    */
-  async getModelById(modelId: string): Promise<EnhancedOpenRouterModel | null> {
+  async getModelById(modelId: string): Promise<BaseModelResponse | null> {
     const allModels = await this.fetchAllModels();
     return allModels.find(m => m.id === modelId) || null;
   }
@@ -297,7 +297,7 @@ class OpenRouterModelsService {
    * ✅ SINGLE SOURCE OF TRUTH: Get required subscription tier for a model
    * Based on OpenRouter pricing thresholds
    */
-  getRequiredTierForModel(model: EnhancedOpenRouterModel): SubscriptionTier {
+  getRequiredTierForModel(model: BaseModelResponse): SubscriptionTier {
     return getRequiredTierForModel(model);
   }
 
@@ -331,7 +331,7 @@ class OpenRouterModelsService {
    * This replaces hardcoded model lists with dynamic selection from OpenRouter API
    * Limited to 100 models to show the most relevant and popular options
    */
-  async getTop100Models(): Promise<EnhancedOpenRouterModel[]> {
+  async getTop100Models(): Promise<BaseModelResponse[]> {
     const allModels = await this.fetchAllModels();
 
     // Define top-tier providers (based on quality and popularity)
@@ -530,7 +530,7 @@ class OpenRouterModelsService {
    *
    * Returns the single best model for cost-performance balance for analysis tasks
    */
-  async getOptimalAnalysisModel(): Promise<EnhancedOpenRouterModel | null> {
+  async getOptimalAnalysisModel(): Promise<BaseModelResponse | null> {
     const allModels = await this.fetchAllModels();
 
     // Filter criteria for analysis models

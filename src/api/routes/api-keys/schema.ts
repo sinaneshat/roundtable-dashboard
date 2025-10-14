@@ -126,17 +126,10 @@ export const UpdateApiKeyRequestSchema = apiKeyUpdateSchema
 /**
  * ✅ REUSE: API Key schema from database validation
  * Picked fields for API response (excludes sensitive hashed key)
+ * NO TRANSFORMS: Handler serializes dates to ISO strings, schema only validates
  */
 export const ApiKeySchema = apiKeySelectSchema
   .omit({ key: true }) // Exclude hashed key from responses
-  .extend({
-    // Transform Date objects to ISO strings for API responses
-    createdAt: z.coerce.date().transform(d => d.toISOString()).openapi({ example: '2024-01-01T00:00:00Z' }),
-    updatedAt: z.coerce.date().transform(d => d.toISOString()).openapi({ example: '2024-01-15T10:30:00Z' }),
-    expiresAt: z.coerce.date().nullable().transform(d => d?.toISOString() ?? null).openapi({ example: '2024-12-31T23:59:59Z' }),
-    lastRequest: z.coerce.date().nullable().transform(d => d?.toISOString() ?? null).openapi({ example: '2024-01-15T10:30:00Z' }),
-    lastRefillAt: z.coerce.date().nullable().transform(d => d?.toISOString() ?? null).openapi({ example: '2024-01-15T00:00:00Z' }),
-  })
   .openapi('ApiKey');
 
 /**
@@ -188,6 +181,10 @@ export const DeleteApiKeyResponseSchema = createApiResponseSchema(
 // TYPE EXPORTS FOR FRONTEND & BACKEND
 // ============================================================================
 
+/**
+ * API response types
+ * Note: Date objects are automatically serialized to ISO strings by Hono/JSON.stringify
+ */
 export type ApiKey = z.infer<typeof ApiKeySchema>;
 export type ApiKeyWithKey = z.infer<typeof ApiKeyWithKeySchema>;
 export type CreateApiKeyRequest = z.infer<typeof CreateApiKeyRequestSchema>;

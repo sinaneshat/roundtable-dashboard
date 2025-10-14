@@ -75,11 +75,12 @@ export type UsageStats = z.infer<typeof usageStatsSchema>;
 // ============================================================================
 
 /**
- * ✅ REUSE: Usage stats schema from database validation
- * Extended with OpenAPI metadata for API documentation
- * Additional 'memories' field added for future feature support
+ * Usage stats API response schema with OpenAPI metadata
  *
- * Single source of truth: @/db/validation/usage.ts:usageStatsSchema
+ * ✅ BUSINESS LOGIC SCHEMA: Extends base usageStatsSchema (defined above) with:
+ * - OpenAPI metadata for documentation
+ * - 'memories' field for future feature support
+ * - Date objects that Hono will automatically serialize to ISO strings
  */
 export const UsageStatsPayloadSchema = usageStatsSchema
   .extend({
@@ -202,10 +203,11 @@ export const UsageStatsResponseSchema = createApiResponseSchema(
 ).openapi('UsageStatsResponse');
 
 /**
- * ✅ REUSE: Quota check schema from database validation
- * Extended with OpenAPI metadata for API documentation
+ * Quota check API response schema with OpenAPI metadata
  *
- * Single source of truth: @/db/validation/usage.ts:quotaCheckSchema
+ * ✅ BUSINESS LOGIC SCHEMA: Extends base quotaCheckSchema (defined above) with:
+ * - OpenAPI metadata for documentation
+ * - Date objects that Hono will automatically serialize to ISO strings
  */
 export const QuotaCheckPayloadSchema = quotaCheckSchema
   .extend({

@@ -5,7 +5,7 @@ import type { UIMessage } from 'ai';
 import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import type { ChatMessage, ChatParticipant, ChatThread, MessageStatus } from '@/api/routes/chat/schema';
+import type { MessageStatus } from '@/api/routes/chat/schema';
 import { canAccessModelByPricing } from '@/api/services/product-logic.service';
 import { Message, MessageAvatar, MessageContent } from '@/components/ai-elements/message';
 import { Response } from '@/components/ai-elements/response';
@@ -34,10 +34,15 @@ import {
   chatMessagesToUIMessages,
   getMessageMetadata,
 } from '@/lib/utils/message-transforms';
+/**
+ * ✅ RPC-INFERRED TYPES: Import runtime types from types layer
+ * These types automatically have correct runtime representation (dates as ISO strings)
+ */
+import type { ChatMessage, Participant, Thread } from '@/types/chat';
 
 type ChatThreadScreenProps = {
-  thread: ChatThread;
-  participants: ChatParticipant[];
+  thread: Thread;
+  participants: Participant[];
   initialMessages: ChatMessage[];
   slug: string;
   /**

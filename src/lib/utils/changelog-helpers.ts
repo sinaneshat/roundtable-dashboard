@@ -2,20 +2,20 @@
  * Changelog Display Helpers
  *
  * ✅ UI-ONLY UTILITIES: Changelog grouping and sorting logic
- * ✅ IMPORTS FROM API: All types come from @/api/routes/chat/schema
+ * ✅ RPC-INFERRED TYPES: Import runtime types from types layer
  */
 
 import type {
   ChangeAction,
   ChangeGroup,
-  ChatThreadChangelog,
+  Changelog,
   GroupedChange,
-} from '@/api/routes/chat/schema';
+} from '@/types/chat';
 
 /**
  * Categorize a change type into an action (added, modified, removed)
  */
-export function categorizeChangeAction(changeType: ChatThreadChangelog['changeType']): ChangeAction {
+export function categorizeChangeAction(changeType: Changelog['changeType']): ChangeAction {
   switch (changeType) {
     case 'participant_added':
       return 'added';
@@ -37,12 +37,12 @@ export function categorizeChangeAction(changeType: ChatThreadChangelog['changeTy
  * This handles cases where multiple configuration changes happen
  * as part of a single user action.
  *
- * @param changelog - List of changelog entries
+ * @param changelog - List of changelog entries from RPC response (dates as ISO strings)
  * @param timeWindowMs - Time window in milliseconds (default: 2000ms)
  * @returns Grouped changelog entries
  */
 export function groupChangelogByTime(
-  changelog: ChatThreadChangelog[],
+  changelog: Changelog[],
   timeWindowMs: number = 2000,
 ): ChangeGroup[] {
   if (changelog.length === 0) {

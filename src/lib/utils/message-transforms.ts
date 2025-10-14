@@ -2,21 +2,21 @@
  * Message Transformation Utilities
  *
  * ✅ AI SDK INTEGRATION: Transforms between API types and AI SDK types
- * ✅ IMPORTS FROM API: All types come from @/api/routes/chat/schema
+ * ✅ RPC-INFERRED TYPES: Import runtime types from services
  *
  * These transforms are necessary for AI SDK v5 compatibility:
- * - ChatMessage (from API) → UIMessage (AI SDK format)
+ * - Message (from RPC) → UIMessage (AI SDK format)
  * - Metadata validation and extraction
  */
 
 import type { UIMessage } from 'ai';
 
-import type { ChatMessage } from '@/api/routes/chat/schema';
 import type { UIMessageMetadata } from '@/lib/schemas/message-metadata';
 import {
   UIMessageMetadataSchema,
   validateMessageMetadata,
 } from '@/lib/schemas/message-metadata';
+import type { ChatMessage } from '@/types/chat';
 
 // ============================================================================
 // METADATA VALIDATION
@@ -42,7 +42,7 @@ export function getMessageMetadata(
 /**
  * Convert backend ChatMessage to AI SDK UIMessage format
  *
- * @param message - ChatMessage from backend schema
+ * @param message - ChatMessage from RPC response (dates as ISO strings)
  * @returns UIMessage in AI SDK format with properly typed metadata
  */
 export function chatMessageToUIMessage(message: ChatMessage): UIMessage {
@@ -62,10 +62,14 @@ export function chatMessageToUIMessage(message: ChatMessage): UIMessage {
   // ✅ Include createdAt from message
   // Handle null metadata from database by using empty object as base
   const baseMetadata = (message.metadata || {}) as Record<string, unknown>;
+
+  // ✅ RPC types have string dates (already serialized by JSON)
+  const createdAtString = message.createdAt;
+
   const metadata: UIMessageMetadata = {
     ...baseMetadata, // Spread metadata from backend
     participantId: message.participantId, // Override with top-level participantId
-    createdAt: message.createdAt, // Add timestamp for timeline sorting
+    createdAt: createdAtString, // Add timestamp for timeline sorting (as string)
   };
 
   return {
@@ -79,7 +83,7 @@ export function chatMessageToUIMessage(message: ChatMessage): UIMessage {
 /**
  * Convert array of backend ChatMessages to AI SDK UIMessage format
  *
- * @param messages - Array of ChatMessage from backend schema
+ * @param messages - Array of ChatMessage from RPC response (dates as ISO strings)
  * @returns Array of UIMessages in AI SDK format
  */
 export function chatMessagesToUIMessages(messages: ChatMessage[]): UIMessage[] {

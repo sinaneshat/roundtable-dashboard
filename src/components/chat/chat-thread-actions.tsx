@@ -3,7 +3,6 @@
 import { Loader2, Lock, Share2, Star, Trash2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
-import type { ChatThread } from '@/api/routes/chat/schema';
 import { HeaderScrollButton } from '@/components/chat/header-scroll-button';
 import { SocialShareButton } from '@/components/chat/social-share-button';
 import { Button } from '@/components/ui/button';
@@ -15,6 +14,7 @@ import {
 } from '@/components/ui/tooltip';
 import { useToggleFavoriteMutation, useTogglePublicMutation } from '@/hooks/mutations/chat-mutations';
 import { cn } from '@/lib/ui/cn';
+import type { Thread } from '@/types/chat';
 
 /**
  * Shared Thread Actions Component
@@ -30,7 +30,7 @@ import { cn } from '@/lib/ui/cn';
  * NOTE: Uses local optimistic state to reflect changes immediately while mutations are pending
  */
 type ChatThreadActionsProps = {
-  thread: ChatThread;
+  thread: Thread;
   slug: string;
   onDeleteClick?: () => void;
   /**

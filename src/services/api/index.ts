@@ -99,7 +99,6 @@ export {
   type ListThreadsRequest,
   type ListThreadsResponse,
   listThreadsService,
-  type ThreadMode,
   type UpdateThreadRequest,
   type UpdateThreadResponse,
   updateThreadService,

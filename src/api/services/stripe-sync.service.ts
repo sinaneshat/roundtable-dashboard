@@ -102,9 +102,18 @@ export async function syncStripeDataFromStripe(
   const db = await getDbAsync();
 
   // Verify customer exists in our database
-  const customer = await db.query.stripeCustomer.findFirst({
-    where: eq(tables.stripeCustomer.id, customerId),
-  });
+  // ✅ CACHING ENABLED: 5-minute TTL for customer verification
+  const customerResults = await db
+    .select()
+    .from(tables.stripeCustomer)
+    .where(eq(tables.stripeCustomer.id, customerId))
+    .limit(1)
+    .$withCache({
+      config: { ex: 300 },
+      tag: `customer-id-${customerId}`,
+    });
+
+  const customer = customerResults[0];
 
   if (!customer) {
     throw createError.notFound(`Customer ${customerId} not found in database`, {
@@ -460,11 +469,23 @@ export async function syncStripeDataFromStripe(
 /**
  * Get customer ID from user ID
  * Helper for success page and other user-initiated syncs
+ *
+ * ✅ CACHING ENABLED: 5-minute TTL for customer lookups (rarely changes after creation)
+ * Cache automatically invalidates when customer record is updated
+ * @see https://orm.drizzle.team/docs/cache
  */
 export async function getCustomerIdByUserId(userId: string): Promise<string | null> {
   const db = await getDbAsync();
-  const customer = await db.query.stripeCustomer.findFirst({
-    where: eq(tables.stripeCustomer.userId, userId),
-  });
+  const customerResults = await db
+    .select()
+    .from(tables.stripeCustomer)
+    .where(eq(tables.stripeCustomer.userId, userId))
+    .limit(1)
+    .$withCache({
+      config: { ex: 300 }, // 5 minutes - customer data stable
+      tag: `customer-${userId}`,
+    });
+
+  const customer = customerResults[0];
   return customer?.id ?? null;
 }

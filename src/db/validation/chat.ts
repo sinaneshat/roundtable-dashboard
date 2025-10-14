@@ -20,15 +20,17 @@ import {
   chatThreadChangelog,
 } from '@/db/tables/chat';
 
+import { Refinements } from './refinements';
+
 /**
  * Chat Thread Schemas
  */
 export const chatThreadSelectSchema = createSelectSchema(chatThread);
 export const chatThreadInsertSchema = createInsertSchema(chatThread, {
-  title: schema => schema.min(1).max(200),
+  title: Refinements.title(),
 });
 export const chatThreadUpdateSchema = createUpdateSchema(chatThread, {
-  title: schema => schema.min(1).max(200).optional(),
+  title: Refinements.titleOptional(),
 });
 
 /**
@@ -36,14 +38,14 @@ export const chatThreadUpdateSchema = createUpdateSchema(chatThread, {
  */
 export const chatParticipantSelectSchema = createSelectSchema(chatParticipant);
 export const chatParticipantInsertSchema = createInsertSchema(chatParticipant, {
-  modelId: schema => schema.min(1),
-  role: schema => schema.min(1).max(100).optional(),
-  priority: schema => schema.min(0).max(100),
+  modelId: Refinements.content(),
+  role: Refinements.nameOptional(),
+  priority: Refinements.priority(),
 });
 export const chatParticipantUpdateSchema = createUpdateSchema(chatParticipant, {
-  modelId: schema => schema.min(1).optional(),
-  role: schema => schema.min(1).max(100).optional(),
-  priority: schema => schema.min(0).max(100).optional(),
+  modelId: Refinements.contentOptional(),
+  role: Refinements.nameOptional(),
+  priority: Refinements.priorityOptional(),
 });
 
 /**
@@ -51,11 +53,11 @@ export const chatParticipantUpdateSchema = createUpdateSchema(chatParticipant, {
  */
 export const chatMessageSelectSchema = createSelectSchema(chatMessage);
 export const chatMessageInsertSchema = createInsertSchema(chatMessage, {
-  content: schema => schema.min(1),
+  content: Refinements.content(),
   role: () => z.enum(['user', 'assistant']),
 });
 export const chatMessageUpdateSchema = createUpdateSchema(chatMessage, {
-  content: schema => schema.min(1).optional(),
+  content: Refinements.contentOptional(),
 });
 
 /**
@@ -63,7 +65,7 @@ export const chatMessageUpdateSchema = createUpdateSchema(chatMessage, {
  */
 export const chatThreadChangelogSelectSchema = createSelectSchema(chatThreadChangelog);
 export const chatThreadChangelogInsertSchema = createInsertSchema(chatThreadChangelog, {
-  changeSummary: schema => schema.min(1).max(500),
+  changeSummary: Refinements.description(),
 });
 export const chatThreadChangelogUpdateSchema = createUpdateSchema(chatThreadChangelog);
 
@@ -73,14 +75,14 @@ export const chatThreadChangelogUpdateSchema = createUpdateSchema(chatThreadChan
  */
 export const chatCustomRoleSelectSchema = createSelectSchema(chatCustomRole);
 export const chatCustomRoleInsertSchema = createInsertSchema(chatCustomRole, {
-  name: schema => schema.min(1).max(100),
-  systemPrompt: schema => schema.min(1),
-  description: schema => schema.max(500).optional(),
+  name: Refinements.name(),
+  systemPrompt: Refinements.systemPrompt(),
+  description: Refinements.descriptionOptional(),
 });
 export const chatCustomRoleUpdateSchema = createUpdateSchema(chatCustomRole, {
-  name: schema => schema.min(1).max(100).optional(),
-  systemPrompt: schema => schema.min(1).optional(),
-  description: schema => schema.max(500).optional(),
+  name: Refinements.nameOptional(),
+  systemPrompt: Refinements.systemPromptOptional(),
+  description: Refinements.descriptionOptional(),
 });
 
 /**
@@ -89,8 +91,8 @@ export const chatCustomRoleUpdateSchema = createUpdateSchema(chatCustomRole, {
  */
 export const chatModeratorAnalysisSelectSchema = createSelectSchema(chatModeratorAnalysis);
 export const chatModeratorAnalysisInsertSchema = createInsertSchema(chatModeratorAnalysis, {
-  roundNumber: schema => schema.min(1),
-  userQuestion: schema => schema.min(1),
+  roundNumber: Refinements.positive(),
+  userQuestion: Refinements.content(),
 });
 export const chatModeratorAnalysisUpdateSchema = createUpdateSchema(chatModeratorAnalysis);
 

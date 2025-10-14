@@ -1,5 +1,5 @@
 import type { RouteHandler } from '@hono/zod-openapi';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import type Stripe from 'stripe';
 
 import { ErrorContextBuilders } from '@/api/common/error-contexts';
@@ -25,7 +25,6 @@ import type {
   switchSubscriptionRoute,
   syncAfterCheckoutRoute,
 } from './route';
-import type { SubscriptionResponsePayload } from './schema';
 import {
   CancelSubscriptionRequestSchema,
   CheckoutRequestSchema,
@@ -61,21 +60,22 @@ type DatabaseSubscription = {
 /**
  * Build subscription response using official Stripe SDK types
  * Status is typed as Stripe.Subscription.Status - no hardcoded validation needed
+ * Dates kept as Date objects - Hono automatically serializes to ISO strings in JSON
+ *
+ * Returns database types with Date objects, which Hono serializes to string in JSON
  */
-function buildSubscriptionResponse(
-  subscription: DatabaseSubscription,
-): SubscriptionResponsePayload {
+function buildSubscriptionResponse(subscription: DatabaseSubscription) {
   return {
     id: subscription.id,
     status: subscription.status as Stripe.Subscription.Status,
     priceId: subscription.priceId,
     productId: subscription.price.productId,
-    currentPeriodStart: subscription.currentPeriodStart.toISOString(),
-    currentPeriodEnd: subscription.currentPeriodEnd.toISOString(),
+    currentPeriodStart: subscription.currentPeriodStart,
+    currentPeriodEnd: subscription.currentPeriodEnd,
     cancelAtPeriodEnd: subscription.cancelAtPeriodEnd,
-    canceledAt: subscription.canceledAt?.toISOString() || null,
-    trialStart: subscription.trialStart?.toISOString() || null,
-    trialEnd: subscription.trialEnd?.toISOString() || null,
+    canceledAt: subscription.canceledAt,
+    trialStart: subscription.trialStart,
+    trialEnd: subscription.trialEnd,
   };
 }
 
@@ -108,17 +108,38 @@ export const listProductsHandler: RouteHandler<typeof listProductsRoute, ApiEnv>
     try {
       const db = await getDbAsync();
 
-      // Use Drizzle relational query to get products with prices
-      const dbProducts = await db.query.stripeProduct.findMany({
-        where: eq(tables.stripeProduct.active, true),
-        with: {
-          prices: {
-            where: eq(tables.stripePrice.active, true),
-          },
-        },
-      });
+      // ✅ CACHING ENABLED: Query builder API with 5-minute TTL for product catalog
+      // Products change infrequently (admin updates), but read on every pricing page visit
+      // Cache automatically invalidates when products or prices are updated
+      // @see https://orm.drizzle.team/docs/cache
 
-      const products = dbProducts
+      // Step 1: Fetch active products (cacheable)
+      const dbProducts = await db
+        .select()
+        .from(tables.stripeProduct)
+        .where(eq(tables.stripeProduct.active, true))
+        .$withCache({
+          config: { ex: 300 }, // 5 minutes
+          tag: 'active-products',
+        });
+
+      // Step 2: Fetch active prices (cacheable)
+      const allPrices = await db
+        .select()
+        .from(tables.stripePrice)
+        .where(eq(tables.stripePrice.active, true))
+        .$withCache({
+          config: { ex: 300 }, // 5 minutes
+          tag: 'active-prices',
+        });
+
+      // Step 3: Join products with their prices in application layer
+      const productsWithPrices = dbProducts.map(product => ({
+        ...product,
+        prices: allPrices.filter(price => price.productId === product.id),
+      }));
+
+      const products = productsWithPrices
         .map((product) => {
           const prices = product.prices
             .map(price => ({
@@ -205,15 +226,23 @@ export const getProductHandler: RouteHandler<typeof getProductRoute, ApiEnv> = c
     try {
       const db = await getDbAsync();
 
-      // Use Drizzle relational query
-      const dbProduct = await db.query.stripeProduct.findFirst({
-        where: eq(tables.stripeProduct.id, id),
-        with: {
-          prices: {
-            where: eq(tables.stripePrice.active, true),
-          },
-        },
-      });
+      // ✅ CACHING ENABLED: Query builder API with 10-minute TTL for single product details
+      // Products change infrequently (admin updates), cached to reduce DB load on product pages
+      // Cache automatically invalidates when product or prices are updated
+      // @see https://orm.drizzle.team/docs/cache
+
+      // Step 1: Fetch single product (cacheable)
+      const productResults = await db
+        .select()
+        .from(tables.stripeProduct)
+        .where(eq(tables.stripeProduct.id, id))
+        .limit(1)
+        .$withCache({
+          config: { ex: 600 }, // 10 minutes - product details stable
+          tag: `product-${id}`,
+        });
+
+      const dbProduct = productResults[0];
 
       if (!dbProduct) {
         c.logger.warn('Product not found', {
@@ -229,6 +258,21 @@ export const getProductHandler: RouteHandler<typeof getProductRoute, ApiEnv> = c
         throw createError.notFound(`Product ${id} not found`, context);
       }
 
+      // Step 2: Fetch active prices for this product (cacheable)
+      const dbPrices = await db
+        .select()
+        .from(tables.stripePrice)
+        .where(
+          and(
+            eq(tables.stripePrice.productId, id),
+            eq(tables.stripePrice.active, true),
+          ),
+        )
+        .$withCache({
+          config: { ex: 600 }, // 10 minutes - prices stable
+          tag: `product-prices-${id}`,
+        });
+
       c.logger.info('Product retrieved successfully', {
         logType: 'operation',
         operationName: 'getProduct',
@@ -242,7 +286,7 @@ export const getProductHandler: RouteHandler<typeof getProductRoute, ApiEnv> = c
           description: dbProduct.description,
           features: dbProduct.features,
           active: dbProduct.active,
-          prices: dbProduct.prices
+          prices: dbPrices
             .map(price => ({
               id: price.id,
               productId: price.productId,
@@ -579,29 +623,36 @@ export const listSubscriptionsHandler: RouteHandler<typeof listSubscriptionsRout
     try {
       const db = await getDbAsync();
 
-      // Use Drizzle relational query with nested relations
-      const dbSubscriptions = await db.query.stripeSubscription.findMany({
-        where: eq(tables.stripeSubscription.userId, user.id),
-        with: {
-          price: {
-            with: {
-              product: true,
-            },
-          },
-        },
-      });
+      // ✅ CACHING ENABLED: Query builder API with 2-minute TTL for user subscriptions
+      // User-specific data with short cache to balance freshness and performance
+      // Cache automatically invalidates when subscriptions, prices, or products are updated
+      // @see https://orm.drizzle.team/docs/cache
 
-      const subscriptions = dbSubscriptions.map(subscription => ({
-        id: subscription.id,
-        status: subscription.status as 'active' | 'past_due' | 'unpaid' | 'canceled' | 'incomplete' | 'incomplete_expired' | 'trialing' | 'paused',
-        priceId: subscription.priceId,
-        productId: subscription.price.productId,
-        currentPeriodStart: subscription.currentPeriodStart.toISOString(),
-        currentPeriodEnd: subscription.currentPeriodEnd.toISOString(),
-        cancelAtPeriodEnd: subscription.cancelAtPeriodEnd,
-        canceledAt: subscription.canceledAt?.toISOString() || null,
-        trialStart: subscription.trialStart?.toISOString() || null,
-        trialEnd: subscription.trialEnd?.toISOString() || null,
+      // Fetch user subscriptions with nested price and product data via leftJoin
+      const dbSubscriptions = await db
+        .select()
+        .from(tables.stripeSubscription)
+        .leftJoin(
+          tables.stripePrice,
+          eq(tables.stripeSubscription.priceId, tables.stripePrice.id),
+        )
+        .where(eq(tables.stripeSubscription.userId, user.id))
+        .$withCache({
+          config: { ex: 120 }, // 2 minutes - user subscription data
+          tag: `user-subscriptions-${user.id}`,
+        });
+
+      const subscriptions = dbSubscriptions.map(row => ({
+        id: row.stripe_subscription.id,
+        status: row.stripe_subscription.status as 'active' | 'past_due' | 'unpaid' | 'canceled' | 'incomplete' | 'incomplete_expired' | 'trialing' | 'paused',
+        priceId: row.stripe_subscription.priceId,
+        productId: row.stripe_price!.productId,
+        currentPeriodStart: row.stripe_subscription.currentPeriodStart.toISOString(),
+        currentPeriodEnd: row.stripe_subscription.currentPeriodEnd.toISOString(),
+        cancelAtPeriodEnd: row.stripe_subscription.cancelAtPeriodEnd,
+        canceledAt: row.stripe_subscription.canceledAt?.toISOString() || null,
+        trialStart: row.stripe_subscription.trialStart?.toISOString() || null,
+        trialEnd: row.stripe_subscription.trialEnd?.toISOString() || null,
       }));
 
       // Success logging with resource count
@@ -658,19 +709,29 @@ export const getSubscriptionHandler: RouteHandler<typeof getSubscriptionRoute, A
     const db = await getDbAsync();
 
     try {
-      // Use Drizzle relational query with nested relations
-      const subscription = await db.query.stripeSubscription.findFirst({
-        where: eq(tables.stripeSubscription.id, id),
-        with: {
-          price: {
-            with: {
-              product: true,
-            },
-          },
-        },
-      });
+      // ✅ CACHING ENABLED: Query builder API with 2-minute TTL for single subscription
+      // User-specific data with short cache to balance freshness and performance
+      // Cache automatically invalidates when subscription, price, or product is updated
+      // @see https://orm.drizzle.team/docs/cache
 
-      if (!subscription) {
+      // Fetch single subscription with nested price and product data via leftJoin
+      const subscriptionResults = await db
+        .select()
+        .from(tables.stripeSubscription)
+        .leftJoin(
+          tables.stripePrice,
+          eq(tables.stripeSubscription.priceId, tables.stripePrice.id),
+        )
+        .where(eq(tables.stripeSubscription.id, id))
+        .limit(1)
+        .$withCache({
+          config: { ex: 120 }, // 2 minutes - subscription data
+          tag: `subscription-${id}`,
+        });
+
+      const result = subscriptionResults[0];
+
+      if (!result) {
         // Warning log before throwing not found error
         c.logger.warn('Subscription not found', {
           logType: 'operation',
@@ -687,7 +748,7 @@ export const getSubscriptionHandler: RouteHandler<typeof getSubscriptionRoute, A
         throw createError.notFound(`Subscription ${id} not found`, context);
       }
 
-      if (subscription.userId !== user.id) {
+      if (result.stripe_subscription.userId !== user.id) {
         // Warning log before throwing unauthorized error
         c.logger.warn('Unauthorized subscription access attempt', {
           logType: 'operation',
@@ -713,16 +774,16 @@ export const getSubscriptionHandler: RouteHandler<typeof getSubscriptionRoute, A
 
       return Responses.ok(c, {
         subscription: {
-          id: subscription.id,
-          status: subscription.status as 'active' | 'past_due' | 'unpaid' | 'canceled' | 'incomplete' | 'incomplete_expired' | 'trialing' | 'paused',
-          priceId: subscription.priceId,
-          productId: subscription.price.productId,
-          currentPeriodStart: subscription.currentPeriodStart.toISOString(),
-          currentPeriodEnd: subscription.currentPeriodEnd.toISOString(),
-          cancelAtPeriodEnd: subscription.cancelAtPeriodEnd,
-          canceledAt: subscription.canceledAt?.toISOString() || null,
-          trialStart: subscription.trialStart?.toISOString() || null,
-          trialEnd: subscription.trialEnd?.toISOString() || null,
+          id: result.stripe_subscription.id,
+          status: result.stripe_subscription.status as 'active' | 'past_due' | 'unpaid' | 'canceled' | 'incomplete' | 'incomplete_expired' | 'trialing' | 'paused',
+          priceId: result.stripe_subscription.priceId,
+          productId: result.stripe_price!.productId,
+          currentPeriodStart: result.stripe_subscription.currentPeriodStart.toISOString(),
+          currentPeriodEnd: result.stripe_subscription.currentPeriodEnd.toISOString(),
+          cancelAtPeriodEnd: result.stripe_subscription.cancelAtPeriodEnd,
+          canceledAt: result.stripe_subscription.canceledAt?.toISOString() || null,
+          trialStart: result.stripe_subscription.trialStart?.toISOString() || null,
+          trialEnd: result.stripe_subscription.trialEnd?.toISOString() || null,
         },
       });
     } catch (error) {

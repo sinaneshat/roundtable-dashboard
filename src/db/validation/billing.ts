@@ -11,16 +11,18 @@ import {
   stripeWebhookEvent,
 } from '@/db/tables/billing';
 
+import { Refinements } from './refinements';
+
 /**
  * Stripe Product Schemas
  * Validation for Stripe product records synced from Stripe
  */
 export const stripeProductSelectSchema = createSelectSchema(stripeProduct);
 export const stripeProductInsertSchema = createInsertSchema(stripeProduct, {
-  name: schema => schema.min(1),
+  name: Refinements.name(),
 });
 export const stripeProductUpdateSchema = createUpdateSchema(stripeProduct, {
-  name: schema => schema.min(1).optional(),
+  name: Refinements.nameOptional(),
 });
 
 /**
@@ -29,8 +31,8 @@ export const stripeProductUpdateSchema = createUpdateSchema(stripeProduct, {
  */
 export const stripePriceSelectSchema = createSelectSchema(stripePrice);
 export const stripePriceInsertSchema = createInsertSchema(stripePrice, {
-  currency: schema => schema.length(3), // ISO 4217 currency code
-  unitAmount: schema => schema.min(0),
+  currency: Refinements.currencyCode(),
+  unitAmount: Refinements.nonNegative(),
 });
 export const stripePriceUpdateSchema = createUpdateSchema(stripePrice);
 
@@ -40,10 +42,10 @@ export const stripePriceUpdateSchema = createUpdateSchema(stripePrice);
  */
 export const stripeCustomerSelectSchema = createSelectSchema(stripeCustomer);
 export const stripeCustomerInsertSchema = createInsertSchema(stripeCustomer, {
-  email: schema => schema.email(),
+  email: Refinements.email(),
 });
 export const stripeCustomerUpdateSchema = createUpdateSchema(stripeCustomer, {
-  email: schema => schema.email().optional(),
+  email: Refinements.emailOptional(),
 });
 
 /**
@@ -52,7 +54,7 @@ export const stripeCustomerUpdateSchema = createUpdateSchema(stripeCustomer, {
  */
 export const stripeSubscriptionSelectSchema = createSelectSchema(stripeSubscription);
 export const stripeSubscriptionInsertSchema = createInsertSchema(stripeSubscription, {
-  quantity: schema => schema.min(1),
+  quantity: Refinements.positive(),
 });
 export const stripeSubscriptionUpdateSchema = createUpdateSchema(stripeSubscription);
 
@@ -70,9 +72,9 @@ export const stripePaymentMethodUpdateSchema = createUpdateSchema(stripePaymentM
  */
 export const stripeInvoiceSelectSchema = createSelectSchema(stripeInvoice);
 export const stripeInvoiceInsertSchema = createInsertSchema(stripeInvoice, {
-  amountDue: schema => schema.min(0),
-  amountPaid: schema => schema.min(0),
-  attemptCount: schema => schema.min(0),
+  amountDue: Refinements.nonNegative(),
+  amountPaid: Refinements.nonNegative(),
+  attemptCount: Refinements.nonNegativeInt(),
 });
 export const stripeInvoiceUpdateSchema = createUpdateSchema(stripeInvoice);
 
@@ -82,7 +84,7 @@ export const stripeInvoiceUpdateSchema = createUpdateSchema(stripeInvoice);
  */
 export const stripeWebhookEventSelectSchema = createSelectSchema(stripeWebhookEvent);
 export const stripeWebhookEventInsertSchema = createInsertSchema(stripeWebhookEvent, {
-  type: schema => schema.min(1),
+  type: Refinements.content(),
 });
 export const stripeWebhookEventUpdateSchema = createUpdateSchema(stripeWebhookEvent);
 

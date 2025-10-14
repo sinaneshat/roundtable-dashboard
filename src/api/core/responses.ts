@@ -17,7 +17,7 @@ import * as HttpStatusCodes from 'stoker/http-status-codes';
 import type { z } from 'zod';
 
 import { apiLogger } from '../middleware/hono-logger';
-import type { ApiResponse, ErrorContext, PaginatedResponse, ResponseMetadata } from './schemas';
+import type { ApiResponse, CursorPaginatedResponse, ErrorContext, PaginatedResponse, ResponseMetadata } from './schemas';
 import { ApiErrorResponseSchema, createApiResponseSchema, createPaginatedResponseSchema } from './schemas';
 import type { ValidationError } from './validation';
 
@@ -135,7 +135,7 @@ export function noContent(c: Context): Response {
 // ============================================================================
 
 /**
- * Create a paginated response with typed items
+ * Create a page-based paginated response with typed items
  */
 export function paginated<T>(
   c: Context,
@@ -163,6 +163,36 @@ export function paginated<T>(
     meta: {
       ...extractResponseMetadata(c),
       ...(additionalMeta || {}),
+    },
+  };
+
+  return c.json(response, HttpStatusCodes.OK);
+}
+
+/**
+ * Create a cursor-based paginated response with typed items
+ * Optimized for infinite scroll and React Query
+ */
+export function cursorPaginated<T>(
+  c: Context,
+  items: T[],
+  pagination: {
+    nextCursor: string | null;
+    hasMore: boolean;
+    count: number;
+  },
+  additionalMeta?: ResponseMetadata,
+): Response {
+  const response: CursorPaginatedResponse<T> = {
+    success: true,
+    data: {
+      items,
+      pagination,
+    },
+    meta: {
+      ...extractResponseMetadata(c),
+      ...getPerformanceMetadata(c),
+      ...additionalMeta,
     },
   };
 
@@ -558,6 +588,7 @@ export const Responses = {
   accepted,
   noContent,
   paginated,
+  cursorPaginated,
 
   // Error responses
   validationError,

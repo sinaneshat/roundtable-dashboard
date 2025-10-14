@@ -12,11 +12,12 @@ import { createError } from '@/api/common/error-handling';
 import {
   applyCursorPagination,
   buildCursorWhereWithFilters,
+  createHandler,
   createTimestampCursor,
+  CursorPaginationQuerySchema,
   getCursorOrderBy,
-} from '@/api/common/pagination';
-import { createHandler, Responses } from '@/api/core';
-import { CursorPaginationQuerySchema } from '@/api/core/schemas';
+  Responses,
+} from '@/api/core';
 import { apiLogger } from '@/api/middleware/hono-logger';
 import type { ClassifiedError, ParticipantInfo, RoundtablePromptConfig } from '@/api/routes/chat/schema';
 import { initializeOpenRouter, openRouterService } from '@/api/services/openrouter.service';
@@ -244,11 +245,12 @@ export const listThreadsHandler: RouteHandler<typeof listThreadsRoute, ApiEnv> =
     }
 
     // Apply cursor pagination and format response
-    return Responses.ok(c, applyCursorPagination(
+    const { items, pagination } = applyCursorPagination(
       threads,
       query.limit,
       thread => createTimestampCursor(thread.updatedAt),
-    ));
+    );
+    return Responses.cursorPaginated(c, items, pagination);
   },
 );
 
@@ -576,8 +578,8 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
       updatedAt: new Date(),
     };
 
-    if (body.title !== undefined)
-      updateData.title = body.title;
+    if (body.title !== undefined && body.title !== null)
+      updateData.title = body.title as string;
     if (body.mode !== undefined)
       updateData.mode = body.mode as ChatModeId;
     if (body.status !== undefined)
@@ -790,7 +792,7 @@ export const addParticipantHandler: RouteHandler<typeof addParticipantRoute, Api
     const userTier = usageStats.subscription.tier as SubscriptionTier;
 
     // ✅ SINGLE SOURCE OF TRUTH: Validate model access using backend service
-    const model = await openRouterModelsService.getModelById(body.modelId);
+    const model = await openRouterModelsService.getModelById(body.modelId as string);
 
     if (!model) {
       throw createError.badRequest(
@@ -811,7 +813,7 @@ export const addParticipantHandler: RouteHandler<typeof addParticipantRoute, Api
         {
           errorType: 'authorization',
           resource: 'model',
-          resourceId: body.modelId,
+          resourceId: body.modelId as string,
         },
       );
     }
@@ -843,11 +845,11 @@ export const addParticipantHandler: RouteHandler<typeof addParticipantRoute, Api
       .values({
         id: participantId,
         threadId: id,
-        modelId: body.modelId,
-        role: body.role,
-        priority: body.priority || 0,
+        modelId: body.modelId as string,
+        role: body.role as string | null,
+        priority: (body.priority as number | undefined) ?? 0,
         isEnabled: true,
-        settings: body.settings,
+        settings: body.settings ?? null,
         createdAt: now,
         updatedAt: now,
       })
@@ -891,7 +893,10 @@ export const updateParticipantHandler: RouteHandler<typeof updateParticipantRout
     const [updatedParticipant] = await db
       .update(tables.chatParticipant)
       .set({
-        ...body,
+        role: body.role as string | null | undefined,
+        priority: body.priority as number | undefined,
+        isEnabled: body.isEnabled,
+        settings: body.settings ?? undefined,
         updatedAt: new Date(),
       })
       .where(eq(tables.chatParticipant.id, id))
@@ -2341,11 +2346,12 @@ export const listCustomRolesHandler: RouteHandler<typeof listCustomRolesRoute, A
     });
 
     // Apply cursor pagination and format response
-    return Responses.ok(c, applyCursorPagination(
+    const { items, pagination } = applyCursorPagination(
       customRoles,
       query.limit,
       customRole => createTimestampCursor(customRole.updatedAt),
-    ));
+    );
+    return Responses.cursorPaginated(c, items, pagination);
   },
 );
 
@@ -2372,10 +2378,10 @@ export const createCustomRoleHandler: RouteHandler<typeof createCustomRoleRoute,
       .values({
         id: customRoleId,
         userId: user.id,
-        name: body.name,
-        description: body.description,
-        systemPrompt: body.systemPrompt,
-        metadata: body.metadata,
+        name: body.name as string,
+        description: body.description as string | null,
+        systemPrompt: body.systemPrompt as string,
+        metadata: body.metadata ?? null,
         createdAt: now,
         updatedAt: now,
       })
@@ -2436,7 +2442,10 @@ export const updateCustomRoleHandler: RouteHandler<typeof updateCustomRoleRoute,
     const [updatedCustomRole] = await db
       .update(tables.chatCustomRole)
       .set({
-        ...body,
+        name: body.name as string | undefined,
+        description: body.description as string | null | undefined,
+        systemPrompt: body.systemPrompt as string | undefined,
+        metadata: body.metadata ?? undefined,
         updatedAt: new Date(),
       })
       .where(and(

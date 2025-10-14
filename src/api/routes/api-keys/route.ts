@@ -84,6 +84,7 @@ export const createApiKeyRoute = createRoute({
   description: 'Create a new API key (returns the key value once - save it!)',
   request: {
     body: {
+      required: true,
       content: {
         'application/json': {
           schema: CreateApiKeyRequestSchema,
@@ -117,6 +118,7 @@ export const updateApiKeyRoute = createRoute({
   request: {
     params: ApiKeyIdParamSchema,
     body: {
+      required: true,
       content: {
         'application/json': {
           schema: UpdateApiKeyRequestSchema,

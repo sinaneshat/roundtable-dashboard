@@ -21,10 +21,10 @@
  */
 
 // ============================================================================
-// SCHEMAS AND VALIDATION
+// IMPORTS
 // ============================================================================
 
-import { created, internalServerError, notFound, ok, paginated, validationError } from './responses';
+import { created, cursorPaginated, internalServerError, notFound, ok, paginated, validationError } from './responses';
 import {
   CoreSchemas,
   IdParamSchema,
@@ -36,6 +36,16 @@ import {
 import {
   documentUploadValidator,
 } from './validation';
+
+// ============================================================================
+// APP FACTORY
+// ============================================================================
+
+export { createOpenApiApp } from './app';
+
+// ============================================================================
+// SCHEMAS AND VALIDATION
+// ============================================================================
 
 export {
   // Type exports
@@ -69,6 +79,7 @@ export {
   badRequest,
   conflict,
   created,
+  cursorPaginated,
   // Utilities
   customResponse,
   databaseError,
@@ -100,7 +111,11 @@ export {
   CoreSchemas,
   // Response schemas
   createApiResponseSchema,
+  createCursorPaginatedResponseSchema,
   createPaginatedResponseSchema,
+  type CursorPaginatedResponse,
+  type CursorPaginationQuery,
+  CursorPaginationQuerySchema,
   type ErrorContext,
   ErrorContextSchema,
   type IdParam,
@@ -111,10 +126,6 @@ export {
   type PaginationQuery,
   // Common request schemas
   PaginationQuerySchema,
-  // Type exports
-  type RequestMetadata,
-  // Discriminated union schemas (replaces Record<string, unknown>)
-  RequestMetadataSchema,
   type SearchQuery,
   SearchQuerySchema,
   type SortingQuery,
@@ -138,6 +149,8 @@ export {
   createUpdateSchema,
   createValidationErrorContext,
   createValidator,
+  // Validation hook (for createOpenApiApp)
+  customValidationHook,
   documentUploadValidator,
   formatValidationErrors,
   validateErrorContext,
@@ -200,10 +213,34 @@ export const CommonResponses = {
   success: ok,
   created,
   paginated,
+  cursorPaginated,
   validationError,
   notFound,
   internalError: internalServerError,
 } as const;
+
+// ============================================================================
+// COMMON UTILITIES
+// ============================================================================
+
+// Export pagination utilities from common
+export {
+  // Cursor-based pagination
+  applyCursorPagination,
+  // Page-based pagination
+  applyPagePagination,
+  buildCursorWhere,
+  buildCursorWhereWithFilters,
+  calculatePageMetadata,
+  createTimestampCursor,
+  type CursorPaginationMetadata,
+  getCursorOrderBy,
+  type PagePaginationMetadata,
+  type PagePaginationParams,
+  validatePageParams,
+  // Drizzle ORM official patterns
+  withPagination, // Recommended: uses .$dynamic()
+} from '@/api/common';
 
 // Export auth types from types module
 export type { AuthenticatedContext, AuthMode } from '@/api/types';

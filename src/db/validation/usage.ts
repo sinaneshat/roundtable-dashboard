@@ -8,13 +8,14 @@
  * @/api/routes/usage/schema.ts
  */
 
-import { createInsertSchema, createSelectSchema } from 'drizzle-zod';
+import { createInsertSchema, createSelectSchema, createUpdateSchema } from 'drizzle-zod';
 import type { z } from 'zod';
 
 import {
   userChatUsage,
   userChatUsageHistory,
 } from '../tables/usage';
+import { Refinements } from './refinements';
 
 // ============================================================================
 // User Chat Usage Schemas
@@ -22,12 +23,19 @@ import {
 
 export const userChatUsageSelectSchema = createSelectSchema(userChatUsage);
 export const userChatUsageInsertSchema = createInsertSchema(userChatUsage, {
-  threadsCreated: schema => schema.min(0),
-  messagesCreated: schema => schema.min(0),
+  threadsCreated: Refinements.nonNegativeInt(),
+  messagesCreated: Refinements.nonNegativeInt(),
+  customRolesCreated: Refinements.nonNegativeInt(),
+});
+export const userChatUsageUpdateSchema = createUpdateSchema(userChatUsage, {
+  threadsCreated: Refinements.nonNegativeIntOptional(),
+  messagesCreated: Refinements.nonNegativeIntOptional(),
+  customRolesCreated: Refinements.nonNegativeIntOptional(),
 });
 
 export type UserChatUsage = z.infer<typeof userChatUsageSelectSchema>;
 export type UserChatUsageInsert = z.infer<typeof userChatUsageInsertSchema>;
+export type UserChatUsageUpdate = z.infer<typeof userChatUsageUpdateSchema>;
 
 // ============================================================================
 // User Chat Usage History Schemas
@@ -35,10 +43,16 @@ export type UserChatUsageInsert = z.infer<typeof userChatUsageInsertSchema>;
 
 export const userChatUsageHistorySelectSchema = createSelectSchema(userChatUsageHistory);
 export const userChatUsageHistoryInsertSchema = createInsertSchema(userChatUsageHistory, {
-  threadsCreated: schema => schema.min(0),
-  messagesCreated: schema => schema.min(0),
-  customRolesCreated: schema => schema.min(0),
+  threadsCreated: Refinements.nonNegativeInt(),
+  messagesCreated: Refinements.nonNegativeInt(),
+  customRolesCreated: Refinements.nonNegativeInt(),
+});
+export const userChatUsageHistoryUpdateSchema = createUpdateSchema(userChatUsageHistory, {
+  threadsCreated: Refinements.nonNegativeIntOptional(),
+  messagesCreated: Refinements.nonNegativeIntOptional(),
+  customRolesCreated: Refinements.nonNegativeIntOptional(),
 });
 
 export type UserChatUsageHistory = z.infer<typeof userChatUsageHistorySelectSchema>;
 export type UserChatUsageHistoryInsert = z.infer<typeof userChatUsageHistoryInsertSchema>;
+export type UserChatUsageHistoryUpdate = z.infer<typeof userChatUsageHistoryUpdateSchema>;

@@ -147,37 +147,22 @@ export const CustomerPortalResponseSchema = createApiResponseSchema(CustomerPort
 
 /**
  * ✅ REUSE: Subscription schema from database validation
- * Picked fields relevant for API responses with Date-to-string transforms
+ * Picked fields relevant for API responses
+ * NO TRANSFORMS: Handler serializes dates to ISO strings, schema only validates
  */
 const SubscriptionSchema = stripeSubscriptionSelectSchema
   .pick({
     id: true,
     status: true,
     priceId: true,
+    currentPeriodStart: true,
+    currentPeriodEnd: true,
     cancelAtPeriodEnd: true,
+    canceledAt: true,
+    trialStart: true,
+    trialEnd: true,
   })
   .extend({
-    // Transform all timestamp fields to ISO strings for JSON serialization
-    currentPeriodStart: z.coerce.date().transform(d => d.toISOString()).openapi({
-      description: 'Current billing period start',
-      example: '2024-01-01T00:00:00Z',
-    }),
-    currentPeriodEnd: z.coerce.date().transform(d => d.toISOString()).openapi({
-      description: 'Current billing period end',
-      example: '2024-02-01T00:00:00Z',
-    }),
-    canceledAt: z.coerce.date().nullable().transform(d => d?.toISOString() ?? null).openapi({
-      description: 'Cancellation timestamp',
-      example: '2024-01-15T10:30:00Z',
-    }),
-    trialStart: z.coerce.date().nullable().transform(d => d?.toISOString() ?? null).openapi({
-      description: 'Trial period start',
-      example: '2024-01-01T00:00:00Z',
-    }),
-    trialEnd: z.coerce.date().nullable().transform(d => d?.toISOString() ?? null).openapi({
-      description: 'Trial period end',
-      example: '2024-01-08T00:00:00Z',
-    }),
     productId: z.string().openapi({
       description: 'Stripe product ID (from price relationship)',
       example: 'prod_ABC123',
@@ -271,6 +256,11 @@ export const SubscriptionChangeResponseSchema = createApiResponseSchema(Subscrip
 export type Product = z.infer<typeof ProductSchema>;
 export type Price = z.infer<typeof PriceSchema>;
 export type CheckoutRequest = z.infer<typeof CheckoutRequestSchema>;
+
+/**
+ * Subscription type for API responses
+ * Note: Date objects are automatically serialized to ISO strings by Hono/JSON.stringify
+ */
 export type Subscription = z.infer<typeof SubscriptionSchema>;
 
 // Use official Stripe SDK type for subscription status
@@ -278,21 +268,3 @@ export type SubscriptionStatus = Stripe.Subscription.Status;
 
 export type SwitchSubscriptionRequest = z.infer<typeof SwitchSubscriptionRequestSchema>;
 export type CancelSubscriptionRequest = z.infer<typeof CancelSubscriptionRequestSchema>;
-
-/**
- * Type-safe subscription response payload
- * Uses official Stripe.Subscription.Status type
- * Timestamps are serialized as ISO strings for API responses
- */
-export type SubscriptionResponsePayload = {
-  id: string;
-  status: SubscriptionStatus; // Stripe.Subscription.Status
-  priceId: string;
-  productId: string;
-  currentPeriodStart: string; // ISO 8601 timestamp string
-  currentPeriodEnd: string; // ISO 8601 timestamp string
-  cancelAtPeriodEnd: boolean;
-  canceledAt: string | null; // ISO 8601 timestamp string
-  trialStart: string | null; // ISO 8601 timestamp string
-  trialEnd: string | null; // ISO 8601 timestamp string
-};

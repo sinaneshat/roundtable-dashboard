@@ -7,10 +7,6 @@ import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { useMemo, useState } from 'react';
 
-// ============================================================================
-// Types - ✅ Inferred from Backend Schema (Zero Hardcoding)
-// ============================================================================
-import type { ChatCustomRole } from '@/api/routes/chat/schema';
 // ✅ ZOD-INFERRED TYPE: Import from schema (no hardcoded interfaces)
 // EnhancedModelResponse includes tier access fields (is_accessible_to_user, required_tier, required_tier_name)
 import type { EnhancedModelResponse } from '@/api/routes/models/schema';
@@ -48,6 +44,14 @@ import { toastManager } from '@/lib/toast/toast-manager';
 import { cn } from '@/lib/ui/cn';
 import { DEFAULT_ROLES, getProviderIcon } from '@/lib/utils/ai-display';
 import { getApiErrorMessage } from '@/lib/utils/error-handling';
+// ============================================================================
+// Types - ✅ Inferred from Backend Schema (Zero Hardcoding)
+// ============================================================================
+/**
+ * ✅ RPC-INFERRED TYPES: Import runtime types from types layer
+ * These types automatically have correct runtime representation (dates as ISO strings)
+ */
+import type { CustomRole } from '@/types/chat';
 
 type ChatParticipantsListProps = {
   participants: ParticipantConfig[];
@@ -75,7 +79,7 @@ function RoleSelector({
   onRequestSelection,
 }: {
   participant: ParticipantConfig | null;
-  customRoles: ChatCustomRole[]; // ✅ Using backend schema type
+  customRoles: CustomRole[]; // ✅ Using RPC-inferred type from service
   onRoleChange: (role: string, customRoleId?: string) => void;
   onClearRole: () => void;
   onRequestSelection?: () => void; // Called when model needs to be selected first
@@ -121,6 +125,7 @@ function RoleSelector({
       const result = await createRoleMutation.mutateAsync({
         json: {
           name: roleName,
+          description: null,
           systemPrompt: `You are a ${roleName} assistant.`,
         },
       });
@@ -488,7 +493,7 @@ function ModelItem({
   userTierInfo,
 }: {
   orderedModel: OrderedModel;
-  customRoles: ChatCustomRole[]; // ✅ Using backend schema type
+  customRoles: CustomRole[]; // ✅ Using RPC-inferred type from service
   onToggle: () => void;
   onRoleChange: (role: string, customRoleId?: string) => void;
   onClearRole: () => void;

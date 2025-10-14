@@ -10,10 +10,15 @@
  * - Schema composition utilities
  * - Request validation helpers
  * - Business rule validators
+ * - OpenAPI validation hook
  */
 
+import type { Hook } from '@hono/zod-openapi';
 import { z } from 'zod';
 
+import type { ApiEnv } from '@/api/types';
+
+import { validationError } from './responses';
 import type { ErrorContext } from './schemas';
 import { CoreSchemas, ErrorContextSchema } from './schemas';
 
@@ -348,6 +353,26 @@ export function createValidationErrorContext(
 export function validateErrorContext(context: unknown): ValidationResult<ErrorContext> {
   return validateWithSchema(ErrorContextSchema, context);
 }
+
+// ============================================================================
+// OPENAPI VALIDATION HOOK
+// ============================================================================
+
+export const customValidationHook: Hook<unknown, ApiEnv, string, unknown> = (result, c) => {
+  if (!result.success) {
+    // Transform Zod issues to ValidationError format
+    const errors = result.error.issues.map((err: z.ZodIssue) => ({
+      field: err.path.join('.') || 'root',
+      message: err.message,
+      code: err.code,
+    }));
+
+    // Use pre-built response architecture for consistency
+    return validationError(c, errors, 'Request validation failed');
+  }
+  // Validation passed - continue to handler
+  return undefined;
+};
 
 // ============================================================================
 // EXPORTS

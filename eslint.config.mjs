@@ -1,10 +1,9 @@
 import antfu from '@antfu/eslint-config';
 import nextPlugin from '@next/eslint-plugin-next';
 import pluginQuery from '@tanstack/eslint-plugin-query';
+import drizzlePlugin from 'eslint-plugin-drizzle';
 import jsxA11y from 'eslint-plugin-jsx-a11y';
 import simpleImportSort from 'eslint-plugin-simple-import-sort';
-
-import localRules from './eslint-local-rules.js';
 
 export default antfu(
   {
@@ -54,6 +53,21 @@ export default antfu(
     },
   },
   {
+    plugins: {
+      drizzle: drizzlePlugin,
+    },
+    rules: {
+      'drizzle/enforce-delete-with-where': [
+        'error',
+        { drizzleObjectName: ['db', 'batch'] },
+      ],
+      'drizzle/enforce-update-with-where': [
+        'error',
+        { drizzleObjectName: ['db', 'batch'] },
+      ],
+    },
+  },
+  {
     rules: {
       'perfectionist/sort-imports': 'off',
       'import/order': 'off', // Avoid conflicts with `simple-import-sort` plugin
@@ -81,22 +95,6 @@ export default antfu(
       // 'import/no-duplicates': 'error', // Prevents importing the same module in multiple places
       // 'import/prefer-default-export': 'off', // Don't force default exports
       // 'import/no-default-export': 'off', // Allow default exports where needed
-    },
-  },
-  {
-    plugins: {
-      local: localRules,
-    },
-    rules: {
-      // 🚨 CRITICAL: Cloudflare D1 Batch-First Architecture Enforcement
-      // These rules prevent transaction usage and enforce batch operations
-      'local/no-db-transactions': 'error', // Block db.transaction() usage
-      'local/prefer-batch-handler': 'warn', // Suggest using createHandlerWithBatch
-      'local/batch-context-awareness': 'warn', // Prefer batch.db over getDbAsync() in batch handlers
-
-      // 🚨 CRITICAL: OpenNext.js Database Pattern Enforcement
-      // Prevent global db imports to ensure per-request database instances
-      'local/no-global-db-import': 'error', // Block import { db } from '@/db' (use getDb/getDbAsync instead)
     },
   },
 );

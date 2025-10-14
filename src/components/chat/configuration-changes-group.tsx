@@ -3,11 +3,6 @@
 import { ArrowRight, Clock, Minus, Pencil, Plus } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
-import type {
-  ChangeAction,
-  ChangeGroup,
-  ChatThreadChangelog,
-} from '@/api/routes/chat/schema';
 import {
   parseModeChangeData,
   parseParticipantAddedData,
@@ -26,6 +21,7 @@ import { formatRelativeTime } from '@/lib/format/date';
 import { cn } from '@/lib/ui/cn';
 import { getProviderIcon } from '@/lib/utils/ai-display';
 import { sortChangesByAction } from '@/lib/utils/changelog-helpers';
+import type { ChangeAction, ChangeGroup, Changelog } from '@/types/chat';
 
 type ConfigurationChangesGroupProps = {
   group: ChangeGroup;
@@ -73,7 +69,7 @@ export function ConfigurationChangesGroup({ group, className }: ConfigurationCha
       acc[change.action].push(change.change);
       return acc;
     },
-    {} as Record<ChangeAction, ChatThreadChangelog[]>,
+    {} as Record<ChangeAction, Changelog[]>,
   );
 
   // Create summary text for header
@@ -109,7 +105,7 @@ export function ConfigurationChangesGroup({ group, className }: ConfigurationCha
         <ChainOfThoughtContent>
           <div className="space-y-4">
             {/* Render each action group */}
-            {(Object.entries(changesByAction) as [ChangeAction, ChatThreadChangelog[]][]).map(
+            {(Object.entries(changesByAction) as [ChangeAction, Changelog[]][]).map(
               ([action, changes]) => {
                 const config = actionConfig[action];
                 const Icon = config.icon;
@@ -147,7 +143,7 @@ export function ConfigurationChangesGroup({ group, className }: ConfigurationCha
  * Individual change item renderer with glassmorphism style
  * Matches the ParticipantsPreview badge design
  */
-function ChangeItem({ change }: { change: ChatThreadChangelog }) {
+function ChangeItem({ change }: { change: Changelog }) {
   // ✅ SINGLE SOURCE OF TRUTH: Fetch models from backend
   const { data: modelsData } = useModelsQuery();
   const allModels = modelsData?.data?.models || [];

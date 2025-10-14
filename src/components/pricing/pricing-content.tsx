@@ -5,12 +5,13 @@ import { motion } from 'motion/react';
 import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 
-import type { Product, Subscription } from '@/api/routes/billing/schema';
+import type { Product } from '@/api/routes/billing/schema';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { FreePricingCard } from '@/components/ui/free-pricing-card';
 import { PricingCard } from '@/components/ui/pricing-card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import type { Subscription } from '@/types/billing';
 
 type BillingInterval = 'month' | 'year';
 

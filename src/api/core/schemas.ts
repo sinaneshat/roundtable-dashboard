@@ -10,6 +10,13 @@
  * - Reusable schema components
  * - Consistent OpenAPI documentation
  * - Single source of truth for all validations
+ *
+ * DATE HANDLING:
+ * - Database (Drizzle): Returns Date objects via integer({ mode: 'timestamp' })
+ * - API Types: Use z.infer to match Drizzle's return types (Date objects)
+ * - JSON Serialization: Hono automatically serializes Date → ISO string
+ * - Frontend Types: Should expect strings since they receive JSON
+ * - No custom SerializeDates utility needed - use Drizzle's built-in type inference
  */
 
 import { z } from '@hono/zod-openapi';
@@ -47,11 +54,6 @@ export const CoreSchemas = {
     description: 'Valid URL',
   }),
 
-  description: () => z.string().min(1).max(500).openapi({
-    example: 'Product description',
-    description: 'Text description (1-500 characters)',
-  }),
-
   // Numeric fields
   amount: () => z.number().nonnegative().openapi({
     example: 99.00,
@@ -63,36 +65,11 @@ export const CoreSchemas = {
     description: 'Positive integer',
   }),
 
-  percentage: () => z.number().min(0).max(100).openapi({
-    example: 15.5,
-    description: 'Percentage value (0-100)',
-  }),
-
   // Temporal fields
-  timestamp: () => z.iso.datetime().openapi({
+  timestamp: () => z.string().datetime().openapi({
     example: new Date().toISOString(),
     description: 'ISO 8601 timestamp',
   }),
-
-  /**
-   * Date transformation helper - converts Date to ISO string
-   * Use for required date fields that need custom descriptions
-   */
-  isoDate: (description: string, example: string) =>
-    z.coerce.date().transform(d => d.toISOString()).openapi({
-      description,
-      example,
-    }),
-
-  /**
-   * Nullable date transformation helper - converts Date? to ISO string | null
-   * Use for optional date fields that need custom descriptions
-   */
-  isoDateNullable: (description: string, example: string) =>
-    z.coerce.date().nullable().transform(d => d?.toISOString() ?? null).openapi({
-      description,
-      example,
-    }),
 
   // Pagination (using constants from single source of truth)
   page: () => z.coerce.number().int().min(1).default(1).openapi({
@@ -106,124 +83,15 @@ export const CoreSchemas = {
   }),
 
   // Common enums
-  currency: () => z.enum(['USD']).default('USD').openapi({
-    example: 'USD',
-    description: 'Currency code (USD only)',
-  }),
-
   sortOrder: () => z.enum(['asc', 'desc']).default('desc').openapi({
     example: 'desc',
     description: 'Sort order',
   }),
-
-  // Status fields
-  entityStatus: () => z.enum(['active', 'inactive', 'suspended', 'deleted']).openapi({
-    example: 'active',
-    description: 'Entity status',
-  }),
-
-  // ============================================================================
-  // Query Parameter Helpers
-  // ============================================================================
-
-  /**
-   * Boolean query parameter helper - converts string to boolean
-   * Use for URL query parameters that represent boolean flags
-   */
-  booleanQuery: (description: string, example: string = 'false') =>
-    z.string().optional().transform(val => val === 'true').openapi({
-      description,
-      example,
-    }),
-
-  // ============================================================================
-  // Path Parameter Factories
-  // ============================================================================
-
-  /**
-   * ID parameter factory - creates standardized ID param schemas
-   * Use for route path parameters that represent resource IDs
-   */
-  idParam: (resourceName: string, example: string) => z.object({
-    id: CoreSchemas.id().openapi({
-      description: `${resourceName} ID`,
-      example,
-      param: { name: 'id', in: 'path' },
-    }),
-  }),
-
-  // ============================================================================
-  // Metadata Factories
-  // ============================================================================
-
-  /**
-   * Generic metadata factory - creates passthrough nullable optional object
-   * Use for flexible metadata fields that allow arbitrary key-value pairs
-   */
-  metadata: <T extends z.ZodRawShape>(shape: T) =>
-    z.object(shape).passthrough().nullable().optional(),
-
-  /**
-   * Tags metadata factory - common pattern for tagging resources
-   * Use for resources that support categorization via tags
-   */
-  tagsMetadata: () => z.object({
-    tags: z.array(z.string()).optional(),
-  }).passthrough().nullable().optional(),
-
-  /**
-   * Key-value metadata factory - simple string-keyed metadata
-   * Use for resources with simple metadata requirements
-   */
-  keyValueMetadata: () => z.record(z.string(), z.unknown()).nullable().optional(),
 } as const;
 
 // ============================================================================
 // DISCRIMINATED UNION METADATA SCHEMAS (Context7 Pattern)
 // ============================================================================
-
-/**
- * Request metadata discriminated union - replaces Record<string, unknown>
- * Maximum type safety with comprehensive validation
- */
-export const RequestMetadataSchema = z.discriminatedUnion('type', [
-  z.object({
-    type: z.literal('api_request'),
-    endpoint: z.string().min(1),
-    method: z.enum(['GET', 'POST', 'PUT', 'DELETE', 'PATCH']),
-    version: z.string().regex(/^v\d+(\.\d+)?$/),
-    requestId: z.string().uuid(),
-    clientVersion: z.string().optional(),
-    features: z.array(z.string()).optional(),
-  }),
-  z.object({
-    type: z.literal('auth_context'),
-    sessionId: z.string().uuid(),
-    userId: z.string().uuid(),
-    role: z.enum(['user']),
-    permissions: z.array(z.string()),
-    lastActivity: z.iso.datetime(),
-    ipAddress: z.string().regex(/^(?:(?:25[0-5]|2[0-4]\d|[01]?\d{1,2})\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d{1,2})$|^(?:[\da-f]{1,4}:){7}[\da-f]{1,4}$/i, 'Invalid IP address').optional(),
-  }),
-  z.object({
-    type: z.literal('performance'),
-    startTime: z.number(),
-    duration: z.number().positive(),
-    memoryUsage: z.number().positive(),
-    dbQueries: z.number().int().nonnegative(),
-    cacheHits: z.number().int().nonnegative(),
-    cacheMisses: z.number().int().nonnegative(),
-  }),
-]).optional().openapi({
-  example: {
-    type: 'api_request',
-    endpoint: '/api/v1/subscriptions',
-    method: 'GET',
-    version: 'v1',
-    requestId: 'req_123456789',
-  },
-  description: 'Type-safe request metadata context',
-});
 
 /**
  * Logger data discriminated union - replaces Record<string, unknown> in logger methods
@@ -426,37 +294,6 @@ export const ErrorContextSchema = z.discriminatedUnion('errorType', [
     }],
   },
   description: 'Type-safe error context information',
-});
-
-// ============================================================================
-// BUSINESS DOMAIN SCHEMAS
-// ============================================================================
-
-/**
- * Feature metadata discriminated union
- */
-export const FeatureMetadataSchema = z.discriminatedUnion('featureType', [
-  z.object({
-    featureType: z.literal('user_setting'),
-    preferenceKey: z.string(),
-    preferenceValue: z.union([z.string(), z.number(), z.boolean()]),
-    updatedAt: z.iso.datetime(),
-  }),
-  z.object({
-    featureType: z.literal('collaboration_session'),
-    sessionId: z.string().uuid(),
-    participants: z.array(z.string()),
-    startedAt: z.iso.datetime(),
-    status: z.enum(['active', 'paused', 'completed']),
-  }),
-]).openapi({
-  example: {
-    featureType: 'user_setting',
-    preferenceKey: 'notification',
-    preferenceValue: true,
-    updatedAt: new Date().toISOString(),
-  },
-  description: 'Feature-specific metadata',
 });
 
 // ============================================================================
@@ -714,11 +551,9 @@ export const StreamingEventSchema = z.discriminatedUnion('type', [
 });
 
 // Export all inferred types
-export type RequestMetadata = z.infer<typeof RequestMetadataSchema>;
 export type LoggerData = z.infer<typeof LoggerDataSchema>;
 export type ResponseMetadata = z.infer<typeof ResponseMetadataSchema>;
 export type ErrorContext = z.infer<typeof ErrorContextSchema>;
-export type FeatureMetadata = z.infer<typeof FeatureMetadataSchema>;
 export type ApiErrorResponse = z.infer<typeof ApiErrorResponseSchema>;
 export type PaginationQuery = z.infer<typeof PaginationQuerySchema>;
 export type CursorPaginationQuery = z.infer<typeof CursorPaginationQuerySchema>;

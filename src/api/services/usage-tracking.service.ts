@@ -47,9 +47,20 @@ export async function ensureUserUsageRecord(userId: string): Promise<typeof tabl
   const db = await getDbAsync();
 
   // Check if user has existing usage record
-  let usage = await db.query.userChatUsage.findFirst({
-    where: eq(tables.userChatUsage.userId, userId),
-  });
+  // ✅ CACHING ENABLED: Query builder API with 1-minute TTL for near-real-time usage
+  // Cache automatically invalidates when usage counters are updated
+  // @see https://orm.drizzle.team/docs/cache
+  const usageResults = await db
+    .select()
+    .from(tables.userChatUsage)
+    .where(eq(tables.userChatUsage.userId, userId))
+    .limit(1)
+    .$withCache({
+      config: { ex: 60 }, // 1 minute TTL for near-real-time data
+      tag: `user-usage-${userId}`,
+    });
+
+  let usage = usageResults[0];
 
   const now = new Date();
 
@@ -94,9 +105,18 @@ export async function ensureUserUsageRecord(userId: string): Promise<typeof tabl
     await rolloverBillingPeriod(userId, usage);
 
     // Fetch the updated usage record
-    const updatedUsage = await db.query.userChatUsage.findFirst({
-      where: eq(tables.userChatUsage.userId, userId),
-    });
+    // ✅ CACHING ENABLED: 1-minute TTL, automatically invalidated by rollover mutation
+    const updatedUsageResults = await db
+      .select()
+      .from(tables.userChatUsage)
+      .where(eq(tables.userChatUsage.userId, userId))
+      .limit(1)
+      .$withCache({
+        config: { ex: 60 },
+        tag: `user-usage-${userId}`,
+      });
+
+    const updatedUsage = updatedUsageResults[0];
 
     if (!updatedUsage) {
       const context: ErrorContext = {
@@ -135,26 +155,53 @@ async function rolloverBillingPeriod(
 
   // Check if user has an active Stripe subscription
   // If currentPeriodEnd has passed and no Stripe sync updated it, subscription has ended
-  const user = await db.query.user.findFirst({
-    where: eq(tables.user.id, userId),
-  });
+  // ✅ CACHING ENABLED: 5-minute TTL for user data (low mutation frequency)
+  const userResults = await db
+    .select()
+    .from(tables.user)
+    .where(eq(tables.user.id, userId))
+    .limit(1)
+    .$withCache({
+      config: { ex: 300 },
+      tag: `user-${userId}`,
+    });
+
+  const user = userResults[0];
 
   let shouldDowngradeToFree = false;
 
   if (user) {
     // Check if user has a Stripe customer record
-    const stripeCustomer = await db.query.stripeCustomer.findFirst({
-      where: eq(tables.stripeCustomer.userId, userId),
-    });
+    // ✅ CACHING ENABLED: 5-minute TTL for customer data (rarely changes)
+    const stripeCustomerResults = await db
+      .select()
+      .from(tables.stripeCustomer)
+      .where(eq(tables.stripeCustomer.userId, userId))
+      .limit(1)
+      .$withCache({
+        config: { ex: 300 },
+        tag: `customer-${userId}`,
+      });
+
+    const stripeCustomer = stripeCustomerResults[0];
 
     if (stripeCustomer) {
       // Check if they have an active subscription in our DB
-      const activeSubscription = await db.query.stripeSubscription.findFirst({
-        where: and(
+      // ✅ CACHING ENABLED: 2-minute TTL for subscription status (updated by webhooks)
+      const activeSubscriptionResults = await db
+        .select()
+        .from(tables.stripeSubscription)
+        .where(and(
           eq(tables.stripeSubscription.customerId, stripeCustomer.id),
           eq(tables.stripeSubscription.status, 'active'),
-        ),
-      });
+        ))
+        .limit(1)
+        .$withCache({
+          config: { ex: 120 },
+          tag: `active-subscription-${userId}`,
+        });
+
+      const activeSubscription = activeSubscriptionResults[0];
 
       // No active subscription = downgrade to free
       shouldDowngradeToFree = !activeSubscription;
@@ -604,9 +651,18 @@ export async function syncUserQuotaFromSubscription(
   const db = await getDbAsync();
 
   // Get price metadata to determine tier and billing period
-  const price = await db.query.stripePrice.findFirst({
-    where: eq(tables.stripePrice.id, priceId),
-  });
+  // ✅ CACHING ENABLED: 5-minute TTL for price data (rarely changes)
+  const priceResults = await db
+    .select()
+    .from(tables.stripePrice)
+    .where(eq(tables.stripePrice.id, priceId))
+    .limit(1)
+    .$withCache({
+      config: { ex: 300 },
+      tag: `price-${priceId}`,
+    });
+
+  const price = priceResults[0];
 
   if (!price) {
     const context: ErrorContext = {

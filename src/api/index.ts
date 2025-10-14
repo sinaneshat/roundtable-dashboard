@@ -23,7 +23,7 @@ import { trimTrailingSlash } from 'hono/trailing-slash';
 import notFound from 'stoker/middlewares/not-found';
 import onError from 'stoker/middlewares/on-error';
 
-import { createOpenApiApp } from './factory';
+import { createOpenApiApp } from './core/app';
 import { attachSession, csrfProtection, protectMutations, requireSession } from './middleware';
 import { errorLoggerMiddleware, honoLoggerMiddleware } from './middleware/hono-logger';
 import { ensureOpenRouterInitialized } from './middleware/openrouter';

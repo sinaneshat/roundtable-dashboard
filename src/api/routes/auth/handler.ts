@@ -33,14 +33,15 @@ export const secureMeHandler: RouteHandler<typeof secureMeRoute, ApiEnv> = creat
     });
 
     // Return user data according to Better Auth user schema
+    // Dates serialized to ISO strings for JSON compatibility
     const payload = {
       userId: user.id,
       email: user.email,
       name: user.name,
       emailVerified: user.emailVerified,
       image: user.image,
-      createdAt: user.createdAt.toISOString(),
-      updatedAt: user.updatedAt.toISOString(),
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
     } as const;
 
     c.logger.info('User information retrieved successfully from Better Auth', {

@@ -7,6 +7,7 @@ import { drizzle as drizzleBetter } from 'drizzle-orm/better-sqlite3';
 import { drizzle as drizzleD1 } from 'drizzle-orm/d1';
 import { cache } from 'react';
 
+import { CloudflareKVCache } from './cache/cloudflare-kv-cache';
 import * as schema from './schema';
 
 // Database configuration
@@ -82,9 +83,26 @@ function getD1Binding(): D1Database | null {
 }
 
 /**
+ * Get KV namespace binding for caching
+ */
+function getKVBinding(): KVNamespace | null {
+  try {
+    const { env } = getCloudflareContext();
+    return env.KV || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Create database instance following official OpenNext.js patterns
  * Uses React cache for optimal performance in server components
  * CRITICAL FIX: Added error handling for ExecutionContext availability
+ *
+ * ✅ CACHING: Automatically enabled for D1 in production/preview using Cloudflare KV
+ * - Opt-in caching strategy (use .$withCache() on queries)
+ * - Automatic cache invalidation on mutations
+ * - 5-minute default TTL
  *
  * ⚠️ CLOUDFLARE D1 NOTE: Use batch operations, not transactions.
  * For Cloudflare D1 environments, db.transaction() should NOT be used.
@@ -92,11 +110,25 @@ function getD1Binding(): D1Database | null {
  *
  * @see {@link D1BatchDatabase} for batch operation documentation
  * @see docs/backend-patterns.md#batch-operations for usage examples
+ * @see src/db/cache/cloudflare-kv-cache.ts for cache implementation
  */
 export const getDb = cache(() => {
   try {
     const { env } = getCloudflareContext();
-    return drizzleD1(env.DB, { schema });
+
+    // Initialize KV cache for D1 (production/preview only)
+    const kvCache = env.KV
+      ? new CloudflareKVCache({
+        kv: env.KV,
+        global: false, // Opt-in caching (use .$withCache())
+        defaultTtl: 300, // 5 minutes
+      })
+      : undefined;
+
+    return drizzleD1(env.DB, {
+      schema,
+      cache: kvCache,
+    });
   } catch (error) {
     // CRITICAL FIX: Fallback to createDbInstance if ExecutionContext not available
     // This handles the "This context has no ExecutionContext" production error
@@ -112,17 +144,36 @@ export const getDb = cache(() => {
  * Async version for static routes (ISR/SSG) following OpenNext.js patterns
  * CRITICAL FIX: Added error handling for ExecutionContext availability
  *
+ * ✅ CACHING: Automatically enabled for D1 in production/preview using Cloudflare KV
+ * - Opt-in caching strategy (use .$withCache() on queries)
+ * - Automatic cache invalidation on mutations
+ * - 5-minute default TTL
+ *
  * ⚠️ CLOUDFLARE D1 NOTE: Use batch operations, not transactions.
  * For Cloudflare D1 environments, db.transaction() should NOT be used.
  * Use db.batch() for atomic operations.
  *
  * @see {@link D1BatchDatabase} for batch operation documentation
  * @see docs/backend-patterns.md#batch-operations for usage examples
+ * @see src/db/cache/cloudflare-kv-cache.ts for cache implementation
  */
 export const getDbAsync = cache(async () => {
   try {
     const { env } = await getCloudflareContext({ async: true });
-    return drizzleD1(env.DB, { schema });
+
+    // Initialize KV cache for D1 (production/preview only)
+    const kvCache = env.KV
+      ? new CloudflareKVCache({
+        kv: env.KV,
+        global: false, // Opt-in caching (use .$withCache())
+        defaultTtl: 300, // 5 minutes
+      })
+      : undefined;
+
+    return drizzleD1(env.DB, {
+      schema,
+      cache: kvCache,
+    });
   } catch (error) {
     // CRITICAL FIX: Fallback to createDbInstance if ExecutionContext not available
     // This handles the "This context has no ExecutionContext" production error
@@ -160,9 +211,20 @@ function createDbInstance(): ReturnType<typeof drizzleD1<typeof schema>> | Retur
   // Try to get D1 binding for Cloudflare Workers environment (production/preview)
   const d1Database = getD1Binding();
   if (d1Database) {
+    // Initialize KV cache for D1 if available
+    const kvBinding = getKVBinding();
+    const kvCache = kvBinding
+      ? new CloudflareKVCache({
+        kv: kvBinding,
+        global: false,
+        defaultTtl: 300,
+      })
+      : undefined;
+
     return drizzleD1(d1Database, {
       schema,
       logger: process.env.NODE_ENV !== 'production',
+      cache: kvCache,
     });
   }
 

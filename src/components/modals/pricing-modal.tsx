@@ -2,8 +2,9 @@
 
 import { useTranslations } from 'next-intl';
 
-import type { Product, Subscription } from '@/api/routes/billing/schema';
+import type { Product } from '@/api/routes/billing/schema';
 import { PricingContent } from '@/components/pricing/pricing-content';
+import type { Subscription } from '@/types/billing';
 
 import { BaseModal } from './base-modal';
 

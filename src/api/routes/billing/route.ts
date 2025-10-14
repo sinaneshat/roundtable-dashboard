@@ -76,6 +76,7 @@ export const createCheckoutSessionRoute = createRoute({
   description: 'Create a Stripe checkout session for subscription purchase',
   request: {
     body: {
+      required: true,
       content: {
         'application/json': {
           schema: CheckoutRequestSchema,
@@ -108,6 +109,7 @@ export const createCustomerPortalSessionRoute = createRoute({
   description: 'Create a Stripe customer portal session for managing subscriptions and billing',
   request: {
     body: {
+      required: true,
       content: {
         'application/json': {
           schema: CustomerPortalRequestSchema,
@@ -188,6 +190,7 @@ export const switchSubscriptionRoute = createRoute({
   request: {
     params: SubscriptionIdParamSchema,
     body: {
+      required: true,
       content: {
         'application/json': {
           schema: SwitchSubscriptionRequestSchema,
@@ -219,6 +222,7 @@ export const cancelSubscriptionRoute = createRoute({
   request: {
     params: SubscriptionIdParamSchema,
     body: {
+      required: true,
       content: {
         'application/json': {
           schema: CancelSubscriptionRequestSchema,

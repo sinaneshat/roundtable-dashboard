@@ -9,7 +9,6 @@
  */
 
 import { createInsertSchema, createSelectSchema, createUpdateSchema } from 'drizzle-zod';
-import { z } from 'zod';
 
 import {
   account,
@@ -17,6 +16,7 @@ import {
   user,
   verification,
 } from '../tables/auth';
+import { Refinements } from './refinements';
 
 // ============================================================================
 // User Schemas
@@ -24,12 +24,12 @@ import {
 
 export const userSelectSchema = createSelectSchema(user);
 export const userInsertSchema = createInsertSchema(user, {
-  email: schema => schema.email(),
-  image: () => z.string().url().optional(),
+  email: Refinements.email(),
+  image: Refinements.urlOptional(),
 });
 export const userUpdateSchema = createUpdateSchema(user, {
-  email: schema => schema.email().optional(),
-  image: () => z.string().url().optional(),
+  email: Refinements.emailOptional(),
+  image: Refinements.urlOptional(),
 });
 
 // ============================================================================

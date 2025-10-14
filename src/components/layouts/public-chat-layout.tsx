@@ -1,12 +1,12 @@
 import type React from 'react';
 
-import type { ChatThread } from '@/api/routes/chat/schema';
 import { NavigationHeader } from '@/components/chat/chat-header';
 import { ChatThreadActions } from '@/components/chat/chat-thread-actions';
+import type { PublicThread } from '@/types/chat';
 
 type PublicChatLayoutProps = {
   children: React.ReactNode;
-  thread: ChatThread | null;
+  thread: PublicThread | null;
   slug: string;
 };
 

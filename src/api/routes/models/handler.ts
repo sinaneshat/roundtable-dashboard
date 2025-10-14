@@ -52,10 +52,22 @@ export const listModelsHandler: RouteHandler<typeof listModelsRoute, ApiEnv> = c
     });
 
     // Get user's subscription tier
+    // ✅ CACHING ENABLED: Query builder API with 5-minute TTL for user tier lookup
+    // Subscription tier changes infrequently (only on plan upgrades/downgrades)
+    // Cache automatically invalidates when userChatUsage is updated
+    // @see https://orm.drizzle.team/docs/cache
     const db = await getDbAsync();
-    const usage = await db.query.userChatUsage.findFirst({
-      where: eq(tables.userChatUsage.userId, user.id),
-    });
+    const usageResults = await db
+      .select()
+      .from(tables.userChatUsage)
+      .where(eq(tables.userChatUsage.userId, user.id))
+      .limit(1)
+      .$withCache({
+        config: { ex: 300 }, // 5 minutes - tier data stable
+        tag: `user-tier-${user.id}`,
+      });
+
+    const usage = usageResults[0];
 
     // Default to free tier if no usage record exists
     const userTier: SubscriptionTier = usage?.subscriptionTier || SUBSCRIPTION_TIERS[0];
