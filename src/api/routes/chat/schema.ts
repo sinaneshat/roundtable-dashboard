@@ -20,8 +20,41 @@ import {
   chatThreadSelectSchema,
   chatThreadUpdateSchema,
 } from '@/db/validation/chat';
-import { isValidModelId } from '@/lib/ai/models-config';
 import { CHAT_MODES } from '@/lib/config/chat-modes';
+
+// ============================================================================
+// Model ID Validation Functions
+// ============================================================================
+
+/**
+ * Validate if a model ID is a non-empty string
+ * Used for basic model ID validation in schemas
+ */
+export function isValidModelId(modelId: unknown): modelId is string {
+  return typeof modelId === 'string' && modelId.length > 0;
+}
+
+/**
+ * Validate if a model ID follows OpenRouter format: provider/model-name
+ * Used for OpenRouter-specific model ID validation
+ */
+export function isValidOpenRouterModelId(modelId: string): boolean {
+  return typeof modelId === 'string' && modelId.includes('/');
+}
+
+/**
+ * Extract formatted model name from model ID
+ * e.g., "anthropic/claude-sonnet-4.5" → "Claude Sonnet 4.5"
+ */
+export function extractModelName(modelId: string): string {
+  const parts = modelId.split('/');
+  const modelPart = parts[parts.length - 1] || modelId;
+
+  return modelPart
+    .split('-')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+}
 
 // ============================================================================
 // Shared Validation Schemas - Used by Frontend and Backend
@@ -829,6 +862,223 @@ export const RetryAttemptMetadataSchema = z.object({
 });
 
 export type RetryAttemptMetadata = z.infer<typeof RetryAttemptMetadataSchema>;
+
+// ============================================================================
+// Changelog Change Data Schemas
+// ============================================================================
+
+/**
+ * ✅ ZOD PATTERN: Type-safe schemas for ChatThreadChangelog.changeData
+ * Eliminates inline type casting throughout the codebase
+ *
+ * The backend stores changeData as z.record(z.string(), z.unknown()) for flexibility,
+ * but the frontend needs type safety for each specific change type.
+ */
+
+/**
+ * Schema for participant_added changeData
+ */
+export const ParticipantAddedDataSchema = z.object({
+  modelId: z.string(),
+  role: z.string().nullable().optional(),
+  priority: z.number().optional(),
+}).passthrough();
+
+export type ParticipantAddedData = z.infer<typeof ParticipantAddedDataSchema>;
+
+/**
+ * Schema for participant_removed changeData
+ */
+export const ParticipantRemovedDataSchema = z.object({
+  modelId: z.string(),
+  role: z.string().nullable().optional(),
+}).passthrough();
+
+export type ParticipantRemovedData = z.infer<typeof ParticipantRemovedDataSchema>;
+
+/**
+ * Schema for participant_updated changeData
+ */
+export const ParticipantUpdatedDataSchema = z.object({
+  before: z.object({
+    modelId: z.string().optional(),
+    role: z.string().nullable().optional(),
+    priority: z.number().optional(),
+  }).passthrough().optional(),
+  after: z.object({
+    modelId: z.string().optional(),
+    role: z.string().nullable().optional(),
+    priority: z.number().optional(),
+  }).passthrough().optional(),
+  modelId: z.string().optional(),
+  oldRole: z.string().nullable().optional(),
+  newRole: z.string().nullable().optional(),
+}).passthrough();
+
+export type ParticipantUpdatedData = z.infer<typeof ParticipantUpdatedDataSchema>;
+
+/**
+ * Schema for participants_reordered changeData
+ */
+export const ParticipantsReorderedDataSchema = z.object({
+  participantIds: z.array(z.string()).optional(),
+  count: z.number().optional(),
+  participants: z.array(z.object({
+    id: z.string(),
+    modelId: z.string(),
+    role: z.string().nullable(),
+    order: z.number(),
+  })).optional(),
+}).passthrough();
+
+export type ParticipantsReorderedData = z.infer<typeof ParticipantsReorderedDataSchema>;
+
+/**
+ * Schema for memory_added changeData
+ */
+export const MemoryAddedDataSchema = z.object({
+  title: z.string(),
+  type: z.string().optional(),
+  description: z.string().nullable().optional(),
+}).passthrough();
+
+export type MemoryAddedData = z.infer<typeof MemoryAddedDataSchema>;
+
+/**
+ * Schema for memory_removed changeData
+ */
+export const MemoryRemovedDataSchema = z.object({
+  title: z.string(),
+  type: z.string().optional(),
+}).passthrough();
+
+export type MemoryRemovedData = z.infer<typeof MemoryRemovedDataSchema>;
+
+/**
+ * Schema for mode_change changeData
+ */
+export const ModeChangeDataSchema = z.object({
+  previousMode: z.string(),
+  newMode: z.string(),
+}).passthrough();
+
+export type ModeChangeData = z.infer<typeof ModeChangeDataSchema>;
+
+/**
+ * Union schema for all possible changeData structures
+ */
+export const ChangeDataSchema = z.union([
+  ParticipantAddedDataSchema,
+  ParticipantRemovedDataSchema,
+  ParticipantUpdatedDataSchema,
+  ParticipantsReorderedDataSchema,
+  MemoryAddedDataSchema,
+  MemoryRemovedDataSchema,
+  ModeChangeDataSchema,
+]);
+
+export type ChangeData = z.infer<typeof ChangeDataSchema>;
+
+// ============================================================================
+// Changelog UI Helper Schemas
+// ============================================================================
+
+/**
+ * Action types for grouped changes
+ */
+export const ChangeActionSchema = z.enum(['added', 'modified', 'removed']);
+export type ChangeAction = z.infer<typeof ChangeActionSchema>;
+
+/**
+ * Grouped change entry with action categorization
+ * Note: change field matches ChatThreadChangelog type (with string createdAt for API compatibility)
+ */
+export const GroupedChangeSchema = z.object({
+  id: z.string(),
+  action: ChangeActionSchema,
+  change: chatThreadChangelogSelectSchema.extend({
+    createdAt: z.coerce.date().transform(d => d.toISOString()),
+  }),
+});
+export type GroupedChange = z.infer<typeof GroupedChangeSchema>;
+
+/**
+ * Group of changes that occurred together
+ */
+export const ChangeGroupSchema = z.object({
+  timestamp: z.coerce.date(),
+  changes: z.array(GroupedChangeSchema),
+});
+export type ChangeGroup = z.infer<typeof ChangeGroupSchema>;
+
+// ============================================================================
+// Changelog Data Parsing Helpers
+// ============================================================================
+
+/**
+ * ✅ ZOD PATTERN: Safe parsing helper for changeData
+ * Returns parsed data or undefined if parsing fails
+ */
+function parseChangeData<T extends z.ZodTypeAny>(
+  schema: T,
+  data: unknown,
+): z.infer<T> | undefined {
+  const result = schema.safeParse(data);
+  return result.success ? result.data : undefined;
+}
+
+/**
+ * Parse participant added data safely
+ */
+export function parseParticipantAddedData(data: unknown): ParticipantAddedData | undefined {
+  return parseChangeData(ParticipantAddedDataSchema, data);
+}
+
+/**
+ * Parse participant removed data safely
+ */
+export function parseParticipantRemovedData(data: unknown): ParticipantRemovedData | undefined {
+  return parseChangeData(ParticipantRemovedDataSchema, data);
+}
+
+/**
+ * Parse participant updated data safely
+ */
+export function parseParticipantUpdatedData(data: unknown): ParticipantUpdatedData | undefined {
+  return parseChangeData(ParticipantUpdatedDataSchema, data);
+}
+
+/**
+ * Parse participants reordered data safely
+ */
+export function parseParticipantsReorderedData(data: unknown): ParticipantsReorderedData | undefined {
+  return parseChangeData(ParticipantsReorderedDataSchema, data);
+}
+
+/**
+ * Parse memory added data safely
+ */
+export function parseMemoryAddedData(data: unknown): MemoryAddedData | undefined {
+  return parseChangeData(MemoryAddedDataSchema, data);
+}
+
+/**
+ * Parse memory removed data safely
+ */
+export function parseMemoryRemovedData(data: unknown): MemoryRemovedData | undefined {
+  return parseChangeData(MemoryRemovedDataSchema, data);
+}
+
+/**
+ * Parse mode change data safely
+ */
+export function parseModeChangeData(data: unknown): ModeChangeData | undefined {
+  return parseChangeData(ModeChangeDataSchema, data);
+}
+
+// ============================================================================
+// TYPE EXPORTS (END OF FILE)
+// ============================================================================
 
 export type ChatThreadChangelog = z.infer<typeof ChatThreadChangelogSchema>;
 

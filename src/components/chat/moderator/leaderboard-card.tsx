@@ -22,8 +22,8 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { useModelsQuery } from '@/hooks/queries/models';
-import { getAvatarPropsFromModelId } from '@/lib/ai/avatar-helpers';
 import { cn } from '@/lib/ui/cn';
+import { getAvatarPropsFromModelId } from '@/lib/utils/ai-display';
 
 type LeaderboardCardProps = {
   leaderboard: LeaderboardEntry[];

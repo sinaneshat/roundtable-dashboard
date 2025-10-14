@@ -2,7 +2,7 @@
 
 import { ChevronDown } from 'lucide-react';
 import type { ComponentProps, ReactNode } from 'react';
-import { createContext, use, useState } from 'react';
+import { createContext, use, useMemo, useState } from 'react';
 
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { cn } from '@/lib/ui/cn';
@@ -61,8 +61,13 @@ export function Reasoning({
 }: ReasoningProps) {
   const [open, setOpen] = useState(defaultOpen);
 
+  const contextValue = useMemo(
+    () => ({ open, setOpen, isStreaming }),
+    [open, setOpen, isStreaming],
+  );
+
   return (
-    <ReasoningContext value={{ open, setOpen, isStreaming }}>
+    <ReasoningContext value={contextValue}>
       <Collapsible open={open} onOpenChange={setOpen}>
         <div
           className={cn(

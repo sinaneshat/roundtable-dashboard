@@ -14,7 +14,7 @@
 import { Buffer } from 'node:buffer';
 
 import { BRAND } from '@/constants/brand';
-import { getModelIconInfo } from '@/lib/ai/provider-icons';
+import { getModelIconInfo } from '@/lib/utils/ai-display';
 
 /**
  * Get the base URL for the application

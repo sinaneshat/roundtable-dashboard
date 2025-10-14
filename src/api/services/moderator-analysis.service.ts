@@ -7,7 +7,7 @@
 import { z } from 'zod';
 
 import type { ModeratorAnalysisPayloadSchema } from '@/api/routes/chat/schema';
-import { extractModelName } from '@/lib/ai/models-config';
+import { extractModelName } from '@/api/routes/chat/schema';
 import type { ChatModeId } from '@/lib/config/chat-modes';
 
 // Internal schemas with .describe() for AI SDK streamObject()

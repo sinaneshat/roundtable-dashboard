@@ -3,7 +3,7 @@
 import type { LucideIcon } from 'lucide-react';
 import { ChevronDown } from 'lucide-react';
 import type { ComponentProps, ReactNode } from 'react';
-import { createContext, use, useMemo, useState } from 'react';
+import { createContext, use, useCallback, useMemo, useState } from 'react';
 
 import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
@@ -58,12 +58,12 @@ export function ChainOfThought({
   const [uncontrolledOpen, setUncontrolledOpen] = useState(defaultOpen);
   const open = controlledOpen !== undefined ? controlledOpen : uncontrolledOpen;
 
-  const handleOpenChange = (newOpen: boolean) => {
+  const handleOpenChange = useCallback((newOpen: boolean) => {
     if (controlledOpen === undefined) {
       setUncontrolledOpen(newOpen);
     }
     onOpenChange?.(newOpen);
-  };
+  }, [controlledOpen, onOpenChange]);
 
   const contextValue = useMemo(
     () => ({ open, setOpen: handleOpenChange }),

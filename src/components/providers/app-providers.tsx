@@ -1,5 +1,6 @@
 'use client';
 
+import type { AbstractIntlMessages } from 'next-intl';
 import { NextIntlClientProvider } from 'next-intl';
 import { NuqsAdapter } from 'nuqs/adapters/next/app';
 
@@ -11,7 +12,9 @@ import QueryClientProvider from './query-client-provider';
 type AppProvidersProps = {
   children: React.ReactNode;
   locale: string;
-  translations: Record<string, unknown>;
+  messages: AbstractIntlMessages;
+  timeZone: string;
+  now: Date;
   env: {
     NEXT_PUBLIC_WEBAPP_ENV?: string;
     NEXT_PUBLIC_MAINTENANCE?: string;
@@ -23,17 +26,21 @@ type AppProvidersProps = {
 /**
  * AppProviders - Global provider wrapper for the entire application
  *
- * Following the established pattern from /docs/frontend-patterns.md:
+ * Following the latest next-intl best practices for apps without locale routing:
  * - Single provider component wraps all global providers
  * - QueryClient configuration with sensible defaults
- * - Development tools conditionally included
+ * - NextIntlClientProvider receives explicit messages, locale, timeZone, and now
+ * - Enables static rendering by providing all props explicitly
  *
  * Pattern: src/components/providers/app-providers.tsx
+ * Reference: https://next-intl.dev/docs/usage/configuration
  */
 export function AppProviders({
   children,
   locale,
-  translations,
+  messages,
+  timeZone,
+  now,
   env,
 }: AppProvidersProps) {
   return (
@@ -45,18 +52,19 @@ export function AppProviders({
       <QueryClientProvider>
         <NuqsAdapter>
           <NextIntlClientProvider
-            messages={translations}
+            messages={messages}
             locale={locale}
-            timeZone="UTC"
+            timeZone={timeZone}
+            now={now}
           >
             {env.NEXT_PUBLIC_MAINTENANCE !== 'true'
               ? children
               : (
                   <div>Maintenance</div>
                 )}
+            <Toaster />
           </NextIntlClientProvider>
         </NuqsAdapter>
-        <Toaster />
       </QueryClientProvider>
     </PostHogProvider>
   );

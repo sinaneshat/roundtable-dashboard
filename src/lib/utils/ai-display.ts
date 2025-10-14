@@ -1,13 +1,57 @@
 /**
- * Provider Icon Utilities - Dynamic PNG-based System
+ * AI Display Utilities
  *
- * ✅ FULLY DYNAMIC: Handles icon path resolution for AI model providers with automatic fallbacks
- * ✅ PNG-BASED: All icons are optimized PNG files in public/static/icons/ai-models/
- * ✅ NO HARDCODING: Dynamically maps OpenRouter providers to icon files
+ * ✅ UI-ONLY UTILITIES: Provider icons, avatars, display formatting
+ * ✅ NO VALIDATION: Validation logic now lives in @/api/routes/chat/schema
+ * ✅ NO SCHEMAS: All schemas are defined in API layer
  *
- * Icon Source: Downloaded from Lobe Icons CDN (https://unpkg.com/@lobehub/icons-static-png)
- * All icons are dark theme, optimized, and ready for production use
+ * For validation functions (isValidModelId, extractModelName), see:
+ * @see @/api/routes/chat/schema - Model ID validation and extraction
  */
+
+import type { ParticipantConfig } from '@/lib/schemas/chat-forms';
+
+// ============================================================================
+// MODEL DISPLAY HELPERS
+// ============================================================================
+
+/**
+ * Get provider name from model ID
+ * e.g., "anthropic/claude-4" → "anthropic"
+ */
+export function getProviderFromModelId(modelId: string): string {
+  return modelId.includes('/') ? (modelId.split('/')[0] || 'unknown') : 'unknown';
+}
+
+/**
+ * Get display name from model ID
+ * e.g., "anthropic/claude-4" → "claude-4"
+ */
+export function getDisplayNameFromModelId(modelId: string): string {
+  return modelId.includes('/') ? modelId.split('/').pop() || modelId : modelId;
+}
+
+// ============================================================================
+// ROLE DEFINITIONS (UI Constants Only)
+// ============================================================================
+
+/**
+ * Default role options for participants
+ * These are UI suggestions and don't affect backend logic
+ */
+export const DEFAULT_ROLES = [
+  'The Ideator',
+  'Devil\'s Advocate',
+  'Builder',
+  'Practical Evaluator',
+  'Visionary Thinker',
+  'Domain Expert',
+  'User Advocate',
+  'Implementation Strategist',
+  'The Data Analyst',
+] as const;
+
+export type DefaultRole = typeof DEFAULT_ROLES[number];
 
 // ============================================================================
 // PROVIDER ICON MAPPING
@@ -176,7 +220,7 @@ const PROVIDER_NAME_MAP: Record<string, string> = {
 };
 
 // ============================================================================
-// UTILITY FUNCTIONS
+// PROVIDER ICON UTILITIES
 // ============================================================================
 
 /**
@@ -296,4 +340,106 @@ export function getSupportedProviderCount(): number {
  */
 export function getAllKnownProviders(): string[] {
   return Object.keys(PROVIDER_NAME_MAP);
+}
+
+// ============================================================================
+// AVATAR HELPERS
+// ============================================================================
+
+/**
+ * Avatar props type
+ */
+export type AvatarProps = {
+  src: string;
+  name: string;
+};
+
+/**
+ * Get avatar props for a participant based on model ID
+ *
+ * ✅ SINGLE SOURCE: Derives all info from model ID directly
+ * - User messages: Use authenticated user's image and name
+ * - Assistant messages: Use provider icon and display name from model ID
+ *
+ * @param role - Message role ('user' or 'assistant')
+ * @param participants - Array of participant configurations
+ * @param userImage - Authenticated user's image URL (optional)
+ * @param userName - Authenticated user's name (optional)
+ * @param participantIndex - Index of the participant for assistant messages (optional)
+ * @returns Avatar props with src and name
+ */
+export function getAvatarProps(
+  role: 'user' | 'assistant',
+  participants: ParticipantConfig[],
+  userImage?: string | null,
+  userName?: string | null,
+  participantIndex?: number,
+): AvatarProps {
+  if (role === 'user') {
+    return {
+      src: userImage || '/static/icons/user-avatar.png',
+      name: userName || 'User',
+    };
+  }
+
+  // For assistant messages, get model info from participant
+  if (participantIndex !== undefined && participants[participantIndex]) {
+    const participant = participants[participantIndex];
+    const provider = getProviderFromModelId(participant.modelId);
+    const displayName = getDisplayNameFromModelId(participant.modelId);
+
+    return {
+      src: getProviderIcon(provider),
+      name: displayName,
+    };
+  }
+
+  // Fallback for assistant messages without participant info
+  return {
+    src: '/static/icons/ai-models/default.png',
+    name: 'AI',
+  };
+}
+
+/**
+ * Get avatar props directly from modelId (for historical messages)
+ *
+ * ✅ CRITICAL: Use this for historical messages to remain independent of current participant config
+ * When participants are reordered/added/removed, avatars should show the model that generated the message
+ *
+ * @param role - Message role ('user' or 'assistant')
+ * @param modelId - Direct model ID from message metadata
+ * @param userImage - Authenticated user's image URL (optional)
+ * @param userName - Authenticated user's name (optional)
+ * @returns Avatar props with src and name
+ */
+export function getAvatarPropsFromModelId(
+  role: 'user' | 'assistant',
+  modelId?: string,
+  userImage?: string | null,
+  userName?: string | null,
+): AvatarProps {
+  if (role === 'user') {
+    return {
+      src: userImage || '/static/icons/user-avatar.png',
+      name: userName || 'User',
+    };
+  }
+
+  // For assistant messages, derive info from model ID
+  if (modelId) {
+    const provider = getProviderFromModelId(modelId);
+    const displayName = getDisplayNameFromModelId(modelId);
+
+    return {
+      src: getProviderIcon(provider),
+      name: displayName,
+    };
+  }
+
+  // Fallback for assistant messages without model info
+  return {
+    src: '/static/icons/ai-models/default.png',
+    name: 'AI',
+  };
 }

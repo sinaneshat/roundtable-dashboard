@@ -12,8 +12,11 @@
 import { z } from 'zod';
 
 import type { CreateThreadRequestSchema } from '@/api/routes/chat/schema';
-import { MessageContentSchema, ThreadModeSchema } from '@/api/routes/chat/schema';
-import { isValidModelId } from '@/lib/ai/models-config';
+import {
+  isValidModelId,
+  MessageContentSchema,
+  ThreadModeSchema,
+} from '@/api/routes/chat/schema';
 import type { ChatModeId } from '@/lib/config/chat-modes';
 import { getDefaultChatMode } from '@/lib/config/chat-modes';
 

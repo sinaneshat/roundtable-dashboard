@@ -50,19 +50,12 @@ function PostHogProvider({
           },
           // Performance optimizations
           loaded: () => {
-            if (process.env.NODE_ENV === 'development') {
-              console.log('PostHog initialized in production mode');
-            }
+            // PostHog initialized successfully
           },
         });
       }
     } else if (!isProduction) {
-      // Log that PostHog is disabled in non-production environments
-      if (process.env.NODE_ENV === 'development') {
-        console.log(
-          `PostHog disabled in ${environment || 'development'} environment`,
-        );
-      }
+      // PostHog is disabled in non-production environments
     }
   }, [apiKey, apiHost, environment]);
 

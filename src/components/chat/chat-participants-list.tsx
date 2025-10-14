@@ -43,11 +43,10 @@ import { useCreateCustomRoleMutation, useDeleteCustomRoleMutation } from '@/hook
 import { useCustomRolesQuery } from '@/hooks/queries/chat-roles';
 import { useModelsQuery } from '@/hooks/queries/models';
 import { useFuzzySearch } from '@/hooks/utils/use-fuzzy-search';
-import { DEFAULT_ROLES } from '@/lib/ai/models-config';
-import { getProviderIcon } from '@/lib/ai/provider-icons';
 import type { ParticipantConfig } from '@/lib/schemas/chat-forms';
 import { toastManager } from '@/lib/toast/toast-manager';
 import { cn } from '@/lib/ui/cn';
+import { DEFAULT_ROLES, getProviderIcon } from '@/lib/utils/ai-display';
 import { getApiErrorMessage } from '@/lib/utils/error-handling';
 
 type ChatParticipantsListProps = {

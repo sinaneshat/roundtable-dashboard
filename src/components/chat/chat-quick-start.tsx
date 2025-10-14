@@ -8,10 +8,10 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Card } from '@/components/ui/card';
 import { useModelsQuery } from '@/hooks/queries/models';
 import { useUsageStatsQuery } from '@/hooks/queries/usage';
-import { getProviderIcon } from '@/lib/ai/provider-icons';
 import type { ChatModeId } from '@/lib/config/chat-modes';
 import type { ParticipantConfig } from '@/lib/schemas/chat-forms';
 import { cn } from '@/lib/ui/cn';
+import { getProviderIcon } from '@/lib/utils/ai-display';
 
 // ============================================================================
 // Types
@@ -50,7 +50,10 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
 
   // ✅ DYNAMIC: Fetch all models from OpenRouter API with tier access info
   const { data: modelsResponse, isLoading: modelsLoading } = useModelsQuery();
-  const allModels = modelsResponse?.success ? modelsResponse.data.models : [];
+  const allModels = useMemo(
+    () => (modelsResponse?.success ? modelsResponse.data.models : []),
+    [modelsResponse],
+  );
 
   // ✅ BACKEND-COMPUTED ACCESS: Use backend's is_accessible_to_user flag
   const accessibleModels = useMemo(() => {

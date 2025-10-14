@@ -18,8 +18,8 @@ import { useTranslations } from 'next-intl';
 
 import type { ParticipantAnalysis } from '@/api/routes/chat/schema';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { getAvatarPropsFromModelId } from '@/lib/ai/avatar-helpers';
 import { cn } from '@/lib/ui/cn';
+import { getAvatarPropsFromModelId } from '@/lib/utils/ai-display';
 
 type ParticipantAnalysisCardProps = {
   analysis: ParticipantAnalysis;

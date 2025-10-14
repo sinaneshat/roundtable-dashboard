@@ -1,26 +1,16 @@
-import type { ChatThreadChangelog } from '@/api/routes/chat/schema';
-
 /**
- * Action types for grouped changes
+ * Changelog Display Helpers
+ *
+ * ✅ UI-ONLY UTILITIES: Changelog grouping and sorting logic
+ * ✅ IMPORTS FROM API: All types come from @/api/routes/chat/schema
  */
-export type ChangeAction = 'added' | 'modified' | 'removed';
 
-/**
- * Grouped change entry with action categorization
- */
-export type GroupedChange = {
-  id: string;
-  action: ChangeAction;
-  change: ChatThreadChangelog;
-};
-
-/**
- * Group of changes that occurred together
- */
-export type ChangeGroup = {
-  timestamp: Date;
-  changes: GroupedChange[];
-};
+import type {
+  ChangeAction,
+  ChangeGroup,
+  ChatThreadChangelog,
+  GroupedChange,
+} from '@/api/routes/chat/schema';
 
 /**
  * Categorize a change type into an action (added, modified, removed)

@@ -49,10 +49,17 @@ type RootLayoutProps = {
 };
 
 export default async function Layout({ children, modal }: RootLayoutProps) {
-  const translations = await getMessages();
   const env = process.env;
   const tAeo = await getTranslations('seo.aeo');
   const tFeatures = await getTranslations('seo.features');
+
+  // Get all messages for client components
+  const messages = await getMessages();
+
+  // Static locale configuration (English-only app)
+  const locale = 'en';
+  const timeZone = 'UTC';
+  const now = new Date();
 
   return (
     <html
@@ -95,8 +102,10 @@ export default async function Layout({ children, modal }: RootLayoutProps) {
         />
 
         <AppProviders
-          locale="en"
-          translations={translations as Record<string, unknown>}
+          locale={locale}
+          messages={messages}
+          timeZone={timeZone}
+          now={now}
           env={{
             NEXT_PUBLIC_WEBAPP_ENV: env.NEXT_PUBLIC_WEBAPP_ENV,
             NEXT_PUBLIC_MAINTENANCE: env.NEXT_PUBLIC_MAINTENANCE,

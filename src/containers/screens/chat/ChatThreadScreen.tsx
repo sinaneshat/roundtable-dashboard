@@ -24,17 +24,16 @@ import { useModelsQuery } from '@/hooks/queries/models';
 import { useUsageStatsQuery } from '@/hooks/queries/usage';
 import { useBoolean } from '@/hooks/utils';
 import { useChatStreaming } from '@/hooks/utils/use-chat-streaming';
-import { getAvatarPropsFromModelId } from '@/lib/ai/avatar-helpers';
-import { groupChangelogByTime } from '@/lib/ai/changelog-helpers';
-import {
-  chatMessagesToUIMessages,
-  getMessageMetadata,
-} from '@/lib/ai/message-helpers';
-// import { detectConversationRounds } from '@/lib/ai/round-helpers'; // REMOVED - No longer detecting rounds in frontend
 import { useSession } from '@/lib/auth/client';
 import type { ChatModeId } from '@/lib/config/chat-modes';
 import { invalidationPatterns } from '@/lib/data/query-keys';
 import type { ParticipantConfig } from '@/lib/schemas/chat-forms';
+import { getAvatarPropsFromModelId } from '@/lib/utils/ai-display';
+import { groupChangelogByTime } from '@/lib/utils/changelog-helpers';
+import {
+  chatMessagesToUIMessages,
+  getMessageMetadata,
+} from '@/lib/utils/message-transforms';
 
 type ChatThreadScreenProps = {
   thread: ChatThread;
@@ -216,7 +215,7 @@ export default function ChatThreadScreen({
         if (result.success && result.data?.messages) {
           console.warn('[ChatThreadScreen] Refetched', result.data.messages.length, 'messages from backend');
           // Transform backend messages to UI messages
-          const { chatMessagesToUIMessages } = await import('@/lib/ai/message-helpers');
+          const { chatMessagesToUIMessages } = await import('@/lib/utils/message-transforms');
           setMessages(chatMessagesToUIMessages(result.data.messages));
 
           // Variants are already included in message metadata from server

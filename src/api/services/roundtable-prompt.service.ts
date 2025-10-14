@@ -10,7 +10,7 @@ import type {
   ParticipantInfo,
   RoundtablePromptConfig,
 } from '@/api/routes/chat/schema';
-import { extractModelName } from '@/lib/ai/models-config';
+import { extractModelName } from '@/api/routes/chat/schema';
 
 export function buildRoundtableSystemPrompt(config: RoundtablePromptConfig): string {
   const {

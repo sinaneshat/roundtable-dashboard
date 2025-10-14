@@ -3,7 +3,18 @@
 import { ArrowRight, Clock, Minus, Pencil, Plus } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
-import type { ChatThreadChangelog } from '@/api/routes/chat/schema';
+import type {
+  ChangeAction,
+  ChangeGroup,
+  ChatThreadChangelog,
+} from '@/api/routes/chat/schema';
+import {
+  parseModeChangeData,
+  parseParticipantAddedData,
+  parseParticipantRemovedData,
+  parseParticipantsReorderedData,
+  parseParticipantUpdatedData,
+} from '@/api/routes/chat/schema';
 import {
   ChainOfThought,
   ChainOfThoughtContent,
@@ -11,18 +22,10 @@ import {
 } from '@/components/ai-elements/chain-of-thought';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useModelsQuery } from '@/hooks/queries/models';
-import type { ChangeAction, ChangeGroup } from '@/lib/ai/changelog-helpers';
-import { sortChangesByAction } from '@/lib/ai/changelog-helpers';
-import {
-  parseModeChangeData,
-  parseParticipantAddedData,
-  parseParticipantRemovedData,
-  parseParticipantsReorderedData,
-  parseParticipantUpdatedData,
-} from '@/lib/ai/changelog-schemas';
-import { getProviderIcon } from '@/lib/ai/provider-icons';
 import { formatRelativeTime } from '@/lib/format/date';
 import { cn } from '@/lib/ui/cn';
+import { getProviderIcon } from '@/lib/utils/ai-display';
+import { sortChangesByAction } from '@/lib/utils/changelog-helpers';
 
 type ConfigurationChangesGroupProps = {
   group: ChangeGroup;
@@ -250,8 +253,8 @@ function ChangeItem({ change }: { change: ChatThreadChangelog }) {
       {change.changeType === 'participants_reordered' && participants && participants.length > 0 && (
         <>
           {participants
-            .sort((a, b) => a.order - b.order)
-            .map((p, index) => {
+            .sort((a: { order: number }, b: { order: number }) => a.order - b.order)
+            .map((p: { id: string; modelId: string; role: string | null; order: number }, index: number) => {
               const pModel = allModels.find(m => m.id === p.modelId);
               if (!pModel)
                 return null;

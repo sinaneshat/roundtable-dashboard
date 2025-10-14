@@ -34,13 +34,13 @@ import { WavyBackground } from '@/components/ui/wavy-background';
 import { BRAND } from '@/constants/brand';
 import { useCreateThreadMutation } from '@/hooks/mutations/chat-mutations';
 import { useModelsQuery } from '@/hooks/queries/models';
-import { getAvatarPropsFromModelId } from '@/lib/ai/avatar-helpers';
-import { getMessageMetadata } from '@/lib/ai/message-helpers';
 import { useSession } from '@/lib/auth/client';
 import type { ChatModeId } from '@/lib/config/chat-modes';
 import type { ParticipantConfig } from '@/lib/schemas/chat-forms';
 import { chatInputFormDefaults, chatInputFormToCreateThreadRequest } from '@/lib/schemas/chat-forms';
 import { showApiErrorToast } from '@/lib/toast';
+import { getAvatarPropsFromModelId } from '@/lib/utils/ai-display';
+import { getMessageMetadata } from '@/lib/utils/message-transforms';
 
 export default function ChatOverviewScreen() {
   const router = useRouter();
@@ -126,10 +126,6 @@ export default function ChatOverviewScreen() {
           let messageId = '';
 
           try {
-            if (retryAttempt > 0) {
-              console.info(`[RETRY] Participant ${participantIndex + 1}, attempt ${retryAttempt + 1}/${MAX_RETRIES}`);
-            }
-
             const currentMessages = messagesRef.current; // Use ref for latest value
 
             const response = await fetch(`/api/v1/chat/threads/${threadId}/stream`, {
@@ -250,7 +246,7 @@ export default function ChatOverviewScreen() {
                       const errorType = errorData.type || 'unknown';
 
                       // Log error for debugging (not alarming - this is handled gracefully)
-                      console.info('[PARTICIPANT ERROR - CONTINUING]', {
+                      console.warn('[PARTICIPANT ERROR - CONTINUING]', {
                         participant: participantIndex + 1,
                         total: participantCount,
                         errorType,

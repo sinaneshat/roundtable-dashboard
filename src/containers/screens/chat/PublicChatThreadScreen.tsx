@@ -18,9 +18,9 @@ import { Button } from '@/components/ui/button';
 import { BRAND } from '@/constants';
 import { usePublicThreadQuery } from '@/hooks/queries/chat-threads';
 import { useModelsQuery } from '@/hooks/queries/models';
-import { getAvatarPropsFromModelId } from '@/lib/ai/avatar-helpers';
-import { groupChangelogByTime } from '@/lib/ai/changelog-helpers';
-import { chatMessagesToUIMessages, getMessageMetadata } from '@/lib/ai/message-helpers';
+import { getAvatarPropsFromModelId } from '@/lib/utils/ai-display';
+import { groupChangelogByTime } from '@/lib/utils/changelog-helpers';
+import { chatMessagesToUIMessages, getMessageMetadata } from '@/lib/utils/message-transforms';
 
 /**
  * Public Chat Thread Screen - Client Component
