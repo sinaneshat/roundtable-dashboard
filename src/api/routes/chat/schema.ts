@@ -811,26 +811,6 @@ export const RetryAttemptMetadataSchema = z.object({
 
 export type RetryAttemptMetadata = z.infer<typeof RetryAttemptMetadataSchema>;
 
-// ============================================================================
-// AI Configuration Constants - Re-exported from @/constants/ai-parameters
-// ============================================================================
-
-/**
- * ✅ SINGLE SOURCE OF TRUTH: AI parameters moved to @/constants/ai-parameters.ts
- * Re-exported here for backward compatibility with existing imports
- *
- * All AI configuration (defaults, mode-specific params, timeouts, retries)
- * is now centralized in the constants directory following separation of concerns.
- */
-export {
-  AI_RETRY_CONFIG,
-  AI_TIMEOUT_CONFIG,
-  DEFAULT_AI_PARAMS,
-  getAIParamsForMode,
-  MODE_SPECIFIC_AI_PARAMS,
-  TITLE_GENERATION_CONFIG,
-} from '@/constants/ai-parameters';
-
 export type ChatThreadChangelog = z.infer<typeof ChatThreadChangelogSchema>;
 
 export type RoundtablePromptParams = z.infer<typeof RoundtablePromptParamsSchema>;

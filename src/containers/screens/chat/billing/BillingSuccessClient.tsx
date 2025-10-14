@@ -6,11 +6,11 @@ import { useTranslations } from 'next-intl';
 import { useEffect, useState } from 'react';
 
 import type { Subscription } from '@/api/routes/billing/schema';
+import type { SubscriptionTier } from '@/api/services/product-logic.service';
+import { getMaxModelsForTier, getTierFromProductId, SUBSCRIPTION_TIER_NAMES } from '@/api/services/product-logic.service';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScaleIn, StaggerContainer, StaggerItem } from '@/components/ui/motion';
-import { getMaxModelsSync, getTierName } from '@/constants/subscription-tiers';
-import type { SubscriptionTier } from '@/db/tables/usage';
 import { useSyncAfterCheckoutMutation } from '@/hooks/mutations/checkout';
 import { useCurrentSubscriptionQuery, useSubscriptionsQuery } from '@/hooks/queries/subscriptions';
 import { useUsageStatsQuery } from '@/hooks/queries/usage';
@@ -149,25 +149,14 @@ export function BillingSuccessClient() {
   }
 
   // Success state - show subscription details
-  // Get product tier from metadata (you'll need to add this mapping)
-  const getTierFromProductId = (productId: string): SubscriptionTier => {
-    // This is a simplified version - you should have proper mapping
-    if (productId.includes('starter'))
-      return 'starter';
-    if (productId.includes('pro'))
-      return 'pro';
-    if (productId.includes('power'))
-      return 'power';
-    return 'free';
-  };
-
+  // Use centralized tier mapping from ai-config service
   const tier = displaySubscription?.productId
     ? getTierFromProductId(displaySubscription.productId)
     : 'free';
 
   // ✅ SINGLE SOURCE OF TRUTH: Get tier quotas from usage stats (database-driven)
-  const tierName = getTierName(tier);
-  const maxModels = getMaxModelsSync(tier);
+  const tierName = SUBSCRIPTION_TIER_NAMES[tier as SubscriptionTier];
+  const maxModels = getMaxModelsForTier(tier as SubscriptionTier);
   const threadsLimit = usageStats?.data?.threads?.limit || 0;
   const messagesLimit = usageStats?.data?.messages?.limit || 0;
   const customRolesLimit = usageStats?.data?.customRoles?.limit || 0;

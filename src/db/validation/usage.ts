@@ -1,37 +1,12 @@
 import { createInsertSchema, createSelectSchema } from 'drizzle-zod';
 import { z } from 'zod';
 
-import {
-  getTierName as getSubscriptionTierName,
-  isValidSubscriptionTier,
-  SUBSCRIPTION_TIER_NAMES,
-  subscriptionTierSchema,
-} from '@/constants/subscription-tiers';
-import type { SubscriptionTier } from '@/db/tables/usage';
-import { SUBSCRIPTION_TIERS } from '@/db/tables/usage';
+import { subscriptionTierSchema } from '@/api/services/product-logic.service';
 
 import {
-  subscriptionTierQuotas,
   userChatUsage,
   userChatUsageHistory,
 } from '../tables/usage';
-
-// ============================================================================
-// Re-exports from Single Source of Truth
-// ============================================================================
-
-/**
- * ✅ SINGLE SOURCE OF TRUTH: All tier-related exports from @/db/config/subscription-tiers
- * Re-exported for backward compatibility with existing imports
- */
-export {
-  getSubscriptionTierName,
-  isValidSubscriptionTier,
-  SUBSCRIPTION_TIER_NAMES,
-  SUBSCRIPTION_TIERS,
-  type SubscriptionTier,
-  subscriptionTierSchema,
-};
 
 // ============================================================================
 // User Chat Usage Schemas
@@ -40,9 +15,7 @@ export {
 export const userChatUsageSelectSchema = createSelectSchema(userChatUsage);
 export const userChatUsageInsertSchema = createInsertSchema(userChatUsage, {
   threadsCreated: schema => schema.min(0),
-  threadsLimit: schema => schema.min(0),
   messagesCreated: schema => schema.min(0),
-  messagesLimit: schema => schema.min(0),
   subscriptionTier: () => subscriptionTierSchema,
   isAnnual: () => z.boolean(),
 });
@@ -66,24 +39,6 @@ export const userChatUsageHistoryInsertSchema = createInsertSchema(userChatUsage
 
 export type UserChatUsageHistory = z.infer<typeof userChatUsageHistorySelectSchema>;
 export type UserChatUsageHistoryInsert = z.infer<typeof userChatUsageHistoryInsertSchema>;
-
-// ============================================================================
-// Subscription Tier Quotas Schemas
-// ============================================================================
-
-export const subscriptionTierQuotasSelectSchema = createSelectSchema(subscriptionTierQuotas);
-export const subscriptionTierQuotasInsertSchema = createInsertSchema(subscriptionTierQuotas, {
-  tier: () => subscriptionTierSchema,
-  isAnnual: () => z.boolean(),
-  threadsPerMonth: schema => schema.min(0),
-  messagesPerMonth: schema => schema.min(0),
-  maxAiModels: schema => schema.min(1).max(50),
-  allowCustomRoles: () => z.boolean(),
-  allowThreadExport: () => z.boolean(),
-});
-
-export type SubscriptionTierQuotas = z.infer<typeof subscriptionTierQuotasSelectSchema>;
-export type SubscriptionTierQuotasInsert = z.infer<typeof subscriptionTierQuotasInsertSchema>;
 
 // ============================================================================
 // Helper Schemas for Usage Tracking

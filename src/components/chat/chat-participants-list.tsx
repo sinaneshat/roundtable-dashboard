@@ -12,6 +12,8 @@ import { useEffect, useMemo, useState } from 'react';
 import type { ChatCustomRole } from '@/api/routes/chat/schema';
 // ✅ ZOD-INFERRED TYPE: Import from schema (no hardcoded interfaces)
 import type { BaseModelResponse } from '@/api/routes/models/schema';
+import type { SubscriptionTier } from '@/api/services/product-logic.service';
+import { getMaxModelsForTier, getTierName, getTiersInOrder, SUBSCRIPTION_TIER_NAMES } from '@/api/services/product-logic.service';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -36,8 +38,6 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import { getMaxModelsSync, getTierName, getTiersInOrder } from '@/constants/subscription-tiers';
-import type { SubscriptionTier } from '@/db/tables/usage';
 import { useCreateCustomRoleMutation, useDeleteCustomRoleMutation } from '@/hooks/mutations/chat-mutations';
 import { useCustomRolesQuery } from '@/hooks/queries/chat-roles';
 import { useModelsQuery } from '@/hooks/queries/models';
@@ -531,7 +531,7 @@ function ModelItem({
   // Create upgrade tooltip content with proper messaging (using centralized getTierName)
   let upgradeTooltipContent: string | undefined;
   if (isDisabledDueToTier) {
-    upgradeTooltipContent = `Upgrade to ${getTierName(model.minTier)} to unlock this model`;
+    upgradeTooltipContent = `Upgrade to ${SUBSCRIPTION_TIER_NAMES[model.minTier]} to unlock this model`;
   } else if (isDisabledDueToLimit) {
     upgradeTooltipContent = `Your ${userTierInfo?.tier_name || 'current'} plan allows up to ${maxModels} models per conversation. Upgrade to select more models.`;
   }
@@ -617,7 +617,7 @@ function ModelItem({
                     <>
                       <Lock className="size-3 text-muted-foreground flex-shrink-0" />
                       <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 font-medium bg-primary/10 text-primary border-primary/20">
-                        {getTierName(model.minTier)}
+                        {SUBSCRIPTION_TIER_NAMES[model.minTier]}
                         {' '}
                         Required
                       </Badge>
@@ -664,7 +664,7 @@ function ModelItem({
               <p className="text-xs text-muted-foreground">
                 Upgrade to
                 {' '}
-                {isDisabledDueToTier ? getTierName(model.minTier) : 'a higher tier'}
+                {isDisabledDueToTier ? SUBSCRIPTION_TIER_NAMES[model.minTier] : 'a higher tier'}
                 {' '}
                 to unlock this model
               </p>
@@ -735,7 +735,7 @@ export function ChatParticipantsList({
   const userTier = usageStatsData?.data?.subscription?.tier || 'free';
 
   // ✅ TIER CONFIG: Get max models from tier configuration (synchronous for UI)
-  const maxModels = getMaxModelsSync(userTier);
+  const maxModels = getMaxModelsForTier(userTier);
   const tierName = getTierName(userTier);
 
   // ✅ BACKEND MODELS + UI PROPERTIES: Add computed properties for component

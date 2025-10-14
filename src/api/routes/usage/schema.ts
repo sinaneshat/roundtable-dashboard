@@ -1,6 +1,7 @@
 import { z } from '@hono/zod-openapi';
 
 import { createApiResponseSchema } from '@/api/core/schemas';
+import { SUBSCRIPTION_TIERS } from '@/api/services/product-logic.service';
 import { quotaCheckSchema, usageStatsSchema } from '@/db/validation/usage';
 
 // ============================================================================
@@ -112,7 +113,7 @@ export const UsageStatsPayloadSchema = usageStatsSchema
       .extend({
         tier: usageStatsSchema.shape.subscription.shape.tier.openapi({
           description: 'Current subscription tier',
-          example: 'free',
+          example: SUBSCRIPTION_TIERS[0],
         }),
         isAnnual: z.boolean().openapi({
           description: 'Whether subscription is annual',
@@ -164,7 +165,7 @@ export const QuotaCheckPayloadSchema = quotaCheckSchema
     }),
     tier: quotaCheckSchema.shape.tier.openapi({
       description: 'Current subscription tier',
-      example: 'free',
+      example: SUBSCRIPTION_TIERS[0],
     }),
   })
   .openapi('QuotaCheckPayload');

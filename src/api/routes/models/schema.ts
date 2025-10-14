@@ -7,7 +7,7 @@
 import { z } from 'zod';
 
 import { createApiResponseSchema } from '@/api/core/schemas';
-import { subscriptionTierSchema } from '@/constants/subscription-tiers';
+import { subscriptionTierSchema } from '@/api/services/product-logic.service';
 
 // ============================================================================
 // Response Schemas

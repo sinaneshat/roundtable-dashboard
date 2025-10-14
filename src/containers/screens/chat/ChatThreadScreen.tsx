@@ -6,7 +6,7 @@ import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { ChatMessage, ChatParticipant, ChatThread } from '@/api/routes/chat/schema';
-import { canAccessModelByPricing } from '@/api/services/model-pricing-tiers.service';
+import { canAccessModelByPricing } from '@/api/services/product-logic.service';
 import { Message, MessageAvatar, MessageContent } from '@/components/ai-elements/message';
 import { Response } from '@/components/ai-elements/response';
 import { ChatDeleteDialog } from '@/components/chat/chat-delete-dialog';

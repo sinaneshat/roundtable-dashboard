@@ -11,13 +11,12 @@ import { eq } from 'drizzle-orm';
 import { ErrorContextBuilders } from '@/api/common/error-contexts';
 import { createError } from '@/api/common/error-handling';
 import { createHandler, Responses } from '@/api/core';
-import { canAccessModelByPricing, getRequiredTierForModel } from '@/api/services/model-pricing-tiers.service';
 import { openRouterModelsService } from '@/api/services/openrouter-models.service';
+import type { SubscriptionTier } from '@/api/services/product-logic.service';
+import { canAccessModelByPricing, getRequiredTierForModel, getTiersInOrder, SUBSCRIPTION_TIER_NAMES, SUBSCRIPTION_TIERS } from '@/api/services/product-logic.service';
 import type { ApiEnv } from '@/api/types';
-import { getTierName, getTiersInOrder } from '@/constants/subscription-tiers';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db/schema';
-import type { SubscriptionTier } from '@/db/tables/usage';
 
 import type { listModelsRoute } from './route';
 import type { TierGroup } from './schema';
@@ -59,7 +58,7 @@ export const listModelsHandler: RouteHandler<typeof listModelsRoute, ApiEnv> = c
     });
 
     // Default to free tier if no usage record exists
-    const userTier: SubscriptionTier = usage?.subscriptionTier || 'free';
+    const userTier: SubscriptionTier = usage?.subscriptionTier || SUBSCRIPTION_TIERS[0];
 
     c.logger.info(`User subscription tier: ${userTier}`, {
       logType: 'operation',
@@ -105,7 +104,7 @@ export const listModelsHandler: RouteHandler<typeof listModelsRoute, ApiEnv> = c
       const tierModels = modelsWithTierInfo.filter(m => m.required_tier === tier);
       return {
         tier,
-        tier_name: getTierName(tier),
+        tier_name: SUBSCRIPTION_TIER_NAMES[tier],
         models: tierModels,
         is_user_tier: tier === userTier,
       };

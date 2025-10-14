@@ -17,15 +17,6 @@ import { createHandler, Responses } from '@/api/core';
 import { CursorPaginationQuerySchema } from '@/api/core/schemas';
 import { apiLogger } from '@/api/middleware/hono-logger';
 import type { ClassifiedError, ParticipantInfo, RoundtablePromptConfig } from '@/api/routes/chat/schema';
-import {
-  AI_TIMEOUT_CONFIG,
-  DEFAULT_AI_PARAMS,
-} from '@/api/routes/chat/schema';
-import {
-  canAccessModelByPricing,
-  getModelPricingDisplay,
-  getRequiredTierForModel,
-} from '@/api/services/model-pricing-tiers.service';
 import { initializeOpenRouter, openRouterService } from '@/api/services/openrouter.service';
 import {
   classifyOpenRouterError,
@@ -34,6 +25,16 @@ import {
 } from '@/api/services/openrouter-error-handler';
 import { openRouterModelsService } from '@/api/services/openrouter-models.service';
 import { retryParticipantStream } from '@/api/services/participant-retry.service';
+import type { SubscriptionTier } from '@/api/services/product-logic.service';
+import {
+  AI_TIMEOUT_CONFIG,
+  canAccessModelByPricing,
+  DEFAULT_AI_PARAMS,
+  getMaxOutputTokensForTier,
+  getModelPricingDisplay,
+  getRequiredTierForModel,
+  SUBSCRIPTION_TIER_NAMES,
+} from '@/api/services/product-logic.service';
 import {
   buildRoundtablePrompt,
 } from '@/api/services/roundtable-prompt.service';
@@ -58,10 +59,8 @@ import {
   incrementThreadUsage,
 } from '@/api/services/usage-tracking.service';
 import type { ApiEnv } from '@/api/types';
-import { getMaxOutputTokens, getTierName } from '@/constants/subscription-tiers';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db/schema';
-import type { SubscriptionTier } from '@/db/tables/usage';
 import type { ChatModeId, ThreadStatus } from '@/lib/config/chat-modes';
 
 import type {
@@ -273,7 +272,7 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
       if (!canAccess) {
         const requiredTier = getRequiredTierForModel(model);
         throw createError.unauthorized(
-          `Your ${getTierName(userTier)} plan does not include access to ${model.name}. Upgrade to ${getTierName(requiredTier)} or higher to use this model.`,
+          `Your ${SUBSCRIPTION_TIER_NAMES[userTier]} plan does not include access to ${model.name}. Upgrade to ${SUBSCRIPTION_TIER_NAMES[requiredTier]} or higher to use this model.`,
           {
             errorType: 'authorization',
             resource: 'model',
@@ -789,7 +788,7 @@ export const addParticipantHandler: RouteHandler<typeof addParticipantRoute, Api
     if (!canAccess) {
       const requiredTier = getRequiredTierForModel(model);
       throw createError.unauthorized(
-        `Your ${getTierName(userTier)} plan does not include access to ${model.name}. Upgrade to ${getTierName(requiredTier)} or higher to use this model.`,
+        `Your ${SUBSCRIPTION_TIER_NAMES[userTier]} plan does not include access to ${model.name}. Upgrade to ${SUBSCRIPTION_TIER_NAMES[requiredTier]} or higher to use this model.`,
         {
           errorType: 'authorization',
           resource: 'model',
@@ -809,7 +808,7 @@ export const addParticipantHandler: RouteHandler<typeof addParticipantRoute, Api
     const maxModels = await getMaxModels(userTier);
     if (currentModelCount >= maxModels) {
       throw createError.badRequest(
-        `Your ${getTierName(userTier)} plan allows up to ${maxModels} AI models per conversation. You already have ${currentModelCount} models. Remove a model or upgrade your plan to add more.`,
+        `Your ${SUBSCRIPTION_TIER_NAMES[userTier]} plan allows up to ${maxModels} AI models per conversation. You already have ${currentModelCount} models. Remove a model or upgrade your plan to add more.`,
         {
           errorType: 'validation',
           field: 'modelId',
@@ -1087,7 +1086,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
           const requiredTier = getRequiredTierForModel(openRouterModel);
           const modelPricing = getModelPricingDisplay(openRouterModel);
           throw createError.unauthorized(
-            `Your ${getTierName(userTier)} plan does not include access to ${openRouterModel.name} (${modelPricing}). Upgrade to ${getTierName(requiredTier)} or higher to use this model.`,
+            `Your ${SUBSCRIPTION_TIER_NAMES[userTier]} plan does not include access to ${openRouterModel.name} (${modelPricing}). Upgrade to ${SUBSCRIPTION_TIER_NAMES[requiredTier]} or higher to use this model.`,
             {
               errorType: 'authorization',
               resource: 'model',
@@ -1101,7 +1100,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
       const maxModels = await getMaxModels(userTier);
       if (newParticipants.length > maxModels) {
         throw createError.unauthorized(
-          `Your ${getTierName(userTier)} plan allows up to ${maxModels} AI models per conversation. You've selected ${newParticipants.length} models. Remove some models or upgrade your plan.`,
+          `Your ${SUBSCRIPTION_TIER_NAMES[userTier]} plan allows up to ${maxModels} AI models per conversation. You've selected ${newParticipants.length} models. Remove some models or upgrade your plan.`,
           {
             errorType: 'authorization',
             resource: 'participants',
@@ -1472,7 +1471,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
 
     // ✅ Cost Control: Calculate max output tokens based on tier
     // Note: OpenRouter models don't have maxOutputTokens config, use tier limits
-    const tierMaxOutputTokens = getMaxOutputTokens(userTier);
+    const tierMaxOutputTokens = getMaxOutputTokensForTier(userTier);
     const maxOutputTokensLimit = tierMaxOutputTokens;
 
     // ✅ RETRY MECHANISM: Up to 10 attempts with fallback models (USER REQUIREMENT)

@@ -7,7 +7,7 @@
 
 import { z } from 'zod';
 
-import { subscriptionTierSchema } from '@/constants/subscription-tiers';
+import { subscriptionTierSchema } from '@/api/services/product-logic.service';
 
 // ============================================================================
 // Base Metadata Schema

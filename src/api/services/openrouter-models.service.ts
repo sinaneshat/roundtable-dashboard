@@ -13,9 +13,14 @@
 import { apiLogger } from '@/api/middleware/hono-logger';
 import type { BaseModelResponse, RawOpenRouterModel } from '@/api/routes/models/schema';
 import { OpenRouterModelsResponseSchema } from '@/api/routes/models/schema';
-import type { SubscriptionTier } from '@/db/tables/usage';
-
-import { canAccessModelByPricing, costPerMillion, getRequiredTierForModel, isModelFree, parsePrice } from './model-pricing-tiers.service';
+import type { SubscriptionTier } from '@/api/services/product-logic.service';
+import {
+  costPerMillion,
+  getDefaultModelForTier,
+  getRequiredTierForModel,
+  isModelFree,
+  parsePrice,
+} from '@/api/services/product-logic.service';
 
 // ============================================================================
 // SCHEMA IMPORTS - SINGLE SOURCE OF TRUTH
@@ -299,13 +304,7 @@ class OpenRouterModelsService {
   /**
    * ✅ GET DEFAULT MODEL: Get the most popular accessible model for a user's tier
    *
-   * Returns the first model from the top 10 that the user can access based on their subscription tier.
-   * This ensures the default model is always:
-   * 1. One of the most popular models
-   * 2. Accessible to the user's current tier
-   * 3. Dynamically selected (no hardcoding)
-   *
-   * Falls back to the cheapest free model if no popular models are accessible (edge case).
+   * Uses the centralized getDefaultModelForTier function from product-logic.service.ts
    *
    * @param userTier - User's subscription tier
    * @returns The default model ID for the user
@@ -313,34 +312,9 @@ class OpenRouterModelsService {
   async getDefaultModelForTier(userTier: SubscriptionTier): Promise<string> {
     const top100 = await this.getTop100Models();
 
-    // Get top 10 most popular models
-    const top10 = top100.slice(0, 10);
-
-    // ✅ SINGLE SOURCE OF TRUTH: Use canAccessModelByPricing directly from model-pricing-tiers.service.ts
-    const defaultModel = top10.find(model => canAccessModelByPricing(userTier, model));
-
-    if (defaultModel) {
-      apiLogger.info('Selected default model for user tier', {
-        userTier,
-        modelId: defaultModel.id,
-        modelName: defaultModel.name,
-        provider: defaultModel.provider,
-        isPopular: true,
-      });
-      return defaultModel.id;
-    }
-
-    // Fallback: Find the cheapest free model (edge case - should rarely happen)
-    const freeModels = top100.filter(m => m.is_free);
-    const fallbackModel = freeModels[0] || top100[0];
-
-    apiLogger.warn('No popular model accessible for user tier, using fallback', {
-      userTier,
-      fallbackModelId: fallbackModel?.id || 'none',
-      fallbackModelName: fallbackModel?.name || 'none',
-    });
-
-    return fallbackModel?.id || 'google/gemini-flash-1.5'; // Ultimate fallback
+    // Use the centralized function from product-logic.service.ts
+    const defaultModelId = getDefaultModelForTier(top100, userTier);
+    return defaultModelId || top100[0]?.id || 'openai/gpt-4o-mini';
   }
 
   /**

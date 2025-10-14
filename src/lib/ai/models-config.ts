@@ -1,42 +1,13 @@
 /**
- * AI Model Utilities - SINGLE SOURCE OF TRUTH
+ * AI Model UI Utilities
  *
- * ✅ All model data from backend OpenRouter API
- * ✅ All pricing logic from backend service
- * ✅ All tier configuration from backend
- * ✅ Zero hardcoding, zero duplication
+ * ⚠️ NO BUSINESS LOGIC HERE
+ * ⚠️ NO RE-EXPORTS
+ * ⚠️ Only UI-specific helpers (roles, display formatters, simple validation)
  *
- * This file exists ONLY to:
- * 1. Re-export backend utilities for convenience
- * 2. Provide minimal helper functions
- * 3. Define non-model constants (like DEFAULT_ROLES)
+ * For all business logic, import directly from:
+ * @see @/api/services/product-logic.service
  */
-
-// ============================================================================
-// RE-EXPORT BACKEND UTILITIES (Single Source of Truth)
-// ============================================================================
-
-/**
- * ✅ ALL pricing and tier logic from backend service
- * These are re-exported for frontend convenience
- */
-export {
-  canAccessModelByPricing,
-  getModelCostCategory,
-  getModelPricingDisplay,
-  getRequiredTierForModel,
-  getTierUpgradeMessage,
-  isModelFree,
-} from '@/api/services/model-pricing-tiers.service';
-
-/**
- * ✅ TIER UTILITIES: Import tier types from @/db/tables/usage
- * Tier helper functions available from @/constants/subscription-tiers
- */
-export {
-  getTierName,
-  getTiersInOrder,
-} from '@/constants/subscription-tiers';
 
 // ============================================================================
 // MODEL VALIDATION (Simple String Validation)
@@ -57,7 +28,7 @@ export function isValidOpenRouterModelId(modelId: string): boolean {
 }
 
 // ============================================================================
-// ROLE DEFINITIONS (Non-Model Constants)
+// ROLE DEFINITIONS (UI Constants Only)
 // ============================================================================
 
 /**

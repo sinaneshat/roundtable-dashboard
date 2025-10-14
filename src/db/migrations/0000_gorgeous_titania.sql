@@ -311,40 +311,18 @@ CREATE TABLE `chat_thread_changelog` (
 CREATE INDEX `chat_thread_changelog_thread_idx` ON `chat_thread_changelog` (`thread_id`);--> statement-breakpoint
 CREATE INDEX `chat_thread_changelog_type_idx` ON `chat_thread_changelog` (`change_type`);--> statement-breakpoint
 CREATE INDEX `chat_thread_changelog_created_idx` ON `chat_thread_changelog` (`created_at`);--> statement-breakpoint
-CREATE TABLE `subscription_tier_quotas` (
-	`id` text PRIMARY KEY NOT NULL,
-	`tier` text NOT NULL,
-	`is_annual` integer DEFAULT false NOT NULL,
-	`threads_per_month` integer NOT NULL,
-	`messages_per_month` integer NOT NULL,
-	`custom_roles_per_month` integer DEFAULT 0 NOT NULL,
-	`max_ai_models` integer DEFAULT 5 NOT NULL,
-	`allow_custom_roles` integer DEFAULT false NOT NULL,
-	`allow_thread_export` integer DEFAULT false NOT NULL,
-	`metadata` text,
-	`created_at` integer NOT NULL,
-	`updated_at` integer NOT NULL
-);
---> statement-breakpoint
-CREATE INDEX `subscription_tier_quotas_tier_idx` ON `subscription_tier_quotas` (`tier`);--> statement-breakpoint
-CREATE INDEX `subscription_tier_quotas_annual_idx` ON `subscription_tier_quotas` (`is_annual`);--> statement-breakpoint
-CREATE INDEX `subscription_tier_quotas_tier_annual_unique_idx` ON `subscription_tier_quotas` (`tier`,`is_annual`);--> statement-breakpoint
 CREATE TABLE `user_chat_usage` (
 	`id` text PRIMARY KEY NOT NULL,
 	`user_id` text NOT NULL,
 	`current_period_start` integer NOT NULL,
 	`current_period_end` integer NOT NULL,
 	`threads_created` integer DEFAULT 0 NOT NULL,
-	`threads_limit` integer NOT NULL,
 	`messages_created` integer DEFAULT 0 NOT NULL,
-	`messages_limit` integer NOT NULL,
 	`custom_roles_created` integer DEFAULT 0 NOT NULL,
-	`custom_roles_limit` integer NOT NULL,
 	`subscription_tier` text DEFAULT 'free' NOT NULL,
 	`is_annual` integer DEFAULT false NOT NULL,
 	`pending_tier_change` text,
 	`pending_tier_is_annual` integer,
-	`pending_tier_price_id` text,
 	`created_at` integer NOT NULL,
 	`updated_at` integer NOT NULL,
 	FOREIGN KEY (`user_id`) REFERENCES `user`(`id`) ON UPDATE no action ON DELETE cascade
@@ -359,10 +337,10 @@ CREATE TABLE `user_chat_usage_history` (
 	`period_start` integer NOT NULL,
 	`period_end` integer NOT NULL,
 	`threads_created` integer DEFAULT 0 NOT NULL,
-	`threads_limit` integer NOT NULL,
 	`messages_created` integer DEFAULT 0 NOT NULL,
-	`messages_limit` integer NOT NULL,
 	`custom_roles_created` integer DEFAULT 0 NOT NULL,
+	`threads_limit` integer NOT NULL,
+	`messages_limit` integer NOT NULL,
 	`custom_roles_limit` integer NOT NULL,
 	`subscription_tier` text NOT NULL,
 	`is_annual` integer DEFAULT false NOT NULL,

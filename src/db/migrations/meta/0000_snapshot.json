@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "e8df84bc-c8d3-4a56-a7d1-3e9413735b8d",
+  "id": "e44935d4-61f5-4c36-a831-d13635d91167",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "account": {
@@ -2183,128 +2183,6 @@
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
-    "subscription_tier_quotas": {
-      "name": "subscription_tier_quotas",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "tier": {
-          "name": "tier",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "is_annual": {
-          "name": "is_annual",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": false
-        },
-        "threads_per_month": {
-          "name": "threads_per_month",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "messages_per_month": {
-          "name": "messages_per_month",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "custom_roles_per_month": {
-          "name": "custom_roles_per_month",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": 0
-        },
-        "max_ai_models": {
-          "name": "max_ai_models",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": 5
-        },
-        "allow_custom_roles": {
-          "name": "allow_custom_roles",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": false
-        },
-        "allow_thread_export": {
-          "name": "allow_thread_export",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": false
-        },
-        "metadata": {
-          "name": "metadata",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        }
-      },
-      "indexes": {
-        "subscription_tier_quotas_tier_idx": {
-          "name": "subscription_tier_quotas_tier_idx",
-          "columns": [
-            "tier"
-          ],
-          "isUnique": false
-        },
-        "subscription_tier_quotas_annual_idx": {
-          "name": "subscription_tier_quotas_annual_idx",
-          "columns": [
-            "is_annual"
-          ],
-          "isUnique": false
-        },
-        "subscription_tier_quotas_tier_annual_unique_idx": {
-          "name": "subscription_tier_quotas_tier_annual_unique_idx",
-          "columns": [
-            "tier",
-            "is_annual"
-          ],
-          "isUnique": false
-        }
-      },
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {}
-    },
     "user_chat_usage": {
       "name": "user_chat_usage",
       "columns": {
@@ -2344,13 +2222,6 @@
           "autoincrement": false,
           "default": 0
         },
-        "threads_limit": {
-          "name": "threads_limit",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
         "messages_created": {
           "name": "messages_created",
           "type": "integer",
@@ -2359,13 +2230,6 @@
           "autoincrement": false,
           "default": 0
         },
-        "messages_limit": {
-          "name": "messages_limit",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
         "custom_roles_created": {
           "name": "custom_roles_created",
           "type": "integer",
@@ -2373,13 +2237,6 @@
           "notNull": true,
           "autoincrement": false,
           "default": 0
-        },
-        "custom_roles_limit": {
-          "name": "custom_roles_limit",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
         },
         "subscription_tier": {
           "name": "subscription_tier",
@@ -2407,13 +2264,6 @@
         "pending_tier_is_annual": {
           "name": "pending_tier_is_annual",
           "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "pending_tier_price_id": {
-          "name": "pending_tier_price_id",
-          "type": "text",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
@@ -2514,13 +2364,6 @@
           "autoincrement": false,
           "default": 0
         },
-        "threads_limit": {
-          "name": "threads_limit",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
         "messages_created": {
           "name": "messages_created",
           "type": "integer",
@@ -2529,13 +2372,6 @@
           "autoincrement": false,
           "default": 0
         },
-        "messages_limit": {
-          "name": "messages_limit",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
         "custom_roles_created": {
           "name": "custom_roles_created",
           "type": "integer",
@@ -2543,6 +2379,20 @@
           "notNull": true,
           "autoincrement": false,
           "default": 0
+        },
+        "threads_limit": {
+          "name": "threads_limit",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "messages_limit": {
+          "name": "messages_limit",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
         },
         "custom_roles_limit": {
           "name": "custom_roles_limit",

@@ -8,8 +8,8 @@
 
 import { z } from 'zod';
 
-import { subscriptionTierSchema } from '@/constants/subscription-tiers';
-import type { SubscriptionTier } from '@/db/tables/usage';
+import type { SubscriptionTier } from '@/api/services/product-logic.service';
+import { subscriptionTierSchema } from '@/api/services/product-logic.service';
 
 /**
  * Discriminated union for metadata types (Context7 Pattern)

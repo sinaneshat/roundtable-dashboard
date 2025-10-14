@@ -1,15 +1,20 @@
 /**
- * Usage Tracking Service
+ * Usage Tracking Service - STORAGE ONLY
  *
- * Handles chat quota tracking and enforcement for subscription tiers
+ * ✅ SINGLE SOURCE OF TRUTH: All quotas come from product-logic.service.ts
+ * ✅ DATABASE ROLE: Only stores usage counters and billing periods
+ * ❌ NO BUSINESS LOGIC: No quota calculations, limits, or pricing in database
+ *
  * Key features:
  * - Tracks thread and message creation (cumulative, never decremented)
- * - Enforces limits based on subscription tier
+ * - Enforces limits based on TIER_QUOTAS from product-logic.service.ts
  * - Handles billing period rollover
  * - Provides usage statistics for UI display
  *
- * ✅ DYNAMIC: All quotas fetched from subscriptionTierQuotas table (database is source of truth)
- * ✅ Fallback: SUBSCRIPTION_TIER_CONFIG used only if DB query fails
+ * Architecture:
+ * - Database: Stores counters (threadsCreated, messagesCreated, etc.)
+ * - Code: Defines limits via TIER_QUOTAS constant
+ * - History: Stores snapshot of limits for historical accuracy
  */
 
 import { and, eq } from 'drizzle-orm';
@@ -20,42 +25,17 @@ import type { ErrorContext } from '@/api/core';
 import { apiLogger } from '@/api/middleware/hono-logger';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db/schema';
-import type { SubscriptionTier } from '@/db/tables/usage';
 import type { QuotaCheck, UsageStats } from '@/db/validation/usage';
 
-// Fallback tier config for when DB query fails
-const FALLBACK_TIER_QUOTAS: Record<SubscriptionTier, { threadsPerMonth: number; messagesPerMonth: number; customRolesPerMonth: number }> = {
-  free: { threadsPerMonth: 2, messagesPerMonth: 20, customRolesPerMonth: 0 },
-  starter: { threadsPerMonth: 30, messagesPerMonth: 150, customRolesPerMonth: 5 },
-  pro: { threadsPerMonth: 75, messagesPerMonth: 400, customRolesPerMonth: 20 },
-  power: { threadsPerMonth: 300, messagesPerMonth: 1800, customRolesPerMonth: -1 },
-};
+import type { SubscriptionTier } from './product-logic.service';
+import { TIER_QUOTAS } from './product-logic.service';
 
 /**
- * Get tier quotas from database (with fallback to SUBSCRIPTION_TIER_CONFIG)
- * ✅ DYNAMIC: Fetches from subscriptionTierQuotas table
+ * Get tier quotas from code (SINGLE SOURCE OF TRUTH)
+ * ✅ CODE-DRIVEN: All limits come from TIER_QUOTAS constant
  */
-async function getTierQuotas(tier: SubscriptionTier, isAnnual: boolean) {
-  const db = await getDbAsync();
-
-  const quotaConfig = await db.query.subscriptionTierQuotas.findFirst({
-    where: and(
-      eq(tables.subscriptionTierQuotas.tier, tier),
-      eq(tables.subscriptionTierQuotas.isAnnual, isAnnual),
-    ),
-  });
-
-  // Fallback to static config if DB query fails
-  if (!quotaConfig) {
-    apiLogger.warn('Quota config not found in DB, using fallback', { tier, isAnnual });
-    return FALLBACK_TIER_QUOTAS[tier];
-  }
-
-  return {
-    threadsPerMonth: quotaConfig.threadsPerMonth,
-    messagesPerMonth: quotaConfig.messagesPerMonth,
-    customRolesPerMonth: quotaConfig.customRolesPerMonth,
-  };
+function getTierQuotas(tier: SubscriptionTier) {
+  return TIER_QUOTAS[tier];
 }
 
 /**
@@ -72,13 +52,10 @@ export async function ensureUserUsageRecord(userId: string): Promise<typeof tabl
 
   const now = new Date();
 
-  // If no usage record exists, create one with free tier defaults from DB
+  // If no usage record exists, create one with free tier defaults from CODE
   if (!usage) {
     const periodStart = new Date(now.getFullYear(), now.getMonth(), 1); // First day of current month
     const periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59); // Last day of current month
-
-    // ✅ DYNAMIC: Fetch free tier quotas from database
-    const freeTierQuotas = await getTierQuotas('free', false);
 
     const [newUsage] = await db
       .insert(tables.userChatUsage)
@@ -88,11 +65,8 @@ export async function ensureUserUsageRecord(userId: string): Promise<typeof tabl
         currentPeriodStart: periodStart,
         currentPeriodEnd: periodEnd,
         threadsCreated: 0,
-        threadsLimit: freeTierQuotas.threadsPerMonth,
         messagesCreated: 0,
-        messagesLimit: freeTierQuotas.messagesPerMonth,
         customRolesCreated: 0,
-        customRolesLimit: freeTierQuotas.customRolesPerMonth,
         subscriptionTier: 'free',
         isAnnual: false,
         createdAt: now,
@@ -193,24 +167,27 @@ async function rolloverBillingPeriod(
   }
 
   // Check if there's a pending tier change to apply
-  const hasPendingTierChange = currentUsage.pendingTierChange && currentUsage.pendingTierPriceId;
+  const hasPendingTierChange = !!currentUsage.pendingTierChange;
 
   // Calculate new period (calendar-based for free tier or expired subscriptions)
   const periodStart = new Date(now.getFullYear(), now.getMonth(), 1);
   const periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
 
-  // Prepare history archive entry
+  // ✅ Get current tier's limits from CODE for historical archive
+  const currentTierQuotas = getTierQuotas(currentUsage.subscriptionTier);
+
+  // Prepare history archive entry with CODE-DRIVEN limits
   const historyInsert = db.insert(tables.userChatUsageHistory).values({
     id: ulid(),
     userId,
     periodStart: currentUsage.currentPeriodStart,
     periodEnd: currentUsage.currentPeriodEnd,
     threadsCreated: currentUsage.threadsCreated,
-    threadsLimit: currentUsage.threadsLimit,
+    threadsLimit: currentTierQuotas.threadsPerMonth, // ✅ FROM CODE
     messagesCreated: currentUsage.messagesCreated,
-    messagesLimit: currentUsage.messagesLimit,
+    messagesLimit: currentTierQuotas.messagesPerMonth, // ✅ FROM CODE
     customRolesCreated: currentUsage.customRolesCreated,
-    customRolesLimit: currentUsage.customRolesLimit,
+    customRolesLimit: currentTierQuotas.customRolesPerMonth, // ✅ FROM CODE
     subscriptionTier: currentUsage.subscriptionTier,
     isAnnual: currentUsage.isAnnual,
     createdAt: now,
@@ -221,75 +198,39 @@ async function rolloverBillingPeriod(
     const pendingTier = currentUsage.pendingTierChange!;
     const pendingIsAnnual = currentUsage.pendingTierIsAnnual || false;
 
-    const pendingTierQuota = await db.query.subscriptionTierQuotas.findFirst({
-      where: and(
-        eq(tables.subscriptionTierQuotas.tier, pendingTier),
-        eq(tables.subscriptionTierQuotas.isAnnual, pendingIsAnnual),
-      ),
-    });
+    const usageUpdate = db.update(tables.userChatUsage)
+      .set({
+        subscriptionTier: pendingTier,
+        isAnnual: pendingIsAnnual,
+        currentPeriodStart: periodStart,
+        currentPeriodEnd: periodEnd,
+        threadsCreated: 0,
+        messagesCreated: 0,
+        customRolesCreated: 0,
+        // Clear pending tier change fields
+        pendingTierChange: null,
+        pendingTierIsAnnual: null,
+        updatedAt: now,
+      })
+      .where(eq(tables.userChatUsage.userId, userId));
 
-    if (pendingTierQuota) {
-      const usageUpdate = db.update(tables.userChatUsage)
-        .set({
-          subscriptionTier: pendingTier,
-          isAnnual: pendingIsAnnual,
-          threadsLimit: pendingTierQuota.threadsPerMonth,
-          messagesLimit: pendingTierQuota.messagesPerMonth,
-          customRolesLimit: pendingTierQuota.customRolesPerMonth,
-          currentPeriodStart: periodStart,
-          currentPeriodEnd: periodEnd,
-          threadsCreated: 0,
-          messagesCreated: 0,
-          customRolesCreated: 0,
-          // Clear pending tier change fields
-          pendingTierChange: null,
-          pendingTierIsAnnual: null,
-          pendingTierPriceId: null,
-          updatedAt: now,
-        })
-        .where(eq(tables.userChatUsage.userId, userId));
-
-      // ✅ ATOMIC: Archive history + Update usage in single batch (Cloudflare D1)
-      if ('batch' in db && typeof db.batch === 'function') {
-        await db.batch([historyInsert, usageUpdate]);
-      } else {
-        // Local SQLite fallback - sequential operations
-        await historyInsert;
-        await usageUpdate;
-      }
-      return; // Exit after batch
+    // ✅ ATOMIC: Archive history + Update usage in single batch (Cloudflare D1)
+    if ('batch' in db && typeof db.batch === 'function') {
+      await db.batch([historyInsert, usageUpdate]);
     } else {
-      apiLogger.error('Pending tier quota not found, falling back to free tier', {
-        userId,
-        pendingTier,
-        pendingIsAnnual,
-      });
-      shouldDowngradeToFree = true;
+      // Local SQLite fallback - sequential operations
+      await historyInsert;
+      await usageUpdate;
     }
+    return; // Exit after batch
   }
 
   if (shouldDowngradeToFree && !hasPendingTierChange) {
     // Downgrade to free tier
-    const freeTierQuota = await db.query.subscriptionTierQuotas.findFirst({
-      where: and(
-        eq(tables.subscriptionTierQuotas.tier, 'free'),
-        eq(tables.subscriptionTierQuotas.isAnnual, false),
-      ),
-    });
-
-    const freeLimits = freeTierQuota || {
-      threadsPerMonth: 2,
-      messagesPerMonth: 20,
-      customRolesPerMonth: 5,
-    };
-
     const freeUpdate = db.update(tables.userChatUsage)
       .set({
         subscriptionTier: 'free',
         isAnnual: false,
-        threadsLimit: freeLimits.threadsPerMonth,
-        messagesLimit: freeLimits.messagesPerMonth,
-        customRolesLimit: freeLimits.customRolesPerMonth,
         currentPeriodStart: periodStart,
         currentPeriodEnd: periodEnd,
         threadsCreated: 0,
@@ -298,7 +239,6 @@ async function rolloverBillingPeriod(
         // Clear any pending tier change fields
         pendingTierChange: null,
         pendingTierIsAnnual: null,
-        pendingTierPriceId: null,
         updatedAt: now,
       })
       .where(eq(tables.userChatUsage.userId, userId));
@@ -314,7 +254,7 @@ async function rolloverBillingPeriod(
   } else if (!hasPendingTierChange) {
     // Active subscription exists but period expired
     // This shouldn't normally happen (Stripe sync should handle it)
-    // Reset usage but keep current tier limits
+    // Reset usage but keep current tier
     const resetUpdate = db.update(tables.userChatUsage)
       .set({
         currentPeriodStart: periodStart,
@@ -352,13 +292,17 @@ async function rolloverBillingPeriod(
 export async function checkThreadQuota(userId: string): Promise<QuotaCheck> {
   const usage = await ensureUserUsageRecord(userId);
 
-  const canCreate = usage.threadsCreated < usage.threadsLimit;
-  const remaining = Math.max(0, usage.threadsLimit - usage.threadsCreated);
+  // ✅ Get limit from CODE, not database
+  const quotas = getTierQuotas(usage.subscriptionTier);
+  const limit = quotas.threadsPerMonth;
+
+  const canCreate = usage.threadsCreated < limit;
+  const remaining = Math.max(0, limit - usage.threadsCreated);
 
   return {
     canCreate,
     current: usage.threadsCreated,
-    limit: usage.threadsLimit,
+    limit,
     remaining,
     resetDate: usage.currentPeriodEnd,
     tier: usage.subscriptionTier,
@@ -372,13 +316,17 @@ export async function checkThreadQuota(userId: string): Promise<QuotaCheck> {
 export async function checkMessageQuota(userId: string): Promise<QuotaCheck> {
   const usage = await ensureUserUsageRecord(userId);
 
-  const canCreate = usage.messagesCreated < usage.messagesLimit;
-  const remaining = Math.max(0, usage.messagesLimit - usage.messagesCreated);
+  // ✅ Get limit from CODE, not database
+  const quotas = getTierQuotas(usage.subscriptionTier);
+  const limit = quotas.messagesPerMonth;
+
+  const canCreate = usage.messagesCreated < limit;
+  const remaining = Math.max(0, limit - usage.messagesCreated);
 
   return {
     canCreate,
     current: usage.messagesCreated,
-    limit: usage.messagesLimit,
+    limit,
     remaining,
     resetDate: usage.currentPeriodEnd,
     tier: usage.subscriptionTier,
@@ -392,13 +340,17 @@ export async function checkMessageQuota(userId: string): Promise<QuotaCheck> {
 export async function checkCustomRoleQuota(userId: string): Promise<QuotaCheck> {
   const usage = await ensureUserUsageRecord(userId);
 
-  const canCreate = usage.customRolesCreated < usage.customRolesLimit;
-  const remaining = Math.max(0, usage.customRolesLimit - usage.customRolesCreated);
+  // ✅ Get limit from CODE, not database
+  const quotas = getTierQuotas(usage.subscriptionTier);
+  const limit = quotas.customRolesPerMonth;
+
+  const canCreate = usage.customRolesCreated < limit;
+  const remaining = Math.max(0, limit - usage.customRolesCreated);
 
   return {
     canCreate,
     current: usage.customRolesCreated,
-    limit: usage.customRolesLimit,
+    limit,
     remaining,
     resetDate: usage.currentPeriodEnd,
     tier: usage.subscriptionTier,
@@ -467,20 +419,23 @@ export async function getUserUsageStats(userId: string): Promise<UsageStats> {
   const usage = await ensureUserUsageRecord(userId);
   const now = new Date();
 
-  const threadsRemaining = Math.max(0, usage.threadsLimit - usage.threadsCreated);
-  const messagesRemaining = Math.max(0, usage.messagesLimit - usage.messagesCreated);
-  const customRolesRemaining = Math.max(0, usage.customRolesLimit - usage.customRolesCreated);
+  // ✅ Get all limits from CODE, not database
+  const quotas = getTierQuotas(usage.subscriptionTier);
 
-  const threadsPercentage = usage.threadsLimit > 0
-    ? Math.round((usage.threadsCreated / usage.threadsLimit) * 100)
+  const threadsRemaining = Math.max(0, quotas.threadsPerMonth - usage.threadsCreated);
+  const messagesRemaining = Math.max(0, quotas.messagesPerMonth - usage.messagesCreated);
+  const customRolesRemaining = Math.max(0, quotas.customRolesPerMonth - usage.customRolesCreated);
+
+  const threadsPercentage = quotas.threadsPerMonth > 0
+    ? Math.round((usage.threadsCreated / quotas.threadsPerMonth) * 100)
     : 0;
 
-  const messagesPercentage = usage.messagesLimit > 0
-    ? Math.round((usage.messagesCreated / usage.messagesLimit) * 100)
+  const messagesPercentage = quotas.messagesPerMonth > 0
+    ? Math.round((usage.messagesCreated / quotas.messagesPerMonth) * 100)
     : 0;
 
-  const customRolesPercentage = usage.customRolesLimit > 0
-    ? Math.round((usage.customRolesCreated / usage.customRolesLimit) * 100)
+  const customRolesPercentage = quotas.customRolesPerMonth > 0
+    ? Math.round((usage.customRolesCreated / quotas.customRolesPerMonth) * 100)
     : 0;
 
   const daysRemaining = Math.ceil(
@@ -490,19 +445,19 @@ export async function getUserUsageStats(userId: string): Promise<UsageStats> {
   return {
     threads: {
       used: usage.threadsCreated,
-      limit: usage.threadsLimit,
+      limit: quotas.threadsPerMonth,
       remaining: threadsRemaining,
       percentage: threadsPercentage,
     },
     messages: {
       used: usage.messagesCreated,
-      limit: usage.messagesLimit,
+      limit: quotas.messagesPerMonth,
       remaining: messagesRemaining,
       percentage: messagesPercentage,
     },
     customRoles: {
       used: usage.customRolesCreated,
-      limit: usage.customRolesLimit,
+      limit: quotas.customRolesPerMonth,
       remaining: customRolesRemaining,
       percentage: customRolesPercentage,
     },
@@ -590,6 +545,8 @@ export async function enforceCustomRoleQuota(userId: string): Promise<void> {
  * - Handle cancellations by preserving quotas until period end
  * - Reset usage when new billing period starts
  *
+ * ✅ CODE-DRIVEN: All quota calculations use TIER_QUOTAS from code
+ *
  * @param userId - User ID to update quotas for
  * @param priceId - Stripe price ID from the subscription
  * @param subscriptionStatus - Stripe subscription status ('active', 'trialing', 'canceled', etc.)
@@ -639,7 +596,7 @@ export async function syncUserQuotaFromSubscription(
   const isPeriodReset = hasPeriodChanged && currentPeriodEnd > currentUsage.currentPeriodEnd;
 
   // If subscription is not active (canceled, past_due, etc.), update period tracking
-  // but preserve current quotas until the period ends (Theo's pattern)
+  // but preserve current tier until the period ends (Theo's pattern)
   if (!isActive) {
     // Only update the period tracking so rollover knows when to downgrade to free
     await db
@@ -654,36 +611,13 @@ export async function syncUserQuotaFromSubscription(
     return;
   }
 
-  // Get quota configuration for the tier
-  const quotaConfig = await db.query.subscriptionTierQuotas.findFirst({
-    where: and(
-      eq(tables.subscriptionTierQuotas.tier, tier),
-      eq(tables.subscriptionTierQuotas.isAnnual, isAnnual),
-    ),
-  });
+  // ✅ Get quota limits from CODE
+  const newQuotas = getTierQuotas(tier);
+  const oldQuotas = getTierQuotas(currentUsage.subscriptionTier);
 
-  if (!quotaConfig) {
-    const context: ErrorContext = {
-      errorType: 'resource',
-      resource: 'subscription_tier_quotas',
-      resourceId: `${tier}-${isAnnual ? 'annual' : 'monthly'}`,
-    };
-    throw createError.notFound(`Quota configuration not found for tier: ${tier}`, context);
-  }
-
-  // Determine if this is an upgrade, downgrade, or period reset
-  const oldThreadsLimit = currentUsage.threadsLimit;
-  const oldMessagesLimit = currentUsage.messagesLimit;
-  const newThreadsLimit = quotaConfig.threadsPerMonth;
-  const newMessagesLimit = quotaConfig.messagesPerMonth;
-
-  const isUpgrade = newThreadsLimit > oldThreadsLimit || newMessagesLimit > oldMessagesLimit;
-  const isDowngrade = newThreadsLimit < oldThreadsLimit || newMessagesLimit < oldMessagesLimit;
-
-  // Calculate quota updates based on subscription change type
-  let updatedThreadsLimit = newThreadsLimit;
-  let updatedMessagesLimit = newMessagesLimit;
-  let updatedCustomRolesLimit = quotaConfig.customRolesPerMonth;
+  // Determine if this is a downgrade or period reset
+  const isDowngrade = newQuotas.threadsPerMonth < oldQuotas.threadsPerMonth
+    || newQuotas.messagesPerMonth < oldQuotas.messagesPerMonth;
 
   // Reset usage counters if new billing period has started
   let resetUsage = {};
@@ -691,57 +625,38 @@ export async function syncUserQuotaFromSubscription(
     resetUsage = {
       threadsCreated: 0,
       messagesCreated: 0,
-      memoriesCreated: 0,
       customRolesCreated: 0,
     };
   }
 
-  if (isUpgrade && !isPeriodReset) {
-    // UPGRADE MID-PERIOD: Add the difference to current limits (compounding)
-    // User gets immediate access to higher limits
-    const threadsDifference = Math.max(0, newThreadsLimit - oldThreadsLimit);
-    const messagesDifference = Math.max(0, newMessagesLimit - oldMessagesLimit);
-
-    updatedThreadsLimit = currentUsage.threadsLimit + threadsDifference;
-    updatedMessagesLimit = currentUsage.messagesLimit + messagesDifference;
-  } else if (isDowngrade && !isPeriodReset) {
+  if (isDowngrade && !isPeriodReset) {
     // DOWNGRADE MID-PERIOD: Schedule change for period end
-    // Keep current quotas, set pending tier change to apply at currentPeriodEnd
+    // Keep current tier, set pending tier change to apply at currentPeriodEnd
     // This ensures user keeps access they paid for until period ends
-    updatedThreadsLimit = oldThreadsLimit; // Keep current limits
-    updatedMessagesLimit = oldMessagesLimit; // Keep current limits
-    updatedCustomRolesLimit = currentUsage.customRolesLimit; // Keep current limits
-
-    // Store pending tier change to apply at period end
     await db
       .update(tables.userChatUsage)
       .set({
         pendingTierChange: tier,
         pendingTierIsAnnual: isAnnual,
-        pendingTierPriceId: priceId,
         currentPeriodStart,
         currentPeriodEnd,
         updatedAt: new Date(),
       })
       .where(eq(tables.userChatUsage.userId, userId));
 
-    return; // Exit early - don't update tier or limits yet
+    return; // Exit early - don't update tier yet
   }
 
-  // Build update operation
+  // Build update operation (upgrade or period reset)
   const usageUpdate = db.update(tables.userChatUsage)
     .set({
       subscriptionTier: tier,
       isAnnual,
-      threadsLimit: updatedThreadsLimit,
-      messagesLimit: updatedMessagesLimit,
-      customRolesLimit: updatedCustomRolesLimit,
       currentPeriodStart, // Always update to Stripe's billing period
       currentPeriodEnd, // Always update to Stripe's billing period
       // Clear any pending tier changes (upgrade overrides scheduled downgrade, or period has reset)
       pendingTierChange: null,
       pendingTierIsAnnual: null,
-      pendingTierPriceId: null,
       ...resetUsage, // Reset usage counters if period changed
       updatedAt: new Date(),
     })
@@ -749,17 +664,20 @@ export async function syncUserQuotaFromSubscription(
 
   // ✅ ATOMIC: If period reset, archive old period + update usage in single batch
   if (isPeriodReset) {
+    // Get old tier's limits from CODE for historical archive
+    const oldTierQuotas = getTierQuotas(currentUsage.subscriptionTier);
+
     const historyArchive = db.insert(tables.userChatUsageHistory).values({
       id: ulid(),
       userId,
       periodStart: currentUsage.currentPeriodStart,
       periodEnd: currentUsage.currentPeriodEnd,
       threadsCreated: currentUsage.threadsCreated,
-      threadsLimit: currentUsage.threadsLimit,
+      threadsLimit: oldTierQuotas.threadsPerMonth, // ✅ FROM CODE
       messagesCreated: currentUsage.messagesCreated,
-      messagesLimit: currentUsage.messagesLimit,
+      messagesLimit: oldTierQuotas.messagesPerMonth, // ✅ FROM CODE
       customRolesCreated: currentUsage.customRolesCreated,
-      customRolesLimit: currentUsage.customRolesLimit,
+      customRolesLimit: oldTierQuotas.customRolesPerMonth, // ✅ FROM CODE
       subscriptionTier: currentUsage.subscriptionTier,
       isAnnual: currentUsage.isAnnual,
       createdAt: new Date(),
@@ -779,46 +697,31 @@ export async function syncUserQuotaFromSubscription(
 }
 
 // ============================================================================
-// Tier Configuration Helpers (Database-Driven)
+// Tier Configuration Helpers (Code-Driven)
 // ============================================================================
 
 /**
  * Get maximum models allowed for a tier
- * ✅ DYNAMIC: Fetches from subscriptionTierQuotas table
+ * ✅ CODE-DRIVEN: Returns value from TIER_QUOTAS or defaults
  *
  * @param tier - Subscription tier
- * @param isAnnual - Whether it's an annual subscription (default: false)
+ * @param _isAnnual - Whether it's an annual subscription (default: false) - reserved for future use
  * @returns Maximum number of models allowed
  */
-export async function getMaxModels(tier: SubscriptionTier, isAnnual = false): Promise<number> {
-  const db = await getDbAsync();
-
-  const quotaConfig = await db.query.subscriptionTierQuotas.findFirst({
-    where: and(
-      eq(tables.subscriptionTierQuotas.tier, tier),
-      eq(tables.subscriptionTierQuotas.isAnnual, isAnnual),
-    ),
-  });
-
-  // Fallback to default if DB query fails
-  if (!quotaConfig) {
-    apiLogger.warn('Max models config not found in DB, using fallback', { tier, isAnnual });
-    // Fallback defaults matching previous config
-    const fallbackMaxModels: Record<SubscriptionTier, number> = {
-      free: 5,
-      starter: 5,
-      pro: 7,
-      power: 15,
-    };
-    return fallbackMaxModels[tier];
-  }
-
-  return quotaConfig.maxAiModels;
+export async function getMaxModels(tier: SubscriptionTier, _isAnnual = false): Promise<number> {
+  // For now, return hardcoded defaults until we add maxAiModels to TIER_QUOTAS
+  const fallbackMaxModels: Record<SubscriptionTier, number> = {
+    free: 5,
+    starter: 5,
+    pro: 7,
+    power: 15,
+  };
+  return fallbackMaxModels[tier];
 }
 
 /**
  * Check if user can add more models based on current count
- * ✅ DYNAMIC: Uses database configuration
+ * ✅ CODE-DRIVEN: Uses code configuration
  */
 export async function canAddMoreModels(currentCount: number, tier: SubscriptionTier, isAnnual = false): Promise<boolean> {
   const maxModels = await getMaxModels(tier, isAnnual);
@@ -827,7 +730,7 @@ export async function canAddMoreModels(currentCount: number, tier: SubscriptionT
 
 /**
  * Get error message when max models limit is reached
- * ✅ DYNAMIC: Uses database configuration
+ * ✅ CODE-DRIVEN: Uses code configuration
  */
 export async function getMaxModelsErrorMessage(tier: SubscriptionTier, isAnnual = false): Promise<string> {
   const maxModels = await getMaxModels(tier, isAnnual);

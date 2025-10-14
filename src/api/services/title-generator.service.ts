@@ -12,7 +12,7 @@ import { eq } from 'drizzle-orm';
 import { createError, normalizeError } from '@/api/common/error-handling';
 import type { ErrorContext } from '@/api/core';
 import { apiLogger } from '@/api/middleware/hono-logger';
-import { TITLE_GENERATION_CONFIG } from '@/api/routes/chat/schema';
+import { TITLE_GENERATION_CONFIG } from '@/api/services/product-logic.service';
 import type { ApiEnv } from '@/api/types';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db/schema';

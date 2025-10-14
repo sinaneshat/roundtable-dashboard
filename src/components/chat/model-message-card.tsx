@@ -1,11 +1,11 @@
 'use client';
 
 import type { EnhancedModelResponse } from '@/api/routes/models/schema';
+import { SUBSCRIPTION_TIER_NAMES } from '@/api/services/product-logic.service';
 import { Message, MessageAvatar, MessageContent } from '@/components/ai-elements/message';
 import { Reasoning, ReasoningContent, ReasoningTrigger } from '@/components/ai-elements/reasoning';
 import { Response } from '@/components/ai-elements/response';
 import { MessageErrorDetails } from '@/components/chat/message-error-details';
-import { getTierName } from '@/constants/subscription-tiers';
 import type { UIMessageMetadata } from '@/lib/schemas/message-metadata';
 
 /**
@@ -99,7 +99,7 @@ export function ModelMessageCard({
                 <>
                   <span className="text-muted-foreground/50 text-xs">•</span>
                   <span className="text-muted-foreground/70 text-xs">
-                    {getTierName(model.required_tier)}
+                    {SUBSCRIPTION_TIER_NAMES[model.required_tier]}
                     {' '}
                     required
                   </span>

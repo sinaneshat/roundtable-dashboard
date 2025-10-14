@@ -1,11 +1,12 @@
 'use client';
 
 import { motion } from 'motion/react';
-import { useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 
+import type { SubscriptionTier } from '@/api/services/product-logic.service';
+import { getQuickStartModelsByTier } from '@/api/services/product-logic.service';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Card } from '@/components/ui/card';
-import type { SubscriptionTier } from '@/db/tables/usage';
 import { useModelsQuery } from '@/hooks/queries/models';
 import { useUsageStatsQuery } from '@/hooks/queries/usage';
 import { getProviderIcon } from '@/lib/ai/provider-icons';
@@ -57,54 +58,13 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
     return allModels.filter(model => model.is_accessible_to_user ?? true);
   }, [allModels]);
 
-  // ✅ DYNAMIC: Helper to select models by criteria (pricing tier and capabilities)
-  // NO HARDCODED MODEL IDS - selects based on pricing and capabilities
-  // ✅ IMPROVED: Randomizes selection for diversity across suggestions
-  const selectModelByTier = useMemo(() => {
-    // Track already selected models to avoid duplicates within the same suggestion set
-    const usedModelIds = new Set<string>();
-
-    return (tierRequirement: SubscriptionTier, preferVision?: boolean, allowReuse = false): string | null => {
-      // Filter models by required tier
-      let tieredModels = accessibleModels.filter(m => m.required_tier === tierRequirement);
-
-      if (tieredModels.length === 0) {
-        // Fallback to any accessible model
-        tieredModels = accessibleModels;
-      }
-
-      if (tieredModels.length === 0) {
-        return null;
-      }
-
-      // If vision is preferred, try to find a vision-capable model first
-      if (preferVision) {
-        const visionModels = tieredModels.filter(m => m.supports_vision);
-        if (visionModels.length > 0) {
-          tieredModels = visionModels;
-        }
-      }
-
-      // Filter out already used models (unless reuse is allowed)
-      if (!allowReuse) {
-        const availableModels = tieredModels.filter(m => !usedModelIds.has(m.id));
-        if (availableModels.length > 0) {
-          tieredModels = availableModels;
-        }
-      }
-
-      // ✅ RANDOMIZE: Select a random model from available tier models for diversity
-      const randomIndex = Math.floor(Math.random() * tieredModels.length);
-      const selectedModel = tieredModels[randomIndex];
-
-      if (selectedModel) {
-        usedModelIds.add(selectedModel.id);
-        return selectedModel.id;
-      }
-
-      return null;
-    };
-  }, [accessibleModels]);
+  // Use the centralized model selection service directly
+  const selectQuickStartModels = useCallback(
+    (tier: SubscriptionTier, count: number = 4): string[] => {
+      return getQuickStartModelsByTier(accessibleModels, tier, count);
+    },
+    [accessibleModels],
+  );
 
   // Tier-based gray area questions - always returns exactly 3 suggestions
   // Designed to be morally ambiguous, thought-provoking, and accessible to each tier
@@ -114,19 +74,27 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
     if (modelsLoading || accessibleModels.length === 0) {
       return [];
     }
-    // ✅ FULLY DYNAMIC: Select free tier models from OpenRouter API
-    const freeModel1 = selectModelByTier('free');
-    const freeModel2 = selectModelByTier('free');
 
-    const freeTierSuggestions: QuickStartSuggestion[] = freeModel1 && freeModel2
+    // ✅ FULLY DYNAMIC: Get models for each tier using centralized service
+    const freeModels = selectQuickStartModels('free', 2);
+    const starterModels = selectQuickStartModels('starter', 3);
+    const proModels = selectQuickStartModels('pro', 4);
+    const powerModels = selectQuickStartModels('power', 6);
+
+    // Destructure models for use in suggestions
+    const [starterModel1, starterModel2, starterModel3] = starterModels;
+    const [proModel1, proModel2, proModel3, proModel4] = proModels;
+    const [powerModel1, powerModel2, powerModel3, powerModel4, powerModel5, powerModel6] = powerModels;
+
+    const freeTierSuggestions: QuickStartSuggestion[] = freeModels.length >= 2
       ? [
           {
             title: 'Is privacy a right or a privilege in the digital age?',
             prompt: 'Should individuals sacrifice privacy for security, or is surveillance capitalism the new totalitarianism? Where do we draw the line?',
             mode: 'debating',
             participants: [
-              { id: 'p1', modelId: freeModel1, role: 'Privacy Advocate', order: 0 },
-              { id: 'p2', modelId: freeModel2, role: 'Security Realist', order: 1 },
+              { id: 'p1', modelId: freeModels[0] || '', role: 'Privacy Advocate', order: 0, customRoleId: undefined },
+              { id: 'p2', modelId: freeModels[1] || '', role: 'Security Realist', order: 1, customRoleId: undefined },
             ],
           },
           {
@@ -134,8 +102,8 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
             prompt: 'De-extinction: ecological restoration or playing god? Discuss bringing back woolly mammoths, passenger pigeons, and other lost species.',
             mode: 'analyzing',
             participants: [
-              { id: 'p1', modelId: freeModel2, role: 'Conservation Biologist', order: 0 },
-              { id: 'p2', modelId: freeModel1, role: 'Bioethicist', order: 1 },
+              { id: 'p1', modelId: freeModels[1] || '', role: 'Conservation Biologist', order: 0, customRoleId: undefined },
+              { id: 'p2', modelId: freeModels[0] || '', role: 'Bioethicist', order: 1, customRoleId: undefined },
             ],
           },
           {
@@ -143,28 +111,25 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
             prompt: 'Does hard work truly determine success, or is meritocracy just a comforting lie that masks systemic advantages and inherited privilege?',
             mode: 'debating',
             participants: [
-              { id: 'p1', modelId: freeModel2, role: 'Sociologist', order: 0 },
-              { id: 'p2', modelId: freeModel1, role: 'Economist', order: 1 },
+              { id: 'p1', modelId: freeModels[1] || '', role: 'Sociologist', order: 0, customRoleId: undefined },
+              { id: 'p2', modelId: freeModels[0] || '', role: 'Economist', order: 1, customRoleId: undefined },
             ],
           },
         ]
       : [];
 
-    // ✅ FULLY DYNAMIC: Select starter tier models (3 models max)
-    const starterModel1 = selectModelByTier('starter');
-    const starterModel2 = selectModelByTier('starter');
-    const starterModel3 = selectModelByTier('starter');
+    // Starter tier models are now selected using the centralized service
 
-    const starterTierSuggestions: QuickStartSuggestion[] = starterModel1 && starterModel2 && starterModel3
+    const starterTierSuggestions: QuickStartSuggestion[] = starterModels.length >= 3
       ? [
           {
             title: 'Should we colonize Mars if it means abandoning Earth\'s problems?',
             prompt: 'Is Mars colonization humanity\'s backup plan or escapism? Should we fix Earth first, or hedge our bets across multiple planets?',
             mode: 'debating',
             participants: [
-              { id: 'p1', modelId: starterModel1, role: 'Space Futurist', order: 0 },
-              { id: 'p2', modelId: starterModel2, role: 'Climate Scientist', order: 1 },
-              { id: 'p3', modelId: starterModel3, role: 'Resource Economist', order: 2 },
+              { id: 'p1', modelId: starterModels[0] || '', role: 'Space Futurist', order: 0, customRoleId: undefined },
+              { id: 'p2', modelId: starterModels[1] || '', role: 'Climate Scientist', order: 1, customRoleId: undefined },
+              { id: 'p3', modelId: starterModels[2] || '', role: 'Resource Economist', order: 2, customRoleId: undefined },
             ],
           },
           {
@@ -172,9 +137,9 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
             prompt: 'With cultured meat becoming viable, is traditional animal agriculture morally defensible? What about cultural traditions and livelihoods?',
             mode: 'analyzing',
             participants: [
-              { id: 'p1', modelId: starterModel2, role: 'Animal Ethicist', order: 0 },
-              { id: 'p2', modelId: starterModel1, role: 'Agronomist', order: 1 },
-              { id: 'p3', modelId: starterModel3, role: 'Cultural Anthropologist', order: 2 },
+              { id: 'p1', modelId: starterModel2 || '', role: 'Animal Ethicist', order: 0, customRoleId: undefined },
+              { id: 'p2', modelId: starterModel1 || '', role: 'Agronomist', order: 1, customRoleId: undefined },
+              { id: 'p3', modelId: starterModel3 || '', role: 'Cultural Anthropologist', order: 2, customRoleId: undefined },
             ],
           },
           {
@@ -182,31 +147,27 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
             prompt: 'Nuclear power could solve climate change but carries catastrophic risks. Can we trust ourselves with this technology long-term?',
             mode: 'debating',
             participants: [
-              { id: 'p1', modelId: starterModel1, role: 'Energy Policy Expert', order: 0 },
-              { id: 'p2', modelId: starterModel2, role: 'Nuclear Physicist', order: 1 },
-              { id: 'p3', modelId: starterModel3, role: 'Environmental Activist', order: 2 },
+              { id: 'p1', modelId: starterModel1 || '', role: 'Energy Policy Expert', order: 0, customRoleId: undefined },
+              { id: 'p2', modelId: starterModel2 || '', role: 'Nuclear Physicist', order: 1, customRoleId: undefined },
+              { id: 'p3', modelId: starterModel3 || '', role: 'Environmental Activist', order: 2, customRoleId: undefined },
             ],
           },
         ]
       : [];
 
-    // ✅ FULLY DYNAMIC: Select pro tier models (5 models max)
-    const proModel1 = selectModelByTier('pro');
-    const proModel2 = selectModelByTier('pro');
-    const proModel3 = selectModelByTier('pro');
-    const proModel4 = selectModelByTier('pro');
+    // Pro tier models are now selected using the centralized service
 
-    const proTierSuggestions: QuickStartSuggestion[] = proModel1 && proModel2 && proModel3
+    const proTierSuggestions: QuickStartSuggestion[] = proModels.length >= 3
       ? [
           {
             title: 'Should we edit human embryos to eliminate genetic diseases?',
             prompt: 'CRISPR germline editing: eliminating suffering or creating designer babies? Where is the line between treatment and enhancement?',
             mode: 'debating',
             participants: [
-              { id: 'p1', modelId: proModel1, role: 'Bioethicist', order: 0 },
-              { id: 'p2', modelId: proModel2, role: 'Geneticist', order: 1 },
-              { id: 'p3', modelId: proModel3, role: 'Disability Rights Advocate', order: 2 },
-              ...(proModel4 ? [{ id: 'p4', modelId: proModel4, role: 'Medical Ethicist', order: 3 }] : []),
+              { id: 'p1', modelId: proModels[0] || '', role: 'Bioethicist', order: 0, customRoleId: undefined },
+              { id: 'p2', modelId: proModels[1] || '', role: 'Geneticist', order: 1, customRoleId: undefined },
+              { id: 'p3', modelId: proModels[2] || '', role: 'Disability Rights Advocate', order: 2, customRoleId: undefined },
+              ...(proModels.length > 3 ? [{ id: 'p4', modelId: proModels[3] || '', role: 'Medical Ethicist', order: 3, customRoleId: undefined }] : []),
             ],
           },
           {
@@ -214,10 +175,10 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
             prompt: 'If we create AGI smarter than us, can we ensure it shares our values? Or is catastrophic misalignment inevitable?',
             mode: 'analyzing',
             participants: [
-              { id: 'p1', modelId: proModel1, role: 'AI Safety Researcher', order: 0 },
-              { id: 'p2', modelId: proModel2, role: 'Machine Learning Engineer', order: 1 },
-              { id: 'p3', modelId: proModel3, role: 'Ethics Philosopher', order: 2 },
-              ...(proModel4 ? [{ id: 'p4', modelId: proModel4, role: 'Systems Architect', order: 3 }] : []),
+              { id: 'p1', modelId: proModel1 || '', role: 'AI Safety Researcher', order: 0, customRoleId: undefined },
+              { id: 'p2', modelId: proModel2 || '', role: 'Machine Learning Engineer', order: 1, customRoleId: undefined },
+              { id: 'p3', modelId: proModel3 || '', role: 'Ethics Philosopher', order: 2, customRoleId: undefined },
+              ...(proModel4 ? [{ id: 'p4', modelId: proModel4 || '', role: 'Systems Architect', order: 3, customRoleId: undefined }] : []),
             ],
           },
           {
@@ -225,35 +186,29 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
             prompt: 'Capitalism demands perpetual growth, but Earth has limits. Must we choose between prosperity and survival, or can we transcend this paradox?',
             mode: 'debating',
             participants: [
-              { id: 'p1', modelId: proModel2, role: 'Ecological Economist', order: 0 },
-              { id: 'p2', modelId: proModel1, role: 'Free Market Theorist', order: 1 },
-              { id: 'p3', modelId: proModel3, role: 'Systems Thinker', order: 2 },
+              { id: 'p1', modelId: proModel2 || '', role: 'Ecological Economist', order: 0, customRoleId: undefined },
+              { id: 'p2', modelId: proModel1 || '', role: 'Free Market Theorist', order: 1, customRoleId: undefined },
+              { id: 'p3', modelId: proModel3 || '', role: 'Systems Thinker', order: 2, customRoleId: undefined },
             ],
           },
         ]
       : [];
 
-    // ✅ FULLY DYNAMIC: Select power tier models (10 models max - premium models)
-    const powerModel1 = selectModelByTier('power');
-    const powerModel2 = selectModelByTier('power');
-    const powerModel3 = selectModelByTier('power');
-    const powerModel4 = selectModelByTier('power');
-    const powerModel5 = selectModelByTier('power');
-    const powerModel6 = selectModelByTier('power');
+    // Power tier models are now selected using the centralized service
 
-    const powerTierSuggestions: QuickStartSuggestion[] = powerModel1 && powerModel2 && powerModel3
+    const powerTierSuggestions: QuickStartSuggestion[] = powerModels.length >= 3
       ? [
           {
             title: 'Should we terraform planets or preserve them as pristine laboratories?',
             prompt: 'Terraforming Mars could create a second home for humanity, but would we be destroying irreplaceable alien ecosystems before we even discover them?',
             mode: 'debating',
             participants: [
-              { id: 'p1', modelId: powerModel1, role: 'Planetary Scientist', order: 0 },
-              { id: 'p2', modelId: powerModel2, role: 'Exobiologist', order: 1 },
-              { id: 'p3', modelId: powerModel3, role: 'Space Ethicist', order: 2 },
-              ...(powerModel4 ? [{ id: 'p4', modelId: powerModel4, role: 'Space Policy Expert', order: 3 }] : []),
-              ...(powerModel5 ? [{ id: 'p5', modelId: powerModel5, role: 'Astrogeologist', order: 4 }] : []),
-              ...(powerModel6 ? [{ id: 'p6', modelId: powerModel6, role: 'Astrobiologist', order: 5 }] : []),
+              { id: 'p1', modelId: powerModel1 || '', role: 'Planetary Scientist', order: 0, customRoleId: undefined },
+              { id: 'p2', modelId: powerModel2 || '', role: 'Exobiologist', order: 1, customRoleId: undefined },
+              { id: 'p3', modelId: powerModel3 || '', role: 'Space Ethicist', order: 2, customRoleId: undefined },
+              ...(powerModel4 ? [{ id: 'p4', modelId: powerModel4 || '', role: 'Space Policy Expert', order: 3, customRoleId: undefined }] : []),
+              ...(powerModel5 ? [{ id: 'p5', modelId: powerModel5 || '', role: 'Astrogeologist', order: 4, customRoleId: undefined }] : []),
+              ...(powerModel6 ? [{ id: 'p6', modelId: powerModel6 || '', role: 'Astrobiologist', order: 5, customRoleId: undefined }] : []),
             ],
           },
           {
@@ -261,12 +216,12 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
             prompt: 'Can moral truths exist in a purely materialist universe without divine authority? Or are ethics just evolutionary programming and social contracts?',
             mode: 'analyzing',
             participants: [
-              { id: 'p1', modelId: powerModel1, role: 'Moral Philosopher', order: 0 },
-              { id: 'p2', modelId: powerModel2, role: 'Evolutionary Psychologist', order: 1 },
-              { id: 'p3', modelId: powerModel3, role: 'Theologian', order: 2 },
-              ...(powerModel4 ? [{ id: 'p4', modelId: powerModel4, role: 'Neuroscientist', order: 3 }] : []),
-              ...(powerModel5 ? [{ id: 'p5', modelId: powerModel5, role: 'Cognitive Scientist', order: 4 }] : []),
-              ...(powerModel6 ? [{ id: 'p6', modelId: powerModel6, role: 'Ethics Scholar', order: 5 }] : []),
+              { id: 'p1', modelId: powerModel1 || '', role: 'Moral Philosopher', order: 0, customRoleId: undefined },
+              { id: 'p2', modelId: powerModel2 || '', role: 'Evolutionary Psychologist', order: 1, customRoleId: undefined },
+              { id: 'p3', modelId: powerModel3 || '', role: 'Theologian', order: 2, customRoleId: undefined },
+              ...(powerModel4 ? [{ id: 'p4', modelId: powerModel4 || '', role: 'Neuroscientist', order: 3, customRoleId: undefined }] : []),
+              ...(powerModel5 ? [{ id: 'p5', modelId: powerModel5 || '', role: 'Cognitive Scientist', order: 4, customRoleId: undefined }] : []),
+              ...(powerModel6 ? [{ id: 'p6', modelId: powerModel6 || '', role: 'Ethics Scholar', order: 5, customRoleId: undefined }] : []),
             ],
           },
           {
@@ -274,12 +229,12 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
             prompt: 'If we develop sentient AI, do we have moral obligations to them? Could creating digital consciousness be the greatest crime or the greatest gift?',
             mode: 'debating',
             participants: [
-              { id: 'p1', modelId: powerModel1, role: 'AI Consciousness Researcher', order: 0 },
-              { id: 'p2', modelId: powerModel2, role: 'Digital Rights Advocate', order: 1 },
-              { id: 'p3', modelId: powerModel4 || powerModel1, role: 'Bioethicist', order: 2 },
-              ...(powerModel3 ? [{ id: 'p4', modelId: powerModel3, role: 'Philosophy of Mind Expert', order: 3 }] : []),
-              ...(powerModel5 ? [{ id: 'p5', modelId: powerModel5, role: 'Computational Consciousness Expert', order: 4 }] : []),
-              ...(powerModel6 ? [{ id: 'p6', modelId: powerModel6, role: 'AI Ethics Researcher', order: 5 }] : []),
+              { id: 'p1', modelId: powerModel1 || '', role: 'AI Consciousness Researcher', order: 0, customRoleId: undefined },
+              { id: 'p2', modelId: powerModel2 || '', role: 'Digital Rights Advocate', order: 1, customRoleId: undefined },
+              { id: 'p3', modelId: powerModel4 || powerModel1 || '', role: 'Bioethicist', order: 2, customRoleId: undefined },
+              ...(powerModel3 ? [{ id: 'p4', modelId: powerModel3 || '', role: 'Philosophy of Mind Expert', order: 3, customRoleId: undefined }] : []),
+              ...(powerModel5 ? [{ id: 'p5', modelId: powerModel5 || '', role: 'Computational Consciousness Expert', order: 4, customRoleId: undefined }] : []),
+              ...(powerModel6 ? [{ id: 'p6', modelId: powerModel6 || '', role: 'AI Ethics Researcher', order: 5, customRoleId: undefined }] : []),
             ],
           },
         ]
@@ -301,7 +256,7 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
 
     // Suggestions are already tier-appropriate, no filtering needed
     return tierSuggestions;
-  }, [userTier, modelsLoading, accessibleModels, selectModelByTier]);
+  }, [userTier, modelsLoading, accessibleModels, selectQuickStartModels]);
 
   return (
     <div className={cn('w-full relative z-20', className)}>

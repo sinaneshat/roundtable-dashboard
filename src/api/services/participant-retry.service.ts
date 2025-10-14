@@ -20,10 +20,9 @@ import type { streamText } from 'ai';
 
 import { apiLogger } from '@/api/middleware/hono-logger';
 import type { RetryAttemptMetadata } from '@/api/routes/chat/schema';
-import { AI_RETRY_CONFIG } from '@/api/routes/chat/schema';
-import type { SubscriptionTier } from '@/db/tables/usage';
+import type { SubscriptionTier } from '@/api/services/product-logic.service';
+import { AI_RETRY_CONFIG, canAccessModelByPricing } from '@/api/services/product-logic.service';
 
-import { canAccessModelByPricing } from './model-pricing-tiers.service';
 import {
   calculateRetryDelay,
   classifyOpenRouterError,
@@ -156,10 +155,13 @@ function sleep(ms: number): Promise<void> {
 /**
  * Retry a streaming operation with exponential backoff and optional fallback models
  *
- * @param streamFn Function that creates and returns a streamText result
- * @param originalModelId Original model ID to try
- * @param userTier User's subscription tier (for fallback selection)
- * @param context Context for logging
+ * @param streamFn - Function that creates and returns a streamText result
+ * @param originalModelId - Original model ID to try
+ * @param userTier - User's subscription tier (for fallback selection)
+ * @param context - Context for logging
+ * @param context.threadId - Thread ID for logging
+ * @param context.participantId - Participant ID for logging
+ * @param context.participantIndex - Participant index for logging
  * @returns RetryResult with success status and metadata
  */
 export async function retryParticipantStream(

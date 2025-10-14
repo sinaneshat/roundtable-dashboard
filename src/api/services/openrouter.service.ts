@@ -21,7 +21,7 @@ import { convertToModelMessages, generateText } from 'ai';
 import { createError, normalizeError } from '@/api/common/error-handling';
 import type { ErrorContext } from '@/api/core';
 import { apiLogger } from '@/api/middleware/hono-logger';
-import { DEFAULT_AI_PARAMS } from '@/api/routes/chat/schema';
+import { DEFAULT_AI_PARAMS } from '@/api/services/product-logic.service';
 import type { ApiEnv } from '@/api/types';
 import { isValidOpenRouterModelId } from '@/lib/ai/models-config';
 
