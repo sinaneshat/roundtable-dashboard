@@ -45,7 +45,7 @@ export function ChatDeleteDialog({
   const deleteThreadMutation = useDeleteThreadMutation();
 
   const handleDelete = () => {
-    deleteThreadMutation.mutate(threadId, {
+    deleteThreadMutation.mutate({ param: { id: threadId } }, {
       onSuccess: () => {
         toastManager.success(
           t('threadDeleted'),

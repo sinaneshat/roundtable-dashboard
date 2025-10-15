@@ -1,12 +1,11 @@
 import type { RouteHandler } from '@hono/zod-openapi';
-import type { UIMessage } from 'ai';
-import { APICallError, consumeStream, convertToModelMessages, streamText, validateUIMessages } from 'ai';
+import type { FinishReason, LanguageModelUsage, UIMessage } from 'ai';
+import { convertToModelMessages, streamText } from 'ai';
 import type { SQL } from 'drizzle-orm';
-import { and, desc, eq, ne, sql } from 'drizzle-orm';
+import { and, desc, eq, ne } from 'drizzle-orm';
 import Fuse from 'fuse.js';
 import { ulid } from 'ulid';
 
-import { executeBatch } from '@/api/common/batch-operations';
 import { ErrorContextBuilders } from '@/api/common/error-contexts';
 import { createError } from '@/api/common/error-handling';
 import {
@@ -18,46 +17,25 @@ import {
   getCursorOrderBy,
   Responses,
 } from '@/api/core';
-import { apiLogger } from '@/api/middleware/hono-logger';
-import type { ParticipantInfo, RoundtablePromptConfig } from '@/api/routes/chat/schema';
+import { IdParamSchema } from '@/api/core/schemas';
 import { initializeOpenRouter, openRouterService } from '@/api/services/openrouter.service';
-import type { ClassifiedError } from '@/api/services/openrouter-error-handler';
-import {
-  classifyOpenRouterError,
-  extractErrorDetails,
-  formatErrorForDatabase,
-} from '@/api/services/openrouter-error-handler';
-import { openRouterModelsService } from '@/api/services/openrouter-models.service';
-import { retryParticipantStream } from '@/api/services/participant-retry.service';
-import type { SubscriptionTier } from '@/api/services/product-logic.service';
+import { extractModeratorModelName, openRouterModelsService } from '@/api/services/openrouter-models.service';
 import {
   AI_TIMEOUT_CONFIG,
   canAccessModelByPricing,
   DEFAULT_AI_PARAMS,
   getMaxOutputTokensForTier,
-  getModelPricingDisplay,
   getRequiredTierForModel,
   SUBSCRIPTION_TIER_NAMES,
 } from '@/api/services/product-logic.service';
-import {
-  buildRoundtablePrompt,
-} from '@/api/services/roundtable-prompt.service';
 import { generateUniqueSlug } from '@/api/services/slug-generator.service';
-import {
-  logModeChange,
-  logParticipantAdded,
-  logParticipantRemoved,
-  logParticipantsReordered,
-  logParticipantUpdated,
-} from '@/api/services/thread-changelog.service';
 import { generateTitleFromMessage } from '@/api/services/title-generator.service';
 import {
   enforceCustomRoleQuota,
   enforceMessageQuota,
   enforceThreadQuota,
-  ensureUserUsageRecord,
   getMaxModels,
-  getUserUsageStats,
+  getUserTier,
   incrementCustomRoleUsage,
   incrementMessageUsage,
   incrementThreadUsage,
@@ -93,12 +71,9 @@ import {
   AddParticipantRequestSchema,
   CreateCustomRoleRequestSchema,
   CreateThreadRequestSchema,
-  CustomRoleIdParamSchema,
   ModeratorAnalysisRequestSchema,
-  ParticipantIdParamSchema,
   RoundAnalysisParamSchema,
   StreamChatRequestSchema,
-  ThreadIdParamSchema,
   ThreadListQuerySchema,
   ThreadSlugParamSchema,
   UpdateCustomRoleRequestSchema,
@@ -272,8 +247,8 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
     const db = await getDbAsync();
 
     // Get user's subscription tier to validate model access
-    const usageStats = await getUserUsageStats(user.id);
-    const userTier = usageStats.subscription.tier as SubscriptionTier;
+    // ✅ DRY: Using centralized getUserTier utility with 5-minute caching
+    const userTier = await getUserTier(user.id);
 
     // ✅ SINGLE SOURCE OF TRUTH: Validate model access using backend service
     for (const participant of body.participants) {
@@ -442,13 +417,8 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
             updatedAt: new Date(),
           })
           .where(eq(tables.chatThread.id, threadId));
-      } catch (error) {
-        // Log error but don't fail the request since thread is already created
-        apiLogger.error('Failed to generate async title for thread', {
-          threadId,
-          error: error instanceof Error ? error.message : String(error),
-          stack: error instanceof Error ? error.stack : undefined,
-        });
+      } catch {
+        // Suppress error - don't fail the request since thread is already created
       }
     })().catch(() => {
       // Suppress unhandled rejection warnings
@@ -467,7 +437,7 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
 export const getThreadHandler: RouteHandler<typeof getThreadRoute, ApiEnv> = createHandler(
   {
     auth: 'session-optional', // Allow both authenticated and unauthenticated access
-    validateParams: ThreadIdParamSchema,
+    validateParams: IdParamSchema,
     operationName: 'getThread',
   },
   async (c) => {
@@ -519,10 +489,11 @@ export const getThreadHandler: RouteHandler<typeof getThreadRoute, ApiEnv> = cre
       orderBy: [desc(tables.chatThreadChangelog.createdAt)],
     });
 
-    // Fetch thread owner information (only safe public fields: name and image)
+    // Fetch thread owner information (only safe public fields: id, name, image)
     const threadOwner = await db.query.user.findFirst({
       where: eq(tables.user.id, thread.userId),
       columns: {
+        id: true,
         name: true,
         image: true,
       },
@@ -537,12 +508,14 @@ export const getThreadHandler: RouteHandler<typeof getThreadRoute, ApiEnv> = cre
     }
 
     // Return everything in one response (ChatGPT pattern)
+    // ✅ NO TRANSFORM: Return user fields directly from DB (schema handles field selection)
     return Responses.ok(c, {
       thread,
       participants,
       messages,
       changelog,
       user: {
+        id: threadOwner.id,
         name: threadOwner.name,
         image: threadOwner.image,
       },
@@ -553,7 +526,7 @@ export const getThreadHandler: RouteHandler<typeof getThreadRoute, ApiEnv> = cre
 export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
-    validateParams: ThreadIdParamSchema,
+    validateParams: IdParamSchema,
     validateBody: UpdateThreadRequestSchema,
     operationName: 'updateThread',
   },
@@ -607,7 +580,7 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
 export const deleteThreadHandler: RouteHandler<typeof deleteThreadRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
-    validateParams: ThreadIdParamSchema,
+    validateParams: IdParamSchema,
     operationName: 'deleteThread',
   },
   async (c) => {
@@ -664,10 +637,11 @@ export const getPublicThreadHandler: RouteHandler<typeof getPublicThreadRoute, A
       );
     }
 
-    // Fetch thread owner information (only safe public fields: name and image)
+    // Fetch thread owner information (only safe public fields: id, name, image)
     const threadOwner = await db.query.user.findFirst({
       where: eq(tables.user.id, thread.userId),
       columns: {
+        id: true,
         name: true,
         image: true,
       },
@@ -701,12 +675,14 @@ export const getPublicThreadHandler: RouteHandler<typeof getPublicThreadRoute, A
     });
 
     // Return expanded structure with user info and changelog
+    // ✅ NO TRANSFORM: Return user fields directly from DB (schema handles field selection)
     return Responses.ok(c, {
       thread,
       participants,
       messages,
       changelog,
       user: {
+        id: threadOwner.id,
         name: threadOwner.name,
         image: threadOwner.image,
       },
@@ -755,11 +731,13 @@ export const getThreadBySlugHandler: RouteHandler<typeof getThreadBySlugRoute, A
 
     // Return everything in one response (same pattern as getThreadHandler)
     // Include user data for proper hydration (prevents client/server mismatch)
+    // ✅ NO TRANSFORM: Return user fields directly from DB (schema handles field selection)
     return Responses.ok(c, {
       thread,
       participants,
       messages,
       user: {
+        id: user.id,
         name: user.name,
         image: user.image,
       },
@@ -775,7 +753,7 @@ export const getThreadBySlugHandler: RouteHandler<typeof getThreadBySlugRoute, A
 export const addParticipantHandler: RouteHandler<typeof addParticipantRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
-    validateParams: ThreadIdParamSchema,
+    validateParams: IdParamSchema,
     validateBody: AddParticipantRequestSchema,
     operationName: 'addParticipant',
   },
@@ -789,8 +767,8 @@ export const addParticipantHandler: RouteHandler<typeof addParticipantRoute, Api
     await verifyThreadOwnership(id, user.id, db);
 
     // Get user's subscription tier to validate model access
-    const usageStats = await getUserUsageStats(user.id);
-    const userTier = usageStats.subscription.tier as SubscriptionTier;
+    // ✅ DRY: Using centralized getUserTier utility with 5-minute caching
+    const userTier = await getUserTier(user.id);
 
     // ✅ SINGLE SOURCE OF TRUTH: Validate model access using backend service
     const model = await openRouterModelsService.getModelById(body.modelId as string);
@@ -865,7 +843,7 @@ export const addParticipantHandler: RouteHandler<typeof addParticipantRoute, Api
 export const updateParticipantHandler: RouteHandler<typeof updateParticipantRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
-    validateParams: ParticipantIdParamSchema,
+    validateParams: IdParamSchema,
     validateBody: UpdateParticipantRequestSchema,
     operationName: 'updateParticipant',
   },
@@ -912,7 +890,7 @@ export const updateParticipantHandler: RouteHandler<typeof updateParticipantRout
 export const deleteParticipantHandler: RouteHandler<typeof deleteParticipantRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
-    validateParams: ParticipantIdParamSchema,
+    validateParams: IdParamSchema,
     operationName: 'deleteParticipant',
   },
   async (c) => {
@@ -955,7 +933,7 @@ export const deleteParticipantHandler: RouteHandler<typeof deleteParticipantRout
 export const getThreadMessagesHandler: RouteHandler<typeof getThreadMessagesRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
-    validateParams: ThreadIdParamSchema,
+    validateParams: IdParamSchema,
     operationName: 'getThreadMessages',
   },
   async (c) => {
@@ -983,7 +961,7 @@ export const getThreadMessagesHandler: RouteHandler<typeof getThreadMessagesRout
 export const getThreadChangelogHandler: RouteHandler<typeof getThreadChangelogRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
-    validateParams: ThreadIdParamSchema,
+    validateParams: IdParamSchema,
     operationName: 'getThreadChangelog',
   },
   async (c) => {
@@ -1005,1307 +983,279 @@ export const getThreadChangelogHandler: RouteHandler<typeof getThreadChangelogRo
 );
 
 /**
- * ✅ OFFICIAL AI SDK v5 STREAMING PATTERN
- * Reference: https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot
+ * ✅ OFFICIAL AI SDK PATTERN - Chat Streaming with Message Persistence
+ * Reference: https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot-message-persistence
  *
- * This handler demonstrates the EXACT patterns from AI SDK documentation:
+ * Pattern Flow:
+ * 1. Load existing messages from database
+ * 2. Append new message from request
+ * 3. Validate with validateUIMessages()
+ * 4. Call streamText() with convertToModelMessages()
+ * 5. Return toUIMessageStreamResponse()
+ * 6. Persist in onFinish callback
  *
- * 1. MESSAGE VALIDATION (Lines 1190-1210):
- *    - Accept messages as `z.array(z.unknown())` in schema
- *    - Runtime validation with `validateUIMessages()`
- *    - Type assertion to `UIMessage[]` after validation
- *    Pattern: https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot#validating-messages
- *
- * 2. STREAMING CONFIGURATION (Lines 1341-1365):
- *    - Use `streamText()` from 'ai' package
- *    - Convert UIMessages with `convertToModelMessages()`
- *    - Apply transformations with `experimental_transform`
- *    - Handle abort signals (timeout + client disconnect)
- *    Pattern: https://sdk.vercel.ai/docs/ai-sdk-core/generating-text
- *
- * 3. RESPONSE STREAMING (Lines 1368-1557):
- *    - Use `toUIMessageStreamResponse()` for SSE streaming
- *    - Use `consumeSseStream` for client disconnect handling
- *    - Use `onFinish` callback for database persistence
- *    - Use `onError` callback for error handling
- *    Pattern: https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot#streaming-responses
- *
- * 🚫 NO CUSTOM TYPES: All types inferred from AI SDK
- * 🚫 NO CUSTOM STREAMING: All streaming via AI SDK built-ins
- * 🚫 NO MANUAL SSE: toUIMessageStreamResponse() handles everything
+ * Multi-Participant: Frontend calls this endpoint N times sequentially
+ * (once per participant). Each call is an independent standard request.
  */
 export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
-    validateParams: ThreadIdParamSchema,
     validateBody: StreamChatRequestSchema,
     operationName: 'streamChat',
   },
   async (c) => {
     const { user } = c.auth();
-    const { id: threadId } = c.validated.params;
-    const {
-      messages: clientMessages,
-      participantIndex: requestedParticipantIndex, // Optional - undefined for config-only updates
-      mode: newMode,
-      participants: newParticipants,
-    } = c.validated.body;
+    const { message: newMessage, id: threadId, participantIndex } = c.validated.body;
     const db = await getDbAsync();
 
-    // Verify thread ownership and get participants
-    let thread = await verifyThreadOwnership(threadId, user.id, db, { includeParticipants: true });
+    // =========================================================================
+    // STEP 1: Verify Thread & Load Participants
+    // =========================================================================
+    const thread = await db.query.chatThread.findFirst({
+      where: eq(tables.chatThread.id, threadId),
+      with: {
+        participants: {
+          where: eq(tables.chatParticipant.isEnabled, true),
+          orderBy: [tables.chatParticipant.priority],
+        },
+      },
+    });
 
-    // Get user's subscription tier (used for model access validation and output token limits)
-    const usageStats = await getUserUsageStats(user.id);
-    const userTier = usageStats.subscription.tier as SubscriptionTier;
-
-    // ==================================================
-    // DYNAMIC CONFIGURATION UPDATES
-    // Update thread mode/participants/memories if provided
-    // ==================================================
-
-    // Update thread mode if changed
-    if (newMode && newMode !== thread.mode) {
-      const oldMode = thread.mode;
-
-      await db
-        .update(tables.chatThread)
-        .set({ mode: newMode as ChatModeId, updatedAt: new Date() })
-        .where(eq(tables.chatThread.id, threadId));
-
-      // Log mode change to changelog
-      await logModeChange(threadId, oldMode, newMode);
-
-      thread.mode = newMode as ChatModeId; // Update local reference
+    if (!thread) {
+      throw createError.notFound('Thread not found');
     }
 
-    // Update participants if provided
-    if (newParticipants && newParticipants.length > 0) {
-      // ✅ TIER-BASED MODEL VALIDATION: Validate that user can access all requested models
-      // Fetch all models from OpenRouter to check pricing-based access control
-      const allModels = await openRouterModelsService.fetchAllModels();
-
-      for (const participant of newParticipants) {
-        // Find the model in OpenRouter's model list
-        const openRouterModel = allModels.find(m => m.id === participant.modelId);
-
-        if (!openRouterModel) {
-          // Model not found in OpenRouter - reject the request
-          throw createError.badRequest(
-            `Model "${participant.modelId}" not found in OpenRouter catalog`,
-            {
-              errorType: 'validation',
-              field: 'participants.modelId',
-            },
-          );
-        }
-
-        // ✅ PRICING-BASED ACCESS CONTROL: Check if user's tier can access this model
-        if (!canAccessModelByPricing(userTier, openRouterModel)) {
-          const requiredTier = getRequiredTierForModel(openRouterModel);
-          const modelPricing = getModelPricingDisplay(openRouterModel);
-          throw createError.unauthorized(
-            `Your ${SUBSCRIPTION_TIER_NAMES[userTier]} plan does not include access to ${openRouterModel.name} (${modelPricing}). Upgrade to ${SUBSCRIPTION_TIER_NAMES[requiredTier]} or higher to use this model.`,
-            {
-              errorType: 'authorization',
-              resource: 'model',
-              resourceId: participant.modelId,
-            },
-          );
-        }
-      }
-
-      // ✅ MODEL COUNT VALIDATION: Check if user can add this many models based on tier
-      const maxModels = await getMaxModels(userTier);
-      if (newParticipants.length > maxModels) {
-        throw createError.unauthorized(
-          `Your ${SUBSCRIPTION_TIER_NAMES[userTier]} plan allows up to ${maxModels} AI models per conversation. You've selected ${newParticipants.length} models. Remove some models or upgrade your plan.`,
-          {
-            errorType: 'authorization',
-            resource: 'participants',
-          },
-        );
-      }
-
-      // Get existing participants before deletion for changelog
-      const oldParticipants = await db.query.chatParticipant.findMany({
-        where: eq(tables.chatParticipant.threadId, threadId),
-      });
-
-      // ✅ CRITICAL: Check if participants have actually changed before recreating
-      // Prevents breaking variant tracking on regeneration
-      // Compare: modelId, role, customRoleId, and priority
-      const participantsChanged
-        = oldParticipants.length !== newParticipants.length
-          || newParticipants.some((newP, idx) => {
-            const oldP = oldParticipants.find(op => op.priority === (newP.order ?? idx));
-            if (!oldP)
-              return true; // New participant
-            // Check if any field changed
-            return (
-              oldP.modelId !== newP.modelId
-              || (oldP.role || null) !== (newP.role || null)
-              || (oldP.customRoleId || null) !== (newP.customRoleId || null)
-              || oldP.priority !== (newP.order ?? idx)
-            );
-          });
-
-      // Skip recreation if participants haven't changed
-      if (!participantsChanged) {
-        apiLogger.info('Participants unchanged - skipping recreation', {
-          threadId,
-          participantCount: oldParticipants.length,
-        });
-        // No need to reload thread since participants didn't change
-      } else {
-      // Delete existing participants
-        await db
-          .delete(tables.chatParticipant)
-          .where(eq(tables.chatParticipant.threadId, threadId));
-
-        // Create new participants
-        const participantsToCreate = newParticipants.map((p, index) => ({
-          id: ulid(),
-          threadId,
-          modelId: p.modelId,
-          role: p.role || null,
-          customRoleId: p.customRoleId || null,
-          priority: p.order ?? index,
-          isEnabled: true,
-        }));
-
-        await db.insert(tables.chatParticipant).values(participantsToCreate);
-
-        // ========================================
-        // ENHANCED CHANGELOG DETECTION
-        // Detects additions, removals, reordering, and role changes
-        // ========================================
-
-        // Build sets for comparison
-        const oldModelIds = new Set(oldParticipants.map(p => p.modelId));
-        const newModelIds = new Set(newParticipants.map(p => p.modelId));
-
-        // Detect additions and removals
-        const addedParticipants = newParticipants.filter(p => !oldModelIds.has(p.modelId));
-        const removedParticipants = oldParticipants.filter(p => !newModelIds.has(p.modelId));
-
-        // If no additions/removals, check for reordering or role changes
-        if (addedParticipants.length === 0 && removedParticipants.length === 0) {
-        // Same set of models - check for reordering or role changes
-
-          // Check for reordering (different priorities) and role changes
-          let hasReordering = false;
-          const roleChanges: Array<{
-            old: typeof oldParticipants[0];
-            new: NonNullable<typeof newParticipants[0]>;
-          }> = [];
-
-          for (let i = 0; i < newParticipants.length; i++) {
-            const newP = newParticipants[i];
-            if (!newP)
-              continue; // Type guard: skip if undefined
-
-            const oldP = oldParticipants.find(op => op.modelId === newP.modelId);
-
-            if (oldP) {
-            // Check priority change (reordering)
-              const newPriority = newP.order ?? i;
-              if (oldP.priority !== newPriority) {
-                hasReordering = true;
-              }
-
-              // Check role change
-              const normalizedOldRole = oldP.role || null;
-              const normalizedNewRole = newP.role || null;
-              if (normalizedOldRole !== normalizedNewRole) {
-                roleChanges.push({ old: oldP, new: newP });
-              }
-            }
-          }
-
-          // Log reordering if detected (takes precedence over role changes in UI)
-          if (hasReordering) {
-            const reorderedParticipants = newParticipants
-              .map((p, idx) => {
-                if (!p)
-                  return null; // Type guard
-                return {
-                  id: participantsToCreate[idx]!.id, // Use the newly created participant IDs
-                  modelId: p.modelId,
-                  role: p.role || null,
-                  order: p.order ?? idx,
-                };
-              })
-              .filter((p): p is NonNullable<typeof p> => p !== null); // Filter out nulls and narrow type
-
-            await logParticipantsReordered(threadId, reorderedParticipants);
-          }
-
-          // Log role changes if detected and no reordering
-          // (If both reordering and role changes happen, reordering takes precedence)
-          if (!hasReordering && roleChanges.length > 0) {
-            for (const { old: oldP, new: newP } of roleChanges) {
-              await logParticipantUpdated(
-                threadId,
-                oldP.id,
-                oldP.modelId,
-                oldP.role,
-                newP.role || null,
-              );
-            }
-          }
-        } else {
-        // Has additions or removals - log them
-          for (const oldP of removedParticipants) {
-            await logParticipantRemoved(threadId, oldP.id, oldP.modelId, oldP.role);
-          }
-
-          for (const newP of addedParticipants) {
-          // Use a placeholder ID since we don't have the real ID yet (it's generated above)
-          // The ID isn't critical for the changelog display
-            await logParticipantAdded(threadId, 'pending', newP.modelId, newP.role || null);
-          }
-        }
-
-        // Reload thread with new participants
-        thread = await verifyThreadOwnership(threadId, user.id, db, { includeParticipants: true });
-      } // end of participantsChanged check
+    if (thread.userId !== user.id) {
+      throw createError.unauthorized('Not authorized to access this thread');
     }
 
-    // Load existing messages from database
+    if (thread.participants.length === 0) {
+      throw createError.badRequest('No enabled participants in this thread');
+    }
+
+    // =========================================================================
+    // STEP 2: Validate participantIndex
+    // =========================================================================
+    if (participantIndex === undefined || participantIndex < 0 || participantIndex >= thread.participants.length) {
+      throw createError.badRequest(
+        `Invalid participantIndex. Must be between 0 and ${thread.participants.length - 1}`,
+      );
+    }
+
+    const participant = thread.participants[participantIndex]!;
+
+    // =========================================================================
+    // STEP 3: ✅ OFFICIAL PATTERN - Load Existing Messages
+    // Following: https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot-message-persistence#sending-only-the-last-message
+    // =========================================================================
     const dbMessages = await db.query.chatMessage.findMany({
       where: eq(tables.chatMessage.threadId, threadId),
       orderBy: [tables.chatMessage.createdAt],
     });
 
-    // ✅ OFFICIAL AI SDK PATTERN: Runtime Validation + Type Assertion
-    // Documentation: https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot#validating-messages
-    //
-    // Why this pattern?
-    // - AI SDK types are complex (UIMessage<METADATA, DATA, TOOLS>)
-    // - Zod cannot accurately represent AI SDK's recursive generic types
-    // - Runtime validation ensures messages match AI SDK's expected structure
-    // - Type assertion after validation is safe and recommended by AI SDK team
-    //
-    // Pattern:
-    // 1. Accept messages as `z.array(z.unknown())` in schema (schema.ts:434)
-    // 2. Runtime validate with `validateUIMessages()` (below)
-    // 3. Type assert to `UIMessage[]` after validation passes
-    const uiMessages = clientMessages as UIMessage[];
-
-    try {
-      validateUIMessages({ messages: uiMessages });
-    } catch (error) {
-      apiLogger.error('Invalid UI messages from client', {
-        threadId,
-        userId: user.id,
-        messageCount: uiMessages.length,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw createError.badRequest('Invalid message format', {
-        errorType: 'validation',
-        field: 'messages',
-      });
-    }
-
-    // Identify new message: last client message not in database
-    const lastClientMessage = uiMessages[uiMessages.length - 1];
-    const existsInDb = dbMessages.some(m => m.id === lastClientMessage?.id);
-    let isNewMessage = false;
-
-    if (!existsInDb && lastClientMessage && lastClientMessage.role === 'user') {
-      // New user message - extract text and save to database
-      const textParts = lastClientMessage.parts.filter(part => part.type === 'text');
-      if (textParts.length === 0) {
-        throw createError.badRequest('Message must contain at least one text part');
-      }
-
-      const content = textParts
-        .map((part) => {
-          if (!('text' in part) || typeof part.text !== 'string') {
-            throw createError.badRequest('Text part missing text property');
-          }
-          return part.text;
-        })
-        .join('');
-
-      if (content.trim().length === 0) {
-        throw createError.badRequest('User message content is empty');
-      }
-
-      // Enforce quota
-      await enforceMessageQuota(user.id);
-
-      // ✅ Save user message to database (no variant tracking needed for user messages)
-      await db.insert(tables.chatMessage).values({
-        id: lastClientMessage.id,
-        threadId,
-        role: 'user',
-        content,
-        createdAt: new Date(),
-      });
-
-      isNewMessage = true;
-    }
-
-    // ==================================================
-    // CONFIG-ONLY UPDATE: Return early if no streaming requested
-    // ==================================================
-    if (requestedParticipantIndex === undefined) {
-      // Configuration was updated but no streaming response requested
-      // This happens when user updates participants/mode without sending a message
-      apiLogger.info('Configuration update only - no streaming', {
-        threadId,
-        userId: user.id,
-        modeUpdated: !!newMode,
-        participantsUpdated: !!newParticipants,
-      });
-
-      return Responses.ok(c, {
-        success: true,
-        message: 'Configuration updated successfully',
-      });
-    }
-
-    // ==================================================
-    // STREAMING RESPONSE: Validate and stream participant
-    // ==================================================
-
-    // Participants are already filtered for isEnabled=true by verifyThreadOwnership
-    // and ordered by priority in the database query - no need to filter/sort again
-    const participants = thread.participants;
-
-    // One participant per HTTP request (N requests for N participants)
-    initializeOpenRouter(c.env);
-    const client = openRouterService.getClient();
-
-    // Validate requested participant index
-    if (requestedParticipantIndex < 0 || requestedParticipantIndex >= participants.length) {
-      throw createError.badRequest(
-        `Invalid participantIndex ${requestedParticipantIndex}. Must be between 0 and ${participants.length - 1}`,
-        {
-          errorType: 'validation',
-          field: 'participantIndex',
-        },
-      );
-    }
-
-    // ====================================================================
-    // ✅ OFFICIAL AI SDK PATTERN: Direct streamText() Usage
-    // Documentation: https://sdk.vercel.ai/docs/ai-sdk-core/generating-text
-    //
-    // Why direct usage instead of service wrapper?
-    // - Full control over abort signals (timeout + client disconnect)
-    // - Full control over callbacks (onFinish, onError, onChunk)
-    // - Full control over message metadata
-    // - This is the RECOMMENDED pattern from AI SDK documentation
-    //
-    // Alternative (not used): Service wrapper
-    // - Less control, more abstraction
-    // - Only useful for simple non-streaming operations
-    // - See openrouter.service.ts for non-streaming example
-    // ====================================================================
-
-    // ====================================================================
-    // ✅ BUILD PARTICIPANT INFO: Prepare participant data for prompt
-    // ====================================================================
-    const participantInfos: ParticipantInfo[] = participants.map((p, idx) => ({
-      id: p.id,
-      modelId: p.modelId,
-      modelName: undefined, // Will be extracted from modelId by service
-      role: p.role,
-      priority: idx,
+    // Convert to UIMessage format
+    const previousUIMessages: UIMessage[] = dbMessages.map(msg => ({
+      id: msg.id,
+      role: msg.role as 'user' | 'assistant',
+      parts: [{ type: 'text' as const, text: msg.content }],
+      createdAt: msg.createdAt,
     }));
 
-    // Stream ONLY the requested participant
-    const participantIndex = requestedParticipantIndex;
-    const participant = participants[participantIndex]!;
-    const currentParticipant = participantInfos[participantIndex]!;
+    // =========================================================================
+    // STEP 4: ✅ OFFICIAL PATTERN - Append New Message
+    // =========================================================================
+    let messages: UIMessage[] = previousUIMessages;
 
-    // ====================================================================
-    // ✅ BUILD IMPROVED PROMPTS: Using AI SDK best practices
-    // Separates system prompt (behavior) from context (memories, participants)
-    // ====================================================================
-    const promptConfig: RoundtablePromptConfig = {
-      mode: thread.mode as ChatModeId,
-      currentParticipantIndex: participantIndex,
-      currentParticipant,
-      allParticipants: participantInfos,
-      customSystemPrompt: participant.settings?.systemPrompt,
-    };
+    if (newMessage) {
+      const typedNewMessage = newMessage as UIMessage;
 
-    const promptSetup = buildRoundtablePrompt(promptConfig, []);
+      // Check if it's actually a new message
+      const existsInDb = dbMessages.some(m => m.id === typedNewMessage.id);
 
-    // ====================================================================
-    // ✅ CONSTRUCT MESSAGE HISTORY: Inject context as user message
-    // AI SDK best practice: Context belongs in user messages, not system prompt
-    // ====================================================================
-    const currentHistory: UIMessage[] = [];
+      if (!existsInDb && typedNewMessage.role === 'user') {
+        // Extract text from parts
+        const textParts = typedNewMessage.parts.filter(part => part.type === 'text');
+        if (textParts.length === 0) {
+          throw createError.badRequest('Message must contain at least one text part');
+        }
 
-    // Add context message as initial user message (if context exists)
-    if (promptSetup.contextMessage) {
-      currentHistory.push({
-        id: `context-${threadId}`,
-        role: 'user',
-        parts: [{ type: 'text', text: promptSetup.contextMessage }],
-        metadata: {
-          isContextMessage: true,
-        },
-      } as UIMessage);
+        const content = textParts
+          .map((part) => {
+            if (!('text' in part) || typeof part.text !== 'string') {
+              throw createError.badRequest('Text part missing text property');
+            }
+            return part.text;
+          })
+          .join('');
+
+        // Enforce quota
+        await enforceMessageQuota(user.id);
+
+        // Save user message
+        await db.insert(tables.chatMessage).values({
+          id: typedNewMessage.id,
+          threadId,
+          role: 'user',
+          content,
+          createdAt: new Date(),
+        });
+
+        // Increment usage
+        await incrementMessageUsage(user.id, 1);
+      }
+
+      // Append to messages
+      messages = [...previousUIMessages, typedNewMessage];
     }
 
-    // Add actual conversation history
-    currentHistory.push(...uiMessages);
+    // =========================================================================
+    // STEP 5: ✅ OFFICIAL PATTERN - Validate Messages
+    // Following: https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot#validating-messages-from-database
+    // =========================================================================
+    const { validateUIMessages } = await import('ai');
+    try {
+      validateUIMessages({ messages });
+    } catch {
+      throw createError.badRequest('Invalid message format');
+    }
 
-    // ✅ Generate unique message ID ONCE per participant response
-    // This prevents duplicate key errors in multi-participant scenarios
-    const messageId = ulid();
+    // =========================================================================
+    // STEP 6: ✅ OFFICIAL PATTERN - streamText()
+    // Following: https://sdk.vercel.ai/docs/ai-sdk-core/generating-text
+    // =========================================================================
+    initializeOpenRouter(c.env);
+    const client = openRouterService.getClient();
+    const userTier = await getUserTier(user.id);
+    const maxOutputTokens = getMaxOutputTokensForTier(userTier);
 
-    // 🛡️ Guard against duplicate onFinish calls
-    // NOTE: AI SDK Behavior with consumeSseStream (observed but not explicitly documented):
-    // - consumeSseStream ensures onFinish runs even on client disconnect
-    // - However, in some cases onFinish may be called multiple times
-    // - This guard prevents:
-    //   1. Duplicate database inserts (though onConflictDoNothing provides backup)
-    //   2. Multiple usage counter increments (would cause billing issues)
-    //   3. Multiple title generation calls (unnecessary API calls)
-    // Without this guard, we've observed duplicate processing in production
-    let onFinishExecuted = false;
-
-    // 🛡️ Track error for metadata in onFinish
-    // NOTE: AI SDK Behavior (not explicitly documented):
-    // - When onError returns a string, it's sent to client as error SSE event
-    // - onFinish still runs afterward (due to consumeSseStream)
-    // - However, responseMessage.parts may be empty in this case
-    // - We track the error here to:
-    //   1. Use error message as content if parts are empty
-    //   2. Include error metadata in database for UI error state display
-    let streamError: Error | null = null;
-
-    // ✅ CRITICAL: Store classified error to prevent double classification
-    // When onError returns a string, AI SDK creates a NEW Error with that string.
-    // If we reclassify that new error, we lose the HTTP context (statusCode, etc.)
-    // and it gets misclassified as "unknown" instead of the correct type (rate_limit, etc.)
-    let classifiedError: ClassifiedError | null = null;
-
-    // ✅ Cost Control: Calculate max output tokens based on tier
-    // Note: OpenRouter models don't have maxOutputTokens config, use tier limits
-    const tierMaxOutputTokens = getMaxOutputTokensForTier(userTier);
-    const maxOutputTokensLimit = tierMaxOutputTokens;
-
-    // ✅ RETRY MECHANISM: Up to 10 attempts with fallback models (USER REQUIREMENT)
-    // Track retry metadata for storage in message
-    let retryMetadata: {
-      totalAttempts: number;
-      retryHistory: Array<{
-        attemptNumber: number;
-        modelId: string;
-        errorType: string;
-        errorMessage: string;
-        timestamp: string;
-        delayMs: number;
-      }>;
-      originalModel: string;
-      finalModel: string;
-      modelSwitched: boolean;
-    } = {
-      totalAttempts: 0,
-      retryHistory: [],
-      originalModel: participant.modelId,
-      finalModel: participant.modelId,
-      modelSwitched: false,
-    };
-
-    // ✅ OFFICIAL AI SDK PATTERN: streamText() Configuration wrapped in retry mechanism
-    // Documentation: https://sdk.vercel.ai/docs/ai-sdk-core/generating-text#streaming
+    // ✅ AI SDK v5 BRIDGE PATTERN: Two-Callback Data Flow
     //
-    // Key features from AI SDK:
-    // - Built-in retry with `maxRetries` (disabled - we handle retries at higher level)
-    // - Built-in transformations with `experimental_transform`
-    // - Built-in telemetry with `experimental_telemetry`
-    // - Built-in abort handling with `abortSignal`
+    // WHY THIS PATTERN IS NECESSARY:
+    // - streamText.onFinish() provides usage/finishReason when MODEL completes
+    // - toUIMessageStreamResponse.onFinish() provides messages/isAborted when UI STREAM finishes
+    // - We need BOTH pieces of data for persistence (usage for tracking + messages for storage)
+    // - This bridge variable connects the two callbacks
     //
-    // ✅ IMPROVED PROMPT ENGINEERING:
-    // - System prompt: Clean behavior definition (from promptSetup.systemPrompt)
-    // - User messages: Dynamic context (memories, participants) injected into currentHistory
-    // - Message history: Properly formatted with participant labels
+    // OFFICIAL AI SDK ARCHITECTURE:
+    // streamText() → [model completion] → streamText.onFinish(usage, finishReason)
+    //             ↓
+    // toUIMessageStreamResponse() → [UI stream completion] → onFinish(messages, isAborted)
+    //             ↓
+    // Database Persistence → Save messages WITH usage data
+    //
+    // REFERENCE: https://v4.ai-sdk.dev/docs/ai-sdk-ui/chatbot-message-persistence
+    // Store usage and finishReason for later use in message persistence
+    // Using official AI SDK types: LanguageModelUsage, FinishReason
+    let completionMetadata: {
+      usage?: LanguageModelUsage;
+      finishReason?: FinishReason;
+    } = {};
 
-    // Create a stream function that can be retried with different models
-    // ✅ CRITICAL FIX: Create NEW AbortSignal for EACH retry attempt
-    // Each attempt gets its own fresh 30-second timeout
-    const streamWithModel = async (modelId: string) => {
-      // ✅ OFFICIAL AI SDK PATTERN: Timeout Protection with AbortSignal.timeout()
-      // Documentation: https://sdk.vercel.ai/docs/ai-sdk-core/settings#abortsignal
-      // ✅ USER REQUIREMENT: Timeout per attempt from centralized config
-      // ✅ CRITICAL: Create NEW signal for EACH retry attempt (not shared across attempts)
-      const attemptSignal = AbortSignal.any([
+    const result = streamText({
+      model: client.chat(participant.modelId),
+      messages: convertToModelMessages(messages),
+      system: participant.settings?.systemPrompt || 'You are a helpful assistant.',
+      temperature: participant.settings?.temperature ?? DEFAULT_AI_PARAMS.temperature,
+      maxOutputTokens,
+
+      // ✅ AI SDK v5 PATTERN: Timeout protection with AbortSignal.any()
+      // Prevents infinite streams while supporting client disconnect
+      abortSignal: AbortSignal.any([
         c.req.raw.signal, // Client disconnect
-        AbortSignal.timeout(AI_TIMEOUT_CONFIG.perAttemptMs), // ✅ Fresh timeout for THIS attempt from config
-      ]);
+        AbortSignal.timeout(AI_TIMEOUT_CONFIG.perAttemptMs), // Centralized timeout (30s)
+      ]),
 
-      return streamText({
-        model: client.chat(modelId),
-        messages: convertToModelMessages(currentHistory),
-        system: promptSetup.systemPrompt, // ✅ Clean system prompt without dynamic context
-        temperature: participant.settings?.temperature ?? DEFAULT_AI_PARAMS.temperature,
-        abortSignal: attemptSignal, // ✅ Use fresh signal for THIS attempt
-
-        // ✅ Cost Control: Enforce output token limit based on subscription tier
-        maxOutputTokens: maxOutputTokensLimit,
-
-        // ✅ Disable AI SDK's built-in retry - we handle retries at higher level with fallback models
-        maxRetries: 0,
-
-        // ✅ AI SDK v5: Telemetry for performance monitoring
-        experimental_telemetry: {
-          isEnabled: true,
-          functionId: `chat-participant-${participant.id}-${participantIndex}-model-${modelId}`,
-        },
-
-        // ✅ OFFICIAL AI SDK PATTERN: onAbort callback
-        // Documentation: https://sdk.vercel.ai/docs/ai-sdk-core/error-handling#handling-stream-aborts
-        // Called when stream is aborted via AbortSignal (timeout or client disconnect)
-        onAbort: ({ steps }) => {
-          apiLogger.info('Stream aborted', {
-            threadId,
-            participantId: participant.id,
-            participantIndex,
-            model: modelId,
-            stepsCompleted: steps.length,
-            timestamp: new Date().toISOString(),
-          });
-        },
-      });
-    };
-
-    // ✅ Execute stream with retry mechanism (up to 10 attempts with fallback models - USER REQUIREMENT)
-    // Will NOT skip to next participant until all retries exhausted
-    const retryResult = await retryParticipantStream(
-      streamWithModel,
-      participant.modelId,
-      userTier,
-      {
-        threadId,
-        participantId: participant.id,
-        participantIndex,
+      // ✅ AI SDK v5 PATTERN: Save partial results on abort
+      // Reference: AI SDK v5 State Management patterns
+      onAbort: async () => {
+        // Partial content available for debugging/resume if needed
       },
-    );
 
-    // Store retry metadata for message persistence (map to our expected format)
-    retryMetadata = {
-      totalAttempts: retryResult.metadata.totalAttempts,
-      retryHistory: retryResult.metadata.retryHistory.map(attempt => ({
-        attemptNumber: attempt.attemptNumber,
-        modelId: attempt.modelId,
-        errorType: attempt.error.type,
-        errorMessage: attempt.error.message,
-        timestamp: attempt.timestamp,
-        delayMs: attempt.delayMs,
-      })),
-      originalModel: retryResult.metadata.originalModel,
-      finalModel: retryResult.metadata.finalModel,
-      modelSwitched: retryResult.metadata.modelSwitched,
-    };
+      // ✅ AI SDK v5 MULTI-MODEL PATTERN: Track completion metadata
+      // This runs when streamText completes (before toUIMessageStreamResponse onFinish)
+      async onFinish({ usage, finishReason }) {
+        completionMetadata = { usage, finishReason };
+      },
+    });
 
-    // If all retries failed, throw the error (will be caught by onError in toUIMessageStreamResponse)
-    if (!retryResult.success || !retryResult.result) {
-      const error = retryResult.error || new Error('All retry attempts failed');
-      apiLogger.error('Participant stream failed after all retries', {
-        threadId,
-        participantId: participant.id,
-        participantIndex,
-        originalModel: retryMetadata.originalModel,
-        finalModel: retryMetadata.finalModel,
-        totalAttempts: retryMetadata.totalAttempts,
-        modelSwitched: retryMetadata.modelSwitched,
-        error: error.message,
-      });
+    // ✅ OFFICIAL PATTERN - Consume stream for client disconnects
+    // Following: https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot-message-persistence#handling-client-disconnects
+    result.consumeStream();
 
-      // Classify and store the error
-      classifiedError = classifyOpenRouterError(error);
-      streamError = error;
-
-      // Throw to trigger error handling in toUIMessageStreamResponse
-      throw error;
-    }
-
-    // Get the successful result
-    const result = retryResult.result;
-
-    // ✅ OFFICIAL AI SDK PATTERN: toUIMessageStreamResponse()
-    // Documentation: https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot#streaming-responses
-    //
-    // This single method handles:
-    // - SSE (Server-Sent Events) formatting
-    // - Message ID generation
-    // - Message metadata
-    // - Client disconnect detection
-    // - onFinish callback for persistence
-    // - onError callback for error handling
-    //
-    // 🚫 NO MANUAL SSE FORMATTING
-    // 🚫 NO MANUAL STREAM HANDLING
-    // 🚫 NO CUSTOM STREAMING UTILITIES
+    // =========================================================================
+    // STEP 7: ✅ OFFICIAL PATTERN - toUIMessageStreamResponse()
+    // Following: https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot#streaming-responses
+    // =========================================================================
+    const { createIdGenerator } = await import('ai');
     return result.toUIMessageStreamResponse({
-      // ✅ CRITICAL FIX: Only pass USER messages in originalMessages for Roundtable scenarios
-      // Including previous assistant messages causes ID reuse across participants
-      // Each participant needs a NEW unique message, not an update to existing ones
-      // See: AI SDK v5 Multi-Agent Pattern - each agent gets unique message ID
-      originalMessages: uiMessages.filter(msg => msg.role === 'user'),
-
-      // ✅ CRITICAL: consumeSseStream ensures onFinish runs even on client disconnect
-      // See: https://ai-sdk.dev/docs/troubleshooting/stream-abort-handling
-      consumeSseStream: consumeStream,
-
-      // ✅ Return consistent NEW ID for this participant's message
-      generateMessageId: () => messageId,
-
-      // ✅ OFFICIAL AI SDK PATTERN: Enable reasoning streaming
-      // Documentation: https://ai-sdk.dev/docs/ai-sdk-ui/chatbot
-      // When enabled, AI SDK automatically emits reasoning-start, reasoning-delta, reasoning-end events
-      // for models that support reasoning (Claude extended thinking, GPT reasoning, DeepSeek R1, etc.)
+      originalMessages: messages,
+      generateMessageId: createIdGenerator({ prefix: 'msg', size: 16 }),
       sendReasoning: true,
+      sendSources: true,
 
-      // ✅ CRITICAL: Send updated participant data when config changes
-      // When participants are updated (reordered/added/removed), frontend needs new IDs
-      // This prevents "Invalid participantIndex" errors and "losing memory" issues
-      // ✅ NEW: Now async to fetch variant data in finish event
-      messageMetadata: async ({ part }) => {
-        if (part.type === 'start') {
-          // Include updated participant data so frontend can sync state
-          // Map to match frontend ParticipantConfig type exactly
-          const updatedParticipants = participants.map(p => ({
-            id: p.id,
-            modelId: p.modelId,
-            role: p.role || '', // Frontend expects string, not null
-            customRoleId: p.customRoleId || undefined,
-            order: p.priority,
-          }));
-
-          return {
-            participants: updatedParticipants,
-            threadMode: thread.mode,
-            participantIndex, // ✅ For current participant preview during streaming
-            // ✅ CRITICAL: Store actual participant data so historical messages are independent
-            // When participants change (reorder/add/remove), historical messages must not be affected
-            // Field names match database schema for consistency
-            participantId: participant.id,
-            model: retryMetadata.finalModel, // ✅ Use final model (may be fallback)
-            role: participant.role || '', // ✅ Matches DB schema (not "participantRole")
-            // ✅ NEW: Add roundId for variant tracking (AI SDK pattern)
-            roundId: messageId, // Unique identifier for this generation round
-            // ✅ NEW: Retry metadata for tracking attempts and fallbacks
-            retryAttempts: retryMetadata.totalAttempts,
-            originalModel: retryMetadata.originalModel,
-            modelSwitched: retryMetadata.modelSwitched,
-            hadRetries: retryMetadata.totalAttempts > 1,
-          };
-        }
-
-        // ✅ Include error information in finish event if error occurred during streaming
-        if (part.type === 'finish') {
-          // ✅ Include error information if error occurred during streaming
-          // This allows frontend to display detailed error messages immediately
-          const errorInfo = streamError
-            ? (() => {
-                const classified = classifyOpenRouterError(streamError);
-                const errorData: Record<string, unknown> = {
-                  hasError: true,
-                  error: classified.message,
-                  errorMessage: classified.message,
-                  errorType: classified.type,
-                  isTransient: classified.isTransient,
-                };
-
-                // Add API error details if available
-                if (APICallError.isInstance(streamError)) {
-                  const { statusCode, url, responseBody } = streamError;
-                  errorData.statusCode = statusCode;
-                  errorData.url = url;
-
-                  // Extract provider message from response body
-                  try {
-                    if (responseBody && typeof responseBody === 'object') {
-                      const body = responseBody as Record<string, unknown>;
-                      if (body.error && typeof body.error === 'object') {
-                        const errorObj = body.error as Record<string, unknown>;
-                        if (typeof errorObj.message === 'string') {
-                          errorData.providerMessage = errorObj.message;
-                        }
-                        // ✅ Extract metadata.raw for upstream provider messages
-                        if (errorObj.metadata && typeof errorObj.metadata === 'object') {
-                          const metadata = errorObj.metadata as Record<string, unknown>;
-                          if (typeof metadata.raw === 'string') {
-                            errorData.providerMessage = metadata.raw;
-                          }
-                        }
-                      }
-                      errorData.responseBody = JSON.stringify(responseBody).substring(0, 500);
-                    }
-                  } catch {}
-                }
-
-                return errorData;
-              })()
-            : {};
-
-          // ✅ USER REQUIREMENT: Flag to indicate moderator analysis is being generated
-          const isLastParticipant = participantIndex === participants.length - 1;
-          const analysisInfo = isLastParticipant && !streamError
-            ? {
-                isLastParticipant: true,
-                moderatorAnalysisGenerating: true,
-                moderatorAnalysisNote: 'Moderator analysis is being generated automatically and will be available via the analyses endpoint',
-              }
-            : {};
-
-          return {
-            // ✅ Include error information for frontend display
-            ...errorInfo,
-            // ✅ Include retry metadata in finish event
-            retryAttempts: retryMetadata.totalAttempts,
-            originalModel: retryMetadata.originalModel,
-            finalModel: retryMetadata.finalModel,
-            modelSwitched: retryMetadata.modelSwitched,
-            hadRetries: retryMetadata.totalAttempts > 1,
-            retryHistory: retryMetadata.retryHistory,
-            // ✅ Include analysis generation info
-            ...analysisInfo,
-          };
-        }
-
-        // Return undefined for other part types (required by TypeScript)
-        return undefined;
-      },
-
-      // ✅ AI SDK: Simplified onFinish with formatted UIMessage[] ready to save
-      onFinish: async ({ messages, responseMessage, isAborted }) => {
-        // 🛡️ Prevent duplicate execution (consumeSseStream can cause multiple calls)
-        if (onFinishExecuted) {
-          apiLogger.warn('onFinish called multiple times - skipping duplicate', {
-            threadId,
-            participantId: participant.id,
-            messageId: responseMessage.id,
-          });
+      // ✅ OFFICIAL PATTERN - onFinish for persistence
+      // Following: https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot-message-persistence#storing-messages
+      onFinish: async ({ messages: allMessages, isAborted }) => {
+        // ✅ Retrieve usage and finishReason from streamText onFinish callback
+        const { usage, finishReason } = completionMetadata;
+        // ✅ AI SDK v5 PATTERN: Don't save incomplete/corrupt messages from aborted streams
+        // Reference: AI SDK v5 Stream Completion Handling patterns
+        if (isAborted) {
           return;
         }
-        onFinishExecuted = true;
 
-        const now = new Date();
-
-        // ✅ USER REQUIREMENT: Check if this is the last participant
-        const isLastParticipant = participantIndex === participants.length - 1;
-
-        // Extract text content and reasoning from the assistant message
-        const textPart = responseMessage.parts.find(p => p.type === 'text');
-        let content = textPart?.type === 'text' ? textPart.text : '';
-
-        // Extract reasoning if present (for models that support extended thinking)
-        const reasoningPart = responseMessage.parts.find(p => p.type === 'reasoning');
-        const reasoning = reasoningPart?.type === 'reasoning' ? reasoningPart.text : null;
-
-        // ✅ CRITICAL: Always save error messages to database for UI display
-        // Following AI SDK error handling pattern: errors should be persisted
-        // See: https://sdk.vercel.ai/docs/ai-sdk-core/error-handling
-        let hasError = false;
-        if (streamError) {
-          const classified = classifyOpenRouterError(streamError);
-          hasError = true;
-
-          // If no content, use error message as content
-          if (!content || content.trim().length === 0) {
-            content = `Error: ${classified.message}`;
+        try {
+          const assistantMessage = allMessages[allMessages.length - 1];
+          if (!assistantMessage || assistantMessage.role !== 'assistant') {
+            return;
           }
 
-          apiLogger.warn('Error occurred during streaming - saving with error metadata', {
-            threadId,
-            participantId: participant.id,
-            messageId: responseMessage.id,
+          // Extract text content
+          const textPart = assistantMessage.parts.find(p => p.type === 'text');
+          const content = textPart?.type === 'text' ? textPart.text : '';
+
+          if (!content) {
+            return;
+          }
+
+          // Extract reasoning content (for Claude extended thinking, GPT reasoning tokens)
+          const reasoningPart = assistantMessage.parts.find(p => 'type' in p && p.type === 'reasoning');
+          const reasoning = reasoningPart && 'text' in reasoningPart && typeof reasoningPart.text === 'string'
+            ? reasoningPart.text
+            : undefined;
+
+          // ✅ AI SDK v5 MULTI-MODEL PATTERN: Token Usage Tracking
+          // Reference: AI_SDK_V5_MULTI_MODEL_PATTERNS.md Section 7.5
+          // Store usage directly from AI SDK (LanguageModelUsage type)
+          const metadata = {
             model: participant.modelId,
-            errorMessage: classified.message,
-            errorType: classified.type,
-          });
-        }
-
-        // ✅ If still no content after error handling, use a fallback message
-        // Never skip saving - always persist the message for error display
-        //
-        // ⚠️ NOTE: Empty responses should now be caught earlier in retryParticipantStream
-        // via result.text validation. If we reach this code path, it suggests:
-        // 1. The AI SDK's behavior changed (result.text showed content but parts are empty)
-        // 2. Or there's an edge case in how empty responses are represented
-        // This should be very rare now that we validate in the retry mechanism.
-        if (!content || content.trim().length === 0) {
-          hasError = true;
-
-          // If we don't have a streamError but got empty content, create synthetic error
-          if (!streamError) {
-            const emptyResponseError = new Error('Model generated empty response - this usually indicates an API failure that did not trigger the error handler');
-            streamError = emptyResponseError;
-
-            apiLogger.error('Empty content with no streamError - model silently failed', {
-              threadId,
-              participantId: participant.id,
-              messageId: responseMessage.id,
-              model: participant.modelId,
-              note: 'This indicates the AI SDK did not trigger onError callback despite generation failure. Empty responses should normally be caught in retryParticipantStream validation.',
-            });
-          }
-
-          // ✅ Use stored classified error or classify if not available
-          // This should rarely happen (only if empty response without error callback)
-          const classified = classifiedError || classifyOpenRouterError(streamError);
-          content = `Error: ${classified.message}`;
-
-          apiLogger.warn('Setting error content from classification', {
-            threadId,
-            participantId: participant.id,
-            errorType: classified.type,
-            errorMessage: classified.message,
-            usedStoredClassification: !!classifiedError,
-          });
-        }
-
-        // ✅ Prepare metadata - include error info if error occurred
-        // When onError returns a message, content is the error text
-        // We need to include error metadata so frontend can display error UI
-
-        // ✅ CRITICAL: Use stored classifiedError to prevent double classification
-        // If we call formatErrorForDatabase(streamError), it will reclassify the error
-        // and lose the HTTP context, resulting in "unknown" error type
-        let errorMetadata = null;
-        if (streamError && classifiedError) {
-          // Build error metadata from the already-classified error
-          const errorDetailsObj: Record<string, unknown> = {
-            technicalMessage: classifiedError.technicalMessage,
-            userMessage: classifiedError.message,
-            modelId: participant.modelId,
-            timestamp: new Date().toISOString(),
-            isTransient: classifiedError.isTransient,
-            shouldRetry: classifiedError.shouldRetry,
+            finishReason,
+            usage,
           };
 
-          // ✅ Add APICallError-specific details if available from original error
-          if (APICallError.isInstance(streamError)) {
-            const { statusCode, url, responseBody, isRetryable } = streamError;
-            errorDetailsObj.statusCode = statusCode;
-            errorDetailsObj.url = url;
-            errorDetailsObj.isRetryable = isRetryable;
-
-            // Extract provider-specific error details
-            const { providerMessage, providerCode } = extractErrorDetails(responseBody);
-            if (providerMessage) {
-              errorDetailsObj.providerMessage = providerMessage;
-            }
-            if (providerCode) {
-              errorDetailsObj.providerCode = providerCode;
-            }
-
-            // Include raw response body for debugging (truncate if too large)
-            const responseBodyStr = JSON.stringify(responseBody);
-            errorDetailsObj.responseBody = responseBodyStr.length > 1000
-              ? `${responseBodyStr.substring(0, 1000)}... (truncated)`
-              : responseBodyStr;
-          } else if (streamError instanceof Error) {
-            // Include Error-specific details
-            errorDetailsObj.errorName = streamError.name;
-            errorDetailsObj.errorStack = streamError.stack;
-          }
-
-          errorMetadata = {
-            error: classifiedError.type,
-            errorMessage: classifiedError.message,
-            errorType: classifiedError.type,
-            errorDetails: JSON.stringify(errorDetailsObj, null, 2),
-            isTransient: classifiedError.isTransient,
-          };
-        } else if (streamError) {
-          // Fallback: If we don't have classifiedError, use formatErrorForDatabase
-          // This should only happen in edge cases
-          errorMetadata = formatErrorForDatabase(streamError, participant.modelId);
-        }
-
-        // ✅ Add hasError flag to metadata for frontend error detection
-        const baseMetadata = {
-          model: retryMetadata.finalModel, // ✅ Use final model (may be fallback)
-          originalModel: retryMetadata.originalModel, // ✅ Track original model for transparency
-          modelSwitched: retryMetadata.modelSwitched, // ✅ Flag if fallback was used
-          role: participant.role,
-          mode: thread.mode,
-          participantId: participant.id,
-          participantIndex,
-          aborted: isAborted,
-          partialResponse: isAborted,
-          hasError, // ✅ Flag for frontend error display
-          // ✅ NEW: Retry metadata for tracking attempts and errors
-          retryAttempts: retryMetadata.totalAttempts,
-          hadRetries: retryMetadata.totalAttempts > 1,
-          retryHistory: retryMetadata.retryHistory,
-        };
-
-        // ✅ ATOMIC BATCH: Save message + update thread + increment usage
-        // All three operations must succeed or fail together for data consistency
-        const totalNewMessages = isNewMessage ? 2 : 1;
-        await ensureUserUsageRecord(user.id);
-
-        // Using reusable batch helper from @/api/common/batch-operations
-        await executeBatch(db, [
-          db.insert(tables.chatMessage).values({
-            id: responseMessage.id,
+          // Save to database with metadata
+          await db.insert(tables.chatMessage).values({
+            id: assistantMessage.id,
             threadId,
             participantId: participant.id,
             role: 'assistant',
             content,
-            reasoning, // ✅ Extracted from parts array (may be null)
-            metadata: {
-              ...baseMetadata,
-              // Include error metadata if error occurred
-              ...(errorMetadata || {}),
-            },
-            createdAt: now,
-          }).onConflictDoNothing(), // ✅ Prevent duplicates if onFinish called multiple times
+            reasoning,
+            metadata,
+            createdAt: new Date(),
+          }).onConflictDoNothing();
 
-          db.update(tables.chatThread)
-            .set({
-              lastMessageAt: now,
-              updatedAt: now,
-            })
-            .where(eq(tables.chatThread.id, threadId)),
+          // Update thread's lastMessageAt
+          await db
+            .update(tables.chatThread)
+            .set({ lastMessageAt: new Date() })
+            .where(eq(tables.chatThread.id, threadId));
 
-          // ✅ ATOMIC: SQL-level increment prevents race conditions
-          db.update(tables.userChatUsage)
-            .set({
-              messagesCreated: sql`${tables.userChatUsage.messagesCreated} + ${totalNewMessages}`,
-              updatedAt: new Date(),
-            })
-            .where(eq(tables.userChatUsage.userId, user.id)),
-        ]);
-
-        // ✅ USER REQUIREMENT: Automatically trigger moderator analysis after last participant
-        // This analysis will be streamed to the frontend as part of the finish event
-        if (isLastParticipant && !isAborted && !hasError) {
-          apiLogger.info('Last participant completed - triggering automatic moderator analysis', {
-            threadId,
-            participantCount: participants.length,
-            participantIndex,
-          });
-
-          // Generate moderator analysis in background (fire-and-forget)
-          // This will be picked up by the frontend via the analyses endpoint
-          (async () => {
-            // Declare variables in outer scope so catch block can access them
-            let analysisId: string | undefined;
-            let roundNumber: number | undefined;
-
-            try {
-              // Collect all participant message IDs from this round
-              // A round consists of all participant responses after the last user message
-              const allMessages = await db.query.chatMessage.findMany({
-                where: eq(tables.chatMessage.threadId, threadId),
-                orderBy: [tables.chatMessage.createdAt],
-              });
-
-              // Find the last user message
-              const userMessages = allMessages.filter(m => m.role === 'user');
-              const lastUserMessage = userMessages[userMessages.length - 1];
-
-              if (!lastUserMessage) {
-                apiLogger.warn('No user message found for moderator analysis', { threadId });
-                return;
-              }
-
-              // Get all assistant messages after the last user message
-              const participantMessages = allMessages.filter(
-                m => m.role === 'assistant'
-                  && m.createdAt > lastUserMessage.createdAt
-                  && m.participantId !== null,
-              );
-
-              // Only analyze if we have responses from all participants
-              if (participantMessages.length !== participants.length) {
-                apiLogger.warn('Not all participants have responded yet', {
-                  threadId,
-                  expected: participants.length,
-                  actual: participantMessages.length,
-                });
-                return;
-              }
-
-              // Calculate round number (number of user messages so far)
-              roundNumber = userMessages.length;
-
-              // ✅ Create pending analysis record FIRST - enables loading state in frontend
-              // Frontend polls and sees this pending record, shows loading indicator
-              analysisId = ulid();
-              await db.insert(tables.chatModeratorAnalysis).values({
-                id: analysisId,
-                threadId,
-                roundNumber,
-                mode: thread.mode,
-                userQuestion: lastUserMessage.content,
-                status: 'pending', // ✅ Start as pending - will update to completed/failed
-                analysisData: null, // No data yet
-                participantMessageIds: participantMessages.map(m => m.id),
-                createdAt: new Date(),
-              });
-
-              apiLogger.info('Created pending analysis record - frontend can show loading state', {
-                threadId,
-                roundNumber,
-                analysisId,
-              });
-
-              // Build participant response data
-              const participantResponses = participantMessages.map((msg, index) => {
-                const msgParticipant = participants.find(p => p.id === msg.participantId);
-                if (!msgParticipant) {
-                  throw new Error(`Participant not found for message ${msg.id}`);
-                }
-
-                const modelName = extractModeratorModelName(msgParticipant.modelId);
-                return {
-                  participantIndex: index,
-                  participantRole: msgParticipant.role,
-                  modelId: msgParticipant.modelId,
-                  modelName,
-                  responseContent: msg.content,
-                };
-              });
-
-              // Build moderator prompts
-              const { buildModeratorSystemPrompt, buildModeratorUserPrompt, ModeratorAnalysisSchema }
-                = await import('@/api/services/moderator-analysis.service');
-
-              const moderatorConfig = {
-                mode: thread.mode as ChatModeId,
-                roundNumber,
-                userQuestion: lastUserMessage.content,
-                participantResponses,
-              };
-
-              const systemPrompt = buildModeratorSystemPrompt(moderatorConfig);
-              const userPrompt = buildModeratorUserPrompt(moderatorConfig);
-
-              // ✅ DYNAMIC MODEL SELECTION: Use optimal analysis model from OpenRouter
-              // Intelligently selects cheapest, fastest model for structured output
-              // Falls back to gpt-4o-mini if no suitable model found
-              const optimalModel = await openRouterModelsService.getOptimalAnalysisModel();
-              const analysisModelId = optimalModel?.id || 'openai/gpt-4o-mini';
-
-              apiLogger.info('Generating automatic moderator analysis', {
-                threadId,
-                roundNumber,
-                analysisModel: analysisModelId,
-                modelName: optimalModel?.name || 'GPT-4o Mini (fallback)',
-                dynamicallySelected: !!optimalModel,
-              });
-
-              // Initialize OpenRouter
-              initializeOpenRouter(c.env);
-              const client = openRouterService.getClient();
-
-              // ✅ AI SDK generateObject() Pattern: Generate complete structured JSON
-              // Non-streaming approach for background analysis
-              const { generateObject, NoObjectGeneratedError } = await import('ai');
-
-              let analysisResult;
-              try {
-                analysisResult = await generateObject({
-                  model: client.chat(analysisModelId),
-                  schema: ModeratorAnalysisSchema,
-                  schemaName: 'ModeratorAnalysis',
-                  schemaDescription: 'Structured analysis of a conversation round with participant ratings, skills, pros/cons, leaderboard, and summary',
-                  system: systemPrompt,
-                  prompt: userPrompt,
-                  mode: 'json',
-                  experimental_telemetry: {
-                    isEnabled: true,
-                    functionId: `moderator-analysis-background-round-${roundNumber}`,
-                  },
-                  abortSignal: AbortSignal.timeout(AI_TIMEOUT_CONFIG.moderatorAnalysisMs),
-                });
-              } catch (error) {
-                if (NoObjectGeneratedError.isInstance(error)) {
-                  throw new Error(`Failed to generate background analysis: ${error.message}`);
-                }
-                throw error;
-              }
-
-              const analysis = analysisResult.object;
-
-              // Validate schema structure before saving
-              const hasValidStructure = analysis.participantAnalyses
-                && Array.isArray(analysis.participantAnalyses)
-                && analysis.leaderboard
-                && Array.isArray(analysis.leaderboard)
-                && analysis.overallSummary
-                && analysis.conclusion;
-
-              if (!hasValidStructure) {
-                const actualKeys = Object.keys(analysis);
-                apiLogger.error('Background moderator analysis generated invalid structure', {
-                  threadId,
-                  roundNumber,
-                  expectedKeys: ['participantAnalyses', 'leaderboard', 'overallSummary', 'conclusion'],
-                  actualKeys,
-                  sampleData: JSON.stringify(analysis).substring(0, 500),
-                });
-                throw new Error('Background analysis generated invalid structure - AI model did not follow schema');
-              }
-
-              // ✅ Update analysis record to completed with results
-              // Frontend polls and sees status change, displays results
-              await db
-                .update(tables.chatModeratorAnalysis)
-                .set({
-                  status: 'completed',
-                  analysisData: {
-                    leaderboard: analysis.leaderboard,
-                    participantAnalyses: analysis.participantAnalyses,
-                    overallSummary: analysis.overallSummary,
-                    conclusion: analysis.conclusion,
-                  },
-                  completedAt: new Date(),
-                })
-                .where(eq(tables.chatModeratorAnalysis.id, analysisId));
-
-              apiLogger.info('Automatic moderator analysis completed successfully', {
-                threadId,
-                roundNumber,
-                analysisId,
-              });
-            } catch (error) {
-              const errorMessage = error instanceof Error ? error.message : String(error);
-
-              apiLogger.error('Failed to generate automatic moderator analysis', {
-                threadId,
-                roundNumber,
-                analysisId,
-                error: errorMessage,
-                stack: error instanceof Error ? error.stack : undefined,
-              });
-
-              // ✅ Update analysis record to failed
-              // Frontend polls and sees status change, displays error
-              if (analysisId) {
-                try {
-                  await db
-                    .update(tables.chatModeratorAnalysis)
-                    .set({
-                      status: 'failed',
-                      errorMessage,
-                    })
-                    .where(eq(tables.chatModeratorAnalysis.id, analysisId));
-                } catch (updateError) {
-                  apiLogger.error('Failed to update analysis status to failed', {
-                    analysisId,
-                    error: updateError instanceof Error ? updateError.message : String(updateError),
-                  });
-                }
-              }
-
-              // Don't throw - this is a background operation
-            }
-          })().catch(() => {
-            // Suppress unhandled rejection warnings
-          });
+          // Increment usage
+          await incrementMessageUsage(user.id, 1);
+        } catch {
+          // Suppress error - message persistence is best effort
         }
-
-        // Generate title if needed
-        if (thread.title === 'New Chat' && messages.length > 0) {
-          const firstUserMessage = messages.find(m => m.role === 'user');
-          if (firstUserMessage) {
-            const userTextPart = firstUserMessage.parts.find(p => p.type === 'text');
-            const userContent = userTextPart?.type === 'text' ? userTextPart.text : '';
-
-            if (userContent) {
-              const generatedTitle = await generateTitleFromMessage(userContent, c.env);
-              await db
-                .update(tables.chatThread)
-                .set({ title: generatedTitle })
-                .where(eq(tables.chatThread.id, threadId));
-            }
-          }
-        }
-      },
-
-      // ✅ AI SDK: Simplified error handling
-      // Store error for metadata in onFinish so UI can display error state
-      onError: (error) => {
-        // Track error for metadata
-        streamError = error instanceof Error ? error : new Error(String(error));
-
-        // ✅ CRITICAL: Classify and store the error BEFORE returning
-        // This prevents double classification that loses HTTP context
-        const classified = classifyOpenRouterError(error);
-        classifiedError = classified; // Store for use in onFinish
-
-        // ✅ Extract detailed error information for logging
-        const errorDetails: Record<string, unknown> = {
-          threadId,
-          participantId: participant.id,
-          participantIndex,
-          model: participant.modelId,
-          errorType: classified.type,
-          userMessage: classified.message,
-          technicalMessage: classified.technicalMessage,
-          isAborted: c.req.raw.signal.aborted,
-          timestamp: new Date().toISOString(),
-        };
-
-        // ✅ Add AI SDK error details if available
-        if (error && typeof error === 'object') {
-          const errorObj = error as Record<string, unknown>;
-          if ('statusCode' in errorObj)
-            errorDetails.statusCode = errorObj.statusCode;
-          if ('url' in errorObj)
-            errorDetails.url = errorObj.url;
-          if ('responseBody' in errorObj) {
-            try {
-              errorDetails.responseBody = JSON.stringify(errorObj.responseBody).substring(0, 500);
-            } catch {
-              errorDetails.responseBody = String(errorObj.responseBody).substring(0, 500);
-            }
-          }
-        }
-
-        // ✅ Add error stack for debugging
-        if (error instanceof Error && error.stack) {
-          errorDetails.errorStack = error.stack.split('\n').slice(0, 5).join('\n'); // First 5 lines
-        }
-
-        // ✅ Check for error.cause (AI SDK retry errors often have underlying cause)
-        if (error && typeof error === 'object' && 'cause' in error) {
-          const cause = (error as { cause: unknown }).cause;
-          if (cause && typeof cause === 'object') {
-            errorDetails.errorCause = cause instanceof Error
-              ? { message: cause.message, name: cause.name, stack: cause.stack?.split('\n').slice(0, 3).join('\n') }
-              : JSON.stringify(cause).substring(0, 500);
-          }
-        }
-
-        // ✅ Dump full error object structure for debugging (in dev mode)
-        if (process.env.NODE_ENV === 'development') {
-          try {
-            errorDetails.fullErrorObject = JSON.stringify(error, Object.getOwnPropertyNames(error), 2).substring(0, 1000);
-          } catch {
-            errorDetails.fullErrorObject = '[Could not serialize error object]';
-          }
-        }
-
-        apiLogger.error('Stream error with full context', errorDetails);
-
-        // Log what we're returning to verify it's the correct message
-        apiLogger.warn('onError returning classified message', {
-          classifiedType: classified.type,
-          classifiedMessage: classified.message,
-          classifiedTechnical: classified.technicalMessage,
-          isTransient: classified.isTransient,
-        });
-
-        // Return user-friendly error message
-        // This becomes the content text streamed to the client
-        return classified.message;
       },
     });
   },
@@ -2394,7 +1344,7 @@ export const createCustomRoleHandler: RouteHandler<typeof createCustomRoleRoute,
 export const getCustomRoleHandler: RouteHandler<typeof getCustomRoleRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
-    validateParams: CustomRoleIdParamSchema,
+    validateParams: IdParamSchema,
     operationName: 'getCustomRole',
   },
   async (c) => {
@@ -2423,7 +1373,7 @@ export const getCustomRoleHandler: RouteHandler<typeof getCustomRoleRoute, ApiEn
 export const updateCustomRoleHandler: RouteHandler<typeof updateCustomRoleRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
-    validateParams: CustomRoleIdParamSchema,
+    validateParams: IdParamSchema,
     validateBody: UpdateCustomRoleRequestSchema,
     operationName: 'updateCustomRole',
   },
@@ -2462,7 +1412,7 @@ export const updateCustomRoleHandler: RouteHandler<typeof updateCustomRoleRoute,
 export const deleteCustomRoleHandler: RouteHandler<typeof deleteCustomRoleRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
-    validateParams: CustomRoleIdParamSchema,
+    validateParams: IdParamSchema,
     operationName: 'deleteCustomRole',
   },
   async (c) => {
@@ -2553,13 +1503,6 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
     if (existingAnalysis) {
       // ✅ COMPLETED: Return existing analysis data
       if (existingAnalysis.status === 'completed' && existingAnalysis.analysisData) {
-        apiLogger.info('Analysis already completed for this round - returning existing', {
-          threadId,
-          roundNumber: roundNum,
-          analysisId: existingAnalysis.id,
-          status: existingAnalysis.status,
-        });
-
         return Responses.ok(c, {
           object: {
             ...existingAnalysis.analysisData,
@@ -2573,14 +1516,6 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
       // ✅ STREAMING or PENDING: Return 202 Accepted to indicate in-progress
       // Frontend should handle this by showing loading state without re-triggering
       if (existingAnalysis.status === 'streaming' || existingAnalysis.status === 'pending') {
-        apiLogger.info('Analysis already in progress for this round - returning 202', {
-          threadId,
-          roundNumber: roundNum,
-          analysisId: existingAnalysis.id,
-          status: existingAnalysis.status,
-          createdAt: existingAnalysis.createdAt,
-        });
-
         return Responses.accepted(c, {
           status: existingAnalysis.status,
           message: 'Analysis is currently being generated. Please wait...',
@@ -2591,13 +1526,6 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
 
       // ✅ FAILED: Allow retry by creating new analysis
       if (existingAnalysis.status === 'failed') {
-        apiLogger.info('Previous analysis failed - allowing retry', {
-          threadId,
-          roundNumber: roundNum,
-          analysisId: existingAnalysis.id,
-          errorMessage: existingAnalysis.errorMessage,
-        });
-
         // Delete failed analysis to allow fresh retry
         await db.delete(tables.chatModeratorAnalysis)
           .where(eq(tables.chatModeratorAnalysis.id, existingAnalysis.id));
@@ -2695,12 +1623,6 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
     const optimalModel = await openRouterModelsService.getOptimalAnalysisModel();
     const analysisModelId = optimalModel?.id || 'openai/gpt-4o-mini';
 
-    c.logger.info('Using dynamically selected analysis model for moderator', {
-      logType: 'operation',
-      operationName: 'analyzeRound',
-      resource: `${analysisModelId} (${optimalModel?.name || 'GPT-4o Mini - fallback'}) - ${optimalModel ? 'dynamically selected' : 'fallback'}`,
-    });
-
     // Initialize OpenRouter with selected optimal model
     initializeOpenRouter(c.env);
     const client = openRouterService.getClient();
@@ -2718,13 +1640,6 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
       status: 'streaming', // Mark as streaming immediately
       participantMessageIds: body.participantMessageIds,
       createdAt: new Date(),
-    });
-
-    apiLogger.info('Created pending analysis record - streaming will begin', {
-      threadId,
-      roundNumber: roundNum,
-      analysisId,
-      participantCount: participantMessages.length,
     });
 
     // ✅ AI SDK streamObject() Pattern: Stream structured JSON as it's generated
@@ -2758,16 +1673,9 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
         ]),
 
         // ✅ Stream callbacks for server-side logging and database persistence
-        onFinish: async ({ object: finalObject, error, usage }) => {
+        onFinish: async ({ object: finalObject, error, usage: _usage }) => {
           // ✅ FAILED: Update status to failed with error message
           if (error) {
-            apiLogger.error('Moderator analysis failed', {
-              threadId,
-              roundNumber: roundNum,
-              analysisId,
-              error,
-            });
-
             try {
               await db.update(tables.chatModeratorAnalysis)
                 .set({
@@ -2775,31 +1683,14 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
                   errorMessage: error instanceof Error ? error.message : String(error),
                 })
                 .where(eq(tables.chatModeratorAnalysis.id, analysisId));
-
-              apiLogger.info('Analysis status updated to failed', {
-                threadId,
-                roundNumber: roundNum,
-                analysisId,
-              });
-            } catch (updateError) {
-              apiLogger.error('Failed to update analysis status to failed', {
-                threadId,
-                roundNumber: roundNum,
-                analysisId,
-                updateError,
-              });
+            } catch {
+              // Suppress error - analysis status update is best effort
             }
             return;
           }
 
           // ✅ NO OBJECT: Mark as failed
           if (!finalObject) {
-            apiLogger.warn('Moderator analysis completed with no object', {
-              threadId,
-              roundNumber: roundNum,
-              analysisId,
-            });
-
             try {
               await db.update(tables.chatModeratorAnalysis)
                 .set({
@@ -2807,26 +1698,11 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
                   errorMessage: 'Analysis completed but no object was generated',
                 })
                 .where(eq(tables.chatModeratorAnalysis.id, analysisId));
-            } catch (updateError) {
-              apiLogger.error('Failed to update analysis status (no object)', {
-                threadId,
-                roundNumber: roundNum,
-                analysisId,
-                updateError,
-              });
+            } catch {
+              // Suppress error - analysis status update is best effort
             }
             return;
           }
-
-          apiLogger.info('Moderator analysis completed successfully', {
-            threadId,
-            roundNumber: roundNum,
-            analysisId,
-            participantCount: participantMessages.length,
-            hasParticipantAnalyses: !!finalObject?.participantAnalyses,
-            hasLeaderboard: !!finalObject?.leaderboard,
-            usage,
-          });
 
           // ✅ Validate schema before saving to prevent corrupt data
           const hasValidStructure = finalObject.participantAnalyses
@@ -2837,17 +1713,6 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
             && finalObject.conclusion;
 
           if (!hasValidStructure) {
-            apiLogger.error('Moderator analysis has invalid structure - schema not followed', {
-              threadId,
-              roundNumber: roundNum,
-              analysisId,
-              hasParticipantAnalyses: !!finalObject.participantAnalyses,
-              hasLeaderboard: !!finalObject.leaderboard,
-              hasOverallSummary: !!finalObject.overallSummary,
-              hasConclusion: !!finalObject.conclusion,
-              actualKeys: Object.keys(finalObject),
-            });
-
             try {
               await db.update(tables.chatModeratorAnalysis)
                 .set({
@@ -2855,13 +1720,8 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
                   errorMessage: 'Analysis generated but structure is invalid',
                 })
                 .where(eq(tables.chatModeratorAnalysis.id, analysisId));
-            } catch (updateError) {
-              apiLogger.error('Failed to update analysis status (invalid structure)', {
-                threadId,
-                roundNumber: roundNum,
-                analysisId,
-                updateError,
-              });
+            } catch {
+              // Suppress error - analysis status update is best effort
             }
             return;
           }
@@ -2880,19 +1740,8 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
                 completedAt: new Date(),
               })
               .where(eq(tables.chatModeratorAnalysis.id, analysisId));
-
-            apiLogger.info('Moderator analysis updated to completed in database', {
-              threadId,
-              roundNumber: roundNum,
-              analysisId,
-            });
-          } catch (updateError) {
-            apiLogger.error('Failed to update moderator analysis to completed', {
-              threadId,
-              roundNumber: roundNum,
-              analysisId,
-              error: updateError,
-            });
+          } catch {
+            // Suppress error - analysis completion update is best effort
           }
         },
       });
@@ -2906,14 +1755,6 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
       // Handle NoObjectGeneratedError specifically
       const { NoObjectGeneratedError } = await import('ai');
       if (NoObjectGeneratedError.isInstance(error)) {
-        apiLogger.error('No object generated by AI model', {
-          threadId,
-          roundNumber: roundNum,
-          cause: error.cause,
-          text: error.text,
-          finishReason: error.finishReason,
-        });
-
         throw createError.internal(
           'Failed to generate analysis',
           {
@@ -2940,19 +1781,12 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
 export const getThreadAnalysesHandler: RouteHandler<typeof getThreadAnalysesRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
-    validateParams: ThreadIdParamSchema,
+    validateParams: IdParamSchema,
     operationName: 'getThreadAnalyses',
   },
   async (c) => {
     const { user } = c.auth();
     const { id: threadId } = c.validated.params;
-
-    c.logger.info('Fetching moderator analyses', {
-      logType: 'operation',
-      operationName: 'getThreadAnalyses',
-      userId: user.id,
-      resource: threadId,
-    });
 
     const db = await getDbAsync();
 
@@ -2979,26 +1813,6 @@ export const getThreadAnalysesHandler: RouteHandler<typeof getThreadAnalysesRout
     const analyses = Array.from(analysesMap.values())
       .sort((a, b) => a.roundNumber - b.roundNumber);
 
-    c.logger.info(`Moderator analyses fetched successfully: ${analyses.length} unique rounds (${allAnalyses.length} total records)`, {
-      logType: 'operation',
-      operationName: 'getThreadAnalyses',
-      resource: threadId,
-    });
-
     return Responses.collection(c, analyses);
   },
 );
-
-/**
- * Helper function to extract model name from model ID
- * (Duplicated from moderator service to avoid circular dependency)
- */
-function extractModeratorModelName(modelId: string): string {
-  const parts = modelId.split('/');
-  const modelPart = parts[parts.length - 1] || modelId;
-
-  return modelPart
-    .split('-')
-    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(' ');
-}

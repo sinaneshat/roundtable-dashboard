@@ -30,11 +30,6 @@ export function useCreateCheckoutSessionMutation() {
       // Invalidate usage queries since new subscription will have different quota limits
       queryClient.invalidateQueries({ queryKey: queryKeys.usage.all });
     },
-    onError: (error) => {
-      if (process.env.NODE_ENV === 'development') {
-        console.error('Failed to create checkout session', error);
-      }
-    },
     retry: false,
     throwOnError: false,
   });
@@ -62,11 +57,6 @@ export function useSyncAfterCheckoutMutation() {
 
       // Invalidate usage queries to reflect new quota limits from subscription
       queryClient.invalidateQueries({ queryKey: queryKeys.usage.all });
-    },
-    onError: (error) => {
-      if (process.env.NODE_ENV === 'development') {
-        console.error('Failed to sync after checkout', error);
-      }
     },
     retry: false,
     throwOnError: false,

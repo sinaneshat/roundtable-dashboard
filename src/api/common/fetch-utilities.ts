@@ -10,10 +10,8 @@ import type { z } from 'zod';
 
 import type { EnhancedHTTPException } from '@/api/core/http-exceptions';
 import { HTTPExceptionFactory } from '@/api/core/http-exceptions';
-// CloudflareEnv is globally available from cloudflare-env.d.ts
-// Import logger from the correct path based on codebase structure
-import { apiLogger } from '@/api/middleware/hono-logger';
 
+// CloudflareEnv is globally available from cloudflare-env.d.ts
 import { createError } from './error-handling';
 
 // ============================================================================
@@ -224,12 +222,6 @@ export async function fetchWithRetry<T = unknown>(
   // Circuit breaker check
   if (!shouldAllowRequest(url, fetchConfig)) {
     const duration = Date.now() - startTime;
-    apiLogger.warn('Circuit breaker OPEN - request blocked', {
-      url,
-      correlationId,
-      duration,
-      component: 'fetch-utilities',
-    });
 
     return {
       success: false,
@@ -247,14 +239,6 @@ export async function fetchWithRetry<T = unknown>(
       // Create abort controller with timeout following Hono patterns
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-
-      apiLogger.debug('Fetch attempt', {
-        url,
-        attempt: attempt + 1,
-        maxRetries: maxRetries + 1,
-        correlationId,
-        component: 'fetch-utilities',
-      });
 
       // Make request with timeout
       const response = await fetch(url, {
@@ -277,15 +261,6 @@ export async function fetchWithRetry<T = unknown>(
           updateCircuitBreakerState(url, false, fetchConfig);
           const duration = Date.now() - startTime;
 
-          apiLogger.error('Response parsing failed', {
-            url,
-            error: parseResult.error,
-            contentType: parseResult.contentType,
-            duration,
-            correlationId,
-            component: 'fetch-utilities',
-          });
-
           return {
             success: false,
             error: `Response parsing failed: ${parseResult.error}`,
@@ -302,15 +277,6 @@ export async function fetchWithRetry<T = unknown>(
         const data = parseResult.data as T;
 
         const duration = Date.now() - startTime;
-
-        apiLogger.info('Fetch successful', {
-          url,
-          status: response.status,
-          attempts: attempt + 1,
-          duration,
-          correlationId,
-          component: 'fetch-utilities',
-        });
 
         return {
           success: true,
@@ -338,41 +304,21 @@ export async function fetchWithRetry<T = unknown>(
         retryInfo.delay,
       );
 
-      apiLogger.warn('Fetch failed, retrying', {
-        url,
-        status: response.status,
-        attempt: attempt + 1,
-        maxRetries: maxRetries + 1,
-        retryDelay: delay,
-        correlationId,
-        component: 'fetch-utilities',
-      });
-
       if (delay > 0) {
         await new Promise(resolve => setTimeout(resolve, delay));
       }
-    } catch (error) {
-      lastError = error instanceof Error ? error : new Error(String(error));
+    } catch (fetchError) {
+      lastError = fetchError instanceof Error ? fetchError : new Error(String(fetchError));
 
       // Handle timeout and network errors
-      const isTimeout = error instanceof Error && error.name === 'AbortError';
-      const isNetworkError = error instanceof Error && error.message.includes('fetch');
+      const isTimeout = fetchError instanceof Error && fetchError.name === 'AbortError';
+      const isNetworkError = fetchError instanceof Error && fetchError.message.includes('fetch');
 
       if (attempt === maxRetries || (!isTimeout && !isNetworkError)) {
         break;
       }
 
       const delay = calculateRetryDelay(attempt, fetchConfig);
-
-      apiLogger.warn('Fetch error, retrying', {
-        url,
-        error: error instanceof Error ? error.message : 'Unknown error',
-        attempt: attempt + 1,
-        maxRetries: maxRetries + 1,
-        retryDelay: delay,
-        correlationId,
-        component: 'fetch-utilities',
-      });
 
       if (delay > 0) {
         await new Promise(resolve => setTimeout(resolve, delay));
@@ -385,15 +331,6 @@ export async function fetchWithRetry<T = unknown>(
 
   const duration = Date.now() - startTime;
   const errorMessage = lastError?.message || 'Unknown error';
-
-  apiLogger.error('Fetch failed after all retries', {
-    url,
-    error: errorMessage,
-    attempts: maxRetries + 1,
-    duration,
-    correlationId,
-    component: 'fetch-utilities',
-  });
 
   return {
     success: false,
@@ -549,10 +486,10 @@ async function parseResponseSafely<T>(
 
     // For binary responses without schema, return as unknown
     return { success: true, data: bufferData, contentType };
-  } catch (error) {
+  } catch (parseError) {
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Unknown parsing error',
+      error: parseError instanceof Error ? parseError.message : 'Unknown parsing error',
       contentType,
     };
   }
@@ -570,15 +507,6 @@ export function validateEnvironmentVariables(
 
   if (missing.length > 0) {
     const errorMessage = `Missing required environment variables: ${missing.join(', ')}`;
-    apiLogger.error('Environment validation failed', {
-      logType: 'validation' as const,
-      fieldCount: required.length,
-      validationType: 'params' as const,
-      errors: missing.map(key => ({
-        field: String(key),
-        message: `Required environment variable ${String(key)} is missing`,
-      })),
-    });
 
     throw createError.internal(errorMessage);
   }

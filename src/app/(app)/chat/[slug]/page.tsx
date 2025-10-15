@@ -63,7 +63,7 @@ export default async function ChatThreadPage({
 
   // OFFICIAL PATTERN: Fetch data directly in Server Component
   // No QueryClient, no prefetch, no hydration - just raw data fetching
-  const threadResult = await getThreadBySlugService(slug);
+  const threadResult = await getThreadBySlugService({ param: { slug } });
 
   // Handle error states
   if (!threadResult?.success || !threadResult.data?.thread) {
@@ -76,7 +76,7 @@ export default async function ChatThreadPage({
   // This populates the cache so useThreadChangelogQuery has data immediately
   await queryClient.prefetchQuery({
     queryKey: queryKeys.threads.changelog(thread.id),
-    queryFn: () => getThreadChangelogService(thread.id),
+    queryFn: () => getThreadChangelogService({ param: { id: thread.id } }),
     staleTime: STALE_TIMES.changelog, // 30 seconds - matches client-side query
   });
 
@@ -84,7 +84,7 @@ export default async function ChatThreadPage({
   // This ensures analyses are available immediately without extra client-side requests
   await queryClient.prefetchQuery({
     queryKey: queryKeys.threads.analyses(thread.id),
-    queryFn: () => getThreadAnalysesService(thread.id),
+    queryFn: () => getThreadAnalysesService({ param: { id: thread.id } }),
     staleTime: STALE_TIMES.changelog, // 30 seconds - same as changelog
   });
 

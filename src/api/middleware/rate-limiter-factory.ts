@@ -8,7 +8,6 @@ import { createMiddleware } from 'hono/factory';
 import { HTTPException } from 'hono/http-exception';
 import * as HttpStatusCodes from 'stoker/http-status-codes';
 
-import { apiLogger } from '@/api/middleware/hono-logger';
 import type { ApiEnv } from '@/api/types';
 
 export type RateLimitConfig = {
@@ -129,16 +128,6 @@ function defaultKeyGenerator(c: Context<ApiEnv>): string {
   if (session?.userId)
     return `session:${session.userId}`;
 
-  // Only log warning if we couldn't get any IP at all
-  if (ip === 'fallback') {
-    apiLogger.warn('No IP address found for rate limiting, using fallback identifier', {
-      logType: 'performance',
-      duration: 0,
-      component: 'rate-limiter',
-      fallbackReason: 'no-ip-headers',
-    });
-  }
-
   return `ip:${ip}`;
 }
 
@@ -150,16 +139,6 @@ function ipKeyGenerator(c: Context<ApiEnv>): string {
     || c.req.header('x-forwarded-for')
     || c.req.header('x-real-ip')
     || 'fallback';
-
-  // Only log warning if we couldn't get any IP at all
-  if (ip === 'fallback') {
-    apiLogger.warn('No IP address found for rate limiting, using fallback identifier', {
-      logType: 'performance',
-      duration: 0,
-      component: 'rate-limiter',
-      fallbackReason: 'no-ip-headers',
-    });
-  }
 
   return `ip:${ip}`;
 }
@@ -261,12 +240,12 @@ export class RateLimiterFactory {
         if (config.skipSuccessfulRequests) {
           entry.count--;
         }
-      } catch (error) {
+      } catch (_error) {
         // Optionally skip counting failed requests
         if (config.skipFailedRequests) {
           entry.count--;
         }
-        throw error;
+        throw _error;
       }
     });
   }

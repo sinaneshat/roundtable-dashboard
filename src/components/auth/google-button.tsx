@@ -39,7 +39,6 @@ export function GoogleButton({
         newUserCallbackURL,
       });
     } catch (error) {
-      console.error('Google sign-in failed:', error);
       showApiErrorToast(t('auth.errors.signInFailed'), error);
     }
   };

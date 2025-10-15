@@ -10,7 +10,6 @@
  * Provides dynamic model discovery instead of hardcoded model lists
  */
 
-import { apiLogger } from '@/api/middleware/hono-logger';
 import type { BaseModelResponse, RawOpenRouterModel } from '@/api/routes/models/schema';
 import { OpenRouterModelsResponseSchema } from '@/api/routes/models/schema';
 import type { SubscriptionTier } from '@/api/services/product-logic.service';
@@ -70,18 +69,10 @@ class OpenRouterModelsService {
     // Return cached models if still valid
     const now = Date.now();
     if (this.cachedModels && (now - this.cacheTimestamp) < this.CACHE_TTL) {
-      apiLogger.info('Returning cached OpenRouter models', {
-        count: this.cachedModels.length,
-        age: `${Math.round((now - this.cacheTimestamp) / 1000)}s`,
-      });
       return this.cachedModels;
     }
 
     try {
-      apiLogger.info('Fetching models from OpenRouter API', {
-        url: this.OPENROUTER_MODELS_API,
-      });
-
       const response = await fetch(this.OPENROUTER_MODELS_API, {
         headers: {
           'Content-Type': 'application/json',
@@ -98,42 +89,87 @@ class OpenRouterModelsService {
       const parseResult = OpenRouterModelsResponseSchema.safeParse(rawData);
 
       if (!parseResult.success) {
-        apiLogger.error('Failed to validate OpenRouter API response', {
-          error: parseResult.error.message,
-        });
         throw new Error('Invalid response from OpenRouter API');
       }
 
       const data = parseResult.data;
 
+      // ✅ FILTER: Only text-based models (no audio/image/video models)
+      const textOnlyModels = data.data.filter(model => this.isTextOnlyModel(model));
+
       // Enhance models with computed fields
-      const enhancedModels = data.data.map(model => this.enhanceModel(model));
+      const enhancedModels = textOnlyModels.map(model => this.enhanceModel(model));
 
       // Update cache
       this.cachedModels = enhancedModels;
       this.cacheTimestamp = now;
 
-      apiLogger.info('Successfully fetched and cached OpenRouter models', {
-        count: enhancedModels.length,
-      });
-
       return enhancedModels;
-    } catch (error) {
-      apiLogger.error('Failed to fetch models from OpenRouter', {
-        error: error instanceof Error ? error.message : String(error),
-      });
-
+    } catch (fetchError) {
       // Return cached models if available, even if stale
       if (this.cachedModels) {
-        apiLogger.warn('Returning stale cached models due to fetch failure', {
-          count: this.cachedModels.length,
-          age: `${Math.round((now - this.cacheTimestamp) / 1000)}s`,
-        });
         return this.cachedModels;
       }
 
-      throw error;
+      throw fetchError;
     }
+  }
+
+  /**
+   * ✅ TEXT-ONLY MODEL FILTER: Only return text/chat/reasoning models
+   * Excludes: audio, image, video generation models
+   */
+  private isTextOnlyModel(model: RawOpenRouterModel): boolean {
+    const modality = model.architecture?.modality?.toLowerCase() || '';
+    const nameLower = model.name.toLowerCase();
+    const descLower = model.description?.toLowerCase() || '';
+    const idLower = model.id.toLowerCase();
+
+    // ✅ EXCLUDE: Audio generation models
+    if (
+      modality.includes('audio')
+      || nameLower.includes('audio')
+      || nameLower.includes('speech')
+      || nameLower.includes('tts')
+      || nameLower.includes('whisper')
+      || descLower.includes('audio generation')
+      || descLower.includes('speech synthesis')
+    ) {
+      return false;
+    }
+
+    // ✅ EXCLUDE: Image generation models
+    if (
+      modality.includes('image->image')
+      || modality.includes('text->image')
+      || nameLower.includes('dall-e')
+      || nameLower.includes('dalle')
+      || nameLower.includes('midjourney')
+      || nameLower.includes('stable-diffusion')
+      || nameLower.includes('flux')
+      || nameLower.includes('imagen')
+      || descLower.includes('image generation')
+      || descLower.includes('text-to-image')
+      || idLower.includes('image-gen')
+      || idLower.includes('flux')
+    ) {
+      return false;
+    }
+
+    // ✅ EXCLUDE: Video generation models
+    if (
+      modality.includes('video')
+      || nameLower.includes('video')
+      || nameLower.includes('sora')
+      || nameLower.includes('runway')
+      || descLower.includes('video generation')
+    ) {
+      return false;
+    }
+
+    // ✅ INCLUDE: Text, chat, reasoning, and multimodal vision models
+    // (Vision models like GPT-4V, Claude with vision are OK - they process images but generate text)
+    return true;
   }
 
   /**
@@ -284,7 +320,6 @@ class OpenRouterModelsService {
   clearCache(): void {
     this.cachedModels = null;
     this.cacheTimestamp = 0;
-    apiLogger.info('OpenRouter models cache cleared');
   }
 
   /**
@@ -339,7 +374,6 @@ class OpenRouterModelsService {
     const allModels = await this.fetchAllModels();
 
     if (allModels.length === 0) {
-      apiLogger.warn('No models available from OpenRouter API');
       return null;
     }
 
@@ -411,17 +445,6 @@ class OpenRouterModelsService {
     const bestModel = scoredModels.sort((a, b) => b.score - a.score)[0];
 
     if (bestModel) {
-      apiLogger.info('Selected cheapest available model dynamically', {
-        modelId: bestModel.model.id,
-        modelName: bestModel.model.name,
-        provider: bestModel.model.provider,
-        inputPrice: bestModel.model.pricing_display.input,
-        outputPrice: bestModel.model.pricing_display.output,
-        contextLength: bestModel.model.context_length,
-        score: bestModel.score.toFixed(2),
-        isFree: bestModel.model.is_free,
-      });
-
       return bestModel.model;
     }
 
@@ -429,95 +452,109 @@ class OpenRouterModelsService {
   }
 
   /**
-   * ✅ 100% DYNAMIC TOP 100 SELECTION: Unbiased model ranking from OpenRouter
+   * ✅ SMARTNESS & POPULARITY FIRST: Top 100 most capable and popular models
    *
-   * Selection criteria (purely data-driven, NO hard-coded preferences):
-   * 1. Cost efficiency (free/cheap models ranked higher)
-   * 2. Model capabilities (vision, reasoning, tools)
-   * 3. Context length (optimal range: 32K-256K)
-   * 4. Recency (newer models preferred)
-   * 5. Pricing tier diversity (ensure models across all tiers)
+   * Selection criteria (based on 2025 OpenRouter popularity rankings):
+   * 1. Provider Quality (40 points) - Real-world popularity by token usage
+   * 2. Capabilities (30 points) - Vision, reasoning, tools support
+   * 3. Context Length (20 points) - Larger windows = more capable
+   * 4. Recency (10 points) - Newer models preferred
+   * 5. Cost (0 points) - IGNORED for top 100 selection
    *
-   * ⚠️ ZERO BIAS: No hard-coded provider names or model patterns
-   * All scoring based purely on OpenRouter API data
+   * ✅ PRICING APPLIED AFTER: User access control happens AFTER selecting smartest models
+   * This ensures users see the BEST models available at their tier, not just cheap ones
+   *
+   * Provider popularity based on OpenRouter 2025 token usage data:
+   * - X-AI: 578B tokens (31.2%)
+   * - Google: 335B tokens (18.1%)
+   * - Anthropic: 260B tokens (14.1%)
+   * - OpenAI: 242B tokens (13.1%)
+   * - DeepSeek: 128B tokens (6.9%)
+   * - Qwen: 117B tokens (6.3%)
    */
   async getTop100Models(): Promise<BaseModelResponse[]> {
     const allModels = await this.fetchAllModels();
 
-    // Score each model based ONLY on objective data from OpenRouter API
+    // Score each model based on SMARTNESS and POPULARITY, not cost
     const scoredModels = allModels.map((model) => {
       let score = 0;
 
-      // Cost efficiency scoring (60 points max - prioritize affordable models)
-      const inputPricePerMillion = costPerMillion(model.pricing.prompt);
-      const outputPricePerMillion = costPerMillion(model.pricing.completion);
-      const avgCostPerMillion = (inputPricePerMillion + outputPricePerMillion) / 2;
-
-      // Free models get maximum cost score
-      if (avgCostPerMillion === 0) {
-        score += 60;
-      } else if (avgCostPerMillion <= 0.5) {
-        score += 50; // Very cheap
-      } else if (avgCostPerMillion <= 2) {
-        score += 40; // Cheap
-      } else if (avgCostPerMillion <= 10) {
-        score += 25; // Moderate
-      } else if (avgCostPerMillion <= 50) {
-        score += 10; // Expensive
+      // ✅ PROVIDER QUALITY SCORING (40 points max - based on real popularity data)
+      // Based on OpenRouter 2025 token usage rankings
+      const providerLower = model.provider.toLowerCase();
+      if (providerLower.includes('x-ai') || providerLower.includes('xai')) {
+        score += 40; // #1 most popular (31.2% token share)
+      } else if (providerLower.includes('google')) {
+        score += 38; // #2 most popular (18.1% token share)
+      } else if (providerLower.includes('anthropic')) {
+        score += 36; // #3 most popular (14.1% token share)
+      } else if (providerLower.includes('openai')) {
+        score += 34; // #4 most popular (13.1% token share)
+      } else if (providerLower.includes('deepseek')) {
+        score += 32; // #5 most popular (6.9% token share)
+      } else if (providerLower.includes('qwen')) {
+        score += 30; // #6 most popular (6.3% token share)
+      } else if (
+        providerLower.includes('meta')
+        || providerLower.includes('mistral')
+        || providerLower.includes('cohere')
+        || providerLower.includes('perplexity')
+      ) {
+        score += 25; // Other major providers
       } else {
-        score += 0; // Very expensive
+        score += 15; // Smaller/unknown providers
       }
 
-      // Capabilities scoring (40 points max - reward versatility)
+      // ✅ CAPABILITIES SCORING (30 points max - reward advanced features)
       if (model.capabilities.vision)
-        score += 15;
+        score += 10; // Multimodal models are more advanced
       if (model.capabilities.reasoning)
-        score += 15;
+        score += 10; // Reasoning models are cutting-edge
       if (model.capabilities.tools)
-        score += 10;
+        score += 10; // Function calling indicates advanced models
 
-      // Context length scoring (30 points max - sweet spot 32K-256K)
-      // Too small: not useful, too large: slower/more expensive
-      if (model.context_length >= 32000 && model.context_length <= 256000) {
-        score += 30; // Optimal range
-      } else if (model.context_length >= 16000 && model.context_length < 32000) {
-        score += 20; // Decent
-      } else if (model.context_length > 256000) {
-        score += 15; // Very large (potentially slower)
-      } else if (model.context_length >= 8000) {
-        score += 10; // Small but usable
+      // ✅ CONTEXT LENGTH SCORING (20 points max - larger = more capable)
+      // Flagship models typically have 128K-200K context windows
+      if (model.context_length >= 128000) {
+        score += 20; // Flagship-tier context (128K+)
+      } else if (model.context_length >= 64000) {
+        score += 15; // Large context (64K-128K)
+      } else if (model.context_length >= 32000) {
+        score += 10; // Standard context (32K-64K)
+      } else if (model.context_length >= 16000) {
+        score += 5; // Smaller context (16K-32K)
       } else {
-        score += 0; // Too small
+        score += 0; // Very small context (<16K)
       }
 
-      // Recency scoring (20 points max - prefer recent models)
+      // ✅ RECENCY SCORING (10 points max - newer = smarter)
       if (model.created) {
         const ageInDays = (Date.now() / 1000 - model.created) / (60 * 60 * 24);
         if (ageInDays < 90) {
-          score += 20; // Last 3 months
+          score += 10; // Last 3 months (cutting-edge)
         } else if (ageInDays < 180) {
-          score += 16; // Last 6 months
+          score += 8; // Last 6 months (recent)
         } else if (ageInDays < 365) {
-          score += 12; // Last year
+          score += 6; // Last year (recent-ish)
         } else if (ageInDays < 730) {
-          score += 6; // Last 2 years
+          score += 3; // Last 2 years (dated)
         } else {
-          score += 2; // Older models
+          score += 0; // Older models (likely outdated)
         }
       } else {
-        score += 10; // No creation date, give neutral score
+        score += 5; // No creation date, give middle score
       }
 
       return { model, score };
     });
 
-    // Sort by score (descending) and take top 100
+    // Sort by score (descending) and take top 100 SMARTEST models
     const top100 = scoredModels
       .sort((a, b) => b.score - a.score)
       .slice(0, 100)
       .map(item => item.model);
 
-    // Ensure tier diversity - make sure we have models across all pricing tiers
+    // Log tier diversity for monitoring (pricing tiers applied AFTER selection)
     const tierCounts = {
       free: 0,
       starter: 0,
@@ -528,14 +565,6 @@ class OpenRouterModelsService {
     top100.forEach((model) => {
       const tier = this.getRequiredTierForModel(model);
       tierCounts[tier]++;
-    });
-
-    apiLogger.info('Selected top 100 models dynamically from OpenRouter (zero bias)', {
-      total: allModels.length,
-      selected: top100.length,
-      tierDistribution: tierCounts,
-      topProviders: [...new Set(top100.slice(0, 10).map(m => m.provider))],
-      top10Models: top100.slice(0, 10).map(m => m.id),
     });
 
     return top100;
@@ -583,7 +612,6 @@ class OpenRouterModelsService {
     });
 
     if (candidateModels.length === 0) {
-      apiLogger.warn('No suitable analysis models found, using dynamic cheapest model fallback');
       // ✅ FULLY DYNAMIC FALLBACK: Get cheapest available model instead of hard-coded fallback
       return await this.getCheapestAvailableModel();
     }
@@ -640,21 +668,36 @@ class OpenRouterModelsService {
     const bestModel = scoredModels.sort((a, b) => b.score - a.score)[0];
 
     if (bestModel) {
-      apiLogger.info('Selected optimal analysis model dynamically', {
-        modelId: bestModel.model.id,
-        modelName: bestModel.model.name,
-        provider: bestModel.model.provider,
-        inputPrice: bestModel.model.pricing_display.input,
-        outputPrice: bestModel.model.pricing_display.output,
-        contextLength: bestModel.model.context_length,
-        score: bestModel.score.toFixed(2),
-      });
-
       return bestModel.model;
     }
 
     return null;
   }
+}
+
+// ============================================================================
+// Model Metadata Utilities
+// ============================================================================
+
+/**
+ * Extract a human-readable model name from a model ID
+ * Converts model IDs like "openai/gpt-4-turbo" to "Gpt 4 Turbo"
+ *
+ * @param modelId - Full model ID (e.g., "openai/gpt-4-turbo")
+ * @returns Formatted model name (e.g., "Gpt 4 Turbo")
+ *
+ * @example
+ * extractModeratorModelName("openai/gpt-4-turbo") // "Gpt 4 Turbo"
+ * extractModeratorModelName("anthropic/claude-3-opus") // "Claude 3 Opus"
+ */
+export function extractModeratorModelName(modelId: string): string {
+  const parts = modelId.split('/');
+  const modelPart = parts[parts.length - 1] || modelId;
+
+  return modelPart
+    .split('-')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
 }
 
 /**

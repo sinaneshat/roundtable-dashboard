@@ -23,10 +23,10 @@ import { useThreadAnalysesQuery, useThreadChangelogQuery } from '@/hooks/queries
 import { useModelsQuery } from '@/hooks/queries/models';
 import { useUsageStatsQuery } from '@/hooks/queries/usage';
 import { useBoolean } from '@/hooks/utils';
-import { useChatStreaming } from '@/hooks/utils/use-chat-streaming';
+import { useMultiParticipantChat } from '@/hooks/utils/use-multi-participant-chat';
 import { useSession } from '@/lib/auth/client';
 import type { ChatModeId } from '@/lib/config/chat-modes';
-import { invalidationPatterns } from '@/lib/data/query-keys';
+import { invalidationPatterns, queryKeys } from '@/lib/data/query-keys';
 import type { ParticipantConfig } from '@/lib/schemas/chat-forms';
 import { getAvatarPropsFromModelId } from '@/lib/utils/ai-display';
 import {
@@ -105,9 +105,6 @@ export default function ChatThreadScreen({
   // ✅ Thread action state
   const isDeleteDialogOpen = useBoolean(false);
 
-  // ✅ Transform backend ChatMessage to AI SDK format using helper
-  const [messages, setMessages] = useState<UIMessage[]>(() => chatMessagesToUIMessages(initialMessages));
-
   // ✅ Participants state (must be declared before timeline useMemo that depends on it)
   const [selectedParticipants, setSelectedParticipants] = useState<ParticipantConfig[]>(() => {
     return participants
@@ -182,12 +179,36 @@ export default function ChatThreadScreen({
   // Users cannot manually trigger analysis - no UI for "opportunities"
   // Frontend just displays analyses that backend creates automatically
 
+  const [selectedMode, setSelectedMode] = useState<ChatModeId>(thread.mode as ChatModeId);
+  const [inputValue, setInputValue] = useState('');
+
+  // ✅ OFFICIAL AI SDK HOOK - Handles all streaming automatically
+  const {
+    messages,
+    status,
+    error,
+    streamAllParticipants,
+    stop,
+    setMessages,
+    isStreamingParticipants,
+    currentParticipantIndex,
+  } = useMultiParticipantChat({
+    threadId: thread.id,
+    initialMessages: chatMessagesToUIMessages(initialMessages),
+    selectedMode,
+    selectedParticipants,
+    onParticipantsUpdate: setSelectedParticipants,
+    onError: (err) => {
+      console.error('[ChatThreadScreen] Streaming error:', err);
+    },
+  });
+
   // ✅ Create a merged timeline of messages, grouped changelog entries, and analyses
   // ✅ CRITICAL: Use stable timestamps to prevent React reconciliation issues
   // ✅ OPTIMIZED: Separated memoization for changelog/analysis to reduce recalculation during streaming
   // ✅ REMOVED: roundItems - analysis is backend-triggered only, no manual triggering UI
   const timeline = useMemo(() => {
-    const messageItems = messages.map((msg, index) => {
+    const messageItems = messages.map((msg: UIMessage, index: number) => {
       const metadata = getMessageMetadata(msg.metadata);
       return {
         type: 'message' as const,
@@ -204,30 +225,16 @@ export default function ChatThreadScreen({
     );
   }, [messages, changelogItems, analysisItems]);
 
-  const [selectedMode, setSelectedMode] = useState<ChatModeId>(thread.mode as ChatModeId);
-  const [inputValue, setInputValue] = useState('');
-
-  // ✅ Simplified streaming hook - Following AI SDK patterns
-  const { status, streamingState, streamMessage, stopStreaming } = useChatStreaming(
-    {
-      threadId: thread.id,
-      selectedMode,
-      selectedParticipants,
-    },
-    setMessages,
-    setSelectedParticipants,
-  );
-
   // ✅ Removed fetchedVariantsRef - no longer needed since variants are pre-loaded
 
   // ✅ Refetch messages and changelog from backend after streaming completes
   // This ensures we get real backend message IDs, participantIds, and parentMessageIds for variant support
   // ALSO invalidates changelog to show any configuration changes that occurred during streaming
   // ✅ Enable polling for analysis generation after streaming completes
-  const previousStatusRef = useRef<typeof status>('ready');
+  const previousStreamingRef = useRef(false);
   useEffect(() => {
-    const didJustFinishStreaming = previousStatusRef.current === 'streaming' && status === 'ready';
-    previousStatusRef.current = status;
+    const didJustFinishStreaming = previousStreamingRef.current && !isStreamingParticipants;
+    previousStreamingRef.current = isStreamingParticipants;
 
     if (!didJustFinishStreaming) {
       return;
@@ -238,14 +245,19 @@ export default function ChatThreadScreen({
 
     const refetchData = async () => {
       try {
-        const { getThreadService } = await import('@/services/api/chat-threads');
+        // ✅ PROPER PATTERN: Use queryClient.refetchQueries to trigger query hooks
+        // This ensures we use the existing query infrastructure (hooks) instead of calling services
+        await queryClient.refetchQueries({
+          queryKey: queryKeys.threads.detail(thread.id),
+          exact: true,
+        });
 
-        const result = await getThreadService(thread.id);
+        // ✅ Get the updated data from the query cache (populated by the query hook's queryFn)
+        const result = queryClient.getQueryData(queryKeys.threads.detail(thread.id)) as Awaited<ReturnType<typeof import('@/services/api/chat-threads').getThreadService>> | undefined;
 
-        if (result.success && result.data?.messages) {
+        if (result?.success && result.data?.messages) {
           console.warn('[ChatThreadScreen] Refetched', result.data.messages.length, 'messages from backend');
           // Transform backend messages to UI messages
-          const { chatMessagesToUIMessages } = await import('@/lib/utils/message-transforms');
           setMessages(chatMessagesToUIMessages(result.data.messages));
 
           // Variants are already included in message metadata from server
@@ -264,37 +276,30 @@ export default function ChatThreadScreen({
     };
 
     refetchData();
-  }, [status, thread.id, queryClient]);
+  }, [isStreamingParticipants, thread.id, queryClient, setMessages]);
 
   // ✅ REMOVED: Polling control logic
   // Polling is now always enabled in useThreadAnalysesQuery (3s interval)
   // Backend automatically triggers analysis after last participant completes
   // No need for frontend to manage polling state
 
-  // ✅ Handle sending new message
+  // ✅ Handle sending new message - AI SDK handles everything
   const handleSubmit = useCallback(
     async (e: React.FormEvent) => {
       e.preventDefault();
-      if (!inputValue.trim() || status !== 'ready')
+      if (!inputValue.trim() || status !== 'ready') {
         return;
+      }
 
-      const userMessage: UIMessage = {
-        id: `temp-${Date.now()}`,
-        role: 'user',
-        parts: [{ type: 'text', text: inputValue }],
-        metadata: {
-          participantId: null, // User messages have no participant
-          createdAt: new Date().toISOString(), // ✅ Required for timeline sorting
-        },
-      };
-
+      const messageText = inputValue;
       setInputValue('');
-      setMessages(prev => [...prev, userMessage]);
-      await streamMessage([...messages, userMessage]);
+
+      // ✅ AI SDK hook handles: user message creation, SSE parsing, state updates, metadata
+      await streamAllParticipants(messageText);
 
       // Auto-scroll handled by useEffect watching messages
     },
-    [inputValue, messages, status, streamMessage],
+    [inputValue, status, streamAllParticipants],
   );
 
   // ✅ Use shared thread actions component
@@ -375,7 +380,8 @@ export default function ChatThreadScreen({
             return (
               <Message from="user" key={message.id}>
                 <MessageContent>
-                  {message.parts.map((part, partIndex) => {
+                  {message.parts.map((part: UIMessage['parts'][number], partIndex: number) => {
+                    // ✅ OFFICIAL PATTERN: Render text content
                     if (part.type === 'text') {
                       return (
                       // eslint-disable-next-line react/no-array-index-key -- Parts are stable content segments within a message
@@ -384,6 +390,51 @@ export default function ChatThreadScreen({
                         </Response>
                       );
                     }
+
+                    // ✅ OFFICIAL PATTERN: Render file attachments (images)
+                    // Following: https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot#attachments
+                    if (part.type === 'file' && part.mediaType?.startsWith('image/')) {
+                      return (
+                        // eslint-disable-next-line react/no-array-index-key -- Parts are stable content segments within a message
+                        <div key={`${message.id}-${partIndex}`} className="my-2">
+                          <img
+                            src={part.url}
+                            alt={part.filename || 'Attachment'}
+                            className="max-w-full rounded-lg border border-border"
+                            style={{ maxHeight: '400px' }}
+                          />
+                          {part.filename && (
+                            <p className="mt-1 text-xs text-muted-foreground">{part.filename}</p>
+                          )}
+                        </div>
+                      );
+                    }
+
+                    // ✅ OFFICIAL PATTERN: Render non-image file attachments
+                    // Following: https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot#attachments
+                    if (part.type === 'file') {
+                      return (
+                        // eslint-disable-next-line react/no-array-index-key -- Parts are stable content segments within a message
+                        <div key={`${message.id}-${partIndex}`} className="my-2 p-3 border border-border rounded-lg">
+                          <div className="flex items-center gap-2">
+                            <div className="flex-1">
+                              <p className="text-sm font-medium">{part.filename || 'File'}</p>
+                              {part.mediaType && (
+                                <p className="text-xs text-muted-foreground">{part.mediaType}</p>
+                              )}
+                            </div>
+                            <a
+                              href={part.url}
+                              download={part.filename}
+                              className="text-xs text-primary hover:underline"
+                            >
+                              Download
+                            </a>
+                          </div>
+                        </div>
+                      );
+                    }
+
                     return null;
                   })}
                 </MessageContent>
@@ -450,8 +501,9 @@ export default function ChatThreadScreen({
           // ✅ Check for error using typed metadata (already declared above)
           // Type-safe error detection following AI SDK error handling pattern
           const hasError = metadata?.hasError === true || !!metadata?.error;
-          const isCurrentlyStreaming = streamingState.messageId === message.id;
-          const hasContent = message.parts.some(p => p.type === 'text' && p.text.trim().length > 0);
+          const isCurrentlyStreaming = isStreamingParticipants
+            && metadata?.participantIndex === currentParticipantIndex;
+          const hasContent = message.parts.some((p: UIMessage['parts'][number]) => p.type === 'text' && p.text.trim().length > 0);
 
           // ✅ RPC TYPE: MessageStatus from backend schema
           const messageStatus: MessageStatus = hasError
@@ -464,32 +516,90 @@ export default function ChatThreadScreen({
 
           // Filter message parts to only text and reasoning (ModelMessageCard types)
           const filteredParts = message.parts.filter(
-            (p): p is { type: 'text'; text: string } | { type: 'reasoning'; text: string } =>
+            (p: UIMessage['parts'][number]): p is { type: 'text'; text: string } | { type: 'reasoning'; text: string } =>
               p.type === 'text' || p.type === 'reasoning',
           );
 
+          // ✅ OFFICIAL PATTERN: Extract source parts (source-url, source-document)
+          // Following: https://ai-sdk.dev/docs/ai-sdk-ui/chatbot#sources
+          // Sources are forwarded from models like Perplexity and Google AI when sendSources: true
+          const sourceParts = message.parts.filter((p: UIMessage['parts'][number]) =>
+            'type' in p && (p.type === 'source-url' || p.type === 'source-document'),
+          );
+
           return (
-            <ModelMessageCard
-              key={message.id}
-              messageId={message.id}
-              model={model}
-              role={String(storedRole || '')} // ✅ Use stored role from metadata
-              participantIndex={participantIndex ?? 0}
-              status={messageStatus}
-              parts={filteredParts}
-              avatarSrc={avatarProps.src}
-              avatarName={avatarProps.name}
-              metadata={metadata ?? null}
-              isAccessible={isAccessible} // ✅ DYNAMIC PRICING: Show tier badge if not accessible
-            />
+            <div key={message.id}>
+              <ModelMessageCard
+                messageId={message.id}
+                model={model}
+                role={String(storedRole || '')} // ✅ Use stored role from metadata
+                participantIndex={participantIndex ?? 0}
+                status={messageStatus}
+                parts={filteredParts}
+                avatarSrc={avatarProps.src}
+                avatarName={avatarProps.name}
+                metadata={metadata ?? null}
+                isAccessible={isAccessible} // ✅ DYNAMIC PRICING: Show tier badge if not accessible
+              />
+
+              {/* ✅ OFFICIAL PATTERN: Render sources (if present) */}
+              {sourceParts.length > 0 && (
+                <div className="mt-2 ml-12 space-y-1">
+                  <p className="text-xs font-medium text-muted-foreground">Sources:</p>
+                  <div className="space-y-1">
+                    {sourceParts.map((sourcePart: UIMessage['parts'][number], sourceIndex: number) => {
+                      if ('type' in sourcePart && sourcePart.type === 'source-url' && 'url' in sourcePart) {
+                        return (
+                          // eslint-disable-next-line react/no-array-index-key -- Sources are stable references within a message
+                          <div key={`${message.id}-source-${sourceIndex}`} className="text-xs">
+                            <a
+                              href={sourcePart.url as string}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-primary hover:underline flex items-center gap-1"
+                            >
+                              <span>{('title' in sourcePart && sourcePart.title) || sourcePart.url}</span>
+                              <svg
+                                className="w-3 h-3"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+                                />
+                              </svg>
+                            </a>
+                          </div>
+                        );
+                      }
+
+                      if ('type' in sourcePart && sourcePart.type === 'source-document') {
+                        return (
+                          // eslint-disable-next-line react/no-array-index-key -- Sources are stable references within a message
+                          <div key={`${message.id}-source-${sourceIndex}`} className="text-xs text-muted-foreground">
+                            <span>{('title' in sourcePart && sourcePart.title) || 'Document'}</span>
+                          </div>
+                        );
+                      }
+
+                      return null;
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
           );
         })}
 
         {/* ✅ Enhanced streaming loader with participant queue and thinking messages */}
-        {status === 'streaming' && (
+        {isStreamingParticipants && currentParticipantIndex !== null && (
           <StreamingParticipantsLoader
             participants={selectedParticipants}
-            currentParticipantIndex={streamingState.participantIndex}
+            currentParticipantIndex={currentParticipantIndex}
           />
         )}
       </div>
@@ -502,8 +612,8 @@ export default function ChatThreadScreen({
             value={inputValue}
             onChange={setInputValue}
             onSubmit={handleSubmit}
-            onStop={stopStreaming}
-            status={status === 'streaming' ? 'streaming' : status === 'error' ? 'error' : 'ready'}
+            onStop={stop}
+            status={isStreamingParticipants ? 'streaming' : error ? 'error' : 'ready'}
             placeholder={t('input.placeholder')}
             toolbar={(
               <>

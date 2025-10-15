@@ -18,9 +18,8 @@ import { createOpenRouter } from '@openrouter/ai-sdk-provider';
 import type { UIMessage } from 'ai';
 import { convertToModelMessages, generateText } from 'ai';
 
-import { createError, normalizeError } from '@/api/common/error-handling';
+import { createError } from '@/api/common/error-handling';
 import type { ErrorContext } from '@/api/core';
-import { apiLogger } from '@/api/middleware/hono-logger';
 import { DEFAULT_AI_PARAMS } from '@/api/services/product-logic.service';
 import type { ApiEnv } from '@/api/types';
 
@@ -105,10 +104,6 @@ class OpenRouterService {
    */
   private validateModelId(modelId: string): void {
     if (!isValidOpenRouterModelId(modelId)) {
-      apiLogger.error('Invalid OpenRouter model ID format', {
-        requestedModelId: modelId,
-      });
-
       const context: ErrorContext = {
         errorType: 'validation',
         field: 'modelId',
@@ -167,9 +162,7 @@ class OpenRouterService {
           totalTokens: result.usage.totalTokens ?? 0,
         },
       };
-    } catch (error) {
-      apiLogger.error('OpenRouter text generation failed', normalizeError(error));
-
+    } catch {
       const context: ErrorContext = {
         errorType: 'external_service',
         service: 'openrouter',

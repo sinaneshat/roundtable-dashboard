@@ -23,7 +23,6 @@ import { ulid } from 'ulid';
 import { executeBatch } from '@/api/common/batch-operations';
 import { createError } from '@/api/common/error-handling';
 import type { ErrorContext } from '@/api/core';
-import { apiLogger } from '@/api/middleware/hono-logger';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db/schema';
 
@@ -37,6 +36,32 @@ import { TIER_QUOTAS } from './product-logic.service';
  */
 function getTierQuotas(tier: SubscriptionTier) {
   return TIER_QUOTAS[tier];
+}
+
+/**
+ * Get user's subscription tier
+ * ✅ CACHING ENABLED: Uses same caching pattern as ensureUserUsageRecord (5-minute TTL)
+ * ✅ DRY: Single source of truth for tier lookup with caching
+ *
+ * @param userId - User ID to look up tier for
+ * @returns User's subscription tier (defaults to 'free' if not found)
+ */
+export async function getUserTier(userId: string): Promise<SubscriptionTier> {
+  const db = await getDbAsync();
+
+  // ✅ CACHING ENABLED: 5-minute TTL for user tier data
+  // Same pattern as ensureUserUsageRecord for consistency
+  const usageResults = await db
+    .select()
+    .from(tables.userChatUsage)
+    .where(eq(tables.userChatUsage.userId, userId))
+    .limit(1)
+    .$withCache({
+      config: { ex: 300 }, // 5 minutes
+      tag: `user-tier-${userId}`,
+    });
+
+  return usageResults[0]?.subscriptionTier || 'free';
 }
 
 /**
@@ -307,14 +332,6 @@ async function rolloverBillingPeriod(
     // ✅ ATOMIC: Archive history + Reset usage in single batch (Cloudflare D1)
     // Using reusable batch helper from @/api/common/batch-operations
     await executeBatch(db, [historyInsert, resetUpdate]);
-
-    apiLogger.warn('Rolled over billing period with active subscription', {
-      userId,
-      tier: currentUsage.subscriptionTier,
-      message: 'This should be handled by Stripe sync, not rollover',
-      oldPeriod: { start: currentUsage.currentPeriodStart, end: currentUsage.currentPeriodEnd },
-      newPeriod: { start: periodStart, end: periodEnd },
-    });
   }
 }
 
@@ -678,7 +695,6 @@ export async function syncUserQuotaFromSubscription(
   const isAnnual = price.interval === 'year';
 
   if (!tier) {
-    apiLogger.warn('Price metadata missing tier information', { priceId });
     return;
   }
 

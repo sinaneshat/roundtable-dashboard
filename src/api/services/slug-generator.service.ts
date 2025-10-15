@@ -8,8 +8,6 @@
 
 import { eq } from 'drizzle-orm';
 
-import { normalizeError } from '@/api/common/error-handling';
-import { apiLogger } from '@/api/middleware/hono-logger';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db/schema';
 
@@ -67,19 +65,13 @@ export async function generateUniqueSlug(title: string): Promise<string> {
       }
 
       // If collision, try again with new short ID
-    } catch (error) {
-      apiLogger.error('Failed to check slug uniqueness', normalizeError(error));
+    } catch {
       // Continue to next attempt on error
     }
   }
 
   // If still can't generate unique slug after 5 attempts, add timestamp
   const timestamp = Date.now().toString(36);
-  apiLogger.warn('Using timestamp fallback for slug generation', {
-    title,
-    baseSlug,
-    fallbackSlug: `${baseSlug}-${timestamp}`,
-  });
   return `${baseSlug}-${timestamp}`;
 }
 
@@ -88,21 +80,16 @@ export async function generateUniqueSlug(title: string): Promise<string> {
  * Useful when AI generates a better title after thread creation
  */
 export async function updateThreadSlug(threadId: string, newTitle: string): Promise<string> {
-  try {
-    const db = await getDbAsync();
-    const newSlug = await generateUniqueSlug(newTitle);
+  const db = await getDbAsync();
+  const newSlug = await generateUniqueSlug(newTitle);
 
-    await db
-      .update(tables.chatThread)
-      .set({
-        slug: newSlug,
-        updatedAt: new Date(),
-      })
-      .where(eq(tables.chatThread.id, threadId));
+  await db
+    .update(tables.chatThread)
+    .set({
+      slug: newSlug,
+      updatedAt: new Date(),
+    })
+    .where(eq(tables.chatThread.id, threadId));
 
-    return newSlug;
-  } catch (error) {
-    apiLogger.error('Failed to update thread slug', normalizeError(error));
-    throw error; // Re-throw to propagate error to caller
-  }
+  return newSlug;
 }

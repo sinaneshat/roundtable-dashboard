@@ -9,8 +9,6 @@ import type { Context } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import * as HttpStatusCodes from 'stoker/http-status-codes';
 
-import { apiLogger } from '@/api/middleware/hono-logger';
-
 // ============================================================================
 // SIZE LIMIT CONFIGURATIONS
 // ============================================================================
@@ -201,11 +199,6 @@ export function validateRequestSize(
       warnings,
     };
   } catch (error) {
-    apiLogger.error('Request size validation failed', {
-      error: error instanceof Error ? error.message : String(error),
-      component: 'size-limits',
-    });
-
     // In case of validation error, allow the request but log the issue
     return {
       isValid: true,
@@ -273,11 +266,6 @@ export async function validateRequestBodySize(
       warnings,
     };
   } catch (error) {
-    apiLogger.error('Request body size validation failed', {
-      error: error instanceof Error ? error.message : String(error),
-      component: 'size-limits',
-    });
-
     return {
       isValid: true,
       violations: [],
@@ -347,11 +335,6 @@ export function validateResponseSize(
       warnings,
     };
   } catch (error) {
-    apiLogger.error('Response size validation failed', {
-      error: error instanceof Error ? error.message : String(error),
-      component: 'size-limits',
-    });
-
     return {
       isValid: true,
       violations: [],
@@ -380,28 +363,11 @@ export function createRequestSizeLimitMiddleware(config: SizeLimitConfig = {}) {
     };
     env: CloudflareEnv;
   }, next: () => Promise<void>) => {
-    const correlationId = crypto.randomUUID();
-
     // Validate basic request size limits
     const requestValidation = validateRequestSize(c, config);
 
-    // Log warnings
-    if (requestValidation.warnings.length > 0) {
-      apiLogger.warn('Request size warnings detected', {
-        correlationId,
-        warnings: requestValidation.warnings,
-        component: 'size-limits',
-      });
-    }
-
     // Handle violations
     if (!requestValidation.isValid) {
-      apiLogger.error('Request size limit violations', {
-        correlationId,
-        violations: requestValidation.violations,
-        component: 'size-limits',
-      });
-
       // Return the first violation as the error
       const primaryViolation = requestValidation.violations[0];
       throw new HTTPException(HttpStatusCodes.REQUEST_TOO_LONG, {
@@ -419,21 +385,7 @@ export function createRequestSizeLimitMiddleware(config: SizeLimitConfig = {}) {
     if (hasBody) {
       const bodyValidation = await validateRequestBodySize(new Request(c.req.raw), config);
 
-      if (bodyValidation.warnings.length > 0) {
-        apiLogger.warn('Request body size warnings detected', {
-          correlationId,
-          warnings: bodyValidation.warnings,
-          component: 'size-limits',
-        });
-      }
-
       if (!bodyValidation.isValid) {
-        apiLogger.error('Request body size limit violations', {
-          correlationId,
-          violations: bodyValidation.violations,
-          component: 'size-limits',
-        });
-
         const primaryViolation = bodyValidation.violations[0];
         throw new HTTPException(HttpStatusCodes.REQUEST_TOO_LONG, {
           message: primaryViolation?.message || 'Request body size limit exceeded',
@@ -457,21 +409,8 @@ export function createResponseSizeLimitMiddleware(config: SizeLimitConfig = {}) 
     if (response) {
       const responseValidation = validateResponseSize(response, config);
 
-      // Log warnings
-      if (responseValidation.warnings.length > 0) {
-        apiLogger.warn('Response size warnings detected', {
-          warnings: responseValidation.warnings,
-          component: 'size-limits',
-        });
-      }
-
       // Handle violations by logging (we can't easily modify response at this point)
       if (!responseValidation.isValid) {
-        apiLogger.error('Response size limit violations', {
-          violations: responseValidation.violations,
-          component: 'size-limits',
-        });
-
         // In production, you might want to truncate the response or return an error
         // For now, we log the violation and let the response proceed
       }

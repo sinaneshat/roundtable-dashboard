@@ -15,7 +15,10 @@ import { useQuery } from '@tanstack/react-query';
 import { useSession } from '@/lib/auth/client';
 import { queryKeys } from '@/lib/data/query-keys';
 import { STALE_TIMES } from '@/lib/data/stale-times';
-import { getSubscriptionService, getSubscriptionsService } from '@/services/api';
+import {
+  getSubscriptionService,
+  getSubscriptionsService,
+} from '@/services/api';
 
 /**
  * Hook to fetch all user subscriptions
@@ -29,7 +32,7 @@ export function useSubscriptionsQuery() {
 
   return useQuery({
     queryKey: queryKeys.subscriptions.list(),
-    queryFn: getSubscriptionsService,
+    queryFn: () => getSubscriptionsService(),
     staleTime: STALE_TIMES.subscriptions, // 2 minutes - match server-side prefetch
     retry: false,
     enabled: isAuthenticated, // Only fetch when authenticated
@@ -41,7 +44,7 @@ export function useSubscriptionsQuery() {
  * Hook to fetch a specific subscription by ID
  * Protected endpoint - requires authentication and ownership
  *
- * @param subscriptionId - Stripe subscription ID
+ * @param subscriptionId - Subscription ID
  */
 export function useSubscriptionQuery(subscriptionId: string) {
   const { data: session } = useSession();
@@ -49,7 +52,7 @@ export function useSubscriptionQuery(subscriptionId: string) {
 
   return useQuery({
     queryKey: queryKeys.subscriptions.detail(subscriptionId),
-    queryFn: () => getSubscriptionService(subscriptionId),
+    queryFn: () => getSubscriptionService({ param: { id: subscriptionId } }),
     staleTime: STALE_TIMES.subscriptions, // 2 minutes - match server-side prefetch
     enabled: isAuthenticated && !!subscriptionId,
     retry: false,
@@ -70,7 +73,7 @@ export function useCurrentSubscriptionQuery() {
 
   return useQuery({
     queryKey: queryKeys.subscriptions.list(), // Reuse list cache
-    queryFn: getSubscriptionsService,
+    queryFn: () => getSubscriptionsService(),
     staleTime: STALE_TIMES.subscriptions, // 2 minutes - match server-side prefetch
     enabled: isAuthenticated,
     retry: false,

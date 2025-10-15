@@ -148,7 +148,7 @@ function RoleSelector({
     e.stopPropagation(); // Prevent selecting the role when clicking delete
 
     try {
-      const result = await deleteRoleMutation.mutateAsync(roleId);
+      const result = await deleteRoleMutation.mutateAsync({ param: { id: roleId } });
 
       if (result.success) {
         // If the deleted role was the currently selected role, clear it
@@ -861,56 +861,74 @@ export function ChatParticipantsList({
     onParticipantsChange(reorderedParticipants);
   };
 
-  // Filter models based on search query using fuzzy search
-  const filteredModels = useFuzzySearch(
-    orderedModels,
+  // ✅ BACKEND DATA: Single source of truth
+  const tierGroups = modelsData?.data?.tier_groups || [];
+  const flagshipModels = modelsData?.data?.flagship_models || [];
+  const selectedModelIds = useMemo(
+    () => new Set(participants.map(p => p.modelId)),
+    [participants],
+  );
+
+  // ✅ SEARCH: Apply fuzzy search to all enabled models
+  const searchFilteredModels = useFuzzySearch(
+    allEnabledModels,
     modelSearchQuery,
     {
-      keys: [
-        'model.name',
-        'model.description',
-        'model.metadata.category',
-        'model.provider',
-      ],
-      threshold: 0.3, // Lower = stricter matching, Higher = more lenient
+      keys: ['name', 'description', 'provider', 'id'],
+      threshold: 0.3,
       ignoreLocation: true,
       minMatchCharLength: 1,
     },
   );
 
-  // Separate selected and unselected models for better drag-and-drop UX
+  // ✅ SEARCH FILTER SET: Efficient lookup for search-filtered models
+  const searchFilteredIds = useMemo(() => {
+    if (!modelSearchQuery)
+      return null; // No search = show all
+    return new Set(searchFilteredModels.map(m => m.id));
+  }, [searchFilteredModels, modelSearchQuery]);
+
+  // ✅ SELECTED MODELS: Filter search results from ordered models
   const selectedModels = useMemo(() => {
-    return filteredModels
-      .filter(om => om.participant !== null)
+    return orderedModels
+      .filter(om =>
+        om.participant !== null
+        && (!searchFilteredIds || searchFilteredIds.has(om.model.id)),
+      )
       .sort((a, b) => a.participant!.order - b.participant!.order);
-  }, [filteredModels]);
+  }, [orderedModels, searchFilteredIds]);
 
-  const unselectedModels = useMemo(() => {
-    return filteredModels
-      .filter(om => om.participant === null);
-  }, [filteredModels]);
+  // ✅ FLAT UNSELECTED LIST: When searching, show all unselected models in flat list
+  const flatUnselectedModels = useMemo(() => {
+    if (!modelSearchQuery || !searchFilteredIds)
+      return [];
 
-  // ✅ BACKEND TIER GROUPS: Get tier groups from backend response
-  const tierGroups = modelsData?.data?.tier_groups || [];
+    // Combine flagship + tier models into flat list
+    const allUnselected: EnhancedModelResponse[] = [];
 
-  // ✅ Group unselected models by tier for display
-  const unselectedModelsByTier = useMemo(() => {
-    const grouped: Record<SubscriptionTier, OrderedModel[]> = {
-      free: [],
-      starter: [],
-      pro: [],
-      power: [],
-    };
-
-    unselectedModels.forEach((om) => {
-      const tier = (om.model.required_tier || 'free') as SubscriptionTier;
-      if (grouped[tier]) {
-        grouped[tier]!.push(om);
+    // Add flagship models first
+    flagshipModels.forEach((model) => {
+      if (!selectedModelIds.has(model.id) && searchFilteredIds.has(model.id)) {
+        allUnselected.push(model);
       }
     });
 
-    return grouped;
-  }, [unselectedModels]);
+    // Add tier models (excluding flagships to avoid duplication)
+    const flagshipIds = new Set(flagshipModels.map(m => m.id));
+    tierGroups.forEach((tierGroup) => {
+      tierGroup.models.forEach((model) => {
+        if (
+          !selectedModelIds.has(model.id)
+          && searchFilteredIds.has(model.id)
+          && !flagshipIds.has(model.id) // Avoid duplication
+        ) {
+          allUnselected.push(model);
+        }
+      });
+    });
+
+    return allUnselected;
+  }, [modelSearchQuery, searchFilteredIds, flagshipModels, tierGroups, selectedModelIds]);
 
   return (
     <div className={cn('flex items-center gap-1.5', className)}>
@@ -981,117 +999,153 @@ export function ChatParticipantsList({
               />
 
               <CommandList>
-                {filteredModels.length === 0 && (
-                  <CommandEmpty>{tModels('noModelsFound')}</CommandEmpty>
-                )}
+                {(() => {
+                  // ✅ SEARCH RESULTS: Check if any models match search query
+                  const hasResults = searchFilteredIds
+                    ? searchFilteredIds.size > 0
+                    : allEnabledModels.length > 0;
+                  return !hasResults && (
+                    <CommandEmpty>{tModels('noModelsFound')}</CommandEmpty>
+                  );
+                })()}
 
-                {/* Selected Models Section - Draggable for reordering */}
-                {selectedModels.length > 0 && (
-                  <div className="border-b">
-                    <div className="px-3 py-2 text-xs font-semibold text-foreground bg-primary/10 border-b border-primary/20 sticky top-0 z-20 backdrop-blur-sm" style={{ boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1)' }}>
-                      <div className="flex items-center justify-between">
-                        <span className="flex items-center gap-2">
-                          {tModels('selectedModels')}
-                          <Badge variant="default" className="text-[10px] px-1.5 py-0 h-4">
-                            {selectedModels.length}
-                            /
-                            {maxModels}
-                          </Badge>
-                        </span>
-                        <span className="text-[10px] opacity-70">{tModels('dragToReorder')}</span>
+                {/* ✅ CONDITIONAL RENDERING: Search mode (flat list) vs Grouped mode (with headers) */}
+                {/* eslint-disable-next-line style/multiline-ternary */}
+                {modelSearchQuery ? (
+                  <>
+                    {/* SEARCH MODE: Flat list without headers */}
+                    {selectedModels.length > 0 && (
+                      <div className="border-b">
+                        <Reorder.Group
+                          axis="y"
+                          values={selectedModels}
+                          onReorder={handleReorderSelected}
+                          className="space-y-0"
+                          as="div"
+                        >
+                          {selectedModels.map(orderedModel => (
+                            <ModelItem
+                              key={orderedModel.participant!.id}
+                              orderedModel={orderedModel}
+                              customRoles={customRoles}
+                              onToggle={() => handleToggleModel(orderedModel.model.id)}
+                              onRoleChange={(role, customRoleId) => handleRoleChange(orderedModel.model.id, role, customRoleId)}
+                              onClearRole={() => handleClearRole(orderedModel.model.id)}
+                              isLastParticipant={selectedModels.length === 1}
+                              selectedCount={participants.length}
+                              maxModels={maxModels}
+                              userTierInfo={userTierInfo}
+                            />
+                          ))}
+                        </Reorder.Group>
                       </div>
-                    </div>
-                    <Reorder.Group
-                      axis="y"
-                      values={selectedModels}
-                      onReorder={handleReorderSelected}
-                      className="space-y-0"
-                      as="div"
-                    >
-                      {selectedModels.map(orderedModel => (
-                        <ModelItem
-                          key={orderedModel.participant!.id}
-                          orderedModel={orderedModel}
-                          customRoles={customRoles}
-                          onToggle={() => handleToggleModel(orderedModel.model.id)}
-                          onRoleChange={(role, customRoleId) => handleRoleChange(orderedModel.model.id, role, customRoleId)}
-                          onClearRole={() => handleClearRole(orderedModel.model.id)}
-                          isLastParticipant={selectedModels.length === 1}
-                          selectedCount={participants.length}
-                          maxModels={maxModels}
-                          userTierInfo={userTierInfo}
-                        />
-                      ))}
-                    </Reorder.Group>
-                  </div>
-                )}
+                    )}
 
-                {/* Available Models Section - Tier-grouped by backend */}
-                {unselectedModels.length > 0 && tierGroups.length > 0 && (
-                  <div className="space-y-0">
-                    {tierGroups.map((tierGroup, tierIndex) => {
-                      const tieredModels = unselectedModelsByTier[tierGroup.tier];
-                      if (!tieredModels || tieredModels.length === 0)
-                        return null;
+                    {/* Unselected - Flat list without headers */}
+                    {flatUnselectedModels.length > 0 && (
+                      <div className="space-y-0">
+                        {flatUnselectedModels.map((model, index) => (
+                          <ModelItem
+                            key={`search-${model.id}`}
+                            orderedModel={{ model, participant: null, order: index }}
+                            customRoles={customRoles}
+                            onToggle={() => handleToggleModel(model.id)}
+                            onRoleChange={(role, customRoleId) => handleRoleChange(model.id, role, customRoleId)}
+                            onClearRole={() => handleClearRole(model.id)}
+                            isLastParticipant={false}
+                            selectedCount={participants.length}
+                            maxModels={maxModels}
+                            enableDrag={false}
+                            userTierInfo={userTierInfo}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    {/* GROUPED MODE: Show headers and tier groups */}
 
-                      // ✅ USE BACKEND DATA: Tier ordering from backend tier_groups array
-                      const isUserTier = tierGroup.is_user_tier;
-                      const userTierIndex = tierGroups.findIndex(g => g.is_user_tier);
-                      const isLowerTier = tierIndex < userTierIndex;
-                      const isHigherTier = tierIndex > userTierIndex;
+                    {/* Selected Models Section - Draggable for reordering */}
+                    {selectedModels.length > 0 && (
+                      <div className="border-b">
+                        <div className="px-3 py-2 text-xs font-semibold text-foreground bg-primary/10 border-b border-primary/20 sticky top-0 z-20 backdrop-blur-sm" style={{ boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1)' }}>
+                          <div className="flex items-center justify-between">
+                            <span className="flex items-center gap-2">
+                              {tModels('selectedModels')}
+                              <Badge variant="default" className="text-[10px] px-1.5 py-0 h-4">
+                                {selectedModels.length}
+                                /
+                                {maxModels}
+                              </Badge>
+                            </span>
+                            <span className="text-[10px] opacity-70">{tModels('dragToReorder')}</span>
+                          </div>
+                        </div>
+                        <Reorder.Group
+                          axis="y"
+                          values={selectedModels}
+                          onReorder={handleReorderSelected}
+                          className="space-y-0"
+                          as="div"
+                        >
+                          {selectedModels.map(orderedModel => (
+                            <ModelItem
+                              key={orderedModel.participant!.id}
+                              orderedModel={orderedModel}
+                              customRoles={customRoles}
+                              onToggle={() => handleToggleModel(orderedModel.model.id)}
+                              onRoleChange={(role, customRoleId) => handleRoleChange(orderedModel.model.id, role, customRoleId)}
+                              onClearRole={() => handleClearRole(orderedModel.model.id)}
+                              isLastParticipant={selectedModels.length === 1}
+                              selectedCount={participants.length}
+                              maxModels={maxModels}
+                              userTierInfo={userTierInfo}
+                            />
+                          ))}
+                        </Reorder.Group>
+                      </div>
+                    )}
 
-                      return (
-                        <div key={tierGroup.tier}>
-                          {/* Tier Header - Sticky header showing upgrade path */}
+                    {/* ✅ MOST POPULAR MODELS - Backend filtered, frontend renders */}
+                    {flagshipModels.length > 0 && (() => {
+                      const unselectedFlagships = flagshipModels.filter(m =>
+                        !selectedModelIds.has(m.id)
+                        && (!searchFilteredIds || searchFilteredIds.has(m.id)),
+                      );
+                      return unselectedFlagships.length > 0 && (
+                        <div className="space-y-0">
                           <div
                             className={cn(
                               'px-3 py-2.5 text-xs font-medium border-b',
-                              'sticky top-0 z-20', // Sticky positioning with high z-index
-                              'backdrop-blur-sm', // Subtle blur effect for better visibility
-                              isUserTier && 'bg-primary/15 text-primary border-primary/20',
-                              isLowerTier && 'bg-muted/50 text-muted-foreground',
-                              isHigherTier && 'bg-muted/60 text-muted-foreground border-muted',
+                              'sticky top-0 z-20 backdrop-blur-sm',
+                              'bg-accent/50 text-accent-foreground border-accent',
                             )}
-                            style={{
-                              // Ensure sticky header stays above content
-                              boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1)',
-                            }}
+                            style={{ boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1)' }}
                           >
                             <div className="flex items-center justify-between">
                               <span className="flex items-center gap-2">
-                                <span className="font-semibold">{tierGroup.tier_name}</span>
-                                {isUserTier && (
-                                  <Badge variant="default" className="text-[10px] px-1.5 py-0 h-4">
-                                    {tModels('yourPlan')}
-                                  </Badge>
-                                )}
-                                {isHigherTier && (
-                                  <Lock className="size-3 opacity-70" />
-                                )}
+                                <span className="font-semibold">{tModels('mostPopular')}</span>
+                                <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4">
+                                  {tModels('topModels')}
+                                </Badge>
                               </span>
                               <span className="text-[10px] opacity-80">
-                                {tieredModels.length}
+                                {unselectedFlagships.length}
                                 {' '}
-                                {tieredModels.length === 1 ? tModels('model') : tModels('models')}
+                                {unselectedFlagships.length === 1 ? tModels('model') : tModels('models')}
                               </span>
                             </div>
-                            {isHigherTier && (
-                              <div className="text-[10px] opacity-70 mt-1">
-                                {tModels('upgradeToUnlock')}
-                              </div>
-                            )}
                           </div>
-
-                          {/* Models in this tier - No reordering needed for unselected */}
                           <div className="space-y-0">
-                            {tieredModels.map((orderedModel: OrderedModel) => (
+                            {unselectedFlagships.map((model, index) => (
                               <ModelItem
-                                key={`unselected-${orderedModel.model.id}`}
-                                orderedModel={orderedModel}
+                                key={`flagship-${model.id}`}
+                                orderedModel={{ model, participant: null, order: index }}
                                 customRoles={customRoles}
-                                onToggle={() => handleToggleModel(orderedModel.model.id)}
-                                onRoleChange={(role, customRoleId) => handleRoleChange(orderedModel.model.id, role, customRoleId)}
-                                onClearRole={() => handleClearRole(orderedModel.model.id)}
+                                onToggle={() => handleToggleModel(model.id)}
+                                onRoleChange={(role, customRoleId) => handleRoleChange(model.id, role, customRoleId)}
+                                onClearRole={() => handleClearRole(model.id)}
                                 isLastParticipant={false}
                                 selectedCount={participants.length}
                                 maxModels={maxModels}
@@ -1102,8 +1156,91 @@ export function ChatParticipantsList({
                           </div>
                         </div>
                       );
-                    })}
-                  </div>
+                    })()}
+
+                    {/* ✅ TIER GROUPS - Backend grouped, frontend renders */}
+                    {tierGroups.length > 0 && (
+                      <div className="space-y-0">
+                        {tierGroups.map((tierGroup, tierIndex) => {
+                          const unselectedTierModels = tierGroup.models.filter(m =>
+                            !selectedModelIds.has(m.id)
+                            && (!searchFilteredIds || searchFilteredIds.has(m.id)),
+                          );
+                          if (unselectedTierModels.length === 0)
+                            return null;
+
+                          // ✅ USE BACKEND DATA: Tier ordering from backend tier_groups array
+                          const isUserTier = tierGroup.is_user_tier;
+                          const userTierIndex = tierGroups.findIndex(g => g.is_user_tier);
+                          const isLowerTier = tierIndex < userTierIndex;
+                          const isHigherTier = tierIndex > userTierIndex;
+
+                          return (
+                            <div key={tierGroup.tier}>
+                              {/* Tier Header - Sticky header showing upgrade path */}
+                              <div
+                                className={cn(
+                                  'px-3 py-2.5 text-xs font-medium border-b',
+                                  'sticky top-0 z-20', // Sticky positioning with high z-index
+                                  'backdrop-blur-sm', // Subtle blur effect for better visibility
+                                  isUserTier && 'bg-primary/15 text-primary border-primary/20',
+                                  isLowerTier && 'bg-muted/50 text-muted-foreground',
+                                  isHigherTier && 'bg-muted/60 text-muted-foreground border-muted',
+                                )}
+                                style={{
+                                  // Ensure sticky header stays above content
+                                  boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1)',
+                                }}
+                              >
+                                <div className="flex items-center justify-between">
+                                  <span className="flex items-center gap-2">
+                                    <span className="font-semibold">{tierGroup.tier_name}</span>
+                                    {isUserTier && (
+                                      <Badge variant="default" className="text-[10px] px-1.5 py-0 h-4">
+                                        {tModels('yourPlan')}
+                                      </Badge>
+                                    )}
+                                    {isHigherTier && (
+                                      <Lock className="size-3 opacity-70" />
+                                    )}
+                                  </span>
+                                  <span className="text-[10px] opacity-80">
+                                    {unselectedTierModels.length}
+                                    {' '}
+                                    {unselectedTierModels.length === 1 ? tModels('model') : tModels('models')}
+                                  </span>
+                                </div>
+                                {isHigherTier && (
+                                  <div className="text-[10px] opacity-70 mt-1">
+                                    {tModels('upgradeToUnlock')}
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* ✅ MODELS - Direct render from backend */}
+                              <div className="space-y-0">
+                                {unselectedTierModels.map((model, index) => (
+                                  <ModelItem
+                                    key={`tier-${tierGroup.tier}-${model.id}`}
+                                    orderedModel={{ model, participant: null, order: index }}
+                                    customRoles={customRoles}
+                                    onToggle={() => handleToggleModel(model.id)}
+                                    onRoleChange={(role, customRoleId) => handleRoleChange(model.id, role, customRoleId)}
+                                    onClearRole={() => handleClearRole(model.id)}
+                                    isLastParticipant={false}
+                                    selectedCount={participants.length}
+                                    maxModels={maxModels}
+                                    enableDrag={false}
+                                    userTierInfo={userTierInfo}
+                                  />
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </>
                 )}
               </CommandList>
             </Command>

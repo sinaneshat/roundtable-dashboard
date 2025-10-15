@@ -63,6 +63,22 @@ export type GetPublicThreadResponse = InferResponseType<
   ApiClientType['chat']['public'][':slug']['$get']
 >;
 
+export type GetThreadBySlugRequest = InferRequestType<
+  ApiClientType['chat']['threads']['slug'][':slug']['$get']
+>;
+
+export type GetThreadBySlugResponse = InferResponseType<
+  ApiClientType['chat']['threads']['slug'][':slug']['$get']
+>;
+
+export type GetThreadMessagesRequest = InferRequestType<
+  ApiClientType['chat']['threads'][':id']['messages']['$get']
+>;
+
+export type GetThreadMessagesResponse = InferResponseType<
+  ApiClientType['chat']['threads'][':id']['messages']['$get']
+>;
+
 export type GetThreadChangelogRequest = InferRequestType<
   ApiClientType['chat']['threads'][':id']['changelog']['$get']
 >;
@@ -92,7 +108,11 @@ export type GetThreadAnalysesResponse = InferResponseType<
  */
 export async function listThreadsService(args?: ListThreadsRequest) {
   const client = await createApiClient();
-  return parseResponse(client.chat.threads.$get(args || { query: {} }));
+  // Internal fallback: if args not provided, create proper empty query object
+  const params: ListThreadsRequest = {
+    query: args?.query ?? {},
+  };
+  return parseResponse(client.chat.threads.$get(params));
 }
 
 /**
@@ -103,57 +123,57 @@ export async function listThreadsService(args?: ListThreadsRequest) {
  */
 export async function createThreadService(data: CreateThreadRequest) {
   const client = await createApiClient();
-  return parseResponse(client.chat.threads.$post(data));
+  // Internal fallback: ensure json property exists
+  const params: CreateThreadRequest = {
+    json: data.json ?? {},
+  };
+  return parseResponse(client.chat.threads.$post(params));
 }
 
 /**
  * Get a specific thread by ID with participants and messages
  * Protected endpoint - requires authentication (ownership check)
  *
- * @param threadId - Thread ID
+ * @param data - Request with param.id for thread ID
  */
-export async function getThreadService(threadId: string) {
+export async function getThreadService(data: GetThreadRequest) {
   const client = await createApiClient();
-  return parseResponse(
-    client.chat.threads[':id'].$get({
-      param: { id: threadId },
-    }),
-  );
+  // Internal fallback: ensure param exists
+  const params: GetThreadRequest = {
+    param: data.param ?? { id: '' },
+  };
+  return parseResponse(client.chat.threads[':id'].$get(params));
 }
 
 /**
  * Update thread details (title, favorite, public status, etc.)
  * Protected endpoint - requires authentication
  *
- * @param threadId - Thread ID
- * @param data - Thread update data
+ * @param data - Request with param.id and json body
  */
-export async function updateThreadService(
-  threadId: string,
-  data: Omit<UpdateThreadRequest, 'param'>,
-) {
+export async function updateThreadService(data: UpdateThreadRequest) {
   const client = await createApiClient();
-  return parseResponse(
-    client.chat.threads[':id'].$patch({
-      param: { id: threadId },
-      ...data,
-    }),
-  );
+  // Internal fallback: ensure param and json exist
+  const params: UpdateThreadRequest = {
+    param: data.param ?? { id: '' },
+    json: data.json ?? {},
+  };
+  return parseResponse(client.chat.threads[':id'].$patch(params));
 }
 
 /**
  * Delete a chat thread
  * Protected endpoint - requires authentication
  *
- * @param threadId - Thread ID
+ * @param data - Request with param.id for thread ID
  */
-export async function deleteThreadService(threadId: string) {
+export async function deleteThreadService(data: DeleteThreadRequest) {
   const client = await createApiClient();
-  return parseResponse(
-    client.chat.threads[':id'].$delete({
-      param: { id: threadId },
-    }),
-  );
+  // Internal fallback: ensure param exists
+  const params: DeleteThreadRequest = {
+    param: data.param ?? { id: '' },
+  };
+  return parseResponse(client.chat.threads[':id'].$delete(params));
 }
 
 /**
@@ -163,30 +183,30 @@ export async function deleteThreadService(threadId: string) {
  * IMPORTANT: Uses createPublicApiClient() instead of createApiClient()
  * to avoid accessing cookies, which would break ISR/SSG rendering.
  *
- * @param slug - Thread slug
+ * @param data - Request with param.slug for thread slug
  */
-export async function getPublicThreadService(slug: string) {
-  const client = createPublicApiClient();
-  return parseResponse(
-    client.chat.public[':slug'].$get({
-      param: { slug },
-    }),
-  );
+export async function getPublicThreadService(data: GetPublicThreadRequest) {
+  const client = await createPublicApiClient();
+  // Internal fallback: ensure param exists
+  const params: GetPublicThreadRequest = {
+    param: data.param ?? { slug: '' },
+  };
+  return parseResponse(client.chat.public[':slug'].$get(params));
 }
 
 /**
  * Get a thread by slug for the authenticated user
  * Protected endpoint - requires authentication (ownership check)
  *
- * @param slug - Thread slug
+ * @param data - Request with param.slug for thread slug
  */
-export async function getThreadBySlugService(slug: string) {
+export async function getThreadBySlugService(data: GetThreadBySlugRequest) {
   const client = await createApiClient();
-  return parseResponse(
-    client.chat.threads.slug[':slug'].$get({
-      param: { slug },
-    }),
-  );
+  // Internal fallback: ensure param exists
+  const params: GetThreadBySlugRequest = {
+    param: data.param ?? { slug: '' },
+  };
+  return parseResponse(client.chat.threads.slug[':slug'].$get(params));
 }
 
 /**
@@ -195,15 +215,15 @@ export async function getThreadBySlugService(slug: string) {
  *
  * Returns all messages for a thread ordered by creation time.
  *
- * @param threadId - Thread ID
+ * @param data - Request with param.id for thread ID
  */
-export async function getThreadMessagesService(threadId: string) {
+export async function getThreadMessagesService(data: GetThreadMessagesRequest) {
   const client = await createApiClient();
-  return parseResponse(
-    client.chat.threads[':id'].messages.$get({
-      param: { id: threadId },
-    }),
-  );
+  // Internal fallback: ensure param exists
+  const params: GetThreadMessagesRequest = {
+    param: data.param ?? { id: '' },
+  };
+  return parseResponse(client.chat.threads[':id'].messages.$get(params));
 }
 
 /**
@@ -212,15 +232,15 @@ export async function getThreadMessagesService(threadId: string) {
  *
  * Returns configuration changes (mode, participants, memories) ordered by creation time (newest first).
  *
- * @param threadId - Thread ID
+ * @param data - Request with param.id for thread ID
  */
-export async function getThreadChangelogService(threadId: string) {
+export async function getThreadChangelogService(data: GetThreadChangelogRequest) {
   const client = await createApiClient();
-  return parseResponse(
-    client.chat.threads[':id'].changelog.$get({
-      param: { id: threadId },
-    }),
-  );
+  // Internal fallback: ensure param exists
+  const params: GetThreadChangelogRequest = {
+    param: data.param ?? { id: '' },
+  };
+  return parseResponse(client.chat.threads[':id'].changelog.$get(params));
 }
 
 /**
@@ -229,13 +249,13 @@ export async function getThreadChangelogService(threadId: string) {
  *
  * Returns all moderator analyses for a thread ordered by round number.
  *
- * @param threadId - Thread ID
+ * @param data - Request with param.id for thread ID
  */
-export async function getThreadAnalysesService(threadId: string) {
+export async function getThreadAnalysesService(data: GetThreadAnalysesRequest) {
   const client = await createApiClient();
-  return parseResponse(
-    client.chat.threads[':id'].analyses.$get({
-      param: { id: threadId },
-    }),
-  );
+  // Internal fallback: ensure param exists
+  const params: GetThreadAnalysesRequest = {
+    param: data.param ?? { id: '' },
+  };
+  return parseResponse(client.chat.threads[':id'].analyses.$get(params));
 }

@@ -18,11 +18,11 @@ import { createApiClient } from '@/api/client';
 // ============================================================================
 
 export type StreamChatRequest = InferRequestType<
-  ApiClientType['chat']['threads'][':id']['stream']['$post']
+  ApiClientType['chat']['$post']
 >;
 
 export type StreamChatResponse = InferResponseType<
-  ApiClientType['chat']['threads'][':id']['stream']['$post']
+  ApiClientType['chat']['$post']
 >;
 
 // ============================================================================
@@ -39,19 +39,13 @@ export type StreamChatResponse = InferResponseType<
  * 3. Saves assistant message on completion
  * 4. Returns SSE stream (compatible with useChat hook)
  *
- * NOTE: This returns a Response object with SSE stream, not JSON
+ * EXCEPTION: Does NOT use parseResponse() because streaming responses
+ * must return raw Response object (not parsed JSON) for SSE to work.
+ * All other services use parseResponse() for consistency.
  *
- * @param threadId - Thread ID
- * @param data - Message content for streaming
+ * @param data - Message content for streaming (inferred from RPC type)
  */
-export async function streamChatService(
-  threadId: string,
-  data: Omit<StreamChatRequest, 'param'>,
-) {
+export async function streamChatService(data: StreamChatRequest) {
   const client = await createApiClient();
-  // Return the raw Response for streaming (don't parse as JSON)
-  return client.chat.threads[':id'].stream.$post({
-    param: { id: threadId },
-    ...data,
-  });
+  return await client.chat.$post(data);
 }

@@ -59,7 +59,7 @@ export function ApiKeysList({ apiKeys, isLoading, onCreateNew }: ApiKeysListProp
       return;
 
     try {
-      await deleteMutation.mutateAsync(deleteKeyId);
+      await deleteMutation.mutateAsync({ param: { keyId: deleteKeyId } });
       // Success is obvious from the item disappearing - no toast needed
     } catch (error) {
       showApiErrorToast(t('apiKeys.list.deleteFailed'), error);

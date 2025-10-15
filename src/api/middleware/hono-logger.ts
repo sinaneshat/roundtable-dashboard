@@ -1,7 +1,20 @@
 /**
  * Environment-Aware Centralized Hono Logger Middleware
  *
- * Logging behavior by environment:
+ * IMPORTANT: This file contains logger helper utilities that are RESERVED for future use.
+ * Currently, logging is disabled throughout the application per project requirements.
+ *
+ * Following Hono.js official documentation, the recommended approach is to use
+ * Hono's built-in logger middleware at the app level:
+ * ```typescript
+ * import { logger } from 'hono/logger'
+ * app.use(logger())
+ * ```
+ *
+ * This file will remain for potential future logging needs but should NOT be used
+ * in handlers, services, or middleware currently.
+ *
+ * Logging behavior by environment (when enabled):
  * - local/development: All logs (DEBUG, INFO, WARN, ERROR)
  * - preview: INFO, WARN, ERROR
  * - production: ERROR only
@@ -168,21 +181,6 @@ export const honoLoggerMiddleware = logger(customPrintFunc);
 /**
  * Error handling middleware for logging unhandled errors
  */
-export async function errorLoggerMiddleware(c: Context, next: () => Promise<void>) {
-  try {
-    await next();
-  } catch (error) {
-    // Don't log expected HTTP errors (404, 410) as ERROR level
-    // These are normal application flow errors, not system errors
-    const isExpectedHttpError = error && typeof error === 'object'
-      && 'statusCode' in error
-      && [404, 410].includes((error as { statusCode: number }).statusCode);
-
-    if (!isExpectedHttpError) {
-      apiLogger.apiError(c, 'Unhandled API error', error);
-    }
-
-    // Re-throw to let other error handlers deal with it
-    throw error;
-  }
+export async function errorLoggerMiddleware(_c: Context, next: () => Promise<void>) {
+  await next();
 }

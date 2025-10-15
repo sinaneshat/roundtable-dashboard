@@ -116,6 +116,7 @@
     "i18n:full-check": "npm run i18n:validate && npm run i18n:check-unused && npm run i18n:find-hardcoded && npm run i18n:check-missing"
   },
   "dependencies": {
+    "@ai-sdk/react": "^2.0.71",
     "@hono/zod-openapi": "^1.1.0",
     "@hookform/resolvers": "^5.2.1",
     "@opennextjs/cloudflare": "1.6.5",

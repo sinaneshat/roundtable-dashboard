@@ -38,5 +38,9 @@ export type CreateCustomerPortalSessionResponse = InferResponseType<
  */
 export async function createCustomerPortalSessionService(data: CreateCustomerPortalSessionRequest) {
   const client = await createApiClient();
-  return parseResponse(client.billing.portal.$post(data));
+  // Internal fallback: ensure json property exists
+  const params: CreateCustomerPortalSessionRequest = {
+    json: data.json ?? {},
+  };
+  return parseResponse(client.billing.portal.$post(params));
 }

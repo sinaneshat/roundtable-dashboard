@@ -10,7 +10,10 @@
 import { useQuery } from '@tanstack/react-query';
 
 import { queryKeys } from '@/lib/data/query-keys';
-import { getProductService, getProductsService } from '@/services/api';
+import {
+  getProductService,
+  getProductsService,
+} from '@/services/api';
 
 /**
  * Hook to fetch all products with pricing plans
@@ -21,7 +24,7 @@ import { getProductService, getProductsService } from '@/services/api';
 export function useProductsQuery() {
   return useQuery({
     queryKey: queryKeys.products.list(),
-    queryFn: getProductsService,
+    queryFn: () => getProductsService(),
     staleTime: 2 * 60 * 60 * 1000, // 2 hours
     retry: false,
     throwOnError: false,
@@ -32,12 +35,12 @@ export function useProductsQuery() {
  * Hook to fetch a specific product by ID
  * Public endpoint - no authentication required
  *
- * @param productId - Stripe product ID
+ * @param productId - Product ID
  */
 export function useProductQuery(productId: string) {
   return useQuery({
     queryKey: queryKeys.products.detail(productId),
-    queryFn: () => getProductService(productId),
+    queryFn: () => getProductService({ param: { id: productId } }),
     staleTime: 2 * 60 * 60 * 1000, // 2 hours
     enabled: !!productId, // Only fetch when productId is available
     retry: false,

@@ -42,13 +42,13 @@ export function useSwitchSubscriptionMutation() {
 
         queryClient.setQueryData<Awaited<ReturnType<typeof getSubscriptionsService>>>(
           queryKeys.subscriptions.list(),
-          (oldData) => {
+          (oldData: Awaited<ReturnType<typeof getSubscriptionsService>> | undefined) => {
             if (!oldData?.success || !oldData.data?.items) {
               return oldData;
             }
 
             // Replace the updated subscription in the list
-            const updatedSubscriptions = oldData.data.items.map(sub =>
+            const updatedSubscriptions = oldData.data.items.map((sub: typeof updatedSubscription) =>
               sub.id === updatedSubscription.id ? updatedSubscription : sub,
             );
 
@@ -76,11 +76,6 @@ export function useSwitchSubscriptionMutation() {
         refetchType: 'active',
       });
     },
-    onError: (error) => {
-      if (process.env.NODE_ENV === 'development') {
-        console.error('Failed to switch subscription', error);
-      }
-    },
     retry: false,
     throwOnError: false,
   });
@@ -107,13 +102,13 @@ export function useCancelSubscriptionMutation() {
 
         queryClient.setQueryData<Awaited<ReturnType<typeof getSubscriptionsService>>>(
           queryKeys.subscriptions.list(),
-          (oldData) => {
+          (oldData: Awaited<ReturnType<typeof getSubscriptionsService>> | undefined) => {
             if (!oldData?.success || !oldData.data?.items) {
               return oldData;
             }
 
             // Replace the updated subscription in the list
-            const updatedSubscriptions = oldData.data.items.map(sub =>
+            const updatedSubscriptions = oldData.data.items.map((sub: typeof updatedSubscription) =>
               sub.id === updatedSubscription.id ? updatedSubscription : sub,
             );
 
@@ -140,11 +135,6 @@ export function useCancelSubscriptionMutation() {
         queryKey: queryKeys.usage.all,
         refetchType: 'active',
       });
-    },
-    onError: (error) => {
-      if (process.env.NODE_ENV === 'development') {
-        console.error('Failed to cancel subscription', error);
-      }
     },
     retry: false,
     throwOnError: false,

@@ -111,7 +111,7 @@ function AppSidebarComponent({ ...props }: React.ComponentProps<typeof Sidebar>)
     const chat = chats.find(c => c.id === chatId);
     const chatSlug = chat?.slug;
 
-    deleteThreadMutation.mutate(chatId, {
+    deleteThreadMutation.mutate({ param: { id: chatId } }, {
       onSuccess: () => {
         // If deleting the currently viewed thread, redirect to /chat
         if (chatSlug) {
@@ -144,7 +144,9 @@ function AppSidebarComponent({ ...props }: React.ComponentProps<typeof Sidebar>)
   const chatGroups = groupChatsByPeriod(nonFavoriteChats);
 
   // Extract loading states from mutations
-  const deletingChatId = deleteThreadMutation.isPending ? deleteThreadMutation.variables : null;
+  const deletingChatId = deleteThreadMutation.isPending && deleteThreadMutation.variables?.param?.id
+    ? deleteThreadMutation.variables.param.id
+    : null;
 
   // Infinite scroll handler - Following TanStack Query official patterns
   const handleScroll = useCallback(() => {

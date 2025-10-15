@@ -86,12 +86,9 @@ export function useCreateThreadMutation() {
       return { previousUsage };
     },
     // On error, rollback to previous value
-    onError: (error, _variables, context) => {
+    onError: (_unusedError, _unusedVariables, context) => {
       if (context?.previousUsage) {
         queryClient.setQueryData(queryKeys.usage.stats(), context.previousUsage);
-      }
-      if (process.env.NODE_ENV === 'development') {
-        console.error('Failed to create thread', error);
       }
     },
     onSuccess: () => {
@@ -118,18 +115,15 @@ export function useUpdateThreadMutation() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ threadId, data }: Parameters<typeof updateThreadService>[0] extends string ? { threadId: string; data: Parameters<typeof updateThreadService>[1] } : never) =>
-      updateThreadService(threadId, data),
-    onSuccess: (_data, variables) => {
+    mutationFn: updateThreadService,
+    onSuccess: (_data, data) => {
       // Invalidate specific thread and lists
-      invalidationPatterns.threadDetail(variables.threadId).forEach((key) => {
+      invalidationPatterns.threadDetail(data.param.id).forEach((key) => {
         queryClient.invalidateQueries({ queryKey: key });
       });
     },
-    onError: (error) => {
-      if (process.env.NODE_ENV === 'development') {
-        console.error('Failed to update thread', error);
-      }
+    onError: () => {
+      // Error is handled by throwOnError: false
     },
     retry: false,
     throwOnError: false,
@@ -155,10 +149,8 @@ export function useDeleteThreadMutation() {
       // Also invalidate full usage stats for real-time sidebar update
       queryClient.invalidateQueries({ queryKey: queryKeys.usage.stats() });
     },
-    onError: (error) => {
-      if (process.env.NODE_ENV === 'development') {
-        console.error('Failed to delete thread', error);
-      }
+    onError: () => {
+      // Error is handled by throwOnError: false
     },
     retry: false,
     throwOnError: false,
@@ -177,7 +169,7 @@ export function useToggleFavoriteMutation() {
 
   return useMutation({
     mutationFn: ({ threadId, isFavorite }: { threadId: string; isFavorite: boolean; slug?: string }) =>
-      updateThreadService(threadId, { json: { isFavorite } }),
+      updateThreadService({ param: { id: threadId }, json: { isFavorite } }),
     // Optimistic update: Update UI immediately before server response
     onMutate: async (variables) => {
       // Cancel any outgoing refetches to prevent overwriting optimistic update
@@ -256,15 +248,12 @@ export function useToggleFavoriteMutation() {
       return { previousThreads, previousBySlug, slug: variables.slug };
     },
     // On error, rollback to previous values
-    onError: (error, _variables, context) => {
+    onError: (_unusedError, _unusedVariables, context) => {
       if (context?.previousThreads) {
         queryClient.setQueryData(queryKeys.threads.all, context.previousThreads);
       }
       if (context?.slug && context?.previousBySlug) {
         queryClient.setQueryData(queryKeys.threads.bySlug(context.slug), context.previousBySlug);
-      }
-      if (process.env.NODE_ENV === 'development') {
-        console.error('Failed to toggle favorite', error);
       }
     },
     // On success, invalidate to ensure data is in sync
@@ -294,7 +283,7 @@ export function useTogglePublicMutation() {
 
   return useMutation({
     mutationFn: ({ threadId, isPublic }: { threadId: string; isPublic: boolean; slug?: string }) =>
-      updateThreadService(threadId, { json: { isPublic } }),
+      updateThreadService({ param: { id: threadId }, json: { isPublic } }),
     // Optimistic update: Update UI immediately before server response
     onMutate: async (variables) => {
       // Cancel any outgoing refetches to prevent overwriting optimistic update
@@ -373,15 +362,12 @@ export function useTogglePublicMutation() {
       return { previousThreads, previousBySlug, slug: variables.slug };
     },
     // On error, rollback to previous values
-    onError: (error, _variables, context) => {
+    onError: (_unusedError, _unusedVariables, context) => {
       if (context?.previousThreads) {
         queryClient.setQueryData(queryKeys.threads.all, context.previousThreads);
       }
       if (context?.slug && context?.previousBySlug) {
         queryClient.setQueryData(queryKeys.threads.bySlug(context.slug), context.previousBySlug);
-      }
-      if (process.env.NODE_ENV === 'development') {
-        console.error('Failed to toggle public status', error);
       }
     },
     // On success, trigger ISR revalidation and invalidate queries
@@ -391,15 +377,10 @@ export function useTogglePublicMutation() {
         try {
           const action = variables.isPublic ? 'publish' : 'unpublish';
           const { revalidatePublicThread } = await import('@/app/auth/actions');
-          const result = await revalidatePublicThread(variables.slug, action);
-
-          if (!result.success) {
-            console.warn('ISR revalidation failed (non-critical):', result.error);
-          }
-        } catch (revalidateError) {
+          await revalidatePublicThread(variables.slug, action);
+        } catch {
           // Don't fail the mutation if revalidation fails
           // The page will be regenerated on next request
-          console.error('ISR revalidation failed (non-critical):', revalidateError);
         }
       }
 
@@ -439,18 +420,15 @@ export function useAddParticipantMutation() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ threadId, data }: Parameters<typeof addParticipantService>[0] extends string ? { threadId: string; data: Parameters<typeof addParticipantService>[1] } : never) =>
-      addParticipantService(threadId, data),
-    onSuccess: (_data, variables) => {
+    mutationFn: addParticipantService,
+    onSuccess: (_data, data) => {
       // Invalidate specific thread
-      invalidationPatterns.threadDetail(variables.threadId).forEach((key) => {
+      invalidationPatterns.threadDetail(data.param.id).forEach((key) => {
         queryClient.invalidateQueries({ queryKey: key });
       });
     },
-    onError: (error) => {
-      if (process.env.NODE_ENV === 'development') {
-        console.error('Failed to add participant', error);
-      }
+    onError: () => {
+      // Error is handled by throwOnError: false
     },
     retry: false,
     throwOnError: false,
@@ -467,12 +445,12 @@ export function useUpdateParticipantMutation() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ participantId, data }: Parameters<typeof updateParticipantService>[0] extends string ? { participantId: string; data: Parameters<typeof updateParticipantService>[1]; threadId?: string } : never) =>
-      updateParticipantService(participantId, data),
-    onSuccess: (_data, variables) => {
+    mutationFn: (data: Parameters<typeof updateParticipantService>[0] & { threadId?: string }) =>
+      updateParticipantService(data),
+    onSuccess: (_data, data) => {
       // If threadId is provided, use specific invalidation (includes changelog)
-      if (variables.threadId) {
-        invalidationPatterns.threadDetail(variables.threadId).forEach((key) => {
+      if (data.threadId) {
+        invalidationPatterns.threadDetail(data.threadId).forEach((key) => {
           queryClient.invalidateQueries({ queryKey: key });
         });
       } else {
@@ -480,10 +458,8 @@ export function useUpdateParticipantMutation() {
         queryClient.invalidateQueries({ queryKey: queryKeys.threads.all });
       }
     },
-    onError: (error) => {
-      if (process.env.NODE_ENV === 'development') {
-        console.error('Failed to update participant', error);
-      }
+    onError: () => {
+      // Error is handled by throwOnError: false
     },
     retry: false,
     throwOnError: false,
@@ -500,12 +476,12 @@ export function useDeleteParticipantMutation() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ participantId }: { participantId: string; threadId?: string }) =>
-      deleteParticipantService(participantId),
-    onSuccess: (_data, variables) => {
+    mutationFn: (data: Parameters<typeof deleteParticipantService>[0] & { threadId?: string }) =>
+      deleteParticipantService(data),
+    onSuccess: (_data, data) => {
       // If threadId is provided, use specific invalidation (includes changelog)
-      if (variables.threadId) {
-        invalidationPatterns.threadDetail(variables.threadId).forEach((key) => {
+      if (data.threadId) {
+        invalidationPatterns.threadDetail(data.threadId).forEach((key) => {
           queryClient.invalidateQueries({ queryKey: key });
         });
       } else {
@@ -513,10 +489,8 @@ export function useDeleteParticipantMutation() {
         queryClient.invalidateQueries({ queryKey: queryKeys.threads.all });
       }
     },
-    onError: (error) => {
-      if (process.env.NODE_ENV === 'development') {
-        console.error('Failed to delete participant', error);
-      }
+    onError: () => {
+      // Error is handled by throwOnError: false
     },
     retry: false,
     throwOnError: false,
@@ -544,10 +518,8 @@ export function useCreateCustomRoleMutation() {
         queryClient.invalidateQueries({ queryKey: key });
       });
     },
-    onError: (error) => {
-      if (process.env.NODE_ENV === 'development') {
-        console.error('Failed to create custom role', error);
-      }
+    onError: () => {
+      // Error is handled by throwOnError: false
     },
     retry: false,
     throwOnError: false,
@@ -564,18 +536,15 @@ export function useUpdateCustomRoleMutation() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ roleId, data }: Parameters<typeof updateCustomRoleService>[0] extends string ? { roleId: string; data: Parameters<typeof updateCustomRoleService>[1] } : never) =>
-      updateCustomRoleService(roleId, data),
-    onSuccess: (_data, variables) => {
+    mutationFn: updateCustomRoleService,
+    onSuccess: (_data, data) => {
       // Invalidate specific role and lists
-      invalidationPatterns.customRoleDetail(variables.roleId).forEach((key) => {
+      invalidationPatterns.customRoleDetail(data.param.id).forEach((key) => {
         queryClient.invalidateQueries({ queryKey: key });
       });
     },
-    onError: (error) => {
-      if (process.env.NODE_ENV === 'development') {
-        console.error('Failed to update custom role', error);
-      }
+    onError: () => {
+      // Error is handled by throwOnError: false
     },
     retry: false,
     throwOnError: false,
@@ -599,10 +568,8 @@ export function useDeleteCustomRoleMutation() {
         queryClient.invalidateQueries({ queryKey: key });
       });
     },
-    onError: (error) => {
-      if (process.env.NODE_ENV === 'development') {
-        console.error('Failed to delete custom role', error);
-      }
+    onError: () => {
+      // Error is handled by throwOnError: false
     },
     retry: false,
     throwOnError: false,

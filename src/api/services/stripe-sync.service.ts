@@ -15,9 +15,8 @@ import { eq } from 'drizzle-orm';
 import type Stripe from 'stripe';
 
 import { executeBatch } from '@/api/common/batch-operations';
-import { createError, normalizeError } from '@/api/common/error-handling';
+import { createError } from '@/api/common/error-handling';
 import type { ErrorContext } from '@/api/core';
-import { apiLogger } from '@/api/middleware/hono-logger';
 import { stripeService } from '@/api/services/stripe.service';
 import { syncUserQuotaFromSubscription } from '@/api/services/usage-tracking.service';
 import { getDbAsync } from '@/db';
@@ -134,8 +133,7 @@ export async function syncStripeDataFromStripe(
       status: 'all',
       expand: ['data.default_payment_method', 'data.items.data.price'],
     });
-  } catch (error) {
-    apiLogger.error('Failed to fetch subscriptions from Stripe API', normalizeError(error));
+  } catch {
     throw createError.internal('Failed to sync subscription data from Stripe', {
       errorType: 'external_service',
       service: 'stripe',
@@ -243,8 +241,7 @@ export async function syncStripeDataFromStripe(
       customer: customerId,
       limit: 10,
     });
-  } catch (error) {
-    apiLogger.error('Failed to fetch invoices from Stripe API', normalizeError(error));
+  } catch {
     throw createError.internal('Failed to sync invoice data from Stripe', {
       errorType: 'external_service',
       service: 'stripe',
@@ -261,8 +258,7 @@ export async function syncStripeDataFromStripe(
       customer: customerId,
       type: 'card',
     });
-  } catch (error) {
-    apiLogger.error('Failed to fetch payment methods from Stripe API', normalizeError(error));
+  } catch {
     throw createError.internal('Failed to sync payment method data from Stripe', {
       errorType: 'external_service',
       service: 'stripe',
@@ -276,8 +272,7 @@ export async function syncStripeDataFromStripe(
   try {
     const stripe = stripeService.getClient();
     stripeCustomer = await stripe.customers.retrieve(customerId);
-  } catch (error) {
-    apiLogger.error('Failed to fetch customer from Stripe API', normalizeError(error));
+  } catch {
     throw createError.internal('Failed to sync customer data from Stripe', {
       errorType: 'external_service',
       service: 'stripe',

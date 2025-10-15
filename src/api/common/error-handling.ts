@@ -422,7 +422,6 @@ export const createError = {
  * try {
  *   await somethingDangerous();
  * } catch (error) {
- *   c.logger.error('Operation failed', normalizeError(error));
  *   throw createError.internal('Operation failed', context);
  * }
  * ```

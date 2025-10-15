@@ -107,45 +107,12 @@ export type OpenRouterModelsResponse = z.infer<typeof OpenRouterModelsResponseSc
 
 /**
  * Base OpenRouter Model Schema (without tier access info)
+ * ✅ REUSE: Extends RawOpenRouterModelSchema with computed enhancement fields
  * Used for public endpoints and by services
  * This is the ENHANCED version with computed fields added to raw OpenRouter data
  */
-export const BaseModelSchema = z.object({
-  // Core OpenRouter fields
-  id: z.string(),
-  name: z.string(),
-  description: z.string().optional(),
-  context_length: z.number(),
-  created: z.number().optional(), // Unix timestamp for model creation date (used for recency scoring)
-  pricing: z.object({
-    prompt: z.string(),
-    completion: z.string(),
-  }),
-  top_provider: z
-    .object({
-      context_length: z.number().nullable().optional(),
-      max_completion_tokens: z.number().nullable().optional(),
-      is_moderated: z.boolean().nullable().optional(),
-    })
-    .nullable()
-    .optional(),
-  per_request_limits: z
-    .object({
-      prompt_tokens: z.number().nullable().optional(),
-      completion_tokens: z.number().nullable().optional(),
-    })
-    .nullable()
-    .optional(),
-  architecture: z
-    .object({
-      modality: z.string().nullable().optional(),
-      tokenizer: z.string().nullable().optional(),
-      instruct_type: z.string().nullable().optional(),
-    })
-    .nullable()
-    .optional(),
-
-  // Enhanced fields
+export const BaseModelSchema = RawOpenRouterModelSchema.extend({
+  // ✅ COMPUTED ENHANCEMENT FIELDS: Added by openrouter-models.service.ts enhanceModel()
   provider: z.string(),
   category: z.enum(['reasoning', 'general', 'creative', 'research']),
   capabilities: z.object({
@@ -207,8 +174,8 @@ export const UserTierConfigSchema = z.object({
 export type UserTierConfig = z.infer<typeof UserTierConfigSchema>;
 
 /**
- * List models response with top 50 models, tier grouping, and default model selection
- * ✅ INCLUDES: user_tier_config - All tier limits computed on backend
+ * List models response with top 100 models, tier grouping, and flagship models
+ * ✅ ESTABLISHED PATTERN: Separate concerns between display (flagship_models) and access control (tier_groups)
  */
 export const ListModelsResponseSchema = createApiResponseSchema(
   z.object({
@@ -216,8 +183,9 @@ export const ListModelsResponseSchema = createApiResponseSchema(
     count: z.number(),
     total: z.number(),
     default_model_id: z.string(), // Default model selected based on user's tier and popularity
+    flagship_models: z.array(EnhancedModelSchema), // ✅ Most popular models shown first (Claude, GPT-4, Gemini, etc.)
     tier_groups: z.array(TierGroupSchema), // Models grouped by subscription tier
-    user_tier_config: UserTierConfigSchema, // ✅ NEW: User's tier configuration with limits
+    user_tier_config: UserTierConfigSchema, // User's tier configuration with limits
   }),
 );
 

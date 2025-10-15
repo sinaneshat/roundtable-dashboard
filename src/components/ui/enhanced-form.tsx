@@ -500,7 +500,8 @@ export function EnhancedForm({
 
       await onSubmit(data);
     } catch (error) {
-      console.error('Form submission error:', error);
+      // Error should be handled by the component using this form
+      throw error;
     } finally {
       setIsSubmitting(false);
     }

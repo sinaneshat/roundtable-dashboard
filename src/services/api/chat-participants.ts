@@ -47,53 +47,45 @@ export type DeleteParticipantResponse = InferResponseType<
  * Add a participant (AI model) to a thread
  * Protected endpoint - requires authentication
  *
- * @param threadId - Thread ID
- * @param data - Participant data including modelId, role, priority, and settings
+ * @param data - Request with param.id (thread ID) and json (participant data)
  */
-export async function addParticipantService(
-  threadId: string,
-  data: Omit<AddParticipantRequest, 'param'>,
-) {
+export async function addParticipantService(data: AddParticipantRequest) {
   const client = await createApiClient();
-  return parseResponse(
-    client.chat.threads[':id'].participants.$post({
-      param: { id: threadId },
-      ...data,
-    }),
-  );
+  // Internal fallback: ensure param and json exist
+  const params: AddParticipantRequest = {
+    param: data.param ?? { id: '' },
+    json: data.json ?? {},
+  };
+  return parseResponse(client.chat.threads[':id'].participants.$post(params));
 }
 
 /**
  * Update participant settings
  * Protected endpoint - requires authentication
  *
- * @param participantId - Participant ID
- * @param data - Participant update data (role, priority, settings, isEnabled)
+ * @param data - Request with param.id (participant ID) and json (update data)
  */
-export async function updateParticipantService(
-  participantId: string,
-  data: Omit<UpdateParticipantRequest, 'param'>,
-) {
+export async function updateParticipantService(data: UpdateParticipantRequest) {
   const client = await createApiClient();
-  return parseResponse(
-    client.chat.participants[':id'].$patch({
-      param: { id: participantId },
-      ...data,
-    }),
-  );
+  // Internal fallback: ensure param and json exist
+  const params: UpdateParticipantRequest = {
+    param: data.param ?? { id: '' },
+    json: data.json ?? {},
+  };
+  return parseResponse(client.chat.participants[':id'].$patch(params));
 }
 
 /**
  * Remove a participant from a thread
  * Protected endpoint - requires authentication
  *
- * @param participantId - Participant ID
+ * @param data - Request with param.id for participant ID
  */
-export async function deleteParticipantService(participantId: string) {
+export async function deleteParticipantService(data: DeleteParticipantRequest) {
   const client = await createApiClient();
-  return parseResponse(
-    client.chat.participants[':id'].$delete({
-      param: { id: participantId },
-    }),
-  );
+  // Internal fallback: ensure param exists
+  const params: DeleteParticipantRequest = {
+    param: data.param ?? { id: '' },
+  };
+  return parseResponse(client.chat.participants[':id'].$delete(params));
 }

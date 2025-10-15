@@ -7,6 +7,9 @@
 
 import { createRoute } from '@hono/zod-openapi';
 import * as HttpStatusCodes from 'stoker/http-status-codes';
+import * as HttpStatusPhrases from 'stoker/http-status-phrases';
+
+import { ApiErrorResponseSchema } from '@/api/core/schemas';
 
 import {
   ApiKeyIdParamSchema,
@@ -40,8 +43,22 @@ export const listApiKeysRoute = createRoute({
         'application/json': { schema: ListApiKeysResponseSchema },
       },
     },
-    [HttpStatusCodes.UNAUTHORIZED]: { description: 'Authentication required' },
-    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: { description: 'Internal Server Error' },
+    [HttpStatusCodes.UNAUTHORIZED]: {
+      description: HttpStatusPhrases.UNAUTHORIZED,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
+    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: {
+      description: HttpStatusPhrases.INTERNAL_SERVER_ERROR,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
   },
 });
 
@@ -65,10 +82,38 @@ export const getApiKeyRoute = createRoute({
         'application/json': { schema: GetApiKeyResponseSchema },
       },
     },
-    [HttpStatusCodes.UNAUTHORIZED]: { description: 'Authentication required' },
-    [HttpStatusCodes.NOT_FOUND]: { description: 'API key not found' },
-    [HttpStatusCodes.FORBIDDEN]: { description: 'Access denied to this API key' },
-    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: { description: 'Internal Server Error' },
+    [HttpStatusCodes.UNAUTHORIZED]: {
+      description: HttpStatusPhrases.UNAUTHORIZED,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
+    [HttpStatusCodes.NOT_FOUND]: {
+      description: HttpStatusPhrases.NOT_FOUND,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
+    [HttpStatusCodes.FORBIDDEN]: {
+      description: HttpStatusPhrases.FORBIDDEN,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
+    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: {
+      description: HttpStatusPhrases.INTERNAL_SERVER_ERROR,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
   },
 });
 
@@ -99,9 +144,30 @@ export const createApiKeyRoute = createRoute({
         'application/json': { schema: CreateApiKeyResponseSchema },
       },
     },
-    [HttpStatusCodes.UNAUTHORIZED]: { description: 'Authentication required' },
-    [HttpStatusCodes.BAD_REQUEST]: { description: 'Invalid request data' },
-    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: { description: 'Internal Server Error' },
+    [HttpStatusCodes.UNAUTHORIZED]: {
+      description: HttpStatusPhrases.UNAUTHORIZED,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
+    [HttpStatusCodes.BAD_REQUEST]: {
+      description: HttpStatusPhrases.BAD_REQUEST,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
+    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: {
+      description: HttpStatusPhrases.INTERNAL_SERVER_ERROR,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
   },
 });
 
@@ -133,11 +199,46 @@ export const updateApiKeyRoute = createRoute({
         'application/json': { schema: UpdateApiKeyResponseSchema },
       },
     },
-    [HttpStatusCodes.UNAUTHORIZED]: { description: 'Authentication required' },
-    [HttpStatusCodes.NOT_FOUND]: { description: 'API key not found' },
-    [HttpStatusCodes.FORBIDDEN]: { description: 'Access denied to this API key' },
-    [HttpStatusCodes.BAD_REQUEST]: { description: 'Invalid request data' },
-    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: { description: 'Internal Server Error' },
+    [HttpStatusCodes.UNAUTHORIZED]: {
+      description: HttpStatusPhrases.UNAUTHORIZED,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
+    [HttpStatusCodes.NOT_FOUND]: {
+      description: HttpStatusPhrases.NOT_FOUND,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
+    [HttpStatusCodes.FORBIDDEN]: {
+      description: HttpStatusPhrases.FORBIDDEN,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
+    [HttpStatusCodes.BAD_REQUEST]: {
+      description: HttpStatusPhrases.BAD_REQUEST,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
+    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: {
+      description: HttpStatusPhrases.INTERNAL_SERVER_ERROR,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
   },
 });
 
@@ -161,9 +262,37 @@ export const deleteApiKeyRoute = createRoute({
         'application/json': { schema: DeleteApiKeyResponseSchema },
       },
     },
-    [HttpStatusCodes.UNAUTHORIZED]: { description: 'Authentication required' },
-    [HttpStatusCodes.NOT_FOUND]: { description: 'API key not found' },
-    [HttpStatusCodes.FORBIDDEN]: { description: 'Access denied to this API key' },
-    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: { description: 'Internal Server Error' },
+    [HttpStatusCodes.UNAUTHORIZED]: {
+      description: HttpStatusPhrases.UNAUTHORIZED,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
+    [HttpStatusCodes.NOT_FOUND]: {
+      description: HttpStatusPhrases.NOT_FOUND,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
+    [HttpStatusCodes.FORBIDDEN]: {
+      description: HttpStatusPhrases.FORBIDDEN,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
+    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: {
+      description: HttpStatusPhrases.INTERNAL_SERVER_ERROR,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
   },
 });

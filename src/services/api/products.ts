@@ -39,27 +39,26 @@ export type GetProductResponse = InferResponseType<
  * Get all active products with pricing plans
  * Public endpoint - no authentication required
  *
- * CRITICAL: Consistent argument handling for SSR/hydration
- * Only pass args if defined to ensure server/client consistency
+ * Following Hono RPC best practices: Always provide an object to $get()
+ * even when all query parameters are optional. Use nullish coalescing
+ * to ensure type safety.
  */
 export async function getProductsService(args?: GetProductsRequest) {
   const client = await createApiClient();
-  return args
-    ? parseResponse(client.billing.products.$get(args))
-    : parseResponse(client.billing.products.$get());
+  return parseResponse(client.billing.products.$get(args ?? {}));
 }
 
 /**
  * Get a specific product by ID with all pricing plans
  * Public endpoint - no authentication required
  *
- * @param productId - Stripe product ID
+ * @param data - Request with param.id for product ID
  */
-export async function getProductService(productId: string) {
+export async function getProductService(data: GetProductRequest) {
   const client = await createApiClient();
-  return parseResponse(
-    client.billing.products[':id'].$get({
-      param: { id: productId },
-    }),
-  );
+  // Internal fallback: ensure param exists
+  const params: GetProductRequest = {
+    param: data.param ?? { id: '' },
+  };
+  return parseResponse(client.billing.products[':id'].$get(params));
 }

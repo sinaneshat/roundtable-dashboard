@@ -16,7 +16,6 @@ import type { Context } from 'hono';
 import * as HttpStatusCodes from 'stoker/http-status-codes';
 import type { z } from 'zod';
 
-import { apiLogger } from '../middleware/hono-logger';
 import type { ApiResponse, CursorPaginatedResponse, ErrorContext, PaginatedResponse, ResponseMetadata } from './schemas';
 import { ApiErrorResponseSchema, createApiResponseSchema, createPaginatedResponseSchema } from './schemas';
 import type { ValidationError } from './validation';
@@ -238,8 +237,6 @@ export function validationError(
   // Validate response format
   const validation = ApiErrorResponseSchema.safeParse(response);
   if (!validation.success) {
-    // Log critical formatting error using structured logging
-    apiLogger.apiError(c, 'Error response formatting failed', validation.error);
     // Return internal server error to prevent malformed responses
     return internalServerError(c, 'Error response formatting failed');
   }

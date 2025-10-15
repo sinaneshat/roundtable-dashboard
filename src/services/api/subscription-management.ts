@@ -46,12 +46,17 @@ export type CancelSubscriptionResponse = InferResponseType<
  * - Equal prices: Throws validation error
  * - Syncs fresh data from Stripe API
  *
- * @param data - Subscription ID and new price ID
+ * @param data - Request with param.id (subscription ID) and json (new price details)
  */
 export async function switchSubscriptionService(data: SwitchSubscriptionRequest) {
   const client = await createApiClient();
+  // Internal fallback: ensure param and json exist
+  const params: SwitchSubscriptionRequest = {
+    param: data.param ?? { id: '' },
+    json: data.json ?? {},
+  };
   return parseResponse(
-    client.billing.subscriptions[':id'].switch.$post(data),
+    client.billing.subscriptions[':id'].switch.$post(params),
   );
 }
 
@@ -62,11 +67,16 @@ export async function switchSubscriptionService(data: SwitchSubscriptionRequest)
  * - Default: Cancel at period end (user retains access)
  * - Optional: Cancel immediately (user loses access now)
  *
- * @param data - Subscription ID and cancellation settings
+ * @param data - Request with param.id (subscription ID) and json (cancellation settings)
  */
 export async function cancelSubscriptionService(data: CancelSubscriptionRequest) {
   const client = await createApiClient();
+  // Internal fallback: ensure param and json exist
+  const params: CancelSubscriptionRequest = {
+    param: data.param ?? { id: '' },
+    json: data.json ?? {},
+  };
   return parseResponse(
-    client.billing.subscriptions[':id'].cancel.$post(data),
+    client.billing.subscriptions[':id'].cancel.$post(params),
   );
 }

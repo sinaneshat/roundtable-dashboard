@@ -75,10 +75,8 @@ export function SocialShareButton({
         copySuccess.onFalse();
         isOpen.onFalse();
       }, 2000);
-    } catch (error) {
-      if (process.env.NODE_ENV === 'development') {
-        console.error('Failed to copy link:', error);
-      }
+    } catch {
+      // Clipboard copy failed - gracefully handled by not showing success message
     }
   };
 

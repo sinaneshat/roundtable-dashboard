@@ -21,7 +21,7 @@ export default async function PublicChatLayoutPage({
   // The page component will handle redirects, layout just shows header
   let thread = null;
   try {
-    const threadResult = await getPublicThreadService(slug);
+    const threadResult = await getPublicThreadService({ param: { slug } });
     thread = threadResult?.success ? threadResult.data?.thread : null;
   } catch {
     // Expected for unavailable threads - page component handles redirect

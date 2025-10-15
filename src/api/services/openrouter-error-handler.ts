@@ -227,17 +227,6 @@ export function classifyOpenRouterError(error: unknown): ClassifiedError {
         underlyingError = errorObj.cause;
       }
 
-      console.warn('[Error Classifier] Detected AI SDK retry wrapper, extracting underlying error:', {
-        wrapperMessage: error.message,
-        actualErrorMessage,
-        hasLastError: !!errorObj.lastError,
-        hasErrors: Array.isArray(errorObj.errors),
-        errorsCount: Array.isArray(errorObj.errors) ? errorObj.errors.length : 0,
-        hasCause: !!errorObj.cause,
-        underlyingErrorType: underlyingError instanceof Error ? underlyingError.constructor.name : typeof underlyingError,
-        isAPICallError: APICallError.isInstance(underlyingError),
-      });
-
       // If we found an underlying error (not the same as the wrapper), classify that
       if (underlyingError !== error) {
         return classifyOpenRouterError(underlyingError);
@@ -245,7 +234,6 @@ export function classifyOpenRouterError(error: unknown): ClassifiedError {
 
       // If no underlying error found, create one with the extracted message
       // This should rarely happen - it means AI SDK changed their error structure
-      console.warn('[Error Classifier] No underlying error found in retry wrapper, using extracted message');
       const extractedError = new Error(actualErrorMessage);
       return classifyOpenRouterError(extractedError);
     }
@@ -283,15 +271,6 @@ export function classifyOpenRouterError(error: unknown): ClassifiedError {
         // Rate limit - ALWAYS use provider message if available for max detail
         // Provider message contains specific info like "deepseek/deepseek-r1:free is temporarily rate-limited upstream..."
         const userMessage = providerMessage || ERROR_MESSAGES.rate_limit;
-
-        // Log the actual provider message to verify extraction
-        if (providerMessage) {
-          console.warn('[Error Classifier] Rate limit with provider message:', {
-            statusCode,
-            providerMessage,
-            technicalMessage,
-          });
-        }
 
         return {
           type: 'rate_limit',

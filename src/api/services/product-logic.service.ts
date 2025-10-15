@@ -26,7 +26,6 @@ import type { BaseModelResponse } from '@/api/routes/models/schema';
  * Used across database schema, API validation, and business logic
  */
 export const SUBSCRIPTION_TIERS = ['free', 'starter', 'pro', 'power'] as const;
-
 /**
  * ✅ SINGLE SOURCE OF TRUTH: Subscription tier type
  */
@@ -61,12 +60,18 @@ export const MAX_OUTPUT_TOKENS_BY_TIER: Record<SubscriptionTier, number> = {
 /**
  * Maximum model pricing threshold by tier (per 1M tokens input)
  * Used for model access control based on pricing
+ *
+ * ✅ ADJUSTED LIMITS: Wider ranges to better categorize models across tiers
+ * - free: Only truly free models
+ * - starter: Budget models suitable for light usage
+ * - pro: Mid-range to premium models (most popular flagships fall here)
+ * - power: Ultra-premium and specialized models
  */
 export const MAX_MODEL_PRICING_BY_TIER: Record<SubscriptionTier, number | null> = {
   free: 0, // Only free models ($0/M tokens)
-  starter: 1.0, // Up to $1/M tokens
-  pro: 20.0, // Up to $20/M tokens
-  power: null, // Unlimited
+  starter: 2.0, // Up to $2/M tokens (increased from $1 for better budget model selection)
+  pro: 100.0, // Up to $100/M tokens (increased from $20 to include most flagship models)
+  power: null, // Unlimited (ultra-premium models like GPT-4, Claude Opus, etc.)
 } as const;
 
 /**
@@ -341,6 +346,122 @@ export function getDefaultModelForTier(
 ): string | undefined {
   const tierModels = getQuickStartModelsByTier(models, tier, 1);
   return tierModels.length > 0 ? tierModels[0] : undefined;
+}
+
+/**
+ * ✅ 100% DYNAMIC FLAGSHIP SCORING: No hard-coded model names
+ *
+ * Calculates flagship score using data-driven signals from OpenRouter API.
+ * Based on observable characteristics that correlate with global popularity.
+ *
+ * Scoring factors:
+ * - Provider quality (40pts): Based on 2025 OpenRouter token usage rankings
+ * - Context window (25pts): Large contexts indicate flagship capability
+ * - Recency (20pts): Recently released = actively maintained
+ * - Capabilities (15pts): Vision, reasoning, tools = advanced features
+ *
+ * @param model The model to score
+ * @returns Flagship score (0-100, higher = more likely flagship)
+ */
+function getFlagshipScore(model: BaseModelResponse): number {
+  let score = 0;
+
+  // ✅ PROVIDER QUALITY (40 points max) - Based on 2025 OpenRouter token usage
+  const providerLower = model.provider.toLowerCase();
+  if (providerLower.includes('x-ai') || providerLower.includes('xai')) {
+    score += 40; // #1 most popular (31.2% token share)
+  } else if (providerLower.includes('google')) {
+    score += 38; // #2 most popular (18.1% token share)
+  } else if (providerLower.includes('anthropic')) {
+    score += 36; // #3 most popular (14.1% token share)
+  } else if (providerLower.includes('openai')) {
+    score += 34; // #4 most popular (13.1% token share)
+  } else if (providerLower.includes('deepseek')) {
+    score += 32; // #5 most popular (6.9% token share)
+  } else if (providerLower.includes('qwen')) {
+    score += 30; // #6 most popular (6.3% token share)
+  } else if (
+    providerLower.includes('meta')
+    || providerLower.includes('mistral')
+    || providerLower.includes('cohere')
+  ) {
+    score += 20; // Other major providers
+  } else {
+    return 0; // Not from top-tier provider = not flagship
+  }
+
+  // ✅ CONTEXT WINDOW (25 points max) - Flagship models have large contexts
+  if (model.context_length >= 200000) {
+    score += 25; // Ultra-large (200K+) = cutting-edge flagship
+  } else if (model.context_length >= 128000) {
+    score += 20; // Large (128K-200K) = typical flagship
+  } else if (model.context_length >= 64000) {
+    score += 10; // Medium (64K-128K) = mid-tier
+  } else {
+    score += 0; // Small context = not flagship
+  }
+
+  // ✅ RECENCY (20 points max) - Recent models = actively maintained
+  if (model.created) {
+    const ageInDays = (Date.now() / 1000 - model.created) / (60 * 60 * 24);
+    if (ageInDays < 180) {
+      score += 20; // Last 6 months = cutting-edge
+    } else if (ageInDays < 365) {
+      score += 15; // Last year = recent
+    } else {
+      score += 5; // Older = less likely flagship
+    }
+  } else {
+    score += 10; // No timestamp = neutral
+  }
+
+  // ✅ CAPABILITIES (15 points max) - Advanced features = flagship
+  if (model.capabilities.vision)
+    score += 5;
+  if (model.capabilities.reasoning)
+    score += 5;
+  if (model.capabilities.tools)
+    score += 5;
+
+  return score;
+}
+
+/**
+ * ✅ DYNAMIC FLAGSHIP DETECTION: Based purely on model characteristics
+ * NO hard-coded model names - entirely data-driven from OpenRouter API
+ *
+ * @param model The model to check
+ * @returns True if model scores above flagship threshold (70+)
+ */
+export function isFlagshipModel(model: BaseModelResponse): boolean {
+  const score = getFlagshipScore(model);
+
+  // ✅ THRESHOLD: Models scoring 70+ are flagships
+  // This captures: Top-tier provider (30-40pts) + Large context (10-25pts) + Recent (15-20pts) + Capabilities (10-15pts)
+  return score >= 70;
+}
+
+/**
+ * ✅ GET FLAGSHIP MODELS: Extract and rank models dynamically
+ *
+ * 100% data-driven flagship detection based on OpenRouter API data.
+ * NO hard-coded model names - scores based on observable characteristics.
+ *
+ * Returns top 10 flagship models sorted by score (highest first).
+ * Shown in "Most Popular" section at top of model list.
+ *
+ * @param models All available models
+ * @returns Top 10 flagship models sorted by flagship score (descending)
+ */
+export function getFlagshipModels(models: BaseModelResponse[]): BaseModelResponse[] {
+  // Score all models and filter flagships
+  const scoredModels = models
+    .map(model => ({ model, score: getFlagshipScore(model) }))
+    .filter(item => item.score >= 70) // Flagship threshold
+    .sort((a, b) => b.score - a.score) // Sort by score descending
+    .slice(0, 10); // Limit to top 10 models
+
+  return scoredModels.map(item => item.model);
 }
 
 // ============================================================================

@@ -39,27 +39,26 @@ export type GetSubscriptionResponse = InferResponseType<
  * Get all subscriptions for authenticated user
  * Protected endpoint - requires authentication
  *
- * CRITICAL: Consistent argument handling for SSR/hydration
- * Only pass args if defined to ensure server/client consistency
+ * Following Hono RPC best practices: Always provide an object to $get()
+ * even when all query parameters are optional. Use nullish coalescing
+ * to ensure type safety.
  */
 export async function getSubscriptionsService(args?: GetSubscriptionsRequest) {
   const client = await createApiClient();
-  return args
-    ? parseResponse(client.billing.subscriptions.$get(args))
-    : parseResponse(client.billing.subscriptions.$get());
+  return parseResponse(client.billing.subscriptions.$get(args ?? {}));
 }
 
 /**
  * Get a specific subscription by ID
  * Protected endpoint - requires authentication and ownership
  *
- * @param subscriptionId - Stripe subscription ID
+ * @param data - Request with param.id for subscription ID
  */
-export async function getSubscriptionService(subscriptionId: string) {
+export async function getSubscriptionService(data: GetSubscriptionRequest) {
   const client = await createApiClient();
-  return parseResponse(
-    client.billing.subscriptions[':id'].$get({
-      param: { id: subscriptionId },
-    }),
-  );
+  // Internal fallback: ensure param exists
+  const params: GetSubscriptionRequest = {
+    param: data.param ?? { id: '' },
+  };
+  return parseResponse(client.billing.subscriptions[':id'].$get(params));
 }

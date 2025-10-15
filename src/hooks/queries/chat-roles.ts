@@ -52,9 +52,9 @@ export function useCustomRolesQuery(enabled = true) {
   return useInfiniteQuery({
     queryKey: queryKeys.customRoles.lists(),
     queryFn: ({ pageParam }) =>
-      listCustomRolesService(
-        pageParam ? { query: { cursor: pageParam } } : undefined,
-      ),
+      listCustomRolesService({
+        query: { cursor: pageParam },
+      }),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage) => {
       // Return nextCursor from pagination metadata, or undefined if no more pages
@@ -81,13 +81,13 @@ export function useCustomRolesQuery(enabled = true) {
  *
  * Stale time: 5 minutes (custom role details change very infrequently)
  */
-export function useCustomRoleQuery(roleId: string | null | undefined, enabled = true) {
+export function useCustomRoleQuery(roleId: string, enabled = true) {
   const { data: session, isPending } = useSession();
   const isAuthenticated = !isPending && !!session?.user?.id;
 
   return useQuery({
-    queryKey: queryKeys.customRoles.detail(roleId || ''),
-    queryFn: () => getCustomRoleService(roleId!),
+    queryKey: queryKeys.customRoles.detail(roleId),
+    queryFn: () => getCustomRoleService({ param: { id: roleId } }),
     staleTime: 5 * 60 * 1000, // 5 minutes
     enabled: isAuthenticated && !!roleId && enabled, // Only fetch when authenticated and roleId exists
     retry: false,

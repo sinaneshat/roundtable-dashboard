@@ -9,24 +9,6 @@ import {
 } from '@/db/validation/billing';
 
 // ============================================================================
-// Path Parameter Schemas
-// ============================================================================
-
-export const ProductIdParamSchema = z.object({
-  id: CoreSchemas.id().openapi({
-    description: 'Stripe product ID',
-    example: 'prod_ABC123',
-  }),
-});
-
-export const SubscriptionIdParamSchema = z.object({
-  id: CoreSchemas.id().openapi({
-    description: 'Stripe subscription ID',
-    example: 'sub_ABC123',
-  }),
-});
-
-// ============================================================================
 // Product & Price Schemas (Reusing Database Validation Schemas)
 // ============================================================================
 
@@ -94,7 +76,7 @@ export const ProductDetailResponseSchema = createApiResponseSchema(ProductDetail
 // ============================================================================
 
 export const CheckoutRequestSchema = z.object({
-  priceId: z.string().min(1).openapi({
+  priceId: CoreSchemas.id().openapi({
     description: 'Stripe price ID for the subscription',
     example: 'price_1ABC123',
   }),
@@ -109,7 +91,7 @@ export const CheckoutRequestSchema = z.object({
 }).openapi('CheckoutRequest');
 
 const CheckoutPayloadSchema = z.object({
-  sessionId: z.string().openapi({
+  sessionId: CoreSchemas.id().openapi({
     description: 'Stripe checkout session ID',
     example: 'cs_test_a1b2c3d4e5f6g7h8i9j0',
   }),
@@ -148,7 +130,8 @@ export const CustomerPortalResponseSchema = createApiResponseSchema(CustomerPort
 /**
  * ✅ REUSE: Subscription schema from database validation
  * Picked fields relevant for API responses
- * NO TRANSFORMS: Handler serializes dates to ISO strings, schema only validates
+ * ✅ NO TRANSFORMS: Returns DB data directly via Drizzle relations
+ * productId comes from stripeSubscription -> price -> product relationship (no manual transformation)
  */
 const SubscriptionSchema = stripeSubscriptionSelectSchema
   .pick({
@@ -163,10 +146,12 @@ const SubscriptionSchema = stripeSubscriptionSelectSchema
     trialEnd: true,
   })
   .extend({
-    productId: z.string().openapi({
-      description: 'Stripe product ID (from price relationship)',
-      example: 'prod_ABC123',
-    }),
+    // Nested price relation with product
+    price: stripePriceSelectSchema
+      .pick({ productId: true })
+      .openapi({
+        description: 'Price details with product ID',
+      }),
   })
   .openapi('Subscription');
 
@@ -224,7 +209,7 @@ export const WebhookResponseSchema = createApiResponseSchema(WebhookPayloadSchem
 // ============================================================================
 
 export const SwitchSubscriptionRequestSchema = z.object({
-  newPriceId: z.string().min(1).openapi({
+  newPriceId: CoreSchemas.id().openapi({
     description: 'New Stripe price ID to switch to (handles both upgrades and downgrades automatically)',
     example: 'price_1ABC456',
   }),

@@ -40,28 +40,13 @@ export const listApiKeysHandler: RouteHandler<typeof listApiKeysRoute, ApiEnv> =
     operationName: 'listApiKeys',
   },
   async (c) => {
-    const user = c.get('user');
-
-    if (!user) {
-      throw createError.unauthenticated('Authentication required', ErrorContextBuilders.auth('listApiKeys'));
-    }
-
-    c.logger.info('Listing API keys for user', {
-      logType: 'operation',
-      operationName: 'listApiKeys',
-      userId: user.id,
-    });
+    // Verify authentication (ensures authenticated request)
+    c.auth();
 
     // Use Better Auth's official API to list API keys
     // This ensures consistent response format and excludes sensitive key values
     const apiKeys = await auth.api.listApiKeys({
       headers: c.req.raw.headers, // Include headers for user context
-    });
-
-    c.logger.info('API keys listed successfully', {
-      logType: 'operation',
-      operationName: 'listApiKeys',
-      resource: `${apiKeys?.length || 0} keys`,
     });
 
     return Responses.collection(c, apiKeys || []);
@@ -79,19 +64,9 @@ export const getApiKeyHandler: RouteHandler<typeof getApiKeyRoute, ApiEnv> = cre
     operationName: 'getApiKey',
   },
   async (c) => {
-    const user = c.get('user');
+    // Verify authentication (ensures authenticated request)
+    c.auth();
     const { keyId } = c.validated.params;
-
-    if (!user) {
-      throw createError.unauthenticated('Authentication required', ErrorContextBuilders.auth('getApiKey'));
-    }
-
-    c.logger.info('Getting API key', {
-      logType: 'operation',
-      operationName: 'getApiKey',
-      userId: user.id,
-      resource: keyId,
-    });
 
     // Use Better Auth's official API to get the API key
     // This ensures ownership validation and excludes sensitive key values
@@ -103,12 +78,6 @@ export const getApiKeyHandler: RouteHandler<typeof getApiKeyRoute, ApiEnv> = cre
     if (!apiKey) {
       throw createError.notFound('API key not found', ErrorContextBuilders.resourceNotFound('apiKey', keyId));
     }
-
-    c.logger.info('API key retrieved successfully', {
-      logType: 'operation',
-      operationName: 'getApiKey',
-      resource: keyId,
-    });
 
     return Responses.ok(c, { apiKey });
   },
@@ -127,13 +96,6 @@ export const createApiKeyHandler: RouteHandler<typeof createApiKeyRoute, ApiEnv>
   async (c) => {
     const { user } = c.auth();
     const body = c.validated.body;
-
-    c.logger.info('Creating API key', {
-      logType: 'operation',
-      operationName: 'createApiKey',
-      userId: user.id,
-      resource: body.name ?? undefined,
-    });
 
     const db = await getDbAsync();
 
@@ -166,12 +128,6 @@ export const createApiKeyHandler: RouteHandler<typeof createApiKeyRoute, ApiEnv>
       throw createError.internal('Failed to create API key', ErrorContextBuilders.externalService('betterauth', 'createApiKey'));
     }
 
-    c.logger.info('API key created successfully', {
-      logType: 'operation',
-      operationName: 'createApiKey',
-      resource: result.id,
-    });
-
     // Better Auth returns the full API key object with the unhashed key value
     // This is the only time the key value is exposed
     return Responses.created(c, {
@@ -192,20 +148,9 @@ export const updateApiKeyHandler: RouteHandler<typeof updateApiKeyRoute, ApiEnv>
     operationName: 'updateApiKey',
   },
   async (c) => {
-    const user = c.get('user');
+    const { user } = c.auth();
     const { keyId } = c.validated.params;
     const body = c.validated.body;
-
-    if (!user) {
-      throw createError.unauthenticated('Authentication required', ErrorContextBuilders.auth('updateApiKey'));
-    }
-
-    c.logger.info('Updating API key', {
-      logType: 'operation',
-      operationName: 'updateApiKey',
-      userId: user.id,
-      resource: keyId,
-    });
 
     // Use Better Auth's official API to update the API key
     // This ensures proper validation and maintains consistency
@@ -229,12 +174,6 @@ export const updateApiKeyHandler: RouteHandler<typeof updateApiKeyRoute, ApiEnv>
       throw createError.internal('Failed to update API key', ErrorContextBuilders.externalService('betterauth', 'updateApiKey'));
     }
 
-    c.logger.info('API key updated successfully', {
-      logType: 'operation',
-      operationName: 'updateApiKey',
-      resource: keyId,
-    });
-
     return Responses.ok(c, { apiKey: result });
   },
 );
@@ -250,19 +189,9 @@ export const deleteApiKeyHandler: RouteHandler<typeof deleteApiKeyRoute, ApiEnv>
     operationName: 'deleteApiKey',
   },
   async (c) => {
-    const user = c.get('user');
+    // Verify authentication (ensures authenticated request)
+    c.auth();
     const { keyId } = c.validated.params;
-
-    if (!user) {
-      throw createError.unauthenticated('Authentication required', ErrorContextBuilders.auth('deleteApiKey'));
-    }
-
-    c.logger.info('Deleting API key', {
-      logType: 'operation',
-      operationName: 'deleteApiKey',
-      userId: user.id,
-      resource: keyId,
-    });
 
     // Use Better Auth's official API to delete the API key
     // This ensures ownership validation and maintains consistency
@@ -276,12 +205,6 @@ export const deleteApiKeyHandler: RouteHandler<typeof deleteApiKeyRoute, ApiEnv>
     if (!result?.success) {
       throw createError.internal('Failed to delete API key', ErrorContextBuilders.externalService('betterauth', 'deleteApiKey'));
     }
-
-    c.logger.info('API key deleted successfully', {
-      logType: 'operation',
-      operationName: 'deleteApiKey',
-      resource: keyId,
-    });
 
     return Responses.ok(c, { deleted: true });
   },

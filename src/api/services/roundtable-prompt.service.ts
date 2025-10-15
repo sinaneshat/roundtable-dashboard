@@ -12,6 +12,41 @@ import type {
 } from '@/api/routes/chat/schema';
 import { extractModelName } from '@/lib/utils/ai-display';
 
+/**
+ * Builds structured system prompt for multi-participant roundtable discussions.
+ *
+ * ✅ AI SDK BEST PRACTICE: Static behavior definition goes in system prompt
+ * ✅ DYNAMIC CONTEXT: Use buildRoundtableContextMessage() for dynamic data
+ *
+ * This function creates a comprehensive system prompt that defines:
+ * - The participant's role and identity
+ * - Mode-specific behavioral rules (analyzing, brainstorming, debating, solving)
+ * - Output structure and formatting requirements
+ * - Quality validation checklist
+ *
+ * @param config - Roundtable configuration with mode, participants, and role info
+ * @returns Formatted system prompt ready for AI SDK streamText({ system })
+ *
+ * @example
+ * ```typescript
+ * const systemPrompt = buildRoundtableSystemPrompt({
+ *   mode: 'brainstorming',
+ *   currentParticipant: { id: '1', modelId: 'gpt-4', role: 'The Ideator' },
+ *   allParticipants: [...],
+ *   customSystemPrompt: null,
+ *   currentParticipantIndex: 0,
+ * });
+ *
+ * const result = streamText({
+ *   model: openai('gpt-4'),
+ *   system: systemPrompt, // ← Use here
+ *   messages: [...]
+ * });
+ * ```
+ *
+ * @see buildRoundtableContextMessage For dynamic context in user messages
+ * @see https://v4.ai-sdk.dev/docs/ai-sdk-core/generating-text Official AI SDK docs
+ */
 export function buildRoundtableSystemPrompt(config: RoundtablePromptConfig): string {
   const {
     mode,
@@ -285,7 +320,26 @@ export function buildRoundtableSystemPrompt(config: RoundtablePromptConfig): str
  * - Instructions for referencing participants
  *
  * @param config - Roundtable prompt configuration
- * @returns Formatted context as user message content
+ * @returns Formatted context as user message content (empty string if no context needed)
+ *
+ * @example
+ * ```typescript
+ * const contextMessage = buildRoundtableContextMessage({
+ *   mode: 'brainstorming',
+ *   currentParticipant: { id: '2', modelId: 'claude-3', role: 'The Critic' },
+ *   allParticipants: [participant1, participant2, participant3],
+ *   currentParticipantIndex: 1,
+ * });
+ *
+ * // Use as first user message in conversation:
+ * const messages: UIMessage[] = [
+ *   ...(contextMessage ? [{ role: 'user', content: contextMessage }] : []),
+ *   { role: 'user', content: 'What are the benefits of AI?' },
+ * ];
+ * ```
+ *
+ * @see buildRoundtableSystemPrompt For static behavior definition
+ * @see https://v4.ai-sdk.dev/docs/ai-sdk-core/generating-text AI SDK message patterns
  */
 export function buildRoundtableContextMessage(config: RoundtablePromptConfig): string {
   const {

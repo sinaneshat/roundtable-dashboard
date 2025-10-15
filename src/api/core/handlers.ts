@@ -22,14 +22,12 @@ import type { z } from 'zod';
 import { executeBatch, validateBatchSize } from '@/api/common/batch-operations';
 import type { ErrorCode } from '@/api/common/error-handling';
 import { AppError } from '@/api/common/error-handling';
-import { apiLogger } from '@/api/middleware/hono-logger';
 import type { ApiEnv, AuthenticatedContext, AuthMode } from '@/api/types';
 // Database access should be handled by individual handlers
 import { getDbAsync } from '@/db';
 
 import { HTTPExceptionFactory } from './http-exceptions';
 import { Responses } from './responses';
-import type { LoggerData } from './schemas';
 import {
   IdParamSchema,
   ListQuerySchema,
@@ -93,7 +91,7 @@ export type HandlerConfig<
 };
 
 /**
- * Enhanced context with validated data and logger
+ * Enhanced context with validated data
  */
 export type HandlerContext<
   TEnv extends Env = ApiEnv,
@@ -105,12 +103,6 @@ export type HandlerContext<
     body: [TBody] extends [never] ? undefined : z.infer<TBody>;
     query: [TQuery] extends [never] ? undefined : z.infer<TQuery>;
     params: [TParams] extends [never] ? undefined : z.infer<TParams>;
-  };
-  logger: {
-    debug: (message: string, data?: LoggerData) => void;
-    info: (message: string, data?: LoggerData) => void;
-    warn: (message: string, data?: LoggerData) => void;
-    error: (message: string, error?: Error, data?: LoggerData) => void;
   };
   /**
    * Get authenticated user and session (use when auth: 'session')
@@ -163,47 +155,6 @@ export type BatchHandler<
 // ============================================================================
 
 /**
- * Create an enhanced logger for the operation
- */
-function createOperationLogger(c: Context, operation: string) {
-  const requestId = c.get('requestId') || 'unknown';
-  const userId = c.get('user')?.id || 'anonymous';
-
-  const baseContext = {
-    requestId,
-    userId,
-    method: c.req.method,
-    path: c.req.path,
-    operation,
-  };
-
-  return {
-    debug: (message: string, data?: LoggerData) => {
-      apiLogger.debug(`${operation}: ${message}`, { ...baseContext, ...data });
-    },
-    info: (message: string, data?: LoggerData) => {
-      apiLogger.info(`${operation}: ${message}`, { ...baseContext, ...data });
-    },
-    warn: (message: string, data?: LoggerData) => {
-      apiLogger.warn(`${operation}: ${message}`, { ...baseContext, ...data });
-    },
-    error: (message: string, error?: Error, data?: LoggerData) => {
-      apiLogger.error(`${operation}: ${message}`, {
-        ...baseContext,
-        error: error
-          ? {
-              name: error.name,
-              message: error.message,
-              stack: error.stack,
-            }
-          : undefined,
-        ...data,
-      });
-    },
-  };
-}
-
-/**
  * Apply authentication check based on mode
  * Properly implements authentication without incorrect middleware calls
  */
@@ -244,9 +195,8 @@ async function applyAuthentication(c: Context, authMode: AuthMode): Promise<void
           c.set('user', null);
         }
         c.set('requestId', c.req.header('x-request-id') || crypto.randomUUID());
-      } catch (error) {
-        // Log error but don't throw - allow unauthenticated requests
-        apiLogger.error('[Auth] Error retrieving session', error instanceof Error ? error : new Error(String(error)));
+      } catch {
+        // Allow unauthenticated requests
         c.set('session', null);
         c.set('user', null);
       }
@@ -392,24 +342,18 @@ export function createHandler<
   implementation: RegularHandler<TRoute, TEnv, TBody, TQuery, TParams>,
 ): RouteHandler<TRoute, TEnv> {
   const handler = async (c: Context<TEnv>) => {
-    const operationName = config.operationName || `${c.req.method} ${c.req.path}`;
-    const logger = createOperationLogger(c, operationName);
     const performance = createPerformanceTracker();
 
     // Set start time in context for response metadata
     (c as Context & { set: (key: string, value: unknown) => void }).set('startTime', performance.startTime);
 
-    logger.debug('Handler started');
-
     try {
       // Apply authentication
       if (config.auth && config.auth !== 'public') {
-        logger.debug('Applying authentication', { logType: 'auth', mode: config.auth });
         await applyAuthentication(c, config.auth);
       }
 
       // Validate request
-      logger.debug('Validating request');
       const validated = await validateRequest<TBody, TQuery, TParams>(c, config);
 
       // Create authenticated context helper
@@ -432,27 +376,14 @@ export function createHandler<
       // Create enhanced context
       const enhancedContext = Object.assign(c, {
         validated,
-        logger,
         auth: authFn,
       }) as HandlerContext<TEnv, TBody, TQuery, TParams>;
 
       // Execute handler implementation
-      logger.debug('Executing handler implementation');
       const result = await implementation(enhancedContext);
-
-      logger.info('Handler completed successfully');
 
       return result;
     } catch (error) {
-      // Don't log expected HTTP errors (404, 410) as ERROR level
-      // These are normal application flow errors (resource not found, gone), not system errors
-      const isExpectedHttpError = error instanceof HTTPException
-        && [404, 410].includes(error.status);
-
-      if (!isExpectedHttpError) {
-        logger.error('Handler failed', error as Error);
-      }
-
       if (error instanceof HTTPException) {
         // Handle validation errors with our unified system
         if (error.status === HttpStatusCodes.UNPROCESSABLE_ENTITY) {
@@ -496,12 +427,12 @@ export function createHandler<
             return Responses.externalServiceError(c, 'External Service', error.message);
           default:
             // For internal server errors and other unknown AppError codes
-            return Responses.internalServerError(c, error.message, operationName);
+            return Responses.internalServerError(c, error.message);
         }
       }
 
       // Convert other errors to internal server error
-      return Responses.internalServerError(c, 'Handler execution failed', operationName);
+      return Responses.internalServerError(c, 'Handler execution failed');
     }
   };
 
@@ -546,28 +477,18 @@ export function createHandlerWithBatch<
   implementation: BatchHandler<TRoute, TEnv, TBody, TQuery, TParams>,
 ): RouteHandler<TRoute, TEnv> {
   const handler = async (c: Context<TEnv>) => {
-    const operationName = config.operationName || `${c.req.method} ${c.req.path}`;
-    const logger = createOperationLogger(c, operationName);
     const performance = createPerformanceTracker();
 
     // Set start time in context for response metadata
     (c as Context & { set: (key: string, value: unknown) => void }).set('startTime', performance.startTime);
 
-    logger.debug('D1 batch handler started', {
-      logType: 'api' as const,
-      method: c.req.method as 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH',
-      path: c.req.path,
-    } as LoggerData);
-
     try {
       // Apply authentication
       if (config.auth && config.auth !== 'public') {
-        logger.debug('Applying authentication', { logType: 'auth', mode: config.auth });
         await applyAuthentication(c, config.auth);
       }
 
       // Validate request
-      logger.debug('Validating request');
       const validated = await validateRequest<TBody, TQuery, TParams>(c, config);
 
       // Create authenticated context helper
@@ -590,12 +511,10 @@ export function createHandlerWithBatch<
       // Create enhanced context
       const enhancedContext = Object.assign(c, {
         validated,
-        logger,
         auth: authFn,
       }) as HandlerContext<TEnv, TBody, TQuery, TParams>;
 
       // Execute implementation with D1 batch operations
-      logger.debug('Preparing D1 batch operations');
       const db = await getDbAsync();
 
       // D1 batch operations collector - follows D1 best practices
@@ -622,16 +541,9 @@ export function createHandlerWithBatch<
 
           statements.push(statement);
           batchMetrics.addedCount++;
-
-          logger.debug('Statement added to batch', {
-            logType: 'database' as const,
-            operation: 'batch' as const,
-            affected: statements.length,
-          } as LoggerData);
         },
         execute: async (): Promise<unknown[]> => {
           if (statements.length === 0) {
-            logger.debug('No statements to execute in batch');
             return [];
           }
 
@@ -646,41 +558,18 @@ export function createHandlerWithBatch<
             });
           }
 
-          logger.info('Executing D1 batch operation', {
-            logType: 'operation' as const,
-            operationName: 'D1Batch',
-            resource: `batch-${statements.length}`,
-          } as LoggerData);
-
-          const batchStartTime = performance.now();
-
           try {
             // ✅ ATOMIC BATCH: Using shared executeBatch helper
             // Following Drizzle ORM best practices with automatic D1/SQLite fallback
             // No type assertion needed - statements is already typed as BatchItem<'sqlite'>[]
             const results = await executeBatch(db, statements);
 
-            const batchDuration = performance.now() - batchStartTime;
-
-            logger.info('Batch executed successfully', {
-              logType: 'performance' as const,
-              duration: batchDuration,
-              dbQueries: statements.length,
-            } as LoggerData);
-
             // Clear statements after successful execution
             statements.length = 0;
 
             return results;
           } catch (error) {
-            const batchDuration = performance.now() - batchStartTime;
-
             // All operations automatically rolled back by D1
-            logger.error('D1 batch execution failed - all operations rolled back', error as Error, {
-              logType: 'database' as const,
-              operation: 'batch' as const,
-              affected: statements.length,
-            } as LoggerData);
 
             // Enhance error with batch context
             if (error instanceof Error) {
@@ -690,7 +579,6 @@ export function createHandlerWithBatch<
                 statusCode: HttpStatusCodes.INTERNAL_SERVER_ERROR,
                 details: {
                   statementCount: statements.length,
-                  duration: batchDuration,
                   originalError: error.message,
                 },
               });
@@ -705,21 +593,8 @@ export function createHandlerWithBatch<
       // Execute the handler implementation
       const result = await implementation(enhancedContext, batchContext);
 
-      const duration = performance.getDuration();
-      logger.info('D1 batch handler completed successfully', {
-        logType: 'performance' as const,
-        duration,
-        marks: performance.getMarks(),
-      } as LoggerData);
-
       return result;
     } catch (error) {
-      const duration = performance.getDuration();
-      logger.error('D1 batch handler failed', error as Error, {
-        logType: 'performance' as const,
-        duration,
-      } as LoggerData);
-
       // Handle validation errors
       if (error instanceof HTTPException) {
         if (error.status === HttpStatusCodes.UNPROCESSABLE_ENTITY) {
@@ -781,7 +656,7 @@ export function createHandlerWithBatch<
       }
 
       // Generic error fallback
-      return Responses.internalServerError(c, 'An unexpected error occurred', operationName);
+      return Responses.internalServerError(c, 'An unexpected error occurred');
     }
   };
 
@@ -793,50 +668,36 @@ export function createHandlerWithBatch<
 // ============================================================================
 
 /**
- * Handler-specific response helpers with integrated logging
+ * Handler-specific response helpers
  */
 export const HandlerResponses = {
   /**
-   * Success response with automatic logging
+   * Success response
    */
-  success: <T>(c: HandlerContext, data: T, logMessage?: string) => {
-    if (logMessage) {
-      c.logger.info(logMessage, { logType: 'api', method: c.req.method as 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH', path: c.req.path });
-    }
+  success: <T>(c: HandlerContext, data: T) => {
     return Responses.ok(c, data);
   },
 
   /**
-   * Created response with automatic logging
+   * Created response
    */
-  created: <T>(c: HandlerContext, data: T, logMessage?: string) => {
-    if (logMessage) {
-      c.logger.info(logMessage, { logType: 'api', method: c.req.method as 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH', path: c.req.path });
-    }
+  created: <T>(c: HandlerContext, data: T) => {
     return Responses.created(c, data);
   },
 
   /**
-   * Page-based paginated response with automatic logging
+   * Page-based paginated response
    */
   paginated: <T>(
     c: HandlerContext,
     items: T[],
     pagination: { page: number; limit: number; total: number },
-    logMessage?: string,
   ) => {
-    if (logMessage) {
-      c.logger.info(logMessage, {
-        logType: 'api',
-        method: c.req.method as 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH',
-        path: c.req.path,
-      });
-    }
     return Responses.paginated(c, items, pagination);
   },
 
   /**
-   * Cursor-based paginated response with automatic logging
+   * Cursor-based paginated response
    * Optimized for infinite scroll and React Query
    */
   cursorPaginated: <T>(
@@ -847,28 +708,14 @@ export const HandlerResponses = {
       hasMore: boolean;
       count: number;
     },
-    logMessage?: string,
   ) => {
-    if (logMessage) {
-      c.logger.info(logMessage, {
-        logType: 'api',
-        method: c.req.method as 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH',
-        path: c.req.path,
-      });
-    }
     return Responses.cursorPaginated(c, items, pagination);
   },
 
   /**
-   * Error response with automatic logging
+   * Error response
    */
-  error: (c: HandlerContext, message: string, status = 400) => {
-    c.logger.warn('Returning error response', {
-      logType: 'api',
-      method: c.req.method as 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH',
-      path: c.req.path,
-      statusCode: status,
-    });
+  error: (c: HandlerContext, message: string) => {
     return Responses.badRequest(c, message);
   },
 } as const;

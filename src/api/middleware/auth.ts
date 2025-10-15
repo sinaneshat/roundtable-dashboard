@@ -5,7 +5,6 @@ import * as HttpStatusCodes from 'stoker/http-status-codes';
 import type { z } from 'zod';
 
 import { mapStatusCode } from '@/api/core/http-exceptions';
-import { apiLogger } from '@/api/middleware/hono-logger';
 import type { ApiEnv } from '@/api/types';
 import type { sessionSelectSchema, userSelectSchema } from '@/db/validation/auth';
 import { auth } from '@/lib/auth/server';
@@ -67,15 +66,9 @@ export const attachSession = createMiddleware<ApiEnv>(async (c, next) => {
   try {
     // Use shared helper to authenticate session
     await authenticateSession(c);
-  } catch (error) {
+  } catch {
     // Log error but don't throw - allow unauthenticated requests to proceed
     // Provide more specific error context for debugging
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    if (errorMessage.includes('Invalid Base64') || errorMessage.includes('JWT')) {
-      apiLogger.warn('Session cookie format issue - likely expired or malformed session', { sessionError: errorMessage });
-    } else {
-      apiLogger.apiError(c, 'Error retrieving Better Auth session', error);
-    }
     c.set('session', null);
     c.set('user', null);
   }
@@ -113,7 +106,6 @@ export const requireSession = createMiddleware<ApiEnv>(async (c, next) => {
     }
 
     // Handle unexpected authentication errors gracefully
-    apiLogger.error('[Auth Middleware] Unexpected Better Auth error', e instanceof Error ? e : new Error(String(e)));
     const res = new Response(JSON.stringify({
       code: HttpStatusCodes.UNAUTHORIZED,
       message: 'Authentication failed',
@@ -140,14 +132,8 @@ export const requireOptionalSession = createMiddleware<ApiEnv>(async (c, next) =
   try {
     // Use shared helper to authenticate session (same as attachSession)
     await authenticateSession(c);
-  } catch (error) {
+  } catch {
     // Log error but don't throw - allow unauthenticated requests to proceed
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    if (errorMessage.includes('Invalid Base64') || errorMessage.includes('JWT')) {
-      apiLogger.warn('Session cookie format issue - likely expired or malformed session', { sessionError: errorMessage });
-    } else {
-      apiLogger.apiError(c, 'Error retrieving Better Auth session', error);
-    }
     c.set('session', null);
     c.set('user', null);
   }

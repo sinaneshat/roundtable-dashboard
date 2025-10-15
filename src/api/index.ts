@@ -75,6 +75,7 @@ import {
 // Chat routes
 import {
   addParticipantHandler,
+  analyzeRoundHandler,
   createCustomRoleHandler,
   createThreadHandler,
   deleteCustomRoleHandler,
@@ -96,6 +97,7 @@ import {
 } from './routes/chat/handler';
 import {
   addParticipantRoute,
+  analyzeRoundRoute,
   createCustomRoleRoute,
   createThreadRoute,
   deleteCustomRoleRoute,
@@ -371,6 +373,7 @@ const appRoutes = app
   .openapi(deleteCustomRoleRoute, deleteCustomRoleHandler) // Delete custom role template
   // Moderator Analysis (protected, backend-triggered only)
   .openapi(getThreadAnalysesRoute, getThreadAnalysesHandler) // Get persisted moderator analyses (read-only)
+  .openapi(analyzeRoundRoute, analyzeRoundHandler) // Stream moderator analysis for a round
 
   // ============================================================================
   // Usage Routes - Usage tracking and quota management (protected)

@@ -6,6 +6,7 @@ import {
   createCursorPaginatedResponseSchema,
   CursorPaginationQuerySchema,
 } from '@/api/core/schemas';
+import { userSelectSchema } from '@/db/validation/auth';
 import {
   chatCustomRoleInsertSchema,
   chatCustomRoleSelectSchema,
@@ -53,38 +54,10 @@ export type ThreadMode = z.infer<typeof ThreadModeSchema>;
 // Path Parameter Schemas
 // ============================================================================
 
-export const ThreadIdParamSchema = z.object({
-  id: CoreSchemas.id().openapi({
-    description: 'Chat thread ID',
-    example: 'thread_abc123',
-  }),
-});
-
-export const ParticipantIdParamSchema = z.object({
-  id: CoreSchemas.id().openapi({
-    description: 'Chat participant ID',
-    example: 'participant_abc123',
-  }),
-});
-
-export const MessageIdParamSchema = z.object({
-  id: CoreSchemas.id().openapi({
-    description: 'Chat message ID',
-    example: 'msg_abc123',
-  }),
-});
-
 export const ThreadSlugParamSchema = z.object({
   slug: z.string().openapi({
     description: 'Thread slug for public access',
     example: 'product-strategy-brainstorm-abc123',
-  }),
-});
-
-export const CustomRoleIdParamSchema = z.object({
-  id: CoreSchemas.id().openapi({
-    description: 'Custom role ID',
-    example: 'role_abc123',
   }),
 });
 
@@ -104,17 +77,23 @@ export const RoundAnalysisParamSchema = z.object({
 // ============================================================================
 
 /**
+ * ✅ SHARED: Participant settings schema
+ * Reusable schema for AI model configuration settings
+ */
+export const ParticipantSettingsSchema = z.object({
+  temperature: z.number().min(0).max(2).optional(),
+  maxTokens: z.number().int().positive().optional(),
+  systemPrompt: z.string().optional(),
+}).passthrough().nullable().optional();
+
+/**
  * ✅ REUSE: Chat participant schema from database validation
  * Extended with OpenAPI metadata
  * NO TRANSFORMS: Handler serializes dates, schema only validates
  */
 const ChatParticipantSchema = chatParticipantSelectSchema
   .extend({
-    settings: z.object({
-      temperature: z.number().min(0).max(2).optional(),
-      maxTokens: z.number().int().positive().optional(),
-      systemPrompt: z.string().optional(),
-    }).passthrough().nullable().optional(),
+    settings: ParticipantSettingsSchema,
   })
   .openapi('ChatParticipant');
 
@@ -229,7 +208,7 @@ export const CreateThreadRequestSchema = chatThreadInsertSchema
       example: 'brainstorming',
     }),
     participants: z.array(z.object({
-      modelId: z.string().min(1, 'Model ID is required').openapi({
+      modelId: CoreSchemas.id().openapi({
         description: 'Model ID (e.g., anthropic/claude-3.5-sonnet, openai/gpt-4o)',
         example: 'anthropic/claude-3.5-sonnet',
       }),
@@ -237,7 +216,7 @@ export const CreateThreadRequestSchema = chatThreadInsertSchema
         description: 'Optional assigned role for this model (immutable)',
         example: 'The Ideator',
       }),
-      customRoleId: z.string().nullish().openapi({
+      customRoleId: CoreSchemas.id().nullish().openapi({
         description: 'Optional custom role ID to load system prompt from',
         example: '01HXYZ123ABC',
       }),
@@ -286,20 +265,30 @@ export const ThreadListQuerySchema = CursorPaginationQuerySchema.extend({
 
 /**
  * Thread detail with participants, messages, and changelog
+ * ✅ REUSE: Uses userSelectSchema for thread owner info (safe public fields only)
  */
 const ThreadDetailPayloadSchema = z.object({
   thread: ChatThreadSchema,
   participants: z.array(ChatParticipantSchema),
   messages: z.array(ChatMessageSchema),
   changelog: z.array(ChatThreadChangelogSchema),
-  user: z.object({
-    name: z.string(),
-    image: z.string().nullable(),
+  user: userSelectSchema.pick({
+    id: true,
+    name: true,
+    image: true,
   }),
 }).openapi('ThreadDetailPayload');
 
 export const ThreadListResponseSchema = createCursorPaginatedResponseSchema(ChatThreadSchema).openapi('ThreadListResponse');
 export const ThreadDetailResponseSchema = createApiResponseSchema(ThreadDetailPayloadSchema).openapi('ThreadDetailResponse');
+
+/**
+ * Delete thread response schema
+ * Returns confirmation of thread deletion
+ */
+export const DeleteThreadResponseSchema = createApiResponseSchema(z.object({
+  deleted: z.boolean().openapi({ example: true }),
+})).openapi('DeleteThreadResponse');
 
 // ============================================================================
 // Participant Request/Response Schemas
@@ -346,29 +335,70 @@ export const ParticipantDetailResponseSchema = createApiResponseSchema(Participa
 // ============================================================================
 
 /**
- * ✅ AI SDK v5 Streaming Request - OFFICIAL PATTERN
- * Following https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot
+ * ✅ OFFICIAL AI SDK v5 STREAMING REQUEST SCHEMA
+ * Reference: https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot
  *
- * AI SDK uses runtime validation with validateUIMessages(), not compile-time schemas.
- * We accept messages as unknown and validate with AI SDK's validateUIMessages() in the handler.
+ * Matches official docs EXACTLY with minimal extension for multi-participant support.
+ *
+ * ## Official Pattern:
+ * ```typescript
+ * const { messages, model, webSearch }: {
+ *   messages: UIMessage[];
+ *   model?: string;
+ *   webSearch?: boolean;
+ * } = await req.json();
+ * ```
+ *
+ * ## Why `z.array(z.unknown())`?
+ * AI SDK recommends runtime validation with `validateUIMessages()` because
+ * UIMessage types are complex generics that Zod cannot represent.
+ *
+ * ## Multi-Participant Extension:
+ * Added `id` (thread ID) and `participantIndex` to support sequential streaming
+ * of multiple AI participants per user message. Frontend orchestrates rounds.
  */
 export const StreamChatRequestSchema = z.object({
-  messages: z.array(z.unknown()).min(1).openapi({
-    description: 'All conversation messages in AI SDK UIMessage format (validated at runtime)',
+  /**
+   * ✅ OFFICIAL PATTERN: Single new message (UIMessage)
+   * Reference: https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot-message-persistence#sending-only-the-last-message
+   *
+   * Backend loads previous messages from database and appends this new message.
+   * Runtime validated with validateUIMessages() in handler.
+   *
+   * Why z.unknown()? UIMessage<METADATA, DATA, TOOLS> is a complex generic
+   * type that Zod cannot accurately represent. Official AI SDK docs recommend
+   * z.unknown() + runtime validation.
+   */
+  message: z.unknown().openapi({
+    description: 'New message in AI SDK UIMessage format (backend loads previous messages from DB)',
+    example: {
+      id: 'msg_abc123',
+      role: 'user',
+      parts: [
+        { type: 'text', text: 'Hello, how are you?' },
+      ],
+    },
   }),
-  mode: ThreadModeSchema.optional().openapi({
-    description: 'Updated conversation mode',
+
+  /**
+   * ✅ OFFICIAL PATTERN: Chat/Thread ID
+   * Reference: https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot-message-persistence
+   *
+   * The ID of the chat/thread to load previous messages from.
+   * Backend uses this to load message history from database.
+   */
+  id: z.string().openapi({
+    description: 'Chat/thread ID to load conversation history',
+    example: 'thread_abc123',
   }),
-  participants: z.array(z.object({
-    modelId: z.string(),
-    role: z.string().nullish(),
-    customRoleId: z.string().nullish(),
-    order: z.number().int().nonnegative(),
-  })).optional().openapi({
-    description: 'Updated participant configuration',
-  }),
-  participantIndex: z.number().int().nonnegative().optional().openapi({
-    description: 'Which participant to stream in this request (0-based). Omit when only updating configuration without streaming.',
+
+  /**
+   * ✅ EXTENSION: Which participant should respond (0-based index)
+   * Enables multi-participant "roundtable" feature using official AI SDK patterns.
+   * Frontend calls endpoint N times sequentially (once per participant).
+   */
+  participantIndex: z.number().int().nonnegative().openapi({
+    description: 'Which participant (0-based index) should respond to this message',
     example: 0,
   }),
 }).openapi('StreamChatRequest');
@@ -463,15 +493,22 @@ export type CreateChangelogParams = z.infer<typeof CreateChangelogParamsSchema>;
 
 /**
  * Participant info schema for roundtable prompt building
- * ✅ SINGLE SOURCE: Used by roundtable-prompt.service.ts
+ * ✅ REUSE: Derives from chatParticipantSelectSchema with computed modelName
+ * Used by roundtable-prompt.service.ts
  */
-export const ParticipantInfoSchema = z.object({
-  id: CoreSchemas.id(),
-  modelId: z.string(),
-  modelName: z.string().optional(),
-  role: z.string().nullable(),
-  priority: z.number().int().nonnegative(),
-}).openapi('ParticipantInfo');
+export const ParticipantInfoSchema = chatParticipantSelectSchema
+  .pick({
+    id: true,
+    modelId: true,
+    role: true,
+    priority: true,
+  })
+  .extend({
+    modelName: z.string().optional().openapi({
+      description: 'Human-readable model name (computed from model lookup)',
+    }),
+  })
+  .openapi('ParticipantInfo');
 
 export type ParticipantInfo = z.infer<typeof ParticipantInfoSchema>;
 
@@ -514,7 +551,7 @@ export const ModeratorAnalysisRequestSchema = z.object({
 /**
  * Individual skill rating for skills matrix visualization
  */
-const SkillRatingSchema = z.object({
+export const SkillRatingSchema = z.object({
   skillName: z.string().openapi({
     description: 'Name of the skill being evaluated',
     example: 'Creativity',
@@ -528,7 +565,7 @@ const SkillRatingSchema = z.object({
 /**
  * Complete analysis for a single participant's response
  */
-const ParticipantAnalysisSchema = z.object({
+export const ParticipantAnalysisSchema = z.object({
   participantIndex: z.number().int().min(0).openapi({
     description: 'Index of the participant in the conversation (0-based)',
     example: 0,
@@ -569,7 +606,7 @@ const ParticipantAnalysisSchema = z.object({
 /**
  * Leaderboard entry for ranking participants
  */
-const LeaderboardEntrySchema = z.object({
+export const LeaderboardEntrySchema = z.object({
   rank: z.number().int().min(1).openapi({
     description: 'Rank position (1 = best)',
     example: 1,

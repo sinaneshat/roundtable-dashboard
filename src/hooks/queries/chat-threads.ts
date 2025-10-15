@@ -67,19 +67,17 @@ export function useThreadsQuery(search?: string) {
  * Protected endpoint - requires authentication
  *
  * @param threadId - Thread ID
- * @param enabled - Optional control over whether to fetch (default: true when threadId exists)
- *
- * Stale time: 10 seconds (thread details should be fresh for active conversations)
+ * @param enabled - Optional control over whether to fetch (default: based on threadId and auth)
  */
-export function useThreadQuery(threadId: string | null | undefined, enabled = true) {
+export function useThreadQuery(threadId: string, enabled?: boolean) {
   const { data: session, isPending } = useSession();
   const isAuthenticated = !isPending && !!session?.user?.id;
 
   return useQuery({
-    queryKey: queryKeys.threads.detail(threadId || ''),
-    queryFn: () => getThreadService(threadId!),
+    queryKey: queryKeys.threads.detail(threadId),
+    queryFn: () => getThreadService({ param: { id: threadId } }),
     staleTime: STALE_TIMES.threadDetail, // 10 seconds - match server-side prefetch
-    enabled: isAuthenticated && !!threadId && enabled, // Only fetch when authenticated and threadId exists
+    enabled: enabled !== undefined ? enabled : (isAuthenticated && !!threadId),
     retry: false,
     throwOnError: false,
   });
@@ -91,151 +89,97 @@ export function useThreadQuery(threadId: string | null | undefined, enabled = tr
  * Public endpoint - no authentication required
  *
  * @param slug - Thread slug
- * @param enabled - Optional control over whether to fetch (default: true when slug exists)
- *
- * Stale time: 1 minute (public threads change less frequently)
+ * @param enabled - Optional control over whether to fetch (default: based on slug)
  */
-export function usePublicThreadQuery(slug: string | null | undefined, enabled = true) {
+export function usePublicThreadQuery(slug: string, enabled?: boolean) {
   return useQuery({
-    queryKey: queryKeys.threads.public(slug || ''),
-    queryFn: () => getPublicThreadService(slug!),
-    staleTime: STALE_TIMES.publicThread, // 5 minutes - MUST match server-side prefetch!
-    enabled: !!slug && enabled, // Only fetch when slug exists
+    queryKey: queryKeys.threads.public(slug),
+    queryFn: () => getPublicThreadService({ param: { slug } }),
+    staleTime: STALE_TIMES.publicThreadDetail, // 1 minute - match server-side prefetch
+    enabled: enabled !== undefined ? enabled : !!slug,
     retry: false,
-    throwOnError: false,
   });
 }
 
 /**
  * Hook to fetch a thread by slug for authenticated user
- * Returns thread details including all participants and messages
- * Protected endpoint - requires authentication and ownership
+ * Protected endpoint - requires authentication
  *
  * @param slug - Thread slug
- * @param enabled - Optional control over whether to fetch (default: true when slug exists)
- *
- * Cache strategy:
- * - staleTime: 10 seconds (fresh enough for active conversations, prevents excessive refetching)
- * - gcTime: 5 minutes (keep for back/forward navigation)
- * - refetchOnWindowFocus: false (prevent flashing during navigation)
- * - refetchOnMount: false (rely on staleTime for refetch logic)
+ * @param enabled - Optional control over whether to fetch (default: based on slug and auth)
  */
-export function useThreadBySlugQuery(slug: string | null | undefined, enabled = true) {
+export function useThreadBySlugQuery(slug: string, enabled?: boolean) {
   const { data: session, isPending } = useSession();
   const isAuthenticated = !isPending && !!session?.user?.id;
 
   return useQuery({
-    queryKey: queryKeys.threads.bySlug(slug || ''),
-    queryFn: () => getThreadBySlugService(slug!),
-    staleTime: STALE_TIMES.threadDetail, // 10 seconds - prevents excessive refetching while staying fresh
-    gcTime: 5 * 60 * 1000, // Keep in cache for 5 minutes for back/forward navigation
-    refetchOnWindowFocus: false, // Don't refetch on window focus - prevents flashing during navigation
-    refetchOnMount: false, // Don't refetch on component mount - rely on staleTime
-    enabled: isAuthenticated && !!slug && enabled, // Only fetch when authenticated and slug exists
+    queryKey: queryKeys.threads.bySlug(slug),
+    queryFn: () => getThreadBySlugService({ param: { slug } }),
+    staleTime: STALE_TIMES.threadDetail, // 10 seconds
+    enabled: enabled !== undefined ? enabled : (isAuthenticated && !!slug),
     retry: false,
-    throwOnError: false,
   });
 }
 
 /**
- * Hook to fetch messages for a thread
- * Returns all messages ordered by creation time
- * Protected endpoint - requires authentication and ownership
+ * Hook to fetch thread messages
+ * Returns all messages for a thread ordered by creation time
+ * Protected endpoint - requires authentication
  *
  * @param threadId - Thread ID
- * @param enabled - Optional control over whether to fetch (default: true when threadId exists)
- *
- * Stale time: 10 seconds (messages should be fresh for active conversations)
+ * @param enabled - Optional control over whether to fetch (default: based on threadId and auth)
  */
-export function useThreadMessagesQuery(threadId: string | null | undefined, enabled = true) {
+export function useThreadMessagesQuery(threadId: string, enabled?: boolean) {
   const { data: session, isPending } = useSession();
   const isAuthenticated = !isPending && !!session?.user?.id;
 
   return useQuery({
-    queryKey: queryKeys.threads.messages(threadId || ''),
-    queryFn: () => getThreadMessagesService(threadId!),
-    staleTime: STALE_TIMES.messages, // 10 seconds - match server-side prefetch
-    enabled: isAuthenticated && !!threadId && enabled, // Only fetch when authenticated and threadId exists
+    queryKey: queryKeys.threads.messages(threadId),
+    queryFn: () => getThreadMessagesService({ param: { id: threadId } }),
+    staleTime: STALE_TIMES.threadMessages, // 5 seconds
+    enabled: enabled !== undefined ? enabled : (isAuthenticated && !!threadId),
     retry: false,
-    throwOnError: false,
   });
 }
 
 /**
- * Hook to fetch configuration changelog for a thread
- * Protected endpoint - requires authentication and ownership
+ * Hook to fetch thread configuration changelog
+ * Returns configuration changes ordered by creation time (newest first)
+ * Protected endpoint - requires authentication
  *
  * @param threadId - Thread ID
- * @param enabled - Optional control over whether to fetch (default: true when threadId exists)
- *
- * Cache strategy:
- * - staleTime: 30 seconds (changelog updates less frequently than messages)
- * - refetchOnWindowFocus: false (prevent unnecessary refetches)
- * - refetchOnMount: false (rely on staleTime for refetch logic)
+ * @param enabled - Optional control over whether to fetch (default: based on threadId and auth)
  */
-export function useThreadChangelogQuery(threadId: string | null | undefined, enabled = true) {
+export function useThreadChangelogQuery(threadId: string, enabled?: boolean) {
   const { data: session, isPending } = useSession();
   const isAuthenticated = !isPending && !!session?.user?.id;
 
   return useQuery({
-    queryKey: queryKeys.threads.changelog(threadId || ''),
-    queryFn: () => getThreadChangelogService(threadId!),
-    staleTime: STALE_TIMES.changelog, // 30 seconds - match server-side prefetch
-    refetchOnWindowFocus: false, // Don't refetch on window focus - prevents excessive network calls
-    refetchOnMount: false, // Don't refetch on component mount - rely on staleTime
-    enabled: isAuthenticated && !!threadId && enabled, // Only fetch when authenticated and threadId exists
+    queryKey: queryKeys.threads.changelog(threadId),
+    queryFn: () => getThreadChangelogService({ param: { id: threadId } }),
+    staleTime: STALE_TIMES.threadChangelog, // 30 seconds
+    enabled: enabled !== undefined ? enabled : (isAuthenticated && !!threadId),
     retry: false,
-    throwOnError: false,
   });
 }
 
 /**
- * Hook to fetch moderator analyses for a thread
- * Protected endpoint - requires authentication and ownership
+ * Hook to fetch thread moderator analyses
+ * Returns all moderator analyses ordered by round number
+ * Protected endpoint - requires authentication
  *
  * @param threadId - Thread ID
- * @param enabled - Optional control over whether to fetch (default: true when threadId exists)
- *
- * Cache strategy:
- * - Polls only when analyses are pending/streaming
- * - Stops polling when all analyses are completed or failed
- * - Refetches on window focus to pick up new analyses
+ * @param enabled - Optional control over whether to fetch (default: based on threadId and auth)
  */
-export function useThreadAnalysesQuery(
-  threadId: string | null | undefined,
-  enabled = true,
-) {
+export function useThreadAnalysesQuery(threadId: string, enabled?: boolean) {
   const { data: session, isPending } = useSession();
   const isAuthenticated = !isPending && !!session?.user?.id;
 
   return useQuery({
-    queryKey: queryKeys.threads.analyses(threadId || ''),
-    queryFn: () => getThreadAnalysesService(threadId!),
-    staleTime: STALE_TIMES.changelog, // 30 seconds - match changelog pattern
-    // ✅ SMART POLLING: Only poll when analyses are in progress
-    // Stops automatically when all analyses reach terminal state (completed/failed)
-    refetchInterval: (query) => {
-      const data = query.state.data;
-      if (!data || !('success' in data) || !data.success) {
-        return false; // Stop polling on error
-      }
-
-      const analyses = data.data?.items || [];
-      if (analyses.length === 0) {
-        return 10000; // Keep polling if no analyses yet (backend might create one)
-      }
-
-      // Check if any analysis is still pending or streaming
-      const hasInProgress = analyses.some(
-        a => a.status === 'pending' || a.status === 'streaming',
-      );
-
-      return hasInProgress ? 10000 : false; // Poll every 10s if in progress, stop if all complete
-    },
-    refetchOnWindowFocus: true, // Refetch when user returns to check for new analyses
-    refetchOnMount: true, // Fetch fresh data on mount
-    enabled: isAuthenticated && !!threadId && enabled,
+    queryKey: queryKeys.threads.analyses(threadId),
+    queryFn: () => getThreadAnalysesService({ param: { id: threadId } }),
+    staleTime: STALE_TIMES.threadAnalyses, // 1 minute
+    enabled: enabled !== undefined ? enabled : (isAuthenticated && !!threadId),
     retry: false,
-    throwOnError: false,
   });
 }

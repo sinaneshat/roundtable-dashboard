@@ -10,26 +10,29 @@ import type { ModeratorAnalysisPayloadSchema } from '@/api/routes/chat/schema';
 import type { ChatModeId } from '@/lib/config/chat-modes';
 import { extractModelName } from '@/lib/utils/ai-display';
 
-// Internal schemas with .describe() for AI SDK streamObject()
-// Route schemas in @/api/routes/chat/schema.ts have OpenAPI metadata but AI SDK needs .describe()
-const SkillRatingSchema = z.object({
+/**
+ * AI SDK wrappers for base schemas with .describe() metadata
+ * Base schemas from @/api/routes/chat/schema.ts use .openapi() for API docs
+ * AI SDK streamObject() requires .describe() for proper field-level guidance
+ */
+const AISkillRatingSchema = z.object({
   skillName: z.string().describe('Name of the skill being evaluated (e.g., "Creativity", "Technical Depth", "Clarity")'),
   rating: z.number().min(1).max(10).describe('Rating out of 10 for this specific skill'),
 });
 
-const ParticipantAnalysisSchema = z.object({
+const AIParticipantAnalysisSchema = z.object({
   participantIndex: z.number().int().min(0).describe('Index of the participant in the conversation (0-based)'),
   participantRole: z.string().nullable().describe('The role assigned to this participant (e.g., "The Ideator")'),
   modelId: z.string().describe('AI model ID (e.g., "anthropic/claude-sonnet-4.5")'),
   modelName: z.string().describe('Human-readable model name (e.g., "Claude Sonnet 4.5")'),
   overallRating: z.number().min(1).max(10).describe('Overall rating out of 10 for this response'),
-  skillsMatrix: z.array(SkillRatingSchema).describe('Individual skill ratings for visualization'),
+  skillsMatrix: z.array(AISkillRatingSchema).describe('Individual skill ratings for visualization'),
   pros: z.array(z.string()).min(1).describe('List of strengths in this response (2-4 items)'),
   cons: z.array(z.string()).min(1).describe('List of weaknesses or areas for improvement (1-3 items)'),
   summary: z.string().min(20).max(300).describe('Brief summary of this participant\'s contribution (1-2 sentences)'),
 });
 
-const LeaderboardEntrySchema = z.object({
+const AILeaderboardEntrySchema = z.object({
   rank: z.number().int().min(1).describe('Rank position (1 = best)'),
   participantIndex: z.number().int().min(0).describe('Index of the participant'),
   participantRole: z.string().nullable().describe('The role assigned to this participant'),
@@ -43,8 +46,8 @@ export const ModeratorAnalysisSchema = z.object({
   roundNumber: z.number().int().min(1).describe('The conversation round number (starts at 1)'),
   mode: z.string().describe('Conversation mode (analyzing, brainstorming, debating, solving)'),
   userQuestion: z.string().describe('The user\'s original question/prompt'),
-  participantAnalyses: z.array(ParticipantAnalysisSchema).min(1).describe('Detailed analysis for each participant'),
-  leaderboard: z.array(LeaderboardEntrySchema).min(1).describe('Ranked list of participants by overall performance'),
+  participantAnalyses: z.array(AIParticipantAnalysisSchema).min(1).describe('Detailed analysis for each participant'),
+  leaderboard: z.array(AILeaderboardEntrySchema).min(1).describe('Ranked list of participants by overall performance'),
   overallSummary: z.string().min(100).max(800).describe('Comprehensive summary of the round, highlighting key insights and comparing approaches'),
   conclusion: z.string().min(50).max(400).describe('Final conclusion and recommendation on the best path forward'),
 });
@@ -67,6 +70,43 @@ export type ModeratorPromptConfig = {
   }>;
 };
 
+/**
+ * Builds structured system prompt for AI moderator analysis of roundtable discussions.
+ *
+ * ✅ AI SDK BEST PRACTICE: System prompt defines moderator's analytical framework
+ * ✅ STRUCTURED OUTPUT: Designed for use with AI SDK's streamObject() pattern
+ *
+ * This function creates a comprehensive moderator prompt that defines:
+ * - Mode-specific rating criteria (analyzing, brainstorming, debating, solving)
+ * - Analysis guidelines and objectivity standards
+ * - Structured output format for consistent evaluations
+ * - Badge/award criteria for exceptional performance
+ *
+ * The generated prompt is used with AI SDK's streamObject() to produce structured
+ * analysis conforming to ModeratorAnalysisSchema.
+ *
+ * @param config - Moderator configuration with mode, participants, and responses
+ * @returns Formatted system prompt for AI SDK streamObject({ prompt })
+ *
+ * @example
+ * ```typescript
+ * const systemPrompt = buildModeratorSystemPrompt({
+ *   mode: 'analyzing',
+ *   roundNumber: 1,
+ *   userQuestion: 'What are the benefits of AI?',
+ *   participantResponses: [...],
+ * });
+ *
+ * const result = streamObject({
+ *   model: openai('gpt-4o'),
+ *   schema: ModeratorAnalysisSchema,
+ *   prompt: systemPrompt,
+ * });
+ * ```
+ *
+ * @see ModeratorAnalysisSchema Zod schema for structured output
+ * @see https://v4.ai-sdk.dev/docs/ai-sdk-core/generating-structured-data Official AI SDK streamObject docs
+ */
 export function buildModeratorSystemPrompt(config: ModeratorPromptConfig): string {
   const { mode } = config;
 
@@ -202,6 +242,38 @@ export function buildModeratorSystemPrompt(config: ModeratorPromptConfig): strin
   return sections.join('\n');
 }
 
+/**
+ * Builds the user-facing prompt containing participant responses for moderator analysis.
+ *
+ * ✅ AI SDK PATTERN: Separates system instructions from dynamic content
+ * ✅ STRUCTURED INPUT: Provides clear context for AI SDK's streamObject()
+ *
+ * This function creates a structured user prompt that includes:
+ * - Round number and discussion mode
+ * - Original user question
+ * - All participant responses with their roles and models
+ *
+ * Used in conjunction with buildModeratorSystemPrompt() to provide complete
+ * context for AI-powered moderator analysis.
+ *
+ * @param config - Moderator configuration with participant responses
+ * @returns Formatted user prompt containing all response data for analysis
+ *
+ * @example
+ * ```typescript
+ * const systemPrompt = buildModeratorSystemPrompt(config);
+ * const userPrompt = buildModeratorUserPrompt(config);
+ *
+ * const result = streamObject({
+ *   model: openai('gpt-4o'),
+ *   schema: ModeratorAnalysisSchema,
+ *   prompt: `${systemPrompt}\n\n${userPrompt}`,
+ * });
+ * ```
+ *
+ * @see buildModeratorSystemPrompt For analysis framework definition
+ * @see ModeratorAnalysisSchema Expected output structure
+ */
 export function buildModeratorUserPrompt(config: ModeratorPromptConfig): string {
   const {
     roundNumber,

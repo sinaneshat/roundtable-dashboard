@@ -1,8 +1,6 @@
 import type { RouteHandler } from '@hono/zod-openapi';
 
-import { normalizeError } from '@/api/common/error-handling';
 import { createHandler, Responses } from '@/api/core';
-import { apiLogger } from '@/api/middleware/hono-logger';
 import type { ApiEnv } from '@/api/types';
 import { getDbAsync } from '@/db';
 
@@ -18,17 +16,6 @@ export const healthHandler: RouteHandler<typeof healthRoute, ApiEnv> = createHan
     operationName: 'healthCheck',
   },
   async (c) => {
-    c.logger.info('Basic health check requested', {
-      logType: 'operation',
-      operationName: 'healthCheck',
-    });
-
-    c.logger.info('Basic health check completed successfully', {
-      logType: 'operation',
-      operationName: 'healthCheck',
-      resource: 'healthy',
-    });
-
     return Responses.health(c, 'healthy');
   },
 );
@@ -43,18 +30,13 @@ export const detailedHealthHandler: RouteHandler<typeof detailedHealthRoute, Api
     operationName: 'detailedHealthCheck',
   },
   async (c) => {
-    c.logger.info('Starting detailed health check', {
-      logType: 'operation',
-      operationName: 'detailedHealthCheck',
-    });
-
     const startTime = Date.now();
 
     // Check database connectivity
-    const dbCheck = await checkDatabase(c);
+    const dbCheck = await checkDatabase({ env: c.env });
 
     // Check environment configuration
-    const envCheck = checkEnvironment(c);
+    const envCheck = checkEnvironment({ env: c.env });
 
     // Build dependencies object
     const dependencies = {
@@ -71,13 +53,6 @@ export const detailedHealthHandler: RouteHandler<typeof detailedHealthRoute, Api
 
     const duration = Date.now() - startTime;
 
-    c.logger.info('Detailed health check completed', {
-      logType: 'operation',
-      operationName: 'detailedHealthCheck',
-      resource: `status-${overallStatus}`,
-      duration,
-    });
-
     return Responses.detailedHealth(c, overallStatus, dependencies, duration);
   },
 );
@@ -85,7 +60,11 @@ export const detailedHealthHandler: RouteHandler<typeof detailedHealthRoute, Api
 /**
  * Check database connectivity
  */
-async function checkDatabase(_c: { env: ApiEnv['Bindings'] }) {
+type HealthCheckContext = {
+  env: ApiEnv['Bindings'];
+};
+
+async function checkDatabase(_c: HealthCheckContext) {
   const startTime = Date.now();
 
   try {
@@ -99,7 +78,6 @@ async function checkDatabase(_c: { env: ApiEnv['Bindings'] }) {
       duration: Date.now() - startTime,
     };
   } catch (error) {
-    apiLogger.error('Database health check failed', normalizeError(error));
     return {
       status: 'unhealthy' as const,
       message: `Database connection failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
@@ -111,7 +89,7 @@ async function checkDatabase(_c: { env: ApiEnv['Bindings'] }) {
 /**
  * Check environment configuration
  */
-function checkEnvironment(c: { env: ApiEnv['Bindings'] }) {
+function checkEnvironment(c: HealthCheckContext) {
   try {
     const missingVars: string[] = [];
 
@@ -134,7 +112,6 @@ function checkEnvironment(c: { env: ApiEnv['Bindings'] }) {
       message: 'All required environment variables are present',
     };
   } catch (error) {
-    apiLogger.error('Environment health check failed', normalizeError(error));
     return {
       status: 'unhealthy' as const,
       message: `Environment check failed: ${error instanceof Error ? error.message : 'Unknown error'}`,

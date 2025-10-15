@@ -281,10 +281,6 @@ function parseEnvironment() {
   const result = completeConfigurationSchema.safeParse(env);
 
   if (!result.success) {
-    console.warn('Invalid environment configuration:');
-    result.error.issues.forEach((error) => {
-      console.error(`  ${error.path.join('.')}: ${error.message}`);
-    });
     throw new Error('Invalid environment configuration');
   }
 
@@ -481,10 +477,8 @@ export function shouldLog(level: LogLevel): boolean {
  */
 export function validateConfiguration(): void {
   try {
-    const cfg = getConfig();
-    console.warn(`Configuration validated successfully for ${cfg.NODE_ENV} environment`);
-  } catch (error) {
-    console.error('Configuration validation failed:', error);
+    getConfig();
+  } catch {
     process.exit(1);
   }
 }

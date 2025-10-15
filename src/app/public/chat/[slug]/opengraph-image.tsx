@@ -71,7 +71,7 @@ export default async function Image({
 
   try {
     // Fetch thread data for OG image generation
-    const response = await getPublicThreadService(slug);
+    const response = await getPublicThreadService({ param: { slug } });
 
     if (!response.success || !response.data?.thread) {
       // Fallback image for not found threads
@@ -278,7 +278,7 @@ export default async function Image({
               >
                 AI Models:
               </div>
-              {participantIcons.map((p, idx) => (
+              {participantIcons.map((p: { modelId: string; role: string | null; icon: string }, idx: number) => (
                 p.icon && (
                   <div
                     key={idx}

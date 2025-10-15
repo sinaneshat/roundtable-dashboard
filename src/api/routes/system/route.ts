@@ -1,5 +1,8 @@
 import { createRoute } from '@hono/zod-openapi';
 import * as HttpStatusCodes from 'stoker/http-status-codes';
+import * as HttpStatusPhrases from 'stoker/http-status-phrases';
+
+import { ApiErrorResponseSchema } from '@/api/core/schemas';
 
 import { DetailedHealthResponseSchema, HealthResponseSchema } from './schema';
 
@@ -16,8 +19,22 @@ export const healthRoute = createRoute({
         'application/json': { schema: HealthResponseSchema },
       },
     },
-    [HttpStatusCodes.BAD_REQUEST]: { description: 'Bad Request' },
-    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: { description: 'Internal Server Error' },
+    [HttpStatusCodes.BAD_REQUEST]: {
+      description: HttpStatusPhrases.BAD_REQUEST,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
+    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: {
+      description: HttpStatusPhrases.INTERNAL_SERVER_ERROR,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
   },
 });
 
@@ -40,7 +57,21 @@ export const detailedHealthRoute = createRoute({
         'application/json': { schema: DetailedHealthResponseSchema },
       },
     },
-    [HttpStatusCodes.BAD_REQUEST]: { description: 'Bad Request' },
-    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: { description: 'Internal Server Error' },
+    [HttpStatusCodes.BAD_REQUEST]: {
+      description: HttpStatusPhrases.BAD_REQUEST,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
+    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: {
+      description: HttpStatusPhrases.INTERNAL_SERVER_ERROR,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
   },
 });

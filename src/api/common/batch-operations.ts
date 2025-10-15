@@ -50,8 +50,6 @@ import type { BatchItem } from 'drizzle-orm/batch';
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import type { DrizzleD1Database } from 'drizzle-orm/d1';
 
-import { apiLogger } from '@/api/middleware/hono-logger';
-
 /**
  * Type alias for any Drizzle query builder that can be batched
  *
@@ -131,50 +129,29 @@ export async function executeBatch<
   operations: [...T],
 ): Promise<unknown[]> {
   if (operations.length === 0) {
-    apiLogger.debug('executeBatch called with empty operations array');
     return [];
   }
 
-  try {
-    // ✅ CLOUDFLARE D1: Use native batch API for atomic execution
-    // Runtime check ensures this works in production (Cloudflare Workers)
-    if ('batch' in db && typeof db.batch === 'function') {
-      apiLogger.debug(`Executing ${operations.length} operations via D1 batch API`);
-
-      // Direct call to db.batch() following official Drizzle pattern
-      // The batch method signature from Drizzle ORM
-      const results = await (db.batch as (queries: BatchQuery[]) => Promise<unknown[]>)(operations);
-
-      apiLogger.debug(`D1 batch completed successfully: ${operations.length} operations`);
-      return results;
-    }
-
-    // ✅ LOCAL DEVELOPMENT: Sequential execution fallback for Better-SQLite3
-    // Better-SQLite3 doesn't support batch(), but sequential execution is acceptable for dev
-    apiLogger.debug(
-      `Executing ${operations.length} operations sequentially (local SQLite fallback)`,
-    );
-
-    const results: unknown[] = [];
-    for (const operation of operations) {
-      // Each operation is a prepared query with .execute() method
-      // Type assertion is necessary because BatchItem type is generic
-      const result = await (operation as unknown as { execute: () => Promise<unknown> }).execute();
-      results.push(result);
-    }
-
-    apiLogger.debug(`Sequential batch completed successfully: ${operations.length} operations`);
+  // ✅ CLOUDFLARE D1: Use native batch API for atomic execution
+  // Runtime check ensures this works in production (Cloudflare Workers)
+  if ('batch' in db && typeof db.batch === 'function') {
+    // Direct call to db.batch() following official Drizzle pattern
+    // The batch method signature from Drizzle ORM
+    const results = await (db.batch as (queries: BatchQuery[]) => Promise<unknown[]>)(operations);
     return results;
-  } catch (error) {
-    // Enhanced error logging for debugging batch failures
-    apiLogger.error(
-      `Batch execution failed after attempting ${operations.length} operations`,
-      error as Error,
-    );
-
-    // Re-throw with context - caller should handle appropriately
-    throw error;
   }
+
+  // ✅ LOCAL DEVELOPMENT: Sequential execution fallback for Better-SQLite3
+  // Better-SQLite3 doesn't support batch(), but sequential execution is acceptable for dev
+  const results: unknown[] = [];
+  for (const operation of operations) {
+    // Each operation is a prepared query with .execute() method
+    // Type assertion is necessary because BatchItem type is generic
+    const result = await (operation as unknown as { execute: () => Promise<unknown> }).execute();
+    results.push(result);
+  }
+
+  return results;
 }
 
 /**
@@ -229,9 +206,5 @@ export function validateBatchSize(operationCount: number, maxBatchSize: number =
       `Batch size limit exceeded: ${operationCount} operations (max: ${maxBatchSize}). `
       + `Consider splitting into multiple batches or refactoring logic.`,
     );
-  }
-
-  if (operationCount === 0) {
-    apiLogger.warn('validateBatchSize called with 0 operations - batch will do nothing');
   }
 }

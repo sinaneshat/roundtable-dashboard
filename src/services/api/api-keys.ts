@@ -64,29 +64,28 @@ export type DeleteApiKeyResponse = InferResponseType<
  * List all API keys for the authenticated user
  * Protected endpoint - requires authentication
  *
- * CRITICAL: Consistent argument handling for SSR/hydration
- * Only pass args if defined to ensure server/client consistency
+ * Following Hono RPC best practices: Always provide an object to $get()
+ * even when all query parameters are optional. Use nullish coalescing
+ * to ensure type safety.
  */
 export async function listApiKeysService(args?: ListApiKeysRequest) {
   const client = await createApiClient();
-  return args
-    ? parseResponse(client.auth['api-keys'].$get(args))
-    : parseResponse(client.auth['api-keys'].$get());
+  return parseResponse(client.auth['api-keys'].$get(args ?? {}));
 }
 
 /**
  * Get a specific API key by ID
  * Protected endpoint - requires authentication (ownership check)
  *
- * @param keyId - API key ID
+ * @param data - Request with param.keyId for API key ID
  */
-export async function getApiKeyService(keyId: string) {
+export async function getApiKeyService(data: GetApiKeyRequest) {
   const client = await createApiClient();
-  return parseResponse(
-    client.auth['api-keys'][':keyId'].$get({
-      param: { keyId },
-    }),
-  );
+  // Internal fallback: ensure param exists
+  const params: GetApiKeyRequest = {
+    param: data.param ?? { keyId: '' },
+  };
+  return parseResponse(client.auth['api-keys'][':keyId'].$get(params));
 }
 
 /**
@@ -98,40 +97,40 @@ export async function getApiKeyService(keyId: string) {
  */
 export async function createApiKeyService(data: CreateApiKeyRequest) {
   const client = await createApiClient();
-  return parseResponse(client.auth['api-keys'].$post(data));
+  // Internal fallback: ensure json property exists
+  const params: CreateApiKeyRequest = {
+    json: data.json ?? {},
+  };
+  return parseResponse(client.auth['api-keys'].$post(params));
 }
 
 /**
  * Update an existing API key
  * Protected endpoint - requires authentication
  *
- * @param keyId - API key ID
- * @param data - API key update data
+ * @param data - Request with param.keyId and json body
  */
-export async function updateApiKeyService(
-  keyId: string,
-  data: Omit<UpdateApiKeyRequest, 'param'>,
-) {
+export async function updateApiKeyService(data: UpdateApiKeyRequest) {
   const client = await createApiClient();
-  return parseResponse(
-    client.auth['api-keys'][':keyId'].$patch({
-      param: { keyId },
-      ...data,
-    }),
-  );
+  // Internal fallback: ensure param and json exist
+  const params: UpdateApiKeyRequest = {
+    param: data.param ?? { keyId: '' },
+    json: data.json ?? {},
+  };
+  return parseResponse(client.auth['api-keys'][':keyId'].$patch(params));
 }
 
 /**
  * Delete an API key
  * Protected endpoint - requires authentication
  *
- * @param keyId - API key ID
+ * @param data - Request with param.keyId for API key ID
  */
-export async function deleteApiKeyService(keyId: string) {
+export async function deleteApiKeyService(data: DeleteApiKeyRequest) {
   const client = await createApiClient();
-  return parseResponse(
-    client.auth['api-keys'][':keyId'].$delete({
-      param: { keyId },
-    }),
-  );
+  // Internal fallback: ensure param exists
+  const params: DeleteApiKeyRequest = {
+    param: data.param ?? { keyId: '' },
+  };
+  return parseResponse(client.auth['api-keys'][':keyId'].$delete(params));
 }

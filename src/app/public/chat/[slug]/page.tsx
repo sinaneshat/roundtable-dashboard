@@ -34,7 +34,7 @@ export async function generateMetadata({
 
   try {
     // Fetch thread data for metadata generation
-    const response = await getPublicThreadService(slug);
+    const response = await getPublicThreadService({ param: { slug } });
 
     if (!response.success || !response.data?.thread) {
       return createMetadata({
@@ -101,7 +101,7 @@ export default async function PublicChatThreadPage({
     // Prefetch public thread data on server for instant hydration
     await queryClient.prefetchQuery({
       queryKey: queryKeys.threads.public(slug),
-      queryFn: () => getPublicThreadService(slug),
+      queryFn: () => getPublicThreadService({ param: { slug } }),
       staleTime: 5 * 60 * 1000, // 5 minutes
     });
 

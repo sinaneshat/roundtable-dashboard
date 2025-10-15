@@ -89,7 +89,6 @@ export function AuthForm() {
       setSentEmail(data.email);
       magicLinkSent.onTrue();
     } catch (error) {
-      console.error('Magic link failed:', error);
       const errorDetails = getApiErrorDetails(error);
       form.setError('email', {
         type: 'manual',

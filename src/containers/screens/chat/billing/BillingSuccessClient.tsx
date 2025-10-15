@@ -149,8 +149,8 @@ export function BillingSuccessClient() {
 
   // Success state - show subscription details
   // Use centralized tier mapping from ai-config service
-  const tierString = displaySubscription?.productId
-    ? getTierFromProductId(displaySubscription.productId)
+  const tierString = displaySubscription?.price?.productId
+    ? getTierFromProductId(displaySubscription.price.productId)
     : 'free';
 
   // ✅ RUNTIME VALIDATION: Validate tier is a valid SubscriptionTier

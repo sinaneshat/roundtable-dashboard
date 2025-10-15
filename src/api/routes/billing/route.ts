@@ -1,5 +1,8 @@
 import { createRoute } from '@hono/zod-openapi';
 import * as HttpStatusCodes from 'stoker/http-status-codes';
+import * as HttpStatusPhrases from 'stoker/http-status-phrases';
+
+import { ApiErrorResponseSchema, IdParamSchema } from '@/api/core/schemas';
 
 import {
   CancelSubscriptionRequestSchema,
@@ -8,11 +11,9 @@ import {
   CustomerPortalRequestSchema,
   CustomerPortalResponseSchema,
   ProductDetailResponseSchema,
-  ProductIdParamSchema,
   ProductListResponseSchema,
   SubscriptionChangeResponseSchema,
   SubscriptionDetailResponseSchema,
-  SubscriptionIdParamSchema,
   SubscriptionListResponseSchema,
   SwitchSubscriptionRequestSchema,
   SyncAfterCheckoutResponseSchema,
@@ -37,8 +38,22 @@ export const listProductsRoute = createRoute({
         'application/json': { schema: ProductListResponseSchema },
       },
     },
-    [HttpStatusCodes.BAD_REQUEST]: { description: 'Bad Request' },
-    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: { description: 'Internal Server Error' },
+    [HttpStatusCodes.BAD_REQUEST]: {
+      description: HttpStatusPhrases.BAD_REQUEST,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
+    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: {
+      description: HttpStatusPhrases.INTERNAL_SERVER_ERROR,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
   },
 });
 
@@ -49,7 +64,7 @@ export const getProductRoute = createRoute({
   summary: 'Get product details',
   description: 'Get a specific product with all its pricing plans',
   request: {
-    params: ProductIdParamSchema,
+    params: IdParamSchema,
   },
   responses: {
     [HttpStatusCodes.OK]: {
@@ -58,9 +73,30 @@ export const getProductRoute = createRoute({
         'application/json': { schema: ProductDetailResponseSchema },
       },
     },
-    [HttpStatusCodes.NOT_FOUND]: { description: 'Product not found' },
-    [HttpStatusCodes.BAD_REQUEST]: { description: 'Bad Request' },
-    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: { description: 'Internal Server Error' },
+    [HttpStatusCodes.NOT_FOUND]: {
+      description: HttpStatusPhrases.NOT_FOUND,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
+    [HttpStatusCodes.BAD_REQUEST]: {
+      description: HttpStatusPhrases.BAD_REQUEST,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
+    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: {
+      description: HttpStatusPhrases.INTERNAL_SERVER_ERROR,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
   },
 });
 
@@ -91,9 +127,30 @@ export const createCheckoutSessionRoute = createRoute({
         'application/json': { schema: CheckoutResponseSchema },
       },
     },
-    [HttpStatusCodes.UNAUTHORIZED]: { description: 'Authentication required' },
-    [HttpStatusCodes.BAD_REQUEST]: { description: 'Invalid request data' },
-    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: { description: 'Internal Server Error' },
+    [HttpStatusCodes.UNAUTHORIZED]: {
+      description: HttpStatusPhrases.UNAUTHORIZED,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
+    [HttpStatusCodes.BAD_REQUEST]: {
+      description: HttpStatusPhrases.BAD_REQUEST,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
+    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: {
+      description: HttpStatusPhrases.INTERNAL_SERVER_ERROR,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
   },
 });
 
@@ -124,9 +181,30 @@ export const createCustomerPortalSessionRoute = createRoute({
         'application/json': { schema: CustomerPortalResponseSchema },
       },
     },
-    [HttpStatusCodes.UNAUTHORIZED]: { description: 'Authentication required' },
-    [HttpStatusCodes.BAD_REQUEST]: { description: 'Invalid request data or no Stripe customer found' },
-    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: { description: 'Internal Server Error' },
+    [HttpStatusCodes.UNAUTHORIZED]: {
+      description: HttpStatusPhrases.UNAUTHORIZED,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
+    [HttpStatusCodes.BAD_REQUEST]: {
+      description: HttpStatusPhrases.BAD_REQUEST,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
+    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: {
+      description: HttpStatusPhrases.INTERNAL_SERVER_ERROR,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
   },
 });
 
@@ -147,9 +225,30 @@ export const listSubscriptionsRoute = createRoute({
         'application/json': { schema: SubscriptionListResponseSchema },
       },
     },
-    [HttpStatusCodes.UNAUTHORIZED]: { description: 'Authentication required' },
-    [HttpStatusCodes.BAD_REQUEST]: { description: 'Bad Request' },
-    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: { description: 'Internal Server Error' },
+    [HttpStatusCodes.UNAUTHORIZED]: {
+      description: HttpStatusPhrases.UNAUTHORIZED,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
+    [HttpStatusCodes.BAD_REQUEST]: {
+      description: HttpStatusPhrases.BAD_REQUEST,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
+    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: {
+      description: HttpStatusPhrases.INTERNAL_SERVER_ERROR,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
   },
 });
 
@@ -160,7 +259,7 @@ export const getSubscriptionRoute = createRoute({
   summary: 'Get subscription details',
   description: 'Get details of a specific subscription',
   request: {
-    params: SubscriptionIdParamSchema,
+    params: IdParamSchema,
   },
   responses: {
     [HttpStatusCodes.OK]: {
@@ -169,11 +268,46 @@ export const getSubscriptionRoute = createRoute({
         'application/json': { schema: SubscriptionDetailResponseSchema },
       },
     },
-    [HttpStatusCodes.UNAUTHORIZED]: { description: 'Authentication required' },
-    [HttpStatusCodes.NOT_FOUND]: { description: 'Subscription not found' },
-    [HttpStatusCodes.FORBIDDEN]: { description: 'Subscription does not belong to user' },
-    [HttpStatusCodes.BAD_REQUEST]: { description: 'Bad Request' },
-    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: { description: 'Internal Server Error' },
+    [HttpStatusCodes.UNAUTHORIZED]: {
+      description: HttpStatusPhrases.UNAUTHORIZED,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
+    [HttpStatusCodes.NOT_FOUND]: {
+      description: HttpStatusPhrases.NOT_FOUND,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
+    [HttpStatusCodes.FORBIDDEN]: {
+      description: HttpStatusPhrases.FORBIDDEN,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
+    [HttpStatusCodes.BAD_REQUEST]: {
+      description: HttpStatusPhrases.BAD_REQUEST,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
+    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: {
+      description: HttpStatusPhrases.INTERNAL_SERVER_ERROR,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
   },
 });
 
@@ -188,7 +322,7 @@ export const switchSubscriptionRoute = createRoute({
   summary: 'Switch subscription plan',
   description: 'Switch the current subscription to a different price. Automatically handles upgrades (immediate with proration) and downgrades (at period end).',
   request: {
-    params: SubscriptionIdParamSchema,
+    params: IdParamSchema,
     body: {
       required: true,
       content: {
@@ -205,11 +339,46 @@ export const switchSubscriptionRoute = createRoute({
         'application/json': { schema: SubscriptionChangeResponseSchema },
       },
     },
-    [HttpStatusCodes.UNAUTHORIZED]: { description: 'Authentication required' },
-    [HttpStatusCodes.NOT_FOUND]: { description: 'Subscription not found' },
-    [HttpStatusCodes.FORBIDDEN]: { description: 'Subscription does not belong to user' },
-    [HttpStatusCodes.BAD_REQUEST]: { description: 'Invalid price ID or same as current plan' },
-    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: { description: 'Internal Server Error' },
+    [HttpStatusCodes.UNAUTHORIZED]: {
+      description: HttpStatusPhrases.UNAUTHORIZED,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
+    [HttpStatusCodes.NOT_FOUND]: {
+      description: HttpStatusPhrases.NOT_FOUND,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
+    [HttpStatusCodes.FORBIDDEN]: {
+      description: HttpStatusPhrases.FORBIDDEN,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
+    [HttpStatusCodes.BAD_REQUEST]: {
+      description: HttpStatusPhrases.BAD_REQUEST,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
+    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: {
+      description: HttpStatusPhrases.INTERNAL_SERVER_ERROR,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
   },
 });
 
@@ -220,7 +389,7 @@ export const cancelSubscriptionRoute = createRoute({
   summary: 'Cancel subscription',
   description: 'Cancel the subscription either immediately or at the end of the current billing period (default).',
   request: {
-    params: SubscriptionIdParamSchema,
+    params: IdParamSchema,
     body: {
       required: true,
       content: {
@@ -237,11 +406,46 @@ export const cancelSubscriptionRoute = createRoute({
         'application/json': { schema: SubscriptionChangeResponseSchema },
       },
     },
-    [HttpStatusCodes.UNAUTHORIZED]: { description: 'Authentication required' },
-    [HttpStatusCodes.NOT_FOUND]: { description: 'Subscription not found' },
-    [HttpStatusCodes.FORBIDDEN]: { description: 'Subscription does not belong to user' },
-    [HttpStatusCodes.BAD_REQUEST]: { description: 'Subscription already canceled or invalid request' },
-    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: { description: 'Internal Server Error' },
+    [HttpStatusCodes.UNAUTHORIZED]: {
+      description: HttpStatusPhrases.UNAUTHORIZED,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
+    [HttpStatusCodes.NOT_FOUND]: {
+      description: HttpStatusPhrases.NOT_FOUND,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
+    [HttpStatusCodes.FORBIDDEN]: {
+      description: HttpStatusPhrases.FORBIDDEN,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
+    [HttpStatusCodes.BAD_REQUEST]: {
+      description: HttpStatusPhrases.BAD_REQUEST,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
+    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: {
+      description: HttpStatusPhrases.INTERNAL_SERVER_ERROR,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
   },
 });
 
@@ -264,9 +468,30 @@ export const syncAfterCheckoutRoute = createRoute({
         },
       },
     },
-    [HttpStatusCodes.UNAUTHORIZED]: { description: 'Authentication required' },
-    [HttpStatusCodes.NOT_FOUND]: { description: 'No Stripe customer found for user' },
-    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: { description: 'Internal Server Error' },
+    [HttpStatusCodes.UNAUTHORIZED]: {
+      description: HttpStatusPhrases.UNAUTHORIZED,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
+    [HttpStatusCodes.NOT_FOUND]: {
+      description: HttpStatusPhrases.NOT_FOUND,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
+    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: {
+      description: HttpStatusPhrases.INTERNAL_SERVER_ERROR,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
   },
 });
 
@@ -299,7 +524,21 @@ export const handleWebhookRoute = createRoute({
         'application/json': { schema: WebhookResponseSchema },
       },
     },
-    [HttpStatusCodes.BAD_REQUEST]: { description: 'Invalid webhook signature or payload' },
-    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: { description: 'Webhook processing failed' },
+    [HttpStatusCodes.BAD_REQUEST]: {
+      description: HttpStatusPhrases.BAD_REQUEST,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
+    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: {
+      description: HttpStatusPhrases.INTERNAL_SERVER_ERROR,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
   },
 });

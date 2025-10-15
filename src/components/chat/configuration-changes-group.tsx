@@ -148,7 +148,7 @@ export function ConfigurationChangesGroup({ group, className }: ConfigurationCha
                   {/* Changes for this action - Responsive: horizontal scroll on desktop, vertical stack on mobile */}
                   <div className="w-full overflow-x-auto md:overflow-x-auto">
                     <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 pb-2 pl-6">
-                      {changes.map(change => (
+                      {changes.map((change: Changelog) => (
                         <ChangeItem key={change.id} change={change} />
                       ))}
                     </div>

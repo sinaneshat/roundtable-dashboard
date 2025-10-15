@@ -11,7 +11,6 @@ import * as HttpStatusCodes from 'stoker/http-status-codes';
 
 import { createError } from '@/api/common/error-handling';
 import { validateEnvironmentVariables } from '@/api/common/fetch-utilities';
-import { apiLogger } from '@/api/middleware/hono-logger';
 import type { SafeEnvironmentSummary } from '@/api/types/http';
 
 // ============================================================================
@@ -229,12 +228,8 @@ export function createEnvironmentValidationMiddleware() {
       const { getCloudflareContext } = await import('@opennextjs/cloudflare');
       const context = getCloudflareContext();
       env = context.env;
-    } catch (error) {
-      // Fallback when Cloudflare context is not available
-      console.warn('[ENV-VALIDATION] Cloudflare context not available, skipping environment validation', {
-        error: error instanceof Error ? error.message : String(error),
-        timestamp: new Date().toISOString(),
-      });
+    } catch {
+      // Fallback when Cloudflare context is not available - skip validation
       return next();
     }
 
@@ -245,14 +240,8 @@ export function createEnvironmentValidationMiddleware() {
 
     const validation = validateEnvironmentConfiguration(env);
 
-    // Log validation results
+    // Validate results
     if (!validation.isValid) {
-      apiLogger.error('Environment validation failed', {
-        errors: validation.errors,
-        missingCritical: validation.missingCritical,
-        component: 'environment-validation',
-      });
-
       // In production, fail fast on critical errors
       if (env.NODE_ENV === 'production' && validation.missingCritical.length > 0) {
         throw new HTTPException(HttpStatusCodes.INTERNAL_SERVER_ERROR, {
@@ -271,24 +260,6 @@ export function createEnvironmentValidationMiddleware() {
       }
     }
 
-    // Log warnings even if validation passes
-    if (validation.warnings.length > 0) {
-      apiLogger.warn('Environment validation warnings', {
-        warnings: validation.warnings,
-        missingOptional: validation.missingOptional,
-        component: 'environment-validation',
-      });
-    }
-
-    // Log successful validation in debug mode
-    if (validation.isValid) {
-      apiLogger.debug('Environment validation passed', {
-        warningCount: validation.warnings.length,
-        missingOptionalCount: validation.missingOptional.length,
-        component: 'environment-validation',
-      });
-    }
-
     return next();
   };
 }
@@ -300,19 +271,10 @@ export function createEnvironmentValidationMiddleware() {
 export function validateServiceEnvironment(
   env: CloudflareEnv,
   required: readonly (keyof CloudflareEnv)[],
-  serviceName: string,
+  _serviceName: string,
 ): void {
-  try {
-    // Use the original env parameter directly since validateEnvironmentVariables expects CloudflareEnv
-    validateEnvironmentVariables(env, [...required]);
-  } catch (error) {
-    apiLogger.error(`${serviceName} environment validation failed`, {
-      error: error instanceof Error ? error.message : String(error),
-      required,
-      component: 'service-environment-validation',
-    });
-    throw error;
-  }
+  // Use the original env parameter directly since validateEnvironmentVariables expects CloudflareEnv
+  validateEnvironmentVariables(env, [...required]);
 }
 
 /**

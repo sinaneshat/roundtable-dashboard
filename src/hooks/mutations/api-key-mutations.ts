@@ -41,11 +41,6 @@ export function useCreateApiKeyMutation() {
         refetchType: 'active',
       });
     },
-    onError: (error) => {
-      if (process.env.NODE_ENV === 'development') {
-        console.error('Failed to create API key', error);
-      }
-    },
     retry: false,
     throwOnError: false,
   });
@@ -63,8 +58,7 @@ export function useUpdateApiKeyMutation() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ keyId, ...data }: Parameters<typeof updateApiKeyService>[1] & { keyId: string }) =>
-      updateApiKeyService(keyId, data),
+    mutationFn: updateApiKeyService,
     onSuccess: (response) => {
       // Immediately update the API keys list cache with the updated key
       if (response.success && response.data?.apiKey) {
@@ -72,13 +66,13 @@ export function useUpdateApiKeyMutation() {
 
         queryClient.setQueryData<Awaited<ReturnType<typeof listApiKeysService>>>(
           queryKeys.apiKeys.list(),
-          (oldData) => {
+          (oldData: Awaited<ReturnType<typeof listApiKeysService>> | undefined) => {
             if (!oldData?.success || !oldData.data?.items) {
               return oldData;
             }
 
             // Replace the updated API key in the list
-            const updatedApiKeys = oldData.data.items.map(key =>
+            const updatedApiKeys = oldData.data.items.map((key: typeof updatedApiKey) =>
               key.id === updatedApiKey.id ? updatedApiKey : key,
             );
 
@@ -98,11 +92,6 @@ export function useUpdateApiKeyMutation() {
         queryKey: queryKeys.apiKeys.all,
         refetchType: 'active',
       });
-    },
-    onError: (error) => {
-      if (process.env.NODE_ENV === 'development') {
-        console.error('Failed to update API key', error);
-      }
     },
     retry: (failureCount, error: unknown) => {
       const httpError = error as { status?: number };
@@ -128,8 +117,10 @@ export function useDeleteApiKeyMutation() {
 
   return useMutation({
     mutationFn: deleteApiKeyService,
-    // Optimistic update: Remove key from UI immediately before server response
-    onMutate: async (keyId: string) => {
+    onMutate: async (data) => {
+      const keyId = data.param?.keyId;
+      if (!keyId)
+        return;
       // Cancel any outgoing refetches to prevent overwriting optimistic update
       await queryClient.cancelQueries({ queryKey: queryKeys.apiKeys.all });
 
@@ -139,13 +130,13 @@ export function useDeleteApiKeyMutation() {
       // Optimistically remove the key from the list
       queryClient.setQueryData<Awaited<ReturnType<typeof listApiKeysService>>>(
         queryKeys.apiKeys.list(),
-        (oldData) => {
+        (oldData: Awaited<ReturnType<typeof listApiKeysService>> | undefined) => {
           if (!oldData?.success || !oldData.data?.items) {
             return oldData;
           }
 
           // Filter out the deleted key
-          const filteredApiKeys = oldData.data.items.filter(key => key.id !== keyId);
+          const filteredApiKeys = oldData.data.items.filter((key: { id: string }) => key.id !== keyId);
 
           return {
             ...oldData,
@@ -161,17 +152,13 @@ export function useDeleteApiKeyMutation() {
       return { previousApiKeys };
     },
     // On error: Rollback to previous state
-    onError: (error, keyId, context) => {
+    onError: (_error, _keyId, context) => {
       // Restore the previous state
       if (context?.previousApiKeys) {
         queryClient.setQueryData(
           queryKeys.apiKeys.list(),
           context.previousApiKeys,
         );
-      }
-
-      if (process.env.NODE_ENV === 'development') {
-        console.error('Failed to delete API key', error);
       }
     },
     // On success: Just ensure data is in sync (already updated optimistically)

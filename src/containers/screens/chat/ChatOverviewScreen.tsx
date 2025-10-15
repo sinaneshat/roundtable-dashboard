@@ -201,7 +201,7 @@ export default function ChatOverviewScreen() {
                       const participant = currentParticipants[participantIndex];
 
                       // ✅ Add placeholder message with CRITICAL metadata fields pre-populated
-                      // Following useChatStreaming pattern (src/hooks/utils/use-chat-streaming.ts:110-124)
+                      // Following AI SDK useChat pattern
                       setMessages((prev) => {
                         const updated = [
                           ...prev,

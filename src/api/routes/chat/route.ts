@@ -1,7 +1,8 @@
 import { createRoute, z } from '@hono/zod-openapi';
 import * as HttpStatusCodes from 'stoker/http-status-codes';
+import * as HttpStatusPhrases from 'stoker/http-status-phrases';
 
-import { createApiResponseSchema } from '@/api/core/schemas';
+import { ApiErrorResponseSchema, createApiResponseSchema, CursorPaginationQuerySchema, IdParamSchema } from '@/api/core/schemas';
 
 import {
   AddParticipantRequestSchema,
@@ -9,17 +10,15 @@ import {
   CreateCustomRoleRequestSchema,
   CreateThreadRequestSchema,
   CustomRoleDetailResponseSchema,
-  CustomRoleIdParamSchema,
   CustomRoleListResponseSchema,
+  DeleteThreadResponseSchema,
   MessagesListResponseSchema,
   ModeratorAnalysisListResponseSchema,
   ModeratorAnalysisRequestSchema,
   ParticipantDetailResponseSchema,
-  ParticipantIdParamSchema,
   RoundAnalysisParamSchema,
   StreamChatRequestSchema,
   ThreadDetailResponseSchema,
-  ThreadIdParamSchema,
   ThreadListQuerySchema,
   ThreadListResponseSchema,
   ThreadSlugParamSchema,
@@ -48,8 +47,22 @@ export const listThreadsRoute = createRoute({
         'application/json': { schema: ThreadListResponseSchema },
       },
     },
-    [HttpStatusCodes.UNAUTHORIZED]: { description: 'Authentication required' },
-    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: { description: 'Internal Server Error' },
+    [HttpStatusCodes.UNAUTHORIZED]: {
+      description: HttpStatusPhrases.UNAUTHORIZED,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
+    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: {
+      description: HttpStatusPhrases.INTERNAL_SERVER_ERROR,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
   },
 });
 
@@ -61,6 +74,7 @@ export const createThreadRoute = createRoute({
   description: 'Create a new chat thread with specified mode and configuration',
   request: {
     body: {
+      required: true,
       content: {
         'application/json': {
           schema: CreateThreadRequestSchema,
@@ -75,9 +89,30 @@ export const createThreadRoute = createRoute({
         'application/json': { schema: ThreadDetailResponseSchema },
       },
     },
-    [HttpStatusCodes.UNAUTHORIZED]: { description: 'Authentication required' },
-    [HttpStatusCodes.BAD_REQUEST]: { description: 'Invalid request data' },
-    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: { description: 'Internal Server Error' },
+    [HttpStatusCodes.UNAUTHORIZED]: {
+      description: HttpStatusPhrases.UNAUTHORIZED,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
+    [HttpStatusCodes.BAD_REQUEST]: {
+      description: HttpStatusPhrases.BAD_REQUEST,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
+    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: {
+      description: HttpStatusPhrases.INTERNAL_SERVER_ERROR,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
   },
 });
 
@@ -88,7 +123,7 @@ export const getThreadRoute = createRoute({
   summary: 'Get thread details',
   description: 'Get details of a specific chat thread',
   request: {
-    params: ThreadIdParamSchema,
+    params: IdParamSchema,
   },
   responses: {
     [HttpStatusCodes.OK]: {
@@ -97,9 +132,30 @@ export const getThreadRoute = createRoute({
         'application/json': { schema: ThreadDetailResponseSchema },
       },
     },
-    [HttpStatusCodes.UNAUTHORIZED]: { description: 'Authentication required' },
-    [HttpStatusCodes.NOT_FOUND]: { description: 'Thread not found' },
-    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: { description: 'Internal Server Error' },
+    [HttpStatusCodes.UNAUTHORIZED]: {
+      description: HttpStatusPhrases.UNAUTHORIZED,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
+    [HttpStatusCodes.NOT_FOUND]: {
+      description: HttpStatusPhrases.NOT_FOUND,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
+    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: {
+      description: HttpStatusPhrases.INTERNAL_SERVER_ERROR,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
   },
 });
 
@@ -110,8 +166,9 @@ export const updateThreadRoute = createRoute({
   summary: 'Update thread',
   description: 'Update thread title, mode, status, or metadata',
   request: {
-    params: ThreadIdParamSchema,
+    params: IdParamSchema,
     body: {
+      required: true,
       content: {
         'application/json': {
           schema: UpdateThreadRequestSchema,
@@ -126,10 +183,38 @@ export const updateThreadRoute = createRoute({
         'application/json': { schema: ThreadDetailResponseSchema },
       },
     },
-    [HttpStatusCodes.UNAUTHORIZED]: { description: 'Authentication required' },
-    [HttpStatusCodes.NOT_FOUND]: { description: 'Thread not found' },
-    [HttpStatusCodes.BAD_REQUEST]: { description: 'Invalid request data' },
-    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: { description: 'Internal Server Error' },
+    [HttpStatusCodes.UNAUTHORIZED]: {
+      description: HttpStatusPhrases.UNAUTHORIZED,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
+    [HttpStatusCodes.NOT_FOUND]: {
+      description: HttpStatusPhrases.NOT_FOUND,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
+    [HttpStatusCodes.BAD_REQUEST]: {
+      description: HttpStatusPhrases.BAD_REQUEST,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
+    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: {
+      description: HttpStatusPhrases.INTERNAL_SERVER_ERROR,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
   },
 });
 
@@ -140,22 +225,41 @@ export const deleteThreadRoute = createRoute({
   summary: 'Delete thread',
   description: 'Delete a chat thread (soft delete - sets status to deleted)',
   request: {
-    params: ThreadIdParamSchema,
+    params: IdParamSchema,
   },
   responses: {
     [HttpStatusCodes.OK]: {
       description: 'Thread deleted successfully',
       content: {
         'application/json': {
-          schema: createApiResponseSchema(z.object({
-            deleted: z.boolean().openapi({ example: true }),
-          })),
+          schema: DeleteThreadResponseSchema,
         },
       },
     },
-    [HttpStatusCodes.UNAUTHORIZED]: { description: 'Authentication required' },
-    [HttpStatusCodes.NOT_FOUND]: { description: 'Thread not found' },
-    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: { description: 'Internal Server Error' },
+    [HttpStatusCodes.UNAUTHORIZED]: {
+      description: HttpStatusPhrases.UNAUTHORIZED,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
+    [HttpStatusCodes.NOT_FOUND]: {
+      description: HttpStatusPhrases.NOT_FOUND,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
+    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: {
+      description: HttpStatusPhrases.INTERNAL_SERVER_ERROR,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
   },
 });
 
@@ -175,8 +279,22 @@ export const getPublicThreadRoute = createRoute({
         'application/json': { schema: ThreadDetailResponseSchema },
       },
     },
-    [HttpStatusCodes.NOT_FOUND]: { description: 'Public thread not found or not public' },
-    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: { description: 'Internal Server Error' },
+    [HttpStatusCodes.NOT_FOUND]: {
+      description: HttpStatusPhrases.NOT_FOUND,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
+    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: {
+      description: HttpStatusPhrases.INTERNAL_SERVER_ERROR,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
   },
 });
 
@@ -196,9 +314,30 @@ export const getThreadBySlugRoute = createRoute({
         'application/json': { schema: ThreadDetailResponseSchema },
       },
     },
-    [HttpStatusCodes.UNAUTHORIZED]: { description: 'Authentication required' },
-    [HttpStatusCodes.NOT_FOUND]: { description: 'Thread not found or does not belong to user' },
-    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: { description: 'Internal Server Error' },
+    [HttpStatusCodes.UNAUTHORIZED]: {
+      description: HttpStatusPhrases.UNAUTHORIZED,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
+    [HttpStatusCodes.NOT_FOUND]: {
+      description: HttpStatusPhrases.NOT_FOUND,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
+    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: {
+      description: HttpStatusPhrases.INTERNAL_SERVER_ERROR,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
   },
 });
 
@@ -214,8 +353,9 @@ export const addParticipantRoute = createRoute({
   summary: 'Add participant to thread',
   description: 'Add an AI model with a role to the thread',
   request: {
-    params: ThreadIdParamSchema,
+    params: IdParamSchema,
     body: {
+      required: true,
       content: {
         'application/json': {
           schema: AddParticipantRequestSchema,
@@ -230,10 +370,38 @@ export const addParticipantRoute = createRoute({
         'application/json': { schema: ParticipantDetailResponseSchema },
       },
     },
-    [HttpStatusCodes.UNAUTHORIZED]: { description: 'Authentication required' },
-    [HttpStatusCodes.NOT_FOUND]: { description: 'Thread not found' },
-    [HttpStatusCodes.BAD_REQUEST]: { description: 'Invalid model ID or request data' },
-    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: { description: 'Internal Server Error' },
+    [HttpStatusCodes.UNAUTHORIZED]: {
+      description: HttpStatusPhrases.UNAUTHORIZED,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
+    [HttpStatusCodes.NOT_FOUND]: {
+      description: HttpStatusPhrases.NOT_FOUND,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
+    [HttpStatusCodes.BAD_REQUEST]: {
+      description: HttpStatusPhrases.BAD_REQUEST,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
+    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: {
+      description: HttpStatusPhrases.INTERNAL_SERVER_ERROR,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
   },
 });
 
@@ -244,8 +412,9 @@ export const updateParticipantRoute = createRoute({
   summary: 'Update participant',
   description: 'Update participant role, priority, or settings',
   request: {
-    params: ParticipantIdParamSchema,
+    params: IdParamSchema,
     body: {
+      required: true,
       content: {
         'application/json': {
           schema: UpdateParticipantRequestSchema,
@@ -260,10 +429,38 @@ export const updateParticipantRoute = createRoute({
         'application/json': { schema: ParticipantDetailResponseSchema },
       },
     },
-    [HttpStatusCodes.UNAUTHORIZED]: { description: 'Authentication required' },
-    [HttpStatusCodes.NOT_FOUND]: { description: 'Participant not found' },
-    [HttpStatusCodes.BAD_REQUEST]: { description: 'Invalid request data' },
-    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: { description: 'Internal Server Error' },
+    [HttpStatusCodes.UNAUTHORIZED]: {
+      description: HttpStatusPhrases.UNAUTHORIZED,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
+    [HttpStatusCodes.NOT_FOUND]: {
+      description: HttpStatusPhrases.NOT_FOUND,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
+    [HttpStatusCodes.BAD_REQUEST]: {
+      description: HttpStatusPhrases.BAD_REQUEST,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
+    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: {
+      description: HttpStatusPhrases.INTERNAL_SERVER_ERROR,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
   },
 });
 
@@ -274,7 +471,7 @@ export const deleteParticipantRoute = createRoute({
   summary: 'Remove participant',
   description: 'Remove a participant from the thread',
   request: {
-    params: ParticipantIdParamSchema,
+    params: IdParamSchema,
   },
   responses: {
     [HttpStatusCodes.OK]: {
@@ -287,9 +484,30 @@ export const deleteParticipantRoute = createRoute({
         },
       },
     },
-    [HttpStatusCodes.UNAUTHORIZED]: { description: 'Authentication required' },
-    [HttpStatusCodes.NOT_FOUND]: { description: 'Participant not found' },
-    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: { description: 'Internal Server Error' },
+    [HttpStatusCodes.UNAUTHORIZED]: {
+      description: HttpStatusPhrases.UNAUTHORIZED,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
+    [HttpStatusCodes.NOT_FOUND]: {
+      description: HttpStatusPhrases.NOT_FOUND,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
+    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: {
+      description: HttpStatusPhrases.INTERNAL_SERVER_ERROR,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
   },
 });
 
@@ -308,7 +526,7 @@ export const getThreadMessagesRoute = createRoute({
   summary: 'Get thread messages',
   description: 'Retrieve all messages for a thread ordered by creation time',
   request: {
-    params: ThreadIdParamSchema,
+    params: IdParamSchema,
   },
   responses: {
     [HttpStatusCodes.OK]: {
@@ -317,9 +535,30 @@ export const getThreadMessagesRoute = createRoute({
         'application/json': { schema: MessagesListResponseSchema },
       },
     },
-    [HttpStatusCodes.UNAUTHORIZED]: { description: 'Authentication required' },
-    [HttpStatusCodes.NOT_FOUND]: { description: 'Thread not found' },
-    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: { description: 'Internal Server Error' },
+    [HttpStatusCodes.UNAUTHORIZED]: {
+      description: HttpStatusPhrases.UNAUTHORIZED,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
+    [HttpStatusCodes.NOT_FOUND]: {
+      description: HttpStatusPhrases.NOT_FOUND,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
+    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: {
+      description: HttpStatusPhrases.INTERNAL_SERVER_ERROR,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
   },
 });
 
@@ -334,7 +573,7 @@ export const getThreadChangelogRoute = createRoute({
   summary: 'Get thread configuration changelog',
   description: 'Retrieve configuration changes (mode, participants) for a thread',
   request: {
-    params: ThreadIdParamSchema,
+    params: IdParamSchema,
   },
   responses: {
     [HttpStatusCodes.OK]: {
@@ -343,26 +582,49 @@ export const getThreadChangelogRoute = createRoute({
         'application/json': { schema: ChangelogListResponseSchema },
       },
     },
-    [HttpStatusCodes.UNAUTHORIZED]: { description: 'Authentication required' },
-    [HttpStatusCodes.NOT_FOUND]: { description: 'Thread not found' },
-    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: { description: 'Internal Server Error' },
+    [HttpStatusCodes.UNAUTHORIZED]: {
+      description: HttpStatusPhrases.UNAUTHORIZED,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
+    [HttpStatusCodes.NOT_FOUND]: {
+      description: HttpStatusPhrases.NOT_FOUND,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
+    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: {
+      description: HttpStatusPhrases.INTERNAL_SERVER_ERROR,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
   },
 });
 
 /**
- * Streaming chat endpoint using Server-Sent Events (SSE)
- * Returns AI responses token-by-token for real-time streaming UX
- * This replaces the old sendMessageRoute - all chat messages should be streamed for better UX
+ * ✅ OFFICIAL AI SDK v5 STREAMING ROUTE PATTERN
+ * Reference: https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot
+ *
+ * Exact match to official AI SDK POST /api/chat pattern.
+ * Uses toUIMessageStreamResponse() which returns UI Message Stream format.
  */
 export const streamChatRoute = createRoute({
   method: 'post',
-  path: '/chat/threads/:id/stream',
+  path: '/chat',
   tags: ['chat'],
-  summary: 'Stream AI chat response',
-  description: 'Send a user message and receive streaming AI responses via Server-Sent Events (SSE). Provides token-by-token streaming for real-time user experience.',
+  summary: 'Stream AI chat responses',
+  description: 'Official AI SDK v5 streaming endpoint. Streams AI responses using toUIMessageStreamResponse() format with support for text and file parts.',
   request: {
-    params: ThreadIdParamSchema,
     body: {
+      required: true,
       content: {
         'application/json': {
           schema: StreamChatRequestSchema,
@@ -372,21 +634,39 @@ export const streamChatRoute = createRoute({
   },
   responses: {
     [HttpStatusCodes.OK]: {
-      description: 'Streaming response (Server-Sent Events)',
+      description: 'AI SDK UI Message Stream Response - streamed as Server-Sent Events with content-type: text/event-stream; charset=utf-8',
       content: {
-        'text/event-stream': {
-          schema: z.object({
-            type: z.enum(['start', 'chunk', 'complete', 'error']).openapi({
-              description: 'Event type',
-            }),
-          }).openapi('StreamingEvent'),
+        'text/event-stream; charset=utf-8': {
+          schema: z.any().openapi({
+            description: 'AI SDK UI Message Stream format returned by toUIMessageStreamResponse(). Consumed by useChat hook on client. Includes text parts, file parts, tool calls, and message metadata.',
+          }),
         },
       },
     },
-    [HttpStatusCodes.UNAUTHORIZED]: { description: 'Authentication required' },
-    [HttpStatusCodes.NOT_FOUND]: { description: 'Thread not found' },
-    [HttpStatusCodes.BAD_REQUEST]: { description: 'Invalid request data or no participants enabled' },
-    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: { description: 'Internal Server Error' },
+    [HttpStatusCodes.UNAUTHORIZED]: {
+      description: HttpStatusPhrases.UNAUTHORIZED,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
+    [HttpStatusCodes.BAD_REQUEST]: {
+      description: HttpStatusPhrases.BAD_REQUEST,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
+    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: {
+      description: HttpStatusPhrases.INTERNAL_SERVER_ERROR,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
   },
 });
 
@@ -401,16 +681,7 @@ export const listCustomRolesRoute = createRoute({
   summary: 'List custom roles with cursor pagination',
   description: 'Get custom role templates for the authenticated user with infinite scroll support',
   request: {
-    query: z.object({
-      cursor: z.string().optional().openapi({
-        description: 'Cursor for pagination (ISO timestamp)',
-        example: '2024-01-15T10:30:00Z',
-      }),
-      limit: z.coerce.number().int().min(1).max(100).default(20).openapi({
-        description: 'Maximum number of items to return',
-        example: 20,
-      }),
-    }).openapi('CustomRoleListQuery'),
+    query: CursorPaginationQuerySchema,
   },
   responses: {
     [HttpStatusCodes.OK]: {
@@ -419,8 +690,22 @@ export const listCustomRolesRoute = createRoute({
         'application/json': { schema: CustomRoleListResponseSchema },
       },
     },
-    [HttpStatusCodes.UNAUTHORIZED]: { description: 'Authentication required' },
-    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: { description: 'Internal Server Error' },
+    [HttpStatusCodes.UNAUTHORIZED]: {
+      description: HttpStatusPhrases.UNAUTHORIZED,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
+    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: {
+      description: HttpStatusPhrases.INTERNAL_SERVER_ERROR,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
   },
 });
 
@@ -432,6 +717,7 @@ export const createCustomRoleRoute = createRoute({
   description: 'Create a new reusable custom role template with system prompt',
   request: {
     body: {
+      required: true,
       content: {
         'application/json': {
           schema: CreateCustomRoleRequestSchema,
@@ -446,9 +732,30 @@ export const createCustomRoleRoute = createRoute({
         'application/json': { schema: CustomRoleDetailResponseSchema },
       },
     },
-    [HttpStatusCodes.UNAUTHORIZED]: { description: 'Authentication required' },
-    [HttpStatusCodes.BAD_REQUEST]: { description: 'Invalid request data or quota exceeded' },
-    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: { description: 'Internal Server Error' },
+    [HttpStatusCodes.UNAUTHORIZED]: {
+      description: HttpStatusPhrases.UNAUTHORIZED,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
+    [HttpStatusCodes.BAD_REQUEST]: {
+      description: HttpStatusPhrases.BAD_REQUEST,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
+    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: {
+      description: HttpStatusPhrases.INTERNAL_SERVER_ERROR,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
   },
 });
 
@@ -459,7 +766,7 @@ export const getCustomRoleRoute = createRoute({
   summary: 'Get custom role details',
   description: 'Get details of a specific custom role',
   request: {
-    params: CustomRoleIdParamSchema,
+    params: IdParamSchema,
   },
   responses: {
     [HttpStatusCodes.OK]: {
@@ -468,9 +775,30 @@ export const getCustomRoleRoute = createRoute({
         'application/json': { schema: CustomRoleDetailResponseSchema },
       },
     },
-    [HttpStatusCodes.UNAUTHORIZED]: { description: 'Authentication required' },
-    [HttpStatusCodes.NOT_FOUND]: { description: 'Custom role not found' },
-    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: { description: 'Internal Server Error' },
+    [HttpStatusCodes.UNAUTHORIZED]: {
+      description: HttpStatusPhrases.UNAUTHORIZED,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
+    [HttpStatusCodes.NOT_FOUND]: {
+      description: HttpStatusPhrases.NOT_FOUND,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
+    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: {
+      description: HttpStatusPhrases.INTERNAL_SERVER_ERROR,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
   },
 });
 
@@ -481,8 +809,9 @@ export const updateCustomRoleRoute = createRoute({
   summary: 'Update custom role',
   description: 'Update custom role name, description, system prompt, or metadata',
   request: {
-    params: CustomRoleIdParamSchema,
+    params: IdParamSchema,
     body: {
+      required: true,
       content: {
         'application/json': {
           schema: UpdateCustomRoleRequestSchema,
@@ -497,10 +826,38 @@ export const updateCustomRoleRoute = createRoute({
         'application/json': { schema: CustomRoleDetailResponseSchema },
       },
     },
-    [HttpStatusCodes.UNAUTHORIZED]: { description: 'Authentication required' },
-    [HttpStatusCodes.NOT_FOUND]: { description: 'Custom role not found' },
-    [HttpStatusCodes.BAD_REQUEST]: { description: 'Invalid request data' },
-    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: { description: 'Internal Server Error' },
+    [HttpStatusCodes.UNAUTHORIZED]: {
+      description: HttpStatusPhrases.UNAUTHORIZED,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
+    [HttpStatusCodes.NOT_FOUND]: {
+      description: HttpStatusPhrases.NOT_FOUND,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
+    [HttpStatusCodes.BAD_REQUEST]: {
+      description: HttpStatusPhrases.BAD_REQUEST,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
+    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: {
+      description: HttpStatusPhrases.INTERNAL_SERVER_ERROR,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
   },
 });
 
@@ -511,7 +868,7 @@ export const deleteCustomRoleRoute = createRoute({
   summary: 'Delete custom role',
   description: 'Delete a custom role template',
   request: {
-    params: CustomRoleIdParamSchema,
+    params: IdParamSchema,
   },
   responses: {
     [HttpStatusCodes.OK]: {
@@ -524,9 +881,30 @@ export const deleteCustomRoleRoute = createRoute({
         },
       },
     },
-    [HttpStatusCodes.UNAUTHORIZED]: { description: 'Authentication required' },
-    [HttpStatusCodes.NOT_FOUND]: { description: 'Custom role not found' },
-    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: { description: 'Internal Server Error' },
+    [HttpStatusCodes.UNAUTHORIZED]: {
+      description: HttpStatusPhrases.UNAUTHORIZED,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
+    [HttpStatusCodes.NOT_FOUND]: {
+      description: HttpStatusPhrases.NOT_FOUND,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
+    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: {
+      description: HttpStatusPhrases.INTERNAL_SERVER_ERROR,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
   },
 });
 
@@ -547,6 +925,13 @@ export const deleteCustomRoleRoute = createRoute({
  * - Pros and cons for each response
  * - Leaderboard ranking
  * - Overall summary and conclusion
+ *
+ * 📡 STREAMING PATTERN: AI SDK streamObject (text/plain; charset=utf-8)
+ * - Uses `streamObject()` from AI SDK for structured JSON streaming with schema validation
+ * - Content-Type: 'text/plain; charset=utf-8' (AI SDK default for streamObject)
+ * - Client: Use AI SDK's experimental_useObject hook for type-safe partial object updates
+ * - Progressive object property rendering with Zod schema validation
+ * - Different from streamText - streams structured data, not just tokens
  */
 export const analyzeRoundRoute = createRoute({
   method: 'post',
@@ -557,6 +942,7 @@ export const analyzeRoundRoute = createRoute({
   request: {
     params: RoundAnalysisParamSchema,
     body: {
+      required: true,
       content: {
         'application/json': {
           schema: ModeratorAnalysisRequestSchema,
@@ -577,10 +963,38 @@ export const analyzeRoundRoute = createRoute({
         },
       },
     },
-    [HttpStatusCodes.UNAUTHORIZED]: { description: 'Authentication required' },
-    [HttpStatusCodes.NOT_FOUND]: { description: 'Thread not found' },
-    [HttpStatusCodes.BAD_REQUEST]: { description: 'Invalid request data or missing participant messages' },
-    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: { description: 'Internal Server Error' },
+    [HttpStatusCodes.UNAUTHORIZED]: {
+      description: HttpStatusPhrases.UNAUTHORIZED,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
+    [HttpStatusCodes.NOT_FOUND]: {
+      description: HttpStatusPhrases.NOT_FOUND,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
+    [HttpStatusCodes.BAD_REQUEST]: {
+      description: HttpStatusPhrases.BAD_REQUEST,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
+    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: {
+      description: HttpStatusPhrases.INTERNAL_SERVER_ERROR,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
   },
 });
 
@@ -595,7 +1009,7 @@ export const getThreadAnalysesRoute = createRoute({
   summary: 'Get moderator analyses for thread',
   description: 'Retrieve all moderator analyses for a thread, showing past analysis results for each round',
   request: {
-    params: ThreadIdParamSchema,
+    params: IdParamSchema,
   },
   responses: {
     [HttpStatusCodes.OK]: {
@@ -604,8 +1018,29 @@ export const getThreadAnalysesRoute = createRoute({
         'application/json': { schema: ModeratorAnalysisListResponseSchema },
       },
     },
-    [HttpStatusCodes.UNAUTHORIZED]: { description: 'Authentication required' },
-    [HttpStatusCodes.NOT_FOUND]: { description: 'Thread not found' },
-    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: { description: 'Internal Server Error' },
+    [HttpStatusCodes.UNAUTHORIZED]: {
+      description: HttpStatusPhrases.UNAUTHORIZED,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
+    [HttpStatusCodes.NOT_FOUND]: {
+      description: HttpStatusPhrases.NOT_FOUND,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
+    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: {
+      description: HttpStatusPhrases.INTERNAL_SERVER_ERROR,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
   },
 });

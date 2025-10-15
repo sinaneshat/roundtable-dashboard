@@ -12,9 +12,8 @@
 
 import Stripe from 'stripe';
 
-import { createError, normalizeError } from '@/api/common/error-handling';
+import { createError } from '@/api/common/error-handling';
 import type { ErrorContext } from '@/api/core';
-import { apiLogger } from '@/api/middleware/hono-logger';
 import type { ApiEnv } from '@/api/types';
 
 /**
@@ -362,8 +361,7 @@ class StripeService {
         webhookSecret,
       );
       return event;
-    } catch (error) {
-      apiLogger.error('Stripe webhook signature verification failed', normalizeError(error));
+    } catch {
       const context: ErrorContext = {
         errorType: 'external_service',
         service: 'stripe',

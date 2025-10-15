@@ -34,7 +34,7 @@ export default async function Image({
   let threadMode = 'solving';
 
   try {
-    const threadResult = await getThreadBySlugService(slug);
+    const threadResult = await getThreadBySlugService({ param: { slug } });
     if (threadResult?.success && threadResult.data?.thread) {
       threadTitle = threadResult.data.thread.title || 'Chat Thread';
       threadMode = threadResult.data.thread.mode || 'solving';

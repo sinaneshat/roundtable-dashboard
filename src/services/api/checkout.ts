@@ -43,7 +43,11 @@ export type SyncAfterCheckoutResponse = InferResponseType<
  */
 export async function createCheckoutSessionService(data: CreateCheckoutSessionRequest) {
   const client = await createApiClient();
-  return parseResponse(client.billing.checkout.$post(data));
+  // Internal fallback: ensure json property exists
+  const params: CreateCheckoutSessionRequest = {
+    json: data.json ?? {},
+  };
+  return parseResponse(client.billing.checkout.$post(params));
 }
 
 /**
@@ -53,10 +57,10 @@ export async function createCheckoutSessionService(data: CreateCheckoutSessionRe
  * Theo's "Stay Sane with Stripe" pattern:
  * Eagerly fetches fresh subscription data from Stripe API immediately after checkout
  * to prevent race conditions with webhooks
+ *
+ * Following Hono RPC best practices: Always provide an object to $post()
  */
 export async function syncAfterCheckoutService(data?: SyncAfterCheckoutRequest) {
   const client = await createApiClient();
-  return data
-    ? parseResponse(client.billing['sync-after-checkout'].$post(data))
-    : parseResponse(client.billing['sync-after-checkout'].$post());
+  return parseResponse(client.billing['sync-after-checkout'].$post(data ?? {}));
 }

@@ -80,6 +80,9 @@ export async function createApiClient() {
  * - Public thread endpoints
  * - Public profile endpoints
  * - Any other publicly accessible endpoints
+ *
+ * NOTE: Synchronous (not async) unlike createApiClient() to avoid
+ * type instantiation depth issues. Call without await.
  */
 export function createPublicApiClient() {
   return hc<AppType>(getBaseUrl(), {
@@ -92,8 +95,10 @@ export function createPublicApiClient() {
 /**
  * Centralized type for awaited API client - used across all services
  * This eliminates the need to repeat this type definition in every service
+ *
+ * Using ReturnType directly from hc to avoid deep type instantiation
  */
-export type ApiClientType = Awaited<ReturnType<typeof createApiClient>>;
+export type ApiClientType = ReturnType<typeof hc<AppType>>;
 
 /**
  * Export AppType for use in services layer
