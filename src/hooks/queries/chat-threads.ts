@@ -179,6 +179,9 @@ export function useThreadAnalysesQuery(threadId: string, enabled?: boolean) {
     queryKey: queryKeys.threads.analyses(threadId),
     queryFn: () => getThreadAnalysesService({ param: { id: threadId } }),
     staleTime: STALE_TIMES.threadAnalyses, // 1 minute
+    // ✅ Poll for analysis updates every 10 seconds
+    // Stops polling automatically when analysis completes or query is disabled
+    refetchInterval: 10000, // Poll every 10 seconds for pending/streaming analyses
     enabled: enabled !== undefined ? enabled : (isAuthenticated && !!threadId),
     retry: false,
   });

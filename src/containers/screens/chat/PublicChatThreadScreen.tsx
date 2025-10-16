@@ -239,8 +239,15 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
                     // Use stored modelId from metadata, not current participants array
                     const model = storedModelId ? allModels.find(m => m.id === storedModelId) : undefined;
 
+                    // ✅ IMPROVED ERROR HANDLING: Continue rendering even if model not found
+                    // ModelMessageCard now handles undefined models with fallbacks
                     if (!model) {
-                      return null;
+                      console.warn('[PublicChatThreadScreen] Rendering message with missing model:', {
+                        messageId: message.id,
+                        storedModelId,
+                        participantIndex,
+                      });
+                      // Continue rendering with placeholder - don't skip the message
                     }
 
                     const hasError = message.metadata && typeof message.metadata === 'object' && 'error' in message.metadata;

@@ -12,7 +12,6 @@ import {
   OG_COLORS,
 } from '@/lib/utils/og-image-helpers';
 
-export const runtime = 'nodejs';
 export const revalidate = 3600; // ISR: Revalidate every hour
 export const size = {
   width: 1200,

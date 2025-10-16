@@ -11,7 +11,6 @@
  *
  * Frontend imports:
  * - src/lib/ai/message-helpers.ts
- * - src/hooks/utils/use-multi-participant-chat.ts
  * - src/containers/screens/chat/ChatThreadScreen.tsx
  * - src/containers/screens/chat/ChatOverviewScreen.tsx
  */

@@ -34,7 +34,7 @@ import { getPublicThreadService } from '@/services/api';
 
 import * as config from './opengraph-image.config';
 
-export { alt, contentType, revalidate, runtime, size } from './opengraph-image.config';
+export { alt, contentType, revalidate, size } from './opengraph-image.config';
 
 export default async function Image({
   params,

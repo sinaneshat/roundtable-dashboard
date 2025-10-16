@@ -24,6 +24,7 @@ import { executeBatch } from '@/api/common/batch-operations';
 import { createError } from '@/api/common/error-handling';
 import type { ErrorContext } from '@/api/core';
 import { getDbAsync } from '@/db';
+import { CustomerCacheTags, PriceCacheTags, SubscriptionCacheTags, UserCacheTags } from '@/db/cache/cache-tags';
 import * as tables from '@/db/schema';
 
 import type { QuotaCheck, UsageStats, UsageStatus } from '../routes/usage/schema';
@@ -58,7 +59,7 @@ export async function getUserTier(userId: string): Promise<SubscriptionTier> {
     .limit(1)
     .$withCache({
       config: { ex: 300 }, // 5 minutes
-      tag: `user-tier-${userId}`,
+      tag: UserCacheTags.tier(userId),
     });
 
   return usageResults[0]?.subscriptionTier || 'free';
@@ -82,7 +83,7 @@ export async function ensureUserUsageRecord(userId: string): Promise<typeof tabl
     .limit(1)
     .$withCache({
       config: { ex: 60 }, // 1 minute TTL for near-real-time data
-      tag: `user-usage-${userId}`,
+      tag: UserCacheTags.usage(userId),
     });
 
   let usage = usageResults[0];
@@ -138,7 +139,7 @@ export async function ensureUserUsageRecord(userId: string): Promise<typeof tabl
       .limit(1)
       .$withCache({
         config: { ex: 60 },
-        tag: `user-usage-${userId}`,
+        tag: UserCacheTags.usage(userId),
       });
 
     const updatedUsage = updatedUsageResults[0];
@@ -188,7 +189,7 @@ async function rolloverBillingPeriod(
     .limit(1)
     .$withCache({
       config: { ex: 300 },
-      tag: `user-${userId}`,
+      tag: UserCacheTags.record(userId),
     });
 
   const user = userResults[0];
@@ -205,7 +206,7 @@ async function rolloverBillingPeriod(
       .limit(1)
       .$withCache({
         config: { ex: 300 },
-        tag: `customer-${userId}`,
+        tag: CustomerCacheTags.byUserId(userId),
       });
 
     const stripeCustomer = stripeCustomerResults[0];
@@ -223,7 +224,7 @@ async function rolloverBillingPeriod(
         .limit(1)
         .$withCache({
           config: { ex: 120 },
-          tag: `active-subscription-${userId}`,
+          tag: SubscriptionCacheTags.active(userId),
         });
 
       const activeSubscription = activeSubscriptionResults[0];
@@ -676,7 +677,7 @@ export async function syncUserQuotaFromSubscription(
     .limit(1)
     .$withCache({
       config: { ex: 300 },
-      tag: `price-${priceId}`,
+      tag: PriceCacheTags.single(priceId),
     });
 
   const price = priceResults[0];

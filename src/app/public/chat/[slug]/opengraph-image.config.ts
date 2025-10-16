@@ -2,7 +2,7 @@
  * Open Graph Image Configuration for Public Chat Threads
  * Dynamic OG images based on thread content
  */
-export const runtime = 'nodejs'; // Use Node.js runtime (compatible with OpenNext)
+// Use Node.js runtime (compatible with OpenNext)
 export const revalidate = 86400; // ISR: Revalidate every 24 hours (same as page)
 export const size = {
   width: 1200,

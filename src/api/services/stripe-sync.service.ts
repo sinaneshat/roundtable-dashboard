@@ -20,6 +20,7 @@ import type { ErrorContext } from '@/api/core';
 import { stripeService } from '@/api/services/stripe.service';
 import { syncUserQuotaFromSubscription } from '@/api/services/usage-tracking.service';
 import { getDbAsync } from '@/db';
+import { CustomerCacheTags, getUserSubscriptionCacheTags } from '@/db/cache/cache-tags';
 import * as tables from '@/db/schema';
 
 /**
@@ -109,7 +110,7 @@ export async function syncStripeDataFromStripe(
     .limit(1)
     .$withCache({
       config: { ex: 300 },
-      tag: `customer-id-${customerId}`,
+      tag: CustomerCacheTags.byCustomerId(customerId),
     });
 
   const customer = customerResults[0];
@@ -445,6 +446,16 @@ export async function syncStripeDataFromStripe(
     new Date(currentPeriodEnd * 1000),
   );
 
+  // ✅ CRITICAL: Invalidate all cached data for this user
+  // Custom cache tags are NOT auto-invalidated by Drizzle ORM mutations
+  // Must manually invalidate to ensure fresh tier data is used immediately
+  // This fixes the issue where upgraded plans show models as locked for 5 minutes
+  if (db.$cache?.invalidate) {
+    await db.$cache.invalidate({
+      tags: getUserSubscriptionCacheTags(customer.userId, customerId, price.id),
+    });
+  }
+
   // Return synced subscription state (Theo's pattern)
   return {
     status: subscription.status,
@@ -478,7 +489,7 @@ export async function getCustomerIdByUserId(userId: string): Promise<string | nu
     .limit(1)
     .$withCache({
       config: { ex: 300 }, // 5 minutes - customer data stable
-      tag: `customer-${userId}`,
+      tag: CustomerCacheTags.byUserId(userId),
     });
 
   const customer = customerResults[0];

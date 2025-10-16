@@ -10,6 +10,7 @@ import { stripeService } from '@/api/services/stripe.service';
 import { getCustomerIdByUserId, syncStripeDataFromStripe } from '@/api/services/stripe-sync.service';
 import type { ApiEnv } from '@/api/types';
 import { getDbAsync } from '@/db';
+import { PriceCacheTags, ProductCacheTags, STATIC_CACHE_TAGS } from '@/db/cache/cache-tags';
 import * as tables from '@/db/schema';
 
 import type {
@@ -116,7 +117,7 @@ export const listProductsHandler: RouteHandler<typeof listProductsRoute, ApiEnv>
         .where(eq(tables.stripeProduct.active, true))
         .$withCache({
           config: { ex: 300 }, // 5 minutes
-          tag: 'active-products',
+          tag: STATIC_CACHE_TAGS.ACTIVE_PRODUCTS,
         });
 
       // Step 2: Fetch active prices (cacheable)
@@ -126,7 +127,7 @@ export const listProductsHandler: RouteHandler<typeof listProductsRoute, ApiEnv>
         .where(eq(tables.stripePrice.active, true))
         .$withCache({
           config: { ex: 300 }, // 5 minutes
-          tag: 'active-prices',
+          tag: STATIC_CACHE_TAGS.ACTIVE_PRICES,
         });
 
       // Step 3: Join products with their prices and sort - minimal transformation
@@ -187,7 +188,7 @@ export const getProductHandler: RouteHandler<typeof getProductRoute, ApiEnv> = c
         .limit(1)
         .$withCache({
           config: { ex: 600 }, // 10 minutes - product details stable
-          tag: `product-${id}`,
+          tag: ProductCacheTags.single(id),
         });
 
       const dbProduct = productResults[0];
@@ -208,7 +209,7 @@ export const getProductHandler: RouteHandler<typeof getProductRoute, ApiEnv> = c
         )
         .$withCache({
           config: { ex: 600 }, // 10 minutes - prices stable
-          tag: `product-prices-${id}`,
+          tag: PriceCacheTags.byProduct(id),
         });
 
       const productPrices = dbPrices.sort((a, b) => (a.unitAmount ?? 0) - (b.unitAmount ?? 0));

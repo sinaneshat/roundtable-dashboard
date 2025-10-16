@@ -9,7 +9,7 @@ import { BRAND } from '@/constants/brand';
 
 import * as config from './opengraph-image.config';
 
-export { contentType, revalidate, runtime, size } from './opengraph-image.config';
+export { contentType, revalidate, size } from './opengraph-image.config';
 export const alt = BRAND.fullName;
 
 export default async function Image() {

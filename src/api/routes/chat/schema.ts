@@ -353,54 +353,58 @@ export const ParticipantDetailResponseSchema = createApiResponseSchema(Participa
  * AI SDK recommends runtime validation with `validateUIMessages()` because
  * UIMessage types are complex generics that Zod cannot represent.
  *
- * ## Multi-Participant Extension:
- * Added `id` (thread ID) and `participantIndex` to support sequential streaming
- * of multiple AI participants per user message. Frontend orchestrates rounds.
+ * ## Multi-Participant Pattern:
+ * Added `id` (thread ID) and `participantIndex` for frontend orchestration.
+ * Frontend calls this endpoint multiple times (once per participant) sequentially.
  */
 export const StreamChatRequestSchema = z.object({
   /**
-   * ✅ OFFICIAL PATTERN: Single new message (UIMessage)
-   * Reference: https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot-message-persistence#sending-only-the-last-message
+   * ✅ AI SDK v5 OFFICIAL PATTERN: Send ALL accumulated messages
+   * Reference: https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot-message-persistence
    *
-   * Backend loads previous messages from database and appends this new message.
+   * Frontend sends complete message array. Backend uses these messages directly
+   * for AI context (no DB dependency), then persists new assistant response.
+   *
    * Runtime validated with validateUIMessages() in handler.
    *
    * Why z.unknown()? UIMessage<METADATA, DATA, TOOLS> is a complex generic
    * type that Zod cannot accurately represent. Official AI SDK docs recommend
    * z.unknown() + runtime validation.
    */
-  message: z.unknown().openapi({
-    description: 'New message in AI SDK UIMessage format (backend loads previous messages from DB)',
-    example: {
-      id: 'msg_abc123',
-      role: 'user',
-      parts: [
-        { type: 'text', text: 'Hello, how are you?' },
-      ],
-    },
+  messages: z.array(z.unknown()).openapi({
+    description: 'Complete message history in AI SDK UIMessage[] format',
+    example: [
+      {
+        id: 'msg_user1',
+        role: 'user',
+        parts: [{ type: 'text', text: 'Hello!' }],
+      },
+      {
+        id: 'msg_assistant1',
+        role: 'assistant',
+        parts: [{ type: 'text', text: 'Hi there!' }],
+      },
+    ],
   }),
 
   /**
-   * ✅ OFFICIAL PATTERN: Chat/Thread ID
-   * Reference: https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot-message-persistence
-   *
-   * The ID of the chat/thread to load previous messages from.
-   * Backend uses this to load message history from database.
+   * ✅ Thread ID for persistence (REQUIRED for streaming)
    */
-  id: z.string().openapi({
-    description: 'Chat/thread ID to load conversation history',
+  id: z.string().min(1).openapi({
+    description: 'Thread ID for persistence and participant loading (required)',
     example: 'thread_abc123',
   }),
 
   /**
-   * ✅ EXTENSION: Which participant should respond (0-based index)
-   * Enables multi-participant "roundtable" feature using official AI SDK patterns.
-   * Frontend calls endpoint N times sequentially (once per participant).
+   * ✅ Participant Index for frontend orchestration (OPTIONAL)
+   * Defaults to 0 (first participant) if not provided.
+   * Frontend increments this to stream each participant sequentially.
    */
-  participantIndex: z.number().int().nonnegative().openapi({
-    description: 'Which participant (0-based index) should respond to this message',
+  participantIndex: z.number().int().min(0).optional().default(0).openapi({
+    description: 'Index of participant to stream (0-based). Frontend orchestrates multiple participants.',
     example: 0,
   }),
+
 }).openapi('StreamChatRequest');
 
 const MessagesListPayloadSchema = z.object({
@@ -875,3 +879,22 @@ export type LeaderboardEntry = z.infer<typeof LeaderboardEntrySchema>;
 export type ModeratorAnalysisRequest = z.infer<typeof ModeratorAnalysisRequestSchema>;
 export type ModeratorAnalysisPayload = z.infer<typeof ModeratorAnalysisPayloadSchema>;
 export type StoredModeratorAnalysis = z.infer<typeof StoredModeratorAnalysisSchema>;
+
+/**
+ * ✅ AI SDK v5 PATTERN: Metadata schema for UI messages
+ * Used with validateUIMessages() to handle message metadata
+ * Reference: https://sdk.vercel.ai/docs/ai-sdk-core/validate-ui-messages
+ */
+export const UIMessageMetadataSchema = z.object({
+  participantId: z.string().optional(),
+  createdAt: z.string().datetime().optional(),
+  model: z.string().optional(),
+  finishReason: z.string().optional(),
+  usage: z.object({
+    promptTokens: z.number().optional(),
+    completionTokens: z.number().optional(),
+    totalTokens: z.number().optional(),
+  }).optional(),
+}).passthrough().nullable();
+
+export type UIMessageMetadata = z.infer<typeof UIMessageMetadataSchema>;

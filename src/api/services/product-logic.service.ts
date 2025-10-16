@@ -363,7 +363,7 @@ export function getDefaultModelForTier(
  * @param model The model to score
  * @returns Flagship score (0-100, higher = more likely flagship)
  */
-function getFlagshipScore(model: BaseModelResponse): number {
+export function getFlagshipScore(model: BaseModelResponse): number {
   let score = 0;
 
   // ✅ PROVIDER QUALITY (40 points max) - Based on 2025 OpenRouter token usage
@@ -527,11 +527,14 @@ export const TITLE_GENERATION_CONFIG = {
 /**
  * AI timeout configuration
  */
+// ✅ AI SDK v5 PATTERN: Reasoning models need extended timeouts
+// Reference: https://sdk.vercel.ai/docs/providers/community-providers/claude-code#extended-thinking
+// DeepSeek-R1, Claude 4, Gemini 2.0 reasoning models can take 5-10 minutes
 export const AI_TIMEOUT_CONFIG = {
-  default: 30000, // 30 seconds
-  titleGeneration: 10000, // 10 seconds
-  perAttemptMs: 30000, // 30 seconds per retry attempt
-  moderatorAnalysisMs: 45000, // 45 seconds for moderator analysis
+  default: 600000, // 10 minutes - reasoning models (DeepSeek-R1, Claude 4) need extended time
+  titleGeneration: 10000, // 10 seconds - title generation is fast
+  perAttemptMs: 600000, // 10 minutes per retry attempt - matches frontend timeout
+  moderatorAnalysisMs: 120000, // 2 minutes for moderator analysis (non-reasoning)
 } as const;
 
 /**

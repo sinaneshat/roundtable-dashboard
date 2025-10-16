@@ -173,7 +173,9 @@ app.use('*', timing());
 // Apply timeout to all routes except streaming endpoints
 app.use('*', async (c, next) => {
   // Skip timeout for streaming endpoints (chat streaming and moderator analysis)
-  if (c.req.path.includes('/stream') || c.req.path.includes('/analyze')) {
+  // AI SDK v5 PATTERN: Reasoning models (DeepSeek-R1, Claude 4, etc.) need 10+ minutes
+  // Reference: https://sdk.vercel.ai/docs/providers/community-providers/claude-code#extended-thinking
+  if (c.req.path.includes('/stream') || c.req.path.includes('/analyze') || c.req.path.includes('/chat')) {
     return next();
   }
   return timeout(15000)(c, next);
@@ -224,7 +226,8 @@ app.use('*', (c, next) => {
 // ETag support - Skip for streaming endpoints to avoid buffering
 app.use('*', async (c, next) => {
   // Skip ETag for streaming endpoints as it buffers the entire response
-  if (c.req.path.includes('/stream')) {
+  // Must skip for /chat (AI streaming), /stream, and /analyze (moderator streaming)
+  if (c.req.path.includes('/stream') || c.req.path.includes('/chat') || c.req.path.includes('/analyze')) {
     return next();
   }
   return etag()(c, next);
@@ -277,6 +280,10 @@ app.use('/billing/subscriptions/:id/cancel', csrfProtection, requireSession);
 // POST /chat/threads - create thread (requires auth + CSRF)
 app.use('/chat/threads', csrfProtection, requireSession);
 
+// POST /chat - stream AI response (AI SDK v5 pattern - requires auth + CSRF)
+// This is the OFFICIAL AI SDK endpoint for streaming chat responses
+app.use('/chat', csrfProtection, requireSession);
+
 // /chat/threads/:id - mixed access pattern
 // GET: public access for public threads (handler checks ownership/public status)
 // PATCH/DELETE: protected mutations (requires auth + CSRF)
@@ -287,9 +294,6 @@ app.use('/chat/threads/slug/:slug', requireSession);
 
 // GET /chat/threads/:id/messages - get messages (requires auth)
 app.use('/chat/threads/:id/messages', requireSession);
-
-// POST /chat/threads/:id/stream - stream AI response (requires auth + CSRF)
-app.use('/chat/threads/:id/stream', csrfProtection, requireSession);
 
 // Participant management routes (protected)
 app.use('/chat/threads/:id/participants', csrfProtection, requireSession);

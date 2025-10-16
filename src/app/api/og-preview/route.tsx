@@ -24,8 +24,6 @@ import {
   OG_COLORS,
 } from '@/lib/utils/og-image-helpers';
 
-export const runtime = 'nodejs';
-
 // Mock data for preview - Showcasing diverse AI model providers
 // ✅ MOCK DATA FOR OG PREVIEW: Example model IDs for preview generation only
 // ⚠️ NOT PRODUCTION DATA: Actual models are selected dynamically via OpenRouter API

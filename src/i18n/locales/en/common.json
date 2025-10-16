@@ -38,6 +38,7 @@
     "delete": "Delete",
     "deleting": "Deleting",
     "done": "Done",
+    "download": "Download",
     "goHome": "Go Home",
     "loading": "Loading...",
     "next": "Next",
@@ -431,9 +432,14 @@
     "comingSoon": "Coming soon",
     "input": {
       "placeholder": "Message Roundtable...",
+      "placeholderStreaming": "AI participants are responding...",
       "streamingPlaceholder": "Waiting for AI response...",
       "submit": "Send message",
       "threadPlaceholder": "Continue the conversation..."
+    },
+    "sources": {
+      "title": "Sources",
+      "document": "Document"
     },
     "linkCopied": "Link copied",
     "linkCopiedDescription": "Share link copied to clipboard",
@@ -479,6 +485,10 @@
     "removedFromFavoritesDescription": "Thread has been removed from your favorites",
     "scrollToBottom": "Scroll to bottom",
     "searchChats": "Search chats...",
+    "status": {
+      "streaming": "AI is thinking...",
+      "navigating": "Navigating to conversation..."
+    },
     "shareConversation": "Share Conversation",
     "shareThread": "Share Thread",
     "shareThreadDescription": "Share this link with anyone to give them access to this thread",

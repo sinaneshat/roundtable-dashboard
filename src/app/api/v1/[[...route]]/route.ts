@@ -74,7 +74,7 @@ export const dynamic = 'force-dynamic';
  * Enable streaming responses for AI SDK
  * This ensures Next.js doesn't buffer streaming responses
  */
-export const runtime = 'nodejs'; // or 'edge' for edge runtime
+// or 'edge' for edge runtime
 
 /**
  * Increase max duration for streaming responses (10 minutes)

@@ -1,6 +1,6 @@
 import type { RouteHandler } from '@hono/zod-openapi';
-import type { FinishReason, LanguageModelUsage, UIMessage } from 'ai';
-import { convertToModelMessages, streamText } from 'ai';
+import type { UIMessage } from 'ai';
+import { convertToModelMessages, streamText, validateUIMessages } from 'ai';
 import type { SQL } from 'drizzle-orm';
 import { and, desc, eq, ne } from 'drizzle-orm';
 import Fuse from 'fuse.js';
@@ -23,7 +23,6 @@ import { extractModeratorModelName, openRouterModelsService } from '@/api/servic
 import {
   AI_TIMEOUT_CONFIG,
   canAccessModelByPricing,
-  DEFAULT_AI_PARAMS,
   getMaxOutputTokensForTier,
   getRequiredTierForModel,
   SUBSCRIPTION_TIER_NAMES,
@@ -399,6 +398,15 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
     await incrementThreadUsage(user.id);
     await incrementMessageUsage(user.id, 1); // Only the user message for now
 
+    // ✅ Invalidate backend cache for thread lists
+    // This ensures new threads immediately appear in the sidebar
+    if (db.$cache?.invalidate) {
+      const { ThreadCacheTags } = await import('@/db/cache/cache-tags');
+      await db.$cache.invalidate({
+        tags: [ThreadCacheTags.list(user.id)],
+      });
+    }
+
     // Generate AI title asynchronously in background
     // This won't block the response, allowing immediate navigation with temp title
     // Fire-and-forget pattern (no await) - runs in background
@@ -537,7 +545,7 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
     const db = await getDbAsync();
 
     // Verify thread ownership
-    await verifyThreadOwnership(id, user.id, db);
+    const thread = await verifyThreadOwnership(id, user.id, db);
 
     // Build update object using reusable types from chat-modes config
     const updateData: {
@@ -571,6 +579,15 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
       .where(eq(tables.chatThread.id, id))
       .returning();
 
+    // ✅ Invalidate backend cache if status changed (affects list visibility)
+    // Particularly important for 'deleted', 'archived' status changes
+    if (body.status !== undefined && db.$cache?.invalidate) {
+      const { ThreadCacheTags } = await import('@/db/cache/cache-tags');
+      await db.$cache.invalidate({
+        tags: ThreadCacheTags.all(user.id, id, thread.slug),
+      });
+    }
+
     return Responses.ok(c, {
       thread: updatedThread,
     });
@@ -588,8 +605,8 @@ export const deleteThreadHandler: RouteHandler<typeof deleteThreadRoute, ApiEnv>
     const { id } = c.validated.params;
     const db = await getDbAsync();
 
-    // Verify thread ownership
-    await verifyThreadOwnership(id, user.id, db);
+    // Verify thread ownership and get thread details for cache invalidation
+    const thread = await verifyThreadOwnership(id, user.id, db);
 
     // Soft delete - set status to deleted
     await db
@@ -599,6 +616,16 @@ export const deleteThreadHandler: RouteHandler<typeof deleteThreadRoute, ApiEnv>
         updatedAt: new Date(),
       })
       .where(eq(tables.chatThread.id, id));
+
+    // ✅ CRITICAL: Invalidate backend cache for thread lists
+    // This ensures deleted threads immediately disappear from the sidebar
+    // Without this, the listThreadsHandler cache returns stale data
+    if (db.$cache?.invalidate) {
+      const { ThreadCacheTags } = await import('@/db/cache/cache-tags');
+      await db.$cache.invalidate({
+        tags: ThreadCacheTags.all(user.id, id, thread.slug),
+      });
+    }
 
     return Responses.ok(c, {
       deleted: true,
@@ -983,19 +1010,17 @@ export const getThreadChangelogHandler: RouteHandler<typeof getThreadChangelogRo
 );
 
 /**
- * ✅ OFFICIAL AI SDK PATTERN - Chat Streaming with Message Persistence
- * Reference: https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot-message-persistence
+ * ✅ OFFICIAL AI SDK v5 PATTERN - Single-Participant Streaming
+ * Reference: https://sdk.vercel.ai/docs/ai-sdk-core/generating-text#stream-text
  *
- * Pattern Flow:
- * 1. Load existing messages from database
- * 2. Append new message from request
- * 3. Validate with validateUIMessages()
- * 4. Call streamText() with convertToModelMessages()
- * 5. Return toUIMessageStreamResponse()
- * 6. Persist in onFinish callback
+ * SIMPLIFIED Pattern Flow:
+ * 1. Frontend sends messages + participantIndex (which model to use)
+ * 2. Backend streams SINGLE participant's response
+ * 3. Frontend orchestrates multiple participants sequentially
+ * 4. Direct streamText() → toUIMessageStreamResponse() (no wrappers)
+ * 5. Message persistence in onFinish callback (doesn't block stream)
  *
- * Multi-Participant: Frontend calls this endpoint N times sequentially
- * (once per participant). Each call is an independent standard request.
+ * This follows official AI SDK v5 docs exactly - no custom events.
  */
 export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = createHandler(
   {
@@ -1005,12 +1030,24 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
   },
   async (c) => {
     const { user } = c.auth();
-    const { message: newMessage, id: threadId, participantIndex } = c.validated.body;
+    const { messages, id: threadId, participantIndex } = c.validated.body;
+
+    // Validate messages array exists and is not empty
+    if (!messages || !Array.isArray(messages) || messages.length === 0) {
+      throw createError.badRequest('Messages array is required and cannot be empty');
+    }
+
     const db = await getDbAsync();
 
     // =========================================================================
     // STEP 1: Verify Thread & Load Participants
     // =========================================================================
+
+    if (!threadId) {
+      throw createError.badRequest('Thread ID is required for streaming');
+    }
+
+    // Load existing thread
     const thread = await db.query.chatThread.findFirst({
       where: eq(tables.chatThread.id, threadId),
       with: {
@@ -1034,230 +1071,170 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
     }
 
     // =========================================================================
-    // STEP 2: Validate participantIndex
+    // STEP 2: Get SINGLE Participant (frontend orchestration)
     // =========================================================================
-    if (participantIndex === undefined || participantIndex < 0 || participantIndex >= thread.participants.length) {
-      throw createError.badRequest(
-        `Invalid participantIndex. Must be between 0 and ${thread.participants.length - 1}`,
-      );
+
+    const participant = thread.participants[participantIndex ?? 0];
+    if (!participant) {
+      throw createError.badRequest(`Participant at index ${participantIndex} not found`);
     }
 
-    const participant = thread.participants[participantIndex]!;
-
     // =========================================================================
-    // STEP 3: ✅ OFFICIAL PATTERN - Load Existing Messages
-    // Following: https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot-message-persistence#sending-only-the-last-message
+    // STEP 3: ✅ OFFICIAL PATTERN - Type and Validate Messages
+    // Reference: https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot#validating-messages-from-database
     // =========================================================================
-    const dbMessages = await db.query.chatMessage.findMany({
-      where: eq(tables.chatMessage.threadId, threadId),
-      orderBy: [tables.chatMessage.createdAt],
-    });
 
-    // Convert to UIMessage format
-    const previousUIMessages: UIMessage[] = dbMessages.map(msg => ({
-      id: msg.id,
-      role: msg.role as 'user' | 'assistant',
-      parts: [{ type: 'text' as const, text: msg.content }],
-      createdAt: msg.createdAt,
-    }));
+    let typedMessages: UIMessage[] = [];
 
-    // =========================================================================
-    // STEP 4: ✅ OFFICIAL PATTERN - Append New Message
-    // =========================================================================
-    let messages: UIMessage[] = previousUIMessages;
-
-    if (newMessage) {
-      const typedNewMessage = newMessage as UIMessage;
-
-      // Check if it's actually a new message
-      const existsInDb = dbMessages.some(m => m.id === typedNewMessage.id);
-
-      if (!existsInDb && typedNewMessage.role === 'user') {
-        // Extract text from parts
-        const textParts = typedNewMessage.parts.filter(part => part.type === 'text');
-        if (textParts.length === 0) {
-          throw createError.badRequest('Message must contain at least one text part');
-        }
-
-        const content = textParts
-          .map((part) => {
-            if (!('text' in part) || typeof part.text !== 'string') {
-              throw createError.badRequest('Text part missing text property');
-            }
-            return part.text;
-          })
-          .join('');
-
-        // Enforce quota
-        await enforceMessageQuota(user.id);
-
-        // Save user message
-        await db.insert(tables.chatMessage).values({
-          id: typedNewMessage.id,
-          threadId,
-          role: 'user',
-          content,
-          createdAt: new Date(),
-        });
-
-        // Increment usage
-        await incrementMessageUsage(user.id, 1);
+    try {
+      if (!Array.isArray(messages)) {
+        throw new TypeError('Messages must be an array');
       }
 
-      // Append to messages
-      messages = [...previousUIMessages, typedNewMessage];
+      typedMessages = messages as UIMessage[];
+      validateUIMessages({ messages: typedMessages });
+    } catch (error) {
+      console.error('Message validation error:', error);
+      throw createError.badRequest(`Invalid message format: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
 
     // =========================================================================
-    // STEP 5: ✅ OFFICIAL PATTERN - Validate Messages
-    // Following: https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot#validating-messages-from-database
+    // STEP 4: Save New User Message (if exists and not already saved)
     // =========================================================================
-    const { validateUIMessages } = await import('ai');
-    try {
-      validateUIMessages({ messages });
-    } catch {
-      throw createError.badRequest('Invalid message format');
+
+    const lastMessage = typedMessages[typedMessages.length - 1];
+    if (lastMessage && lastMessage.role === 'user') {
+      const existsInDb = await db.query.chatMessage.findFirst({
+        where: eq(tables.chatMessage.id, lastMessage.id),
+      });
+
+      if (!existsInDb) {
+        const textParts = lastMessage.parts?.filter(part => part.type === 'text') || [];
+        if (textParts.length > 0) {
+          const content = textParts
+            .map((part) => {
+              if ('text' in part && typeof part.text === 'string') {
+                return part.text;
+              }
+              return '';
+            })
+            .join('')
+            .trim();
+
+          if (content.length > 0) {
+            await enforceMessageQuota(user.id);
+            await db.insert(tables.chatMessage).values({
+              id: lastMessage.id,
+              threadId,
+              role: 'user',
+              content,
+              createdAt: new Date(),
+            });
+            await incrementMessageUsage(user.id, 1);
+          }
+        }
+      }
     }
 
     // =========================================================================
-    // STEP 6: ✅ OFFICIAL PATTERN - streamText()
-    // Following: https://sdk.vercel.ai/docs/ai-sdk-core/generating-text
+    // STEP 5: Initialize OpenRouter and Setup
     // =========================================================================
+
     initializeOpenRouter(c.env);
     const client = openRouterService.getClient();
     const userTier = await getUserTier(user.id);
     const maxOutputTokens = getMaxOutputTokensForTier(userTier);
 
-    // ✅ AI SDK v5 BRIDGE PATTERN: Two-Callback Data Flow
-    //
-    // WHY THIS PATTERN IS NECESSARY:
-    // - streamText.onFinish() provides usage/finishReason when MODEL completes
-    // - toUIMessageStreamResponse.onFinish() provides messages/isAborted when UI STREAM finishes
-    // - We need BOTH pieces of data for persistence (usage for tracking + messages for storage)
-    // - This bridge variable connects the two callbacks
-    //
-    // OFFICIAL AI SDK ARCHITECTURE:
-    // streamText() → [model completion] → streamText.onFinish(usage, finishReason)
-    //             ↓
-    // toUIMessageStreamResponse() → [UI stream completion] → onFinish(messages, isAborted)
-    //             ↓
-    // Database Persistence → Save messages WITH usage data
-    //
-    // REFERENCE: https://v4.ai-sdk.dev/docs/ai-sdk-ui/chatbot-message-persistence
-    // Store usage and finishReason for later use in message persistence
-    // Using official AI SDK types: LanguageModelUsage, FinishReason
-    let completionMetadata: {
-      usage?: LanguageModelUsage;
-      finishReason?: FinishReason;
-    } = {};
+    // =========================================================================
+    // STEP 6: ✅ OFFICIAL AI SDK v5 PATTERN - Direct streamText()
+    // Reference: https://sdk.vercel.ai/docs/ai-sdk-core/generating-text#stream-text
+    // =========================================================================
 
-    const result = streamText({
-      model: client.chat(participant.modelId),
-      messages: convertToModelMessages(messages),
-      system: participant.settings?.systemPrompt || 'You are a helpful assistant.',
-      temperature: participant.settings?.temperature ?? DEFAULT_AI_PARAMS.temperature,
-      maxOutputTokens,
+    // Prepare system prompt for this participant
+    const systemPrompt = participant.settings?.systemPrompt
+      || `You are ${participant.role || 'an AI assistant'}.`;
 
-      // ✅ AI SDK v5 PATTERN: Timeout protection with AbortSignal.any()
-      // Prevents infinite streams while supporting client disconnect
-      abortSignal: AbortSignal.any([
-        c.req.raw.signal, // Client disconnect
-        AbortSignal.timeout(AI_TIMEOUT_CONFIG.perAttemptMs), // Centralized timeout (30s)
-      ]),
+    // Convert UI messages to model messages
+    // ✅ FIX: Filter out empty messages (caused by subsequent participant triggers)
+    const nonEmptyMessages = typedMessages.filter((msg) => {
+      // Keep all assistant messages
+      if (msg.role === 'assistant') {
+        return true;
+      }
 
-      // ✅ AI SDK v5 PATTERN: Save partial results on abort
-      // Reference: AI SDK v5 State Management patterns
-      onAbort: async () => {
-        // Partial content available for debugging/resume if needed
-      },
+      // For user messages, only keep if they have non-empty text parts
+      if (msg.role === 'user') {
+        const textParts = msg.parts?.filter(part =>
+          part.type === 'text' && 'text' in part && part.text.trim().length > 0,
+        );
+        return textParts && textParts.length > 0;
+      }
 
-      // ✅ AI SDK v5 MULTI-MODEL PATTERN: Track completion metadata
-      // This runs when streamText completes (before toUIMessageStreamResponse onFinish)
-      async onFinish({ usage, finishReason }) {
-        completionMetadata = { usage, finishReason };
-      },
+      return false;
     });
 
-    // ✅ OFFICIAL PATTERN - Consume stream for client disconnects
-    // Following: https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot-message-persistence#handling-client-disconnects
-    result.consumeStream();
+    if (nonEmptyMessages.length === 0) {
+      throw createError.badRequest('No valid messages to send to AI model');
+    }
 
-    // =========================================================================
-    // STEP 7: ✅ OFFICIAL PATTERN - toUIMessageStreamResponse()
-    // Following: https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot#streaming-responses
-    // =========================================================================
-    const { createIdGenerator } = await import('ai');
-    return result.toUIMessageStreamResponse({
-      originalMessages: messages,
-      generateMessageId: createIdGenerator({ prefix: 'msg', size: 16 }),
-      sendReasoning: true,
-      sendSources: true,
+    let modelMessages;
+    try {
+      modelMessages = convertToModelMessages(nonEmptyMessages);
+    } catch (conversionError) {
+      console.error('Error converting messages:', conversionError);
+      throw createError.badRequest('Failed to convert messages for model');
+    }
 
-      // ✅ OFFICIAL PATTERN - onFinish for persistence
-      // Following: https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot-message-persistence#storing-messages
-      onFinish: async ({ messages: allMessages, isAborted }) => {
-        // ✅ Retrieve usage and finishReason from streamText onFinish callback
-        const { usage, finishReason } = completionMetadata;
-        // ✅ AI SDK v5 PATTERN: Don't save incomplete/corrupt messages from aborted streams
-        // Reference: AI SDK v5 Stream Completion Handling patterns
-        if (isAborted) {
-          return;
-        }
+    // ✅ OFFICIAL PATTERN: Direct streamText() call
+    const result = streamText({
+      model: client(participant.modelId),
+      system: systemPrompt,
+      messages: modelMessages,
+      maxOutputTokens,
+      temperature: participant.settings?.temperature ?? 0.7,
+      abortSignal: AbortSignal.any([
+        // Cancel when client disconnects
+        (c.req as unknown as { raw: Request }).raw.signal,
+        // Server-side protection per attempt
+        AbortSignal.timeout(AI_TIMEOUT_CONFIG.perAttemptMs),
+      ]),
+      experimental_telemetry: {
+        isEnabled: true,
+        functionId: `chat.thread.${threadId}.participant.${participant.id}`,
+      },
 
+      // ✅ MESSAGE PERSISTENCE: onFinish callback (doesn't block stream)
+      onFinish: async ({ text, usage, finishReason }) => {
         try {
-          const assistantMessage = allMessages[allMessages.length - 1];
-          if (!assistantMessage || assistantMessage.role !== 'assistant') {
-            return;
-          }
-
-          // Extract text content
-          const textPart = assistantMessage.parts.find(p => p.type === 'text');
-          const content = textPart?.type === 'text' ? textPart.text : '';
-
-          if (!content) {
-            return;
-          }
-
-          // Extract reasoning content (for Claude extended thinking, GPT reasoning tokens)
-          const reasoningPart = assistantMessage.parts.find(p => 'type' in p && p.type === 'reasoning');
-          const reasoning = reasoningPart && 'text' in reasoningPart && typeof reasoningPart.text === 'string'
-            ? reasoningPart.text
-            : undefined;
-
-          // ✅ AI SDK v5 MULTI-MODEL PATTERN: Token Usage Tracking
-          // Reference: AI_SDK_V5_MULTI_MODEL_PATTERNS.md Section 7.5
-          // Store usage directly from AI SDK (LanguageModelUsage type)
-          const metadata = {
-            model: participant.modelId,
-            finishReason,
-            usage,
-          };
-
-          // Save to database with metadata
+          // Persist message to database AFTER streaming completes
           await db.insert(tables.chatMessage).values({
-            id: assistantMessage.id,
+            id: ulid(),
             threadId,
             participantId: participant.id,
             role: 'assistant',
-            content,
-            reasoning,
-            metadata,
+            content: text,
+            metadata: {
+              model: participant.modelId,
+              participantId: participant.id,
+              participantIndex,
+              participantRole: participant.role,
+              usage,
+              finishReason,
+            } as Record<string, unknown>,
             createdAt: new Date(),
           }).onConflictDoNothing();
 
-          // Update thread's lastMessageAt
-          await db
-            .update(tables.chatThread)
-            .set({ lastMessageAt: new Date() })
-            .where(eq(tables.chatThread.id, threadId));
-
-          // Increment usage
           await incrementMessageUsage(user.id, 1);
-        } catch {
-          // Suppress error - message persistence is best effort
+        } catch (error) {
+          console.error('Failed to save message:', error);
+          // Don't throw - message already streamed to client
         }
       },
     });
+
+    // ✅ OFFICIAL PATTERN: Return standard UI message stream response
+    // Reference: https://sdk.vercel.ai/docs/ai-sdk-core/streaming-text-to-response#toUIMessageStreamResponse
+    return result.toUIMessageStreamResponse();
   },
 );
 
