@@ -34,8 +34,8 @@ import { BRAND } from '@/constants/brand';
 import { useDeleteThreadMutation } from '@/hooks/mutations/chat-mutations';
 import { useThreadsQuery } from '@/hooks/queries/chat-threads';
 import { toastManager } from '@/lib/toast/toast-manager';
-import type { Chat } from '@/lib/types/chat';
-import { groupChatsByPeriod } from '@/lib/types/chat';
+import type { Chat } from '@/lib/types/sidebar';
+import { groupChatsByPeriod } from '@/lib/types/sidebar';
 
 // ✅ CRITICAL: Memoize sidebar to prevent re-renders during message streaming
 // Without this, every message update triggers sidebar re-render, causing Next.js prefetch requests

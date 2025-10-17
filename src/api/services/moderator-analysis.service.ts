@@ -52,6 +52,10 @@ export const ModeratorAnalysisSchema = z.object({
   conclusion: z.string().min(50).max(400).describe('Final conclusion and recommendation on the best path forward'),
 });
 
+// ✅ AI SDK V5 PATTERN: Export schema for frontend useObject hook
+// Frontend needs this schema to type-check streamed objects
+export type ModeratorAnalysisFromStream = z.infer<typeof ModeratorAnalysisSchema>;
+
 export type ModeratorAnalysis = z.infer<typeof ModeratorAnalysisPayloadSchema>;
 export type ModeratorPromptConfig = {
   /** Conversation mode */

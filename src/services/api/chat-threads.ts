@@ -95,6 +95,15 @@ export type GetThreadAnalysesResponse = InferResponseType<
   ApiClientType['chat']['threads'][':id']['analyses']['$get']
 >;
 
+// Analysis types - for streaming object generation
+export type AnalyzeRoundRequest = InferRequestType<
+  ApiClientType['chat']['threads'][':threadId']['rounds'][':roundNumber']['analyze']['$post']
+>;
+
+export type AnalyzeRoundResponse = InferResponseType<
+  ApiClientType['chat']['threads'][':threadId']['rounds'][':roundNumber']['analyze']['$post']
+>;
+
 // ============================================================================
 // Service Functions
 // ============================================================================

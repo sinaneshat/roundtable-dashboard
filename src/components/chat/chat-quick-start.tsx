@@ -9,7 +9,7 @@ import { Card } from '@/components/ui/card';
 import { useModelsQuery } from '@/hooks/queries/models';
 import { useUsageStatsQuery } from '@/hooks/queries/usage';
 import type { ChatModeId } from '@/lib/config/chat-modes';
-import type { ParticipantConfig } from '@/lib/schemas/chat-forms';
+import type { ParticipantConfig } from '@/lib/types/participant-config';
 import { cn } from '@/lib/ui/cn';
 import { getProviderIcon } from '@/lib/utils/ai-display';
 

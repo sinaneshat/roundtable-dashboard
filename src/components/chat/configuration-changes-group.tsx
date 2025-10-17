@@ -3,6 +3,7 @@
 import { ArrowRight, Clock, Minus, Pencil, Plus } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
+import type { ChatThreadChangelog } from '@/api/routes/chat/schema';
 import {
   parseModeChangeData,
   parseParticipantAddedData,
@@ -20,12 +21,11 @@ import { useModelsQuery } from '@/hooks/queries/models';
 import { formatRelativeTime } from '@/lib/format/date';
 import { cn } from '@/lib/ui/cn';
 import { getProviderIcon } from '@/lib/utils/ai-display';
-import type { Changelog } from '@/types/chat';
 
 type ConfigurationChangesGroupProps = {
   group: {
     timestamp: Date;
-    changes: Changelog[];
+    changes: ChatThreadChangelog[];
   };
   className?: string;
 };
@@ -36,7 +36,7 @@ type ConfigurationChangesGroupProps = {
 
 type ChangeAction = 'added' | 'modified' | 'removed';
 
-function getChangeAction(changeType: Changelog['changeType']): ChangeAction {
+function getChangeAction(changeType: ChatThreadChangelog['changeType']): ChangeAction {
   switch (changeType) {
     case 'participant_added':
       return 'added';
@@ -90,7 +90,7 @@ export function ConfigurationChangesGroup({ group, className }: ConfigurationCha
       acc[action].push(change);
       return acc;
     },
-    {} as Record<ChangeAction, Changelog[]>,
+    {} as Record<ChangeAction, ChatThreadChangelog[]>,
   );
 
   // Sort by action order: added -> modified -> removed
@@ -148,7 +148,7 @@ export function ConfigurationChangesGroup({ group, className }: ConfigurationCha
                   {/* Changes for this action - Responsive: horizontal scroll on desktop, vertical stack on mobile */}
                   <div className="w-full overflow-x-auto md:overflow-x-auto">
                     <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 pb-2 pl-6">
-                      {changes.map((change: Changelog) => (
+                      {changes.map((change: ChatThreadChangelog) => (
                         <ChangeItem key={change.id} change={change} />
                       ))}
                     </div>
@@ -167,7 +167,7 @@ export function ConfigurationChangesGroup({ group, className }: ConfigurationCha
  * Individual change item renderer with glassmorphism style
  * Matches the ParticipantsPreview badge design
  */
-function ChangeItem({ change }: { change: Changelog }) {
+function ChangeItem({ change }: { change: ChatThreadChangelog }) {
   // ✅ SINGLE SOURCE OF TRUTH: Fetch models from backend
   const { data: modelsData } = useModelsQuery();
   const allModels = modelsData?.data?.items || [];

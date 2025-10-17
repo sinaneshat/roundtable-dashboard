@@ -43,6 +43,7 @@ import type { ApiEnv } from '@/api/types';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db/schema';
 import type { ChatModeId, ThreadStatus } from '@/lib/config/chat-modes';
+import { filterNonEmptyMessages } from '@/lib/utils/message-transforms';
 
 import type {
   addParticipantRoute,
@@ -75,6 +76,7 @@ import {
   StreamChatRequestSchema,
   ThreadListQuerySchema,
   ThreadSlugParamSchema,
+  UIMessageMetadataSchema,
   UpdateCustomRoleRequestSchema,
   UpdateParticipantRequestSchema,
   UpdateThreadRequestSchema,
@@ -83,6 +85,92 @@ import {
 // ============================================================================
 // Internal Helper Functions (Following 3-file pattern: handler, route, schema)
 // ============================================================================
+
+/**
+ * ✅ AUTO-TRIGGER ANALYSIS: Automatically create pending analysis after round completes
+ *
+ * This function is called asynchronously after the last participant finishes responding.
+ * It creates a pending analysis record immediately to prevent duplicate analysis generation.
+ * The actual analysis streaming happens when the frontend requests it.
+ *
+ * @param params - Round completion parameters
+ * @returns Promise<void> - Resolves when pending analysis record is created
+ */
+async function triggerRoundAnalysisAsync(params: {
+  threadId: string;
+  thread: typeof tables.chatThread.$inferSelect & {
+    participants: Array<typeof tables.chatParticipant.$inferSelect>;
+  };
+  allParticipants: Array<typeof tables.chatParticipant.$inferSelect>;
+  savedMessageId: string;
+  db: Awaited<ReturnType<typeof getDbAsync>>;
+}): Promise<void> {
+  const { threadId, thread, db } = params;
+
+  try {
+    // Get all assistant messages for this thread to determine round number
+    const assistantMessages = await db.query.chatMessage.findMany({
+      where: and(
+        eq(tables.chatMessage.threadId, threadId),
+        eq(tables.chatMessage.role, 'assistant'),
+      ),
+      orderBy: [tables.chatMessage.createdAt],
+    });
+
+    // Calculate round number: each round has N assistant messages (one per participant)
+    const participantCount = thread.participants.length;
+    const roundNumber = Math.ceil(assistantMessages.length / participantCount);
+
+    // Check if analysis already exists for this round (idempotency)
+    const existingAnalysis = await db.query.chatModeratorAnalysis.findFirst({
+      where: and(
+        eq(tables.chatModeratorAnalysis.threadId, threadId),
+        eq(tables.chatModeratorAnalysis.roundNumber, roundNumber),
+      ),
+    });
+
+    if (existingAnalysis) {
+      // Analysis already exists - skip
+      return;
+    }
+
+    // Get the participant message IDs for this round
+    const roundStartIndex = (roundNumber - 1) * participantCount;
+    const roundMessages = assistantMessages.slice(roundStartIndex, roundStartIndex + participantCount);
+    const participantMessageIds = roundMessages.map(m => m.id);
+
+    // Get the user question for this round (last user message before round messages)
+    const userMessages = await db.query.chatMessage.findMany({
+      where: and(
+        eq(tables.chatMessage.threadId, threadId),
+        eq(tables.chatMessage.role, 'user'),
+      ),
+      orderBy: [desc(tables.chatMessage.createdAt)],
+      limit: 10,
+    });
+
+    const earliestRoundMessageTime = Math.min(...roundMessages.map(m => m.createdAt.getTime()));
+    const userQuestion = userMessages.find(
+      m => m.createdAt.getTime() < earliestRoundMessageTime,
+    )?.content || 'N/A';
+
+    // ✅ CREATE PENDING ANALYSIS: This prevents duplicate generation
+    // Frontend will automatically pick this up and start streaming
+    await db.insert(tables.chatModeratorAnalysis).values({
+      id: ulid(),
+      threadId,
+      roundNumber,
+      mode: thread.mode,
+      userQuestion,
+      status: 'pending', // Mark as pending - frontend will trigger streaming
+      participantMessageIds,
+      createdAt: new Date(),
+    });
+  } catch (error) {
+    console.error('Failed to trigger round analysis:', error);
+    // Don't throw - this is a background operation
+  }
+}
 
 /**
  * Verify thread exists and user owns it
@@ -861,6 +949,22 @@ export const addParticipantHandler: RouteHandler<typeof addParticipantRoute, Api
       })
       .returning();
 
+    // ✅ CREATE CHANGELOG ENTRY: Track participant addition
+    const modelName = extractModeratorModelName(body.modelId as string);
+    const changelogId = ulid();
+    await db.insert(tables.chatThreadChangelog).values({
+      id: changelogId,
+      threadId: id,
+      changeType: 'participant_added',
+      changeSummary: `Added ${modelName}${body.role ? ` as "${body.role}"` : ''}`,
+      changeData: {
+        participantId,
+        modelId: body.modelId as string,
+        role: body.role as string | null,
+      },
+      createdAt: now,
+    });
+
     return Responses.ok(c, {
       participant,
     });
@@ -908,6 +1012,26 @@ export const updateParticipantHandler: RouteHandler<typeof updateParticipantRout
       .where(eq(tables.chatParticipant.id, id))
       .returning();
 
+    // ✅ CREATE CHANGELOG ENTRY: Track participant update
+    // Only create changelog if role changed (most common/visible change)
+    if (body.role !== undefined && body.role !== participant.role) {
+      const modelName = extractModeratorModelName(participant.modelId);
+      const changelogId = ulid();
+      await db.insert(tables.chatThreadChangelog).values({
+        id: changelogId,
+        threadId: participant.threadId,
+        changeType: 'participant_updated',
+        changeSummary: `Updated ${modelName} role from "${participant.role || 'none'}" to "${body.role || 'none'}"`,
+        changeData: {
+          participantId: id,
+          modelId: participant.modelId,
+          oldRole: participant.role,
+          newRole: body.role as string | null,
+        },
+        createdAt: new Date(),
+      });
+    }
+
     return Responses.ok(c, {
       participant: updatedParticipant,
     });
@@ -940,6 +1064,22 @@ export const deleteParticipantHandler: RouteHandler<typeof deleteParticipantRout
     if (participant.thread.userId !== user.id) {
       throw createError.unauthorized('Not authorized to delete this participant', ErrorContextBuilders.authorization('participant', id));
     }
+
+    // ✅ CREATE CHANGELOG ENTRY: Track participant removal (BEFORE deletion)
+    const modelName = extractModeratorModelName(participant.modelId);
+    const changelogId = ulid();
+    await db.insert(tables.chatThreadChangelog).values({
+      id: changelogId,
+      threadId: participant.threadId,
+      changeType: 'participant_removed',
+      changeSummary: `Removed ${modelName}${participant.role ? ` ("${participant.role}")` : ''}`,
+      changeData: {
+        participantId: id,
+        modelId: participant.modelId,
+        role: participant.role,
+      },
+      createdAt: new Date(),
+    });
 
     await db.delete(tables.chatParticipant).where(eq(tables.chatParticipant.id, id));
 
@@ -1092,7 +1232,12 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
       }
 
       typedMessages = messages as UIMessage[];
-      validateUIMessages({ messages: typedMessages });
+      // ✅ AI SDK v5 OFFICIAL PATTERN: Validate messages with metadata schema
+      // Reference: https://sdk.vercel.ai/docs/ai-sdk-core/validate-ui-messages
+      validateUIMessages({
+        messages: typedMessages,
+        metadataSchema: UIMessageMetadataSchema,
+      });
     } catch (error) {
       console.error('Message validation error:', error);
       throw createError.badRequest(`Invalid message format: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -1155,23 +1300,8 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
       || `You are ${participant.role || 'an AI assistant'}.`;
 
     // Convert UI messages to model messages
-    // ✅ FIX: Filter out empty messages (caused by subsequent participant triggers)
-    const nonEmptyMessages = typedMessages.filter((msg) => {
-      // Keep all assistant messages
-      if (msg.role === 'assistant') {
-        return true;
-      }
-
-      // For user messages, only keep if they have non-empty text parts
-      if (msg.role === 'user') {
-        const textParts = msg.parts?.filter(part =>
-          part.type === 'text' && 'text' in part && part.text.trim().length > 0,
-        );
-        return textParts && textParts.length > 0;
-      }
-
-      return false;
-    });
+    // ✅ SHARED UTILITY: Filter out empty messages (caused by subsequent participant triggers)
+    const nonEmptyMessages = filterNonEmptyMessages(typedMessages);
 
     if (nonEmptyMessages.length === 0) {
       throw createError.badRequest('No valid messages to send to AI model');
@@ -1207,7 +1337,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
       onFinish: async ({ text, usage, finishReason }) => {
         try {
           // Persist message to database AFTER streaming completes
-          await db.insert(tables.chatMessage).values({
+          const [savedMessage] = await db.insert(tables.chatMessage).values({
             id: ulid(),
             threadId,
             participantId: participant.id,
@@ -1222,9 +1352,25 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
               finishReason,
             } as Record<string, unknown>,
             createdAt: new Date(),
-          }).onConflictDoNothing();
+          }).onConflictDoNothing().returning();
 
           await incrementMessageUsage(user.id, 1);
+
+          // ✅ AUTO-TRIGGER ANALYSIS: When last participant finishes
+          // This happens asynchronously - don't await to avoid blocking
+          if (participantIndex === thread.participants.length - 1 && savedMessage) {
+            // Last participant just finished - trigger analysis for this round
+            triggerRoundAnalysisAsync({
+              threadId,
+              thread,
+              allParticipants: thread.participants,
+              savedMessageId: savedMessage.id,
+              db,
+            }).catch((error) => {
+              console.error('Failed to trigger round analysis:', error);
+              // Don't throw - this is a background task
+            });
+          }
         } catch (error) {
           console.error('Failed to save message:', error);
           // Don't throw - message already streamed to client
@@ -1509,11 +1655,26 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
       }
     }
 
+    // ✅ AI SDK V5 PATTERN: Support optional participantMessageIds
+    // If not provided, query automatically (future enhancement)
+    // For now, require them with clear error message
+    if (!body.participantMessageIds || body.participantMessageIds.length === 0) {
+      throw createError.badRequest(
+        'participantMessageIds array is required for analysis',
+        {
+          errorType: 'validation',
+          field: 'participantMessageIds',
+        },
+      );
+    }
+
     // Fetch all participant messages for this round
+    // Safe to assert: we validated participantMessageIds exists above
+    const messageIds = body.participantMessageIds!;
     const participantMessages = await db.query.chatMessage.findMany({
       where: (fields, { inArray, eq: eqOp, and: andOp }) =>
         andOp(
-          inArray(fields.id, body.participantMessageIds),
+          inArray(fields.id, messageIds),
           eqOp(fields.threadId, threadId),
           eqOp(fields.role, 'assistant'),
         ),
@@ -1524,9 +1685,9 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
     });
 
     // Validation: Ensure we have all requested messages
-    if (participantMessages.length !== body.participantMessageIds.length) {
+    if (participantMessages.length !== messageIds.length) {
       const foundIds = participantMessages.map(m => m.id);
-      const missingIds = body.participantMessageIds.filter(id => !foundIds.includes(id));
+      const missingIds = messageIds.filter(id => !foundIds.includes(id));
       throw createError.badRequest(
         `Some participant messages not found: ${missingIds.join(', ')}`,
         {

@@ -81,6 +81,8 @@ export {
 // ============================================================================
 
 export {
+  type AnalyzeRoundRequest,
+  type AnalyzeRoundResponse,
   type CreateThreadRequest,
   type CreateThreadResponse,
   createThreadService,
@@ -199,3 +201,9 @@ export {
   type GetUsageStatsResponse,
   getUserUsageStatsService,
 } from './usage';
+
+// ============================================================================
+// Chat Analysis Service Exports
+// ============================================================================
+// ✅ CONSOLIDATED: Analysis exports now part of chat-threads service
+// GetThreadAnalysesRequest/Response/Service exported above from './chat-threads'

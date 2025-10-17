@@ -9,8 +9,6 @@
  * @see @/api/routes/chat/schema - Model ID validation and extraction
  */
 
-import type { ParticipantConfig } from '@/lib/schemas/chat-forms';
-
 // ============================================================================
 // MODEL DISPLAY HELPERS
 // ============================================================================
@@ -248,57 +246,6 @@ export function getModelIconInfo(modelId: string): {
   };
 }
 
-/**
- * Check if a provider has a dedicated icon (not using fallback)
- *
- * @param provider - Provider slug
- * @returns True if we have a specific icon for this provider
- *
- * @example
- * hasProviderIcon('anthropic') // true
- * hasProviderIcon('unknown-provider') // false
- */
-export function hasProviderIcon(provider: string): boolean {
-  const normalizedProvider = provider.toLowerCase().trim();
-  return normalizedProvider in PROVIDER_ICON_MAP && normalizedProvider !== 'openrouter';
-}
-
-/**
- * Get all providers that have mapped icons
- *
- * Useful for debugging and displaying supported providers
- *
- * @returns Array of provider slugs with icons
- *
- * @example
- * const providers = getProvidersWithIcons();
- * console.log(`${providers.length} providers with icons`);
- */
-export function getProvidersWithIcons(): string[] {
-  return Object.keys(PROVIDER_ICON_MAP).filter(p => p !== 'openrouter');
-}
-
-/**
- * Get total count of supported providers
- *
- * @returns Number of providers with dedicated icons
- */
-export function getSupportedProviderCount(): number {
-  return getProvidersWithIcons().length;
-}
-
-/**
- * ✅ DYNAMIC: Get all providers we have icons for
- *
- * Note: This does NOT represent "all supported providers"
- * ALL providers from OpenRouter are supported automatically via fallback
- *
- * @returns Array of provider slugs with dedicated icon files
- */
-export function getAllKnownProviders(): string[] {
-  return Object.keys(PROVIDER_ICON_MAP).filter(p => p !== 'openrouter');
-}
-
 // ============================================================================
 // AVATAR HELPERS
 // ============================================================================
@@ -310,53 +257,6 @@ export type AvatarProps = {
   src: string;
   name: string;
 };
-
-/**
- * Get avatar props for a participant based on model ID
- *
- * ✅ SINGLE SOURCE: Derives all info from model ID directly
- * - User messages: Use authenticated user's image and name
- * - Assistant messages: Use provider icon and display name from model ID
- *
- * @param role - Message role ('user' or 'assistant')
- * @param participants - Array of participant configurations
- * @param userImage - Authenticated user's image URL (optional)
- * @param userName - Authenticated user's name (optional)
- * @param participantIndex - Index of the participant for assistant messages (optional)
- * @returns Avatar props with src and name
- */
-export function getAvatarProps(
-  role: 'user' | 'assistant',
-  participants: ParticipantConfig[],
-  userImage?: string | null,
-  userName?: string | null,
-  participantIndex?: number,
-): AvatarProps {
-  if (role === 'user') {
-    return {
-      src: userImage || '/static/icons/user-avatar.png',
-      name: userName || 'User',
-    };
-  }
-
-  // For assistant messages, get model info from participant
-  if (participantIndex !== undefined && participants[participantIndex]) {
-    const participant = participants[participantIndex];
-    const provider = getProviderFromModelId(participant.modelId);
-    const displayName = getDisplayNameFromModelId(participant.modelId);
-
-    return {
-      src: getProviderIcon(provider),
-      name: displayName,
-    };
-  }
-
-  // Fallback for assistant messages without participant info
-  return {
-    src: '/static/icons/ai-models/default.png',
-    name: 'AI',
-  };
-}
 
 /**
  * Get avatar props directly from modelId (for historical messages)

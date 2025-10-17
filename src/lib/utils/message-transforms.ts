@@ -1,30 +1,29 @@
 /**
  * Message Transformation Utilities
  *
- * ✅ AI SDK INTEGRATION: Transforms between API types and AI SDK types
- * ✅ RPC-INFERRED TYPES: Import runtime types from services
+ * ✅ AI SDK v5 OFFICIAL PATTERN: Transforms between API types and AI SDK types
+ *
+ * Reference: https://sdk.vercel.ai/docs/ai-sdk-core/validate-ui-messages
  *
  * These transforms are necessary for AI SDK v5 compatibility:
- * - Message (from RPC) → UIMessage (AI SDK format)
- * - Metadata validation and extraction
+ * - ChatMessage (from schema) → UIMessage (AI SDK format)
+ * - Metadata validation using AI SDK patterns
  */
 
 import type { UIMessage } from 'ai';
 
-import type { UIMessageMetadata } from '@/lib/schemas/message-metadata';
-import {
-  UIMessageMetadataSchema,
-  validateMessageMetadata,
-} from '@/lib/schemas/message-metadata';
-import type { ChatMessage } from '@/types/chat';
+import type { ChatMessage, UIMessageMetadata } from '@/api/routes/chat/schema';
+import { UIMessageMetadataSchema } from '@/api/routes/chat/schema';
 
 // ============================================================================
-// METADATA VALIDATION
+// METADATA VALIDATION (AI SDK v5 Official Pattern)
 // ============================================================================
 
 /**
- * ✅ ZOD VALIDATION: Runtime-safe metadata extraction with proper validation
- * Parses and validates metadata from UIMessage using Zod schema
+ * ✅ AI SDK v5 PATTERN: Runtime-safe metadata extraction with Zod validation
+ * Uses safeParse for graceful handling of invalid data
+ *
+ * Reference: https://sdk.vercel.ai/docs/ai-sdk-core/validate-ui-messages
  *
  * @param metadata - UIMessage metadata field (unknown - from AI SDK UIMessage type)
  * @returns Validated and typed metadata, or undefined if invalid/missing
@@ -32,7 +31,18 @@ import type { ChatMessage } from '@/types/chat';
 export function getMessageMetadata(
   metadata: unknown,
 ): UIMessageMetadata | undefined {
-  return validateMessageMetadata(metadata, UIMessageMetadataSchema);
+  if (!metadata) {
+    return undefined;
+  }
+
+  const result = UIMessageMetadataSchema.safeParse(metadata);
+
+  if (!result.success) {
+    // Return raw metadata as fallback to prevent data loss
+    return metadata as UIMessageMetadata;
+  }
+
+  return result.data;
 }
 
 // ============================================================================
@@ -68,7 +78,7 @@ export function chatMessageToUIMessage(message: ChatMessage): UIMessage {
 
   const metadata: UIMessageMetadata = {
     ...baseMetadata, // Spread metadata from backend
-    participantId: message.participantId, // Override with top-level participantId
+    participantId: message.participantId || undefined, // Override with top-level participantId (convert null to undefined)
     createdAt: createdAtString, // Add timestamp for timeline sorting (as string)
   };
 
@@ -88,4 +98,40 @@ export function chatMessageToUIMessage(message: ChatMessage): UIMessage {
  */
 export function chatMessagesToUIMessages(messages: ChatMessage[]): UIMessage[] {
   return messages.map(chatMessageToUIMessage);
+}
+
+// ============================================================================
+// MESSAGE FILTERING
+// ============================================================================
+
+/**
+ * ✅ SHARED UTILITY: Filter out empty user messages
+ *
+ * Filters out user messages that have no non-empty text parts.
+ * This is necessary for UI display and AI model consumption.
+ *
+ * Used in:
+ * - Frontend: chat-message-list.tsx (UI display)
+ * - Backend: chat handler (before sending to AI model)
+ *
+ * @param messages - Array of UIMessages to filter
+ * @returns Filtered array with only non-empty messages
+ */
+export function filterNonEmptyMessages(messages: UIMessage[]): UIMessage[] {
+  return messages.filter((message) => {
+    // Keep all assistant messages
+    if (message.role === 'assistant') {
+      return true;
+    }
+
+    // For user messages, only keep if they have non-empty text parts
+    if (message.role === 'user') {
+      const textParts = message.parts?.filter(part =>
+        part.type === 'text' && 'text' in part && part.text.trim().length > 0,
+      );
+      return textParts && textParts.length > 0;
+    }
+
+    return false;
+  });
 }

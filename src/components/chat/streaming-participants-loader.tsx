@@ -4,7 +4,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useTranslations } from 'next-intl';
 import { useEffect, useState } from 'react';
 
-import type { ParticipantConfig } from '@/lib/schemas/chat-forms';
+import type { ParticipantConfig } from '@/lib/types/participant-config';
 import { cn } from '@/lib/ui/cn';
 
 export type StreamingParticipantsLoaderProps = {

@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import type { ChatMessage, ChatParticipant, ChatThread } from '@/api/routes/chat/schema';
 import { ChatDeleteDialog } from '@/components/chat/chat-delete-dialog';
 import { ChatInput } from '@/components/chat/chat-input';
 import { ChatMessageList } from '@/components/chat/chat-message-list';
@@ -11,6 +12,7 @@ import { ChatModeSelector } from '@/components/chat/chat-mode-selector';
 import { ChatParticipantsList } from '@/components/chat/chat-participants-list';
 import { ChatThreadActions } from '@/components/chat/chat-thread-actions';
 import { ConfigurationChangesGroup } from '@/components/chat/configuration-changes-group';
+import { ModeratorAnalysisStream } from '@/components/chat/moderator/moderator-analysis-stream';
 import { ModeratorRoundTrigger } from '@/components/chat/moderator/moderator-round-trigger';
 import { StreamingParticipantsLoader } from '@/components/chat/streaming-participants-loader';
 import { useThreadHeader } from '@/components/chat/thread-header-context';
@@ -18,13 +20,12 @@ import { useThreadAnalysesQuery, useThreadChangelogQuery } from '@/hooks/queries
 import { useMultiParticipantChat } from '@/hooks/use-multi-participant-chat';
 import { useBoolean } from '@/hooks/utils';
 import type { ChatModeId } from '@/lib/config/chat-modes';
-import type { ParticipantConfig } from '@/lib/schemas/chat-forms';
+import type { ParticipantConfig } from '@/lib/types/participant-config';
 import { chatMessagesToUIMessages } from '@/lib/utils/message-transforms';
-import type { ChatMessage, Participant, Thread } from '@/types/chat';
 
 type ChatThreadScreenProps = {
-  thread: Thread;
-  participants: Participant[];
+  thread: ChatThread;
+  participants: ChatParticipant[];
   initialMessages: ChatMessage[];
   slug: string;
   user: {
@@ -81,6 +82,7 @@ export default function ChatThreadScreen({
     currentParticipantIndex,
     error: streamError,
     sendMessage: sendMessageToParticipants,
+    triggerParticipantsOnly,
   } = useMultiParticipantChat({
     threadId: thread.id,
     participants,
@@ -91,16 +93,15 @@ export default function ChatThreadScreen({
         router.refresh();
       }
     },
+    // Note: Analysis triggering will be handled by ModeratorAnalysisStream component
+    // TODO: Integrate ModeratorAnalysisStream for real-time streaming analysis
   });
 
-  // ✅ AUTO-TRIGGER: When thread loads with user message but no assistant responses,
-  // automatically trigger streaming for all participants (ChatGPT pattern)
-  //
-  // NOTE: We check messages.length === initialMessages.length to ensure we only
-  // trigger once on mount, not on every message update
+  // ✅ FIX: AUTO-TRIGGER WITHOUT user message duplication
+  // When thread loads with user message but no assistant responses,
+  // trigger participants WITHOUT sending the user message again
   const hasTriggeredRef = useRef(false);
   useEffect(() => {
-    // Only trigger once on initial load
     if (hasTriggeredRef.current) {
       return;
     }
@@ -109,19 +110,16 @@ export default function ChatThreadScreen({
     const hasAssistantResponse = initialMessages.some(m => m.role === 'assistant');
 
     // If there's a user message but no assistant response, trigger streaming
-    if (hasUserMessage && !hasAssistantResponse && !isStreaming && messages.length === initialMessages.length) {
+    if (hasUserMessage && !hasAssistantResponse && !isStreaming) {
       hasTriggeredRef.current = true;
 
-      const userMessage = initialMessages.find(m => m.role === 'user');
-      if (userMessage && userMessage.content) {
-        // Trigger streaming - the hook will handle adding to messages and calling backend
-        sendMessageToParticipants(userMessage.content).catch((error) => {
-          console.error('Auto-trigger streaming error:', error);
-          hasTriggeredRef.current = false; // Allow retry on error
-        });
-      }
+      // ✅ Use triggerParticipantsOnly to avoid duplicating user message
+      triggerParticipantsOnly().catch((error) => {
+        console.error('Auto-trigger streaming error:', error);
+        hasTriggeredRef.current = false;
+      });
     }
-  }, [initialMessages, isStreaming, messages.length, sendMessageToParticipants]);
+  }, [initialMessages, isStreaming, triggerParticipantsOnly]);
 
   // ✅ AI SDK v5 PATTERN: Simple submit handler using the hook
   const handlePromptSubmit = useCallback(
@@ -150,13 +148,6 @@ export default function ChatThreadScreen({
       />,
     );
   }, [thread, slug, setThreadTitle, setThreadActions, isDeleteDialogOpen.onTrue]);
-
-  // Determine if moderator can trigger
-  const canModeratorTrigger = useMemo(() => {
-    const hasUserMessage = messages.some(m => m.role === 'user');
-    const hasAtLeastOneAssistantResponse = messages.some(m => m.role === 'assistant');
-    return hasUserMessage && hasAtLeastOneAssistantResponse && !isStreaming;
-  }, [messages, isStreaming]);
 
   return (
     <>
@@ -206,21 +197,36 @@ export default function ChatThreadScreen({
               </div>
             )}
 
-            {/* Moderator Analyses */}
-            {canModeratorTrigger && analyses.length > 0 && (
+            {/* ✅ AUTOMATIC STREAMING ANALYSES: Show real-time streaming for pending/streaming */}
+            {analyses.length > 0 && (
               <div className="mt-6 space-y-4">
-                {analyses.map(analysis => (
-                  <ModeratorRoundTrigger
-                    key={analysis.id}
-                    analysis={{
-                      ...analysis,
-                      // Convert date strings to Date objects
-                      createdAt: new Date(analysis.createdAt),
-                      completedAt: analysis.completedAt ? new Date(analysis.completedAt) : null,
-                    }}
-                    startExpanded={false}
-                  />
-                ))}
+                {analyses.map((analysis) => {
+                  // ✅ AI SDK PATTERN: Use streaming component for pending/streaming analyses
+                  if (analysis.status === 'pending' || analysis.status === 'streaming') {
+                    return (
+                      <ModeratorAnalysisStream
+                        key={analysis.id}
+                        threadId={thread.id}
+                        roundNumber={analysis.roundNumber}
+                        participantMessageIds={analysis.participantMessageIds}
+                        autoTrigger={true}
+                      />
+                    );
+                  }
+
+                  // ✅ COMPLETED/FAILED: Use existing panel for completed analyses
+                  return (
+                    <ModeratorRoundTrigger
+                      key={analysis.id}
+                      analysis={{
+                        ...analysis,
+                        createdAt: new Date(analysis.createdAt),
+                        completedAt: analysis.completedAt ? new Date(analysis.completedAt) : null,
+                      }}
+                      startExpanded={false}
+                    />
+                  );
+                })}
               </div>
             )}
           </div>

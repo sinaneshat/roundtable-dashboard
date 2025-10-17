@@ -575,3 +575,18 @@ export function useDeleteCustomRoleMutation() {
     throwOnError: false,
   });
 }
+
+// ============================================================================
+// Analysis Mutations
+// ============================================================================
+
+/**
+ * ❌ REMOVED: useTriggerAnalysisMutation
+ *
+ * Analysis is now handled via:
+ * 1. Auto-detection on backend (streamChatHandler onFinish callback)
+ * 2. On-demand streaming via useObject hook from @ai-sdk/react
+ *
+ * No manual mutation needed - analysis streams automatically when component renders
+ * Reference: See src/components/chat/round-analysis-stream.tsx for usage
+ */

@@ -3,8 +3,8 @@
 import { AlertCircle } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
+import type { UIMessageMetadata } from '@/api/routes/chat/schema';
 import { useBoolean } from '@/hooks/utils';
-import type { UIMessageMetadata } from '@/lib/schemas/message-metadata';
 
 type MessageErrorDetailsProps = {
   metadata: UIMessageMetadata | null | undefined;

@@ -3,7 +3,7 @@
 import type { UIMessage } from 'ai';
 import { useTranslations } from 'next-intl';
 
-import type { MessageStatus } from '@/api/routes/chat/schema';
+import type { ChatParticipant, MessageStatus } from '@/api/routes/chat/schema';
 import { canAccessModelByPricing } from '@/api/services/product-logic.service';
 import { Message, MessageAvatar, MessageContent } from '@/components/ai-elements/message';
 import { Response } from '@/components/ai-elements/response';
@@ -11,8 +11,7 @@ import { ModelMessageCard } from '@/components/chat/model-message-card';
 import { useModelsQuery } from '@/hooks/queries/models';
 import { useUsageStatsQuery } from '@/hooks/queries/usage';
 import { getAvatarPropsFromModelId } from '@/lib/utils/ai-display';
-import { getMessageMetadata } from '@/lib/utils/message-transforms';
-import type { Participant } from '@/types/chat';
+import { filterNonEmptyMessages, getMessageMetadata } from '@/lib/utils/message-transforms';
 
 type ChatMessageListProps = {
   messages: UIMessage[];
@@ -22,7 +21,7 @@ type ChatMessageListProps = {
     image: string | null;
   } | null;
   /** List of AI participants. Optional - will be inferred from message metadata if not provided. */
-  participants?: Participant[];
+  participants?: ChatParticipant[];
   /** Hide metadata like timestamps and model names */
   hideMetadata?: boolean;
   /** Whether messages are currently being streamed (loading state) */
@@ -30,7 +29,7 @@ type ChatMessageListProps = {
   /** Whether any participant is currently streaming (alias for isLoading) */
   isStreaming?: boolean;
   /** Currently active streaming participant */
-  currentStreamingParticipant?: Participant | null;
+  currentStreamingParticipant?: ChatParticipant | null;
   /** Index of currently active participant */
   currentParticipantIndex?: number;
   /** Optional custom user avatar (overrides user.image) */
@@ -62,9 +61,12 @@ export function ChatMessageList({
   const userAvatarSrc = userAvatar?.src || userInfo.image || '/avatars/user.png';
   const userAvatarName = userAvatar?.name || userInfo.name;
 
+  // ✅ SHARED UTILITY: Filter out empty user messages (used for triggering subsequent participants)
+  const nonEmptyMessages = filterNonEmptyMessages(messages);
+
   return (
     <>
-      {messages.map((message) => {
+      {nonEmptyMessages.map((message) => {
         // User message
         if (message.role === 'user') {
           return (

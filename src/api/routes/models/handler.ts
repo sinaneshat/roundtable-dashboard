@@ -1,9 +1,9 @@
 /**
  * Models API Handlers
  *
- * ✅ TESTING MODE: Uses hardcoded top 50+ models (October 2025)
+ * ✅ DYNAMIC MODE: Fetches models from OpenRouter API
+ * ✅ TEXT-ONLY: Filters to text/chat/reasoning models (no audio/image/video generation)
  * ✅ USES EXISTING TIER LOGIC: product-logic.service.ts for all grouping
- * ✅ NO OPENROUTER API CALLS: Eliminates "data policy restrictions" errors
  *
  * Pattern: Following src/api/routes/{auth,billing}/handler.ts patterns
  */
@@ -11,99 +11,25 @@
 import type { RouteHandler } from '@hono/zod-openapi';
 
 import { createHandler, Responses } from '@/api/core';
+import { openRouterModelsService } from '@/api/services/openrouter-models.service';
 import { canAccessModelByPricing, getFlagshipScore, getMaxModelsForTier, getRequiredTierForModel, getTierName, getTiersInOrder, SUBSCRIPTION_TIER_NAMES } from '@/api/services/product-logic.service';
 import { getUserTier } from '@/api/services/usage-tracking.service';
 import type { ApiEnv } from '@/api/types';
-import { DEFAULT_MODEL_ID, FLAGSHIP_MODEL_IDS, HARDCODED_TOP_MODELS } from '@/lib/config/hardcoded-models';
 
 import type { listModelsRoute } from './route';
-import type { BaseModelResponse, TierGroup } from './schema';
-
-// ============================================================================
-// COMMENTED OUT - OpenRouter Service (for future dynamic fetching)
-// ============================================================================
-
-/**
- * ⚠️ TEMPORARILY DISABLED FOR TESTING
- *
- * This code will fetch models dynamically from OpenRouter when re-enabled.
- * Currently commented out to use hardcoded models for testing purposes.
- *
- * To re-enable:
- * 1. Uncomment the import: import { openRouterModelsService } from '@/api/services/openrouter-models.service';
- * 2. Uncomment the getTop100Models call in listModelsHandler
- * 3. Comment out HARDCODED_TOP_MODELS usage
- */
-
-// import { openRouterModelsService } from '@/api/services/openrouter-models.service';
-
-// ============================================================================
-// Helper Functions
-// ============================================================================
-
-/**
- * Enhance raw model with computed fields
- * Matches the structure expected by frontend (BaseModelSchema)
- */
-function enhanceModel(model: typeof HARDCODED_TOP_MODELS[number]): BaseModelResponse {
-  // Extract provider from model ID (e.g., "openai/gpt-5" -> "openai")
-  const provider = model.id.split('/')[0] || 'unknown';
-
-  // Determine category based on model characteristics
-  let category: 'reasoning' | 'general' | 'creative' | 'research' = 'general';
-  const nameLower = model.name.toLowerCase();
-  const descLower = (model.description || '').toLowerCase();
-
-  if (nameLower.includes('coder') || nameLower.includes('code') || descLower.includes('coding')) {
-    category = 'reasoning';
-  } else if (nameLower.includes('sonnet') || nameLower.includes('opus') || nameLower.includes('claude')) {
-    category = 'creative';
-  } else if (nameLower.includes('gemini') || descLower.includes('research')) {
-    category = 'research';
-  }
-
-  // Determine capabilities
-  const modality = model.architecture?.modality?.toLowerCase() || '';
-  const capabilities = {
-    vision: modality.includes('vision') || modality.includes('image'),
-    reasoning: model.context_length >= 100000,
-    streaming: true, // All models support streaming
-    tools: true, // All modern models support tools
-  };
-
-  // Format pricing for display
-  const inputPrice = Number.parseFloat(model.pricing.prompt);
-  const outputPrice = Number.parseFloat(model.pricing.completion);
-  const pricing_display = {
-    input: inputPrice === 0 ? 'Free' : `$${(inputPrice * 1000000).toFixed(2)}/M`,
-    output: outputPrice === 0 ? 'Free' : `$${(outputPrice * 1000000).toFixed(2)}/M`,
-  };
-
-  // Determine if model is free
-  const is_free = inputPrice === 0 && outputPrice === 0;
-
-  return {
-    ...model,
-    provider,
-    category,
-    capabilities,
-    pricing_display,
-    is_free,
-    supports_vision: capabilities.vision,
-    is_reasoning_model: false, // No reasoning models in this list
-  };
-}
+import type { TierGroup } from './schema';
 
 // ============================================================================
 // Handlers
 // ============================================================================
 
 /**
- * List top 50+ hardcoded models with tier-based access control
+ * List top 100 dynamically fetched models with tier-based access control
  *
  * GET /api/v1/models
  *
- * ⚠️ TESTING MODE: Returns hardcoded top 50+ smartest models (October 2025)
+ * ✅ DYNAMIC MODE: Fetches top 100 smartest models from OpenRouter API
+ * ✅ TEXT-ONLY: Automatically filters to text/chat/reasoning models (no audio/image/video)
  * Uses existing subscription tier logic from product-logic.service.ts
  *
  * Returns:
@@ -111,7 +37,7 @@ function enhanceModel(model: typeof HARDCODED_TOP_MODELS[number]): BaseModelResp
  * - Top 10 flagship models in separate section
  * - Models grouped by subscription tier
  * - Default model selection based on user's tier
- * - No OpenRouter API calls (eliminates data policy errors)
+ * - Cached for 24 hours to minimize API calls
  */
 export const listModelsHandler: RouteHandler<typeof listModelsRoute, ApiEnv> = createHandler(
   {
@@ -126,21 +52,14 @@ export const listModelsHandler: RouteHandler<typeof listModelsRoute, ApiEnv> = c
     const userTier = await getUserTier(user.id);
 
     // ============================================================================
-    // ⚠️ TESTING MODE: Use hardcoded models
-    // ============================================================================
-
-    // ✅ USE HARDCODED MODELS: Top 50+ smartest models (October 2025)
-    // No OpenRouter API calls - eliminates "data policy restrictions" errors
-    const enhancedModels = HARDCODED_TOP_MODELS.map(enhanceModel);
-
-    // ============================================================================
-    // ⚠️ FUTURE: Uncomment to use dynamic OpenRouter fetching
+    // ✅ DYNAMIC FETCHING: Get top 100 models from OpenRouter API
     // ============================================================================
 
     // Get top 100 most popular models from OpenRouter based on scoring algorithm
-    // Uses provider quality, popularity patterns, capabilities, context length, recency, and pricing diversity
-    // Cached for 24 hours to minimize API calls
-    // const models = await openRouterModelsService.getTop100Models();
+    // - Text-only models (filters out audio/image/video generation)
+    // - Uses provider quality, capabilities, context length, and recency
+    // - Cached for 24 hours to minimize API calls
+    const enhancedModels = await openRouterModelsService.getTop100Models();
 
     // ============================================================================
     // ✅ SERVER-COMPUTED TIER ACCESS: Use existing pricing-based tier detection
@@ -162,33 +81,35 @@ export const listModelsHandler: RouteHandler<typeof listModelsRoute, ApiEnv> = c
     });
 
     // ============================================================================
-    // ✅ DEFAULT MODEL: Use hardcoded default (DeepSeek V3 - free tier)
+    // ✅ DEFAULT MODEL: Get dynamic default from OpenRouter
     // ============================================================================
-    // DeepSeek V3: 685B MoE, completely free, 131K context, strong reasoning
-    const defaultModelId = DEFAULT_MODEL_ID;
+    // Selects the best default model based on user's tier
+    const defaultModelId = await openRouterModelsService.getDefaultModelForTier(userTier);
 
     // ============================================================================
     // ✅ FLAGSHIP MODELS: Top 10 most popular models shown first
     // ============================================================================
-    // Uses FLAGSHIP_MODEL_IDS from hardcoded config
-    // These models will automatically score 70+ in the dynamic flagship scoring algorithm
-    // when OpenRouter is re-enabled
-    const flagshipModels = modelsWithTierInfo.filter(m => FLAGSHIP_MODEL_IDS.includes(m.id));
+    // Uses dynamic flagship scoring algorithm (getFlagshipScore)
+    // Models with score >= 70 are considered flagship
+    // Based on provider quality, context length, recency, and capabilities
+    const flagshipModels = modelsWithTierInfo.filter(m => getFlagshipScore(m) >= 70);
 
     // Sort flagship models by their flagship score (highest first)
-    // This ensures consistent ordering even when using hardcoded models
     flagshipModels.sort((a, b) => {
       const scoreA = getFlagshipScore(a);
       const scoreB = getFlagshipScore(b);
       return scoreB - scoreA;
     });
 
+    // Limit to top 10 flagship models
+    const top10Flagship = flagshipModels.slice(0, 10);
+
     // ============================================================================
     // ✅ TIER GROUPS: Group remaining models by subscription tier
     // ============================================================================
     // Exclude flagship models to avoid duplication
     // Uses existing getTiersInOrder() for consistent tier ordering
-    const flagshipModelIds = new Set(FLAGSHIP_MODEL_IDS);
+    const flagshipModelIds = new Set(top10Flagship.map(m => m.id));
     const nonFlagshipModels = modelsWithTierInfo.filter(m => !flagshipModelIds.has(m.id));
 
     const tierGroups: TierGroup[] = getTiersInOrder().map((tier) => {
@@ -227,7 +148,7 @@ export const listModelsHandler: RouteHandler<typeof listModelsRoute, ApiEnv> = c
     return Responses.collection(c, modelsWithTierInfo, {
       total: modelsWithTierInfo.length,
       default_model_id: defaultModelId,
-      flagship_models: flagshipModels,
+      flagship_models: top10Flagship,
       tier_groups: tierGroups,
       user_tier_config: userTierConfig,
     });

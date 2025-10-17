@@ -2,7 +2,10 @@ import type React from 'react';
 
 import { NavigationHeader } from '@/components/chat/chat-header';
 import { ChatThreadActions } from '@/components/chat/chat-thread-actions';
-import type { PublicThread } from '@/types/chat';
+import type { GetPublicThreadResponse } from '@/services/api/chat-threads';
+
+// ✅ RPC-INFERRED TYPE: Extract PublicThread from service response
+type PublicThread = NonNullable<Extract<GetPublicThreadResponse, { success: true }>['data']>['thread'];
 
 type PublicChatLayoutProps = {
   children: React.ReactNode;

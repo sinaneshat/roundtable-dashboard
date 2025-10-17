@@ -25,7 +25,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from '@/components/ui/sidebar';
-import type { Chat, ChatGroup } from '@/lib/types/chat';
+import type { Chat, ChatGroup } from '@/lib/types/sidebar';
 import { cn } from '@/lib/ui/cn';
 
 type ChatListProps = {

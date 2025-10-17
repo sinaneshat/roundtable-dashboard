@@ -39,8 +39,8 @@ import { useCreateCustomRoleMutation, useDeleteCustomRoleMutation } from '@/hook
 import { useCustomRolesQuery } from '@/hooks/queries/chat-roles';
 import { useModelsQuery } from '@/hooks/queries/models';
 import { useFuzzySearch } from '@/hooks/utils/use-fuzzy-search';
-import type { ParticipantConfig } from '@/lib/schemas/chat-forms';
 import { toastManager } from '@/lib/toast/toast-manager';
+import type { ParticipantConfig } from '@/lib/types/participant-config';
 import { cn } from '@/lib/ui/cn';
 import { DEFAULT_ROLES, getProviderIcon } from '@/lib/utils/ai-display';
 import { getApiErrorMessage } from '@/lib/utils/error-handling';
@@ -48,10 +48,13 @@ import { getApiErrorMessage } from '@/lib/utils/error-handling';
 // Types - ✅ Inferred from Backend Schema (Zero Hardcoding)
 // ============================================================================
 /**
- * ✅ RPC-INFERRED TYPES: Import runtime types from types layer
+ * ✅ RPC-INFERRED TYPES: Import runtime types from service layer
  * These types automatically have correct runtime representation (dates as ISO strings)
  */
-import type { CustomRole } from '@/types/chat';
+import type { ListCustomRolesResponse } from '@/services/api/chat-roles';
+
+// ✅ RPC-INFERRED TYPE: Extract CustomRole from service response
+type CustomRole = NonNullable<Extract<ListCustomRolesResponse, { success: true }>['data']>['items'][number];
 
 type ChatParticipantsListProps = {
   participants: ParticipantConfig[];

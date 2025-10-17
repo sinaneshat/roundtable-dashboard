@@ -20,7 +20,10 @@ import { usePublicThreadQuery } from '@/hooks/queries/chat-threads';
 import { useModelsQuery } from '@/hooks/queries/models';
 import { getAvatarPropsFromModelId } from '@/lib/utils/ai-display';
 import { chatMessagesToUIMessages, getMessageMetadata } from '@/lib/utils/message-transforms';
-import type { Changelog } from '@/types/chat';
+import type { GetPublicThreadResponse } from '@/services/api/chat-threads';
+
+// ✅ RPC-INFERRED TYPE: Extract Changelog from public thread response
+type Changelog = NonNullable<Extract<GetPublicThreadResponse, { success: true }>['data']>['changelog'][number];
 
 /**
  * Public Chat Thread Screen - Client Component

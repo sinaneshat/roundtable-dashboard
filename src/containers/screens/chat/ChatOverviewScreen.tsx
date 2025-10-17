@@ -16,11 +16,12 @@ import { BRAND } from '@/constants/brand';
 import { useCreateThreadMutation } from '@/hooks/mutations/chat-mutations';
 import { useModelsQuery } from '@/hooks/queries/models';
 import { useMultiParticipantChat } from '@/hooks/use-multi-participant-chat';
+import { useSession } from '@/lib/auth/client';
 import type { ChatModeId } from '@/lib/config/chat-modes';
-import type { ParticipantConfig } from '@/lib/schemas/chat-forms';
-import { chatInputFormDefaults, chatInputFormToCreateThreadRequest } from '@/lib/schemas/chat-forms';
+import { getDefaultChatMode } from '@/lib/config/chat-modes';
 import { showApiErrorToast } from '@/lib/toast';
-import type { Participant, Thread } from '@/types/chat';
+import type { ParticipantConfig } from '@/lib/types/participant-config';
+import { toCreateThreadRequest } from '@/lib/types/participant-config';
 
 /**
  * ✅ ENHANCED OVERVIEW SCREEN (ChatGPT Pattern v2)
@@ -37,6 +38,8 @@ import type { Participant, Thread } from '@/types/chat';
 export default function ChatOverviewScreen() {
   const router = useRouter();
   const t = useTranslations();
+  const { data: session } = useSession();
+  const sessionUser = session?.user;
 
   const { data: modelsData } = useModelsQuery();
   const defaultModelId = modelsData?.data?.default_model_id;
@@ -56,7 +59,7 @@ export default function ChatOverviewScreen() {
   }, [defaultModelId]);
 
   // Form state
-  const [selectedMode, setSelectedMode] = useState<ChatModeId>(chatInputFormDefaults.mode);
+  const [selectedMode, setSelectedMode] = useState<ChatModeId>(getDefaultChatMode());
   const [selectedParticipants, setSelectedParticipants] = useState<ParticipantConfig[]>(initialParticipants);
   const [inputValue, setInputValue] = useState('');
 
@@ -83,7 +86,7 @@ export default function ChatOverviewScreen() {
     participants: threadParticipants,
     initialMessages: [],
     onComplete: () => {
-      // ✅ Navigate to thread page AFTER all participants finish
+      // ✅ SIMPLIFIED: Navigate directly - backend handles analysis automatically
       if (createdThread?.slug && !hasNavigatedRef.current) {
         hasNavigatedRef.current = true;
         router.push(`/chat/${createdThread.slug}`);
@@ -115,7 +118,7 @@ export default function ChatOverviewScreen() {
         setIsCreatingThread(true);
 
         // ✅ STEP 1: Create thread with initial user message
-        const createThreadRequest = chatInputFormToCreateThreadRequest({
+        const createThreadRequest = toCreateThreadRequest({
           message: prompt,
           mode: selectedMode,
           participants: selectedParticipants,
@@ -162,6 +165,9 @@ export default function ChatOverviewScreen() {
   const handleSuggestionClick = useCallback((suggestion: string) => {
     setInputValue(suggestion);
   }, []);
+
+  // ✅ Compute current streaming participant for display
+  const currentStreamingParticipant = threadParticipants[currentParticipantIndex] || null;
 
   // ✅ FIX: Trigger streaming after state updates (not synchronously)
   // This ensures threadParticipants is populated before calling sendMessage
@@ -288,12 +294,13 @@ export default function ChatOverviewScreen() {
                 <ChatMessageList
                   messages={messages}
                   user={{
-                    name: 'You',
-                    image: null,
+                    name: sessionUser?.name || 'You',
+                    image: sessionUser?.image || null,
                   }}
                   participants={threadParticipants}
                   isStreaming={isStreaming}
                   currentParticipantIndex={currentParticipantIndex}
+                  currentStreamingParticipant={currentStreamingParticipant}
                 />
 
                 {/* Error display */}

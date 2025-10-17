@@ -536,18 +536,15 @@ export type RoundtablePromptConfig = z.infer<typeof RoundtablePromptConfigSchema
 
 /**
  * Request to generate moderator analysis for a conversation round
+ *
+ * ✅ AI SDK V5 PATTERN: Simplified for useObject hook
+ * - threadId and roundNumber come from URL params (not body)
+ * - participantMessageIds is optional - backend auto-queries if not provided
+ * - Compatible with official AI SDK submit() pattern
  */
 export const ModeratorAnalysisRequestSchema = z.object({
-  threadId: CoreSchemas.id().openapi({
-    description: 'Thread ID to analyze',
-    example: 'thread_abc123',
-  }),
-  roundNumber: z.number().int().min(1).openapi({
-    description: 'Round number (1-indexed) of the conversation to analyze',
-    example: 1,
-  }),
-  participantMessageIds: z.array(CoreSchemas.id()).min(1).openapi({
-    description: 'Array of message IDs from all participants in this round (in order)',
+  participantMessageIds: z.array(CoreSchemas.id()).optional().openapi({
+    description: 'Array of message IDs from participants (optional - backend auto-queries from database if not provided)',
     example: ['msg_abc123', 'msg_def456', 'msg_ghi789'],
   }),
 }).openapi('ModeratorAnalysisRequest');
@@ -881,11 +878,18 @@ export type ModeratorAnalysisPayload = z.infer<typeof ModeratorAnalysisPayloadSc
 export type StoredModeratorAnalysis = z.infer<typeof StoredModeratorAnalysisSchema>;
 
 /**
- * ✅ AI SDK v5 PATTERN: Metadata schema for UI messages
+ * ✅ AI SDK v5 OFFICIAL PATTERN: Metadata schema for UI messages
  * Used with validateUIMessages() to handle message metadata
  * Reference: https://sdk.vercel.ai/docs/ai-sdk-core/validate-ui-messages
+ *
+ * Extended with UI-specific fields for frontend rendering:
+ * - participantId, participantIndex, role (for rendering participant info)
+ * - createdAt (for timeline sorting)
+ * - hasError, error, errorType, errorMessage (for error handling)
+ * - mode, aborted, partialResponse (for streaming state)
  */
 export const UIMessageMetadataSchema = z.object({
+  // ✅ Core metadata fields (from AI SDK)
   participantId: z.string().optional(),
   createdAt: z.string().datetime().optional(),
   model: z.string().optional(),
@@ -895,6 +899,25 @@ export const UIMessageMetadataSchema = z.object({
     completionTokens: z.number().optional(),
     totalTokens: z.number().optional(),
   }).optional(),
+
+  // ✅ UI-specific fields for rendering
+  participantIndex: z.number().optional(),
+  role: z.string().nullable().optional(),
+
+  // ✅ Streaming state fields
+  mode: z.string().optional(),
+  aborted: z.boolean().optional(),
+  partialResponse: z.boolean().optional(),
+
+  // ✅ Error handling fields (AI SDK error handling pattern)
+  hasError: z.boolean().optional(),
+  error: z.string().optional(),
+  errorType: z.string().optional(),
+  errorMessage: z.string().optional(),
+  isTransient: z.boolean().optional(),
+  statusCode: z.number().optional(),
+  responseBody: z.string().optional(),
+  errorDetails: z.string().optional(),
 }).passthrough().nullable();
 
 export type UIMessageMetadata = z.infer<typeof UIMessageMetadataSchema>;
