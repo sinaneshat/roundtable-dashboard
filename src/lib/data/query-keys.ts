@@ -164,6 +164,7 @@ export const invalidationPatterns = {
     queryKeys.threads.detail(threadId),
     queryKeys.threads.lists(),
     queryKeys.threads.changelog(threadId), // ✅ Invalidate changelog when thread details change
+    queryKeys.threads.analyses(threadId), // ✅ Invalidate analyses when thread details change
   ],
 
   // After thread message - invalidate thread detail and usage

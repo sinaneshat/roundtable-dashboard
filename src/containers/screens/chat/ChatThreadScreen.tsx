@@ -22,7 +22,7 @@ import { useThreadHeader } from '@/components/chat/thread-header-context';
 import { Button } from '@/components/ui/button';
 import { useSharedChatContext } from '@/contexts/chat-context';
 import { useUpdateThreadMutation } from '@/hooks/mutations/chat-mutations';
-import { useThreadAnalysesQuery, useThreadChangelogQuery } from '@/hooks/queries/chat-threads';
+import { useThreadAnalysesQuery, useThreadChangelogQuery, useThreadQuery } from '@/hooks/queries/chat-threads';
 import { useBoolean } from '@/hooks/utils';
 import type { ChatModeId } from '@/lib/config/chat-modes';
 import { queryKeys } from '@/lib/data/query-keys';
@@ -132,6 +132,7 @@ export default function ChatThreadScreen({
     setOnStreamComplete,
     setOnRoundComplete,
     participants: contextParticipants,
+    updateParticipants, // ✅ Need this to sync context after mutation
   } = useSharedChatContext();
 
   const { data: changelogResponse } = useThreadChangelogQuery(thread.id);
@@ -162,6 +163,10 @@ export default function ChatThreadScreen({
 
   // ✅ MUTATION: Update thread (including participants)
   const updateThreadMutation = useUpdateThreadMutation();
+
+  // ✅ QUERY: Subscribe to thread data changes (for participant updates after mutation)
+  // Mutation invalidates this query, React Query auto-refetches, useEffect syncs context
+  const { data: threadQueryData } = useThreadQuery(thread.id);
 
   // Chat state
   const [selectedMode, setSelectedMode] = useState<ChatModeId>(thread.mode as ChatModeId);
@@ -207,14 +212,42 @@ export default function ChatThreadScreen({
 
     // Set up round completion callback for analysis triggers
     setOnRoundComplete(() => {
-      // ✅ Immediately refetch analyses when round completes
-      // This ensures the pending analysis is discovered without waiting for polling
+      // ✅ Immediately invalidate analyses when round completes
+      // React Query will auto-refetch and the hook will get fresh data
       queryClient.invalidateQueries({ queryKey: queryKeys.threads.analyses(thread.id) });
     });
     // ✅ CRITICAL: Only depend on thread.id to prevent infinite loops
     // participants/initialMessages come from server props and shouldn't trigger re-initialization
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [thread.id]);
+
+  // ✅ SYNC CONTEXT: Update context when thread query data changes (after mutation)
+  // This is the proper React Query pattern - mutation invalidates, query refetches, effect syncs
+  useEffect(() => {
+    if (threadQueryData?.success && threadQueryData.data?.participants) {
+      const freshParticipants = threadQueryData.data.participants;
+
+      // Only update if participants actually changed (avoid unnecessary updates)
+      const hasChanged = JSON.stringify(contextParticipants.map(p => p.id).sort())
+        !== JSON.stringify(freshParticipants.map(p => p.id).sort());
+
+      if (hasChanged) {
+        console.warn('[ChatThreadScreen] 🔄 Syncing context with fresh participants from query', {
+          threadId: thread.id,
+          participantCount: freshParticipants.length,
+        });
+
+        // Transform date strings to Date objects (query returns ISO strings)
+        const participantsWithDates = freshParticipants.map(p => ({
+          ...p,
+          createdAt: new Date(p.createdAt),
+          updatedAt: new Date(p.updatedAt),
+        }));
+
+        updateParticipants(participantsWithDates);
+      }
+    }
+  }, [threadQueryData, thread.id, contextParticipants, updateParticipants]);
 
   // ✅ AI SDK v5 PATTERN: Submit handler with participant persistence
   const handlePromptSubmit = useCallback(
@@ -239,7 +272,10 @@ export default function ChatThreadScreen({
           isEnabled: true,
         }));
 
-        // ✅ USE MUTATION HOOK: Update thread with new participant configuration
+        // ✅ PROPER REACT QUERY PATTERN: Mutation handles invalidation automatically
+        // The onSuccess callback in the mutation will invalidate the thread query
+        // The useThreadQuery hook will auto-refetch
+        // The useEffect watching threadQueryData will sync the context
         await updateThreadMutation.mutateAsync({
           param: { id: thread.id },
           json: {
@@ -247,7 +283,7 @@ export default function ChatThreadScreen({
           },
         });
 
-        console.warn('[ChatThreadScreen] ✅ Participant changes persisted before streaming', {
+        console.warn('[ChatThreadScreen] ✅ Participant changes persisted, query will auto-refetch', {
           threadId: thread.id,
           participantCount: participantsForUpdate.length,
         });

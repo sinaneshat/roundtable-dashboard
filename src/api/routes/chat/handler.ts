@@ -743,6 +743,22 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
 
     const now = new Date();
 
+    // ✅ CRITICAL: Calculate the round number for changelog entries
+    // Changelog should be associated with the NEXT round that will happen
+    // This ensures changelog appears BEFORE the messages of the new round
+    const latestMessage = await db.query.chatMessage.findFirst({
+      where: eq(tables.chatMessage.threadId, id),
+      orderBy: [desc(tables.chatMessage.roundNumber)],
+      columns: { roundNumber: true },
+    });
+    const nextRoundNumber = latestMessage ? latestMessage.roundNumber + 1 : 1;
+
+    console.warn('[updateThreadHandler] 📊 Calculated round number for changelog', {
+      threadId: id,
+      latestRoundNumber: latestMessage?.roundNumber,
+      nextRoundNumber,
+    });
+
     // ✅ Track changelog entries for all changes
     const changelogEntries: Array<typeof tables.chatThreadChangelog.$inferInsert> = [];
 
@@ -751,6 +767,7 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
       changelogEntries.push({
         id: ulid(),
         threadId: id,
+        roundNumber: nextRoundNumber, // ✅ Associate with next round
         changeType: 'mode_change',
         changeSummary: `Changed conversation mode from ${thread.mode} to ${body.mode}`,
         changeData: {
@@ -779,6 +796,7 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
           changelogEntries.push({
             id: ulid(),
             threadId: id,
+            roundNumber: nextRoundNumber, // ✅ Associate with next round
             changeType: 'participant_removed',
             changeSummary: `Removed ${modelName}${current.role ? ` ("${current.role}")` : ''}`,
             changeData: {
@@ -817,6 +835,7 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
           changelogEntries.push({
             id: ulid(),
             threadId: id,
+            roundNumber: nextRoundNumber, // ✅ Associate with next round
             changeType: 'participant_added',
             changeSummary: `Added ${modelName}${newP.role ? ` as "${newP.role}"` : ''}`,
             changeData: {
@@ -856,6 +875,7 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
               changelogEntries.push({
                 id: ulid(),
                 threadId: id,
+                roundNumber: nextRoundNumber, // ✅ Associate with next round
                 changeType: 'participant_updated',
                 changeSummary: `Updated ${modelName} role from ${current.role || 'none'} to ${newP.role || 'none'}`,
                 changeData: {
@@ -874,6 +894,7 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
               changelogEntries.push({
                 id: ulid(),
                 threadId: id,
+                roundNumber: nextRoundNumber, // ✅ Associate with next round
                 changeType: 'participants_reordered',
                 changeSummary: `Reordered ${modelName}`,
                 changeData: {
