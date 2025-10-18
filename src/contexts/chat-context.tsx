@@ -24,7 +24,7 @@
  */
 
 import type { UIMessage } from 'ai';
-import { createContext, useCallback, useContext, useMemo, useState } from 'react';
+import { createContext, use, useCallback, useMemo, useState } from 'react';
 
 import type { ChatParticipant, ChatThread } from '@/api/routes/chat/schema';
 import { useMultiParticipantChat } from '@/hooks/use-multi-participant-chat';
@@ -42,6 +42,7 @@ type ChatContextValue = {
   currentParticipantIndex: number;
   error: Error | null;
   retry: () => void;
+  stop: () => void; // ✅ Stop streaming
 
   // Thread management
   initializeThread: (
@@ -168,7 +169,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
  * ```
  */
 export function useSharedChatContext() {
-  const context = useContext(ChatContext);
+  const context = use(ChatContext);
   if (!context) {
     throw new Error('useSharedChatContext must be used within a ChatProvider');
   }

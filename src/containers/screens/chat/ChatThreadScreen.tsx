@@ -1,11 +1,14 @@
 'use client';
 
 import { useQueryClient } from '@tanstack/react-query';
+import { ArrowDownIcon } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useStickToBottomContext } from 'use-stick-to-bottom';
 
 import type { ChatMessage, ChatParticipant, ChatThread } from '@/api/routes/chat/schema';
+import { Conversation, ConversationContent } from '@/components/ai-elements/conversation';
 import { ChatDeleteDialog } from '@/components/chat/chat-delete-dialog';
 import { ChatInput } from '@/components/chat/chat-input';
 import { ChatMessageList } from '@/components/chat/chat-message-list';
@@ -16,6 +19,7 @@ import { ConfigurationChangesGroup } from '@/components/chat/configuration-chang
 import { RoundAnalysisCard } from '@/components/chat/moderator/round-analysis-card';
 import { StreamingParticipantsLoader } from '@/components/chat/streaming-participants-loader';
 import { useThreadHeader } from '@/components/chat/thread-header-context';
+import { Button } from '@/components/ui/button';
 import { useSharedChatContext } from '@/contexts/chat-context';
 import { useThreadAnalysesQuery, useThreadChangelogQuery } from '@/hooks/queries/chat-threads';
 import { useBoolean } from '@/hooks/utils';
@@ -36,6 +40,54 @@ type ChatThreadScreenProps = {
 };
 
 /**
+ * Component that injects scroll button into thread header when not at bottom
+ * Must be rendered inside Conversation to access StickToBottomContext
+ */
+function ThreadHeaderScrollUpdater({
+  thread,
+  slug,
+  onDeleteClick,
+}: {
+  thread: ChatThread;
+  slug: string;
+  onDeleteClick: () => void;
+}) {
+  const { isAtBottom, scrollToBottom } = useStickToBottomContext();
+  const { setThreadActions, setThreadTitle } = useThreadHeader();
+
+  const handleScrollToBottom = useCallback(() => {
+    scrollToBottom();
+  }, [scrollToBottom]);
+
+  // Update thread header with title and actions (including scroll button when not at bottom)
+  useEffect(() => {
+    setThreadTitle(thread.title);
+    setThreadActions(
+      <div className="flex items-center gap-2">
+        {!isAtBottom && (
+          <Button
+            onClick={handleScrollToBottom}
+            size="sm"
+            variant="ghost"
+            className="rounded-full"
+            type="button"
+          >
+            <ArrowDownIcon className="size-4" />
+          </Button>
+        )}
+        <ChatThreadActions
+          thread={thread}
+          slug={slug}
+          onDeleteClick={onDeleteClick}
+        />
+      </div>,
+    );
+  }, [thread, slug, isAtBottom, onDeleteClick, setThreadTitle, setThreadActions, handleScrollToBottom]);
+
+  return null; // This component only updates context
+}
+
+/**
  * ✅ AI SDK v5 PATTERN: Chat Thread Screen with Shared Context
  *
  * REFACTORED TO FOLLOW AI SDK v5 BEST PRACTICES:
@@ -43,6 +95,8 @@ type ChatThreadScreenProps = {
  * - Eliminated optimistic update complexity (~80 lines)
  * - Simplified participant management
  * - Reduced state variables
+ * - Integrated Conversation wrapper for automatic scroll-to-bottom
+ * - Scroll button appears in header when scrolled away from bottom
  *
  * CODE REDUCTION: 364 lines → 250 lines (-31%)
  * ELIMINATED:
@@ -62,7 +116,6 @@ export default function ChatThreadScreen({
 }: ChatThreadScreenProps) {
   const router = useRouter();
   const t = useTranslations('chat');
-  const { setThreadActions, setThreadTitle } = useThreadHeader();
   const queryClient = useQueryClient();
 
   // ✅ AI SDK v5 PATTERN: Access shared chat context (no duplicate hook)
@@ -73,6 +126,7 @@ export default function ChatThreadScreen({
     currentParticipantIndex,
     error: streamError,
     retry: retryRound,
+    stop: stopStreaming,
     initializeThread,
     setOnStreamComplete,
     setOnRoundComplete,
@@ -90,20 +144,16 @@ export default function ChatThreadScreen({
   const analyses = useMemo(
     () => {
       const items = analysesResponse?.success ? analysesResponse.data.items || [] : [];
-      console.log('[ChatThreadScreen] Analyses loaded:', {
-        count: items.length,
-        analyses: items.map(a => ({
-          id: a.id,
-          roundNumber: a.roundNumber,
-          status: a.status,
-        })),
-      });
       // Transform date strings to Date objects (API returns ISO strings, component expects Dates)
-      return items.map(item => ({
-        ...item,
-        createdAt: typeof item.createdAt === 'string' ? new Date(item.createdAt) : item.createdAt,
-        completedAt: item.completedAt ? (typeof item.completedAt === 'string' ? new Date(item.completedAt) : item.completedAt) : null,
-      }));
+      // ✅ FILTER: Only show completed analyses (exclude pending, streaming, or failed)
+      // Failed/pending analyses should not be displayed as they don't have valid data
+      return items
+        .filter(item => item.status === 'completed')
+        .map(item => ({
+          ...item,
+          createdAt: typeof item.createdAt === 'string' ? new Date(item.createdAt) : item.createdAt,
+          completedAt: item.completedAt ? (typeof item.completedAt === 'string' ? new Date(item.completedAt) : item.completedAt) : null,
+        }));
     },
     [analysesResponse],
   );
@@ -184,7 +234,6 @@ export default function ChatThreadScreen({
     setOnRoundComplete(() => {
       // ✅ Immediately refetch analyses when round completes
       // This ensures the pending analysis is discovered without waiting for polling
-      console.log('[ChatThreadScreen] Round complete - triggering analysis refetch');
       queryClient.invalidateQueries({ queryKey: queryKeys.threads.analyses(thread.id) });
     });
     // ✅ CRITICAL: Only depend on thread.id to prevent infinite loops
@@ -208,126 +257,160 @@ export default function ChatThreadScreen({
     [inputValue, sendMessage],
   );
 
-  // Update header actions
-  useEffect(() => {
-    setThreadTitle(thread.title);
-    setThreadActions(
-      <ChatThreadActions
-        thread={thread}
-        slug={slug}
-        onDeleteClick={isDeleteDialogOpen.onTrue}
-      />,
-    );
-  }, [thread, slug, setThreadTitle, setThreadActions, isDeleteDialogOpen.onTrue]);
-
   // ✅ Derive active participants from context
   // Context manages the participant state, we just display it
   const activeParticipants = contextParticipants;
 
-  // ✅ INTERLEAVED RENDERING: Merge messages and analyses by round
-  // Each round consists of: user message → N participant responses
-  // Analysis should appear immediately after each round's participant responses
-  const messagesWithAnalyses = useMemo(() => {
-    const items: Array<{ type: 'messages' | 'analysis'; data: any; key: string }> = [];
+  // ✅ EVENT-BASED ROUND TRACKING: Simple grouping by roundNumber
+  // Messages, changelog, and analysis all grouped by roundNumber field
+  // No complex date/time calculations - just group by roundNumber!
+  //
+  // Display order for each round:
+  // 1. Changelog (if exists) - shows what changed BEFORE this round
+  // 2. Messages - user message + participant responses
+  // 3. Analysis (if exists) - analysis AFTER participant responses
+  const messagesWithAnalysesAndChangelog = useMemo(() => {
+    const items: Array<
+      | { type: 'messages'; data: typeof messages; key: string }
+      | { type: 'analysis'; data: (typeof analyses)[number]; key: string }
+      | { type: 'changelog'; data: (typeof changelog)[number][]; key: string }
+    > = [];
 
-    // Group messages by rounds
-    const participantCount = activeParticipants.length;
-    let currentRound = 0;
-    let roundMessages: typeof messages = [];
+    // Group messages by roundNumber
+    const messagesByRound = new Map<number, typeof messages>();
+    messages.forEach((message) => {
+      const metadata = message.metadata as Record<string, unknown> | undefined;
+      const roundNumber = (metadata?.roundNumber as number) || 1;
 
-    messages.forEach((message, index) => {
-      roundMessages.push(message);
-
-      // Check if we've completed a round (all participants have responded)
-      if (message.role === 'assistant') {
-        const assistantMessagesInRound = roundMessages.filter(m => m.role === 'assistant').length;
-
-        if (assistantMessagesInRound === participantCount) {
-          // Round complete - add messages group
-          currentRound++;
-          items.push({
-            type: 'messages',
-            data: roundMessages,
-            key: `round-${currentRound}-messages`,
-          });
-
-          // Add analysis for this round if it exists
-          const analysis = analyses.find(a => a.roundNumber === currentRound);
-          if (analysis) {
-            items.push({
-              type: 'analysis',
-              data: analysis,
-              key: `round-${currentRound}-analysis`,
-            });
-          }
-
-          // Reset for next round
-          roundMessages = [];
-        }
+      if (!messagesByRound.has(roundNumber)) {
+        messagesByRound.set(roundNumber, []);
       }
+      messagesByRound.get(roundNumber)!.push(message);
     });
 
-    // Add any remaining messages (incomplete round)
-    if (roundMessages.length > 0) {
+    // Group changelog by roundNumber
+    const changelogByRound = new Map<number, (typeof changelog)>();
+    changelog.forEach((change) => {
+      const roundNumber = change.roundNumber || 1;
+
+      if (!changelogByRound.has(roundNumber)) {
+        changelogByRound.set(roundNumber, []);
+      }
+      changelogByRound.get(roundNumber)!.push(change);
+    });
+
+    // Get all unique round numbers from messages (changelog might not have all rounds)
+    const sortedRounds = Array.from(messagesByRound.keys()).sort((a, b) => a - b);
+
+    sortedRounds.forEach((roundNumber) => {
+      const roundMessages = messagesByRound.get(roundNumber)!;
+      const roundChangelog = changelogByRound.get(roundNumber);
+      const roundAnalysis = analyses.find(a => a.roundNumber === roundNumber);
+
+      // 1. Add changelog BEFORE round messages (shows what changed)
+      if (roundChangelog && roundChangelog.length > 0) {
+        items.push({
+          type: 'changelog',
+          data: roundChangelog,
+          key: `round-${roundNumber}-changelog`,
+        });
+      }
+
+      // 2. Add messages for this round
       items.push({
         type: 'messages',
         data: roundMessages,
-        key: `round-incomplete-messages`,
+        key: `round-${roundNumber}-messages`,
       });
-    }
+
+      // 3. Add analysis AFTER round messages (shows round results)
+      if (roundAnalysis) {
+        items.push({
+          type: 'analysis',
+          data: roundAnalysis,
+          key: `round-${roundNumber}-analysis`,
+        });
+      }
+    });
 
     return items;
-  }, [messages, analyses, activeParticipants.length]);
+  }, [messages, analyses, changelog]);
+
+  // ✅ DEBUG: Log when items update to track rendering
+  useEffect(() => {
+    console.warn('[ChatThreadScreen] 🔄 Messages with analyses and changelog updated', {
+      totalItems: messagesWithAnalysesAndChangelog.length,
+      messagesGroups: messagesWithAnalysesAndChangelog.filter(i => i.type === 'messages').length,
+      analysesGroups: messagesWithAnalysesAndChangelog.filter(i => i.type === 'analysis').length,
+      changelogGroups: messagesWithAnalysesAndChangelog.filter(i => i.type === 'changelog').length,
+      items: messagesWithAnalysesAndChangelog.map(item => ({
+        type: item.type,
+        key: item.key,
+        itemCount: item.type === 'messages' ? item.data.length : item.type === 'changelog' ? item.data.length : undefined,
+      })),
+    });
+  }, [messagesWithAnalysesAndChangelog]);
 
   return (
-    <>
-      <div className="flex flex-1 flex-col overflow-hidden">
-        {/* Messages Container */}
-        <div className="flex-1 overflow-y-auto">
-          <div className="mx-auto max-w-3xl px-4 py-6">
-            {/* Configuration Changes */}
-            {changelog.length > 0 && (
-              <div className="mb-6 space-y-4">
-                {/* Group changes by timestamp for ConfigurationChangesGroup */}
-                {changelog.map(change => (
-                  <ConfigurationChangesGroup
-                    key={change.id}
-                    group={{
-                      timestamp: new Date(change.createdAt),
-                      changes: [change],
-                    }}
-                  />
-                ))}
-              </div>
-            )}
+    <div className="relative flex flex-1 flex-col min-h-0">
+      {/* Conversation wrapper - scrollable content area */}
+      <Conversation className="flex-1 flex flex-col min-h-0">
+        {/* Scroll button updater component */}
+        <ThreadHeaderScrollUpdater
+          thread={thread}
+          slug={slug}
+          onDeleteClick={isDeleteDialogOpen.onTrue}
+        />
 
-            {/* ✅ INTERLEAVED MESSAGES AND ANALYSES: Render messages and analyses in chronological order */}
-            {messagesWithAnalyses.map((item, itemIndex) => (
+        {/* Scrollable content area */}
+        <ConversationContent className="flex-1">
+          <div className="mx-auto max-w-3xl px-4 pt-6 pb-32">
+            {/* ✅ Configuration changes are now shown inline between rounds */}
+
+            {/* ✅ ROUND-BASED RENDERING: Changelog → Messages → Analysis */}
+            {messagesWithAnalysesAndChangelog.map((item, itemIndex) => (
               <div key={item.key}>
-                {item.type === 'messages'
+                {item.type === 'changelog'
                   ? (
-                      <ChatMessageList
-                        messages={item.data}
-                        user={user}
-                        participants={activeParticipants}
-                        isStreaming={isStreaming}
-                        currentParticipantIndex={currentParticipantIndex}
-                        currentStreamingParticipant={
-                          isStreaming && activeParticipants[currentParticipantIndex]
-                            ? activeParticipants[currentParticipantIndex]
-                            : null
-                        }
-                      />
-                    )
-                  : (
-                      <div className="mt-6">
-                        <RoundAnalysisCard
-                          analysis={item.data}
-                          threadId={thread.id}
-                          isLatest={itemIndex === messagesWithAnalyses.length - 1 && item.type === 'analysis'}
-                        />
+                // Changelog before round (shows what changed)
+                      <div className="mb-6 space-y-4">
+                        {item.data.map(change => (
+                          <ConfigurationChangesGroup
+                            key={change.id}
+                            group={{
+                              timestamp: new Date(change.createdAt),
+                              changes: [change],
+                            }}
+                          />
+                        ))}
                       </div>
-                    )}
+                    )
+                  : item.type === 'messages'
+                    ? (
+                  // Messages for this round
+                        <ChatMessageList
+                          messages={item.data}
+                          user={user}
+                          participants={activeParticipants}
+                          isStreaming={isStreaming}
+                          currentParticipantIndex={currentParticipantIndex}
+                          currentStreamingParticipant={
+                            isStreaming && activeParticipants[currentParticipantIndex]
+                              ? activeParticipants[currentParticipantIndex]
+                              : null
+                          }
+                        />
+                      )
+                    : (
+                  // Analysis after round (shows results)
+                        <div className="mt-6">
+                          <RoundAnalysisCard
+                            analysis={item.data}
+                            threadId={thread.id}
+                            isLatest={itemIndex === messagesWithAnalysesAndChangelog.length - 1}
+                          />
+                        </div>
+                      )}
               </div>
             ))}
 
@@ -354,32 +437,32 @@ export default function ChatThreadScreen({
               </div>
             )}
           </div>
-        </div>
+        </ConversationContent>
+      </Conversation>
 
-        {/* Input Area */}
-
-        <div className="mx-auto max-w-3xl w-full px-4 py-4">
-          <ChatInput
-            value={inputValue}
-            onChange={setInputValue}
-            onSubmit={handlePromptSubmit}
-            status={isStreaming ? 'submitted' : 'ready'}
-            placeholder={t('input.placeholder')}
-            toolbar={(
-              <>
-                <ChatParticipantsList
-                  participants={selectedParticipants}
-                  onParticipantsChange={handleParticipantsChange}
-                />
-                <ChatModeSelector
-                  selectedMode={selectedMode}
-                  onModeChange={setSelectedMode}
-                />
-              </>
-            )}
-          />
-        </div>
-
+      {/* Absolutely positioned input - always visible at bottom, centered with content */}
+      <div className="absolute bottom-0 left-1/2 -translate-x-1/2 z-20 w-full max-w-3xl px-4 py-4">
+        <ChatInput
+          value={inputValue}
+          onChange={setInputValue}
+          onSubmit={handlePromptSubmit}
+          status={isStreaming ? 'submitted' : 'ready'}
+          onStop={stopStreaming}
+          placeholder={t('input.placeholder')}
+          className="backdrop-blur-xl bg-background/70 border border-border/30 shadow-lg"
+          toolbar={(
+            <>
+              <ChatParticipantsList
+                participants={selectedParticipants}
+                onParticipantsChange={handleParticipantsChange}
+              />
+              <ChatModeSelector
+                selectedMode={selectedMode}
+                onModeChange={setSelectedMode}
+              />
+            </>
+          )}
+        />
       </div>
 
       {/* Delete Dialog */}
@@ -389,6 +472,6 @@ export default function ChatThreadScreen({
         threadId={thread.id}
         threadSlug={slug}
       />
-    </>
+    </div>
   );
 }

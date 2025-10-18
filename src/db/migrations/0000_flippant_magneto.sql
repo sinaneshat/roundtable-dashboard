@@ -230,6 +230,7 @@ CREATE TABLE `chat_message` (
 	`role` text DEFAULT 'assistant' NOT NULL,
 	`content` text NOT NULL,
 	`reasoning` text,
+	`round_number` integer DEFAULT 1 NOT NULL,
 	`tool_calls` text,
 	`metadata` text,
 	`created_at` integer DEFAULT (cast((julianday('now') - 2440587.5)*86400000 as integer)) NOT NULL,
@@ -242,6 +243,7 @@ CREATE INDEX `chat_message_created_idx` ON `chat_message` (`created_at`);--> sta
 CREATE INDEX `chat_message_participant_idx` ON `chat_message` (`participant_id`);--> statement-breakpoint
 CREATE INDEX `chat_message_role_idx` ON `chat_message` (`role`);--> statement-breakpoint
 CREATE INDEX `chat_message_thread_created_idx` ON `chat_message` (`thread_id`,`created_at`);--> statement-breakpoint
+CREATE INDEX `chat_message_thread_round_idx` ON `chat_message` (`thread_id`,`round_number`);--> statement-breakpoint
 CREATE TABLE `chat_moderator_analysis` (
 	`id` text PRIMARY KEY NOT NULL,
 	`thread_id` text NOT NULL,
@@ -307,6 +309,7 @@ CREATE INDEX `chat_thread_public_idx` ON `chat_thread` (`is_public`);--> stateme
 CREATE TABLE `chat_thread_changelog` (
 	`id` text PRIMARY KEY NOT NULL,
 	`thread_id` text NOT NULL,
+	`round_number` integer DEFAULT 1 NOT NULL,
 	`change_type` text NOT NULL,
 	`change_summary` text NOT NULL,
 	`change_data` text,
@@ -317,6 +320,7 @@ CREATE TABLE `chat_thread_changelog` (
 CREATE INDEX `chat_thread_changelog_thread_idx` ON `chat_thread_changelog` (`thread_id`);--> statement-breakpoint
 CREATE INDEX `chat_thread_changelog_type_idx` ON `chat_thread_changelog` (`change_type`);--> statement-breakpoint
 CREATE INDEX `chat_thread_changelog_created_idx` ON `chat_thread_changelog` (`created_at`);--> statement-breakpoint
+CREATE INDEX `chat_thread_changelog_thread_round_idx` ON `chat_thread_changelog` (`thread_id`,`round_number`);--> statement-breakpoint
 CREATE TABLE `user_chat_usage` (
 	`id` text PRIMARY KEY NOT NULL,
 	`user_id` text NOT NULL,

@@ -125,11 +125,11 @@ export default async function ChatLayout({ children, modal }: ChatLayoutProps) {
             <AppSidebar />
           </Suspense>
 
-          <SidebarInset className="h-svh flex flex-col min-h-0 overflow-y-auto">
+          <SidebarInset className="h-svh flex flex-col min-h-0 overflow-x-hidden">
             <NavigationHeader />
 
             {/* ✅ OPTIMIZATION: Suspense boundary for main content streaming */}
-            <div className="flex flex-1 flex-col w-full min-w-0 min-h-0">
+            <div className="flex flex-1 flex-col w-full min-w-0 min-h-0 overflow-x-hidden overflow-y-hidden">
               <Suspense fallback={<ContentLoadingFallback />}>
                 {children}
               </Suspense>

@@ -4,10 +4,10 @@
  * Simplified schemas for OpenRouter models endpoint
  */
 
-import { z } from 'zod';
+import { z } from '@hono/zod-openapi';
 
 import { createApiResponseSchema } from '@/api/core/schemas';
-import { subscriptionTierSchema } from '@/api/services/product-logic.service';
+import { subscriptionTierSchemaOpenAPI } from '@/api/services/product-logic.service';
 
 // ============================================================================
 // Response Schemas
@@ -139,7 +139,7 @@ export type BaseModelResponse = z.infer<typeof BaseModelSchema>;
  */
 export const EnhancedModelSchema = BaseModelSchema.extend({
   // ✅ SERVER-COMPUTED TIER ACCESS (Single Source of Truth)
-  required_tier: subscriptionTierSchema,
+  required_tier: subscriptionTierSchemaOpenAPI,
   required_tier_name: z.string(), // Human-readable tier name (e.g., "Pro")
   is_accessible_to_user: z.boolean(),
 });
@@ -151,7 +151,7 @@ export type EnhancedModelResponse = z.infer<typeof EnhancedModelSchema>;
  * Computed on backend for consistent tier-based UI rendering
  */
 export const TierGroupSchema = z.object({
-  tier: subscriptionTierSchema,
+  tier: subscriptionTierSchemaOpenAPI,
   tier_name: z.string(), // Human-readable tier name (e.g., "Free Plan")
   models: z.array(EnhancedModelSchema),
   is_user_tier: z.boolean(), // True if this is the user's current tier
@@ -165,7 +165,7 @@ export type TierGroup = z.infer<typeof TierGroupSchema>;
  * Provides everything frontend needs to enforce tier restrictions without business logic
  */
 export const UserTierConfigSchema = z.object({
-  tier: subscriptionTierSchema,
+  tier: subscriptionTierSchemaOpenAPI,
   tier_name: z.string(), // Human-readable tier name (e.g., "Free", "Pro")
   max_models: z.number(), // Maximum models allowed per conversation for this tier
   can_upgrade: z.boolean(), // Whether user can upgrade to a higher tier

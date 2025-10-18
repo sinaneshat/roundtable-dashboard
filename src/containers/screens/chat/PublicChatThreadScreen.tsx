@@ -55,56 +55,66 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
   // API returns dates as strings, chatMessagesToUIMessages handles both Date and string
   const messages: UIMessage[] = useMemo(() => chatMessagesToUIMessages(serverMessages), [serverMessages]);
 
-  // Create a merged timeline of messages and grouped changelog entries
-  // Sort by creation time to show configuration changes at the right points
-  // Available for future use to display configuration changes inline with messages
+  // ✅ EVENT-BASED ROUND TRACKING: Group by roundNumber (same as ChatThreadScreen)
+  // Display order for each round:
+  // 1. Changelog (if exists) - shows what changed BEFORE this round
+  // 2. Messages - user message + participant responses
   const timeline = useMemo(() => {
-    const messageItems = messages.map((msg, index) => {
-      const metadata = getMessageMetadata(msg.metadata);
-      return {
-        type: 'message' as const,
-        data: msg,
-        index, // Store original index
-        timestamp: metadata?.createdAt
-          ? new Date(metadata.createdAt)
-          : new Date(Date.now() + index),
-      };
+    const items: Array<
+      | { type: 'messages'; data: UIMessage[]; key: string; roundNumber: number }
+      | { type: 'changelog'; data: Changelog[]; key: string; roundNumber: number }
+    > = [];
+
+    // Group messages by roundNumber
+    const messagesByRound = new Map<number, UIMessage[]>();
+    messages.forEach((message) => {
+      const metadata = getMessageMetadata(message.metadata);
+      const roundNumber = metadata?.roundNumber || 1;
+
+      if (!messagesByRound.has(roundNumber)) {
+        messagesByRound.set(roundNumber, []);
+      }
+      messagesByRound.get(roundNumber)!.push(message);
     });
 
-    // ✅ Group changelog entries inline - simple transformation like ChatThreadScreen
-    const changelogGroups: Array<{ timestamp: Date; changes: Changelog[] }> = [];
-    if (changelog.length > 0) {
-      const sorted = [...changelog].sort(
-        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-      );
+    // Group changelog by roundNumber
+    const changelogByRound = new Map<number, Changelog[]>();
+    changelog.forEach((change) => {
+      const roundNumber = change.roundNumber || 1;
 
-      let currentGroup: { timestamp: Date; changes: Changelog[] } | null = null;
-      const TIME_WINDOW_MS = 2000;
-
-      for (const change of sorted) {
-        const timestamp = new Date(change.createdAt);
-
-        if (
-          !currentGroup
-          || Math.abs(timestamp.getTime() - currentGroup.timestamp.getTime()) > TIME_WINDOW_MS
-        ) {
-          currentGroup = { timestamp, changes: [] };
-          changelogGroups.push(currentGroup);
-        }
-
-        currentGroup.changes.push(change);
+      if (!changelogByRound.has(roundNumber)) {
+        changelogByRound.set(roundNumber, []);
       }
-    }
+      changelogByRound.get(roundNumber)!.push(change);
+    });
 
-    const changelogItems = changelogGroups.map(group => ({
-      type: 'changelog_group' as const,
-      data: group,
-      timestamp: group.timestamp,
-    }));
+    // Get all unique round numbers from messages
+    const sortedRounds = Array.from(messagesByRound.keys()).sort((a, b) => a - b);
 
-    return [...messageItems, ...changelogItems].sort(
-      (a, b) => a.timestamp.getTime() - b.timestamp.getTime(),
-    );
+    sortedRounds.forEach((roundNumber) => {
+      const roundMessages = messagesByRound.get(roundNumber)!;
+      const roundChangelog = changelogByRound.get(roundNumber);
+
+      // 1. Add changelog BEFORE round messages (shows what changed)
+      if (roundChangelog && roundChangelog.length > 0) {
+        items.push({
+          type: 'changelog',
+          data: roundChangelog,
+          key: `round-${roundNumber}-changelog`,
+          roundNumber,
+        });
+      }
+
+      // 2. Add messages for this round
+      items.push({
+        type: 'messages',
+        data: roundMessages,
+        key: `round-${roundNumber}-messages`,
+        roundNumber,
+      });
+    });
+
+    return items;
   }, [messages, changelog]);
 
   // Show loading state
@@ -189,94 +199,106 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
               )
             : (
                 <>
-                  {/* ✅ Timeline: Messages and grouped configuration changes sorted by time */}
+                  {/* ✅ ROUND-BASED RENDERING: Changelog → Messages (same as ChatThreadScreen) */}
                   {timeline.map((item) => {
-                    // Render grouped configuration changes
-                    if (item.type === 'changelog_group') {
+                    // Render changelog before round
+                    if (item.type === 'changelog') {
                       return (
-                        <ConfigurationChangesGroup
-                          key={`changelog-group-${item.data.timestamp.getTime()}`}
-                          group={item.data}
-                        />
+                        <div key={item.key} className="mb-6 space-y-4">
+                          {item.data.map(change => (
+                            <ConfigurationChangesGroup
+                              key={change.id}
+                              group={{
+                                timestamp: new Date(change.createdAt),
+                                changes: [change],
+                              }}
+                            />
+                          ))}
+                        </div>
                       );
                     }
 
-                    // Render message (existing logic)
-                    const message = item.data;
-                    if (message.role === 'user') {
-                      // ✅ User message with proper name and avatar from backend
-                      return (
-                        <Message from="user" key={message.id}>
-                          <MessageContent>
-                            {message.parts.map((part, partIndex) => {
-                              if (part.type === 'text') {
-                                return (
-                                  <Response key={`${message.id}-${partIndex}`}>
-                                    {part.text}
-                                  </Response>
-                                );
-                              }
-                              return null;
-                            })}
-                          </MessageContent>
-                          <MessageAvatar
-                            src={user?.image || ''}
-                            name={user?.name || t('user.defaultName')}
-                          />
-                        </Message>
-                      );
-                    }
-                    // ✅ Assistant message: Extract participant data from message metadata (same as ChatThreadScreen)
-                    // CRITICAL: Use stored model/role from metadata (NOT current participants)
-                    const metadata = getMessageMetadata(message.metadata);
-                    const participantIndex = metadata?.participantIndex;
-                    const storedModelId = metadata?.model; // ✅ Matches DB schema
-                    const storedRole = metadata?.role; // ✅ Matches DB schema
-
-                    // ✅ CRITICAL: Use stored modelId directly for avatar (independent of current participants)
-                    const avatarProps = getAvatarPropsFromModelId(
-                      message.role === 'system' ? 'assistant' : message.role,
-                      storedModelId,
-                    );
-
-                    // Use stored modelId from metadata, not current participants array
-                    const model = storedModelId ? allModels.find(m => m.id === storedModelId) : undefined;
-
-                    // ✅ IMPROVED ERROR HANDLING: Continue rendering even if model not found
-                    // ModelMessageCard now handles undefined models with fallbacks
-                    if (!model) {
-                      console.warn('[PublicChatThreadScreen] Rendering message with missing model:', {
-                        messageId: message.id,
-                        storedModelId,
-                        participantIndex,
-                      });
-                      // Continue rendering with placeholder - don't skip the message
-                    }
-
-                    const hasError = message.metadata && typeof message.metadata === 'object' && 'error' in message.metadata;
-
-                    const messageStatus: 'thinking' | 'streaming' | 'completed' | 'error' = hasError
-                      ? 'error'
-                      : 'completed'; // Public threads only show completed messages
-
-                    // Filter message parts to only text and reasoning (ModelMessageCard types)
-                    const filteredParts = message.parts.filter(
-                      (p): p is { type: 'text'; text: string } | { type: 'reasoning'; text: string } =>
-                        p.type === 'text' || p.type === 'reasoning',
-                    );
-
+                    // Render messages for this round
                     return (
-                      <ModelMessageCard
-                        key={message.id}
-                        messageId={message.id}
-                        model={model}
-                        role={storedRole || ''} // ✅ Use stored role from metadata
-                        participantIndex={participantIndex ?? 0}
-                        status={messageStatus}
-                        parts={filteredParts}
-                        avatarSrc={avatarProps.src}
-                        avatarName={avatarProps.name}
-                      />
+                      <div key={item.key} className="space-y-4">
+                        {item.data.map((message) => {
+                          if (message.role === 'user') {
+                            // ✅ User message with proper name and avatar from backend
+                            return (
+                              <Message from="user" key={message.id}>
+                                <MessageContent>
+                                  {message.parts.map((part, partIndex) => {
+                                    if (part.type === 'text') {
+                                      return (
+                                        <Response key={`${message.id}-${partIndex}`}>
+                                          {part.text}
+                                        </Response>
+                                      );
+                                    }
+                                    return null;
+                                  })}
+                                </MessageContent>
+                                <MessageAvatar
+                                  src={user?.image || ''}
+                                  name={user?.name || t('user.defaultName')}
+                                />
+                              </Message>
+                            );
+                          }
+                          // ✅ Assistant message: Extract participant data from message metadata (same as ChatThreadScreen)
+                          // CRITICAL: Use stored model/role from metadata (NOT current participants)
+                          const metadata = getMessageMetadata(message.metadata);
+                          const participantIndex = metadata?.participantIndex;
+                          const storedModelId = metadata?.model; // ✅ Matches DB schema
+                          const storedRole = metadata?.role; // ✅ Matches DB schema
+
+                          // ✅ CRITICAL: Use stored modelId directly for avatar (independent of current participants)
+                          const avatarProps = getAvatarPropsFromModelId(
+                            message.role === 'system' ? 'assistant' : message.role,
+                            storedModelId,
+                          );
+
+                          // Use stored modelId from metadata, not current participants array
+                          const model = storedModelId ? allModels.find(m => m.id === storedModelId) : undefined;
+
+                          // ✅ IMPROVED ERROR HANDLING: Continue rendering even if model not found
+                          // ModelMessageCard now handles undefined models with fallbacks
+                          if (!model) {
+                            console.warn('[PublicChatThreadScreen] Rendering message with missing model:', {
+                              messageId: message.id,
+                              storedModelId,
+                              participantIndex,
+                            });
+                            // Continue rendering with placeholder - don't skip the message
+                          }
+
+                          const hasError = message.metadata && typeof message.metadata === 'object' && 'error' in message.metadata;
+
+                          const messageStatus: 'thinking' | 'streaming' | 'completed' | 'error' = hasError
+                            ? 'error'
+                            : 'completed'; // Public threads only show completed messages
+
+                          // Filter message parts to only text and reasoning (ModelMessageCard types)
+                          const filteredParts = message.parts.filter(
+                            (p): p is { type: 'text'; text: string } | { type: 'reasoning'; text: string } =>
+                              p.type === 'text' || p.type === 'reasoning',
+                          );
+
+                          return (
+                            <ModelMessageCard
+                              key={message.id}
+                              messageId={message.id}
+                              model={model}
+                              role={storedRole || ''} // ✅ Use stored role from metadata
+                              participantIndex={participantIndex ?? 0}
+                              status={messageStatus}
+                              parts={filteredParts}
+                              avatarSrc={avatarProps.src}
+                              avatarName={avatarProps.name}
+                            />
+                          );
+                        })}
+                      </div>
                     );
                   })}
 

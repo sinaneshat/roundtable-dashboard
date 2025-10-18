@@ -1751,6 +1751,54 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
     });
 
     // =========================================================================
+    // STEP 1.4: Calculate Round Number (ONLY for first participant)
+    // =========================================================================
+    // ✅ EVENT-BASED ROUND TRACKING: Calculate round number ONCE per round
+    // Only participant 0 calculates the round number to avoid race conditions
+    // Other participants will use the roundNumber from the saved user message
+
+    let currentRoundNumber: number;
+
+    if (participantIndex === 0) {
+      // First participant: Calculate round number
+      const existingUserMessages = await db.query.chatMessage.findMany({
+        where: and(
+          eq(tables.chatMessage.threadId, threadId),
+          eq(tables.chatMessage.role, 'user'),
+        ),
+        columns: { id: true },
+      });
+
+      currentRoundNumber = existingUserMessages.length + 1;
+
+      console.warn('[streamChatHandler] 🔢 Round number calculated (first participant)', {
+        threadId,
+        participantIndex,
+        existingUserMessages: existingUserMessages.length,
+        currentRoundNumber,
+      });
+    } else {
+      // Subsequent participants: Get round number from the user message
+      const userMessages = await db.query.chatMessage.findMany({
+        where: and(
+          eq(tables.chatMessage.threadId, threadId),
+          eq(tables.chatMessage.role, 'user'),
+        ),
+        columns: { id: true, roundNumber: true },
+        orderBy: desc(tables.chatMessage.createdAt),
+        limit: 1,
+      });
+
+      currentRoundNumber = userMessages[0]?.roundNumber || 1;
+
+      console.warn('[streamChatHandler] 🔢 Round number from saved user message', {
+        threadId,
+        participantIndex,
+        currentRoundNumber,
+      });
+    }
+
+    // =========================================================================
     // STEP 1.5: ✅ PERSIST PARTICIPANT CHANGES (Staged Changes Pattern)
     // =========================================================================
     // If participants were provided in request AND this is the first participant (index 0),
@@ -1765,60 +1813,180 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
         dbCount: thread.participants.length,
       });
 
-      // Detect changes by comparing provided participants with DB participants
-      const hasChanges = (
-        providedParticipants.length !== thread.participants.length
-        || providedParticipants.some((provided) => {
-          const dbP = thread.participants.find(db => db.id === provided.id);
-          return !dbP
-            || dbP.modelId !== provided.modelId
-            || dbP.role !== provided.role
-            || dbP.customRoleId !== provided.customRoleId
-            || dbP.priority !== provided.priority
-            || dbP.isEnabled !== provided.isEnabled;
-        })
+      // ✅ DETAILED CHANGE DETECTION: Track specific types of changes
+      const changelogEntries: Array<{
+        id: string;
+        changeType: 'participant_added' | 'participant_removed' | 'participant_updated' | 'participants_reordered';
+        changeSummary: string;
+        changeData: Record<string, unknown>;
+      }> = [];
+
+      // Get current enabled participants from DB for comparison
+      const enabledDbParticipants = thread.participants.filter(p => p.isEnabled);
+      const providedEnabledParticipants = providedParticipants.filter(p => p.isEnabled !== false);
+
+      // Detect removed participants (in DB but not in provided)
+      const removedParticipants = enabledDbParticipants.filter(
+        dbP => !providedEnabledParticipants.find(p => p.id === dbP.id),
       );
 
-      if (hasChanges) {
-        console.warn('[streamChatHandler] 🔄 Participant changes detected - updating database', {
+      // Detect added participants (in provided but not in DB enabled)
+      const addedParticipants = providedEnabledParticipants.filter(
+        provided => !enabledDbParticipants.find(dbP => dbP.id === provided.id),
+      );
+
+      // Detect updated participants (role, model, or customRole changed)
+      const updatedParticipants = providedEnabledParticipants.filter((provided) => {
+        const dbP = enabledDbParticipants.find(db => db.id === provided.id);
+        if (!dbP) {
+          return false; // This is an added participant, not updated
+        }
+        return dbP.modelId !== provided.modelId
+          || dbP.role !== provided.role
+          || dbP.customRoleId !== provided.customRoleId;
+      });
+
+      // Detect reordering (priority changes)
+      const wasReordered = providedEnabledParticipants.some((provided, index) => {
+        const dbP = enabledDbParticipants.find(db => db.id === provided.id);
+        return dbP && dbP.priority !== index;
+      });
+
+      // Build update operations for ALL provided participants
+      const updateOps = providedParticipants.map(provided =>
+        db.update(tables.chatParticipant)
+          .set({
+            modelId: provided.modelId,
+            role: provided.role ?? null,
+            customRoleId: provided.customRoleId ?? null,
+            priority: provided.priority,
+            isEnabled: provided.isEnabled ?? true,
+            updatedAt: new Date(),
+          })
+          .where(eq(tables.chatParticipant.id, provided.id)),
+      );
+
+      // Also disable participants that were removed (not in provided list)
+      const disableOps = removedParticipants.map(removed =>
+        db.update(tables.chatParticipant)
+          .set({
+            isEnabled: false,
+            updatedAt: new Date(),
+          })
+          .where(eq(tables.chatParticipant.id, removed.id)),
+      );
+
+      // Create specific changelog entries
+      if (removedParticipants.length > 0) {
+        removedParticipants.forEach((removed) => {
+          changelogEntries.push({
+            id: ulid(),
+            changeType: 'participant_removed',
+            changeSummary: `Removed ${removed.role || removed.modelId}`,
+            changeData: {
+              participantId: removed.id,
+              modelId: removed.modelId,
+              role: removed.role,
+            },
+          });
+        });
+      }
+
+      if (addedParticipants.length > 0) {
+        addedParticipants.forEach((added) => {
+          changelogEntries.push({
+            id: ulid(),
+            changeType: 'participant_added',
+            changeSummary: `Added ${added.role || added.modelId}`,
+            changeData: {
+              participantId: added.id,
+              modelId: added.modelId,
+              role: added.role,
+            },
+          });
+        });
+      }
+
+      if (updatedParticipants.length > 0) {
+        updatedParticipants.forEach((updated) => {
+          const dbP = enabledDbParticipants.find(db => db.id === updated.id);
+          if (!dbP) {
+            return;
+          }
+
+          const changes: string[] = [];
+          if (dbP.modelId !== updated.modelId) {
+            changes.push(`model changed to ${updated.modelId}`);
+          }
+          if (dbP.role !== updated.role) {
+            changes.push(`role changed to ${updated.role || 'none'}`);
+          }
+
+          changelogEntries.push({
+            id: ulid(),
+            changeType: 'participant_updated',
+            changeSummary: `Updated ${updated.role || updated.modelId}: ${changes.join(', ')}`,
+            changeData: {
+              participantId: updated.id,
+              modelId: updated.modelId,
+              role: updated.role,
+              oldModelId: dbP.modelId,
+              oldRole: dbP.role,
+            },
+          });
+        });
+      }
+
+      if (wasReordered) {
+        changelogEntries.push({
+          id: ulid(),
+          changeType: 'participants_reordered',
+          changeSummary: `Reordered ${providedEnabledParticipants.length} participant(s)`,
+          changeData: {
+            participants: providedEnabledParticipants.map((p, index) => ({
+              id: p.id,
+              modelId: p.modelId,
+              role: p.role,
+              order: index,
+            })),
+          },
+        });
+      }
+
+      // Only persist if there are actual changes
+      if (changelogEntries.length > 0 || updateOps.length > 0 || disableOps.length > 0) {
+        console.warn('[streamChatHandler] 🔄 Participant changes detected', {
           threadId,
+          added: addedParticipants.length,
+          removed: removedParticipants.length,
+          updated: updatedParticipants.length,
+          reordered: wasReordered,
+          changelogEntries: changelogEntries.length,
         });
 
-        // Build database update operations
-        const updateOps = providedParticipants.map(provided =>
-          db.update(tables.chatParticipant)
-            .set({
-              modelId: provided.modelId,
-              role: provided.role ?? null,
-              customRoleId: provided.customRoleId ?? null,
-              priority: provided.priority,
-              isEnabled: provided.isEnabled ?? true,
-              updatedAt: new Date(),
+        // Build changelog insert operations
+        const changelogOps = changelogEntries.map(entry =>
+          db.insert(tables.chatThreadChangelog)
+            .values({
+              id: entry.id,
+              threadId,
+              roundNumber: currentRoundNumber,
+              changeType: entry.changeType,
+              changeSummary: entry.changeSummary,
+              changeData: entry.changeData,
+              createdAt: new Date(),
             })
-            .where(eq(tables.chatParticipant.id, provided.id)),
+            .onConflictDoNothing(),
         );
 
-        // Create a single changelog entry for participant updates
-        const changelogOp = db.insert(tables.chatThreadChangelog)
-          .values({
-            id: ulid(),
-            threadId,
-            changeType: 'participant_updated',
-            changeSummary: `Updated ${providedParticipants.length} participant(s)`,
-            changeData: {
-              participantIds: providedParticipants.map(p => p.id),
-              count: providedParticipants.length,
-            },
-            createdAt: new Date(),
-          })
-          .onConflictDoNothing();
-
-        // Execute all updates atomically
-        await executeAtomic(db, [...updateOps, changelogOp]);
+        // Execute all operations atomically
+        await executeAtomic(db, [...updateOps, ...disableOps, ...changelogOps]);
 
         console.warn('[streamChatHandler] ✅ Participant changes persisted', {
           threadId,
-          participantCount: providedParticipants.length,
+          updateCount: updateOps.length,
+          disableCount: disableOps.length,
+          changelogCount: changelogOps.length,
         });
       } else {
         console.warn('[streamChatHandler] ℹ️  No participant changes detected', {
@@ -1892,15 +2060,18 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
     }
 
     // =========================================================================
-    // STEP 4: Save New User Message (if exists and not already saved)
+    // STEP 4: Save New User Message (ONLY first participant)
     // =========================================================================
+    // ✅ EVENT-BASED ROUND TRACKING: Only first participant saves user message
+    // This prevents duplicate user messages and ensures consistent round numbers
 
     const lastMessage = typedMessages[typedMessages.length - 1];
-    if (lastMessage && lastMessage.role === 'user') {
-      console.warn('[streamChatHandler] 💾 Checking user message', {
+    if (lastMessage && lastMessage.role === 'user' && participantIndex === 0) {
+      console.warn('[streamChatHandler] 💾 Checking user message (first participant)', {
         threadId,
         participantIndex,
         messageId: lastMessage.id,
+        roundNumber: currentRoundNumber,
         hasPartsArray: !!lastMessage.parts,
       });
 
@@ -1922,28 +2093,53 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
             .trim();
 
           if (content.length > 0) {
-            console.warn('[streamChatHandler] 💾 Saving user message', {
-              threadId,
-              participantIndex,
-              messageId: lastMessage.id,
-              contentLength: content.length,
+            // ✅ DUPLICATE PREVENTION: Check if a user message with the same content already exists in this round
+            // This prevents duplicate messages when startRound() is called (which creates a new message ID)
+            const duplicateCheck = await db.query.chatMessage.findFirst({
+              where: and(
+                eq(tables.chatMessage.threadId, threadId),
+                eq(tables.chatMessage.role, 'user'),
+                eq(tables.chatMessage.roundNumber, currentRoundNumber),
+                eq(tables.chatMessage.content, content),
+              ),
             });
 
-            await enforceMessageQuota(user.id);
-            await db.insert(tables.chatMessage).values({
-              id: lastMessage.id,
-              threadId,
-              role: 'user',
-              content,
-              createdAt: new Date(),
-            });
-            await incrementMessageUsage(user.id, 1);
+            if (duplicateCheck) {
+              console.warn('[streamChatHandler] ⏭️  Duplicate user message detected (same content in same round) - skipping save', {
+                threadId,
+                participantIndex,
+                messageId: lastMessage.id,
+                existingMessageId: duplicateCheck.id,
+                roundNumber: currentRoundNumber,
+                contentPreview: content.substring(0, 50),
+              });
+            } else {
+              console.warn('[streamChatHandler] 💾 Saving user message', {
+                threadId,
+                participantIndex,
+                messageId: lastMessage.id,
+                roundNumber: currentRoundNumber,
+                contentLength: content.length,
+              });
 
-            console.warn('[streamChatHandler] ✅ User message saved', {
-              threadId,
-              participantIndex,
-              messageId: lastMessage.id,
-            });
+              await enforceMessageQuota(user.id);
+              await db.insert(tables.chatMessage).values({
+                id: lastMessage.id,
+                threadId,
+                role: 'user',
+                content,
+                roundNumber: currentRoundNumber,
+                createdAt: new Date(),
+              });
+              await incrementMessageUsage(user.id, 1);
+
+              console.warn('[streamChatHandler] ✅ User message saved', {
+                threadId,
+                participantIndex,
+                messageId: lastMessage.id,
+                roundNumber: currentRoundNumber,
+              });
+            }
           }
         }
       } else {
@@ -2163,11 +2359,14 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
           // 3. Zero output tokens (model refused/filtered)
           // 4. Minimal response: <10 chars AND <10 tokens (likely just whitespace/punctuation)
           const trimmedText = (text || '').trim();
+          // ✅ VALIDATION: Only check for TRULY empty responses
+          // - Empty text (no content at all)
+          // - Zero output tokens (content filtered/refused)
+          // ❌ NO minimum length check - short responses like "Yes", "No", "Hi!", "42" are VALID
           const isEmptyResponse = (
             !text
             || trimmedText.length === 0
             || usage?.outputTokens === 0
-            || (trimmedText.length < 10 && (usage?.outputTokens || 0) < 10)
           );
 
           if (isEmptyResponse) {
@@ -2184,7 +2383,6 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
 
           // ✅ AI SDK v5 ERROR HANDLING PATTERN: Save error state for empty responses
           // Reference: https://sdk.vercel.ai/docs/ai-sdk-ui/error-handling
-          const contentToSave = text || '';
 
           // Generate specific error message based on failure type
           let errorMessage: string | undefined;
@@ -2195,14 +2393,16 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
             if (outputTokens === 0) {
               // Model refused to respond or was filtered
               errorMessage = `The model (${participant.modelId}) refused to respond or output was filtered. The model processed ${inputTokens} input tokens but produced no output. This typically indicates content filtering, safety constraints, or model limitations. Status: ${finishReason}.`;
-            } else if (trimmedText.length < 10) {
-              // Model generated minimal/incomplete response
-              errorMessage = `The model (${participant.modelId}) generated an incomplete or minimal response. The model processed ${inputTokens} input tokens and produced ${outputTokens} output tokens, but the response text is too short (<10 characters) to be meaningful. This may indicate a model failure or timeout. Status: ${finishReason}.`;
             } else {
-              // Generic empty response
+              // Generic empty response (should rarely happen since we check outputTokens === 0 above)
               errorMessage = `The model (${participant.modelId}) did not generate a valid response. The model processed ${inputTokens} input tokens but produced no usable output (${outputTokens} tokens). This can happen due to content filtering, model limitations, or API issues. Status: ${finishReason}.`;
             }
           }
+
+          // ✅ CRITICAL FIX: Save empty string for content (error details shown via MessageErrorDetails component)
+          // The MessageErrorDetails component reads from metadata.errorMessage and displays comprehensive error info
+          // We keep content empty to maintain consistency - errors are always shown via metadata, not content
+          const contentToSave = text || '';
 
           const [savedMessage] = await db.insert(tables.chatMessage)
             .values({
@@ -2212,6 +2412,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
               role: 'assistant' as const,
               content: contentToSave,
               reasoning: reasoningText,
+              roundNumber: currentRoundNumber, // ✅ EVENT-BASED ROUND TRACKING: Use same round as user message
               metadata: {
                 model: participant.modelId,
                 participantId: participant.id,

@@ -132,13 +132,31 @@ export const chatParticipant = sqliteTable('chat_participant', {
 /**
  * Chat Thread Changelog
  * Tracks configuration changes to threads (participants, mode)
- * Provides audit trail without the overhead of denormalized junction tables
+ * Shows between conversation rounds when user modifies thread configuration
+ *
+ * ✅ EVENT-BASED ROUND TRACKING: Like messages and analysis, changelog entries
+ * are tied to specific rounds. They appear BETWEEN rounds to show what changed
+ * before the next user prompt was submitted.
+ *
+ * Example flow:
+ * - Round 1: User asks question, models respond
+ * - [Analysis for Round 1]
+ * - User changes mode from "brainstorming" to "analyzing"
+ * - User reorders participants
+ * - User submits next message → CHANGELOG CREATED for Round 2
+ * - [Changelog showing mode change + reordering] ← Shows BEFORE Round 2 messages
+ * - Round 2: User asks question, models respond with new config
  */
 export const chatThreadChangelog = sqliteTable('chat_thread_changelog', {
   id: text('id').primaryKey(),
   threadId: text('thread_id')
     .notNull()
     .references(() => chatThread.id, { onDelete: 'cascade' }),
+  // ✅ ROUND TRACKING: Which round does this changelog belong to?
+  // Changelog for round N appears BEFORE round N messages (showing what changed)
+  roundNumber: integer('round_number')
+    .notNull()
+    .default(1), // 1-indexed to match messages and analysis
   changeType: text('change_type', {
     enum: [
       'mode_change',
@@ -175,6 +193,8 @@ export const chatThreadChangelog = sqliteTable('chat_thread_changelog', {
   index('chat_thread_changelog_thread_idx').on(table.threadId),
   index('chat_thread_changelog_type_idx').on(table.changeType),
   index('chat_thread_changelog_created_idx').on(table.createdAt),
+  // ✅ ROUND TRACKING INDEX: Efficient queries by thread + round
+  index('chat_thread_changelog_thread_round_idx').on(table.threadId, table.roundNumber),
 ]);
 
 /**
@@ -194,6 +214,12 @@ export const chatMessage = sqliteTable('chat_message', {
     .default('assistant'),
   content: text('content').notNull(),
   reasoning: text('reasoning'), // For Claude extended thinking, GPT reasoning tokens
+  // ✅ ROUND TRACKING: Event-based round number for reliable analysis placement
+  // Round = User message + all participant responses
+  // Eliminates fragile date/time calculations on frontend
+  roundNumber: integer('round_number')
+    .notNull()
+    .default(1), // 1-indexed to match moderatorAnalysis.roundNumber
   toolCalls: text('tool_calls', { mode: 'json' }).$type<Array<{
     id: string;
     type: string;
@@ -223,6 +249,8 @@ export const chatMessage = sqliteTable('chat_message', {
   index('chat_message_role_idx').on(table.role),
   // ✅ Composite index for paginated message queries (thread + sort)
   index('chat_message_thread_created_idx').on(table.threadId, table.createdAt),
+  // ✅ ROUND TRACKING INDEX: Efficient queries by thread + round for analysis placement
+  index('chat_message_thread_round_idx').on(table.threadId, table.roundNumber),
 ]);
 
 /**

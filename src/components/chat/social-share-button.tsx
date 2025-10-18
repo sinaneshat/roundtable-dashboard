@@ -184,22 +184,22 @@ export function SocialShareButton({
 
             <div className="space-y-0.5">
               {shareButtons.map(({ name, icon, Component, props, className: itemClassName }) => (
-                <Component key={name} {...props}>
-                  <button
-                    type="button"
-                    className={cn(
-                      'flex w-full items-center gap-3 rounded-md px-2 py-2 text-sm',
-                      'hover:bg-accent/50 transition-colors duration-200',
-                      'focus:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                      itemClassName,
-                    )}
-                    onClick={isOpen.onFalse}
-                  >
-                    <span className="flex size-5 items-center justify-center shrink-0">
-                      {icon}
-                    </span>
-                    <span>{name}</span>
-                  </button>
+                <Component
+                  key={name}
+                  {...props}
+                  className={cn(
+                    'flex w-full items-center gap-3 rounded-md px-2 py-2 text-sm',
+                    'hover:bg-accent/50 transition-colors duration-200',
+                    'focus:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                    'cursor-pointer',
+                    itemClassName,
+                  )}
+                  onClick={isOpen.onFalse}
+                >
+                  <span className="flex size-5 items-center justify-center shrink-0">
+                    {icon}
+                  </span>
+                  <span>{name}</span>
                 </Component>
               ))}
 

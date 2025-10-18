@@ -71,7 +71,7 @@ export function Reasoning({
       <Collapsible open={open} onOpenChange={setOpen}>
         <div
           className={cn(
-            'rounded-lg border border-border/50 bg-muted/20 overflow-hidden my-2',
+            'rounded-lg border border-border bg-muted/30 overflow-hidden',
             className,
           )}
           {...props}
@@ -101,24 +101,24 @@ export function ReasoningTrigger({
   return (
     <CollapsibleTrigger
       className={cn(
-        'flex w-full items-center justify-between gap-2 px-4 py-2.5 text-sm font-medium',
+        'flex w-full items-center justify-between gap-2 px-3 py-2 text-sm',
         'text-muted-foreground hover:text-foreground transition-colors',
-        'focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2',
+        'focus:outline-none',
         className,
       )}
       {...props}
     >
       <div className="flex items-center gap-2">
-        <span className="text-sm">
-          {children || '💭 Reasoning'}
+        <span className="text-xs font-medium">
+          {children || 'Reasoning'}
         </span>
         {isStreaming && (
-          <div className="size-1.5 rounded-full bg-primary animate-pulse" />
+          <div className="size-1.5 rounded-full bg-primary/60 animate-pulse" />
         )}
       </div>
       <ChevronDown
         className={cn(
-          'size-4 transition-transform duration-200 flex-shrink-0',
+          'size-3.5 transition-transform duration-200',
           open && 'rotate-180',
         )}
       />
@@ -140,13 +140,12 @@ export function ReasoningContent({
   return (
     <CollapsibleContent
       className={cn(
-        'px-4 pb-3 pt-1',
-        'animate-in fade-in-50 slide-in-from-top-2',
+        'px-3 pb-2.5 pt-1',
         className,
       )}
       {...props}
     >
-      <div className="text-sm text-muted-foreground whitespace-pre-wrap font-mono text-xs leading-relaxed">
+      <div className="text-xs text-muted-foreground whitespace-pre-wrap font-mono leading-relaxed">
         {children}
       </div>
     </CollapsibleContent>

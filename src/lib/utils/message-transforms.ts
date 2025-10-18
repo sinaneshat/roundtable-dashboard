@@ -58,10 +58,11 @@ export function getMessageMetadata(
 export function chatMessageToUIMessage(message: ChatMessage | (Omit<ChatMessage, 'createdAt'> & { createdAt: string | Date })): UIMessage {
   const parts: UIMessage['parts'] = [];
 
-  // Add text content part
-  if (message.content) {
-    parts.push({ type: 'text', text: message.content });
-  }
+  // ✅ CRITICAL FIX: Always add text part, even if empty
+  // This ensures messages with errors (empty content) still render their message cards
+  // The MessageErrorDetails component will display error information from metadata
+  // Previously, empty content would result in parts: [], causing the message to not render
+  parts.push({ type: 'text', text: message.content || '' });
 
   // ✅ CRITICAL FIX: Only add reasoning part if it has non-empty content
   // This prevents empty reasoning boxes from showing for non-reasoning models
@@ -84,6 +85,7 @@ export function chatMessageToUIMessage(message: ChatMessage | (Omit<ChatMessage,
     ...baseMetadata, // Spread metadata from backend
     participantId: message.participantId || undefined, // Override with top-level participantId (convert null to undefined)
     createdAt: createdAtString, // Add timestamp for timeline sorting (as string)
+    roundNumber: message.roundNumber, // ✅ EVENT-BASED ROUND TRACKING: Include roundNumber for frontend grouping
   };
 
   return {

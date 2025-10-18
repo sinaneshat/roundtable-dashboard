@@ -1,13 +1,12 @@
 'use client';
 
 import type { ChatStatus } from 'ai';
-import { ArrowUp } from 'lucide-react';
+import { ArrowUp, Square } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import type { FormEvent } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/ui/cn';
-import { chatGlass } from '@/lib/ui/glassmorphism';
 
 // ============================================================================
 // OFFICIAL AI SDK PATTERN: Chat Input Component
@@ -23,6 +22,8 @@ type ChatInputProps = {
   onSubmit: (e: FormEvent) => void;
   /** Chat status from official AI SDK */
   status: ChatStatus;
+  /** Stop handler for interrupting streaming */
+  onStop?: () => void;
   /** Placeholder text */
   placeholder?: string;
   /** Disabled state */
@@ -56,6 +57,7 @@ export function ChatInput({
   onChange,
   onSubmit,
   status,
+  onStop,
   placeholder,
   disabled = false,
   autoFocus = false,
@@ -72,20 +74,17 @@ export function ChatInput({
     }
   };
 
-  const isDisabled = disabled || status !== 'ready';
+  const isStreaming = status === 'submitted' || status === 'streaming';
+  const isDisabled = disabled || (status !== 'ready' && !isStreaming);
 
   return (
-    <div className={cn('', className)}>
-      {/* OFFICIAL PATTERN: Simple HTML form - Glass design with enhanced shadows */}
+    <div className="w-full">
+      {/* OFFICIAL PATTERN: Simple HTML form - Styling applied via className prop */}
       <form
         onSubmit={onSubmit}
-        className={cn(
-          chatGlass.inputBox,
-          'rounded-lg',
-          'shadow-2xl', // Enhanced shadow for visibility on black backgrounds
-        )}
+        className={cn('rounded-lg p-1', className)}
       >
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-1">
           {/* Textarea Input */}
           <textarea
             value={value}
@@ -101,7 +100,7 @@ export function ChatInput({
           />
 
           {/* Toolbar */}
-          <div className="flex items-center justify-between px-2 pb-2">
+          <div className="flex items-center justify-between px-2 pb-1">
             {/* Left: Toolbar content (participants, mode) */}
             {toolbar && (
               <div className="flex items-center gap-1.5">
@@ -110,16 +109,30 @@ export function ChatInput({
             )}
             {!toolbar && <div />}
 
-            {/* Right: Submit Button (no stop - users cannot interrupt participants mid-round) */}
+            {/* Right: Submit/Stop Button */}
             <div className="flex items-center gap-2">
-              <Button
-                type="submit"
-                size="icon"
-                disabled={isDisabled || !value.trim()}
-                className="rounded-lg size-9"
-              >
-                <ArrowUp className="size-4" />
-              </Button>
+              {isStreaming && onStop
+                ? (
+                    <Button
+                      type="button"
+                      size="icon"
+                      onClick={onStop}
+                      variant="ghost"
+                      className="rounded-lg size-9"
+                    >
+                      <Square className="size-4" />
+                    </Button>
+                  )
+                : (
+                    <Button
+                      type="submit"
+                      size="icon"
+                      disabled={isDisabled || !value.trim()}
+                      className="rounded-lg size-9"
+                    >
+                      <ArrowUp className="size-4" />
+                    </Button>
+                  )}
             </div>
           </div>
         </div>

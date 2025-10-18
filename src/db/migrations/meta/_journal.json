@@ -1,12 +1,12 @@
 {
-  "version": "6",
+  "version": "7",
   "dialect": "sqlite",
   "entries": [
     {
       "idx": 0,
       "version": "6",
-      "when": 1760451179356,
-      "tag": "0000_shocking_secret_warriors",
+      "when": 1760796081681,
+      "tag": "0000_flippant_magneto",
       "breakpoints": true
     }
   ]

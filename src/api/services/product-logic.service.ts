@@ -13,6 +13,7 @@
  * ⚠️ Import directly from this service when needed
  */
 
+import { z as zOpenAPI } from '@hono/zod-openapi';
 import { z } from 'zod';
 
 import type { BaseModelResponse } from '@/api/routes/models/schema';
@@ -43,8 +44,28 @@ export const SUBSCRIPTION_TIER_NAMES: Record<SubscriptionTier, string> = {
 
 /**
  * Zod schema for subscription tier validation
+ * Use this in service layer and non-OpenAPI contexts
  */
 export const subscriptionTierSchema = z.enum(SUBSCRIPTION_TIERS);
+
+/**
+ * OpenAPI-enhanced subscription tier schema
+ * Use this in route files (schema.ts) for OpenAPI documentation
+ *
+ * @example
+ * ```ts
+ * // In route schema files
+ * import { subscriptionTierSchemaOpenAPI } from '@/api/services/product-logic.service';
+ *
+ * const UserSchema = z.object({
+ *   tier: subscriptionTierSchemaOpenAPI.openapi({
+ *     description: 'User subscription tier',
+ *     example: 'pro',
+ *   }),
+ * });
+ * ```
+ */
+export const subscriptionTierSchemaOpenAPI = zOpenAPI.enum(SUBSCRIPTION_TIERS);
 
 /**
  * Maximum output tokens by tier
@@ -647,3 +668,80 @@ export const AI_RETRY_CONFIG = {
   maxAttempts: 10,
   baseDelay: 500,
 } as const;
+
+/**
+ * Infinite retry configuration for multi-participant chat
+ *
+ * Retry Strategy:
+ * - Attempts 1-10: Fast retries with exponential backoff (2s → 60s)
+ * - Attempts 11+: Extended retries with 2-minute intervals
+ * - Never gives up until valid response or manual abort
+ */
+export const INFINITE_RETRY_CONFIG = {
+  maxInitialAttempts: 10, // Fast retries before switching to extended mode
+  initialDelay: 2000, // 2 seconds - start delay
+  maxDelay: 60000, // 60 seconds - cap for exponential backoff
+  extendedDelay: 120000, // 2 minutes - extended retry interval
+} as const;
+
+/**
+ * Calculate exponential backoff delay for infinite retry
+ *
+ * @param attempt Current retry attempt number (1-based)
+ * @returns Delay in milliseconds
+ */
+export function getExponentialBackoff(attempt: number): number {
+  if (attempt <= 0)
+    return 0;
+
+  // Extended retry mode (attempts 11+)
+  if (attempt > INFINITE_RETRY_CONFIG.maxInitialAttempts) {
+    return INFINITE_RETRY_CONFIG.extendedDelay; // 120s
+  }
+
+  // Exponential backoff (attempts 1-10)
+  const delay = INFINITE_RETRY_CONFIG.initialDelay * 2 ** (attempt - 1);
+  return Math.min(delay, INFINITE_RETRY_CONFIG.maxDelay);
+}
+
+/**
+ * Check if error is transient (should retry) or permanent (skip to next participant)
+ *
+ * Permanent errors require user action (e.g., fix OpenRouter settings, upgrade plan)
+ * Transient errors can be resolved by retrying (e.g., network issues, rate limits)
+ *
+ * @param error Error to check
+ * @returns True if error is transient and should be retried
+ */
+export function isTransientError(error: unknown): boolean {
+  if (!error)
+    return true;
+
+  const errorMessage = error instanceof Error ? error.message : String(error);
+  const errorLower = errorMessage.toLowerCase();
+
+  // Permanent errors - don't retry (user action required)
+  const permanentErrorPatterns = [
+    'model not found',
+    'invalid api key',
+    'invalid model',
+    'unauthorized',
+    'forbidden',
+    'model does not exist',
+    'data policy', // OpenRouter data policy errors
+    'no endpoints found', // OpenRouter endpoint configuration errors
+    'payment required', // Insufficient credits
+    'quota exceeded', // API quota exceeded (need to upgrade)
+    'invalid request', // Malformed request
+    'unsupported', // Feature not supported by model
+  ];
+
+  for (const pattern of permanentErrorPatterns) {
+    if (errorLower.includes(pattern)) {
+      return false; // Don't retry permanent errors
+    }
+  }
+
+  // All other errors are considered transient - retry
+  return true;
+}

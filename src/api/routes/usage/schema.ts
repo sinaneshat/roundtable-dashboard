@@ -1,7 +1,7 @@
 import { z } from '@hono/zod-openapi';
 
 import { createApiResponseSchema } from '@/api/core/schemas';
-import { SUBSCRIPTION_TIERS, subscriptionTierSchema } from '@/api/services/product-logic.service';
+import { SUBSCRIPTION_TIERS, subscriptionTierSchemaOpenAPI } from '@/api/services/product-logic.service';
 
 // ============================================================================
 // Usage Statistics API Schemas
@@ -134,7 +134,7 @@ export const UsageStatsPayloadSchema = z.object({
     description: 'Billing period information',
   }),
   subscription: z.object({
-    tier: subscriptionTierSchema.openapi({
+    tier: subscriptionTierSchemaOpenAPI.openapi({
       description: 'Current subscription tier',
       example: SUBSCRIPTION_TIERS[0],
     }),
@@ -142,7 +142,7 @@ export const UsageStatsPayloadSchema = z.object({
       description: 'Whether subscription is annual',
       example: false,
     }),
-    pendingTierChange: subscriptionTierSchema.nullable().optional().openapi({
+    pendingTierChange: subscriptionTierSchemaOpenAPI.nullable().optional().openapi({
       description: 'Scheduled tier change (for downgrades at period end)',
       example: 'starter',
     }),
@@ -187,7 +187,7 @@ export const QuotaCheckPayloadSchema = z.object({
     description: 'Date when quota resets (end of billing period)',
     example: '2025-10-31T23:59:59Z',
   }),
-  tier: subscriptionTierSchema.openapi({
+  tier: subscriptionTierSchemaOpenAPI.openapi({
     description: 'Current subscription tier',
     example: SUBSCRIPTION_TIERS[0],
   }),

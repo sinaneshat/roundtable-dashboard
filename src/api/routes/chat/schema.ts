@@ -1002,6 +1002,7 @@ export const UIMessageMetadataSchema = z.object({
   // ✅ UI-specific fields for rendering
   participantIndex: z.number().optional(),
   role: z.string().nullable().optional(),
+  roundNumber: z.number().optional(), // ✅ EVENT-BASED ROUND TRACKING: Group messages by round
 
   // ✅ Streaming state fields
   mode: z.string().optional(),

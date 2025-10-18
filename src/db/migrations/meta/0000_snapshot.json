@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "d7f7c603-f06d-470c-9f78-ff5c4b588db8",
+  "id": "f318eaf0-4092-49ef-97e9-8acaa21131bc",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "account": {
@@ -1602,6 +1602,14 @@
           "notNull": false,
           "autoincrement": false
         },
+        "round_number": {
+          "name": "round_number",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 1
+        },
         "tool_calls": {
           "name": "tool_calls",
           "type": "text",
@@ -1659,6 +1667,14 @@
           "columns": [
             "thread_id",
             "created_at"
+          ],
+          "isUnique": false
+        },
+        "chat_message_thread_round_idx": {
+          "name": "chat_message_thread_round_idx",
+          "columns": [
+            "thread_id",
+            "round_number"
           ],
           "isUnique": false
         }
@@ -2155,6 +2171,14 @@
           "notNull": true,
           "autoincrement": false
         },
+        "round_number": {
+          "name": "round_number",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 1
+        },
         "change_type": {
           "name": "change_type",
           "type": "text",
@@ -2204,6 +2228,14 @@
           "name": "chat_thread_changelog_created_idx",
           "columns": [
             "created_at"
+          ],
+          "isUnique": false
+        },
+        "chat_thread_changelog_thread_round_idx": {
+          "name": "chat_thread_changelog_thread_round_idx",
+          "columns": [
+            "thread_id",
+            "round_number"
           ],
           "isUnique": false
         }
