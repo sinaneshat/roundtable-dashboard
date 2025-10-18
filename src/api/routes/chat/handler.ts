@@ -1,6 +1,6 @@
 import type { RouteHandler } from '@hono/zod-openapi';
 import type { UIMessage } from 'ai';
-import { consumeStream, convertToModelMessages, streamText, validateUIMessages } from 'ai';
+import { consumeStream, convertToModelMessages, generateText, streamText, validateUIMessages } from 'ai';
 import type { SQL } from 'drizzle-orm';
 import { and, asc, desc, eq, ne } from 'drizzle-orm';
 import Fuse from 'fuse.js';
@@ -91,6 +91,251 @@ import {
 // ============================================================================
 // Internal Helper Functions (Following 3-file pattern: handler, route, schema)
 // ============================================================================
+
+/**
+ * ✅ OPENROUTER PROVIDER ERROR HANDLING: Extract comprehensive error details
+ * Reference: https://openrouter.ai/docs#errors
+ *
+ * OpenRouter returns errors in multiple formats:
+ * 1. Standard HTTP errors with JSON body: { error: { message, code, metadata } }
+ * 2. AI SDK errors with responseBody containing OpenRouter JSON
+ * 3. Model-specific errors from underlying providers
+ *
+ * @param error - Error from AI SDK (unknown type for safety)
+ * @param participant - Participant information for context
+ * @returns Comprehensive structured error metadata
+ */
+function structureErrorMetadata(error: unknown, participant: { id: string; modelId: string; role: string | null }) {
+  // ✅ STEP 1: Extract base error fields from AI SDK error object
+  const err = error as Error & {
+    cause?: unknown;
+    statusCode?: number;
+    responseBody?: string;
+    responseHeaders?: Record<string, string>;
+    code?: string;
+    data?: unknown;
+  };
+
+  const errorName = err?.name || 'UnknownError';
+  let errorMessage = err?.message || 'An unexpected error occurred';
+  const errorType = err?.constructor?.name || 'Error';
+  const statusCode = err?.statusCode;
+  const responseBody = err?.responseBody;
+  const responseHeaders = err?.responseHeaders;
+  const cause = err?.cause;
+
+  // ✅ STEP 2: Parse OpenRouter-specific error from response body (JSON format)
+  let openRouterError: {
+    message?: string;
+    code?: string;
+    type?: string;
+    metadata?: Record<string, unknown>;
+  } | null = null;
+
+  if (responseBody) {
+    try {
+      const parsed = JSON.parse(responseBody);
+      // OpenRouter standard error format: { error: { message, code, metadata } }
+      if (parsed.error) {
+        openRouterError = {
+          message: parsed.error.message || parsed.error,
+          code: parsed.error.code,
+          type: parsed.error.type,
+          metadata: parsed.error.metadata,
+        };
+        // Override error message with OpenRouter's detailed message
+        if (openRouterError.message) {
+          errorMessage = String(openRouterError.message);
+        }
+      }
+      // Alternative format: { message, error }
+      else if (parsed.message) {
+        openRouterError = {
+          message: parsed.message,
+          code: parsed.code,
+        };
+        errorMessage = parsed.message;
+      }
+    } catch {
+      // responseBody is not JSON - may be plain text error
+      if (responseBody.length > 0 && responseBody.length < 500) {
+        errorMessage = responseBody;
+      }
+    }
+  }
+
+  // ✅ STEP 3: Categorize error and determine retry strategy
+  //
+  // RETRY STRATEGY:
+  // - Provider errors (rate_limit, network, service_unavailable): INFINITE_RETRY_CONFIG (aggressive)
+  // - Model errors (content_filter, model_not_found, validation): NO RETRY or very limited (fail fast)
+  // - Authentication errors: NO RETRY (permanent - requires user action)
+  //
+  let errorCategory: 'provider_rate_limit' | 'provider_network' | 'provider_service' | 'model_not_found' | 'model_content_filter' | 'authentication' | 'validation' | 'unknown' = 'unknown';
+  let userFriendlyMessage: string;
+  let errorIsTransient: boolean;
+  let shouldRetry: boolean; // Explicitly control retry behavior
+
+  const errorLower = errorMessage.toLowerCase();
+  const openRouterCode = openRouterError?.code ? String(openRouterError.code).toLowerCase() : undefined;
+
+  // ========================================
+  // PROVIDER-LEVEL ERRORS (retry aggressively with INFINITE_RETRY_CONFIG)
+  // ========================================
+
+  // ✅ PROVIDER: RATE LIMITING (transient - retry indefinitely)
+  if (
+    statusCode === 429
+    || openRouterCode === 'rate_limit_exceeded'
+    || errorLower.includes('rate limit')
+    || errorLower.includes('quota')
+    || errorLower.includes('too many requests')
+  ) {
+    errorCategory = 'provider_rate_limit';
+    errorIsTransient = true;
+    shouldRetry = true; // Use INFINITE_RETRY_CONFIG
+    userFriendlyMessage = `OpenRouter Rate Limit: ${errorMessage}. Retrying with exponential backoff...`;
+  }
+  // ✅ PROVIDER: NETWORK/CONNECTIVITY (transient - retry indefinitely)
+  else if (
+    statusCode === 502
+    || statusCode === 503
+    || statusCode === 504
+    || openRouterCode === 'service_unavailable'
+    || openRouterCode === 'timeout'
+    || errorLower.includes('timeout')
+    || errorLower.includes('connection')
+    || errorLower.includes('network')
+    || errorLower.includes('econnrefused')
+    || errorLower.includes('dns')
+    || errorLower.includes('service unavailable')
+    || errorLower.includes('gateway')
+  ) {
+    errorCategory = 'provider_network';
+    errorIsTransient = true;
+    shouldRetry = true; // Use INFINITE_RETRY_CONFIG
+    userFriendlyMessage = `OpenRouter Network Error: ${errorMessage}. Retrying with exponential backoff...`;
+  }
+
+  // ========================================
+  // MODEL-LEVEL ERRORS (fail fast - don't retry or very limited)
+  // ========================================
+
+  // ✅ MODEL: NOT FOUND / NO ENDPOINTS (permanent - don't retry)
+  else if (
+    statusCode === 404
+    || openRouterCode === 'model_not_found'
+    || openRouterCode === 'no_endpoints'
+    || errorLower.includes('model not found')
+    || errorLower.includes('does not exist')
+    || errorLower.includes('no endpoints found')
+    || errorLower.includes('model is not available')
+    || errorLower.includes('model does not support')
+  ) {
+    errorCategory = 'model_not_found';
+    errorIsTransient = false;
+    shouldRetry = false; // Don't retry - model permanently unavailable
+    userFriendlyMessage = `Model Error: "${participant.modelId}" is not available. ${errorMessage}`;
+  }
+  // ✅ MODEL: CONTENT FILTERING / SAFETY (permanent - don't retry)
+  else if (
+    errorLower.includes('content')
+    || errorLower.includes('filter')
+    || errorLower.includes('safety')
+    || errorLower.includes('moderation')
+    || errorLower.includes('policy')
+    || errorLower.includes('inappropriate')
+  ) {
+    errorCategory = 'model_content_filter';
+    errorIsTransient = false;
+    shouldRetry = false; // Don't retry - content violates guidelines
+    userFriendlyMessage = `Content Filter: ${errorMessage}. This content violates model safety guidelines.`;
+  }
+
+  // ========================================
+  // AUTHENTICATION & VALIDATION ERRORS (permanent - don't retry)
+  // ========================================
+
+  // ✅ AUTHENTICATION ERRORS (permanent - requires user action)
+  else if (
+    statusCode === 401
+    || statusCode === 403
+    || openRouterCode === 'unauthorized'
+    || openRouterCode === 'forbidden'
+    || errorLower.includes('invalid api key')
+    || errorLower.includes('unauthorized')
+    || errorLower.includes('api key')
+    || errorLower.includes('authentication')
+  ) {
+    errorCategory = 'authentication';
+    errorIsTransient = false;
+    shouldRetry = false; // Don't retry - requires API key fix
+    userFriendlyMessage = `Authentication Error: ${errorMessage}. Please check your OpenRouter API key.`;
+  }
+  // ✅ VALIDATION ERRORS (permanent - bad request)
+  else if (
+    statusCode === 400
+    || openRouterCode === 'invalid_request'
+    || errorLower.includes('invalid')
+    || errorLower.includes('malformed')
+    || errorLower.includes('bad request')
+  ) {
+    errorCategory = 'validation';
+    errorIsTransient = false;
+    shouldRetry = false; // Don't retry - request is malformed
+    userFriendlyMessage = `Validation Error: ${errorMessage}`;
+  }
+
+  // ========================================
+  // UNKNOWN ERRORS (cautious retry)
+  // ========================================
+
+  // ✅ UNKNOWN ERRORS (assume transient but log for investigation)
+  else {
+    errorCategory = 'unknown';
+    errorIsTransient = true;
+    shouldRetry = true; // Retry but monitor
+    userFriendlyMessage = `OpenRouter Error: ${errorMessage}`;
+  }
+
+  // ✅ STEP 4: Extract OpenRouter request/response IDs for debugging
+  const requestId = responseHeaders?.['x-request-id'] || responseHeaders?.['x-trace-id'];
+
+  // ✅ STEP 5: Return comprehensive metadata
+  return {
+    // Error identification
+    errorName,
+    errorType,
+    errorCategory,
+
+    // User-facing message
+    errorMessage: userFriendlyMessage,
+
+    // OpenRouter-specific details
+    openRouterError: openRouterError?.message,
+    openRouterCode: openRouterError?.code,
+    openRouterType: openRouterError?.type,
+    openRouterMetadata: openRouterError?.metadata,
+
+    // HTTP details
+    statusCode,
+    requestId,
+
+    // Technical details for debugging
+    rawErrorMessage: errorMessage,
+    responseBody: responseBody?.substring(0, 1000), // Limit to 1000 chars
+    cause: cause ? String(cause) : undefined,
+
+    // Retry decision
+    isTransient: errorIsTransient,
+    shouldRetry, // ✅ EXPLICIT: Whether to retry (uses INFINITE_RETRY_CONFIG for provider errors)
+
+    // Participant context
+    participantId: participant.id,
+    participantRole: participant.role,
+    modelId: participant.modelId,
+  };
+}
 
 /**
  * ✅ BATCH/TRANSACTION HELPER: Execute atomic operations
@@ -2179,7 +2424,14 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
     const modelSupportsTemperature = !participant.modelId.includes('o4-mini') && !participant.modelId.includes('o4-deep');
     const temperatureValue = modelSupportsTemperature ? (participant.settings?.temperature ?? 0.7) : undefined;
 
-    console.warn('[streamChatHandler] 🚀 Starting streamText', {
+    // ✅ RETRY CONFIGURATION: Server-side retry for empty responses
+    const RETRY_CONFIG = {
+      minRetryWindowMs: 10000, // Retry for at least 10 seconds
+      delayBetweenRetriesMs: 3000, // 3 seconds between each retry
+      maxAttempts: 5, // Max 5 attempts within the 10 second window
+    };
+
+    console.warn('[streamChatHandler] 🚀 Starting generation with retry wrapper', {
       threadId,
       participantIndex,
       participantId: participant.id,
@@ -2190,25 +2442,151 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
       modelSupportsTemperature,
       timeoutMs: AI_TIMEOUT_CONFIG.perAttemptMs,
       maxRetries: AI_RETRY_CONFIG.maxAttempts,
+      retryWindowMs: RETRY_CONFIG.minRetryWindowMs,
+      retryDelayMs: RETRY_CONFIG.delayBetweenRetriesMs,
     });
 
+    // ✅ RETRY WRAPPER: Call generateText() with retry logic for empty responses
+    let attemptNumber = 0;
+    let finalResult: Awaited<ReturnType<typeof generateText>> | null = null;
+    let lastError: unknown;
+    const startTime = Date.now();
+
+    // Helper to check if response is empty
+    const isResponseEmpty = (text: string | undefined, usage: any) => {
+      const trimmedText = (text || '').trim();
+      return !text || trimmedText.length === 0 || usage?.outputTokens === 0;
+    };
+
+    // Helper to wait between retries
+    const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+    // ✅ RETRY LOOP: Keep trying until we get a valid response or exhaust retries
+    while (attemptNumber < RETRY_CONFIG.maxAttempts) {
+      attemptNumber++;
+      const elapsedMs = Date.now() - startTime;
+
+      console.warn('[streamChatHandler] 🔄 Retry attempt', {
+        threadId,
+        participantIndex,
+        attemptNumber,
+        elapsedMs,
+      });
+
+      try {
+        // ✅ Call generateText (non-streaming) to get full response
+        const generationResult = await generateText({
+          model: client(participant.modelId),
+          system: systemPrompt,
+          messages: modelMessages,
+          maxOutputTokens,
+          ...(modelSupportsTemperature && { temperature: temperatureValue }),
+          maxRetries: AI_RETRY_CONFIG.maxAttempts,
+          abortSignal: AbortSignal.any([
+            (c.req as unknown as { raw: Request }).raw.signal,
+            AbortSignal.timeout(AI_TIMEOUT_CONFIG.perAttemptMs),
+          ]),
+          experimental_telemetry: {
+            isEnabled: true,
+            functionId: `chat.thread.${threadId}.participant.${participant.id}.attempt.${attemptNumber}`,
+          },
+        });
+
+        // ✅ Check if response is empty
+        if (isResponseEmpty(generationResult.text, generationResult.usage)) {
+          const elapsedAfter = Date.now() - startTime;
+
+          console.warn('[streamChatHandler] ⚠️ Empty response received', {
+            threadId,
+            participantIndex,
+            attemptNumber,
+            elapsedMs: elapsedAfter,
+            textLength: generationResult.text?.length || 0,
+            outputTokens: generationResult.usage?.outputTokens || 0,
+          });
+
+          // Check if we should retry
+          if (attemptNumber < RETRY_CONFIG.maxAttempts && elapsedAfter < RETRY_CONFIG.minRetryWindowMs) {
+            console.warn('[streamChatHandler] 🔄 Retrying after delay', {
+              threadId,
+              participantIndex,
+              delayMs: RETRY_CONFIG.delayBetweenRetriesMs,
+              nextAttempt: attemptNumber + 1,
+            });
+
+            // Wait before retrying
+            await sleep(RETRY_CONFIG.delayBetweenRetriesMs);
+            continue; // Retry
+          } else {
+            // Exhausted retries - save empty response
+            console.error('[streamChatHandler] ❌ Exhausted retries - empty response', {
+              threadId,
+              participantIndex,
+              attemptNumber,
+              elapsedMs: elapsedAfter,
+            });
+            finalResult = generationResult;
+            break;
+          }
+        } else {
+          // ✅ Valid response received
+          console.warn('[streamChatHandler] ✅ Valid response received', {
+            threadId,
+            participantIndex,
+            attemptNumber,
+            elapsedMs: Date.now() - startTime,
+            textLength: generationResult.text?.length || 0,
+            outputTokens: generationResult.usage?.outputTokens || 0,
+          });
+          finalResult = generationResult;
+          break;
+        }
+      } catch (error) {
+        console.error('[streamChatHandler] ❌ Generation error', {
+          threadId,
+          participantIndex,
+          attemptNumber,
+          error: error instanceof Error ? error.message : String(error),
+        });
+
+        lastError = error;
+
+        // Check if we should retry
+        const elapsedAfter = Date.now() - startTime;
+        if (attemptNumber < RETRY_CONFIG.maxAttempts && elapsedAfter < RETRY_CONFIG.minRetryWindowMs) {
+          console.warn('[streamChatHandler] 🔄 Retrying after error', {
+            threadId,
+            participantIndex,
+            delayMs: RETRY_CONFIG.delayBetweenRetriesMs,
+            nextAttempt: attemptNumber + 1,
+          });
+          await sleep(RETRY_CONFIG.delayBetweenRetriesMs);
+          continue; // Retry
+        } else {
+          // Exhausted retries - throw error
+          throw error;
+        }
+      }
+    }
+
+    // If we exhausted retries without a result, throw the last error
+    if (!finalResult) {
+      throw lastError || new Error('Failed to generate response after retries');
+    }
+
+    // ✅ NOW use streamText for the UI response (reusing the same config)
+    // We need to stream to maintain UI compatibility, but we've already validated the response
     const result = streamText({
       model: client(participant.modelId),
       system: systemPrompt,
       messages: modelMessages,
       maxOutputTokens,
       ...(modelSupportsTemperature && { temperature: temperatureValue }),
-
-      // ✅ AI SDK RETRY: Handles ALL errors (network, server, timeouts, rate limits)
-      // Reference: https://sdk.vercel.ai/docs/ai-sdk-core/error-handling
-      // ✅ INCREASED RETRIES: Using reusable config (10 attempts for max reliability)
-      maxRetries: AI_RETRY_CONFIG.maxAttempts,
-
+      maxRetries: 0, // Don't retry - we already did that above
       abortSignal: AbortSignal.any([
-        (c.req as unknown as { raw: Request }).raw.signal, // Cancel on client disconnect
-        AbortSignal.timeout(AI_TIMEOUT_CONFIG.perAttemptMs), // Server-side timeout
+        (c.req as unknown as { raw: Request }).raw.signal,
+        AbortSignal.timeout(AI_TIMEOUT_CONFIG.perAttemptMs),
       ]),
-
       experimental_telemetry: {
         isEnabled: true,
         functionId: `chat.thread.${threadId}.participant.${participant.id}`,
@@ -2224,84 +2602,92 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
           modelId: participant.modelId,
         });
 
-        const { text, usage, finishReason, providerMetadata } = finishResult;
-
-        // ✅ AI SDK v5 OFFICIAL PATTERN: No custom validation - accept all model responses
-        // Reference: "NO content validation (models return what they return)"
-        // If the model finished successfully, we save whatever it returned
-
-        console.warn('[streamChatHandler] 📊 Finish result details', {
-          threadId,
-          participantIndex,
-          participantId: participant.id,
-          textLength: text?.length || 0,
-          finishReason,
-          hasUsage: !!usage,
-          totalTokens: usage?.totalTokens || 0,
-        });
+        const { text, usage, finishReason, providerMetadata, response } = finishResult;
 
         // ✅ REASONING SUPPORT: Extract reasoning for o1/o3/DeepSeek models
         const reasoningText = typeof providerMetadata?.openai?.reasoning === 'string'
           ? providerMetadata.openai.reasoning
           : null;
 
-        console.warn('[streamChatHandler] 💾 Saving assistant message to database', {
-          threadId,
-          participantIndex,
-          participantId: participant.id,
-          hasReasoning: !!reasoningText,
-        });
-
         // ✅ CRITICAL ERROR HANDLING: Wrap DB operations in try-catch
         // This ensures that errors don't break the round - next participant can still respond
         try {
+          // ✅ EXTRACT OPENROUTER ERROR DETAILS: Check providerMetadata and response for error information
+          let openRouterError: string | undefined;
+          let errorCategory: string | undefined;
+
+          // Check providerMetadata for OpenRouter-specific errors
+          if (providerMetadata && typeof providerMetadata === 'object') {
+            const metadata = providerMetadata as Record<string, unknown>;
+            if (metadata.error) {
+              openRouterError = typeof metadata.error === 'string'
+                ? metadata.error
+                : JSON.stringify(metadata.error);
+            }
+            if (!openRouterError && metadata.errorMessage) {
+              openRouterError = String(metadata.errorMessage);
+            }
+            // Check for moderation/content filter errors
+            if (metadata.moderation || metadata.contentFilter) {
+              errorCategory = 'content_filter';
+              openRouterError = openRouterError || 'Content was filtered by safety systems';
+            }
+          }
+
+          // Check response object for errors
+          if (!openRouterError && response && typeof response === 'object') {
+            const resp = response as Record<string, unknown>;
+            if (resp.error) {
+              openRouterError = typeof resp.error === 'string'
+                ? resp.error
+                : JSON.stringify(resp.error);
+            }
+          }
+
           // ✅ IMPROVED EMPTY RESPONSE DETECTION: Check for meaningful content
-          // Some models output whitespace or minimal tokens (1-5 tokens) that aren't useful responses.
-          // Examples: amazon/nova-pro-v1, some reasoning models during failures
-          //
-          // Detection criteria:
-          // 1. No text at all
-          // 2. Empty/whitespace-only text
-          // 3. Zero output tokens (model refused/filtered)
-          // 4. Minimal response: <10 chars AND <10 tokens (likely just whitespace/punctuation)
           const trimmedText = (text || '').trim();
-          // ✅ VALIDATION: Only check for TRULY empty responses
-          // - Empty text (no content at all)
-          // - Zero output tokens (content filtered/refused)
-          // ❌ NO minimum length check - short responses like "Yes", "No", "Hi!", "42" are VALID
           const isEmptyResponse = (
             !text
             || trimmedText.length === 0
             || usage?.outputTokens === 0
           );
 
-          if (isEmptyResponse) {
-            console.error('[streamChatHandler] ❌ Empty response detected - treating as error', {
-              threadId,
-              participantIndex,
-              participantId: participant.id,
-              modelId: participant.modelId,
-              textLength: text?.length || 0,
-              outputTokens: usage?.outputTokens || 0,
-              finishReason,
-            });
-          }
-
-          // ✅ AI SDK v5 ERROR HANDLING PATTERN: Save error state for empty responses
-          // Reference: https://sdk.vercel.ai/docs/ai-sdk-ui/error-handling
-
-          // Generate specific error message based on failure type
+          // Generate comprehensive error message
           let errorMessage: string | undefined;
-          if (isEmptyResponse) {
+          let providerMessage: string | undefined;
+
+          if (isEmptyResponse || openRouterError) {
             const outputTokens = usage?.outputTokens || 0;
             const inputTokens = usage?.inputTokens || 0;
 
-            if (outputTokens === 0) {
-              // Model refused to respond or was filtered
-              errorMessage = `The model (${participant.modelId}) refused to respond or output was filtered. The model processed ${inputTokens} input tokens but produced no output. This typically indicates content filtering, safety constraints, or model limitations. Status: ${finishReason}.`;
+            // Use OpenRouter error if available
+            if (openRouterError) {
+              providerMessage = openRouterError;
+              errorMessage = `OpenRouter Error for ${participant.modelId}: ${openRouterError}`;
+
+              // Categorize based on error content
+              const errorLower = openRouterError.toLowerCase();
+              if (errorLower.includes('not found') || errorLower.includes('does not exist')) {
+                errorCategory = 'model_not_found';
+              } else if (errorLower.includes('filter') || errorLower.includes('safety') || errorLower.includes('moderation')) {
+                errorCategory = 'content_filter';
+              } else if (errorLower.includes('rate limit') || errorLower.includes('quota')) {
+                errorCategory = 'rate_limit';
+              } else if (errorLower.includes('timeout') || errorLower.includes('connection')) {
+                errorCategory = 'network';
+              } else {
+                errorCategory = errorCategory || 'provider_error';
+              }
+            } else if (outputTokens === 0) {
+              // Model refused to respond - no OpenRouter error but empty output
+              providerMessage = `Model refused or was filtered. Input: ${inputTokens} tokens, Output: 0 tokens, Status: ${finishReason}`;
+              errorMessage = `The model (${participant.modelId}) refused to respond. This typically indicates content filtering, safety constraints, or model limitations.`;
+              errorCategory = errorCategory || 'empty_response';
             } else {
-              // Generic empty response (should rarely happen since we check outputTokens === 0 above)
-              errorMessage = `The model (${participant.modelId}) did not generate a valid response. The model processed ${inputTokens} input tokens but produced no usable output (${outputTokens} tokens). This can happen due to content filtering, model limitations, or API issues. Status: ${finishReason}.`;
+              // Rare case: has some tokens but no useful text
+              providerMessage = `Empty response. Input: ${inputTokens} tokens, Output: ${outputTokens} tokens, Status: ${finishReason}`;
+              errorMessage = `The model (${participant.modelId}) did not generate a valid response despite producing ${outputTokens} tokens.`;
+              errorCategory = 'empty_response';
             }
           }
 
@@ -2309,6 +2695,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
           // The MessageErrorDetails component reads from metadata.errorMessage and displays comprehensive error info
           // We keep content empty to maintain consistency - errors are always shown via metadata, not content
           const contentToSave = text || '';
+          const hasError = isEmptyResponse || !!openRouterError;
 
           const [savedMessage] = await db.insert(tables.chatMessage)
             .values({
@@ -2326,10 +2713,14 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
                 participantRole: participant.role,
                 usage,
                 finishReason,
-                // ✅ ERROR STATE: Flag empty responses as errors per AI SDK patterns
-                hasError: isEmptyResponse,
-                errorType: isEmptyResponse ? 'empty_response' : undefined,
+                // ✅ COMPREHENSIVE ERROR STATE: Include all error details from OpenRouter
+                hasError,
+                errorType: errorCategory || (hasError ? 'empty_response' : undefined),
                 errorMessage,
+                providerMessage, // ✅ CRITICAL: Raw OpenRouter error message
+                openRouterError, // ✅ CRITICAL: Original OpenRouter error for debugging
+                // ✅ RETRY DECISION: Empty responses and provider errors should retry
+                isTransient: hasError, // All empty responses and provider errors are transient (should retry)
               },
               createdAt: new Date(),
             })
@@ -2405,25 +2796,25 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
       consumeSseStream: consumeStream,
 
       onError: (error) => {
-        // ✅ COMPREHENSIVE ERROR LOGGING: Log all error details for debugging
-        // Type assertion: AI SDK onError provides error as unknown type
-        const err = error as Error & { cause?: unknown };
-        console.error('[streamChatHandler] ❌ STREAMING ERROR (handled by onError)', {
+        // ✅ OPENROUTER PROVIDER ERROR HANDLING: Extract comprehensive error details
+        const errorMetadata = structureErrorMetadata(error, participant);
+
+        // ✅ ESSENTIAL PROVIDER ERROR LOGGING: Log structured OpenRouter error
+        console.error('[streamChatHandler] ❌ OpenRouter Error', {
           threadId,
           participantIndex,
-          participantId: participant.id,
-          modelId: participant.modelId,
-          modelRole: participant.role,
-          errorName: err?.name,
-          errorMessage: err?.message,
-          errorType: err?.constructor?.name,
-          errorCause: err?.cause,
-          stack: err?.stack,
+          category: errorMetadata.errorCategory,
+          isTransient: errorMetadata.isTransient,
+          modelId: errorMetadata.modelId,
+          statusCode: errorMetadata.statusCode,
+          openRouterCode: errorMetadata.openRouterCode,
+          requestId: errorMetadata.requestId,
+          message: errorMetadata.rawErrorMessage,
         });
 
-        // Return user-friendly error message for the frontend
-        const modelName = participant.role || participant.modelId || 'AI model';
-        return `${modelName} encountered an error. The round will continue with the next participant.`;
+        // ✅ AI SDK v5 PATTERN: Return error metadata as JSON string
+        // The frontend will parse this and display appropriate error information
+        return JSON.stringify(errorMetadata);
       },
     });
   },

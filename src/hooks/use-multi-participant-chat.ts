@@ -84,7 +84,6 @@ import { DefaultChatTransport } from 'ai';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import type { ChatParticipant } from '@/api/routes/chat/schema';
-import { getExponentialBackoff, INFINITE_RETRY_CONFIG, isTransientError } from '@/api/services/product-logic.service';
 
 type UseMultiParticipantChatOptions = {
   threadId: string;
@@ -139,10 +138,6 @@ export function useMultiParticipantChat({
   const participantQueueRef = useRef<number[]>([]);
   const participantsRef = useRef<ChatParticipant[]>(participants);
 
-  // ✅ INFINITE RETRY: Track retry attempts and timeouts for each participant
-  const retryAttemptsRef = useRef<Map<number, number>>(new Map());
-  const retryTimeoutsRef = useRef<Map<number, NodeJS.Timeout>>(new Map());
-
   // ✅ SIMPLIFIED: Single useChat instance, backend handles participants
   const {
     messages,
@@ -167,160 +162,82 @@ export function useMultiParticipantChat({
     messages: initialMessages,
 
     onError: (error) => {
-      console.error('[Multi-Participant Chat] Error:', error);
-
       const currentParticipant = participants[currentIndexRef.current];
-      const errorMessage = error instanceof Error ? error.message : String(error);
 
-      // ✅ CRITICAL: Check if error is permanent or transient
-      const errorIsTransient = isTransientError(error);
+      // ✅ AI SDK v5 ERROR HANDLING PATTERN: Parse structured error metadata from backend
+      // The backend returns JSON-stringified error metadata with comprehensive details
+      // NOTE: Errors that reach here have ALREADY gone through AI SDK's server-side retry mechanism
+      let errorMetadata: {
+        errorCategory?: string;
+        errorMessage?: string;
+        rawErrorMessage?: string;
+        statusCode?: number;
+        errorType?: string;
+        participantId?: string;
+        modelId?: string;
+        openRouterError?: string;
+        openRouterCode?: string;
+      } | null = null;
 
-      if (!errorIsTransient) {
-        // ❌ PERMANENT ERROR: Show error immediately and move to next participant
-        console.error('[Multi-Participant Chat] ❌ PERMANENT ERROR - Moving to next participant', {
-          participantIndex: currentIndexRef.current,
-          participantId: currentParticipant?.id,
-          error: errorMessage,
-        });
+      let errorMessage = error instanceof Error ? error.message : String(error);
 
-        setPendingNextParticipant(false);
-
-        // ✅ Create error message that shows immediately in chat
-        if (currentParticipant) {
-          const errorMessageId = `error-${Date.now()}-${currentIndexRef.current}`;
-          const errorUIMessage: UIMessage = {
-            id: errorMessageId,
-            role: 'assistant',
-            // ✅ CRITICAL FIX: Add empty text part to ensure message card renders
-            // The MessageErrorDetails component will show the full error from metadata
-            parts: [{ type: 'text', text: '' }],
-            metadata: {
-              participantId: currentParticipant.id,
-              participantIndex: currentIndexRef.current,
-              participantRole: currentParticipant.role,
-              model: currentParticipant.modelId,
-              hasError: true,
-              errorType: 'permanent_error',
-              errorMessage,
-              providerMessage: errorMessage,
-            },
-          };
-
-          console.warn('[useMultiParticipantChat] 📝 Creating error message for participant', {
-            participantIndex: currentIndexRef.current,
-            participantId: currentParticipant.id,
-            errorMessageId,
-            errorType: 'permanent_error',
-            errorMessage,
-          });
-
-          setMessages((prev) => {
-            const updated = [...prev, errorUIMessage];
-            console.warn('[useMultiParticipantChat] ✅ Added error message to state', {
-              totalMessages: updated.length,
-              errorMessageId,
-              lastMessage: updated[updated.length - 1],
-            });
-            return updated;
-          });
+      // Try to parse JSON error metadata from backend
+      try {
+        if (typeof errorMessage === 'string' && (errorMessage.startsWith('{') || errorMessage.includes('errorCategory'))) {
+          errorMetadata = JSON.parse(errorMessage);
+          // Use the user-friendly error message from backend
+          if (errorMetadata?.errorMessage) {
+            errorMessage = errorMetadata.errorMessage;
+          }
         }
-
-        // ✅ Clear retry tracking for this participant
-        retryAttemptsRef.current.delete(currentIndexRef.current);
-        const timeout = retryTimeoutsRef.current.get(currentIndexRef.current);
-        if (timeout) {
-          clearTimeout(timeout);
-          retryTimeoutsRef.current.delete(currentIndexRef.current);
-        }
-
-        // ✅ MOVE TO NEXT PARTICIPANT: Don't stop the round, just advance
-        const nextIndex = participantQueueRef.current.shift();
-        if (nextIndex !== undefined) {
-          currentIndexRef.current = nextIndex;
-          setCurrentIndex(nextIndex);
-
-          console.warn('[Multi-Participant Chat] Advancing to next participant after permanent error', {
-            nextIndex,
-            remainingQueue: participantQueueRef.current,
-          });
-
-          // Trigger next participant after small delay
-          setPendingNextParticipant(true);
-        } else {
-          // No more participants - round complete
-          console.warn('[Multi-Participant Chat] Round complete (ended with error)');
-          onRoundComplete?.();
-          onComplete?.();
-        }
-
-        // Notify parent component
-        onError?.(error instanceof Error ? error : new Error(errorMessage));
-        return;
+      } catch {
+        // Not JSON - use error message as is
       }
-
-      // ✅ TRANSIENT ERROR: Use infinite retry mechanism
-      const currentAttempt = retryAttemptsRef.current.get(currentIndexRef.current) || 0;
-      const nextAttempt = currentAttempt + 1;
-      retryAttemptsRef.current.set(currentIndexRef.current, nextAttempt);
-
-      const isExtendedRetry = nextAttempt > INFINITE_RETRY_CONFIG.maxInitialAttempts;
-      const retryDelay = getExponentialBackoff(nextAttempt);
-
-      console.warn('[Multi-Participant Chat] ⚠️ TRANSIENT ERROR - Scheduling retry', {
-        participantIndex: currentIndexRef.current,
-        attempt: nextAttempt,
-        delayMs: retryDelay,
-        isExtendedRetry,
-      });
 
       setPendingNextParticipant(false);
 
-      // ✅ Create retry status message
+      // ✅ NO FRONTEND RETRIES: Errors that reach here have already been retried by the server
+      // Display error inline and move to next participant
       if (currentParticipant) {
-        const retryMessageId = `retry-${Date.now()}-${currentIndexRef.current}`;
-
-        const retryStatusMessage: UIMessage = {
-          id: retryMessageId,
+        const errorMessageId = `error-${Date.now()}-${currentIndexRef.current}`;
+        const errorUIMessage: UIMessage = {
+          id: errorMessageId,
           role: 'assistant',
-          parts: [{
-            type: 'text',
-            text: isExtendedRetry
-              ? `Retrying with extended intervals... (attempt ${nextAttempt})`
-              : `Retrying... (attempt ${nextAttempt}/${INFINITE_RETRY_CONFIG.maxInitialAttempts})`,
-          }],
+          // ✅ CRITICAL FIX: Add empty text part to ensure message card renders
+          // The MessageErrorDetails component will show the full error from metadata
+          parts: [{ type: 'text', text: '' }],
           metadata: {
             participantId: currentParticipant.id,
             participantIndex: currentIndexRef.current,
             participantRole: currentParticipant.role,
             model: currentParticipant.modelId,
-            isRetryStatus: true,
-            retryAttempt: nextAttempt,
-            nextRetryMs: retryDelay,
             hasError: true,
-            errorType: 'retry_scheduled',
+            errorType: errorMetadata?.errorCategory || 'error',
             errorMessage,
+            errorCategory: errorMetadata?.errorCategory,
+            statusCode: errorMetadata?.statusCode,
+            rawErrorMessage: errorMetadata?.rawErrorMessage,
+            providerMessage: errorMetadata?.rawErrorMessage || errorMessage,
+            openRouterError: errorMetadata?.openRouterError,
+            openRouterCode: errorMetadata?.openRouterCode,
           },
         };
 
-        setMessages(prev => [...prev, retryStatusMessage]);
+        setMessages(prev => [...prev, errorUIMessage]);
       }
 
-      // ✅ Schedule retry after backoff delay
-      const timeoutId = setTimeout(() => {
-        console.warn('[Multi-Participant Chat] Retrying participant', {
-          participantIndex: currentIndexRef.current,
-          attempt: nextAttempt,
-        });
-
-        // Re-trigger the same participant (don't advance queue)
-        aiSendMessage({
-          role: 'user',
-          parts: [{ type: 'text', text: '' }],
-        });
-      }, retryDelay);
-
-      // Store timeout for potential cancellation
-      retryTimeoutsRef.current.set(currentIndexRef.current, timeoutId);
+      // ✅ MOVE TO NEXT PARTICIPANT: Don't retry - server already did that
+      const nextIndex = participantQueueRef.current.shift();
+      if (nextIndex !== undefined) {
+        currentIndexRef.current = nextIndex;
+        setCurrentIndex(nextIndex);
+        // Trigger next participant after small delay
+        setPendingNextParticipant(true);
+      } else {
+        // No more participants - round complete
+        onRoundComplete?.();
+        onComplete?.();
+      }
 
       // Notify parent component
       onError?.(error instanceof Error ? error : new Error(errorMessage));
@@ -332,24 +249,9 @@ export function useMultiParticipantChat({
       // This ensures the frontend can display the correct model name/icon
       const currentParticipant = participants[currentIndexRef.current];
 
-      console.warn('[useMultiParticipantChat] onFinish - Participant', currentIndexRef.current, 'completed streaming', {
-        hasMessage: !!data.message,
-        messageId: data.message?.id,
-        participantId: currentParticipant?.id,
-        participantRole: currentParticipant?.role,
-        participantModelId: currentParticipant?.modelId,
-      });
-
       // ✅ CRITICAL BUG FIX: Validate data.message exists before continuing
       // Silent failures occur when AI SDK doesn't create a message (empty response, error, etc.)
       if (!data.message) {
-        console.error('[useMultiParticipantChat] ❌ SILENT FAILURE: onFinish called but data.message is missing!', {
-          participantIndex: currentIndexRef.current,
-          participantId: currentParticipant?.id,
-          participantRole: currentParticipant?.role,
-          participantModelId: currentParticipant?.modelId,
-        });
-
         setPendingNextParticipant(false);
 
         // ✅ CREATE ERROR MESSAGE: Make the failure visible to the user
@@ -374,22 +276,7 @@ export function useMultiParticipantChat({
             },
           };
 
-          console.warn('[useMultiParticipantChat] 📝 Creating error message for silent failure', {
-            participantIndex: currentIndexRef.current,
-            participantId: currentParticipant.id,
-            errorMessageId,
-            errorType: 'silent_failure',
-          });
-
-          setMessages((prev) => {
-            const updated = [...prev, errorUIMessage];
-            console.warn('[useMultiParticipantChat] ✅ Added silent failure error message to state', {
-              totalMessages: updated.length,
-              errorMessageId,
-              lastMessage: updated[updated.length - 1],
-            });
-            return updated;
-          });
+          setMessages(prev => [...prev, errorUIMessage]);
         }
 
         // ✅ MOVE TO NEXT PARTICIPANT: Don't stop the round, just advance
@@ -397,17 +284,10 @@ export function useMultiParticipantChat({
         if (nextIndex !== undefined) {
           currentIndexRef.current = nextIndex;
           setCurrentIndex(nextIndex);
-
-          console.warn('[useMultiParticipantChat] Advancing to next participant after silent failure', {
-            nextIndex,
-            remainingQueue: participantQueueRef.current,
-          });
-
           // Trigger next participant
           setPendingNextParticipant(true);
         } else {
           // No more participants - round complete
-          console.warn('[useMultiParticipantChat] Round complete (ended with silent failure)');
           currentIndexRef.current = 0;
           setCurrentIndex(0);
           onRoundComplete?.();
@@ -422,14 +302,6 @@ export function useMultiParticipantChat({
       }
 
       if (currentParticipant && data.message) {
-        // ✅ INFINITE RETRY: Clear retry tracking on success
-        retryAttemptsRef.current.delete(currentIndexRef.current);
-        const timeout = retryTimeoutsRef.current.get(currentIndexRef.current);
-        if (timeout) {
-          clearTimeout(timeout);
-          retryTimeoutsRef.current.delete(currentIndexRef.current);
-        }
-
         // ✅ AI SDK v5 ERROR HANDLING: Check for error metadata and empty responses
         // 1. Check backend-provided error metadata (hasError, errorMessage, errorType)
         // 2. Detect empty/invalid responses on frontend
@@ -449,99 +321,58 @@ export function useMultiParticipantChat({
         const isEmptyResponse = textParts.length === 0 || !hasTextContent;
         const hasError = hasBackendError || isEmptyResponse;
 
-        if (hasError) {
-          console.error('[useMultiParticipantChat] ❌ ERROR DETECTED IN RESPONSE', {
-            participantIndex: currentIndexRef.current,
-            participantId: currentParticipant?.id,
-            participantRole: currentParticipant?.role,
-            participantModelId: currentParticipant?.modelId,
-            hasBackendError,
-            isEmptyResponse,
-            errorType: messageMetadata?.errorType || (isEmptyResponse ? 'empty_response' : 'unknown'),
-            errorMessage: messageMetadata?.errorMessage,
-            messageId: data.message.id,
-            textPartsCount: textParts.length,
-            hasTextContent,
-            messageParts: data.message.parts?.map(p => ({ type: p.type, hasText: 'text' in p && !!p.text })),
-          });
+        // Build error message for empty responses
+        let errorMessage = messageMetadata?.errorMessage as string | undefined;
+        if (isEmptyResponse && !errorMessage) {
+          errorMessage = `The model (${currentParticipant.modelId}) did not generate a response. This can happen due to content filtering, model limitations, or API issues.`;
         }
+
+        // Merge participant metadata with any existing error metadata from backend
+        const updatedMetadata = {
+          ...(typeof data.message.metadata === 'object' && data.message.metadata !== null ? data.message.metadata : {}),
+          participantId: currentParticipant.id,
+          participantIndex: currentIndexRef.current,
+          participantRole: currentParticipant.role,
+          model: currentParticipant.modelId,
+          // Add error fields if error detected
+          ...(hasError && {
+            hasError: true,
+            errorType: messageMetadata?.errorType || (isEmptyResponse ? 'empty_response' : 'unknown'),
+            errorMessage,
+            providerMessage: messageMetadata?.providerMessage || messageMetadata?.openRouterError || errorMessage,
+            openRouterError: messageMetadata?.openRouterError,
+          }),
+        };
 
         setMessages((prev) => {
           // ✅ CRITICAL FIX: Check if message exists in array before trying to update
-          // When AI SDK streams empty content, it might not add the message to the array
-          // In that case, we need to ADD the message instead of updating it
           const messageExists = prev.some(msg => msg.id === data.message.id);
-
-          // Build error message for empty responses
-          let errorMessage = messageMetadata?.errorMessage as string | undefined;
-          if (isEmptyResponse && !errorMessage) {
-            errorMessage = `The model (${currentParticipant.modelId}) did not generate a response. This can happen due to content filtering, model limitations, or API issues.`;
-          }
-
-          // Merge participant metadata with any existing error metadata from backend
-          const updatedMetadata = {
-            ...(typeof data.message.metadata === 'object' && data.message.metadata !== null ? data.message.metadata : {}),
-            participantId: currentParticipant.id,
-            participantIndex: currentIndexRef.current,
-            participantRole: currentParticipant.role,
-            model: currentParticipant.modelId,
-            // Add error fields if error detected
-            ...(hasError && {
-              hasError: true,
-              errorType: messageMetadata?.errorType || (isEmptyResponse ? 'empty_response' : 'unknown'),
-              errorMessage,
-              providerMessage: messageMetadata?.providerMessage || errorMessage,
-            }),
-          };
 
           if (!messageExists) {
             // Message doesn't exist in array - ADD it
-            console.warn('[useMultiParticipantChat] ⚠️  Message not in array, adding it', {
-              messageId: data.message.id,
-              participantIndex: currentIndexRef.current,
-              participantId: currentParticipant.id,
-              hasError,
-              isEmptyResponse,
-            });
-
-            const messageToAdd: UIMessage = {
-              ...data.message,
-              metadata: updatedMetadata,
-            };
-
-            return [...prev, messageToAdd];
+            return [...prev, { ...data.message, metadata: updatedMetadata }];
           }
 
           // Message exists - UPDATE it
           return prev.map((msg) => {
             if (msg.id === data.message.id && msg.role === 'assistant') {
-              console.warn('[useMultiParticipantChat] ✅ Updating message metadata for participant', currentIndexRef.current, {
-                hasError,
-                isEmptyResponse,
-                hasBackendError,
-              });
-
-              return {
-                ...msg,
-                metadata: updatedMetadata,
-              };
+              return { ...msg, metadata: updatedMetadata };
             }
             return msg;
           });
         });
+
+        // ✅ NO FRONTEND RETRIES: Server already handled retries
+        // If there's an error at this point, it's already been saved to the database
+        // Just continue to next participant
       }
 
-      // ✅ CRITICAL FIX: Use ref for queue to avoid React state timing issues
+      // ✅ ALWAYS ADVANCE TO NEXT PARTICIPANT: After message is processed (success or error)
       // Process next participant in queue using REF (immediate access)
       if (participantQueueRef.current.length > 0) {
         const nextIndex = participantQueueRef.current[0];
         const remaining = participantQueueRef.current.slice(1);
         if (nextIndex !== undefined) {
-          console.warn('[useMultiParticipantChat] ⏭️  Next participant in queue:', nextIndex, {
-            remaining: remaining.length,
-            totalParticipants: participants.length,
-          });
-
           // ✅ FIX: Update both ref and state immediately
           currentIndexRef.current = nextIndex;
           setCurrentIndex(nextIndex);
@@ -556,9 +387,6 @@ export function useMultiParticipantChat({
         currentIndexRef.current = 0;
         setCurrentIndex(0);
         participantQueueRef.current = [];
-
-        // ✅ SUCCESS: All participants responded successfully
-        console.warn('[useMultiParticipantChat] ✅ Round completed successfully - all participants responded');
 
         // ✅ CRITICAL: Trigger round completion callback FIRST
         // This allows the frontend to immediately refetch analyses
@@ -578,22 +406,10 @@ export function useMultiParticipantChat({
     participantsRef.current = participants;
   }, [participants]);
 
-  // ✅ INFINITE RETRY: Cleanup all retry timeouts on unmount
-  useEffect(() => {
-    const timeoutsMap = retryTimeoutsRef.current;
-    return () => {
-      // Clear all pending retry timeouts
-      timeoutsMap.forEach(timeout => clearTimeout(timeout));
-      timeoutsMap.clear();
-    };
-  }, []);
-
   useEffect(() => {
     if (!pendingNextParticipant || status !== 'ready') {
       return;
     }
-
-    console.warn('[useMultiParticipantChat] Status is ready, triggering participant', currentIndexRef.current);
 
     // ✅ CRITICAL: Add small delay to ensure stream is fully flushed
     // This prevents race conditions where status becomes 'ready' but stream hasn't fully completed
@@ -602,7 +418,6 @@ export function useMultiParticipantChat({
       // AI SDK is ready for the next message - reset pending state
       setPendingNextParticipant(false);
 
-      console.warn('[useMultiParticipantChat] Sending message for participant', currentIndexRef.current);
       // Trigger next participant with empty user message
       aiSendMessage({
         role: 'user',
@@ -625,7 +440,6 @@ export function useMultiParticipantChat({
    */
   const startRound = useCallback(() => {
     if (status !== 'ready') {
-      console.warn('[useMultiParticipantChat] Cannot start round - status is:', status);
       return;
     }
 
@@ -634,39 +448,11 @@ export function useMultiParticipantChat({
       .sort((a, b) => a.priority - b.priority);
 
     if (enabled.length === 0) {
-      console.warn('[useMultiParticipantChat] No enabled participants');
       return;
     }
 
-    console.warn('[useMultiParticipantChat] 🚀 Starting round with', enabled.length, 'participants', {
-      participants: enabled.map((p, i) => ({
-        index: i,
-        id: p.id,
-        modelId: p.modelId,
-        role: p.role,
-        priority: p.priority,
-        isEnabled: p.isEnabled,
-      })),
-    });
-
     // Setup participant queue (skip first, it triggers automatically)
     const queue = enabled.slice(1).map((_, i) => i + 1);
-
-    console.warn('[useMultiParticipantChat] 📋 Queue created:', {
-      queueIndices: queue,
-      firstParticipant: {
-        index: 0,
-        id: enabled[0]?.id,
-        modelId: enabled[0]?.modelId,
-        role: enabled[0]?.role,
-      },
-      queuedParticipants: queue.map(idx => ({
-        index: idx,
-        id: enabled[idx]?.id,
-        modelId: enabled[idx]?.modelId,
-        role: enabled[idx]?.role,
-      })),
-    });
 
     // ✅ Setup queue and reset index
     participantQueueRef.current = queue;
@@ -680,7 +466,6 @@ export function useMultiParticipantChat({
     const lastUserMessage = messages.findLast(m => m.role === 'user');
 
     if (!lastUserMessage) {
-      console.error('[useMultiParticipantChat] ❌ No user message found to trigger round');
       return;
     }
 
@@ -689,11 +474,8 @@ export function useMultiParticipantChat({
     const userText = textPart && 'text' in textPart ? textPart.text : '';
 
     if (!userText.trim()) {
-      console.error('[useMultiParticipantChat] ❌ Last user message has no text content');
       return;
     }
-
-    console.warn('[useMultiParticipantChat] 🎯 Triggering first participant (index 0) with user message:', `${userText.substring(0, 50)}...`);
 
     // ✅ Send the actual user message text to trigger the round
     // The AI SDK will add this as a new message, but it's the same content as the existing one
@@ -715,7 +497,6 @@ export function useMultiParticipantChat({
 
       const trimmed = content.trim();
       if (!trimmed) {
-        console.warn('[useMultiParticipantChat] Cannot send empty message');
         return;
       }
 
@@ -727,36 +508,8 @@ export function useMultiParticipantChat({
         throw new Error('No enabled participants');
       }
 
-      console.warn('[useMultiParticipantChat] 💬 Sending user message and starting round', {
-        messageLength: trimmed.length,
-        participantCount: enabled.length,
-        participants: enabled.map((p, i) => ({
-          index: i,
-          id: p.id,
-          modelId: p.modelId,
-          role: p.role,
-          priority: p.priority,
-        })),
-      });
-
       // Setup participant queue (skip first, it triggers automatically)
       const queue = enabled.slice(1).map((_, i) => i + 1);
-
-      console.warn('[useMultiParticipantChat] 📋 Queue created:', {
-        queueIndices: queue,
-        firstParticipant: {
-          index: 0,
-          id: enabled[0]?.id,
-          modelId: enabled[0]?.modelId,
-          role: enabled[0]?.role,
-        },
-        queuedParticipants: queue.map(idx => ({
-          index: idx,
-          id: enabled[idx]?.id,
-          modelId: enabled[idx]?.modelId,
-          role: enabled[idx]?.role,
-        })),
-      });
 
       // ✅ Setup queue
       participantQueueRef.current = queue;
@@ -765,7 +518,6 @@ export function useMultiParticipantChat({
       setPendingNextParticipant(false);
 
       // Send user message (first participant responds automatically)
-      console.warn('[useMultiParticipantChat] 🎯 Sending user message - first participant (index 0) will respond');
       aiSendMessage({ text: trimmed });
     },
     [participants, status, aiSendMessage],
@@ -784,18 +536,14 @@ export function useMultiParticipantChat({
     // ✅ Get the last user message to retry
     const lastUserMessage = messages.findLast(m => m.role === 'user');
     if (!lastUserMessage) {
-      console.warn('[useMultiParticipantChat] No user message to retry');
       return;
     }
 
     // Extract text from the last user message
     const textPart = lastUserMessage.parts?.find(p => p.type === 'text' && 'text' in p);
     if (!textPart || !('text' in textPart)) {
-      console.warn('[useMultiParticipantChat] Last user message has no text');
       return;
     }
-
-    console.warn('[useMultiParticipantChat] Retrying last message:', textPart.text);
 
     // Remove the failed assistant messages (keep all messages up to and including the last user message)
     const lastUserIndex = messages.findLastIndex(m => m.role === 'user');

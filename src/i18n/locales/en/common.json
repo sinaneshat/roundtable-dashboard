@@ -279,6 +279,23 @@
       },
       "tryAgain": "Try Again",
       "returnHome": "Return to Chat"
+    },
+    "subscriptionChanged": {
+      "title": "Subscription Updated!",
+      "upgrade": "Upgrade",
+      "downgrade": "Downgrade",
+      "upgradeDescription": "Your subscription has been upgraded successfully. You now have access to enhanced features and higher limits.",
+      "downgradeDescription": "Your subscription change has been scheduled. You'll keep your current plan features until the end of your billing period.",
+      "changeDescription": "Your subscription has been updated successfully.",
+      "gracePeriodNotice": "Your current plan will remain active until {date}. After that, your new plan takes effect.",
+      "previousPlan": "Previous Plan",
+      "currentPlan": "Current Plan",
+      "currentPlanNow": "Current Plan (Active Now)",
+      "afterDate": "After {date}",
+      "newPlanDetails": "Your New Plan Details",
+      "noSubscriptionFound": "No Subscription Found",
+      "noSubscriptionFoundDescription": "We couldn't find an active subscription. Please try subscribing to a plan.",
+      "viewPricing": "View Pricing Plans"
     }
   },
   "brand": {

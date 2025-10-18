@@ -230,6 +230,24 @@ const SubscriptionChangePayloadSchema = z.object({
     description: 'Success message describing the change',
     example: 'Subscription upgraded successfully',
   }),
+  changeDetails: z.object({
+    oldPrice: PriceSchema.openapi({
+      description: 'Previous price details before the change',
+    }),
+    newPrice: PriceSchema.openapi({
+      description: 'New price details after the change',
+    }),
+    isUpgrade: z.boolean().openapi({
+      description: 'Whether this change is an upgrade (true) or downgrade (false)',
+      example: true,
+    }),
+    isDowngrade: z.boolean().openapi({
+      description: 'Whether this change is a downgrade (true) or upgrade (false)',
+      example: false,
+    }),
+  }).optional().openapi({
+    description: 'Details about the subscription change for showing before/after comparison',
+  }),
 }).openapi('SubscriptionChangePayload');
 
 export const SubscriptionChangeResponseSchema = createApiResponseSchema(SubscriptionChangePayloadSchema).openapi('SubscriptionChangeResponse');

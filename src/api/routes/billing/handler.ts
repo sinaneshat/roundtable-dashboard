@@ -668,9 +668,17 @@ export const switchSubscriptionHandler: RouteHandler<typeof switchSubscriptionRo
       // Fetch updated subscription from database with nested price data
       const refreshedSubscription = await fetchRefreshedSubscription(db, subscriptionId);
 
+      // ✅ Include old and new price information for success page comparison
+      // This allows the frontend to show before/after plan details
       return Responses.ok(c, {
         subscription: refreshedSubscription,
         message: 'Subscription updated successfully',
+        changeDetails: {
+          oldPrice: currentPrice,
+          newPrice,
+          isUpgrade,
+          isDowngrade,
+        },
       });
     } catch (_error) {
       if (_error instanceof AppError) {

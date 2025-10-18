@@ -37,11 +37,11 @@ export function BillingSuccessClient() {
   const syncMutation = useSyncAfterCheckoutMutation();
 
   // Subscription queries - automatically fetch after sync completes
-  const { data: subscriptionData } = useSubscriptionsQuery();
-  const { data: currentSubscription } = useCurrentSubscriptionQuery();
+  const { data: subscriptionData, isFetching: isSubscriptionsFetching } = useSubscriptionsQuery();
+  const { data: currentSubscription, isFetching: isCurrentSubscriptionFetching } = useCurrentSubscriptionQuery();
 
   // Get usage stats for tier quotas
-  const { data: usageStats } = useUsageStatsQuery();
+  const { data: usageStats, isFetching: isUsageStatsFetching } = useUsageStatsQuery();
 
   // Track initialization to prevent double-calls in React.StrictMode
   const hasInitiatedSync = useRef(false);
@@ -61,8 +61,14 @@ export function BillingSuccessClient() {
 
   // Countdown timer for auto-redirect
   useEffect(() => {
-    // Only start countdown after sync is complete
-    if (!syncMutation.isSuccess)
+    // ✅ FIX: Only start countdown after sync AND queries are complete
+    // This ensures we have fresh subscription data before redirecting
+    const isDataReady = syncMutation.isSuccess
+      && !isSubscriptionsFetching
+      && !isCurrentSubscriptionFetching
+      && !isUsageStatsFetching;
+
+    if (!isDataReady)
       return;
 
     if (countdown <= 0) {
@@ -75,10 +81,15 @@ export function BillingSuccessClient() {
     }, 1000);
 
     return () => clearTimeout(timer);
-  }, [countdown, syncMutation.isSuccess, router]);
+  }, [countdown, syncMutation.isSuccess, isSubscriptionsFetching, isCurrentSubscriptionFetching, isUsageStatsFetching, router]);
 
-  // Loading state - syncing
-  if (syncMutation.isPending) {
+  // Loading state - syncing OR refetching subscription data after sync
+  // ✅ FIX: Wait for both sync AND subscription queries to complete
+  // This prevents showing empty plan details due to race condition
+  const isLoadingData = syncMutation.isPending
+    || (syncMutation.isSuccess && (isSubscriptionsFetching || isCurrentSubscriptionFetching || isUsageStatsFetching));
+
+  if (isLoadingData) {
     return (
       <div className="flex min-h-screen w-full flex-col items-center justify-start px-4 pt-16 md:pt-20">
         <StaggerContainer

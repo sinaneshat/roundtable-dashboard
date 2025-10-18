@@ -40,11 +40,35 @@ export default function PricingScreen() {
     setProcessingPriceId(priceId);
     try {
       if (activeSubscription) {
-        await switchMutation.mutateAsync({
+        // In-app subscription switch (upgrade/downgrade)
+        const result = await switchMutation.mutateAsync({
           param: { id: activeSubscription.id },
           json: { newPriceId: priceId },
         });
+
+        // ✅ Always redirect to subscription changed page after successful switch
+        // Show comparison if we have changeDetails, otherwise just show new plan
+        if (result.success) {
+          const changeDetails = result.data?.changeDetails;
+
+          if (changeDetails) {
+            // We have before/after data - build full query params
+            const changeType = changeDetails.isUpgrade ? 'upgrade' : changeDetails.isDowngrade ? 'downgrade' : 'change';
+
+            const params = new URLSearchParams({
+              changeType,
+              oldProductId: changeDetails.oldPrice.productId,
+              newProductId: changeDetails.newPrice.productId,
+            });
+
+            window.location.href = `/chat/billing/subscription-changed?${params.toString()}`;
+          } else {
+            // No changeDetails - redirect without query params (page will show just new plan)
+            window.location.href = '/chat/billing/subscription-changed';
+          }
+        }
       } else {
+        // New subscription - redirect to Stripe Checkout
         const result = await createCheckoutMutation.mutateAsync({
           json: { priceId },
         });

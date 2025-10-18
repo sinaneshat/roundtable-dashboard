@@ -17,6 +17,7 @@ import {
   chatParticipantSelectSchema,
   chatParticipantUpdateSchema,
   chatRoundFeedbackSelectSchema,
+  chatRoundFeedbackUpdateSchema,
   chatThreadChangelogSelectSchema,
   chatThreadInsertSchema,
   chatThreadSelectSchema,
@@ -1015,22 +1016,32 @@ export const RoundFeedbackParamSchema = z.object({
 });
 
 /**
- * Round feedback request schema
+ * ✅ REUSE: Round feedback request schema from database validation
+ * Uses update schema since we're modifying feedback
  */
-export const RoundFeedbackRequestSchema = z.object({
-  feedbackType: z.enum(['like', 'dislike']).nullable().openapi({
-    description: 'Feedback type (like/dislike) or null to remove feedback',
-    example: 'like',
-  }),
-});
+export const RoundFeedbackRequestSchema = chatRoundFeedbackUpdateSchema
+  .pick({
+    feedbackType: true,
+  })
+  .openapi('RoundFeedbackRequest');
 
 export type RoundFeedbackRequest = z.infer<typeof RoundFeedbackRequestSchema>;
 
 /**
  * ✅ REUSE: Chat round feedback schema from database validation
+ * Picks only fields needed for API responses
  * NO TRANSFORMS: Handler serializes dates, schema only validates
  */
 const ChatRoundFeedbackSchema = chatRoundFeedbackSelectSchema
+  .pick({
+    id: true,
+    threadId: true,
+    userId: true,
+    roundNumber: true,
+    feedbackType: true,
+    createdAt: true,
+    updatedAt: true,
+  })
   .openapi('ChatRoundFeedback');
 
 export type RoundFeedback = z.infer<typeof ChatRoundFeedbackSchema>;
