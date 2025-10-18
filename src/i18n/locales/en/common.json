@@ -347,6 +347,7 @@
     "errors": {
       "streamError": "AI Model Failed to Respond",
       "retry": "Retry",
+      "retryRound": "Retry this round of conversation",
       "retryHint": "The AI model failed after multiple retries. Click Retry to try again with all participants.",
       "unknownModel": "Unknown model",
       "generationCancelled": "Generation cancelled",
@@ -561,7 +562,11 @@
     "today": "Today",
     "updateFailed": "Failed to update thread",
     "updateFailedDescription": "Could not update the thread. Please try again.",
-    "yesterday": "Yesterday"
+    "yesterday": "Yesterday",
+    "feedback": {
+      "like": "This round was helpful",
+      "dislike": "This round was not helpful"
+    }
   },
   "common": {
     "error": "An error occurred",

@@ -28,6 +28,19 @@ export {
 } from './api-keys';
 
 // ============================================================================
+// Chat Feedback Service Exports
+// ============================================================================
+
+export {
+  type GetThreadFeedbackRequest,
+  type GetThreadFeedbackResponse,
+  getThreadFeedbackService,
+  type SetRoundFeedbackRequest,
+  type SetRoundFeedbackResponse,
+  setRoundFeedbackService,
+} from './chat-feedback';
+
+// ============================================================================
 // Chat Messages Service Exports
 // All messages use streaming for better UX (sendMessage endpoint removed)
 // ============================================================================

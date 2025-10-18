@@ -12,11 +12,15 @@ import {
   CustomRoleDetailResponseSchema,
   CustomRoleListResponseSchema,
   DeleteThreadResponseSchema,
+  GetThreadFeedbackResponseSchema,
   MessagesListResponseSchema,
   ModeratorAnalysisListResponseSchema,
   ModeratorAnalysisRequestSchema,
   ParticipantDetailResponseSchema,
   RoundAnalysisParamSchema,
+  RoundFeedbackParamSchema,
+  RoundFeedbackRequestSchema,
+  SetRoundFeedbackResponseSchema,
   StreamChatRequestSchema,
   ThreadDetailResponseSchema,
   ThreadListQuerySchema,
@@ -1027,6 +1031,120 @@ export const getThreadAnalysesRoute = createRoute({
       description: 'Analyses retrieved successfully',
       content: {
         'application/json': { schema: ModeratorAnalysisListResponseSchema },
+      },
+    },
+    [HttpStatusCodes.UNAUTHORIZED]: {
+      description: HttpStatusPhrases.UNAUTHORIZED,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
+    [HttpStatusCodes.NOT_FOUND]: {
+      description: HttpStatusPhrases.NOT_FOUND,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
+    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: {
+      description: HttpStatusPhrases.INTERNAL_SERVER_ERROR,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
+  },
+});
+
+// ============================================================================
+// Round Feedback Routes
+// ============================================================================
+
+/**
+ * Set Round Feedback Route
+ * Allows users to like/dislike a conversation round
+ */
+export const setRoundFeedbackRoute = createRoute({
+  method: 'put',
+  path: '/chat/threads/:threadId/rounds/:roundNumber/feedback',
+  tags: ['chat'],
+  summary: 'Set round feedback (like/dislike)',
+  description: 'Set or update user feedback for a conversation round. Pass null to remove feedback.',
+  request: {
+    params: RoundFeedbackParamSchema,
+    body: {
+      required: true,
+      content: {
+        'application/json': {
+          schema: RoundFeedbackRequestSchema,
+        },
+      },
+    },
+  },
+  responses: {
+    [HttpStatusCodes.OK]: {
+      description: 'Feedback set successfully',
+      content: {
+        'application/json': { schema: SetRoundFeedbackResponseSchema },
+      },
+    },
+    [HttpStatusCodes.UNAUTHORIZED]: {
+      description: HttpStatusPhrases.UNAUTHORIZED,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
+    [HttpStatusCodes.NOT_FOUND]: {
+      description: HttpStatusPhrases.NOT_FOUND,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
+    [HttpStatusCodes.BAD_REQUEST]: {
+      description: HttpStatusPhrases.BAD_REQUEST,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
+    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: {
+      description: HttpStatusPhrases.INTERNAL_SERVER_ERROR,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
+  },
+});
+
+/**
+ * Get Thread Feedback Route
+ * Retrieves all round feedback for a thread (for the current user)
+ */
+export const getThreadFeedbackRoute = createRoute({
+  method: 'get',
+  path: '/chat/threads/:id/feedback',
+  tags: ['chat'],
+  summary: 'Get all round feedback for a thread',
+  description: 'Get all round feedback (likes/dislikes) for a thread for the current user.',
+  request: {
+    params: IdParamSchema,
+  },
+  responses: {
+    [HttpStatusCodes.OK]: {
+      description: 'Feedback retrieved successfully',
+      content: {
+        'application/json': { schema: GetThreadFeedbackResponseSchema },
       },
     },
     [HttpStatusCodes.UNAUTHORIZED]: {

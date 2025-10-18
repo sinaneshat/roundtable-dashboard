@@ -282,6 +282,21 @@ CREATE TABLE `chat_participant` (
 CREATE INDEX `chat_participant_thread_idx` ON `chat_participant` (`thread_id`);--> statement-breakpoint
 CREATE INDEX `chat_participant_priority_idx` ON `chat_participant` (`priority`);--> statement-breakpoint
 CREATE INDEX `chat_participant_custom_role_idx` ON `chat_participant` (`custom_role_id`);--> statement-breakpoint
+CREATE TABLE `chat_round_feedback` (
+	`id` text PRIMARY KEY NOT NULL,
+	`thread_id` text NOT NULL,
+	`user_id` text NOT NULL,
+	`round_number` integer NOT NULL,
+	`feedback_type` text,
+	`created_at` integer DEFAULT (cast((julianday('now') - 2440587.5)*86400000 as integer)) NOT NULL,
+	`updated_at` integer DEFAULT (cast((julianday('now') - 2440587.5)*86400000 as integer)) NOT NULL,
+	FOREIGN KEY (`thread_id`) REFERENCES `chat_thread`(`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`user_id`) REFERENCES `user`(`id`) ON UPDATE no action ON DELETE cascade
+);
+--> statement-breakpoint
+CREATE INDEX `chat_round_feedback_unique_idx` ON `chat_round_feedback` (`thread_id`,`user_id`,`round_number`);--> statement-breakpoint
+CREATE INDEX `chat_round_feedback_thread_idx` ON `chat_round_feedback` (`thread_id`);--> statement-breakpoint
+CREATE INDEX `chat_round_feedback_round_idx` ON `chat_round_feedback` (`thread_id`,`round_number`);--> statement-breakpoint
 CREATE TABLE `chat_thread` (
 	`id` text PRIMARY KEY NOT NULL,
 	`user_id` text NOT NULL,

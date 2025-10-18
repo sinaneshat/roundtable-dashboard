@@ -74,8 +74,10 @@ export function ChatInput({
     }
   };
 
-  const isStreaming = status === 'submitted' || status === 'streaming';
-  const isDisabled = disabled || (status !== 'ready' && !isStreaming);
+  // ✅ FIX: AI SDK v5 uses 'in_progress' for streaming, not 'submitted' or 'streaming'
+  const isStreaming = status !== 'ready';
+  // Submit button should be disabled when explicitly disabled or when not ready AND not streaming (error state)
+  const isDisabled = disabled || status === 'error';
 
   return (
     <div className="w-full">

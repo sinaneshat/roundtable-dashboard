@@ -17,6 +17,7 @@ import {
   deleteCustomRoleService,
   deleteParticipantService,
   deleteThreadService,
+  setRoundFeedbackService,
   updateCustomRoleService,
   updateParticipantService,
   updateThreadService,
@@ -590,3 +591,48 @@ export function useDeleteCustomRoleMutation() {
  * No manual mutation needed - analysis streams automatically when component renders
  * Reference: See src/components/chat/round-analysis-stream.tsx for usage
  */
+
+// ============================================================================
+// Round Feedback Mutations
+// ============================================================================
+
+/**
+ * Hook to set round feedback (like/dislike)
+ * Protected endpoint - requires authentication
+ *
+ * Optimistically updates the feedback list for instant UI feedback
+ */
+export function useSetRoundFeedbackMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: setRoundFeedbackService,
+    // ✅ OPTIMISTIC UPDATE: Immediately update feedback for instant UI
+    onMutate: async ({ param }) => {
+      const { threadId } = param;
+
+      // Cancel outgoing refetches
+      await queryClient.cancelQueries({ queryKey: queryKeys.threads.feedback(threadId) });
+
+      // Snapshot previous value
+      const previousFeedback = queryClient.getQueryData(queryKeys.threads.feedback(threadId));
+
+      return { previousFeedback, threadId };
+    },
+    // On error, rollback
+    onError: (_error, _variables, context) => {
+      if (context?.previousFeedback && context?.threadId) {
+        queryClient.setQueryData(
+          queryKeys.threads.feedback(context.threadId),
+          context.previousFeedback,
+        );
+      }
+    },
+    // On success or error (settled), invalidate to get fresh data
+    onSettled: (_data, _error, { param }) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.threads.feedback(param.threadId) });
+    },
+    retry: false,
+    throwOnError: false,
+  });
+}

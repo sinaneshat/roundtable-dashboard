@@ -75,6 +75,7 @@ export const queryKeys = {
     messages: (id: string) => QueryKeyFactory.action('threads', 'messages', id),
     changelog: (id: string) => QueryKeyFactory.action('threads', 'changelog', id),
     analyses: (id: string) => QueryKeyFactory.action('threads', 'analyses', id),
+    feedback: (id: string) => QueryKeyFactory.action('threads', 'feedback', id),
   },
 
   // Chat Custom Roles

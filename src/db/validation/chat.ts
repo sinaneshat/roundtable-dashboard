@@ -16,6 +16,7 @@ import {
   chatMessage,
   chatModeratorAnalysis,
   chatParticipant,
+  chatRoundFeedback,
   chatThread,
   chatThreadChangelog,
 } from '@/db/tables/chat';
@@ -97,6 +98,19 @@ export const chatModeratorAnalysisInsertSchema = createInsertSchema(chatModerato
 export const chatModeratorAnalysisUpdateSchema = createUpdateSchema(chatModeratorAnalysis);
 
 /**
+ * Round Feedback Schemas
+ * User feedback (like/dislike) for conversation rounds
+ */
+export const chatRoundFeedbackSelectSchema = createSelectSchema(chatRoundFeedback);
+export const chatRoundFeedbackInsertSchema = createInsertSchema(chatRoundFeedback, {
+  roundNumber: Refinements.positive(),
+  feedbackType: () => z.enum(['like', 'dislike']).nullable(),
+});
+export const chatRoundFeedbackUpdateSchema = createUpdateSchema(chatRoundFeedback, {
+  feedbackType: () => z.enum(['like', 'dislike']).nullable().optional(),
+});
+
+/**
  * Type exports
  */
 export type ChatThread = z.infer<typeof chatThreadSelectSchema>;
@@ -122,3 +136,7 @@ export type ChatCustomRoleUpdate = z.infer<typeof chatCustomRoleUpdateSchema>;
 export type ChatModeratorAnalysis = z.infer<typeof chatModeratorAnalysisSelectSchema>;
 export type ChatModeratorAnalysisInsert = z.infer<typeof chatModeratorAnalysisInsertSchema>;
 export type ChatModeratorAnalysisUpdate = z.infer<typeof chatModeratorAnalysisUpdateSchema>;
+
+export type ChatRoundFeedback = z.infer<typeof chatRoundFeedbackSelectSchema>;
+export type ChatRoundFeedbackInsert = z.infer<typeof chatRoundFeedbackInsertSchema>;
+export type ChatRoundFeedbackUpdate = z.infer<typeof chatRoundFeedbackUpdateSchema>;

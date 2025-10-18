@@ -2,7 +2,7 @@
 
 import { ChevronDown } from 'lucide-react';
 import type { ComponentProps, ReactNode } from 'react';
-import { createContext, use, useMemo, useState } from 'react';
+import { createContext, use, useEffect, useMemo, useState } from 'react';
 
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { cn } from '@/lib/ui/cn';
@@ -44,22 +44,31 @@ type ReasoningProps = ComponentProps<'div'> & {
   /**
    * Whether the reasoning is currently being streamed
    * Shows a pulsing indicator when true
+   * Automatically opens the component when streaming begins
    */
   isStreaming?: boolean;
   /**
    * Default open state
+   * Defaults to true - reasoning is expanded by default
    */
   defaultOpen?: boolean;
 };
 
 export function Reasoning({
   isStreaming = false,
-  defaultOpen = false,
+  defaultOpen = true,
   className,
   children,
   ...props
 }: ReasoningProps) {
   const [open, setOpen] = useState(defaultOpen);
+
+  // Automatically open when streaming begins
+  useEffect(() => {
+    if (isStreaming) {
+      setOpen(true);
+    }
+  }, [isStreaming]);
 
   const contextValue = useMemo(
     () => ({ open, setOpen, isStreaming }),

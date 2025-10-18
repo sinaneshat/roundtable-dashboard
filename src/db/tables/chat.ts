@@ -317,6 +317,34 @@ export const chatModeratorAnalysis = sqliteTable('chat_moderator_analysis', {
 ]);
 
 /**
+ * Chat Round Feedback
+ * Stores user feedback (like/dislike) for each round of conversation
+ */
+export const chatRoundFeedback = sqliteTable('chat_round_feedback', {
+  id: text('id').primaryKey(),
+  threadId: text('thread_id')
+    .notNull()
+    .references(() => chatThread.id, { onDelete: 'cascade' }),
+  userId: text('user_id')
+    .notNull()
+    .references(() => user.id, { onDelete: 'cascade' }),
+  roundNumber: integer('round_number').notNull(), // 1-indexed round number
+  feedbackType: text('feedback_type', { enum: ['like', 'dislike'] as const }), // null = no feedback
+  createdAt: integer('created_at', { mode: 'timestamp' })
+    .defaultNow()
+    .notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp' })
+    .defaultNow()
+    .$onUpdate(() => /* @__PURE__ */ new Date())
+    .notNull(),
+}, table => [
+  // ✅ Unique constraint: one feedback per user per round
+  index('chat_round_feedback_unique_idx').on(table.threadId, table.userId, table.roundNumber),
+  index('chat_round_feedback_thread_idx').on(table.threadId),
+  index('chat_round_feedback_round_idx').on(table.threadId, table.roundNumber),
+]);
+
+/**
  * Drizzle Relations for improved query support
  */
 export const chatThreadRelations = relations(chatThread, ({ one, many }) => ({
@@ -328,6 +356,7 @@ export const chatThreadRelations = relations(chatThread, ({ one, many }) => ({
   messages: many(chatMessage),
   changelog: many(chatThreadChangelog), // Configuration change history
   moderatorAnalyses: many(chatModeratorAnalysis), // AI-generated round analyses
+  roundFeedback: many(chatRoundFeedback), // User feedback for rounds
 }));
 
 export const chatCustomRoleRelations = relations(chatCustomRole, ({ one, many }) => ({
@@ -380,5 +409,19 @@ export const chatModeratorAnalysisRelations = relations(chatModeratorAnalysis, (
   thread: one(chatThread, {
     fields: [chatModeratorAnalysis.threadId],
     references: [chatThread.id],
+  }),
+}));
+
+/**
+ * Round Feedback Relations
+ */
+export const chatRoundFeedbackRelations = relations(chatRoundFeedback, ({ one }) => ({
+  thread: one(chatThread, {
+    fields: [chatRoundFeedback.threadId],
+    references: [chatThread.id],
+  }),
+  user: one(user, {
+    fields: [chatRoundFeedback.userId],
+    references: [user.id],
   }),
 }));

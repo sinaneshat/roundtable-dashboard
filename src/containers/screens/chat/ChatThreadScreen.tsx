@@ -1,13 +1,14 @@
 'use client';
 
 import { useQueryClient } from '@tanstack/react-query';
-import { ArrowDownIcon } from 'lucide-react';
+import { ArrowDownIcon, RefreshCcwIcon } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useStickToBottomContext } from 'use-stick-to-bottom';
 
 import type { ChatMessage, ChatParticipant, ChatThread } from '@/api/routes/chat/schema';
+import { Action, Actions } from '@/components/ai-elements/actions';
 import { Conversation, ConversationContent } from '@/components/ai-elements/conversation';
 import { ChatDeleteDialog } from '@/components/chat/chat-delete-dialog';
 import { ChatInput } from '@/components/chat/chat-input';
@@ -17,17 +18,19 @@ import { ChatParticipantsList } from '@/components/chat/chat-participants-list';
 import { ChatThreadActions } from '@/components/chat/chat-thread-actions';
 import { ConfigurationChangesGroup } from '@/components/chat/configuration-changes-group';
 import { RoundAnalysisCard } from '@/components/chat/moderator/round-analysis-card';
+import { RoundFeedback } from '@/components/chat/round-feedback';
 import { StreamingParticipantsLoader } from '@/components/chat/streaming-participants-loader';
 import { useThreadHeader } from '@/components/chat/thread-header-context';
 import { Button } from '@/components/ui/button';
 import { useSharedChatContext } from '@/contexts/chat-context';
-import { useUpdateThreadMutation } from '@/hooks/mutations/chat-mutations';
+import { useSetRoundFeedbackMutation, useUpdateThreadMutation } from '@/hooks/mutations/chat-mutations';
+import { useThreadFeedbackQuery } from '@/hooks/queries/chat-feedback';
 import { useThreadAnalysesQuery, useThreadChangelogQuery, useThreadQuery } from '@/hooks/queries/chat-threads';
 import { useBoolean } from '@/hooks/utils';
 import type { ChatModeId } from '@/lib/config/chat-modes';
 import { queryKeys } from '@/lib/data/query-keys';
 import type { ParticipantConfig } from '@/lib/types/participant-config';
-import { chatMessagesToUIMessages } from '@/lib/utils/message-transforms';
+import { chatMessagesToUIMessages, getMessageMetadata } from '@/lib/utils/message-transforms';
 
 type ChatThreadScreenProps = {
   thread: ChatThread;
@@ -125,7 +128,7 @@ export default function ChatThreadScreen({
     sendMessage,
     isStreaming,
     currentParticipantIndex,
-    error: streamError,
+    error: _streamError, // Not used for display - using round-level error detection
     retry: retryRound,
     stop: stopStreaming,
     initializeThread,
@@ -137,7 +140,7 @@ export default function ChatThreadScreen({
 
   const { data: changelogResponse } = useThreadChangelogQuery(thread.id);
   const changelog = useMemo(
-    () => (changelogResponse?.success ? changelogResponse.data.changelog || [] : []),
+    () => (changelogResponse?.success ? changelogResponse.data.items || [] : []),
     [changelogResponse],
   );
 
@@ -146,10 +149,10 @@ export default function ChatThreadScreen({
     () => {
       const items = analysesResponse?.success ? analysesResponse.data.items || [] : [];
       // Transform date strings to Date objects (API returns ISO strings, component expects Dates)
-      // ✅ FILTER: Only show completed analyses (exclude pending, streaming, or failed)
-      // Failed/pending analyses should not be displayed as they don't have valid data
+      // ✅ SHOW ALL ANALYSES: Include pending, streaming, completed (but not failed)
+      // Pending/streaming will show loading state, completed will show full analysis
       return items
-        .filter(item => item.status === 'completed')
+        .filter(item => item.status !== 'failed') // Only exclude failed
         .map(item => ({
           ...item,
           createdAt: typeof item.createdAt === 'string' ? new Date(item.createdAt) : item.createdAt,
@@ -168,6 +171,19 @@ export default function ChatThreadScreen({
   // Mutation invalidates this query, React Query auto-refetches, useEffect syncs context
   const { data: threadQueryData } = useThreadQuery(thread.id);
 
+  // ✅ ROUND FEEDBACK: Fetch all feedback for this thread
+  const { data: feedbackData } = useThreadFeedbackQuery(thread.id);
+  const feedbackByRound = useMemo<Map<number, 'like' | 'dislike' | null>>(() => {
+    if (!feedbackData)
+      return new Map();
+    return new Map(
+      feedbackData.map(f => [f.roundNumber, f.feedbackType] as const),
+    );
+  }, [feedbackData]);
+
+  // ✅ MUTATION: Set round feedback
+  const setFeedbackMutation = useSetRoundFeedbackMutation();
+
   // Chat state
   const [selectedMode, setSelectedMode] = useState<ChatModeId>(thread.mode as ChatModeId);
   const [inputValue, setInputValue] = useState('');
@@ -183,6 +199,9 @@ export default function ChatThreadScreen({
         order: index,
       }));
   });
+
+  // ✅ TIMING FIX: Track pending message to send after participant update
+  const [pendingMessage, setPendingMessage] = useState<string | null>(null);
 
   // ✅ SIMPLIFIED: No participantsOverride state needed
   // Context manages the active participants
@@ -249,6 +268,25 @@ export default function ChatThreadScreen({
     }
   }, [threadQueryData, thread.id, contextParticipants, updateParticipants]);
 
+  // ✅ TIMING FIX: Send pending message after context participants update
+  // This ensures sendMessage uses fresh participants, not stale ones
+  useEffect(() => {
+    if (pendingMessage && contextParticipants.length > 0) {
+      console.warn('[ChatThreadScreen] 🚀 Sending pending message with fresh participants', {
+        threadId: thread.id,
+        participantCount: contextParticipants.length,
+        participantIds: contextParticipants.map(p => p.id),
+        messagePreview: pendingMessage.substring(0, 50),
+      });
+
+      // Clear pending message first to prevent re-triggering
+      setPendingMessage(null);
+
+      // Now send the message - context has fresh participants
+      sendMessage(pendingMessage);
+    }
+  }, [pendingMessage, contextParticipants, sendMessage, thread.id]);
+
   // ✅ AI SDK v5 PATTERN: Submit handler with participant persistence
   const handlePromptSubmit = useCallback(
     async (e: React.FormEvent) => {
@@ -259,8 +297,8 @@ export default function ChatThreadScreen({
       }
 
       // ✅ CRITICAL FIX: Persist participant changes before streaming starts
-      // This ensures the backend uses the latest participant configuration
-      // and creates proper changelog entries for the changes
+      // Backend now returns fresh participants in mutation response
+      // This ensures context is updated synchronously before sendMessage
       try {
         // Convert selectedParticipants to the format expected by updateThread API
         const participantsForUpdate = selectedParticipants.map(p => ({
@@ -272,32 +310,48 @@ export default function ChatThreadScreen({
           isEnabled: true,
         }));
 
-        // ✅ PROPER REACT QUERY PATTERN: Mutation handles invalidation automatically
-        // The onSuccess callback in the mutation will invalidate the thread query
-        // The useThreadQuery hook will auto-refetch
-        // The useEffect watching threadQueryData will sync the context
-        await updateThreadMutation.mutateAsync({
+        // ✅ PROPER PATTERN: Mutation returns fresh participants
+        // No manual refetching needed - use the mutation response directly
+        const result = await updateThreadMutation.mutateAsync({
           param: { id: thread.id },
           json: {
             participants: participantsForUpdate,
           },
         });
 
-        console.warn('[ChatThreadScreen] ✅ Participant changes persisted, query will auto-refetch', {
-          threadId: thread.id,
-          participantCount: participantsForUpdate.length,
-        });
+        // Update context with fresh participants from mutation response
+        if (result.success && result.data.participants) {
+          const participantsWithDates = result.data.participants.map(p => ({
+            ...p,
+            createdAt: new Date(p.createdAt),
+            updatedAt: new Date(p.updatedAt),
+          }));
+
+          updateParticipants(participantsWithDates);
+
+          console.warn('[ChatThreadScreen] ✅ Context updated with fresh participants from mutation', {
+            threadId: thread.id,
+            participantCount: participantsWithDates.length,
+            participantIds: participantsWithDates.map(p => p.id),
+          });
+
+          // ✅ TIMING FIX: Set pending message instead of calling sendMessage immediately
+          // The useEffect will trigger sendMessage after context state propagates
+          setPendingMessage(trimmed);
+        } else {
+          // No participants in response - fallback to immediate send
+          console.warn('[ChatThreadScreen] ⚠️ No participants in mutation response, sending immediately');
+          await sendMessage(trimmed);
+        }
       } catch (error) {
         console.error('[ChatThreadScreen] ❌ Failed to persist participant changes:', error);
-        // Don't block streaming on participant update errors
-        // The streamChat endpoint will still receive providedParticipants
+        // On error, send message anyway (uses existing context participants)
+        await sendMessage(trimmed);
       }
 
-      // ✅ The context hook handles all streaming logic
-      await sendMessage(trimmed);
       setInputValue('');
     },
-    [inputValue, sendMessage, thread.id, selectedParticipants, updateThreadMutation],
+    [inputValue, sendMessage, thread.id, selectedParticipants, updateThreadMutation, updateParticipants],
   );
 
   // ✅ Derive active participants from context
@@ -342,15 +396,20 @@ export default function ChatThreadScreen({
       changelogByRound.get(roundNumber)!.push(change);
     });
 
-    // Get all unique round numbers from messages (changelog might not have all rounds)
-    const sortedRounds = Array.from(messagesByRound.keys()).sort((a, b) => a - b);
+    // ✅ FIX: Get all unique round numbers from BOTH messages AND changelog
+    // This ensures changelog for upcoming rounds (where participant changes were made) displays
+    const allRoundNumbers = new Set([
+      ...messagesByRound.keys(),
+      ...changelogByRound.keys(),
+    ]);
+    const sortedRounds = Array.from(allRoundNumbers).sort((a, b) => a - b);
 
     sortedRounds.forEach((roundNumber) => {
-      const roundMessages = messagesByRound.get(roundNumber)!;
+      const roundMessages = messagesByRound.get(roundNumber);
       const roundChangelog = changelogByRound.get(roundNumber);
       const roundAnalysis = analyses.find(a => a.roundNumber === roundNumber);
 
-      // 1. Add changelog BEFORE round messages (shows what changed)
+      // 1. Add changelog BEFORE round messages (shows what changed for this round)
       if (roundChangelog && roundChangelog.length > 0) {
         items.push({
           type: 'changelog',
@@ -359,12 +418,14 @@ export default function ChatThreadScreen({
         });
       }
 
-      // 2. Add messages for this round
-      items.push({
-        type: 'messages',
-        data: roundMessages,
-        key: `round-${roundNumber}-messages`,
-      });
+      // 2. Add messages for this round (if they exist)
+      if (roundMessages && roundMessages.length > 0) {
+        items.push({
+          type: 'messages',
+          data: roundMessages,
+          key: `round-${roundNumber}-messages`,
+        });
+      }
 
       // 3. Add analysis AFTER round messages (shows round results)
       if (roundAnalysis) {
@@ -394,6 +455,34 @@ export default function ChatThreadScreen({
     });
   }, [messagesWithAnalysesAndChangelog]);
 
+  // ✅ ROUND-LEVEL ERROR DETECTION: Check if the last completed round has errors
+  // A round is considered complete when:
+  // 1. Not currently streaming
+  // 2. Last message is an assistant message (round finished)
+  // 3. At least one assistant message in the round has an error
+  const lastRoundHasErrors = useMemo(() => {
+    if (isStreaming || messages.length === 0) {
+      return false;
+    }
+
+    // Find the last user message to determine the current round
+    const lastUserMessageIndex = messages.findLastIndex(m => m.role === 'user');
+    if (lastUserMessageIndex === -1) {
+      return false;
+    }
+
+    // Get all assistant messages after the last user message (current round)
+    const currentRoundAssistantMessages = messages.slice(lastUserMessageIndex + 1).filter(m => m.role === 'assistant');
+
+    // Check if any assistant message in this round has an error
+    const hasErrorInRound = currentRoundAssistantMessages.some((message) => {
+      const metadata = getMessageMetadata(message.metadata);
+      return metadata?.hasError === true || !!metadata?.error || !!metadata?.errorMessage;
+    });
+
+    return hasErrorInRound;
+  }, [messages, isStreaming]);
+
   return (
     <div className="relative flex flex-1 flex-col min-h-0">
       {/* Conversation wrapper - scrollable content area */}
@@ -413,19 +502,16 @@ export default function ChatThreadScreen({
             {/* ✅ ROUND-BASED RENDERING: Changelog → Messages → Analysis */}
             {messagesWithAnalysesAndChangelog.map((item, itemIndex) => (
               <div key={item.key}>
-                {item.type === 'changelog'
+                {item.type === 'changelog' && item.data.length > 0
                   ? (
-                // Changelog before round (shows what changed)
-                      <div className="mb-6 space-y-4">
-                        {item.data.map(change => (
-                          <ConfigurationChangesGroup
-                            key={change.id}
-                            group={{
-                              timestamp: new Date(change.createdAt),
-                              changes: [change],
-                            }}
-                          />
-                        ))}
+                // ✅ Changelog before round - ALL changes for this round in ONE accordion
+                      <div className="mb-6">
+                        <ConfigurationChangesGroup
+                          group={{
+                            timestamp: new Date(item.data[0]!.createdAt),
+                            changes: item.data, // ✅ Pass ALL changes - component groups by action
+                          }}
+                        />
                       </div>
                     )
                   : item.type === 'messages'
@@ -444,29 +530,54 @@ export default function ChatThreadScreen({
                           }
                         />
                       )
-                    : (
-                  // Analysis after round (shows results)
-                        <div className="mt-6">
-                          <RoundAnalysisCard
-                            analysis={item.data}
-                            threadId={thread.id}
-                            isLatest={itemIndex === messagesWithAnalysesAndChangelog.length - 1}
-                          />
-                        </div>
-                      )}
+                    : item.type === 'analysis'
+                      ? (
+                    // Analysis after round (shows results) + Round Feedback
+                          <div className="mt-6 space-y-4">
+                            {/* ✅ Round Feedback: Like/Dislike buttons above changelog/analysis */}
+                            <div className="flex justify-start min-h-[32px]">
+                              <RoundFeedback
+                                threadId={thread.id}
+                                roundNumber={item.data.roundNumber}
+                                currentFeedback={feedbackByRound.get(item.data.roundNumber) ?? null}
+                                onFeedbackChange={(feedbackType) => {
+                                  setFeedbackMutation.mutate({
+                                    param: {
+                                      threadId: thread.id,
+                                      roundNumber: String(item.data.roundNumber),
+                                    },
+                                    json: { feedbackType },
+                                  });
+                                }}
+                                disabled={isStreaming}
+                              />
+                            </div>
+
+                            <RoundAnalysisCard
+                              analysis={item.data}
+                              threadId={thread.id}
+                              isLatest={itemIndex === messagesWithAnalysesAndChangelog.length - 1}
+                            />
+                          </div>
+                        )
+                      : null}
               </div>
             ))}
 
-            {/* ✅ RETRY BUTTON: Show after error (error message appears inline with participant) */}
-            {streamError && !isStreaming && (
-              <div className="flex justify-center mt-4">
-                <button
-                  type="button"
-                  onClick={retryRound}
-                  className="px-4 py-2 text-sm font-medium rounded-lg bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 transition-colors"
-                >
-                  {t('errors.retry')}
-                </button>
+            {/* ✅ ROUND-LEVEL RETRY: Show after entire round completes with errors */}
+            {/* Following AI Elements Actions pattern - retry button appears after failed round */}
+            {/* ✅ MOVED TO FAR LEFT: Changed justify-center to justify-start */}
+            {lastRoundHasErrors && !isStreaming && (
+              <div className="flex justify-start mt-6 mb-4">
+                <Actions>
+                  <Action
+                    onClick={retryRound}
+                    label={t('errors.retry')}
+                    tooltip={t('errors.retryRound')}
+                  >
+                    <RefreshCcwIcon className="size-3" />
+                  </Action>
+                </Actions>
               </div>
             )}
 

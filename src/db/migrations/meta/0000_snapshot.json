@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "f318eaf0-4092-49ef-97e9-8acaa21131bc",
+  "id": "c1bc69b2-46d2-447e-af81-e4f2ae0f0834",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "account": {
@@ -1981,6 +1981,119 @@
           "value": "\"chat_participant\".\"priority\" >= 0"
         }
       }
+    },
+    "chat_round_feedback": {
+      "name": "chat_round_feedback",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "thread_id": {
+          "name": "thread_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "round_number": {
+          "name": "round_number",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "feedback_type": {
+          "name": "feedback_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(cast((julianday('now') - 2440587.5)*86400000 as integer))"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(cast((julianday('now') - 2440587.5)*86400000 as integer))"
+        }
+      },
+      "indexes": {
+        "chat_round_feedback_unique_idx": {
+          "name": "chat_round_feedback_unique_idx",
+          "columns": [
+            "thread_id",
+            "user_id",
+            "round_number"
+          ],
+          "isUnique": false
+        },
+        "chat_round_feedback_thread_idx": {
+          "name": "chat_round_feedback_thread_idx",
+          "columns": [
+            "thread_id"
+          ],
+          "isUnique": false
+        },
+        "chat_round_feedback_round_idx": {
+          "name": "chat_round_feedback_round_idx",
+          "columns": [
+            "thread_id",
+            "round_number"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "chat_round_feedback_thread_id_chat_thread_id_fk": {
+          "name": "chat_round_feedback_thread_id_chat_thread_id_fk",
+          "tableFrom": "chat_round_feedback",
+          "tableTo": "chat_thread",
+          "columnsFrom": [
+            "thread_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "chat_round_feedback_user_id_user_id_fk": {
+          "name": "chat_round_feedback_user_id_user_id_fk",
+          "tableFrom": "chat_round_feedback",
+          "tableTo": "user",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
     },
     "chat_thread": {
       "name": "chat_thread",

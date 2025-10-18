@@ -709,8 +709,8 @@ export function useMultiParticipantChat({
    */
   const sendMessage = useCallback(
     async (content: string) => {
-      if (status === 'submitted') {
-        return;
+      if (status !== 'ready') {
+        return; // ✅ FIX: Already streaming, can't send new message
       }
 
       const trimmed = content.trim();
@@ -777,8 +777,8 @@ export function useMultiParticipantChat({
    * This will restart the entire round from the beginning with all participants
    */
   const retry = useCallback(() => {
-    if (status === 'submitted') {
-      return; // Already streaming, can't retry
+    if (status !== 'ready') {
+      return; // ✅ FIX: Already streaming, can't retry
     }
 
     // ✅ Get the last user message to retry
@@ -810,7 +810,7 @@ export function useMultiParticipantChat({
     messages,
     sendMessage,
     startRound, // ✅ NEW: Trigger round without sending user message
-    isStreaming: status === 'submitted',
+    isStreaming: status !== 'ready', // ✅ FIX: AI SDK v5 uses 'in_progress' not 'submitted'
     currentParticipantIndex: currentIndex,
     error: chatError || null,
     retry,

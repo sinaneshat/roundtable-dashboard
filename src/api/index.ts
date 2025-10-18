@@ -86,10 +86,12 @@ import {
   getThreadAnalysesHandler,
   getThreadBySlugHandler,
   getThreadChangelogHandler,
+  getThreadFeedbackHandler,
   getThreadHandler,
   getThreadMessagesHandler,
   listCustomRolesHandler,
   listThreadsHandler,
+  setRoundFeedbackHandler,
   streamChatHandler,
   updateCustomRoleHandler,
   updateParticipantHandler,
@@ -108,10 +110,12 @@ import {
   getThreadAnalysesRoute,
   getThreadBySlugRoute,
   getThreadChangelogRoute,
+  getThreadFeedbackRoute,
   getThreadMessagesRoute,
   getThreadRoute,
   listCustomRolesRoute,
   listThreadsRoute,
+  setRoundFeedbackRoute,
   streamChatRoute,
   updateCustomRoleRoute,
   updateParticipantRoute,
@@ -381,6 +385,9 @@ const appRoutes = app
   // Moderator Analysis (protected, backend-triggered only)
   .openapi(getThreadAnalysesRoute, getThreadAnalysesHandler) // Get persisted moderator analyses (read-only)
   .openapi(analyzeRoundRoute, analyzeRoundHandler) // Stream moderator analysis for a round
+  // Round Feedback (protected)
+  .openapi(setRoundFeedbackRoute, setRoundFeedbackHandler) // Set/update round feedback (like/dislike)
+  .openapi(getThreadFeedbackRoute, getThreadFeedbackHandler) // Get all round feedback for a thread
 
   // ============================================================================
   // Usage Routes - Usage tracking and quota management (protected)

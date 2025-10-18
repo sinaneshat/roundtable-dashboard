@@ -16,6 +16,7 @@ import {
   chatParticipantInsertSchema,
   chatParticipantSelectSchema,
   chatParticipantUpdateSchema,
+  chatRoundFeedbackSelectSchema,
   chatThreadChangelogSelectSchema,
   chatThreadInsertSchema,
   chatThreadSelectSchema,
@@ -504,7 +505,7 @@ export const CustomRoleDetailResponseSchema = createApiResponseSchema(CustomRole
 // ============================================================================
 
 const ChangelogListPayloadSchema = z.object({
-  changelog: z.array(ChatThreadChangelogSchema),
+  items: z.array(ChatThreadChangelogSchema), // ✅ Match Responses.collection() structure
   count: z.number().int().nonnegative(),
 }).openapi('ChangelogListPayload');
 
@@ -994,3 +995,56 @@ export const UIMessageMetadataSchema = z.object({
 }).passthrough().nullable().optional();
 
 export type UIMessageMetadata = z.infer<typeof UIMessageMetadataSchema>;
+
+// ============================================================================
+// Round Feedback Schemas
+// ============================================================================
+
+/**
+ * Round feedback parameter schema (threadId + roundNumber in path)
+ */
+export const RoundFeedbackParamSchema = z.object({
+  threadId: z.string().openapi({
+    description: 'Thread ID',
+    example: 'thread_abc123',
+  }),
+  roundNumber: z.string().openapi({
+    description: 'Round number (1-indexed)',
+    example: '1',
+  }),
+});
+
+/**
+ * Round feedback request schema
+ */
+export const RoundFeedbackRequestSchema = z.object({
+  feedbackType: z.enum(['like', 'dislike']).nullable().openapi({
+    description: 'Feedback type (like/dislike) or null to remove feedback',
+    example: 'like',
+  }),
+});
+
+export type RoundFeedbackRequest = z.infer<typeof RoundFeedbackRequestSchema>;
+
+/**
+ * ✅ REUSE: Chat round feedback schema from database validation
+ * NO TRANSFORMS: Handler serializes dates, schema only validates
+ */
+const ChatRoundFeedbackSchema = chatRoundFeedbackSelectSchema
+  .openapi('ChatRoundFeedback');
+
+export type RoundFeedback = z.infer<typeof ChatRoundFeedbackSchema>;
+
+/**
+ * Response schema for setting round feedback
+ */
+export const SetRoundFeedbackResponseSchema = createApiResponseSchema(
+  ChatRoundFeedbackSchema,
+).openapi('SetRoundFeedbackResponse');
+
+/**
+ * Response schema for getting round feedback for a thread
+ */
+export const GetThreadFeedbackResponseSchema = createApiResponseSchema(
+  z.array(ChatRoundFeedbackSchema),
+).openapi('GetThreadFeedbackResponse');

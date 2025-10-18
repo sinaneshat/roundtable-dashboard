@@ -59,10 +59,12 @@ import type {
   getThreadAnalysesRoute,
   getThreadBySlugRoute,
   getThreadChangelogRoute,
+  getThreadFeedbackRoute,
   getThreadMessagesRoute,
   getThreadRoute,
   listCustomRolesRoute,
   listThreadsRoute,
+  setRoundFeedbackRoute,
   streamChatRoute,
   updateCustomRoleRoute,
   updateParticipantRoute,
@@ -75,6 +77,8 @@ import {
   ModeratorAnalysisPayloadSchema,
   ModeratorAnalysisRequestSchema,
   RoundAnalysisParamSchema,
+  RoundFeedbackParamSchema,
+  RoundFeedbackRequestSchema,
   StreamChatRequestSchema,
   ThreadListQuerySchema,
   ThreadSlugParamSchema,
@@ -988,11 +992,20 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
 
     await executeAtomic(db, batchOps);
 
-    // Fetch updated thread
-    const [updatedThread] = await db
-      .select()
-      .from(tables.chatThread)
-      .where(eq(tables.chatThread.id, id));
+    // Fetch updated thread WITH participants
+    const updatedThreadWithParticipants = await db.query.chatThread.findFirst({
+      where: eq(tables.chatThread.id, id),
+      with: {
+        participants: {
+          where: eq(tables.chatParticipant.isEnabled, true),
+          orderBy: [asc(tables.chatParticipant.priority)],
+        },
+      },
+    });
+
+    if (!updatedThreadWithParticipants) {
+      throw createError.notFound('Thread not found after update');
+    }
 
     // ✅ Invalidate backend cache if status changed (affects list visibility)
     if (body.status !== undefined && db.$cache?.invalidate) {
@@ -1003,7 +1016,8 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
     }
 
     return Responses.ok(c, {
-      thread: updatedThread,
+      thread: updatedThreadWithParticipants,
+      participants: updatedThreadWithParticipants.participants,
     });
   },
 );
@@ -3009,5 +3023,199 @@ export const getThreadAnalysesHandler: RouteHandler<typeof getThreadAnalysesRout
       .sort((a, b) => a.roundNumber - b.roundNumber);
 
     return Responses.collection(c, analyses);
+  },
+);
+
+// ============================================================================
+// Round Feedback Handlers
+// ============================================================================
+
+/**
+ * Set Round Feedback Handler
+ *
+ * Allows users to like/dislike a conversation round.
+ * - Creates new feedback if it doesn't exist
+ * - Updates existing feedback if it exists
+ * - Deletes feedback if feedbackType is null
+ *
+ * Security: Users can only set feedback for their own threads
+ */
+export const setRoundFeedbackHandler: RouteHandler<typeof setRoundFeedbackRoute, ApiEnv> = createHandler(
+  {
+    auth: 'session',
+    validateParams: RoundFeedbackParamSchema,
+    validateBody: RoundFeedbackRequestSchema,
+    operationName: 'setRoundFeedback',
+  },
+  async (c) => {
+    const { threadId, roundNumber: roundNumberStr } = c.validated.params;
+    const { feedbackType } = c.validated.body;
+    const roundNumber = Number.parseInt(roundNumberStr, 10);
+
+    const db = await getDbAsync();
+    const user = c.get('user');
+
+    if (!user) {
+      throw createError.unauthenticated(
+        'Authentication required',
+        ErrorContextBuilders.auth(),
+      );
+    }
+
+    // ✅ Verify thread exists and belongs to user
+    const thread = await db.query.chatThread.findFirst({
+      where: and(
+        eq(tables.chatThread.id, threadId),
+        eq(tables.chatThread.userId, user.id),
+      ),
+    });
+
+    if (!thread) {
+      throw createError.notFound(
+        'Thread not found',
+        ErrorContextBuilders.resourceNotFound('thread', threadId),
+      );
+    }
+
+    // ✅ Check if feedback already exists
+    const existingFeedback = await db.query.chatRoundFeedback.findFirst({
+      where: and(
+        eq(tables.chatRoundFeedback.threadId, threadId),
+        eq(tables.chatRoundFeedback.userId, user.id),
+        eq(tables.chatRoundFeedback.roundNumber, roundNumber),
+      ),
+    });
+
+    let result;
+
+    if (feedbackType === null) {
+      // ✅ DELETE: Remove feedback if exists
+      if (existingFeedback) {
+        await db
+          .delete(tables.chatRoundFeedback)
+          .where(eq(tables.chatRoundFeedback.id, existingFeedback.id));
+      }
+
+      // Return null feedback (removed)
+      result = {
+        id: existingFeedback?.id || ulid(),
+        threadId,
+        userId: user.id,
+        roundNumber,
+        feedbackType: null,
+        createdAt: existingFeedback?.createdAt || /* @__PURE__ */ new Date(),
+        updatedAt: /* @__PURE__ */ new Date(),
+      };
+    } else if (existingFeedback) {
+      // ✅ UPDATE: Update existing feedback
+      const [updated] = await db
+        .update(tables.chatRoundFeedback)
+        .set({
+          feedbackType,
+          updatedAt: /* @__PURE__ */ new Date(),
+        })
+        .where(eq(tables.chatRoundFeedback.id, existingFeedback.id))
+        .returning();
+
+      if (!updated) {
+        throw createError.internal(
+          'Failed to update feedback',
+          ErrorContextBuilders.database('update', 'chat_round_feedback'),
+        );
+      }
+
+      result = updated;
+    } else {
+      // ✅ CREATE: Insert new feedback
+      const [created] = await db
+        .insert(tables.chatRoundFeedback)
+        .values({
+          id: ulid(),
+          threadId,
+          userId: user.id,
+          roundNumber,
+          feedbackType,
+          createdAt: /* @__PURE__ */ new Date(),
+          updatedAt: /* @__PURE__ */ new Date(),
+        })
+        .returning();
+
+      if (!created) {
+        throw createError.internal(
+          'Failed to create feedback',
+          ErrorContextBuilders.database('insert', 'chat_round_feedback'),
+        );
+      }
+
+      result = created;
+    }
+
+    // ✅ Serialize dates to ISO strings for API response
+    return Responses.ok(c, {
+      ...result,
+      createdAt: result.createdAt.toISOString(),
+      updatedAt: result.updatedAt.toISOString(),
+    });
+  },
+);
+
+/**
+ * Get Thread Feedback Handler
+ *
+ * Retrieves all round feedback for a thread for the current user.
+ *
+ * Security: Users can only get feedback for their own threads
+ */
+export const getThreadFeedbackHandler: RouteHandler<typeof getThreadFeedbackRoute, ApiEnv> = createHandler(
+  {
+    auth: 'session',
+    validateParams: IdParamSchema,
+    operationName: 'getThreadFeedback',
+  },
+  async (c) => {
+    const { id: threadId } = c.validated.params;
+    const db = await getDbAsync();
+    const user = c.get('user');
+
+    if (!user) {
+      throw createError.unauthenticated(
+        'Authentication required',
+        ErrorContextBuilders.auth(),
+      );
+    }
+
+    // ✅ Verify thread exists and belongs to user
+    const thread = await db.query.chatThread.findFirst({
+      where: and(
+        eq(tables.chatThread.id, threadId),
+        eq(tables.chatThread.userId, user.id),
+      ),
+    });
+
+    if (!thread) {
+      throw createError.notFound(
+        'Thread not found',
+        ErrorContextBuilders.resourceNotFound('thread', threadId),
+      );
+    }
+
+    // ✅ Get all feedback for this thread and user
+    const feedbackList = await db.query.chatRoundFeedback.findMany({
+      where: and(
+        eq(tables.chatRoundFeedback.threadId, threadId),
+        eq(tables.chatRoundFeedback.userId, user.id),
+      ),
+      orderBy: (table, { asc }) => [asc(table.roundNumber)],
+    });
+
+    // ✅ Serialize dates to ISO strings for API response
+    return Responses.ok(
+      c,
+      feedbackList.map(feedback => ({
+        ...feedback,
+        createdAt: feedback.createdAt.toISOString(),
+        updatedAt: feedback.updatedAt.toISOString(),
+      })),
+    );
   },
 );
