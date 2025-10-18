@@ -1,5 +1,6 @@
 'use client';
 
+import { useQueryClient } from '@tanstack/react-query';
 import { AnimatePresence, motion } from 'motion/react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
@@ -21,10 +22,12 @@ import { useModelsQuery } from '@/hooks/queries/models';
 import { useSession } from '@/lib/auth/client';
 import type { ChatModeId } from '@/lib/config/chat-modes';
 import { getDefaultChatMode } from '@/lib/config/chat-modes';
+import { queryKeys } from '@/lib/data/query-keys';
 import { showApiErrorToast } from '@/lib/toast';
 import type { ParticipantConfig } from '@/lib/types/participant-config';
 import { toCreateThreadRequest } from '@/lib/types/participant-config';
 import { chatMessagesToUIMessages } from '@/lib/utils/message-transforms';
+import { getThreadService } from '@/services/api/chat-threads';
 
 /**
  * ✅ AI SDK v5 PATTERN: ChatGPT-Style Overview Screen with Shared Context
@@ -33,7 +36,7 @@ import { chatMessagesToUIMessages } from '@/lib/utils/message-transforms';
  * - Uses shared context from ChatProvider (no duplicate hook instance)
  * - Streams ALL participant responses on overview screen before navigation
  * - Waits for AI-generated title to complete in background
- * - Uses setOnStreamComplete callback for navigation (no setTimeout)
+ * - Uses setOnRoundComplete callback for navigation (no setTimeout)
  * - Uses sendMessage() to trigger streaming (no empty message hack)
  *
  * CODE REDUCTION: 372 lines → 240 lines (-35%)
@@ -41,11 +44,13 @@ import { chatMessagesToUIMessages } from '@/lib/utils/message-transforms';
  *
  * CORRECT UX FLOW (ChatGPT-style):
  * 1. User enters prompt on home screen
- * 2. Thread created with initial user message
+ * 2. Thread created (backend returns empty messages array)
  * 3. Logo/suggestions animate out
- * 4. ALL participants stream responses on overview screen ✅ KEY FIX
- * 5. After streaming completes, wait for title generation
- * 6. Navigate to thread page
+ * 4. Context initialized with thread data
+ * 5. sendMessage() called with initial prompt - backend creates user message
+ * 6. ALL participants stream responses on overview screen ✅ KEY FIX
+ * 7. After streaming completes, wait for title generation
+ * 8. Navigate to thread page
  *
  * REFERENCE: AI SDK v5 docs - Share useChat State Across Components
  * https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot#share-useChat-state-across-components
@@ -53,6 +58,7 @@ import { chatMessagesToUIMessages } from '@/lib/utils/message-transforms';
 export default function ChatOverviewScreen() {
   const router = useRouter();
   const t = useTranslations();
+  const queryClient = useQueryClient();
   const { data: session } = useSession();
   const sessionUser = session?.user;
 
@@ -62,7 +68,7 @@ export default function ChatOverviewScreen() {
   // ✅ AI SDK v5 PATTERN: Access shared chat context
   const {
     messages,
-    startRound, // ✅ Start round without sending user message (for triggering participants after thread creation)
+    sendMessage, // ✅ Send user message and trigger participants
     isStreaming,
     currentParticipantIndex,
     error: streamError,
@@ -97,8 +103,8 @@ export default function ChatOverviewScreen() {
   const [showInitialUI, setShowInitialUI] = useState(true);
   const [isCreatingThread, setIsCreatingThread] = useState(false);
 
-  // ✅ Flag to trigger round after thread initialization
-  const [shouldStartRound, setShouldStartRound] = useState(false);
+  // ✅ Store initial prompt for sending after thread initialization
+  const [initialPrompt, setInitialPrompt] = useState<string | null>(null);
 
   const createThreadMutation = useCreateThreadMutation();
 
@@ -106,17 +112,19 @@ export default function ChatOverviewScreen() {
    * ✅ AI SDK v5 PATTERN: Proper ChatGPT-style streaming workflow
    *
    * CORRECT FLOW:
-   * 1. Create thread with user message (backend saves it)
-   * 2. Initialize context with thread + messages (includes the user message)
+   * 1. Create thread (backend returns empty messages array)
+   * 2. Initialize context with thread + participants (no messages yet)
    * 3. Set completion callback for navigation
-   * 4. Call sendMessage(prompt) to trigger participant streaming
-   * 5. Context handles streaming, onComplete fires when done
-   * 6. Navigate to thread page with fresh title
+   * 4. Store prompt in state (initialPrompt)
+   * 5. useEffect detects initialPrompt and calls sendMessage(prompt)
+   * 6. Backend creates user message + participants stream responses
+   * 7. Context handles streaming, onRoundComplete fires when done
+   * 8. Navigate to thread page with AI-generated title
    *
    * ✅ ELIMINATED:
    * - setTimeout hack (was 800ms)
    * - Empty message trigger (was sendMessage(''))
-   * - Manual stream trigger logic
+   * - startRound() for new threads (now only for existing threads)
    * - shouldTriggerStream state
    */
   const handlePromptSubmit = useCallback(
@@ -165,22 +173,69 @@ export default function ChatOverviewScreen() {
         setInputValue('');
 
         // Step 3: Initialize context with thread data
-        // The backend already created the user message, so uiMessages includes it
+        // ✅ CRITICAL: Backend returns empty messages array - user message will be created by sendMessage()
         initializeThread(threadWithDates, participantsWithDates, uiMessages);
 
-        // Step 4: Set round completion callback for navigation
-        // ✅ This fires when ALL participants finish streaming (entire round complete)
-        setOnRoundComplete(() => {
-          // Small delay to ensure title generation completes (async background task)
-          setTimeout(() => {
-            router.push(`/chat/${thread.slug}`);
-          }, 500);
-        });
+        // Step 4: Store prompt for sending after context is ready
+        setInitialPrompt(prompt);
 
-        // Step 5: Flag to trigger participant round (after context is ready)
-        // ✅ The backend already created the user message during thread creation
-        // ✅ useEffect will call startRound() once the context status is 'ready'
-        setShouldStartRound(true);
+        // Step 5: Set round completion callback for navigation
+        // ✅ This fires when ALL participants finish streaming (entire round complete)
+        setOnRoundComplete(async () => {
+          try {
+            // ✅ CRITICAL FIX: Fetch the latest thread to get AI-generated title and slug
+            // The title generation happens asynchronously in the background during streaming
+            // We need to wait for it to complete and get the updated slug for navigation
+
+            // Wait for title generation to complete (async background task using fastest model)
+            // Title generation involves: model selection, API call, DB update, cache invalidation
+            // Typical latency: 1-2 seconds for fastest models
+            await new Promise(resolve => setTimeout(resolve, 2000));
+
+            // Fetch the latest thread details from the backend
+            console.warn('[ChatOverviewScreen] 🔄 Fetching updated thread after title generation', {
+              threadId: thread.id,
+              originalTitle: thread.title,
+              originalSlug: thread.slug,
+            });
+
+            const threadResponse = await getThreadService({ param: { id: thread.id } });
+
+            if (threadResponse.success) {
+              const { thread: updatedThread } = threadResponse.data;
+
+              console.warn('[ChatOverviewScreen] ✅ Updated thread fetched', {
+                threadId: updatedThread.id,
+                updatedTitle: updatedThread.title,
+                updatedSlug: updatedThread.slug,
+                titleChanged: thread.title !== updatedThread.title,
+                slugChanged: thread.slug !== updatedThread.slug,
+              });
+
+              // ✅ CRITICAL: Invalidate sidebar thread list cache
+              // This ensures the sidebar shows the updated AI-generated title immediately
+              await queryClient.invalidateQueries({ queryKey: queryKeys.threads.lists() });
+
+              console.warn('[ChatOverviewScreen] ✅ Sidebar cache invalidated, navigating to thread', {
+                slug: updatedThread.slug,
+              });
+
+              // Navigate to the thread using the updated slug (with AI-generated title)
+              router.push(`/chat/${updatedThread.slug}`);
+            } else {
+              // Fallback: Navigate with original slug if fetch fails
+              console.warn('[ChatOverviewScreen] ❌ Failed to fetch updated thread, using original slug', {
+                threadId: thread.id,
+                originalSlug: thread.slug,
+              });
+              router.push(`/chat/${thread.slug}`);
+            }
+          } catch (error) {
+            // Fallback: Navigate with original slug if anything fails
+            console.error('[ChatOverviewScreen] Error fetching updated thread:', error);
+            router.push(`/chat/${thread.slug}`);
+          }
+        });
       } catch (err) {
         console.error('Error creating thread:', err);
         showApiErrorToast('Error', err);
@@ -198,6 +253,7 @@ export default function ChatOverviewScreen() {
       createThreadMutation,
       initializeThread,
       setOnRoundComplete,
+      queryClient,
       router,
     ],
   );
@@ -206,17 +262,21 @@ export default function ChatOverviewScreen() {
     setInputValue(suggestion);
   }, []);
 
-  // ✅ CRITICAL: Trigger startRound once context is initialized and ready
+  // ✅ CRITICAL: Send initial user message once context is initialized and ready
   // This effect waits for:
-  // 1. shouldStartRound flag to be set (after thread creation)
+  // 1. initialPrompt to be set (after thread creation)
   // 2. currentThread to exist (context initialized)
   // 3. isStreaming to be false (status is 'ready')
   useEffect(() => {
-    if (shouldStartRound && currentThread && !isStreaming) {
-      setShouldStartRound(false); // Reset flag
-      startRound(); // Trigger participants
+    if (initialPrompt && currentThread && !isStreaming) {
+      console.warn('[ChatOverviewScreen] 🚀 Sending initial user message to trigger participants', {
+        threadId: currentThread.id,
+        promptPreview: initialPrompt.substring(0, 50),
+      });
+      setInitialPrompt(null); // Reset flag
+      sendMessage(initialPrompt); // Send user message - triggers first participant automatically
     }
-  }, [shouldStartRound, currentThread, isStreaming, startRound]);
+  }, [initialPrompt, currentThread, isStreaming, sendMessage]);
 
   // ✅ Derive current streaming participant from context
   const currentStreamingParticipant = contextParticipants[currentParticipantIndex] || null;

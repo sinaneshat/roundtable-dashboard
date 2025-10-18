@@ -21,6 +21,7 @@ import { StreamingParticipantsLoader } from '@/components/chat/streaming-partici
 import { useThreadHeader } from '@/components/chat/thread-header-context';
 import { Button } from '@/components/ui/button';
 import { useSharedChatContext } from '@/contexts/chat-context';
+import { useUpdateThreadMutation } from '@/hooks/mutations/chat-mutations';
 import { useThreadAnalysesQuery, useThreadChangelogQuery } from '@/hooks/queries/chat-threads';
 import { useBoolean } from '@/hooks/utils';
 import type { ChatModeId } from '@/lib/config/chat-modes';
@@ -130,7 +131,6 @@ export default function ChatThreadScreen({
     initializeThread,
     setOnStreamComplete,
     setOnRoundComplete,
-    updateParticipants,
     participants: contextParticipants,
   } = useSharedChatContext();
 
@@ -160,6 +160,9 @@ export default function ChatThreadScreen({
 
   const isDeleteDialogOpen = useBoolean(false);
 
+  // ✅ MUTATION: Update thread (including participants)
+  const updateThreadMutation = useUpdateThreadMutation();
+
   // Chat state
   const [selectedMode, setSelectedMode] = useState<ChatModeId>(thread.mode as ChatModeId);
   const [inputValue, setInputValue] = useState('');
@@ -179,40 +182,12 @@ export default function ChatThreadScreen({
   // ✅ SIMPLIFIED: No participantsOverride state needed
   // Context manages the active participants
 
-  // ✅ AI SDK v5 PATTERN: Staged participant changes (local only)
-  // Changes are persisted when user submits next message, not immediately
+  // ✅ SIMPLIFIED: Participant changes handler
+  // Changes are persisted via updateThreadMutation when user submits next message
   // This prevents unwanted API calls when user is just exploring options
   const handleParticipantsChange = useCallback((newParticipants: ParticipantConfig[]) => {
-    // Update local UI state
     setSelectedParticipants(newParticipants);
-
-    // Convert ParticipantConfig[] to ChatParticipant[] and update context
-    // Context will send these participants with the next message
-    const updatedParticipants = newParticipants.map((config, index) => {
-      // Find the original participant to preserve DB fields (timestamps, etc.)
-      const original = participants.find(p => p.id === config.id);
-      if (!original) {
-        // If not found, this shouldn't happen but handle gracefully
-        console.warn(`[ChatThreadScreen] Participant ${config.id} not found in original participants`);
-        return null;
-      }
-
-      // Merge: Use config for updated fields, preserve DB fields from original
-      return {
-        ...original,
-        modelId: config.modelId,
-        role: config.role || null,
-        customRoleId: config.customRoleId || null,
-        priority: index, // Use array index as priority
-        isEnabled: true,
-        settings: config.settings || original.settings,
-      };
-    }).filter((p): p is NonNullable<typeof p> => p !== null);
-
-    // Update context with new participant configuration
-    // These will be sent to backend with the next message
-    updateParticipants(updatedParticipants);
-  }, [participants, updateParticipants]);
+  }, []);
 
   // ✅ Initialize context when component mounts or thread changes
   useEffect(() => {
@@ -241,7 +216,7 @@ export default function ChatThreadScreen({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [thread.id]);
 
-  // ✅ AI SDK v5 PATTERN: Simple submit handler using shared context
+  // ✅ AI SDK v5 PATTERN: Submit handler with participant persistence
   const handlePromptSubmit = useCallback(
     async (e: React.FormEvent) => {
       e.preventDefault();
@@ -250,11 +225,43 @@ export default function ChatThreadScreen({
         return;
       }
 
+      // ✅ CRITICAL FIX: Persist participant changes before streaming starts
+      // This ensures the backend uses the latest participant configuration
+      // and creates proper changelog entries for the changes
+      try {
+        // Convert selectedParticipants to the format expected by updateThread API
+        const participantsForUpdate = selectedParticipants.map(p => ({
+          id: p.id.startsWith('participant-') ? undefined : p.id, // Omit temp IDs for new participants
+          modelId: p.modelId,
+          role: p.role || null,
+          customRoleId: p.customRoleId || null,
+          priority: p.order,
+          isEnabled: true,
+        }));
+
+        // ✅ USE MUTATION HOOK: Update thread with new participant configuration
+        await updateThreadMutation.mutateAsync({
+          param: { id: thread.id },
+          json: {
+            participants: participantsForUpdate,
+          },
+        });
+
+        console.warn('[ChatThreadScreen] ✅ Participant changes persisted before streaming', {
+          threadId: thread.id,
+          participantCount: participantsForUpdate.length,
+        });
+      } catch (error) {
+        console.error('[ChatThreadScreen] ❌ Failed to persist participant changes:', error);
+        // Don't block streaming on participant update errors
+        // The streamChat endpoint will still receive providedParticipants
+      }
+
       // ✅ The context hook handles all streaming logic
       await sendMessage(trimmed);
       setInputValue('');
     },
-    [inputValue, sendMessage],
+    [inputValue, sendMessage, thread.id, selectedParticipants, updateThreadMutation],
   );
 
   // ✅ Derive active participants from context

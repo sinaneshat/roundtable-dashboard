@@ -476,6 +476,107 @@ class OpenRouterModelsService {
   }
 
   /**
+   * ✅ 100% DYNAMIC FASTEST MODEL SELECTION: No hard-coded provider or model biases
+   * Purely data-driven scoring based on OpenRouter API fields
+   *
+   * Prioritizes speed over cost for latency-sensitive operations like title generation.
+   *
+   * Selection criteria (in priority order):
+   * 1. Speed: Smaller context window = faster inference (100 points max)
+   * 2. Cost: Free/cheap models preferred (40 points max)
+   * 3. Capabilities: Basic text generation (20 points max)
+   * 4. Recency: Newer models preferred (20 points max)
+   *
+   * @returns The fastest available model, or null if no models available
+   */
+  async getFastestAvailableModel(): Promise<BaseModelResponse | null> {
+    const allModels = await this.fetchAllModels();
+
+    if (allModels.length === 0) {
+      return null;
+    }
+
+    // Filter for minimum viable models for title generation
+    const candidateModels = allModels.filter((model) => {
+      // Must have at least 8K context window (sufficient for title generation)
+      // Must support basic text generation (no vision/reasoning required)
+      return model.context_length >= 8000;
+    });
+
+    // If no candidates meet minimum requirements, use all models
+    const modelsToScore = candidateModels.length > 0 ? candidateModels : allModels;
+
+    // ✅ PURELY DATA-DRIVEN SCORING: Based only on OpenRouter API fields
+    const scoredModels = modelsToScore.map((model) => {
+      let score = 0;
+
+      // Speed scoring (100 points max - HIGHEST PRIORITY for fastest model)
+      // Smaller context = faster inference
+      // 8K-16K context models are typically the fastest
+      if (model.context_length >= 8000 && model.context_length < 16000) {
+        score += 100; // Fastest tier (8K-16K)
+      } else if (model.context_length >= 16000 && model.context_length < 32000) {
+        score += 80; // Very fast (16K-32K)
+      } else if (model.context_length >= 32000 && model.context_length < 64000) {
+        score += 60; // Fast (32K-64K)
+      } else if (model.context_length >= 64000 && model.context_length < 128000) {
+        score += 40; // Medium (64K-128K)
+      } else {
+        score += 20; // Slower (128K+)
+      }
+
+      // Cost efficiency scoring (40 points max - secondary priority)
+      const inputPricePerMillion = costPerMillion(model.pricing.prompt);
+      const outputPricePerMillion = costPerMillion(model.pricing.completion);
+      const avgCostPerMillion = (inputPricePerMillion + outputPricePerMillion) / 2;
+
+      // Free models get maximum cost points
+      if (avgCostPerMillion === 0) {
+        score += 40;
+      } else {
+        // Invert cost to score (cheaper = better)
+        // $0 = 40 points, $1/M = 0 points
+        const costScore = Math.max(0, 40 - (avgCostPerMillion / 1) * 40);
+        score += costScore;
+      }
+
+      // Capabilities scoring (20 points max - basic requirements)
+      // For title generation, we don't need vision or advanced reasoning
+      // Just basic text generation capability
+      if (model.capabilities.tools)
+        score += 10;
+      // Simple text models get bonus (no complex features = faster)
+      if (!model.capabilities.vision && !model.capabilities.reasoning)
+        score += 10;
+
+      // Recency scoring (20 points max - prefer maintained models)
+      if (model.created) {
+        const ageInDays = (Date.now() / 1000 - model.created) / (60 * 60 * 24);
+        if (ageInDays < 180) {
+          score += 20; // Last 6 months
+        } else if (ageInDays < 365) {
+          score += 15; // Last year
+        } else if (ageInDays < 730) {
+          score += 10; // Last 2 years
+        } else {
+          score += 5; // Older models
+        }
+      }
+
+      return { model, score };
+    });
+
+    // Sort by score and pick the best
+    const bestModel = scoredModels.sort((a, b) => b.score - a.score)[0];
+
+    if (bestModel) {
+      return bestModel.model;
+    }
+
+    return null;
+  }
+
+  /**
    * ✅ 100% DYNAMIC MODEL SCORING: No hard-coded provider names
    *
    * Scores models based purely on observable characteristics from OpenRouter API:

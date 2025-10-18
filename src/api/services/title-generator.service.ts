@@ -22,34 +22,45 @@ import { generateUniqueSlug } from './slug-generator.service';
 
 /**
  * Get the best model for title generation
- * ✅ FULLY DYNAMIC: Selects cheapest available model from OpenRouter API
+ * ✅ FULLY DYNAMIC: Selects fastest available model from OpenRouter API
+ * Prioritizes speed over cost for low-latency title generation
  * No hard-coded model preferences
  */
 async function getTitleGenerationModel(): Promise<string> {
-  // ✅ DYNAMIC MODEL SELECTION: Get cheapest available model for title generation
-  const cheapestModel = await openRouterModelsService.getCheapestAvailableModel();
+  // ✅ DYNAMIC MODEL SELECTION: Get fastest available model for title generation
+  // Title generation is latency-sensitive, so we prioritize speed over cost
+  const fastestModel = await openRouterModelsService.getFastestAvailableModel();
 
-  if (!cheapestModel) {
+  if (!fastestModel) {
     throw new Error('No models available for title generation');
   }
 
-  return cheapestModel.id;
+  return fastestModel.id;
 }
 
 /**
  * Generate title from first user message
- * ✅ FULLY DYNAMIC: Uses cheapest available model from OpenRouter API
+ * ✅ FULLY DYNAMIC: Uses fastest available model from OpenRouter API for low-latency response
  */
 export async function generateTitleFromMessage(
   firstMessage: string,
   env: ApiEnv['Bindings'],
 ): Promise<string> {
   try {
+    console.warn('[generateTitleFromMessage] 🎯 Starting title generation', {
+      messagePreview: firstMessage.substring(0, 100),
+      messageLength: firstMessage.length,
+    });
+
     // Initialize OpenRouter with API key
     initializeOpenRouter(env);
 
     // ✅ DYNAMIC MODEL SELECTION: Get best model for title generation
     const titleModel = await getTitleGenerationModel();
+
+    console.warn('[generateTitleFromMessage] 🤖 Using model for title generation', {
+      modelId: titleModel,
+    });
 
     // Using AI SDK v5 UIMessage format with consolidated config
     const result = await openRouterService.generateText({
@@ -71,6 +82,11 @@ export async function generateTitleFromMessage(
       maxTokens: TITLE_GENERATION_CONFIG.maxTokens,
     });
 
+    console.warn('[generateTitleFromMessage] ✅ Raw title generated from model', {
+      rawTitle: result.text,
+      rawLength: result.text.length,
+    });
+
     // Clean up the generated title
     let title = result.text.trim();
 
@@ -81,23 +97,51 @@ export async function generateTitleFromMessage(
     const words = title.split(/\s+/);
     if (words.length > 5) {
       title = words.slice(0, 5).join(' ');
+      console.warn('[generateTitleFromMessage] ✂️ Truncated to 5 words', {
+        originalWords: words.length,
+        truncatedTitle: title,
+      });
     }
 
     // Limit to 50 characters max (5 words ~= 50 chars)
     if (title.length > 50) {
       title = title.substring(0, 50).trim();
+      console.warn('[generateTitleFromMessage] ✂️ Truncated to 50 characters', {
+        truncatedTitle: title,
+      });
     }
 
     // If title is empty or too short, use fallback
     if (title.length < 3) {
+      console.warn('[generateTitleFromMessage] ⚠️ Title too short, using fallback', {
+        shortTitle: title,
+        fallback: 'New Chat',
+      });
       title = 'New Chat';
     }
 
+    console.warn('[generateTitleFromMessage] 🎉 Final title generated', {
+      finalTitle: title,
+      finalLength: title.length,
+      wordCount: title.split(/\s+/).length,
+    });
+
     return title;
-  } catch {
+  } catch (error) {
+    console.error('[generateTitleFromMessage] ❌ Title generation failed, using fallback', {
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+    });
+
     // Fallback: Use first 5 words of message (enforcing 5-word constraint)
     const words = firstMessage.split(/\s+/).slice(0, 5).join(' ');
-    return words.length > 50 ? words.substring(0, 50).trim() : words || 'New Chat';
+    const fallbackTitle = words.length > 50 ? words.substring(0, 50).trim() : words || 'New Chat';
+
+    console.warn('[generateTitleFromMessage] 📝 Using fallback title', {
+      fallbackTitle,
+    });
+
+    return fallbackTitle;
   }
 }
 

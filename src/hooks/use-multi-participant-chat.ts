@@ -467,36 +467,59 @@ export function useMultiParticipantChat({
         }
 
         setMessages((prev) => {
+          // ✅ CRITICAL FIX: Check if message exists in array before trying to update
+          // When AI SDK streams empty content, it might not add the message to the array
+          // In that case, we need to ADD the message instead of updating it
+          const messageExists = prev.some(msg => msg.id === data.message.id);
+
+          // Build error message for empty responses
+          let errorMessage = messageMetadata?.errorMessage as string | undefined;
+          if (isEmptyResponse && !errorMessage) {
+            errorMessage = `The model (${currentParticipant.modelId}) did not generate a response. This can happen due to content filtering, model limitations, or API issues.`;
+          }
+
+          // Merge participant metadata with any existing error metadata from backend
+          const updatedMetadata = {
+            ...(typeof data.message.metadata === 'object' && data.message.metadata !== null ? data.message.metadata : {}),
+            participantId: currentParticipant.id,
+            participantIndex: currentIndexRef.current,
+            participantRole: currentParticipant.role,
+            model: currentParticipant.modelId,
+            // Add error fields if error detected
+            ...(hasError && {
+              hasError: true,
+              errorType: messageMetadata?.errorType || (isEmptyResponse ? 'empty_response' : 'unknown'),
+              errorMessage,
+              providerMessage: messageMetadata?.providerMessage || errorMessage,
+            }),
+          };
+
+          if (!messageExists) {
+            // Message doesn't exist in array - ADD it
+            console.warn('[useMultiParticipantChat] ⚠️  Message not in array, adding it', {
+              messageId: data.message.id,
+              participantIndex: currentIndexRef.current,
+              participantId: currentParticipant.id,
+              hasError,
+              isEmptyResponse,
+            });
+
+            const messageToAdd: UIMessage = {
+              ...data.message,
+              metadata: updatedMetadata,
+            };
+
+            return [...prev, messageToAdd];
+          }
+
+          // Message exists - UPDATE it
           return prev.map((msg) => {
-            // Update the last assistant message with participant metadata
             if (msg.id === data.message.id && msg.role === 'assistant') {
               console.warn('[useMultiParticipantChat] ✅ Updating message metadata for participant', currentIndexRef.current, {
                 hasError,
                 isEmptyResponse,
                 hasBackendError,
               });
-
-              // Build error message for empty responses
-              let errorMessage = messageMetadata?.errorMessage as string | undefined;
-              if (isEmptyResponse && !errorMessage) {
-                errorMessage = `The model (${currentParticipant.modelId}) did not generate a response. This can happen due to content filtering, model limitations, or API issues.`;
-              }
-
-              // Merge participant metadata with any existing error metadata from backend
-              const updatedMetadata = {
-                ...(typeof msg.metadata === 'object' && msg.metadata !== null ? msg.metadata : {}),
-                participantId: currentParticipant.id,
-                participantIndex: currentIndexRef.current,
-                participantRole: currentParticipant.role,
-                model: currentParticipant.modelId,
-                // Add error fields if error detected
-                ...(hasError && {
-                  hasError: true,
-                  errorType: messageMetadata?.errorType || (isEmptyResponse ? 'empty_response' : 'unknown'),
-                  errorMessage,
-                  providerMessage: messageMetadata?.providerMessage || errorMessage,
-                }),
-              };
 
               return {
                 ...msg,

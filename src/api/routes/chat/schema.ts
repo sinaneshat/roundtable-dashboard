@@ -344,33 +344,6 @@ const ParticipantDetailPayloadSchema = z.object({
 
 export const ParticipantDetailResponseSchema = createApiResponseSchema(ParticipantDetailPayloadSchema).openapi('ParticipantDetailResponse');
 
-/**
- * ✅ BULK PARTICIPANT UPDATE: Update multiple participants at once
- * Supports:
- * - Reordering participants (change priority/order)
- * - Changing roles (including custom roles)
- * - Adding/removing participants
- */
-export const BulkUpdateParticipantsRequestSchema = z.object({
-  participants: z.array(
-    z.object({
-      id: z.string().optional().openapi({ description: 'Participant ID (omit for new participants)' }),
-      modelId: z.string().openapi({ description: 'Model ID' }),
-      role: z.string().nullable().optional().openapi({ description: 'Role name' }),
-      customRoleId: z.string().nullable().optional().openapi({ description: 'Custom role ID' }),
-      priority: z.number().int().min(0).openapi({ description: 'Display order (0-indexed)' }),
-      isEnabled: z.boolean().optional().default(true).openapi({ description: 'Whether participant is enabled' }),
-    }),
-  ).openapi({ description: 'Complete list of participants with their updated state' }),
-}).openapi('BulkUpdateParticipantsRequest');
-
-const BulkUpdateParticipantsPayloadSchema = z.object({
-  participants: z.array(ChatParticipantSchema),
-  changelogEntries: z.array(chatThreadChangelogSelectSchema),
-}).openapi('BulkUpdateParticipantsPayload');
-
-export const BulkUpdateParticipantsResponseSchema = createApiResponseSchema(BulkUpdateParticipantsPayloadSchema).openapi('BulkUpdateParticipantsResponse');
-
 // ============================================================================
 // Message Request/Response Schemas
 // ============================================================================
@@ -807,7 +780,6 @@ export type UpdateThreadRequest = z.infer<typeof UpdateThreadRequestSchema>;
 export type ChatParticipant = z.infer<typeof ChatParticipantSchema>;
 export type AddParticipantRequest = z.infer<typeof AddParticipantRequestSchema>;
 export type UpdateParticipantRequest = z.infer<typeof UpdateParticipantRequestSchema>;
-export type BulkUpdateParticipantsRequest = z.infer<typeof BulkUpdateParticipantsRequestSchema>;
 
 export type ChatMessage = z.infer<typeof ChatMessageSchema>;
 export type StreamChatRequest = z.infer<typeof StreamChatRequestSchema>;

@@ -136,9 +136,12 @@ export function ChatMessageList({
         const participantId = metadata?.participantId;
         const participantIndex = metadata?.participantIndex ?? currentParticipantIndex;
 
-        const participant = participantId
-          ? participants.find(p => p.id === participantId)
-          : currentStreamingParticipant;
+        // ✅ FIX: Match by participantIndex first (position in round), not participantId
+        // participantIndex is stable across participant reordering, participantId is not
+        // When participants are reordered, participantIndex still refers to the correct position
+        const participant = (participantIndex !== undefined && participants[participantIndex])
+          ? participants[participantIndex]
+          : (participantId ? participants.find(p => p.id === participantId) : currentStreamingParticipant);
 
         const storedModelId = participant?.modelId || metadata?.model;
         const storedRole = participant?.role;

@@ -6,8 +6,6 @@ import { ApiErrorResponseSchema, createApiResponseSchema, CursorPaginationQueryS
 
 import {
   AddParticipantRequestSchema,
-  BulkUpdateParticipantsRequestSchema,
-  BulkUpdateParticipantsResponseSchema,
   ChangelogListResponseSchema,
   CreateCustomRoleRequestSchema,
   CreateThreadRequestSchema,
@@ -496,68 +494,6 @@ export const deleteParticipantRoute = createRoute({
     },
     [HttpStatusCodes.NOT_FOUND]: {
       description: HttpStatusPhrases.NOT_FOUND,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
-    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: {
-      description: HttpStatusPhrases.INTERNAL_SERVER_ERROR,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
-  },
-});
-
-export const bulkUpdateParticipantsRoute = createRoute({
-  method: 'put',
-  path: '/chat/threads/:id/participants/bulk',
-  tags: ['chat'],
-  summary: 'Bulk update thread participants',
-  description: 'Update multiple participants at once (reorder, change roles, add/remove). Creates appropriate changelog entries for each change.',
-  request: {
-    params: IdParamSchema,
-    body: {
-      description: 'Complete list of participants with their updated state',
-      content: {
-        'application/json': {
-          schema: BulkUpdateParticipantsRequestSchema,
-        },
-      },
-      required: true,
-    },
-  },
-  responses: {
-    [HttpStatusCodes.OK]: {
-      description: 'Participants updated successfully with changelog entries',
-      content: {
-        'application/json': {
-          schema: BulkUpdateParticipantsResponseSchema,
-        },
-      },
-    },
-    [HttpStatusCodes.UNAUTHORIZED]: {
-      description: HttpStatusPhrases.UNAUTHORIZED,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
-    [HttpStatusCodes.NOT_FOUND]: {
-      description: HttpStatusPhrases.NOT_FOUND,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
-    [HttpStatusCodes.BAD_REQUEST]: {
-      description: HttpStatusPhrases.BAD_REQUEST,
       content: {
         'application/json': {
           schema: ApiErrorResponseSchema,

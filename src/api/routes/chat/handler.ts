@@ -49,7 +49,6 @@ import { filterNonEmptyMessages } from '@/lib/utils/message-transforms';
 import type {
   addParticipantRoute,
   analyzeRoundRoute,
-  bulkUpdateParticipantsRoute,
   createCustomRoleRoute,
   createThreadRoute,
   deleteCustomRoleRoute,
@@ -71,7 +70,6 @@ import type {
 } from './route';
 import {
   AddParticipantRequestSchema,
-  BulkUpdateParticipantsRequestSchema,
   CreateCustomRoleRequestSchema,
   CreateThreadRequestSchema,
   ModeratorAnalysisPayloadSchema,
@@ -383,9 +381,9 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
   async (c) => {
     const { user } = c.auth();
 
-    // Enforce thread and message quotas BEFORE creating anything
+    // Enforce thread quota BEFORE creating anything
+    // Message quota will be enforced by streamChatHandler when it creates the first message
     await enforceThreadQuota(user.id);
-    await enforceMessageQuota(user.id); // First message will be created
 
     const body = c.validated.body;
     const db = await getDbAsync();
@@ -523,25 +521,13 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
       );
     }
 
-    // Create first user message
-    const userMessageId = ulid();
-    const [userMessage] = await db
-      .insert(tables.chatMessage)
-      .values({
-        id: userMessageId,
-        threadId,
-        // Omit participantId for user messages (it's nullable in schema)
-        role: 'user',
-        content: body.firstMessage,
-        // ✅ User messages don't need variant tracking
-        createdAt: now,
-      })
-      .returning();
+    // ✅ FIX: Don't create user message here - let streamChatHandler create it
+    // The streamChatHandler has proper duplicate detection and round number management
+    // This prevents duplicate messages when the frontend calls streamChatHandler for participant 0
 
-    // Increment usage counters AFTER successful creation
-    // AI responses will be generated through the streaming endpoint
+    // Increment usage counter for thread creation
+    // Message will be counted when streamChatHandler saves it
     await incrementThreadUsage(user.id);
-    await incrementMessageUsage(user.id, 1); // Only the user message for now
 
     // ✅ Invalidate backend cache for thread lists
     // This ensures new threads immediately appear in the sidebar
@@ -557,32 +543,95 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
     // Fire-and-forget pattern (no await) - runs in background
     (async () => {
       try {
-        // Generate AI title from first message
+        console.warn('[createThreadHandler] 🎯 Starting AI title generation', {
+          threadId,
+          firstMessagePreview: body.firstMessage.substring(0, 50),
+        });
+
+        // Generate AI title from first message (using fastest available model)
         const aiTitle = await generateTitleFromMessage(body.firstMessage, c.env);
 
-        // Update thread with AI-generated title ONLY
-        // IMPORTANT: Don't update slug - it must remain immutable to prevent 404s
-        // The slug was already generated at creation time and users may have bookmarked it
+        console.warn('[createThreadHandler] ✅ AI title generated', {
+          threadId,
+          aiTitle,
+          previousTitle: tempTitle,
+        });
+
+        // ✅ CRITICAL FIX: Update both title AND slug
+        // Generate new slug from AI title for better SEO and user experience
+        const newSlug = await generateUniqueSlug(aiTitle);
+
+        console.warn('[createThreadHandler] 📝 Updating thread with AI title and new slug', {
+          threadId,
+          aiTitle,
+          newSlug,
+          previousSlug: tempSlug,
+        });
+
+        // Update thread with AI-generated title and slug
         await db
           .update(tables.chatThread)
           .set({
             title: aiTitle,
+            slug: newSlug,
             updatedAt: new Date(),
           })
           .where(eq(tables.chatThread.id, threadId));
-      } catch {
-        // Suppress error - don't fail the request since thread is already created
+
+        console.warn('[createThreadHandler] ✅ Thread updated with AI title and slug', {
+          threadId,
+          aiTitle,
+          newSlug,
+        });
+
+        // ✅ CRITICAL FIX: Invalidate cache after title update
+        // This ensures the sidebar shows the updated AI-generated title immediately
+        if (db.$cache?.invalidate) {
+          const { ThreadCacheTags } = await import('@/db/cache/cache-tags');
+          await db.$cache.invalidate({
+            tags: [ThreadCacheTags.list(user.id)],
+          });
+
+          console.warn('[createThreadHandler] ✅ Cache invalidated after title update', {
+            threadId,
+            userId: user.id,
+          });
+        }
+
+        console.warn('[createThreadHandler] 🎉 AI title generation complete', {
+          threadId,
+          aiTitle,
+          newSlug,
+        });
+      } catch (error) {
+        // Log error but don't fail the request since thread is already created
+        console.error('[createThreadHandler] ❌ AI title generation failed', {
+          threadId,
+          error: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined,
+        });
       }
-    })().catch(() => {
-      // Suppress unhandled rejection warnings
+    })().catch((error) => {
+      // Log unhandled rejection
+      console.error('[createThreadHandler] ❌ Unhandled rejection in title generation', {
+        threadId,
+        error: error instanceof Error ? error.message : String(error),
+      });
     });
 
-    // Return thread with participants and first user message
+    // Return thread with participants (no messages yet)
+    // The first user message will be created by streamChatHandler
     // AI responses will be generated via the streaming endpoint
     return Responses.ok(c, {
       thread,
       participants,
-      messages: [userMessage],
+      messages: [], // No messages yet - streamChatHandler will create the first user message
+      changelog: [], // No changelog entries yet for a new thread
+      user: {
+        id: user.id,
+        name: user.name,
+        image: user.image,
+      },
     });
   },
 );
@@ -1345,233 +1394,6 @@ export const deleteParticipantHandler: RouteHandler<typeof deleteParticipantRout
   },
 );
 
-/**
- * Bulk update participants for a thread
- * Handles reordering, role changes, additions, and removals
- * Creates appropriate changelog entries for all changes
- */
-export const bulkUpdateParticipantsHandler: RouteHandler<typeof bulkUpdateParticipantsRoute, ApiEnv> = createHandler(
-  {
-    auth: 'session',
-    validateParams: IdParamSchema,
-    validateBody: BulkUpdateParticipantsRequestSchema,
-    operationName: 'bulkUpdateParticipants',
-  },
-  async (c) => {
-    const { user } = c.auth();
-    const { id: threadId } = c.validated.params;
-    const { participants: newParticipants } = c.validated.body;
-    const db = await getDbAsync();
-
-    // Verify thread ownership
-    const thread = await db.query.chatThread.findFirst({
-      where: eq(tables.chatThread.id, threadId),
-    });
-
-    if (!thread) {
-      throw createError.notFound('Thread not found', ErrorContextBuilders.resourceNotFound('thread', threadId));
-    }
-
-    if (thread.userId !== user.id) {
-      throw createError.unauthorized('Not authorized to update this thread', ErrorContextBuilders.authorization('thread', threadId));
-    }
-
-    // Get current participants
-    const currentParticipants = await db.query.chatParticipant.findMany({
-      where: eq(tables.chatParticipant.threadId, threadId),
-    });
-
-    // Build maps for comparison
-    const currentMap = new Map(currentParticipants.map(p => [p.id, p]));
-    const newMap = new Map(newParticipants.filter(p => p.id).map(p => [p.id!, p]));
-
-    // Track changes for changelog
-    const changelogEntries: Array<typeof tables.chatThreadChangelog.$inferInsert> = [];
-    const now = new Date();
-
-    // Detect removals
-    for (const current of currentParticipants) {
-      if (!newMap.has(current.id)) {
-        const modelName = extractModeratorModelName(current.modelId);
-        changelogEntries.push({
-          id: ulid(),
-          threadId,
-          changeType: 'participant_removed',
-          changeSummary: `Removed ${modelName}${current.role ? ` ("${current.role}")` : ''}`,
-          changeData: {
-            participantId: current.id,
-            modelId: current.modelId,
-            role: current.role,
-          },
-          createdAt: now,
-        });
-      }
-    }
-
-    // Detect additions and updates
-    const participantsToInsert: Array<typeof tables.chatParticipant.$inferInsert> = [];
-    const participantsToUpdate: Array<{ id: string; updates: Partial<typeof tables.chatParticipant.$inferSelect> }> = [];
-
-    for (const newP of newParticipants) {
-      if (!newP.id) {
-        // New participant
-        const participantId = ulid();
-        const modelName = extractModeratorModelName(newP.modelId);
-
-        participantsToInsert.push({
-          id: participantId,
-          threadId,
-          modelId: newP.modelId,
-          role: newP.role || null,
-          customRoleId: newP.customRoleId || null,
-          priority: newP.priority,
-          isEnabled: newP.isEnabled ?? true,
-          settings: null,
-          createdAt: now,
-          updatedAt: now,
-        });
-
-        changelogEntries.push({
-          id: ulid(),
-          threadId,
-          changeType: 'participant_added',
-          changeSummary: `Added ${modelName}${newP.role ? ` as "${newP.role}"` : ''}`,
-          changeData: {
-            participantId,
-            modelId: newP.modelId,
-            role: newP.role || null,
-          },
-          createdAt: now,
-        });
-      } else {
-        // Existing participant - check for changes
-        const current = currentMap.get(newP.id);
-        if (!current)
-          continue;
-
-        const hasChanges
-          = current.role !== (newP.role || null)
-            || current.customRoleId !== (newP.customRoleId || null)
-            || current.priority !== newP.priority
-            || current.isEnabled !== (newP.isEnabled ?? true);
-
-        if (hasChanges) {
-          participantsToUpdate.push({
-            id: newP.id,
-            updates: {
-              role: newP.role || null,
-              customRoleId: newP.customRoleId || null,
-              priority: newP.priority,
-              isEnabled: newP.isEnabled ?? true,
-              updatedAt: now,
-            },
-          });
-
-          // Create changelog for role changes
-          if (current.role !== (newP.role || null)) {
-            const modelName = extractModeratorModelName(current.modelId);
-            changelogEntries.push({
-              id: ulid(),
-              threadId,
-              changeType: 'participant_updated',
-              changeSummary: `Updated ${modelName} role from ${current.role || 'none'} to ${newP.role || 'none'}`,
-              changeData: {
-                participantId: newP.id,
-                modelId: current.modelId,
-                oldRole: current.role,
-                newRole: newP.role || null,
-              },
-              createdAt: now,
-            });
-          }
-
-          // Create changelog for priority changes (reordering)
-          if (current.priority !== newP.priority) {
-            const modelName = extractModeratorModelName(current.modelId);
-            changelogEntries.push({
-              id: ulid(),
-              threadId,
-              changeType: 'participants_reordered',
-              changeSummary: `Reordered ${modelName}`,
-              changeData: {
-                participantId: newP.id,
-                modelId: current.modelId,
-                oldPriority: current.priority,
-                newPriority: newP.priority,
-              },
-              createdAt: now,
-            });
-          }
-        }
-      }
-    }
-
-    // ✅ BATCH OPERATIONS: Execute all changes atomically
-    // Following Cloudflare D1 best practices - batch operations provide atomicity
-    const bulkBatchOps: Array<unknown> = [];
-
-    // Delete removed participants
-    for (const current of currentParticipants) {
-      if (!newMap.has(current.id)) {
-        bulkBatchOps.push(
-          db.delete(tables.chatParticipant).where(eq(tables.chatParticipant.id, current.id)),
-        );
-      }
-    }
-
-    // Insert new participants
-    if (participantsToInsert.length > 0) {
-      bulkBatchOps.push(
-        db.insert(tables.chatParticipant).values(participantsToInsert),
-      );
-    }
-
-    // Update existing participants
-    for (const { id, updates } of participantsToUpdate) {
-      bulkBatchOps.push(
-        db.update(tables.chatParticipant)
-          .set(updates)
-          .where(eq(tables.chatParticipant.id, id)),
-      );
-    }
-
-    // Insert changelog entries
-    if (changelogEntries.length > 0) {
-      bulkBatchOps.push(
-        db.insert(tables.chatThreadChangelog).values(changelogEntries),
-      );
-    }
-
-    // Update thread timestamp
-    bulkBatchOps.push(
-      db.update(tables.chatThread)
-        .set({ updatedAt: now })
-        .where(eq(tables.chatThread.id, threadId)),
-    );
-
-    // Execute all operations atomically
-    await executeAtomic(db, bulkBatchOps);
-
-    // Fetch updated participants
-    const updatedParticipants = await db.query.chatParticipant.findMany({
-      where: eq(tables.chatParticipant.threadId, threadId),
-      orderBy: [asc(tables.chatParticipant.priority)],
-    });
-
-    // Fetch created changelog entries
-    const createdChangelog = await db.query.chatThreadChangelog.findMany({
-      where: eq(tables.chatThreadChangelog.threadId, threadId),
-      orderBy: [desc(tables.chatThreadChangelog.createdAt)],
-      limit: changelogEntries.length,
-    });
-
-    return Responses.ok(c, {
-      participants: updatedParticipants,
-      changelogEntries: createdChangelog,
-    });
-  },
-);
-
 // ============================================================================
 // Message Handlers
 // ============================================================================
@@ -1711,45 +1533,6 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
       throw createError.unauthorized('Not authorized to access this thread');
     }
 
-    // ✅ RACE CONDITION FIX: Use provided participants if available (eliminates race with updateThread)
-    // Merge provided participants with database participants to get full participant data
-    // with updated configuration (role, priority, isEnabled, etc.)
-    const participants = providedParticipants
-      ? providedParticipants
-          .filter(p => p.isEnabled !== false)
-          .sort((a, b) => a.priority - b.priority)
-          .map((providedP) => {
-          // Find matching participant in database to get full data
-            const dbP = thread.participants.find(dbParticipant => dbParticipant.id === providedP.id);
-            if (!dbP) {
-            // If not found in DB, this might be a newly added participant
-            // For now, we'll skip it since it should have been persisted first
-              return null;
-            }
-            // Merge: Use provided config (role, priority, etc.) with DB fields (settings, timestamps, etc.)
-            return {
-              ...dbP,
-              role: providedP.role ?? dbP.role,
-              customRoleId: providedP.customRoleId ?? dbP.customRoleId,
-              priority: providedP.priority,
-              isEnabled: providedP.isEnabled ?? dbP.isEnabled,
-            };
-          })
-          .filter((p): p is typeof thread.participants[0] => p !== null)
-      : thread.participants;
-
-    if (participants.length === 0) {
-      console.error('[streamChatHandler] ❌ NO PARTICIPANTS', { threadId });
-      throw createError.badRequest('No enabled participants in this thread');
-    }
-
-    console.warn('[streamChatHandler] ✅ Thread and participants ready', {
-      threadId,
-      participantCount: participants.length,
-      mode: thread.mode,
-      source: providedParticipants ? 'request' : 'database',
-    });
-
     // =========================================================================
     // STEP 1.4: Calculate Round Number (ONLY for first participant)
     // =========================================================================
@@ -1799,8 +1582,11 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
     }
 
     // =========================================================================
-    // STEP 1.5: ✅ PERSIST PARTICIPANT CHANGES (Staged Changes Pattern)
+    // STEP 1.5: ✅ PERSIST PARTICIPANT CHANGES FIRST (Atomic Pattern)
     // =========================================================================
+    // CRITICAL: Persist participant changes BEFORE loading participants for streaming
+    // This ensures the participants used for streaming are always up-to-date
+    //
     // If participants were provided in request AND this is the first participant (index 0),
     // persist the participant changes to database and create changelog entries.
     // This implements the "staged changes" pattern where participant config changes
@@ -1831,8 +1617,9 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
       );
 
       // Detect added participants (in provided but not in DB enabled)
+      // ✅ CRITICAL: Also check if ID is temporary (starts with "participant-")
       const addedParticipants = providedEnabledParticipants.filter(
-        provided => !enabledDbParticipants.find(dbP => dbP.id === provided.id),
+        provided => !enabledDbParticipants.find(dbP => dbP.id === provided.id) || provided.id.startsWith('participant-'),
       );
 
       // Detect updated participants (role, model, or customRole changed)
@@ -1852,19 +1639,39 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
         return dbP && dbP.priority !== index;
       });
 
-      // Build update operations for ALL provided participants
-      const updateOps = providedParticipants.map(provided =>
-        db.update(tables.chatParticipant)
-          .set({
-            modelId: provided.modelId,
-            role: provided.role ?? null,
-            customRoleId: provided.customRoleId ?? null,
-            priority: provided.priority,
-            isEnabled: provided.isEnabled ?? true,
-            updatedAt: new Date(),
-          })
-          .where(eq(tables.chatParticipant.id, provided.id)),
-      );
+      // ✅ BUILD INSERT OPERATIONS FOR NEW PARTICIPANTS
+      const insertOps = addedParticipants.map((provided) => {
+        const newId = ulid(); // Generate a real database ID
+        return db.insert(tables.chatParticipant).values({
+          id: newId,
+          threadId,
+          modelId: provided.modelId,
+          role: provided.role ?? null,
+          customRoleId: provided.customRoleId ?? null,
+          priority: provided.priority,
+          isEnabled: provided.isEnabled ?? true,
+          settings: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        });
+      });
+
+      // ✅ BUILD UPDATE OPERATIONS FOR EXISTING PARTICIPANTS ONLY
+      const updateOps = providedParticipants
+        .filter(provided => !provided.id.startsWith('participant-')) // Skip temporary IDs
+        .filter(provided => enabledDbParticipants.find(dbP => dbP.id === provided.id)) // Only update existing
+        .map(provided =>
+          db.update(tables.chatParticipant)
+            .set({
+              modelId: provided.modelId,
+              role: provided.role ?? null,
+              customRoleId: provided.customRoleId ?? null,
+              priority: provided.priority,
+              isEnabled: provided.isEnabled ?? true,
+              updatedAt: new Date(),
+            })
+            .where(eq(tables.chatParticipant.id, provided.id)),
+        );
 
       // Also disable participants that were removed (not in provided list)
       const disableOps = removedParticipants.map(removed =>
@@ -1954,7 +1761,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
       }
 
       // Only persist if there are actual changes
-      if (changelogEntries.length > 0 || updateOps.length > 0 || disableOps.length > 0) {
+      if (changelogEntries.length > 0 || insertOps.length > 0 || updateOps.length > 0 || disableOps.length > 0) {
         console.warn('[streamChatHandler] 🔄 Participant changes detected', {
           threadId,
           added: addedParticipants.length,
@@ -1979,11 +1786,12 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
             .onConflictDoNothing(),
         );
 
-        // Execute all operations atomically
-        await executeAtomic(db, [...updateOps, ...disableOps, ...changelogOps]);
+        // ✅ Execute all operations atomically (INSERT new, UPDATE existing, DISABLE removed)
+        await executeAtomic(db, [...insertOps, ...updateOps, ...disableOps, ...changelogOps]);
 
         console.warn('[streamChatHandler] ✅ Participant changes persisted', {
           threadId,
+          insertCount: insertOps.length,
           updateCount: updateOps.length,
           disableCount: disableOps.length,
           changelogCount: changelogOps.length,
@@ -1993,6 +1801,69 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
           threadId,
         });
       }
+    }
+
+    // =========================================================================
+    // STEP 1.6: ✅ LOAD PARTICIPANTS (After Persistence)
+    // =========================================================================
+    // CRITICAL: After persisting changes, ALL participants must reload from database
+    // This ensures streaming uses the correct, up-to-date participant configuration
+    //
+    // WHY RELOAD FOR ALL PARTICIPANTS?
+    // - Participant 0: Just persisted changes, must reload to get fresh state
+    // - Participants 1, 2, 3...: Must see the changes participant 0 persisted
+    // - Without reload, subsequent participants use stale thread.participants from line 1690
+
+    let participants: Array<typeof tables.chatParticipant.$inferSelect>;
+
+    if (providedParticipants) {
+      // ✅ PROVIDED PARTICIPANTS: Always reload from database to get latest persisted state
+      // This applies to ALL participants (0, 1, 2, 3...) when frontend sends config
+      console.warn('[streamChatHandler] 🔄 Reloading participants from database (provided config)', {
+        threadId,
+        participantIndex,
+        providedCount: providedParticipants.length,
+      });
+
+      const reloadedThread = await db.query.chatThread.findFirst({
+        where: eq(tables.chatThread.id, threadId),
+        with: {
+          participants: {
+            where: eq(tables.chatParticipant.isEnabled, true),
+            orderBy: [asc(tables.chatParticipant.priority)],
+          },
+        },
+      });
+
+      if (!reloadedThread || reloadedThread.participants.length === 0) {
+        console.error('[streamChatHandler] ❌ NO PARTICIPANTS after reload', { threadId });
+        throw createError.badRequest('No enabled participants after persistence');
+      }
+
+      participants = reloadedThread.participants;
+
+      console.warn('[streamChatHandler] ✅ Participants reloaded from database', {
+        threadId,
+        participantIndex,
+        participantCount: participants.length,
+        participantIds: participants.map(p => p.id),
+        participantRoles: participants.map(p => p.role),
+        participantPriorities: participants.map(p => p.priority),
+      });
+    } else {
+      // ✅ NO PROVIDED PARTICIPANTS: Use database state from initial query
+      participants = thread.participants;
+
+      console.warn('[streamChatHandler] ✅ Using database participants from initial query', {
+        threadId,
+        participantIndex,
+        participantCount: participants.length,
+      });
+    }
+
+    if (participants.length === 0) {
+      console.error('[streamChatHandler] ❌ NO PARTICIPANTS', { threadId });
+      throw createError.badRequest('No enabled participants in this thread');
     }
 
     // =========================================================================
