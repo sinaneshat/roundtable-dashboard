@@ -43,7 +43,6 @@ export default function AuthLayout({ children }: AuthLayoutProps) {
             <Link
               href="/"
               className="group flex items-center gap-3 transition-transform duration-300 hover:scale-105"
-
             >
               <Logo
                 size="md"

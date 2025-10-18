@@ -30,7 +30,7 @@ import { cn } from '@/lib/ui/cn';
  * NOTE: Uses local optimistic state to reflect changes immediately while mutations are pending
  */
 type ChatThreadActionsProps = {
-  thread: ChatThread;
+  thread: ChatThread | (Omit<ChatThread, 'createdAt' | 'updatedAt' | 'lastMessageAt'> & { createdAt: string | Date; updatedAt: string | Date; lastMessageAt: string | Date | null });
   slug: string;
   onDeleteClick?: () => void;
   /**

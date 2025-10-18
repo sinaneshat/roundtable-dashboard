@@ -5,6 +5,7 @@ import { NextIntlClientProvider } from 'next-intl';
 import { NuqsAdapter } from 'nuqs/adapters/next/app';
 
 import { Toaster } from '@/components/ui/toaster';
+import { ChatProvider } from '@/contexts/chat-context';
 
 import PostHogProvider from './posthog-provider';
 import QueryClientProvider from './query-client-provider';
@@ -50,21 +51,24 @@ export function AppProviders({
       environment={env.NEXT_PUBLIC_WEBAPP_ENV}
     >
       <QueryClientProvider>
-        <NuqsAdapter>
-          <NextIntlClientProvider
-            messages={messages}
-            locale={locale}
-            timeZone={timeZone}
-            now={now}
-          >
-            {env.NEXT_PUBLIC_MAINTENANCE !== 'true'
-              ? children
-              : (
-                  <div>Maintenance</div>
-                )}
-            <Toaster />
-          </NextIntlClientProvider>
-        </NuqsAdapter>
+        {/* ✅ AI SDK v5 PATTERN: Shared chat context wraps entire app */}
+        <ChatProvider>
+          <NuqsAdapter>
+            <NextIntlClientProvider
+              messages={messages}
+              locale={locale}
+              timeZone={timeZone}
+              now={now}
+            >
+              {env.NEXT_PUBLIC_MAINTENANCE !== 'true'
+                ? children
+                : (
+                    <div>Maintenance</div>
+                  )}
+              <Toaster />
+            </NextIntlClientProvider>
+          </NuqsAdapter>
+        </ChatProvider>
       </QueryClientProvider>
     </PostHogProvider>
   );

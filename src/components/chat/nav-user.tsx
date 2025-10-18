@@ -165,7 +165,7 @@ export function NavUser() {
               {/* Account Actions */}
               <DropdownMenuGroup>
                 <DropdownMenuItem asChild>
-                  <Link href="/chat/pricing" prefetch={false}>
+                  <Link href="/chat/pricing">
                     <Sparkles />
                     {isPremium ? t('navigation.pricing') : t('pricing.card.upgradeToPro')}
                   </Link>

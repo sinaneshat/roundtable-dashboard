@@ -118,7 +118,7 @@ function NavigationHeaderComponent({
           )}
           {showLogo && (
             <>
-              <Link href="/" className="flex items-center gap-2 flex-shrink-0" prefetch={false}>
+              <Link href="/" className="flex items-center gap-2 flex-shrink-0">
                 <Logo size="sm" variant="icon" />
                 <span className="text-base font-semibold tracking-tight">
                   {BRAND.displayName}
@@ -134,7 +134,7 @@ function NavigationHeaderComponent({
                   <>
                     <BreadcrumbItem className="hidden md:block">
                       <BreadcrumbLink asChild>
-                        <Link href={currentPage.parent!} prefetch={false}>
+                        <Link href={currentPage.parent!}>
                           {t(parentPage.titleKey)}
                         </Link>
                       </BreadcrumbLink>

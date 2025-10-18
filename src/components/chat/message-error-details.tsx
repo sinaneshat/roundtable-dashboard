@@ -49,6 +49,8 @@ export function MessageErrorDetails({
   const getErrorTitle = () => {
     if (aborted)
       return t('generationCancelled');
+    if (errorType === 'empty_response')
+      return t('emptyResponse');
     if (errorType === 'rate_limit')
       return t('rateLimitReached');
     if (errorType === 'context_length')
@@ -150,6 +152,16 @@ export function MessageErrorDetails({
               )}
               {errorType === 'timeout' && (
                 <p>{t('requestTookTooLong')}</p>
+              )}
+              {errorType === 'empty_response' && (
+                <div>
+                  <p className="font-medium mb-1">{t('whatToDo')}</p>
+                  <ul className="list-disc list-inside space-y-0.5 text-destructive/70">
+                    <li>{t('tryDifferentModel')}</li>
+                    <li>{t('tryDifferentPrompt')}</li>
+                    <li>{t('useRegenerateButton')}</li>
+                  </ul>
+                </div>
               )}
               {(errorType === 'model_unavailable' || errorType === 'api_error' || errorType === 'unknown') && (
                 <p>{t('useRegenerateButton')}</p>

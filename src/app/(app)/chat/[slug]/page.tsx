@@ -100,12 +100,32 @@ export default async function ChatThreadPage({
   // Client Component will use useChat with initialMessages
   // Changelog is prefetched and accessed via useThreadChangelogQuery hook
   // NavigationHeader in layout will automatically show thread actions for this route
+
+  // Convert API response dates (strings) to Date objects for component
+  const threadWithDates = {
+    ...thread,
+    createdAt: new Date(thread.createdAt),
+    updatedAt: new Date(thread.updatedAt),
+    lastMessageAt: thread.lastMessageAt ? new Date(thread.lastMessageAt) : null,
+  };
+
+  const participantsWithDates = participants.map(p => ({
+    ...p,
+    createdAt: new Date(p.createdAt),
+    updatedAt: new Date(p.updatedAt),
+  }));
+
+  const messagesWithDates = messages.map(m => ({
+    ...m,
+    createdAt: new Date(m.createdAt),
+  }));
+
   return (
     <HydrationBoundary state={dehydrate(queryClient)}>
       <ChatThreadScreen
-        thread={thread}
-        participants={participants}
-        initialMessages={messages}
+        thread={threadWithDates}
+        participants={participantsWithDates}
+        initialMessages={messagesWithDates}
         slug={slug}
         user={user}
       />

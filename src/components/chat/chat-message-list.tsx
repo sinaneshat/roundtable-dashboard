@@ -11,7 +11,7 @@ import { ModelMessageCard } from '@/components/chat/model-message-card';
 import { useModelsQuery } from '@/hooks/queries/models';
 import { useUsageStatsQuery } from '@/hooks/queries/usage';
 import { getAvatarPropsFromModelId } from '@/lib/utils/ai-display';
-import { filterNonEmptyMessages, getMessageMetadata } from '@/lib/utils/message-transforms';
+import { deduplicateConsecutiveUserMessages, filterNonEmptyMessages, getMessageMetadata } from '@/lib/utils/message-transforms';
 
 type ChatMessageListProps = {
   messages: UIMessage[];
@@ -62,7 +62,8 @@ export function ChatMessageList({
   const userAvatarName = userAvatar?.name || userInfo.name;
 
   // ✅ SHARED UTILITY: Filter out empty user messages (used for triggering subsequent participants)
-  const nonEmptyMessages = filterNonEmptyMessages(messages);
+  // ✅ DEDUPLICATION: Remove consecutive duplicate user messages (caused by startRound)
+  const nonEmptyMessages = deduplicateConsecutiveUserMessages(filterNonEmptyMessages(messages));
 
   return (
     <>

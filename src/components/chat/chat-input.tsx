@@ -1,7 +1,7 @@
 'use client';
 
 import type { ChatStatus } from 'ai';
-import { ArrowUp, Square } from 'lucide-react';
+import { ArrowUp } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import type { FormEvent } from 'react';
 
@@ -21,8 +21,6 @@ type ChatInputProps = {
   onChange: (value: string) => void;
   /** Form submit handler */
   onSubmit: (e: FormEvent) => void;
-  /** Optional stop handler for streaming */
-  onStop?: () => void;
   /** Chat status from official AI SDK */
   status: ChatStatus;
   /** Placeholder text */
@@ -57,7 +55,6 @@ export function ChatInput({
   value,
   onChange,
   onSubmit,
-  onStop,
   status,
   placeholder,
   disabled = false,
@@ -75,7 +72,6 @@ export function ChatInput({
     }
   };
 
-  const isStreaming = status === 'streaming' || status === 'submitted';
   const isDisabled = disabled || status !== 'ready';
 
   return (
@@ -114,30 +110,16 @@ export function ChatInput({
             )}
             {!toolbar && <div />}
 
-            {/* Right: Submit/Stop Button */}
+            {/* Right: Submit Button (no stop - users cannot interrupt participants mid-round) */}
             <div className="flex items-center gap-2">
-              {isStreaming && onStop
-                ? (
-                    <Button
-                      type="button"
-                      onClick={onStop}
-                      size="icon"
-                      variant="destructive"
-                      className="rounded-lg size-9"
-                    >
-                      <Square className="size-4" />
-                    </Button>
-                  )
-                : (
-                    <Button
-                      type="submit"
-                      size="icon"
-                      disabled={isDisabled || !value.trim()}
-                      className="rounded-lg size-9"
-                    >
-                      <ArrowUp className="size-4" />
-                    </Button>
-                  )}
+              <Button
+                type="submit"
+                size="icon"
+                disabled={isDisabled || !value.trim()}
+                className="rounded-lg size-9"
+              >
+                <ArrowUp className="size-4" />
+              </Button>
             </div>
           </div>
         </div>

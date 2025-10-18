@@ -125,10 +125,12 @@ import { listModelsRoute } from './routes/models/route';
 // ============================================================================
 // System/health routes
 import {
+  clearCacheHandler,
   detailedHealthHandler,
   healthHandler,
 } from './routes/system/handler';
 import {
+  clearCacheRoute,
   detailedHealthRoute,
   healthRoute,
 } from './routes/system/route';
@@ -314,6 +316,7 @@ const appRoutes = app
   // ============================================================================
   .openapi(healthRoute, healthHandler) // Basic health check for monitoring
   .openapi(detailedHealthRoute, detailedHealthHandler) // Detailed health check with environment and dependencies
+  .openapi(clearCacheRoute, clearCacheHandler) // Clear all backend caches
 
   // ============================================================================
   // Auth Routes - User authentication and session management (protected)

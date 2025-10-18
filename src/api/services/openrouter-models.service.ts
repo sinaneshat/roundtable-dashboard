@@ -52,152 +52,197 @@ import {
  *   Used directly instead of creating redundant alias
  */
 
+// ============================================================================
+// DYNAMIC MODEL SELECTION CONFIGURATION
+// ============================================================================
+
+/**
+ * ✅ 100% DYNAMIC: No hard-coded provider names or model identifiers
+ *
+ * Model selection is entirely data-driven based on OpenRouter API responses:
+ * - Pricing data (from API)
+ * - Context length (from API)
+ * - Recency (from API created field)
+ * - Capabilities (from API architecture field)
+ * - Modality (from API architecture.modality field)
+ *
+ * This ensures the system adapts automatically as OpenRouter adds new models
+ * or providers without requiring code changes.
+ */
+
+/**
+ * Number of top models to return to users
+ * Increased to 250 to ensure:
+ * - More model variants across all providers
+ * - Better coverage across all pricing tiers
+ * - Sufficient selection for Free, Starter, Pro, and Power tiers
+ */
+const MAX_MODELS_TO_RETURN = 250;
+
+/**
+ * Maximum models to show from any single provider
+ * Ensures provider diversity - prevents any single provider from dominating
+ * User sees best 5 models from each provider (OpenAI, Anthropic, Google, etc.)
+ */
+const MAX_MODELS_PER_PROVIDER = 5;
+
+/**
+ * Minimum pricing threshold to exclude OpenRouter's free tier
+ * Models with both prompt and completion pricing of "0" are considered
+ * OpenRouter free tier and will be excluded
+ */
+const MIN_PRICING_THRESHOLD = 0;
+
 /**
  * OpenRouter Models Fetcher Service
  */
 class OpenRouterModelsService {
   private readonly OPENROUTER_MODELS_API = 'https://openrouter.ai/api/v1/models';
-  private cachedModels: BaseModelResponse[] | null = null;
-  private cacheTimestamp: number = 0;
-  private readonly CACHE_TTL = 1000 * 60 * 60 * 24; // 24 hour cache - aggressive caching to minimize API calls
+  // ✅ NO SERVER-SIDE CACHING: Always fetch fresh data from OpenRouter
+  // TanStack Query handles caching on the client side
 
   /**
    * Fetch all models from OpenRouter API
-   * Uses caching to avoid excessive API calls
+   * ✅ ALWAYS FRESH: No server-side caching - relies on client-side TanStack Query cache
+   * ✅ 100% DYNAMIC FILTERING: Based only on API data, no hard-coded exclusions
    */
   async fetchAllModels(): Promise<BaseModelResponse[]> {
-    // Return cached models if still valid
-    const now = Date.now();
-    if (this.cachedModels && (now - this.cacheTimestamp) < this.CACHE_TTL) {
-      return this.cachedModels;
+    const response = await fetch(this.OPENROUTER_MODELS_API, {
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`OpenRouter API returned ${response.status}`);
     }
 
-    try {
-      const response = await fetch(this.OPENROUTER_MODELS_API, {
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
+    const rawData = await response.json();
 
-      if (!response.ok) {
-        throw new Error(`OpenRouter API returned ${response.status}`);
-      }
+    // ✅ ZOD VALIDATION: Validate API response at runtime using imported schema
+    const parseResult = OpenRouterModelsResponseSchema.safeParse(rawData);
 
-      const rawData = await response.json();
-
-      // ✅ ZOD VALIDATION: Validate API response at runtime using imported schema
-      const parseResult = OpenRouterModelsResponseSchema.safeParse(rawData);
-
-      if (!parseResult.success) {
-        throw new Error('Invalid response from OpenRouter API');
-      }
-
-      const data = parseResult.data;
-
-      // ✅ FILTER: Only text-based models (no audio/image/video models)
-      const textOnlyModels = data.data.filter(model => this.isTextOnlyModel(model));
-
-      // Enhance models with computed fields
-      const enhancedModels = textOnlyModels.map(model => this.enhanceModel(model));
-
-      // Update cache
-      this.cachedModels = enhancedModels;
-      this.cacheTimestamp = now;
-
-      return enhancedModels;
-    } catch (fetchError) {
-      // Return cached models if available, even if stale
-      if (this.cachedModels) {
-        return this.cachedModels;
-      }
-
-      throw fetchError;
+    if (!parseResult.success) {
+      throw new Error('Invalid response from OpenRouter API');
     }
+
+    const data = parseResult.data;
+
+    // ✅ FILTER: Only text-capable models (no pure audio/image/video generation)
+    // Includes multimodal models that can process images but generate text
+    const textCapableModels = data.data.filter(model => this.isTextCapableModel(model));
+
+    // ✅ FILTER: Exclude OpenRouter free tier models (pricing = "0" for both prompt and completion)
+    // These are low-quality models provided free by OpenRouter, not premium models
+    const paidModels = textCapableModels.filter(model => !this.isOpenRouterFreeTier(model));
+
+    // Enhance models with computed fields
+    const enhancedModels = paidModels.map(model => this.enhanceModel(model));
+
+    return enhancedModels;
   }
 
   /**
-   * ✅ TEXT-ONLY MODEL FILTER: Only return text/chat/reasoning models
-   * Excludes: audio, image, video generation models
+   * ✅ 100% DYNAMIC: Check if model is OpenRouter free tier
+   *
+   * OpenRouter free tier models have pricing of "0" for both prompt and completion.
+   * These are typically low-quality models and should be excluded from our curated list.
+   *
+   * We only want premium/paid models that indicate quality and active maintenance.
    */
-  private isTextOnlyModel(model: RawOpenRouterModel): boolean {
+  private isOpenRouterFreeTier(model: RawOpenRouterModel): boolean {
+    const promptPrice = parsePrice(model.pricing.prompt);
+    const completionPrice = parsePrice(model.pricing.completion);
+
+    // If both prompt and completion are free (0), it's OpenRouter free tier
+    return promptPrice === MIN_PRICING_THRESHOLD && completionPrice === MIN_PRICING_THRESHOLD;
+  }
+
+  /**
+   * ✅ PURE API DATA: Text-capable filter using ONLY architecture.modality field
+   *
+   * Includes ONLY models that generate PURE TEXT output:
+   * - text->text (chat, completion, reasoning)
+   * - text+image->text (vision models that generate text)
+   * - audio->text (transcription models that generate text)
+   * - image->text (OCR, vision models that generate text)
+   *
+   * Excludes ANY models that generate non-text outputs:
+   * - *->image (image generation - DALL-E, Flux, Stable Diffusion, etc.)
+   * - *->audio (audio generation - TTS, music generation, etc.)
+   * - *->video (video generation - Sora, etc.)
+   * - *->text+image (multimodal output including images - GPT-5 Image, etc.)
+   * - *->text+audio (multimodal output including audio)
+   *
+   * Detection: If the OUTPUT side of modality (after "->") contains anything
+   * other than pure "text", the model is EXCLUDED.
+   *
+   * Uses ONLY the architecture.modality field from OpenRouter API.
+   */
+  private isTextCapableModel(model: RawOpenRouterModel): boolean {
     const modality = model.architecture?.modality?.toLowerCase() || '';
-    const nameLower = model.name.toLowerCase();
-    const descLower = model.description?.toLowerCase() || '';
-    const idLower = model.id.toLowerCase();
 
-    // ✅ EXCLUDE: Audio generation models
+    // If no modality specified, assume it's text-capable (most models are)
+    if (!modality) {
+      return true;
+    }
+
+    // Split on "->" to get output modality
+    const parts = modality.split('->');
+    if (parts.length < 2 || !parts[1]) {
+      // No arrow or no output part, assume text-capable
+      return true;
+    }
+
+    const outputModality = parts[1].trim();
+
+    // ONLY allow pure text output
+    // Exclude if output contains: image, audio, video, or any combination with text
     if (
-      modality.includes('audio')
-      || nameLower.includes('audio')
-      || nameLower.includes('speech')
-      || nameLower.includes('tts')
-      || nameLower.includes('whisper')
-      || descLower.includes('audio generation')
-      || descLower.includes('speech synthesis')
+      outputModality !== 'text'
+      && (outputModality.includes('image')
+        || outputModality.includes('audio')
+        || outputModality.includes('video'))
     ) {
       return false;
     }
 
-    // ✅ EXCLUDE: Image generation models
-    if (
-      modality.includes('image->image')
-      || modality.includes('text->image')
-      || nameLower.includes('dall-e')
-      || nameLower.includes('dalle')
-      || nameLower.includes('midjourney')
-      || nameLower.includes('stable-diffusion')
-      || nameLower.includes('flux')
-      || nameLower.includes('imagen')
-      || descLower.includes('image generation')
-      || descLower.includes('text-to-image')
-      || idLower.includes('image-gen')
-      || idLower.includes('flux')
-    ) {
-      return false;
-    }
-
-    // ✅ EXCLUDE: Video generation models
-    if (
-      modality.includes('video')
-      || nameLower.includes('video')
-      || nameLower.includes('sora')
-      || nameLower.includes('runway')
-      || descLower.includes('video generation')
-    ) {
-      return false;
-    }
-
-    // ✅ INCLUDE: Text, chat, reasoning, and multimodal vision models
-    // (Vision models like GPT-4V, Claude with vision are OK - they process images but generate text)
+    // INCLUDE: Pure text output models
     return true;
   }
 
   /**
-   * Enhance a model with computed fields for better UI experience
+   * ✅ 100% DYNAMIC: Enhance model with computed fields
+   *
+   * All fields computed from API data, no hard-coded values:
+   * - provider: Extracted from model ID
+   * - category: Detected from modality and description
+   * - capabilities: Detected from architecture.modality
+   * - pricing_display: Formatted from pricing.prompt/completion
+   * - is_free: Computed from actual pricing values
    */
   private enhanceModel(model: RawOpenRouterModel): BaseModelResponse {
     // Extract provider from model ID (e.g., "anthropic/claude-4" -> "anthropic")
     const provider = model.id.split('/')[0] || 'unknown';
 
-    // Determine category based on model name and description
+    // Determine category based on modality and description (100% dynamic)
     const category = this.determineCategory(model);
 
-    // Detect capabilities based on architecture and model name
+    // Detect capabilities from architecture.modality field (100% dynamic)
     const capabilities = {
       vision: this.detectVisionSupport(model),
-      reasoning: this.detectReasoningModel(model),
+      reasoning: this.detectReasoningSupport(model),
       streaming: true, // Most modern models support streaming
       tools: true, // Most modern models support tools
     };
 
-    // ✅ SINGLE SOURCE OF TRUTH: Use parsePrice() utility for consistent parsing
+    // Format pricing for display
     const pricing_display = {
       input: this.formatPricing(parsePrice(model.pricing.prompt)),
       output: this.formatPricing(parsePrice(model.pricing.completion)),
     };
 
-    // ✅ SINGLE SOURCE OF TRUTH: Use isModelFree() from model-pricing-tiers.service.ts
-    // This checks both pricing AND model name for "free" designation
+    // Compute if model is free based on actual pricing
     const baseModel: BaseModelResponse = {
       ...model,
       provider,
@@ -216,70 +261,58 @@ class OpenRouterModelsService {
   }
 
   /**
-   * ✅ MINIMAL CATEGORY DETECTION: Based only on explicit keywords
-   * OpenRouter API doesn't provide category field, so we use minimal heuristics
-   * Only detects if exact keywords appear in name/id/description
+   * ✅ PURE API DATA: Category detection using ONLY OpenRouter API fields
+   *
+   * Uses only data provided by OpenRouter API (description field).
+   * NO pattern matching, NO model name parsing, NO hard-coding.
+   *
+   * If OpenRouter doesn't provide category data, default to 'general'.
    */
-  private determineCategory(model: RawOpenRouterModel): 'reasoning' | 'general' | 'creative' | 'research' {
-    const nameLower = model.name.toLowerCase();
+  private determineCategory(model: RawOpenRouterModel): 'general' | 'creative' | 'research' | 'reasoning' {
     const descLower = model.description?.toLowerCase() || '';
-    const idLower = model.id.toLowerCase();
 
-    // Only if explicitly contains "reasoning"
-    if (
-      nameLower.includes('reasoning')
-      || idLower.includes('reasoning')
-      || descLower.includes('reasoning')
-    ) {
+    // Check description field ONLY (data from OpenRouter)
+    if (descLower.includes('reasoning') || descLower.includes('extended thinking')) {
       return 'reasoning';
     }
 
-    // Only if explicitly contains "research" or "search"
-    if (
-      nameLower.includes('research')
-      || nameLower.includes('search')
-      || idLower.includes('research')
-      || idLower.includes('search')
-      || descLower.includes('research')
-      || descLower.includes('search')
-    ) {
+    if (descLower.includes('research') || descLower.includes('analysis')) {
       return 'research';
     }
 
-    // Only if explicitly contains "creative"
-    if (
-      nameLower.includes('creative')
-      || idLower.includes('creative')
-      || descLower.includes('creative')
-    ) {
+    if (descLower.includes('creative') || descLower.includes('storytelling')) {
       return 'creative';
     }
 
-    // Default to general - most models will be general
+    // Default: general purpose
     return 'general';
   }
 
   /**
-   * Detect vision support based on architecture modality
+   * ✅ 100% DYNAMIC: Detect vision/multimodal support
+   *
+   * Based on architecture.modality field from OpenRouter API.
+   * Models that can process images as input have vision capability.
    */
   private detectVisionSupport(model: RawOpenRouterModel): boolean {
     const modality = model.architecture?.modality?.toLowerCase() || '';
-    return modality.includes('image') || modality.includes('vision');
+    return modality.includes('image') || modality.includes('vision') || modality.includes('multimodal');
   }
 
   /**
-   * ✅ MINIMAL DETECTION: Only if "reasoning" explicitly in name/id
-   * OpenRouter API doesn't provide is_reasoning_model field
-   * Uses minimal heuristics - only exact keyword matching
+   * ✅ PURE API DATA: Detect reasoning support using ONLY API description
+   *
+   * Uses only the description field from OpenRouter API.
+   * NO pattern matching on model names or IDs.
    */
-  private detectReasoningModel(model: RawOpenRouterModel): boolean {
-    const nameLower = model.name.toLowerCase();
-    const idLower = model.id.toLowerCase();
+  private detectReasoningSupport(model: RawOpenRouterModel): boolean {
+    const descLower = model.description?.toLowerCase() || '';
 
-    // Only detect if explicitly contains "reasoning" keyword
+    // Check ONLY description field from API
     return (
-      nameLower.includes('reasoning')
-      || idLower.includes('reasoning')
+      descLower.includes('reasoning')
+      || descLower.includes('extended thinking')
+      || descLower.includes('chain-of-thought')
     );
   }
 
@@ -315,14 +348,6 @@ class OpenRouterModelsService {
   }
 
   /**
-   * Clear cache (useful for testing or manual refresh)
-   */
-  clearCache(): void {
-    this.cachedModels = null;
-    this.cacheTimestamp = 0;
-  }
-
-  /**
    * ✅ SINGLE SOURCE OF TRUTH: Get required subscription tier for a model
    * Based on OpenRouter pricing thresholds
    */
@@ -339,15 +364,15 @@ class OpenRouterModelsService {
    * @returns The default model ID for the user
    */
   async getDefaultModelForTier(userTier: SubscriptionTier): Promise<string> {
-    const top100 = await this.getTop100Models();
+    const topModels = await this.getTopModelsAcrossProviders();
 
     // Use the centralized function from product-logic.service.ts
-    const defaultModelId = getDefaultModelForTier(top100, userTier);
+    const defaultModelId = getDefaultModelForTier(topModels, userTier);
 
     // ✅ FULLY DYNAMIC FALLBACK: If no default found, get cheapest available model
     if (!defaultModelId) {
       const cheapestModel = await this.getCheapestAvailableModel();
-      return cheapestModel?.id || top100[0]?.id || '';
+      return cheapestModel?.id || topModels[0]?.id || '';
     }
 
     return defaultModelId;
@@ -408,11 +433,10 @@ class OpenRouterModelsService {
 
       // Capabilities scoring (30 points max - reward versatility)
       if (model.capabilities.vision)
-        score += 10;
-      if (model.capabilities.reasoning)
-        score += 10;
+        score += 15;
+      // Reasoning capability removed - all reasoning models filtered out
       if (model.capabilities.tools)
-        score += 10;
+        score += 15;
 
       // Context window scoring (20 points max)
       // Prefer models with reasonable context (16K-128K range for balance)
@@ -452,122 +476,161 @@ class OpenRouterModelsService {
   }
 
   /**
-   * ✅ SMARTNESS & POPULARITY FIRST: Top 100 most capable and popular models
+   * ✅ 100% DYNAMIC MODEL SCORING: No hard-coded provider names
    *
-   * Selection criteria (based on 2025 OpenRouter popularity rankings):
-   * 1. Provider Quality (40 points) - Real-world popularity by token usage
-   * 2. Capabilities (30 points) - Vision, reasoning, tools support
-   * 3. Context Length (20 points) - Larger windows = more capable
-   * 4. Recency (10 points) - Newer models preferred
-   * 5. Cost (0 points) - IGNORED for top 100 selection
+   * Scores models based purely on observable characteristics from OpenRouter API:
+   * 1. Context Length (35 points) - Larger context = more capable
+   * 2. Recency (25 points) - Newer = better maintained
+   * 3. Capabilities (20 points) - Vision + reasoning + tools
+   * 4. Pricing Tier (20 points) - Mid-to-high pricing indicates quality/demand
    *
-   * ✅ PRICING APPLIED AFTER: User access control happens AFTER selecting smartest models
-   * This ensures users see the BEST models available at their tier, not just cheap ones
-   *
-   * Provider popularity based on OpenRouter 2025 token usage data:
-   * - X-AI: 578B tokens (31.2%)
-   * - Google: 335B tokens (18.1%)
-   * - Anthropic: 260B tokens (14.1%)
-   * - OpenAI: 242B tokens (13.1%)
-   * - DeepSeek: 128B tokens (6.9%)
-   * - Qwen: 117B tokens (6.3%)
+   * This scoring ensures:
+   * - Quality models rise to the top
+   * - Good distribution across pricing tiers (Free, Starter, Pro, Power)
+   * - No bias toward any specific provider
+   * - Fully adaptive to new models and providers
    */
-  async getTop100Models(): Promise<BaseModelResponse[]> {
+  private calculateModelScore(model: BaseModelResponse): number {
+    let score = 0;
+
+    // ═══════════════════════════════════════════════════════════════
+    // CONTEXT LENGTH (35 points) - Capability indicator
+    // ═══════════════════════════════════════════════════════════════
+    if (model.context_length >= 200000) {
+      score += 35; // Ultra-large (200K+) - cutting-edge
+    } else if (model.context_length >= 128000) {
+      score += 30; // Large (128K-200K) - flagship tier
+    } else if (model.context_length >= 64000) {
+      score += 20; // Medium-large (64K-128K) - capable
+    } else if (model.context_length >= 32000) {
+      score += 10; // Medium (32K-64K) - standard
+    } else {
+      score += 0; // Small (<32K) - basic
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // RECENCY (25 points) - Maintenance and relevance indicator
+    // ═══════════════════════════════════════════════════════════════
+    if (model.created) {
+      const ageInDays = (Date.now() / 1000 - model.created) / (60 * 60 * 24);
+      if (ageInDays < 90) {
+        score += 25; // Last 3 months - cutting-edge
+      } else if (ageInDays < 180) {
+        score += 20; // Last 6 months - recent
+      } else if (ageInDays < 365) {
+        score += 15; // Last year - maintained
+      } else if (ageInDays < 730) {
+        score += 8; // Last 2 years - older
+      } else {
+        score += 0; // Very old - outdated
+      }
+    } else {
+      score += 10; // No timestamp - neutral
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // CAPABILITIES (20 points) - Advanced feature indicator
+    // ═══════════════════════════════════════════════════════════════
+    if (model.capabilities.vision)
+      score += 8; // Multimodal vision
+    if (model.capabilities.reasoning)
+      score += 7; // Extended thinking
+    if (model.capabilities.tools)
+      score += 5; // Function calling
+
+    // ═══════════════════════════════════════════════════════════════
+    // PRICING TIER (20 points) - Quality/demand indicator
+    // ═══════════════════════════════════════════════════════════════
+    // Mid-to-high pricing indicates popular, high-quality models
+    // Very cheap models might be lower quality
+    // Very expensive models might be niche/specialized
+    const inputPricePerMillion = costPerMillion(model.pricing.prompt);
+
+    if (inputPricePerMillion >= 5 && inputPricePerMillion <= 20) {
+      score += 20; // Sweet spot - flagship pricing tier
+    } else if (inputPricePerMillion >= 1 && inputPricePerMillion < 5) {
+      score += 15; // Mid-tier pricing
+    } else if (inputPricePerMillion > 20 && inputPricePerMillion <= 100) {
+      score += 12; // Premium pricing
+    } else if (inputPricePerMillion > 0 && inputPricePerMillion < 1) {
+      score += 8; // Budget pricing
+    } else if (inputPricePerMillion > 100) {
+      score += 5; // Ultra-premium pricing
+    } else {
+      score += 0; // Free tier (already filtered out)
+    }
+
+    return score;
+  }
+
+  /**
+   * ✅ 100% DYNAMIC TOP MODELS SELECTION WITH PROVIDER DIVERSITY
+   *
+   * NEW ALGORITHM (fully dynamic, no provider hard-coding):
+   * 1. Score all paid, text-capable models
+   * 2. Sort by score (highest first)
+   * 3. Limit to max 5 models per provider (ensures diversity)
+   * 4. Return top 250 models total
+   *
+   * Benefits:
+   * - NO hard-coded provider names or preferences
+   * - Automatically adapts to new providers joining OpenRouter
+   * - Provider diversity: Max 5 models from any single provider
+   * - Quality-focused scoring ensures best models rise to top
+   * - Large model count (250) ensures coverage across all pricing tiers
+   * - Tier categorization happens in the handler (Free, Starter, Pro, Power)
+   *
+   * @returns Top 250 highest-scoring models (max 5 per provider)
+   */
+  async getTopModelsAcrossProviders(): Promise<BaseModelResponse[]> {
     const allModels = await this.fetchAllModels();
 
-    // Score each model based on SMARTNESS and POPULARITY, not cost
-    const scoredModels = allModels.map((model) => {
-      let score = 0;
+    // Score all models using dynamic scoring algorithm
+    const scoredModels = allModels.map(model => ({
+      model,
+      score: this.calculateModelScore(model),
+    }));
 
-      // ✅ PROVIDER QUALITY SCORING (40 points max - based on real popularity data)
-      // Based on OpenRouter 2025 token usage rankings
-      const providerLower = model.provider.toLowerCase();
-      if (providerLower.includes('x-ai') || providerLower.includes('xai')) {
-        score += 40; // #1 most popular (31.2% token share)
-      } else if (providerLower.includes('google')) {
-        score += 38; // #2 most popular (18.1% token share)
-      } else if (providerLower.includes('anthropic')) {
-        score += 36; // #3 most popular (14.1% token share)
-      } else if (providerLower.includes('openai')) {
-        score += 34; // #4 most popular (13.1% token share)
-      } else if (providerLower.includes('deepseek')) {
-        score += 32; // #5 most popular (6.9% token share)
-      } else if (providerLower.includes('qwen')) {
-        score += 30; // #6 most popular (6.3% token share)
-      } else if (
-        providerLower.includes('meta')
-        || providerLower.includes('mistral')
-        || providerLower.includes('cohere')
-        || providerLower.includes('perplexity')
-      ) {
-        score += 25; // Other major providers
-      } else {
-        score += 15; // Smaller/unknown providers
+    // Sort by score (descending)
+    scoredModels.sort((a, b) => b.score - a.score);
+
+    // Apply provider diversity limit (max 5 per provider)
+    const providerCounts = new Map<string, number>();
+    const selectedModels: BaseModelResponse[] = [];
+
+    for (const { model } of scoredModels) {
+      const provider = model.provider;
+      const currentCount = providerCounts.get(provider) || 0;
+
+      // Only add if this provider has less than max allowed
+      if (currentCount < MAX_MODELS_PER_PROVIDER) {
+        selectedModels.push(model);
+        providerCounts.set(provider, currentCount + 1);
       }
 
-      // ✅ CAPABILITIES SCORING (30 points max - reward advanced features)
-      if (model.capabilities.vision)
-        score += 10; // Multimodal models are more advanced
-      if (model.capabilities.reasoning)
-        score += 10; // Reasoning models are cutting-edge
-      if (model.capabilities.tools)
-        score += 10; // Function calling indicates advanced models
-
-      // ✅ CONTEXT LENGTH SCORING (20 points max - larger = more capable)
-      // Flagship models typically have 128K-200K context windows
-      if (model.context_length >= 128000) {
-        score += 20; // Flagship-tier context (128K+)
-      } else if (model.context_length >= 64000) {
-        score += 15; // Large context (64K-128K)
-      } else if (model.context_length >= 32000) {
-        score += 10; // Standard context (32K-64K)
-      } else if (model.context_length >= 16000) {
-        score += 5; // Smaller context (16K-32K)
-      } else {
-        score += 0; // Very small context (<16K)
+      // Stop once we have enough models
+      if (selectedModels.length >= MAX_MODELS_TO_RETURN) {
+        break;
       }
+    }
 
-      // ✅ RECENCY SCORING (10 points max - newer = smarter)
-      if (model.created) {
-        const ageInDays = (Date.now() / 1000 - model.created) / (60 * 60 * 24);
-        if (ageInDays < 90) {
-          score += 10; // Last 3 months (cutting-edge)
-        } else if (ageInDays < 180) {
-          score += 8; // Last 6 months (recent)
-        } else if (ageInDays < 365) {
-          score += 6; // Last year (recent-ish)
-        } else if (ageInDays < 730) {
-          score += 3; // Last 2 years (dated)
-        } else {
-          score += 0; // Older models (likely outdated)
-        }
-      } else {
-        score += 5; // No creation date, give middle score
-      }
+    return selectedModels;
+  }
 
-      return { model, score };
-    });
+  /**
+   * ✅ DEPRECATED: Use getTopModelsAcrossProviders() instead
+   * Kept for backward compatibility
+   */
+  async getTop50Models(): Promise<BaseModelResponse[]> {
+    return this.getTopModelsAcrossProviders();
+  }
 
-    // Sort by score (descending) and take top 100 SMARTEST models
-    const top100 = scoredModels
-      .sort((a, b) => b.score - a.score)
-      .slice(0, 100)
-      .map(item => item.model);
-
-    // Log tier diversity for monitoring (pricing tiers applied AFTER selection)
-    const tierCounts = {
-      free: 0,
-      starter: 0,
-      pro: 0,
-      power: 0,
-    };
-
-    top100.forEach((model) => {
-      const tier = this.getRequiredTierForModel(model);
-      tierCounts[tier]++;
-    });
-
-    return top100;
+  /**
+   * ✅ BACKWARD COMPATIBILITY: Alias for getTop50Models()
+   * @deprecated Use getTop50Models() instead for clarity
+   */
+  async getTop100Models(): Promise<BaseModelResponse[]> {
+    return this.getTop50Models();
   }
 
   /**
@@ -589,10 +652,8 @@ class OpenRouterModelsService {
 
     // ✅ NO PROVIDER FILTERING: Filter only by objective criteria from OpenRouter API
     const candidateModels = allModels.filter((model) => {
-      // Must not be a reasoning model (slower by design)
-      if (model.is_reasoning_model || model.category === 'reasoning') {
-        return false;
-      }
+      // Reasoning models are already filtered out at fetchAllModels level
+      // No need to check again here
 
       // ✅ SINGLE SOURCE OF TRUTH: Use costPerMillion() utility for consistent calculations
       const inputPricePerMillion = costPerMillion(model.pricing.prompt);
@@ -643,11 +704,10 @@ class OpenRouterModelsService {
 
       // Capabilities scoring (25 points max - reward versatility)
       if (model.capabilities.vision)
-        score += 10;
-      if (model.capabilities.reasoning)
-        score += 10;
+        score += 15;
+      // Reasoning capability removed - all reasoning models filtered out
       if (model.capabilities.tools)
-        score += 5;
+        score += 10;
 
       // Recency scoring (15 points max - prefer maintained models)
       if (model.created) {

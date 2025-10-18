@@ -20,8 +20,6 @@ type CommandSearchProps = {
 
 /**
  * SearchResultItem - Individual search result
- * Uses Next.js Link component with built-in prefetching behavior
- * Source: https://nextjs.org/docs/app/api-reference/components/link
  */
 function SearchResultItem({
   thread,

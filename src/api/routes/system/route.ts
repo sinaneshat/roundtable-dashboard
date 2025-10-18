@@ -4,7 +4,7 @@ import * as HttpStatusPhrases from 'stoker/http-status-phrases';
 
 import { ApiErrorResponseSchema } from '@/api/core/schemas';
 
-import { DetailedHealthResponseSchema, HealthResponseSchema } from './schema';
+import { ClearCacheResponseSchema, DetailedHealthResponseSchema, HealthResponseSchema } from './schema';
 
 export const healthRoute = createRoute({
   method: 'get',
@@ -55,6 +55,38 @@ export const detailedHealthRoute = createRoute({
       description: 'Service unavailable - health check failed',
       content: {
         'application/json': { schema: DetailedHealthResponseSchema },
+      },
+    },
+    [HttpStatusCodes.BAD_REQUEST]: {
+      description: HttpStatusPhrases.BAD_REQUEST,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
+    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: {
+      description: HttpStatusPhrases.INTERNAL_SERVER_ERROR,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
+  },
+});
+
+export const clearCacheRoute = createRoute({
+  method: 'get',
+  path: '/cache/clear',
+  tags: ['system'],
+  summary: 'Clear all backend caches',
+  description: 'Clears all backend API caches including KV cache and all cache tags',
+  responses: {
+    [HttpStatusCodes.OK]: {
+      description: 'Cache cleared successfully',
+      content: {
+        'application/json': { schema: ClearCacheResponseSchema },
       },
     },
     [HttpStatusCodes.BAD_REQUEST]: {

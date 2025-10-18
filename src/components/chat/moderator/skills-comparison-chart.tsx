@@ -50,16 +50,17 @@ export function SkillsComparisonChart({ participants }: SkillsComparisonChartPro
     return null;
   }
 
-  // Get all unique skill names from the first participant (assuming all have same skills)
-  const skillNames = participants[0]?.skillsMatrix.map(s => s.skillName) || [];
+  // ✅ AI SDK V5 PATTERN: Handle partial objects with safe access
+  const skillNames = participants[0]?.skillsMatrix?.map(s => s?.skillName).filter(Boolean) || [];
 
   // Transform data for Recharts - one object per skill with all participant ratings
   const chartData = skillNames.map((skillName) => {
     const dataPoint: Record<string, string | number> = { skill: skillName };
 
     participants.forEach((participant) => {
-      const skill = participant.skillsMatrix.find(s => s.skillName === skillName);
-      dataPoint[`participant${participant.participantIndex}`] = skill?.rating || 0;
+      const skill = participant?.skillsMatrix?.find(s => s?.skillName === skillName);
+      const participantIndex = participant?.participantIndex ?? 0;
+      dataPoint[`participant${participantIndex}`] = skill?.rating ?? 0;
     });
 
     return dataPoint;
@@ -68,9 +69,9 @@ export function SkillsComparisonChart({ participants }: SkillsComparisonChartPro
   // Chart configuration for colors and styling
   const chartConfig: ChartConfig = participants.reduce(
     (config, participant, index) => {
-      const key = `participant${participant.participantIndex}`;
+      const key = `participant${participant?.participantIndex ?? index}`;
       config[key] = {
-        label: participant.modelName,
+        label: participant?.modelName ?? 'Unknown',
         color: PARTICIPANT_COLORS[index % PARTICIPANT_COLORS.length],
       };
       return config;
@@ -94,7 +95,7 @@ export function SkillsComparisonChart({ participants }: SkillsComparisonChartPro
 
         {/* Render a Radar for each participant */}
         {participants.map((participant, index) => {
-          const key = `participant${participant.participantIndex}`;
+          const key = `participant${participant?.participantIndex ?? index}`;
           const color = PARTICIPANT_COLORS[index % PARTICIPANT_COLORS.length];
 
           return (

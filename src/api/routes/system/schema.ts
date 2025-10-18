@@ -103,6 +103,31 @@ const DetailedHealthPayloadSchema = z.object({
 export const DetailedHealthResponseSchema = createApiResponseSchema(DetailedHealthPayloadSchema).openapi('DetailedHealthResponse');
 
 // ============================================================================
+// CACHE CLEAR SCHEMAS
+// ============================================================================
+
+const ClearCachePayloadSchema = z.object({
+  ok: z.boolean().openapi({
+    example: true,
+    description: 'Cache clear operation success indicator',
+  }),
+  message: z.string().openapi({
+    example: 'All backend caches cleared successfully',
+    description: 'Human-readable cache clear status message',
+  }),
+  timestamp: CoreSchemas.timestamp().openapi({
+    example: new Date().toISOString(),
+    description: 'Cache clear execution timestamp',
+  }),
+  clearedTags: z.array(z.string()).openapi({
+    example: ['user-tier-*', 'user-usage-*', 'active-products'],
+    description: 'List of cache tags that were cleared',
+  }),
+}).openapi('ClearCachePayload');
+
+export const ClearCacheResponseSchema = createApiResponseSchema(ClearCachePayloadSchema).openapi('ClearCacheResponse');
+
+// ============================================================================
 // TYPE EXPORTS FOR FRONTEND
 // ============================================================================
 
@@ -111,3 +136,5 @@ export type HealthResponse = z.infer<typeof HealthResponseSchema>;
 export type HealthCheckResult = z.infer<typeof HealthCheckResultSchema>;
 export type DetailedHealthPayload = z.infer<typeof DetailedHealthPayloadSchema>;
 export type DetailedHealthResponse = z.infer<typeof DetailedHealthResponseSchema>;
+export type ClearCachePayload = z.infer<typeof ClearCachePayloadSchema>;
+export type ClearCacheResponse = z.infer<typeof ClearCacheResponseSchema>;

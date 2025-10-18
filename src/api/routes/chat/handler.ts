@@ -1,8 +1,8 @@
 import type { RouteHandler } from '@hono/zod-openapi';
 import type { UIMessage } from 'ai';
-import { convertToModelMessages, streamText, validateUIMessages } from 'ai';
+import { consumeStream, convertToModelMessages, streamText, validateUIMessages } from 'ai';
 import type { SQL } from 'drizzle-orm';
-import { and, desc, eq, ne } from 'drizzle-orm';
+import { and, asc, desc, eq, ne } from 'drizzle-orm';
 import Fuse from 'fuse.js';
 import { ulid } from 'ulid';
 
@@ -21,10 +21,11 @@ import { IdParamSchema } from '@/api/core/schemas';
 import { initializeOpenRouter, openRouterService } from '@/api/services/openrouter.service';
 import { extractModeratorModelName, openRouterModelsService } from '@/api/services/openrouter-models.service';
 import {
+  AI_RETRY_CONFIG,
   AI_TIMEOUT_CONFIG,
   canAccessModelByPricing,
-  getMaxOutputTokensForTier,
   getRequiredTierForModel,
+  getSafeMaxOutputTokens,
   SUBSCRIPTION_TIER_NAMES,
 } from '@/api/services/product-logic.service';
 import { generateUniqueSlug } from '@/api/services/slug-generator.service';
@@ -48,6 +49,7 @@ import { filterNonEmptyMessages } from '@/lib/utils/message-transforms';
 import type {
   addParticipantRoute,
   analyzeRoundRoute,
+  bulkUpdateParticipantsRoute,
   createCustomRoleRoute,
   createThreadRoute,
   deleteCustomRoleRoute,
@@ -69,8 +71,10 @@ import type {
 } from './route';
 import {
   AddParticipantRequestSchema,
+  BulkUpdateParticipantsRequestSchema,
   CreateCustomRoleRequestSchema,
   CreateThreadRequestSchema,
+  ModeratorAnalysisPayloadSchema,
   ModeratorAnalysisRequestSchema,
   RoundAnalysisParamSchema,
   StreamChatRequestSchema,
@@ -87,14 +91,57 @@ import {
 // ============================================================================
 
 /**
- * ✅ AUTO-TRIGGER ANALYSIS: Automatically create pending analysis after round completes
+ * ✅ BATCH/TRANSACTION HELPER: Execute atomic operations
+ * - D1 (production): Use batch() for atomicity
+ * - Better-SQLite3 (local dev): Use transaction() for atomicity
+ *
+ * This helper provides a unified API that works in both environments
+ */
+async function executeAtomic<T extends Awaited<ReturnType<typeof getDbAsync>>>(
+  db: T,
+  operations: Array<unknown>,
+) {
+  // ✅ TYPE-SAFE RUNTIME CHECK: Check if batch() exists (D1 Database)
+  // This allows us to use batch() on D1 and transaction() on BetterSQLite3
+  if ('batch' in db && typeof db.batch === 'function') {
+    // ✅ D1 PATTERN: Use batch operations
+    if (operations.length > 0) {
+      await (db as { batch: (ops: unknown[]) => Promise<unknown> }).batch(operations);
+    }
+  } else if ('transaction' in db && typeof db.transaction === 'function') {
+    // ✅ BETTER-SQLITE3 PATTERN: Use transaction
+    await (db as { transaction: (fn: () => Promise<void>) => Promise<void> }).transaction(async () => {
+      // Execute operations sequentially within transaction
+      for (const op of operations) {
+        await op;
+      }
+    });
+  } else {
+    // Fallback: Execute operations sequentially (not atomic)
+    for (const op of operations) {
+      await op;
+    }
+  }
+}
+
+/**
+ * ✅ AI SDK V5 PATTERN: Automatically generate analysis in background after round completes
  *
  * This function is called asynchronously after the last participant finishes responding.
- * It creates a pending analysis record immediately to prevent duplicate analysis generation.
- * The actual analysis streaming happens when the frontend requests it.
+ * It immediately starts analysis generation using the official AI SDK V5 streamObject pattern.
+ * No frontend trigger needed - fully automatic background generation.
+ *
+ * Following the official AI SDK V5 documentation:
+ * "Record Final Object after Streaming Object" - uses streamObject + onFinish callback
  *
  * @param params - Round completion parameters
- * @returns Promise<void> - Resolves when pending analysis record is created
+ * @param params.threadId - The chat thread ID
+ * @param params.thread - The chat thread with participants
+ * @param params.allParticipants - All participants in the chat
+ * @param params.savedMessageId - The saved message ID
+ * @param params.db - Database instance
+ * @param params.env - Cloudflare environment bindings
+ * @returns Promise<void> - Resolves when analysis generation starts (non-blocking)
  */
 async function triggerRoundAnalysisAsync(params: {
   threadId: string;
@@ -104,6 +151,7 @@ async function triggerRoundAnalysisAsync(params: {
   allParticipants: Array<typeof tables.chatParticipant.$inferSelect>;
   savedMessageId: string;
   db: Awaited<ReturnType<typeof getDbAsync>>;
+  env: CloudflareEnv;
 }): Promise<void> {
   const { threadId, thread, db } = params;
 
@@ -130,7 +178,7 @@ async function triggerRoundAnalysisAsync(params: {
     });
 
     if (existingAnalysis) {
-      // Analysis already exists - skip
+      console.warn('[triggerRoundAnalysisAsync] ⏭️  Analysis already exists for round', roundNumber);
       return;
     }
 
@@ -154,20 +202,29 @@ async function triggerRoundAnalysisAsync(params: {
       m => m.createdAt.getTime() < earliestRoundMessageTime,
     )?.content || 'N/A';
 
-    // ✅ CREATE PENDING ANALYSIS: This prevents duplicate generation
-    // Frontend will automatically pick this up and start streaming
+    // ✅ CREATE PENDING ANALYSIS RECORD: Frontend will stream from /analyze endpoint
+    // This prevents duplicate generation and signals frontend to start real-time streaming
+    const analysisId = ulid();
+
     await db.insert(tables.chatModeratorAnalysis).values({
-      id: ulid(),
+      id: analysisId,
       threadId,
       roundNumber,
       mode: thread.mode,
       userQuestion,
-      status: 'pending', // Mark as pending - frontend will trigger streaming
+      status: 'pending', // Frontend will detect and stream from /analyze endpoint
       participantMessageIds,
       createdAt: new Date(),
     });
+
+    console.warn('[triggerRoundAnalysisAsync] ✅ Created pending analysis - frontend will stream', {
+      threadId,
+      roundNumber,
+      analysisId,
+      participantCount: participantMessageIds.length,
+    });
   } catch (error) {
-    console.error('Failed to trigger round analysis:', error);
+    console.error('[triggerRoundAnalysisAsync] ❌ Failed to trigger round analysis:', error);
     // Don't throw - this is a background operation
   }
 }
@@ -635,7 +692,190 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
     // Verify thread ownership
     const thread = await verifyThreadOwnership(id, user.id, db);
 
-    // Build update object using reusable types from chat-modes config
+    const now = new Date();
+
+    // ✅ Track changelog entries for all changes
+    const changelogEntries: Array<typeof tables.chatThreadChangelog.$inferInsert> = [];
+
+    // ✅ Handle mode change
+    if (body.mode !== undefined && body.mode !== thread.mode) {
+      changelogEntries.push({
+        id: ulid(),
+        threadId: id,
+        changeType: 'mode_change',
+        changeSummary: `Changed conversation mode from ${thread.mode} to ${body.mode}`,
+        changeData: {
+          oldMode: thread.mode,
+          newMode: body.mode,
+        },
+        createdAt: now,
+      });
+    }
+
+    // ✅ Handle participant changes (if provided)
+    if (body.participants !== undefined) {
+      // Get current participants
+      const currentParticipants = await db.query.chatParticipant.findMany({
+        where: eq(tables.chatParticipant.threadId, id),
+      });
+
+      // Build maps for comparison
+      const currentMap = new Map(currentParticipants.map(p => [p.id, p]));
+      const newMap = new Map(body.participants.filter(p => p.id).map(p => [p.id!, p]));
+
+      // Detect removals
+      for (const current of currentParticipants) {
+        if (!newMap.has(current.id)) {
+          const modelName = extractModeratorModelName(current.modelId);
+          changelogEntries.push({
+            id: ulid(),
+            threadId: id,
+            changeType: 'participant_removed',
+            changeSummary: `Removed ${modelName}${current.role ? ` ("${current.role}")` : ''}`,
+            changeData: {
+              participantId: current.id,
+              modelId: current.modelId,
+              role: current.role,
+            },
+            createdAt: now,
+          });
+        }
+      }
+
+      // Detect additions and updates
+      const participantsToInsert: Array<typeof tables.chatParticipant.$inferInsert> = [];
+      const participantsToUpdate: Array<{ id: string; updates: Partial<typeof tables.chatParticipant.$inferSelect> }> = [];
+
+      for (const newP of body.participants) {
+        if (!newP.id) {
+          // New participant
+          const participantId = ulid();
+          const modelName = extractModeratorModelName(newP.modelId);
+
+          participantsToInsert.push({
+            id: participantId,
+            threadId: id,
+            modelId: newP.modelId,
+            role: newP.role || null,
+            customRoleId: newP.customRoleId || null,
+            priority: newP.priority,
+            isEnabled: newP.isEnabled ?? true,
+            settings: null,
+            createdAt: now,
+            updatedAt: now,
+          });
+
+          changelogEntries.push({
+            id: ulid(),
+            threadId: id,
+            changeType: 'participant_added',
+            changeSummary: `Added ${modelName}${newP.role ? ` as "${newP.role}"` : ''}`,
+            changeData: {
+              participantId,
+              modelId: newP.modelId,
+              role: newP.role || null,
+            },
+            createdAt: now,
+          });
+        } else {
+          // Existing participant - check for changes
+          const current = currentMap.get(newP.id);
+          if (!current)
+            continue;
+
+          const hasChanges
+            = current.role !== (newP.role || null)
+              || current.customRoleId !== (newP.customRoleId || null)
+              || current.priority !== newP.priority
+              || current.isEnabled !== (newP.isEnabled ?? true);
+
+          if (hasChanges) {
+            participantsToUpdate.push({
+              id: newP.id,
+              updates: {
+                role: newP.role || null,
+                customRoleId: newP.customRoleId || null,
+                priority: newP.priority,
+                isEnabled: newP.isEnabled ?? true,
+                updatedAt: now,
+              },
+            });
+
+            // Create changelog for role changes
+            if (current.role !== (newP.role || null)) {
+              const modelName = extractModeratorModelName(current.modelId);
+              changelogEntries.push({
+                id: ulid(),
+                threadId: id,
+                changeType: 'participant_updated',
+                changeSummary: `Updated ${modelName} role from ${current.role || 'none'} to ${newP.role || 'none'}`,
+                changeData: {
+                  participantId: newP.id,
+                  modelId: current.modelId,
+                  oldRole: current.role,
+                  newRole: newP.role || null,
+                },
+                createdAt: now,
+              });
+            }
+
+            // Create changelog for priority changes (reordering)
+            if (current.priority !== newP.priority) {
+              const modelName = extractModeratorModelName(current.modelId);
+              changelogEntries.push({
+                id: ulid(),
+                threadId: id,
+                changeType: 'participants_reordered',
+                changeSummary: `Reordered ${modelName}`,
+                changeData: {
+                  participantId: newP.id,
+                  modelId: current.modelId,
+                  oldPriority: current.priority,
+                  newPriority: newP.priority,
+                },
+                createdAt: now,
+              });
+            }
+          }
+        }
+      }
+
+      // ✅ BATCH OPERATIONS: Execute participant changes atomically
+      // Following Cloudflare D1 best practices - batch operations provide atomicity
+      const batchOperations: Array<unknown> = [];
+
+      // Delete removed participants
+      for (const current of currentParticipants) {
+        if (!newMap.has(current.id)) {
+          batchOperations.push(
+            db.delete(tables.chatParticipant).where(eq(tables.chatParticipant.id, current.id)),
+          );
+        }
+      }
+
+      // Insert new participants
+      if (participantsToInsert.length > 0) {
+        batchOperations.push(
+          db.insert(tables.chatParticipant).values(participantsToInsert),
+        );
+      }
+
+      // Update existing participants
+      for (const { id: participantId, updates } of participantsToUpdate) {
+        batchOperations.push(
+          db.update(tables.chatParticipant)
+            .set(updates)
+            .where(eq(tables.chatParticipant.id, participantId)),
+        );
+      }
+
+      // Execute all operations atomically
+      if (batchOperations.length > 0) {
+        await executeAtomic(db, batchOperations);
+      }
+    }
+
+    // Build thread update object
     const updateData: {
       title?: string;
       mode?: ChatModeId;
@@ -645,7 +885,7 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
       metadata?: Record<string, unknown>;
       updatedAt: Date;
     } = {
-      updatedAt: new Date(),
+      updatedAt: now,
     };
 
     if (body.title !== undefined && body.title !== null)
@@ -661,14 +901,30 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
     if (body.metadata !== undefined)
       updateData.metadata = body.metadata ?? undefined;
 
+    // ✅ BATCH OPERATIONS: Execute thread update and changelog insertion atomically
+    // Following Cloudflare D1 best practices - batch operations provide atomicity
+    const batchOps: Array<unknown> = [
+      db.update(tables.chatThread)
+        .set(updateData)
+        .where(eq(tables.chatThread.id, id)),
+    ];
+
+    // Insert changelog entries
+    if (changelogEntries.length > 0) {
+      batchOps.push(
+        db.insert(tables.chatThreadChangelog).values(changelogEntries),
+      );
+    }
+
+    await executeAtomic(db, batchOps);
+
+    // Fetch updated thread
     const [updatedThread] = await db
-      .update(tables.chatThread)
-      .set(updateData)
-      .where(eq(tables.chatThread.id, id))
-      .returning();
+      .select()
+      .from(tables.chatThread)
+      .where(eq(tables.chatThread.id, id));
 
     // ✅ Invalidate backend cache if status changed (affects list visibility)
-    // Particularly important for 'deleted', 'archived' status changes
     if (body.status !== undefined && db.$cache?.invalidate) {
       const { ThreadCacheTags } = await import('@/db/cache/cache-tags');
       await db.$cache.invalidate({
@@ -1089,6 +1345,233 @@ export const deleteParticipantHandler: RouteHandler<typeof deleteParticipantRout
   },
 );
 
+/**
+ * Bulk update participants for a thread
+ * Handles reordering, role changes, additions, and removals
+ * Creates appropriate changelog entries for all changes
+ */
+export const bulkUpdateParticipantsHandler: RouteHandler<typeof bulkUpdateParticipantsRoute, ApiEnv> = createHandler(
+  {
+    auth: 'session',
+    validateParams: IdParamSchema,
+    validateBody: BulkUpdateParticipantsRequestSchema,
+    operationName: 'bulkUpdateParticipants',
+  },
+  async (c) => {
+    const { user } = c.auth();
+    const { id: threadId } = c.validated.params;
+    const { participants: newParticipants } = c.validated.body;
+    const db = await getDbAsync();
+
+    // Verify thread ownership
+    const thread = await db.query.chatThread.findFirst({
+      where: eq(tables.chatThread.id, threadId),
+    });
+
+    if (!thread) {
+      throw createError.notFound('Thread not found', ErrorContextBuilders.resourceNotFound('thread', threadId));
+    }
+
+    if (thread.userId !== user.id) {
+      throw createError.unauthorized('Not authorized to update this thread', ErrorContextBuilders.authorization('thread', threadId));
+    }
+
+    // Get current participants
+    const currentParticipants = await db.query.chatParticipant.findMany({
+      where: eq(tables.chatParticipant.threadId, threadId),
+    });
+
+    // Build maps for comparison
+    const currentMap = new Map(currentParticipants.map(p => [p.id, p]));
+    const newMap = new Map(newParticipants.filter(p => p.id).map(p => [p.id!, p]));
+
+    // Track changes for changelog
+    const changelogEntries: Array<typeof tables.chatThreadChangelog.$inferInsert> = [];
+    const now = new Date();
+
+    // Detect removals
+    for (const current of currentParticipants) {
+      if (!newMap.has(current.id)) {
+        const modelName = extractModeratorModelName(current.modelId);
+        changelogEntries.push({
+          id: ulid(),
+          threadId,
+          changeType: 'participant_removed',
+          changeSummary: `Removed ${modelName}${current.role ? ` ("${current.role}")` : ''}`,
+          changeData: {
+            participantId: current.id,
+            modelId: current.modelId,
+            role: current.role,
+          },
+          createdAt: now,
+        });
+      }
+    }
+
+    // Detect additions and updates
+    const participantsToInsert: Array<typeof tables.chatParticipant.$inferInsert> = [];
+    const participantsToUpdate: Array<{ id: string; updates: Partial<typeof tables.chatParticipant.$inferSelect> }> = [];
+
+    for (const newP of newParticipants) {
+      if (!newP.id) {
+        // New participant
+        const participantId = ulid();
+        const modelName = extractModeratorModelName(newP.modelId);
+
+        participantsToInsert.push({
+          id: participantId,
+          threadId,
+          modelId: newP.modelId,
+          role: newP.role || null,
+          customRoleId: newP.customRoleId || null,
+          priority: newP.priority,
+          isEnabled: newP.isEnabled ?? true,
+          settings: null,
+          createdAt: now,
+          updatedAt: now,
+        });
+
+        changelogEntries.push({
+          id: ulid(),
+          threadId,
+          changeType: 'participant_added',
+          changeSummary: `Added ${modelName}${newP.role ? ` as "${newP.role}"` : ''}`,
+          changeData: {
+            participantId,
+            modelId: newP.modelId,
+            role: newP.role || null,
+          },
+          createdAt: now,
+        });
+      } else {
+        // Existing participant - check for changes
+        const current = currentMap.get(newP.id);
+        if (!current)
+          continue;
+
+        const hasChanges
+          = current.role !== (newP.role || null)
+            || current.customRoleId !== (newP.customRoleId || null)
+            || current.priority !== newP.priority
+            || current.isEnabled !== (newP.isEnabled ?? true);
+
+        if (hasChanges) {
+          participantsToUpdate.push({
+            id: newP.id,
+            updates: {
+              role: newP.role || null,
+              customRoleId: newP.customRoleId || null,
+              priority: newP.priority,
+              isEnabled: newP.isEnabled ?? true,
+              updatedAt: now,
+            },
+          });
+
+          // Create changelog for role changes
+          if (current.role !== (newP.role || null)) {
+            const modelName = extractModeratorModelName(current.modelId);
+            changelogEntries.push({
+              id: ulid(),
+              threadId,
+              changeType: 'participant_updated',
+              changeSummary: `Updated ${modelName} role from ${current.role || 'none'} to ${newP.role || 'none'}`,
+              changeData: {
+                participantId: newP.id,
+                modelId: current.modelId,
+                oldRole: current.role,
+                newRole: newP.role || null,
+              },
+              createdAt: now,
+            });
+          }
+
+          // Create changelog for priority changes (reordering)
+          if (current.priority !== newP.priority) {
+            const modelName = extractModeratorModelName(current.modelId);
+            changelogEntries.push({
+              id: ulid(),
+              threadId,
+              changeType: 'participants_reordered',
+              changeSummary: `Reordered ${modelName}`,
+              changeData: {
+                participantId: newP.id,
+                modelId: current.modelId,
+                oldPriority: current.priority,
+                newPriority: newP.priority,
+              },
+              createdAt: now,
+            });
+          }
+        }
+      }
+    }
+
+    // ✅ BATCH OPERATIONS: Execute all changes atomically
+    // Following Cloudflare D1 best practices - batch operations provide atomicity
+    const bulkBatchOps: Array<unknown> = [];
+
+    // Delete removed participants
+    for (const current of currentParticipants) {
+      if (!newMap.has(current.id)) {
+        bulkBatchOps.push(
+          db.delete(tables.chatParticipant).where(eq(tables.chatParticipant.id, current.id)),
+        );
+      }
+    }
+
+    // Insert new participants
+    if (participantsToInsert.length > 0) {
+      bulkBatchOps.push(
+        db.insert(tables.chatParticipant).values(participantsToInsert),
+      );
+    }
+
+    // Update existing participants
+    for (const { id, updates } of participantsToUpdate) {
+      bulkBatchOps.push(
+        db.update(tables.chatParticipant)
+          .set(updates)
+          .where(eq(tables.chatParticipant.id, id)),
+      );
+    }
+
+    // Insert changelog entries
+    if (changelogEntries.length > 0) {
+      bulkBatchOps.push(
+        db.insert(tables.chatThreadChangelog).values(changelogEntries),
+      );
+    }
+
+    // Update thread timestamp
+    bulkBatchOps.push(
+      db.update(tables.chatThread)
+        .set({ updatedAt: now })
+        .where(eq(tables.chatThread.id, threadId)),
+    );
+
+    // Execute all operations atomically
+    await executeAtomic(db, bulkBatchOps);
+
+    // Fetch updated participants
+    const updatedParticipants = await db.query.chatParticipant.findMany({
+      where: eq(tables.chatParticipant.threadId, threadId),
+      orderBy: [asc(tables.chatParticipant.priority)],
+    });
+
+    // Fetch created changelog entries
+    const createdChangelog = await db.query.chatThreadChangelog.findMany({
+      where: eq(tables.chatThreadChangelog.threadId, threadId),
+      orderBy: [desc(tables.chatThreadChangelog.createdAt)],
+      limit: changelogEntries.length,
+    });
+
+    return Responses.ok(c, {
+      participants: updatedParticipants,
+      changelogEntries: createdChangelog,
+    });
+  },
+);
+
 // ============================================================================
 // Message Handlers
 // ============================================================================
@@ -1170,24 +1653,40 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
   },
   async (c) => {
     const { user } = c.auth();
-    const { messages, id: threadId, participantIndex } = c.validated.body;
+    const { messages, id: threadId, participantIndex, participants: providedParticipants } = c.validated.body;
+
+    console.warn('[streamChatHandler] 🚀 REQUEST START', {
+      threadId,
+      participantIndex,
+      userId: user.id,
+      messageCount: messages?.length || 0,
+      hasProvidedParticipants: !!providedParticipants,
+    });
 
     // Validate messages array exists and is not empty
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
+      console.error('[streamChatHandler] ❌ VALIDATION ERROR: Messages array invalid', {
+        threadId,
+        participantIndex,
+        messagesProvided: !!messages,
+        isArray: Array.isArray(messages),
+      });
       throw createError.badRequest('Messages array is required and cannot be empty');
     }
 
     const db = await getDbAsync();
 
     // =========================================================================
-    // STEP 1: Verify Thread & Load Participants
+    // STEP 1: Verify Thread & Load/Use Participants
     // =========================================================================
 
     if (!threadId) {
+      console.error('[streamChatHandler] ❌ VALIDATION ERROR: Thread ID missing');
       throw createError.badRequest('Thread ID is required for streaming');
     }
 
-    // Load existing thread
+    // Load thread for verification and metadata
+    // Always load participants from DB for verification, but may override with providedParticipants
     const thread = await db.query.chatThread.findFirst({
       where: eq(tables.chatThread.id, threadId),
       with: {
@@ -1199,30 +1698,168 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
     });
 
     if (!thread) {
+      console.error('[streamChatHandler] ❌ THREAD NOT FOUND', { threadId });
       throw createError.notFound('Thread not found');
     }
 
     if (thread.userId !== user.id) {
+      console.error('[streamChatHandler] ❌ UNAUTHORIZED ACCESS', {
+        threadId,
+        threadOwner: thread.userId,
+        requestUser: user.id,
+      });
       throw createError.unauthorized('Not authorized to access this thread');
     }
 
-    if (thread.participants.length === 0) {
+    // ✅ RACE CONDITION FIX: Use provided participants if available (eliminates race with updateThread)
+    // Merge provided participants with database participants to get full participant data
+    // with updated configuration (role, priority, isEnabled, etc.)
+    const participants = providedParticipants
+      ? providedParticipants
+          .filter(p => p.isEnabled !== false)
+          .sort((a, b) => a.priority - b.priority)
+          .map((providedP) => {
+          // Find matching participant in database to get full data
+            const dbP = thread.participants.find(dbParticipant => dbParticipant.id === providedP.id);
+            if (!dbP) {
+            // If not found in DB, this might be a newly added participant
+            // For now, we'll skip it since it should have been persisted first
+              return null;
+            }
+            // Merge: Use provided config (role, priority, etc.) with DB fields (settings, timestamps, etc.)
+            return {
+              ...dbP,
+              role: providedP.role ?? dbP.role,
+              customRoleId: providedP.customRoleId ?? dbP.customRoleId,
+              priority: providedP.priority,
+              isEnabled: providedP.isEnabled ?? dbP.isEnabled,
+            };
+          })
+          .filter((p): p is typeof thread.participants[0] => p !== null)
+      : thread.participants;
+
+    if (participants.length === 0) {
+      console.error('[streamChatHandler] ❌ NO PARTICIPANTS', { threadId });
       throw createError.badRequest('No enabled participants in this thread');
+    }
+
+    console.warn('[streamChatHandler] ✅ Thread and participants ready', {
+      threadId,
+      participantCount: participants.length,
+      mode: thread.mode,
+      source: providedParticipants ? 'request' : 'database',
+    });
+
+    // =========================================================================
+    // STEP 1.5: ✅ PERSIST PARTICIPANT CHANGES (Staged Changes Pattern)
+    // =========================================================================
+    // If participants were provided in request AND this is the first participant (index 0),
+    // persist the participant changes to database and create changelog entries.
+    // This implements the "staged changes" pattern where participant config changes
+    // are only persisted when user submits a new message, not when they change the UI.
+
+    if (providedParticipants && participantIndex === 0) {
+      console.warn('[streamChatHandler] 📝 Persisting participant changes from request', {
+        threadId,
+        providedCount: providedParticipants.length,
+        dbCount: thread.participants.length,
+      });
+
+      // Detect changes by comparing provided participants with DB participants
+      const hasChanges = (
+        providedParticipants.length !== thread.participants.length
+        || providedParticipants.some((provided) => {
+          const dbP = thread.participants.find(db => db.id === provided.id);
+          return !dbP
+            || dbP.modelId !== provided.modelId
+            || dbP.role !== provided.role
+            || dbP.customRoleId !== provided.customRoleId
+            || dbP.priority !== provided.priority
+            || dbP.isEnabled !== provided.isEnabled;
+        })
+      );
+
+      if (hasChanges) {
+        console.warn('[streamChatHandler] 🔄 Participant changes detected - updating database', {
+          threadId,
+        });
+
+        // Build database update operations
+        const updateOps = providedParticipants.map(provided =>
+          db.update(tables.chatParticipant)
+            .set({
+              modelId: provided.modelId,
+              role: provided.role ?? null,
+              customRoleId: provided.customRoleId ?? null,
+              priority: provided.priority,
+              isEnabled: provided.isEnabled ?? true,
+              updatedAt: new Date(),
+            })
+            .where(eq(tables.chatParticipant.id, provided.id)),
+        );
+
+        // Create a single changelog entry for participant updates
+        const changelogOp = db.insert(tables.chatThreadChangelog)
+          .values({
+            id: ulid(),
+            threadId,
+            changeType: 'participant_updated',
+            changeSummary: `Updated ${providedParticipants.length} participant(s)`,
+            changeData: {
+              participantIds: providedParticipants.map(p => p.id),
+              count: providedParticipants.length,
+            },
+            createdAt: new Date(),
+          })
+          .onConflictDoNothing();
+
+        // Execute all updates atomically
+        await executeAtomic(db, [...updateOps, changelogOp]);
+
+        console.warn('[streamChatHandler] ✅ Participant changes persisted', {
+          threadId,
+          participantCount: providedParticipants.length,
+        });
+      } else {
+        console.warn('[streamChatHandler] ℹ️  No participant changes detected', {
+          threadId,
+        });
+      }
     }
 
     // =========================================================================
     // STEP 2: Get SINGLE Participant (frontend orchestration)
     // =========================================================================
 
-    const participant = thread.participants[participantIndex ?? 0];
+    const participant = participants[participantIndex ?? 0];
     if (!participant) {
+      console.error('[streamChatHandler] ❌ PARTICIPANT NOT FOUND', {
+        threadId,
+        participantIndex,
+        availableParticipants: participants.length,
+      });
       throw createError.badRequest(`Participant at index ${participantIndex} not found`);
     }
+
+    console.warn('[streamChatHandler] 🤖 Selected participant', {
+      threadId,
+      participantIndex,
+      participantId: participant.id,
+      modelId: participant.modelId,
+      role: participant.role,
+      priority: participant.priority,
+    });
 
     // =========================================================================
     // STEP 3: ✅ OFFICIAL PATTERN - Type and Validate Messages
     // Reference: https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot#validating-messages-from-database
     // =========================================================================
+
+    console.warn('[streamChatHandler] 📋 Validating messages', {
+      threadId,
+      participantIndex,
+      messageCount: messages.length,
+    });
 
     let typedMessages: UIMessage[] = [];
 
@@ -1238,8 +1875,19 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
         messages: typedMessages,
         metadataSchema: UIMessageMetadataSchema,
       });
+
+      console.warn('[streamChatHandler] ✅ Messages validated', {
+        threadId,
+        participantIndex,
+        messageCount: typedMessages.length,
+      });
     } catch (error) {
-      console.error('Message validation error:', error);
+      console.error('[streamChatHandler] ❌ MESSAGE VALIDATION ERROR', {
+        threadId,
+        participantIndex,
+        error: error instanceof Error ? error.message : String(error),
+        messageCount: messages.length,
+      });
       throw createError.badRequest(`Invalid message format: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
 
@@ -1249,6 +1897,13 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
 
     const lastMessage = typedMessages[typedMessages.length - 1];
     if (lastMessage && lastMessage.role === 'user') {
+      console.warn('[streamChatHandler] 💾 Checking user message', {
+        threadId,
+        participantIndex,
+        messageId: lastMessage.id,
+        hasPartsArray: !!lastMessage.parts,
+      });
+
       const existsInDb = await db.query.chatMessage.findFirst({
         where: eq(tables.chatMessage.id, lastMessage.id),
       });
@@ -1267,6 +1922,13 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
             .trim();
 
           if (content.length > 0) {
+            console.warn('[streamChatHandler] 💾 Saving user message', {
+              threadId,
+              participantIndex,
+              messageId: lastMessage.id,
+              contentLength: content.length,
+            });
+
             await enforceMessageQuota(user.id);
             await db.insert(tables.chatMessage).values({
               id: lastMessage.id,
@@ -1276,8 +1938,20 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
               createdAt: new Date(),
             });
             await incrementMessageUsage(user.id, 1);
+
+            console.warn('[streamChatHandler] ✅ User message saved', {
+              threadId,
+              participantIndex,
+              messageId: lastMessage.id,
+            });
           }
         }
+      } else {
+        console.warn('[streamChatHandler] ⏭️  User message already exists', {
+          threadId,
+          participantIndex,
+          messageId: lastMessage.id,
+        });
       }
     }
 
@@ -1285,102 +1959,366 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
     // STEP 5: Initialize OpenRouter and Setup
     // =========================================================================
 
+    console.warn('[streamChatHandler] 🔧 Initializing OpenRouter', {
+      threadId,
+      participantIndex,
+      modelId: participant.modelId,
+    });
+
     initializeOpenRouter(c.env);
     const client = openRouterService.getClient();
     const userTier = await getUserTier(user.id);
-    const maxOutputTokens = getMaxOutputTokensForTier(userTier);
+
+    // ✅ DYNAMIC TOKEN LIMIT: Fetch model info to get context_length and calculate safe max tokens
+    const modelInfo = await openRouterModelsService.getModelById(participant.modelId);
+    const modelContextLength = modelInfo?.context_length || 16000; // Default fallback
+
+    // Estimate input tokens: system prompt + average message content
+    // Rough estimate: 1 token ≈ 4 characters
+    // Use conservative average of 200 tokens per message (includes system, user, assistant)
+    const systemPromptTokens = Math.ceil((participant.settings?.systemPrompt || '').length / 4);
+    const averageTokensPerMessage = 200;
+    const messageTokens = typedMessages.length * averageTokensPerMessage;
+    const estimatedInputTokens = systemPromptTokens + messageTokens + 500; // +500 for overhead and safety
+
+    // Calculate safe max output tokens based on model's context length
+    const maxOutputTokens = getSafeMaxOutputTokens(
+      modelContextLength,
+      estimatedInputTokens,
+      userTier,
+    );
+
+    console.warn('[streamChatHandler] ✅ OpenRouter initialized', {
+      threadId,
+      participantIndex,
+      userTier,
+      modelContextLength,
+      estimatedInputTokens,
+      maxOutputTokens,
+    });
 
     // =========================================================================
     // STEP 6: ✅ OFFICIAL AI SDK v5 PATTERN - Direct streamText()
     // Reference: https://sdk.vercel.ai/docs/ai-sdk-core/generating-text#stream-text
     // =========================================================================
 
+    console.warn('[streamChatHandler] 🔄 Preparing messages for model', {
+      threadId,
+      participantIndex,
+      totalMessages: typedMessages.length,
+    });
+
     // Prepare system prompt for this participant
     const systemPrompt = participant.settings?.systemPrompt
       || `You are ${participant.role || 'an AI assistant'}.`;
+
+    console.warn('[streamChatHandler] 📝 System prompt prepared', {
+      threadId,
+      participantIndex,
+      hasCustomPrompt: !!participant.settings?.systemPrompt,
+      promptLength: systemPrompt.length,
+    });
 
     // Convert UI messages to model messages
     // ✅ SHARED UTILITY: Filter out empty messages (caused by subsequent participant triggers)
     const nonEmptyMessages = filterNonEmptyMessages(typedMessages);
 
+    console.warn('[streamChatHandler] 🔍 Filtered messages', {
+      threadId,
+      participantIndex,
+      originalCount: typedMessages.length,
+      nonEmptyCount: nonEmptyMessages.length,
+    });
+
     if (nonEmptyMessages.length === 0) {
+      console.error('[streamChatHandler] ❌ NO VALID MESSAGES', {
+        threadId,
+        participantIndex,
+        originalMessageCount: typedMessages.length,
+      });
       throw createError.badRequest('No valid messages to send to AI model');
     }
 
     let modelMessages;
     try {
       modelMessages = convertToModelMessages(nonEmptyMessages);
+
+      console.warn('[streamChatHandler] ✅ Messages converted to model format', {
+        threadId,
+        participantIndex,
+        modelMessageCount: modelMessages.length,
+      });
     } catch (conversionError) {
-      console.error('Error converting messages:', conversionError);
+      console.error('[streamChatHandler] ❌ MESSAGE CONVERSION ERROR', {
+        threadId,
+        participantIndex,
+        error: conversionError instanceof Error ? conversionError.message : String(conversionError),
+        nonEmptyMessageCount: nonEmptyMessages.length,
+      });
       throw createError.badRequest('Failed to convert messages for model');
     }
 
-    // ✅ OFFICIAL PATTERN: Direct streamText() call
+    // =========================================================================
+    // STEP 7: ✅ OFFICIAL AI SDK v5 STREAMING PATTERN
+    // Reference: https://sdk.vercel.ai/docs/ai-sdk-core/generating-text#stream-text
+    // Reference: https://sdk.vercel.ai/docs/ai-sdk-core/error-handling
+    // =========================================================================
+    //
+    // OFFICIAL PATTERN: Direct streamText() → toUIMessageStreamResponse()
+    // - NO content validation (models return what they return)
+    // - NO custom retry loops (AI SDK maxRetries handles all retries)
+    // - NO minimum length checking (accept all model responses)
+    //
+    // CUSTOMIZATION: Multi-participant routing via participantIndex (application-specific)
+    //
+
+    // ✅ TEMPERATURE SUPPORT: Some models (like o4-mini) don't support temperature parameter
+    // Check if model supports temperature before including it
+    const modelSupportsTemperature = !participant.modelId.includes('o4-mini') && !participant.modelId.includes('o4-deep');
+    const temperatureValue = modelSupportsTemperature ? (participant.settings?.temperature ?? 0.7) : undefined;
+
+    console.warn('[streamChatHandler] 🚀 Starting streamText', {
+      threadId,
+      participantIndex,
+      participantId: participant.id,
+      modelId: participant.modelId,
+      modelRole: participant.role,
+      maxOutputTokens,
+      temperature: temperatureValue,
+      modelSupportsTemperature,
+      timeoutMs: AI_TIMEOUT_CONFIG.perAttemptMs,
+      maxRetries: AI_RETRY_CONFIG.maxAttempts,
+    });
+
     const result = streamText({
       model: client(participant.modelId),
       system: systemPrompt,
       messages: modelMessages,
       maxOutputTokens,
-      temperature: participant.settings?.temperature ?? 0.7,
+      ...(modelSupportsTemperature && { temperature: temperatureValue }),
+
+      // ✅ AI SDK RETRY: Handles ALL errors (network, server, timeouts, rate limits)
+      // Reference: https://sdk.vercel.ai/docs/ai-sdk-core/error-handling
+      // ✅ INCREASED RETRIES: Using reusable config (10 attempts for max reliability)
+      maxRetries: AI_RETRY_CONFIG.maxAttempts,
+
       abortSignal: AbortSignal.any([
-        // Cancel when client disconnects
-        (c.req as unknown as { raw: Request }).raw.signal,
-        // Server-side protection per attempt
-        AbortSignal.timeout(AI_TIMEOUT_CONFIG.perAttemptMs),
+        (c.req as unknown as { raw: Request }).raw.signal, // Cancel on client disconnect
+        AbortSignal.timeout(AI_TIMEOUT_CONFIG.perAttemptMs), // Server-side timeout
       ]),
+
       experimental_telemetry: {
         isEnabled: true,
         functionId: `chat.thread.${threadId}.participant.${participant.id}`,
       },
 
-      // ✅ MESSAGE PERSISTENCE: onFinish callback (doesn't block stream)
-      onFinish: async ({ text, usage, finishReason }) => {
+      // ✅ OFFICIAL PATTERN: onFinish for message persistence only
+      // Reference: https://sdk.vercel.ai/docs/ai-sdk-core/generating-text#on-finish
+      onFinish: async (finishResult) => {
+        console.warn('[streamChatHandler] ✨ onFinish triggered', {
+          threadId,
+          participantIndex,
+          participantId: participant.id,
+          modelId: participant.modelId,
+        });
+
+        const { text, usage, finishReason, providerMetadata } = finishResult;
+
+        // ✅ AI SDK v5 OFFICIAL PATTERN: No custom validation - accept all model responses
+        // Reference: "NO content validation (models return what they return)"
+        // If the model finished successfully, we save whatever it returned
+
+        console.warn('[streamChatHandler] 📊 Finish result details', {
+          threadId,
+          participantIndex,
+          participantId: participant.id,
+          textLength: text?.length || 0,
+          finishReason,
+          hasUsage: !!usage,
+          totalTokens: usage?.totalTokens || 0,
+        });
+
+        // ✅ REASONING SUPPORT: Extract reasoning for o1/o3/DeepSeek models
+        const reasoningText = typeof providerMetadata?.openai?.reasoning === 'string'
+          ? providerMetadata.openai.reasoning
+          : null;
+
+        console.warn('[streamChatHandler] 💾 Saving assistant message to database', {
+          threadId,
+          participantIndex,
+          participantId: participant.id,
+          hasReasoning: !!reasoningText,
+        });
+
+        // ✅ CRITICAL ERROR HANDLING: Wrap DB operations in try-catch
+        // This ensures that errors don't break the round - next participant can still respond
         try {
-          // Persist message to database AFTER streaming completes
-          const [savedMessage] = await db.insert(tables.chatMessage).values({
-            id: ulid(),
-            threadId,
-            participantId: participant.id,
-            role: 'assistant',
-            content: text,
-            metadata: {
-              model: participant.modelId,
-              participantId: participant.id,
+          // ✅ IMPROVED EMPTY RESPONSE DETECTION: Check for meaningful content
+          // Some models output whitespace or minimal tokens (1-5 tokens) that aren't useful responses.
+          // Examples: amazon/nova-pro-v1, some reasoning models during failures
+          //
+          // Detection criteria:
+          // 1. No text at all
+          // 2. Empty/whitespace-only text
+          // 3. Zero output tokens (model refused/filtered)
+          // 4. Minimal response: <10 chars AND <10 tokens (likely just whitespace/punctuation)
+          const trimmedText = (text || '').trim();
+          const isEmptyResponse = (
+            !text
+            || trimmedText.length === 0
+            || usage?.outputTokens === 0
+            || (trimmedText.length < 10 && (usage?.outputTokens || 0) < 10)
+          );
+
+          if (isEmptyResponse) {
+            console.error('[streamChatHandler] ❌ Empty response detected - treating as error', {
+              threadId,
               participantIndex,
-              participantRole: participant.role,
-              usage,
+              participantId: participant.id,
+              modelId: participant.modelId,
+              textLength: text?.length || 0,
+              outputTokens: usage?.outputTokens || 0,
               finishReason,
-            } as Record<string, unknown>,
-            createdAt: new Date(),
-          }).onConflictDoNothing().returning();
+            });
+          }
+
+          // ✅ AI SDK v5 ERROR HANDLING PATTERN: Save error state for empty responses
+          // Reference: https://sdk.vercel.ai/docs/ai-sdk-ui/error-handling
+          const contentToSave = text || '';
+
+          // Generate specific error message based on failure type
+          let errorMessage: string | undefined;
+          if (isEmptyResponse) {
+            const outputTokens = usage?.outputTokens || 0;
+            const inputTokens = usage?.inputTokens || 0;
+
+            if (outputTokens === 0) {
+              // Model refused to respond or was filtered
+              errorMessage = `The model (${participant.modelId}) refused to respond or output was filtered. The model processed ${inputTokens} input tokens but produced no output. This typically indicates content filtering, safety constraints, or model limitations. Status: ${finishReason}.`;
+            } else if (trimmedText.length < 10) {
+              // Model generated minimal/incomplete response
+              errorMessage = `The model (${participant.modelId}) generated an incomplete or minimal response. The model processed ${inputTokens} input tokens and produced ${outputTokens} output tokens, but the response text is too short (<10 characters) to be meaningful. This may indicate a model failure or timeout. Status: ${finishReason}.`;
+            } else {
+              // Generic empty response
+              errorMessage = `The model (${participant.modelId}) did not generate a valid response. The model processed ${inputTokens} input tokens but produced no usable output (${outputTokens} tokens). This can happen due to content filtering, model limitations, or API issues. Status: ${finishReason}.`;
+            }
+          }
+
+          const [savedMessage] = await db.insert(tables.chatMessage)
+            .values({
+              id: ulid(),
+              threadId,
+              participantId: participant.id,
+              role: 'assistant' as const,
+              content: contentToSave,
+              reasoning: reasoningText,
+              metadata: {
+                model: participant.modelId,
+                participantId: participant.id,
+                participantIndex,
+                participantRole: participant.role,
+                usage,
+                finishReason,
+                // ✅ ERROR STATE: Flag empty responses as errors per AI SDK patterns
+                hasError: isEmptyResponse,
+                errorType: isEmptyResponse ? 'empty_response' : undefined,
+                errorMessage,
+              },
+              createdAt: new Date(),
+            })
+            .onConflictDoNothing()
+            .returning();
+
+          console.warn('[streamChatHandler] ✅ Assistant message saved', {
+            threadId,
+            participantIndex,
+            participantId: participant.id,
+            messageId: savedMessage?.id,
+            isLastParticipant: participantIndex === participants.length - 1,
+          });
 
           await incrementMessageUsage(user.id, 1);
 
-          // ✅ AUTO-TRIGGER ANALYSIS: When last participant finishes
-          // This happens asynchronously - don't await to avoid blocking
-          if (participantIndex === thread.participants.length - 1 && savedMessage) {
-            // Last participant just finished - trigger analysis for this round
+          // ✅ TRIGGER ANALYSIS: When last participant finishes
+          if (participantIndex === participants.length - 1 && savedMessage) {
+            console.warn('[streamChatHandler] 🎯 Last participant finished - triggering analysis', {
+              threadId,
+              participantIndex,
+              roundNumber: Math.ceil((participantIndex + 1) / participants.length),
+              totalParticipants: participants.length,
+            });
+
             triggerRoundAnalysisAsync({
               threadId,
-              thread,
-              allParticipants: thread.participants,
+              thread: { ...thread, participants },
+              allParticipants: participants,
               savedMessageId: savedMessage.id,
               db,
+              env: c.env, // ✅ ADDED: Pass env for background analysis generation
             }).catch((error) => {
-              console.error('Failed to trigger round analysis:', error);
-              // Don't throw - this is a background task
+              console.error('[streamChatHandler] ❌ Failed to trigger analysis (non-blocking):', error);
             });
           }
-        } catch (error) {
-          console.error('Failed to save message:', error);
-          // Don't throw - message already streamed to client
+        } catch (dbError) {
+          // ✅ NON-BLOCKING ERROR: Log but don't throw
+          // This allows the next participant to continue even if this one failed to save
+          console.error('[streamChatHandler] ❌ FAILED TO SAVE MESSAGE (non-blocking)', {
+            threadId,
+            participantIndex,
+            participantId: participant.id,
+            modelId: participant.modelId,
+            error: dbError instanceof Error ? dbError.message : String(dbError),
+            stack: dbError instanceof Error ? dbError.stack : undefined,
+          });
+          // Don't throw - allow round to continue
         }
       },
     });
 
-    // ✅ OFFICIAL PATTERN: Return standard UI message stream response
+    // ✅ OFFICIAL PATTERN: Return UI message stream response
     // Reference: https://sdk.vercel.ai/docs/ai-sdk-core/streaming-text-to-response#toUIMessageStreamResponse
-    return result.toUIMessageStreamResponse();
+
+    console.warn('[streamChatHandler] 📤 Returning stream response', {
+      threadId,
+      participantIndex,
+      participantId: participant.id,
+      modelId: participant.modelId,
+    });
+
+    return result.toUIMessageStreamResponse({
+      sendReasoning: true, // Stream reasoning for o1/o3/DeepSeek models
+
+      // ✅ OFFICIAL PATTERN: Pass original messages for type-safe metadata
+      // Reference: https://sdk.vercel.ai/docs/ai-sdk-ui/25-message-metadata
+      originalMessages: typedMessages,
+
+      // ✅ OFFICIAL PATTERN: Required for proper abort handling
+      // Reference: https://sdk.vercel.ai/docs/09-troubleshooting/14-stream-abort-handling
+      // Without this, onFinish callback may not fire when stream is aborted
+      consumeSseStream: consumeStream,
+
+      onError: (error) => {
+        // ✅ COMPREHENSIVE ERROR LOGGING: Log all error details for debugging
+        // Type assertion: AI SDK onError provides error as unknown type
+        const err = error as Error & { cause?: unknown };
+        console.error('[streamChatHandler] ❌ STREAMING ERROR (handled by onError)', {
+          threadId,
+          participantIndex,
+          participantId: participant.id,
+          modelId: participant.modelId,
+          modelRole: participant.role,
+          errorName: err?.name,
+          errorMessage: err?.message,
+          errorType: err?.constructor?.name,
+          errorCause: err?.cause,
+          stack: err?.stack,
+        });
+
+        // Return user-friendly error message for the frontend
+        const modelName = participant.role || participant.modelId || 'AI model';
+        return `${modelName} encountered an error. The round will continue with the next participant.`;
+      },
+    });
   },
 );
 
@@ -1636,15 +2574,41 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
         });
       }
 
-      // ✅ STREAMING or PENDING: Return 202 Accepted to indicate in-progress
+      // ✅ STREAMING: Return 202 Accepted if actively streaming
       // Frontend should handle this by showing loading state without re-triggering
-      if (existingAnalysis.status === 'streaming' || existingAnalysis.status === 'pending') {
+      if (existingAnalysis.status === 'streaming') {
         return Responses.accepted(c, {
           status: existingAnalysis.status,
           message: 'Analysis is currently being generated. Please wait...',
           analysisId: existingAnalysis.id,
           createdAt: existingAnalysis.createdAt,
         }); // 202 Accepted - request accepted but not yet completed
+      }
+
+      // ✅ PENDING: Check if stuck (created > 2 minutes ago)
+      // If stuck, delete and allow retry. Otherwise, proceed with generation
+      if (existingAnalysis.status === 'pending') {
+        const ageMs = Date.now() - existingAnalysis.createdAt.getTime();
+        const TWO_MINUTES_MS = 2 * 60 * 1000;
+
+        if (ageMs > TWO_MINUTES_MS) {
+          // Stuck pending - mark as failed and allow fresh retry
+          console.warn('[analyzeRoundHandler] Pending analysis is stuck (> 2 min), marking as failed:', existingAnalysis.id);
+          await db.update(tables.chatModeratorAnalysis)
+            .set({
+              status: 'failed',
+              errorMessage: 'Analysis timed out - stuck in pending state for over 2 minutes',
+            })
+            .where(eq(tables.chatModeratorAnalysis.id, existingAnalysis.id));
+
+          // Fall through to create new analysis
+        } else {
+          // Recent pending - proceed with generation (don't return early!)
+          console.warn('[analyzeRoundHandler] Found recent pending analysis, proceeding with generation:', existingAnalysis.id);
+          // Delete pending and create streaming below
+          await db.delete(tables.chatModeratorAnalysis)
+            .where(eq(tables.chatModeratorAnalysis.id, existingAnalysis.id));
+        }
       }
 
       // ✅ FAILED: Allow retry by creating new analysis
@@ -1743,7 +2707,7 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
     });
 
     // Build moderator prompts using the service
-    const { buildModeratorSystemPrompt, buildModeratorUserPrompt, ModeratorAnalysisSchema } = await import('@/api/services/moderator-analysis.service');
+    const { buildModeratorSystemPrompt, buildModeratorUserPrompt } = await import('@/api/services/moderator-analysis.service');
 
     const moderatorConfig = {
       mode: thread.mode as ChatModeId,
@@ -1791,7 +2755,7 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
     try {
       const result = streamObject({
         model: client.chat(analysisModelId),
-        schema: ModeratorAnalysisSchema,
+        schema: ModeratorAnalysisPayloadSchema,
         schemaName: 'ModeratorAnalysis',
         schemaDescription: 'Structured analysis of a conversation round with participant ratings, skills, pros/cons, leaderboard, and summary',
         system: systemPrompt,

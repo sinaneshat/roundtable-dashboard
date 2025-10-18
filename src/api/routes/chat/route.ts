@@ -6,6 +6,8 @@ import { ApiErrorResponseSchema, createApiResponseSchema, CursorPaginationQueryS
 
 import {
   AddParticipantRequestSchema,
+  BulkUpdateParticipantsRequestSchema,
+  BulkUpdateParticipantsResponseSchema,
   ChangelogListResponseSchema,
   CreateCustomRoleRequestSchema,
   CreateThreadRequestSchema,
@@ -511,6 +513,68 @@ export const deleteParticipantRoute = createRoute({
   },
 });
 
+export const bulkUpdateParticipantsRoute = createRoute({
+  method: 'put',
+  path: '/chat/threads/:id/participants/bulk',
+  tags: ['chat'],
+  summary: 'Bulk update thread participants',
+  description: 'Update multiple participants at once (reorder, change roles, add/remove). Creates appropriate changelog entries for each change.',
+  request: {
+    params: IdParamSchema,
+    body: {
+      description: 'Complete list of participants with their updated state',
+      content: {
+        'application/json': {
+          schema: BulkUpdateParticipantsRequestSchema,
+        },
+      },
+      required: true,
+    },
+  },
+  responses: {
+    [HttpStatusCodes.OK]: {
+      description: 'Participants updated successfully with changelog entries',
+      content: {
+        'application/json': {
+          schema: BulkUpdateParticipantsResponseSchema,
+        },
+      },
+    },
+    [HttpStatusCodes.UNAUTHORIZED]: {
+      description: HttpStatusPhrases.UNAUTHORIZED,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
+    [HttpStatusCodes.NOT_FOUND]: {
+      description: HttpStatusPhrases.NOT_FOUND,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
+    [HttpStatusCodes.BAD_REQUEST]: {
+      description: HttpStatusPhrases.BAD_REQUEST,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
+    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: {
+      description: HttpStatusPhrases.INTERNAL_SERVER_ERROR,
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
+  },
+});
+
 // ============================================================================
 // Message Routes
 // ============================================================================
@@ -610,18 +674,29 @@ export const getThreadChangelogRoute = createRoute({
 });
 
 /**
- * ✅ OFFICIAL AI SDK v5 STREAMING ROUTE PATTERN
+ * ✅ AI SDK v5 Streaming Route (Official Pattern + Multi-Participant Extension)
  * Reference: https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot
  *
- * Exact match to official AI SDK POST /api/chat pattern.
- * Uses toUIMessageStreamResponse() which returns UI Message Stream format.
+ * OFFICIAL AI SDK v5 PATTERN:
+ * POST /api/chat
+ * - Receives UIMessage[] array
+ * - Streams response using toUIMessageStreamResponse()
+ * - Returns text/event-stream content-type
+ *
+ * APPLICATION-SPECIFIC EXTENSION:
+ * - Accepts `participantIndex` to route to specific AI model in roundtable
+ * - Frontend calls this endpoint sequentially for each participant
+ * - Handler uses participantIndex to select which model responds
+ *
+ * This pattern allows multiple AI models to respond to the same user question
+ * in sequence, creating a "roundtable discussion" effect.
  */
 export const streamChatRoute = createRoute({
   method: 'post',
   path: '/chat',
   tags: ['chat'],
-  summary: 'Stream AI chat responses',
-  description: 'Official AI SDK v5 streaming endpoint. Streams AI responses using toUIMessageStreamResponse() format with support for text and file parts.',
+  summary: 'Stream AI chat responses (AI SDK v5)',
+  description: 'Official AI SDK v5 streaming endpoint with multi-participant support. Streams AI responses using toUIMessageStreamResponse() format. Supports text, reasoning, and file parts.',
   request: {
     body: {
       required: true,

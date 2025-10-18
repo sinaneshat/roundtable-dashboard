@@ -37,8 +37,8 @@ function PostHogProvider({
 
     if (isProduction && apiKey && apiHost) {
       // Check if PostHog is already initialized to avoid duplicate initialization
-      // eslint-disable-next-line ts/no-explicit-any
-      if (!(posthog as any).__loaded) {
+      // PostHog uses __loaded flag internally (not part of public API, but safe to check)
+      if (!('__loaded' in posthog) || !posthog.__loaded) {
         posthog.init(apiKey, {
           api_host: apiHost,
           person_profiles: 'identified_only', // Only create profiles for identified users

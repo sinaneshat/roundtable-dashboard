@@ -25,7 +25,7 @@ import { getProviderIcon } from '@/lib/utils/ai-display';
 type ConfigurationChangesGroupProps = {
   group: {
     timestamp: Date;
-    changes: ChatThreadChangelog[];
+    changes: (ChatThreadChangelog | (Omit<ChatThreadChangelog, 'createdAt'> & { createdAt: string | Date }))[];
   };
   className?: string;
 };
@@ -90,7 +90,7 @@ export function ConfigurationChangesGroup({ group, className }: ConfigurationCha
       acc[action].push(change);
       return acc;
     },
-    {} as Record<ChangeAction, ChatThreadChangelog[]>,
+    {} as Record<ChangeAction, (ChatThreadChangelog | (Omit<ChatThreadChangelog, 'createdAt'> & { createdAt: string | Date }))[]>,
   );
 
   // Sort by action order: added -> modified -> removed
@@ -148,7 +148,7 @@ export function ConfigurationChangesGroup({ group, className }: ConfigurationCha
                   {/* Changes for this action - Responsive: horizontal scroll on desktop, vertical stack on mobile */}
                   <div className="w-full overflow-x-auto md:overflow-x-auto">
                     <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 pb-2 pl-6">
-                      {changes.map((change: ChatThreadChangelog) => (
+                      {changes.map(change => (
                         <ChangeItem key={change.id} change={change} />
                       ))}
                     </div>
@@ -167,7 +167,7 @@ export function ConfigurationChangesGroup({ group, className }: ConfigurationCha
  * Individual change item renderer with glassmorphism style
  * Matches the ParticipantsPreview badge design
  */
-function ChangeItem({ change }: { change: ChatThreadChangelog }) {
+function ChangeItem({ change }: { change: ChatThreadChangelog | (Omit<ChatThreadChangelog, 'createdAt'> & { createdAt: string | Date }) }) {
   // ✅ SINGLE SOURCE OF TRUTH: Fetch models from backend
   const { data: modelsData } = useModelsQuery();
   const allModels = modelsData?.data?.items || [];

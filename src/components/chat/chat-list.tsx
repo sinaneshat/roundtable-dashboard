@@ -71,8 +71,6 @@ function StickyHeader({ children, zIndex = 10 }: { children: React.ReactNode; zI
 
 /**
  * ChatItem - Individual chat item component
- * Uses Next.js Link component with built-in prefetching behavior
- * Source: https://nextjs.org/docs/app/api-reference/components/link
  */
 function ChatItem({
   chat,
@@ -135,16 +133,11 @@ function ChatItem({
 /**
  * ChatList - Renders chat items in sidebar
  *
- * Uses Next.js Link component with default prefetching behavior.
- * Links are automatically prefetched when they enter the viewport in production.
- *
  * Features:
  * - Sticky timestamp headers for scroll visibility
  * - Grouped chats by time period
  * - Favorites section
  * - Delete confirmation dialog
- *
- * Reference: https://nextjs.org/docs/app/api-reference/components/link
  */
 export function ChatList({
   chatGroups,

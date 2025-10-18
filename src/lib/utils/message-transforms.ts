@@ -52,10 +52,10 @@ export function getMessageMetadata(
 /**
  * Convert backend ChatMessage to AI SDK UIMessage format
  *
- * @param message - ChatMessage from RPC response (dates as ISO strings)
+ * @param message - ChatMessage from RPC response (dates can be ISO strings or Date objects)
  * @returns UIMessage in AI SDK format with properly typed metadata
  */
-export function chatMessageToUIMessage(message: ChatMessage): UIMessage {
+export function chatMessageToUIMessage(message: ChatMessage | (Omit<ChatMessage, 'createdAt'> & { createdAt: string | Date })): UIMessage {
   const parts: UIMessage['parts'] = [];
 
   // Add text content part
@@ -63,8 +63,10 @@ export function chatMessageToUIMessage(message: ChatMessage): UIMessage {
     parts.push({ type: 'text', text: message.content });
   }
 
-  // Add reasoning part (if present)
-  if (message.reasoning) {
+  // ✅ CRITICAL FIX: Only add reasoning part if it has non-empty content
+  // This prevents empty reasoning boxes from showing for non-reasoning models
+  // ✅ TYPE SAFETY: Check if reasoning is a string before calling .trim()
+  if (message.reasoning && typeof message.reasoning === 'string' && message.reasoning.trim().length > 0) {
     parts.push({ type: 'reasoning', text: message.reasoning });
   }
 
@@ -73,8 +75,10 @@ export function chatMessageToUIMessage(message: ChatMessage): UIMessage {
   // Handle null metadata from database by using empty object as base
   const baseMetadata = (message.metadata || {}) as Record<string, unknown>;
 
-  // ✅ RPC types have string dates (already serialized by JSON)
-  const createdAtString = message.createdAt;
+  // ✅ Ensure createdAt is a string (convert Date to ISO string if needed)
+  const createdAtString = message.createdAt instanceof Date
+    ? message.createdAt.toISOString()
+    : message.createdAt;
 
   const metadata: UIMessageMetadata = {
     ...baseMetadata, // Spread metadata from backend
@@ -93,10 +97,10 @@ export function chatMessageToUIMessage(message: ChatMessage): UIMessage {
 /**
  * Convert array of backend ChatMessages to AI SDK UIMessage format
  *
- * @param messages - Array of ChatMessage from RPC response (dates as ISO strings)
+ * @param messages - Array of ChatMessage from RPC response (dates can be ISO strings or Date objects)
  * @returns Array of UIMessages in AI SDK format
  */
-export function chatMessagesToUIMessages(messages: ChatMessage[]): UIMessage[] {
+export function chatMessagesToUIMessages(messages: (ChatMessage | (Omit<ChatMessage, 'createdAt'> & { createdAt: string | Date }))[]): UIMessage[] {
   return messages.map(chatMessageToUIMessage);
 }
 
@@ -134,4 +138,41 @@ export function filterNonEmptyMessages(messages: UIMessage[]): UIMessage[] {
 
     return false;
   });
+}
+
+/**
+ * ✅ DEDUPLICATION UTILITY: Remove duplicate consecutive user messages
+ *
+ * When startRound() is called, it may create a duplicate user message
+ * because the AI SDK always adds a new message when calling sendMessage().
+ * This utility removes consecutive user messages with identical content.
+ *
+ * @param messages - Array of UIMessages to deduplicate
+ * @returns Filtered array without consecutive duplicate user messages
+ */
+export function deduplicateConsecutiveUserMessages(messages: UIMessage[]): UIMessage[] {
+  const result: UIMessage[] = [];
+  let lastUserMessageText: string | null = null;
+
+  for (const message of messages) {
+    if (message.role === 'user') {
+      // Extract text from user message
+      const textPart = message.parts?.find(p => p.type === 'text' && 'text' in p);
+      const text = textPart && 'text' in textPart ? textPart.text.trim() : '';
+
+      // Skip if this is a duplicate of the last user message
+      if (text && text === lastUserMessageText) {
+        continue;
+      }
+
+      lastUserMessageText = text;
+    } else {
+      // Reset on non-user messages (so we only check consecutive user messages)
+      lastUserMessageText = null;
+    }
+
+    result.push(message);
+  }
+
+  return result;
 }

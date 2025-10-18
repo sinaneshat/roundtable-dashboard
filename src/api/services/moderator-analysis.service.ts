@@ -1,62 +1,15 @@
 /**
  * Moderator Analysis Service
  *
- * AI-powered analysis and rating of participant responses using AI SDK's streamObject().
+ * ✅ SINGLE SOURCE OF TRUTH: Schema now in @/api/routes/chat/schema.ts
+ * This service only contains prompt building logic for AI SDK streamObject()
  */
 
-import { z } from 'zod';
-
-import type { ModeratorAnalysisPayloadSchema } from '@/api/routes/chat/schema';
+import type { ModeratorAnalysisPayload } from '@/api/routes/chat/schema';
 import type { ChatModeId } from '@/lib/config/chat-modes';
 import { extractModelName } from '@/lib/utils/ai-display';
 
-/**
- * AI SDK wrappers for base schemas with .describe() metadata
- * Base schemas from @/api/routes/chat/schema.ts use .openapi() for API docs
- * AI SDK streamObject() requires .describe() for proper field-level guidance
- */
-const AISkillRatingSchema = z.object({
-  skillName: z.string().describe('Name of the skill being evaluated (e.g., "Creativity", "Technical Depth", "Clarity")'),
-  rating: z.number().min(1).max(10).describe('Rating out of 10 for this specific skill'),
-});
-
-const AIParticipantAnalysisSchema = z.object({
-  participantIndex: z.number().int().min(0).describe('Index of the participant in the conversation (0-based)'),
-  participantRole: z.string().nullable().describe('The role assigned to this participant (e.g., "The Ideator")'),
-  modelId: z.string().describe('AI model ID (e.g., "anthropic/claude-sonnet-4.5")'),
-  modelName: z.string().describe('Human-readable model name (e.g., "Claude Sonnet 4.5")'),
-  overallRating: z.number().min(1).max(10).describe('Overall rating out of 10 for this response'),
-  skillsMatrix: z.array(AISkillRatingSchema).describe('Individual skill ratings for visualization'),
-  pros: z.array(z.string()).min(1).describe('List of strengths in this response (2-4 items)'),
-  cons: z.array(z.string()).min(1).describe('List of weaknesses or areas for improvement (1-3 items)'),
-  summary: z.string().min(20).max(300).describe('Brief summary of this participant\'s contribution (1-2 sentences)'),
-});
-
-const AILeaderboardEntrySchema = z.object({
-  rank: z.number().int().min(1).describe('Rank position (1 = best)'),
-  participantIndex: z.number().int().min(0).describe('Index of the participant'),
-  participantRole: z.string().nullable().describe('The role assigned to this participant'),
-  modelId: z.string().describe('AI model ID (e.g., "anthropic/claude-sonnet-4.5")'),
-  modelName: z.string().describe('Human-readable model name'),
-  overallRating: z.number().min(1).max(10).describe('Overall rating for ranking'),
-  badge: z.string().nullable().describe('Optional badge/award (e.g., "Most Creative", "Best Analysis")'),
-});
-
-export const ModeratorAnalysisSchema = z.object({
-  roundNumber: z.number().int().min(1).describe('The conversation round number (starts at 1)'),
-  mode: z.string().describe('Conversation mode (analyzing, brainstorming, debating, solving)'),
-  userQuestion: z.string().describe('The user\'s original question/prompt'),
-  participantAnalyses: z.array(AIParticipantAnalysisSchema).min(1).describe('Detailed analysis for each participant'),
-  leaderboard: z.array(AILeaderboardEntrySchema).min(1).describe('Ranked list of participants by overall performance'),
-  overallSummary: z.string().min(100).max(800).describe('Comprehensive summary of the round, highlighting key insights and comparing approaches'),
-  conclusion: z.string().min(50).max(400).describe('Final conclusion and recommendation on the best path forward'),
-});
-
-// ✅ AI SDK V5 PATTERN: Export schema for frontend useObject hook
-// Frontend needs this schema to type-check streamed objects
-export type ModeratorAnalysisFromStream = z.infer<typeof ModeratorAnalysisSchema>;
-
-export type ModeratorAnalysis = z.infer<typeof ModeratorAnalysisPayloadSchema>;
+export type ModeratorAnalysis = ModeratorAnalysisPayload;
 export type ModeratorPromptConfig = {
   /** Conversation mode */
   mode: ChatModeId;

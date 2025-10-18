@@ -36,16 +36,18 @@ type ParticipantAnalysisCardProps = {
 export function ParticipantAnalysisCard({ analysis, rank }: ParticipantAnalysisCardProps) {
   const t = useTranslations('moderator');
 
-  // ✅ Use getAvatarPropsFromModelId to get proper model icon
-  const avatarProps = getAvatarPropsFromModelId('assistant', analysis.modelId);
+  // ✅ AI SDK V5 PATTERN: Use optional chaining for partial objects
+  const avatarProps = getAvatarPropsFromModelId('assistant', analysis.modelId ?? '');
 
-  // Format rating for display
-  const ratingDisplay = analysis.overallRating.toFixed(1);
-  const ratingColor = analysis.overallRating >= 8
-    ? 'text-green-500'
-    : analysis.overallRating >= 6
-      ? 'text-yellow-500'
-      : 'text-orange-500';
+  // Format rating for display with safe access
+  const ratingDisplay = analysis.overallRating?.toFixed(1) ?? '...';
+  const ratingColor = analysis.overallRating
+    ? analysis.overallRating >= 8
+      ? 'text-green-500'
+      : analysis.overallRating >= 6
+        ? 'text-yellow-500'
+        : 'text-orange-500'
+    : 'text-foreground/60';
 
   return (
     <motion.div
@@ -119,19 +121,19 @@ export function ParticipantAnalysisCard({ analysis, rank }: ParticipantAnalysisC
               <h4 className="text-xs font-semibold text-foreground">{t('strengths')}</h4>
             </div>
             <ul className="space-y-1 text-foreground/80">
-              {analysis.pros.slice(0, 3).map(pro => (
+              {(analysis.pros ?? []).slice(0, 3).map((pro, idx) => (
                 <li
-                  key={`pro-${analysis.participantIndex}-${pro.substring(0, 20)}`}
+                  key={`pro-${analysis.participantIndex ?? 'unknown'}-${idx}`}
                   className="flex items-start gap-1.5"
                 >
                   <span className="text-green-500 flex-shrink-0 text-[10px]">✓</span>
                   <span className="flex-1 leading-tight">{pro}</span>
                 </li>
               ))}
-              {analysis.pros.length > 3 && (
+              {(analysis.pros?.length ?? 0) > 3 && (
                 <li className="text-foreground/50 text-[10px]">
                   +
-                  {analysis.pros.length - 3}
+                  {(analysis.pros?.length ?? 0) - 3}
                   {' '}
                   more
                 </li>
@@ -146,19 +148,19 @@ export function ParticipantAnalysisCard({ analysis, rank }: ParticipantAnalysisC
               <h4 className="text-xs font-semibold text-foreground">{t('areasForImprovement')}</h4>
             </div>
             <ul className="space-y-1 text-foreground/80">
-              {analysis.cons.slice(0, 3).map(con => (
+              {(analysis.cons ?? []).slice(0, 3).map((con, idx) => (
                 <li
-                  key={`con-${analysis.participantIndex}-${con.substring(0, 20)}`}
+                  key={`con-${analysis.participantIndex ?? 'unknown'}-${idx}`}
                   className="flex items-start gap-1.5"
                 >
                   <span className="text-orange-500 flex-shrink-0 text-[10px]">!</span>
                   <span className="flex-1 leading-tight">{con}</span>
                 </li>
               ))}
-              {analysis.cons.length > 3 && (
+              {(analysis.cons?.length ?? 0) > 3 && (
                 <li className="text-foreground/50 text-[10px]">
                   +
-                  {analysis.cons.length - 3}
+                  {(analysis.cons?.length ?? 0) - 3}
                   {' '}
                   more
                 </li>
@@ -168,12 +170,14 @@ export function ParticipantAnalysisCard({ analysis, rank }: ParticipantAnalysisC
         </div>
 
         {/* Summary - Compact */}
-        <div className="space-y-1">
-          <h4 className="text-xs font-semibold text-foreground">{t('summary')}</h4>
-          <p className="text-xs text-foreground/80 leading-relaxed">
-            {analysis.summary}
-          </p>
-        </div>
+        {analysis.summary && (
+          <div className="space-y-1">
+            <h4 className="text-xs font-semibold text-foreground">{t('summary')}</h4>
+            <p className="text-xs text-foreground/80 leading-relaxed">
+              {analysis.summary}
+            </p>
+          </div>
+        )}
       </div>
     </motion.div>
   );

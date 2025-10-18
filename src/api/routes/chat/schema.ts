@@ -109,6 +109,7 @@ export const MessageMetadataSchema = z.object({
     completionTokens: z.number().optional(),
     totalTokens: z.number().optional(),
   }).optional(),
+  isEmptyResponse: z.boolean().optional(), // Flag for models that returned no content
 }).passthrough().nullable();
 
 /**
@@ -241,6 +242,7 @@ export const CreateThreadRequestSchema = chatThreadInsertSchema
 
 /**
  * ✅ REUSE: Uses chatThreadUpdateSchema from database validation
+ * Extended with participants array to update thread configuration
  */
 export const UpdateThreadRequestSchema = chatThreadUpdateSchema
   .pick({
@@ -250,6 +252,18 @@ export const UpdateThreadRequestSchema = chatThreadUpdateSchema
     isFavorite: true,
     isPublic: true,
     metadata: true,
+  })
+  .extend({
+    participants: z.array(
+      z.object({
+        id: z.string().optional().openapi({ description: 'Participant ID (omit for new participants)' }),
+        modelId: z.string().openapi({ description: 'Model ID' }),
+        role: z.string().nullable().optional().openapi({ description: 'Role name' }),
+        customRoleId: z.string().nullable().optional().openapi({ description: 'Custom role ID' }),
+        priority: z.number().int().min(0).openapi({ description: 'Display order (0-indexed)' }),
+        isEnabled: z.boolean().optional().default(true).openapi({ description: 'Whether participant is enabled' }),
+      }),
+    ).optional().openapi({ description: 'Complete list of participants with their updated state' }),
   })
   .openapi('UpdateThreadRequest');
 
@@ -330,32 +344,65 @@ const ParticipantDetailPayloadSchema = z.object({
 
 export const ParticipantDetailResponseSchema = createApiResponseSchema(ParticipantDetailPayloadSchema).openapi('ParticipantDetailResponse');
 
+/**
+ * ✅ BULK PARTICIPANT UPDATE: Update multiple participants at once
+ * Supports:
+ * - Reordering participants (change priority/order)
+ * - Changing roles (including custom roles)
+ * - Adding/removing participants
+ */
+export const BulkUpdateParticipantsRequestSchema = z.object({
+  participants: z.array(
+    z.object({
+      id: z.string().optional().openapi({ description: 'Participant ID (omit for new participants)' }),
+      modelId: z.string().openapi({ description: 'Model ID' }),
+      role: z.string().nullable().optional().openapi({ description: 'Role name' }),
+      customRoleId: z.string().nullable().optional().openapi({ description: 'Custom role ID' }),
+      priority: z.number().int().min(0).openapi({ description: 'Display order (0-indexed)' }),
+      isEnabled: z.boolean().optional().default(true).openapi({ description: 'Whether participant is enabled' }),
+    }),
+  ).openapi({ description: 'Complete list of participants with their updated state' }),
+}).openapi('BulkUpdateParticipantsRequest');
+
+const BulkUpdateParticipantsPayloadSchema = z.object({
+  participants: z.array(ChatParticipantSchema),
+  changelogEntries: z.array(chatThreadChangelogSelectSchema),
+}).openapi('BulkUpdateParticipantsPayload');
+
+export const BulkUpdateParticipantsResponseSchema = createApiResponseSchema(BulkUpdateParticipantsPayloadSchema).openapi('BulkUpdateParticipantsResponse');
+
 // ============================================================================
 // Message Request/Response Schemas
 // ============================================================================
 
 /**
- * ✅ OFFICIAL AI SDK v5 STREAMING REQUEST SCHEMA
+ * ✅ AI SDK v5 Streaming Request Schema (with Multi-Participant Extension)
  * Reference: https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot
  *
- * Matches official docs EXACTLY with minimal extension for multi-participant support.
- *
- * ## Official Pattern:
+ * OFFICIAL AI SDK v5 PATTERN:
  * ```typescript
- * const { messages, model, webSearch }: {
- *   messages: UIMessage[];
- *   model?: string;
- *   webSearch?: boolean;
- * } = await req.json();
+ * const { messages }: { messages: UIMessage[] } = await req.json();
+ * const result = streamText({
+ *   model: openai('gpt-4o'),
+ *   messages: convertToModelMessages(messages),
+ * });
+ * return result.toUIMessageStreamResponse();
  * ```
  *
- * ## Why `z.array(z.unknown())`?
- * AI SDK recommends runtime validation with `validateUIMessages()` because
- * UIMessage types are complex generics that Zod cannot represent.
+ * APPLICATION-SPECIFIC EXTENSIONS:
+ * - `id`: Thread ID for persistence (required for multi-turn conversations)
+ * - `participantIndex`: Route to specific AI model in roundtable (our customization)
  *
- * ## Multi-Participant Pattern:
- * Added `id` (thread ID) and `participantIndex` for frontend orchestration.
- * Frontend calls this endpoint multiple times (once per participant) sequentially.
+ * WHY `z.array(z.unknown())` for messages?
+ * AI SDK recommends runtime validation with `validateUIMessages()` because
+ * UIMessage<METADATA, DATA, TOOLS> is a complex generic that Zod cannot represent.
+ * We validate at runtime in the handler using the official validateUIMessages() function.
+ *
+ * MULTI-PARTICIPANT FLOW:
+ * 1. Frontend calls with participantIndex=0 (first model responds)
+ * 2. onFinish triggers, frontend calls with participantIndex=1 (second model)
+ * 3. Repeat until all participants have responded
+ * 4. This sequential orchestration is handled by useMultiParticipantChat hook
  */
 export const StreamChatRequestSchema = z.object({
   /**
@@ -403,6 +450,36 @@ export const StreamChatRequestSchema = z.object({
   participantIndex: z.number().int().min(0).optional().default(0).openapi({
     description: 'Index of participant to stream (0-based). Frontend orchestrates multiple participants.',
     example: 0,
+  }),
+
+  /**
+   * ✅ RACE CONDITION FIX: Current participants configuration (OPTIONAL)
+   * When provided, backend uses this configuration instead of loading from database.
+   * This eliminates race condition between updateThread() and streamChat() calls.
+   *
+   * Frontend should send current UI state to ensure AI responses use latest config.
+   */
+  participants: z.array(
+    z.object({
+      id: z.string(),
+      modelId: z.string(),
+      role: z.string().nullable().optional(),
+      customRoleId: z.string().nullable().optional(),
+      priority: z.number().int().min(0),
+      isEnabled: z.boolean().optional().default(true),
+    }),
+  ).optional().openapi({
+    description: 'Current participant configuration (optional). If provided, used instead of loading from database.',
+    example: [
+      {
+        id: 'participant_1',
+        modelId: 'anthropic/claude-sonnet-4.5',
+        role: 'The Ideator',
+        customRoleId: null,
+        priority: 0,
+        isEnabled: true,
+      },
+    ],
   }),
 
 }).openapi('StreamChatRequest');
@@ -551,13 +628,16 @@ export const ModeratorAnalysisRequestSchema = z.object({
 
 /**
  * Individual skill rating for skills matrix visualization
+ * ✅ SINGLE SOURCE OF TRUTH: Used by both AI SDK streamObject() and OpenAPI docs
  */
 export const SkillRatingSchema = z.object({
-  skillName: z.string().openapi({
-    description: 'Name of the skill being evaluated',
-    example: 'Creativity',
-  }),
-  rating: z.number().min(1).max(10).openapi({
+  skillName: z.string()
+    .describe('Name of the skill being evaluated (e.g., "Creativity", "Technical Depth", "Clarity")')
+    .openapi({
+      description: 'Name of the skill being evaluated',
+      example: 'Creativity',
+    }),
+  rating: z.number().min(1).max(10).describe('Rating out of 10 for this specific skill').openapi({
     description: 'Rating out of 10 for this specific skill',
     example: 8,
   }),
@@ -565,40 +645,47 @@ export const SkillRatingSchema = z.object({
 
 /**
  * Complete analysis for a single participant's response
+ * ✅ SINGLE SOURCE OF TRUTH: Used by both AI SDK streamObject() and OpenAPI docs
  */
 export const ParticipantAnalysisSchema = z.object({
-  participantIndex: z.number().int().min(0).openapi({
+  participantIndex: z.number().int().min(0).describe('Index of the participant in the conversation (0-based)').openapi({
     description: 'Index of the participant in the conversation (0-based)',
     example: 0,
   }),
-  participantRole: z.string().nullable().openapi({
+  participantRole: z.string().nullable().describe('The role assigned to this participant (e.g., "The Ideator")').openapi({
     description: 'The role assigned to this participant',
     example: 'The Ideator',
   }),
-  modelId: z.string().openapi({
-    description: 'AI model ID',
-    example: 'anthropic/claude-sonnet-4.5',
-  }),
-  modelName: z.string().openapi({
-    description: 'Human-readable model name',
-    example: 'Claude Sonnet 4.5',
-  }),
-  overallRating: z.number().min(1).max(10).openapi({
+  modelId: z.string()
+    .describe('AI model ID (e.g., "anthropic/claude-sonnet-4.5")')
+    .openapi({
+      description: 'AI model ID',
+      example: 'anthropic/claude-sonnet-4.5',
+    }),
+  modelName: z.string()
+    .describe('Human-readable model name (e.g., "Claude Sonnet 4.5")')
+    .openapi({
+      description: 'Human-readable model name',
+      example: 'Claude Sonnet 4.5',
+    }),
+  overallRating: z.number().min(1).max(10).describe('Overall rating out of 10 for this response').openapi({
     description: 'Overall rating out of 10 for this response',
     example: 8.5,
   }),
-  skillsMatrix: z.array(SkillRatingSchema).openapi({
-    description: 'Individual skill ratings for visualization',
-  }),
-  pros: z.array(z.string()).min(1).openapi({
+  skillsMatrix: z.array(SkillRatingSchema)
+    .describe('Individual skill ratings for visualization')
+    .openapi({
+      description: 'Individual skill ratings for visualization',
+    }),
+  pros: z.array(z.string()).min(1).describe('List of strengths in this response (2-4 items)').openapi({
     description: 'List of strengths in this response',
     example: ['Creative and diverse ideas', 'Built effectively on previous suggestions'],
   }),
-  cons: z.array(z.string()).min(1).openapi({
+  cons: z.array(z.string()).min(1).describe('List of weaknesses or areas for improvement (1-3 items)').openapi({
     description: 'List of weaknesses or areas for improvement',
     example: ['Could have explored more unconventional approaches'],
   }),
-  summary: z.string().min(20).max(300).openapi({
+  summary: z.string().min(20).max(300).describe('Brief summary of this participant\'s contribution (1-2 sentences)').openapi({
     description: 'Brief summary of this participant\'s contribution',
     example: 'Provided innovative solutions with strong creative direction.',
   }),
@@ -606,33 +693,38 @@ export const ParticipantAnalysisSchema = z.object({
 
 /**
  * Leaderboard entry for ranking participants
+ * ✅ SINGLE SOURCE OF TRUTH: Used by both AI SDK streamObject() and OpenAPI docs
  */
 export const LeaderboardEntrySchema = z.object({
-  rank: z.number().int().min(1).openapi({
+  rank: z.number().int().min(1).describe('Rank position (1 = best)').openapi({
     description: 'Rank position (1 = best)',
     example: 1,
   }),
-  participantIndex: z.number().int().min(0).openapi({
+  participantIndex: z.number().int().min(0).describe('Index of the participant').openapi({
     description: 'Index of the participant',
     example: 0,
   }),
-  participantRole: z.string().nullable().openapi({
+  participantRole: z.string().nullable().describe('The role assigned to this participant').openapi({
     description: 'The role assigned to this participant',
     example: 'The Ideator',
   }),
-  modelId: z.string().openapi({
-    description: 'Model ID for proper icon display',
-    example: 'anthropic/claude-sonnet-4.5',
-  }),
-  modelName: z.string().openapi({
-    description: 'Human-readable model name',
-    example: 'Claude Sonnet 4.5',
-  }),
-  overallRating: z.number().min(1).max(10).openapi({
+  modelId: z.string()
+    .describe('AI model ID (e.g., "anthropic/claude-sonnet-4.5")')
+    .openapi({
+      description: 'Model ID for proper icon display',
+      example: 'anthropic/claude-sonnet-4.5',
+    }),
+  modelName: z.string()
+    .describe('Human-readable model name')
+    .openapi({
+      description: 'Human-readable model name',
+      example: 'Claude Sonnet 4.5',
+    }),
+  overallRating: z.number().min(1).max(10).describe('Overall rating for ranking').openapi({
     description: 'Overall rating for ranking',
     example: 8.5,
   }),
-  badge: z.string().nullable().openapi({
+  badge: z.string().nullable().describe('Optional badge/award (e.g., "Most Creative", "Best Analysis")').openapi({
     description: 'Optional badge/award',
     example: 'Most Creative',
   }),
@@ -640,31 +732,37 @@ export const LeaderboardEntrySchema = z.object({
 
 /**
  * Complete moderator analysis output
+ * ✅ SINGLE SOURCE OF TRUTH: Used by AI SDK streamObject(), OpenAPI docs, and frontend
+ * ✅ AI SDK V5 PATTERN: Combines .describe() for generation with .openapi() for documentation
  */
 export const ModeratorAnalysisPayloadSchema = z.object({
-  roundNumber: z.number().int().min(1).openapi({
+  roundNumber: z.number().int().min(1).describe('The conversation round number (starts at 1)').openapi({
     description: 'The conversation round number',
     example: 1,
   }),
-  mode: z.string().openapi({
-    description: 'Conversation mode',
-    example: 'brainstorming',
-  }),
-  userQuestion: z.string().openapi({
-    description: 'The user\'s original question/prompt',
-    example: 'What are some innovative product ideas?',
-  }),
-  participantAnalyses: z.array(ParticipantAnalysisSchema).min(1).openapi({
+  mode: z.string()
+    .describe('Conversation mode (analyzing, brainstorming, debating, solving)')
+    .openapi({
+      description: 'Conversation mode',
+      example: 'brainstorming',
+    }),
+  userQuestion: z.string()
+    .describe('The user\'s original question/prompt')
+    .openapi({
+      description: 'The user\'s original question/prompt',
+      example: 'What are some innovative product ideas?',
+    }),
+  participantAnalyses: z.array(ParticipantAnalysisSchema).min(1).describe('Detailed analysis for each participant').openapi({
     description: 'Detailed analysis for each participant',
   }),
-  leaderboard: z.array(LeaderboardEntrySchema).min(1).openapi({
+  leaderboard: z.array(LeaderboardEntrySchema).min(1).describe('Ranked list of participants by overall performance').openapi({
     description: 'Ranked list of participants by overall performance',
   }),
-  overallSummary: z.string().min(100).max(800).openapi({
+  overallSummary: z.string().min(100).max(800).describe('Comprehensive summary of the round, highlighting key insights and comparing approaches').openapi({
     description: 'Comprehensive summary of the round',
     example: 'This brainstorming round showcased diverse creative approaches...',
   }),
-  conclusion: z.string().min(50).max(400).openapi({
+  conclusion: z.string().min(50).max(400).describe('Final conclusion and recommendation on the best path forward').openapi({
     description: 'Final conclusion and recommendation',
     example: 'The combination of Participant 1\'s creative ideas with Participant 2\'s practical insights provides the best path forward...',
   }),
@@ -709,6 +807,7 @@ export type UpdateThreadRequest = z.infer<typeof UpdateThreadRequestSchema>;
 export type ChatParticipant = z.infer<typeof ChatParticipantSchema>;
 export type AddParticipantRequest = z.infer<typeof AddParticipantRequestSchema>;
 export type UpdateParticipantRequest = z.infer<typeof UpdateParticipantRequestSchema>;
+export type BulkUpdateParticipantsRequest = z.infer<typeof BulkUpdateParticipantsRequestSchema>;
 
 export type ChatMessage = z.infer<typeof ChatMessageSchema>;
 export type StreamChatRequest = z.infer<typeof StreamChatRequestSchema>;
@@ -918,6 +1017,7 @@ export const UIMessageMetadataSchema = z.object({
   statusCode: z.number().optional(),
   responseBody: z.string().optional(),
   errorDetails: z.string().optional(),
-}).passthrough().nullable();
+  isEmptyResponse: z.boolean().optional(), // Flag for models that returned no content
+}).passthrough().nullable().optional();
 
 export type UIMessageMetadata = z.infer<typeof UIMessageMetadataSchema>;

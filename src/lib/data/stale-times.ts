@@ -36,11 +36,11 @@ export const STALE_TIMES = {
   subscriptions: 2 * 60 * 1000, // 2 minutes - subscription status changes occasionally
 
   // ============================================================================
-  // AI Models (dynamic - fetched from OpenRouter API)
+  // AI Models (cached on server for 24h, client uses server cache)
   // ============================================================================
-  models: 30 * 60 * 1000, // 30 minutes - models refresh periodically from OpenRouter
-  modelDetail: 30 * 60 * 1000, // 30 minutes - individual model details can change
-  providers: 30 * 60 * 1000, // 30 minutes - provider list can change
+  models: Infinity, // Never refetch on client - server cache is 24h, models rarely change
+  modelDetail: 5 * 60 * 1000, // 5 minutes - individual model details can change
+  providers: 10 * 60 * 1000, // 10 minutes - provider list changes infrequently
 
   // ============================================================================
   // Usage & Quota (change frequently)

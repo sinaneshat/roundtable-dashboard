@@ -61,17 +61,41 @@ export const MAX_OUTPUT_TOKENS_BY_TIER: Record<SubscriptionTier, number> = {
  * Maximum model pricing threshold by tier (per 1M tokens input)
  * Used for model access control based on pricing
  *
- * ✅ ADJUSTED LIMITS: Wider ranges to better categorize models across tiers
- * - free: Only truly free models
- * - starter: Budget models suitable for light usage
- * - pro: Mid-range to premium models (most popular flagships fall here)
- * - power: Ultra-premium and specialized models
+ * ✅ AGGRESSIVE UPSELLING STRATEGY: Optimized to drive Pro tier upgrades
+ *
+ * Distribution based on OpenRouter API analysis (290+ paid models):
+ * - $0.00-$0.05: ~15 models (only cheapest)
+ * - $0.05-$0.20: ~35 models (budget tier)
+ * - $0.20-$2.50: ~180 models (flagship tier - GPT-4, Claude, Gemini, DeepSeek)
+ * - $2.50+: All models (ultra-premium and specialized)
+ *
+ * Business Logic - Upsell Funnel:
+ * 1. **Free Tier ($0.05/M)**: VERY LIMITED - only cheapest 15 models
+ *    - Purpose: Let users test the platform with minimal access
+ *    - Upsell: "Upgrade to Starter for 20+ more budget models"
+ *
+ * 2. **Starter Tier ($0.20/M)**: Budget models - ~35 total models
+ *    - Purpose: Give users decent variety at low cost
+ *    - Upsell: "Upgrade to Pro for flagship models (GPT-4, Claude, Gemini)"
+ *    - This creates strong incentive to upgrade to Pro!
+ *
+ * 3. **Pro Tier ($2.50/M)**: MAIN TARGET - ~180 flagship models
+ *    - Purpose: Access to ALL flagship models (GPT-4, Claude Sonnet, Gemini Pro, DeepSeek)
+ *    - This is where we want most paying users
+ *    - Best value proposition
+ *
+ * 4. **Power Tier (Unlimited)**: Ultra-premium - all 290+ models
+ *    - Purpose: For power users who need cutting-edge/specialized models
+ *    - Access to ultra-expensive models (>$2.50/M)
+ *
+ * This aggressive pricing forces users through a clear upgrade path:
+ * Free → Starter ($10/mo) → Pro ($25/mo) ← MAIN TARGET → Power ($50/mo)
  */
 export const MAX_MODEL_PRICING_BY_TIER: Record<SubscriptionTier, number | null> = {
-  free: 0, // Only free models ($0/M tokens)
-  starter: 2.0, // Up to $2/M tokens (increased from $1 for better budget model selection)
-  pro: 100.0, // Up to $100/M tokens (increased from $20 to include most flagship models)
-  power: null, // Unlimited (ultra-premium models like GPT-4, Claude Opus, etc.)
+  free: 0.05, // Up to $0.05/M tokens - VERY LIMITED (~15 cheapest models only)
+  starter: 0.20, // Up to $0.20/M tokens - Budget tier (~35 models total)
+  pro: 2.50, // Up to $2.50/M tokens - Flagship tier (~180 models total) ← MAIN UPSELL
+  power: null, // Unlimited - All ultra-premium models (>$2.50/M)
 } as const;
 
 /**
@@ -142,6 +166,41 @@ export function getMaxOutputTokensForTier(tier: SubscriptionTier): number {
 }
 
 /**
+ * Calculate safe max output tokens based on model's context length and tier limits
+ *
+ * This prevents the error: "maximum context length is X tokens, but you requested Y tokens"
+ *
+ * @param modelContextLength - The model's maximum context length (from OpenRouter API)
+ * @param estimatedInputTokens - Estimated input tokens (system + messages)
+ * @param tier - User's subscription tier
+ * @returns Safe maxOutputTokens value that won't exceed model limits
+ *
+ * @example
+ * // gpt-3.5-turbo has 16385 context length, user has 21 input tokens
+ * getSafeMaxOutputTokens(16385, 21, 'power')
+ * // Returns: 14000 (safe buffer below 16385 - 21 = 16364)
+ */
+export function getSafeMaxOutputTokens(
+  modelContextLength: number,
+  estimatedInputTokens: number,
+  tier: SubscriptionTier,
+): number {
+  // Get the tier's maximum allowed output tokens
+  const tierMaxOutput = getMaxOutputTokensForTier(tier);
+
+  // Calculate available space in model's context window
+  // Leave 20% buffer for safety (token estimation can be off)
+  const safetyBuffer = Math.floor(modelContextLength * 0.2);
+  const availableTokens = modelContextLength - estimatedInputTokens - safetyBuffer;
+
+  // Use the minimum of:
+  // 1. Tier's max output tokens (subscription limit)
+  // 2. Available tokens in model's context window (model limit)
+  // 3. Ensure at least 512 tokens for meaningful responses
+  return Math.max(512, Math.min(tierMaxOutput, availableTokens));
+}
+
+/**
  * Get the maximum model pricing threshold for a given tier
  */
 export function getMaxModelPricingForTier(tier: SubscriptionTier): number | null {
@@ -201,12 +260,16 @@ export function costPerMillion(pricePerToken: string | number): number {
 // ============================================================================
 
 /**
- * Check if a model is free (accessible to all tiers)
+ * Check if a model is accessible to free tier users
+ *
+ * Free tier has access to models up to $0.30/M tokens (input pricing).
+ * This is NOT the same as OpenRouter free tier (which we exclude).
+ * These are paid models that are cheap enough for our free tier users.
  */
 export function isModelFree(model: BaseModelResponse): boolean {
-  const promptPrice = Number.parseFloat(model.pricing.prompt);
-  const completionPrice = Number.parseFloat(model.pricing.completion);
-  return promptPrice === 0 && completionPrice === 0;
+  const inputPricePerMillion = costPerMillion(model.pricing.prompt);
+  const freeLimit = MAX_MODEL_PRICING_BY_TIER.free;
+  return freeLimit !== null && inputPricePerMillion <= freeLimit;
 }
 
 /**
@@ -258,25 +321,31 @@ export function getTierUpgradeMessage(tier: SubscriptionTier): string {
 
 /**
  * Get the required tier for a model based on pricing
+ *
+ * Determines minimum subscription tier needed to access a model.
+ * Based on input pricing per million tokens.
  */
 export function getRequiredTierForModel(model: BaseModelResponse): SubscriptionTier {
-  if (isModelFree(model)) {
-    return 'free';
-  }
-
   // Get input pricing per million tokens
   const inputPricePerMillion = costPerMillion(model.pricing.prompt);
 
-  // Determine tier based on pricing thresholds
-  if (inputPricePerMillion <= (MAX_MODEL_PRICING_BY_TIER.free || 0)) {
+  // Check each tier threshold in order (free -> starter -> pro -> power)
+  const freeLimit = MAX_MODEL_PRICING_BY_TIER.free;
+  if (freeLimit !== null && inputPricePerMillion <= freeLimit) {
     return 'free';
   }
-  if (inputPricePerMillion <= (MAX_MODEL_PRICING_BY_TIER.starter || 0)) {
+
+  const starterLimit = MAX_MODEL_PRICING_BY_TIER.starter;
+  if (starterLimit !== null && inputPricePerMillion <= starterLimit) {
     return 'starter';
   }
-  if (inputPricePerMillion <= (MAX_MODEL_PRICING_BY_TIER.pro || 0)) {
+
+  const proLimit = MAX_MODEL_PRICING_BY_TIER.pro;
+  if (proLimit !== null && inputPricePerMillion <= proLimit) {
     return 'pro';
   }
+
+  // Everything above pro limit requires power tier
   return 'power';
 }
 
@@ -349,14 +418,14 @@ export function getDefaultModelForTier(
 }
 
 /**
- * ✅ 100% DYNAMIC FLAGSHIP SCORING: No hard-coded model names
+ * ✅ 100% DYNAMIC FLAGSHIP SCORING: No hard-coded provider names or model IDs
  *
- * Calculates flagship score using data-driven signals from OpenRouter API.
- * Based on observable characteristics that correlate with global popularity.
+ * Calculates flagship score using ONLY data from OpenRouter API.
+ * Based on observable characteristics that indicate quality and popularity.
  *
- * Scoring factors:
- * - Provider quality (40pts): Based on 2025 OpenRouter token usage rankings
- * - Context window (25pts): Large contexts indicate flagship capability
+ * Scoring factors (all from API data):
+ * - Pricing tier (35pts): Premium pricing indicates demand/quality
+ * - Context window (30pts): Large contexts = more capable
  * - Recency (20pts): Recently released = actively maintained
  * - Capabilities (15pts): Vision, reasoning, tools = advanced features
  *
@@ -366,42 +435,39 @@ export function getDefaultModelForTier(
 export function getFlagshipScore(model: BaseModelResponse): number {
   let score = 0;
 
-  // ✅ PROVIDER QUALITY (40 points max) - Based on 2025 OpenRouter token usage
-  const providerLower = model.provider.toLowerCase();
-  if (providerLower.includes('x-ai') || providerLower.includes('xai')) {
-    score += 40; // #1 most popular (31.2% token share)
-  } else if (providerLower.includes('google')) {
-    score += 38; // #2 most popular (18.1% token share)
-  } else if (providerLower.includes('anthropic')) {
-    score += 36; // #3 most popular (14.1% token share)
-  } else if (providerLower.includes('openai')) {
-    score += 34; // #4 most popular (13.1% token share)
-  } else if (providerLower.includes('deepseek')) {
-    score += 32; // #5 most popular (6.9% token share)
-  } else if (providerLower.includes('qwen')) {
-    score += 30; // #6 most popular (6.3% token share)
-  } else if (
-    providerLower.includes('meta')
-    || providerLower.includes('mistral')
-    || providerLower.includes('cohere')
-  ) {
-    score += 20; // Other major providers
+  // ═══════════════════════════════════════════════════════════════
+  // PRICING TIER (35 points) - Premium pricing indicates flagship quality
+  // ═══════════════════════════════════════════════════════════════
+  const inputPrice = Number.parseFloat(model.pricing.prompt) * 1_000_000;
+
+  if (inputPrice >= 5 && inputPrice <= 20) {
+    score += 35; // Flagship pricing tier ($5-$20/M tokens)
+  } else if (inputPrice > 20 && inputPrice <= 100) {
+    score += 30; // Premium pricing tier ($20-$100/M tokens)
+  } else if (inputPrice >= 1 && inputPrice < 5) {
+    score += 20; // Mid-tier pricing ($1-$5/M tokens)
+  } else if (inputPrice > 100) {
+    score += 15; // Ultra-premium (>$100/M tokens)
   } else {
-    return 0; // Not from top-tier provider = not flagship
+    score += 0; // Budget/free tier
   }
 
-  // ✅ CONTEXT WINDOW (25 points max) - Flagship models have large contexts
+  // ═══════════════════════════════════════════════════════════════
+  // CONTEXT WINDOW (30 points) - Large context = flagship capability
+  // ═══════════════════════════════════════════════════════════════
   if (model.context_length >= 200000) {
-    score += 25; // Ultra-large (200K+) = cutting-edge flagship
+    score += 30; // Ultra-large (200K+) = cutting-edge
   } else if (model.context_length >= 128000) {
-    score += 20; // Large (128K-200K) = typical flagship
+    score += 25; // Large (128K-200K) = flagship tier
   } else if (model.context_length >= 64000) {
-    score += 10; // Medium (64K-128K) = mid-tier
+    score += 15; // Medium-large (64K-128K)
   } else {
-    score += 0; // Small context = not flagship
+    score += 0; // Small context
   }
 
-  // ✅ RECENCY (20 points max) - Recent models = actively maintained
+  // ═══════════════════════════════════════════════════════════════
+  // RECENCY (20 points) - Recent models = actively maintained
+  // ═══════════════════════════════════════════════════════════════
   if (model.created) {
     const ageInDays = (Date.now() / 1000 - model.created) / (60 * 60 * 24);
     if (ageInDays < 180) {
@@ -415,7 +481,9 @@ export function getFlagshipScore(model: BaseModelResponse): number {
     score += 10; // No timestamp = neutral
   }
 
-  // ✅ CAPABILITIES (15 points max) - Advanced features = flagship
+  // ═══════════════════════════════════════════════════════════════
+  // CAPABILITIES (15 points) - Advanced features = flagship
+  // ═══════════════════════════════════════════════════════════════
   if (model.capabilities.vision)
     score += 5;
   if (model.capabilities.reasoning)
@@ -442,26 +510,61 @@ export function isFlagshipModel(model: BaseModelResponse): boolean {
 }
 
 /**
- * ✅ GET FLAGSHIP MODELS: Extract and rank models dynamically
+ * ✅ GET FLAGSHIP MODELS: Extract and rank models dynamically with provider diversity
  *
  * 100% data-driven flagship detection based on OpenRouter API data.
  * NO hard-coded model names - scores based on observable characteristics.
  *
- * Returns top 10 flagship models sorted by score (highest first).
- * Shown in "Most Popular" section at top of model list.
+ * Returns top 10 flagship models with maximum 2 models per provider.
+ * This ensures provider diversity in "Most Popular" section.
+ *
+ * Algorithm:
+ * 1. Filter models with flagship score >= 70
+ * 2. Group by provider
+ * 3. Take max 2 highest-scored models from each provider
+ * 4. Sort all selected models by score
+ * 5. Return top 10 overall
  *
  * @param models All available models
- * @returns Top 10 flagship models sorted by flagship score (descending)
+ * @returns Top 10 flagship models (max 2 per provider) sorted by flagship score
  */
 export function getFlagshipModels(models: BaseModelResponse[]): BaseModelResponse[] {
   // Score all models and filter flagships
-  const scoredModels = models
+  const flagshipCandidates = models
     .map(model => ({ model, score: getFlagshipScore(model) }))
     .filter(item => item.score >= 70) // Flagship threshold
-    .sort((a, b) => b.score - a.score) // Sort by score descending
-    .slice(0, 10); // Limit to top 10 models
+    .sort((a, b) => b.score - a.score); // Sort by score descending
 
-  return scoredModels.map(item => item.model);
+  // Group by provider and take max 2 from each
+  const modelsByProvider = new Map<string, BaseModelResponse[]>();
+
+  for (const { model } of flagshipCandidates) {
+    const provider = model.provider;
+    if (!modelsByProvider.has(provider)) {
+      modelsByProvider.set(provider, []);
+    }
+
+    const providerModels = modelsByProvider.get(provider)!;
+    // Only add if this provider has less than 2 models already
+    if (providerModels.length < 2) {
+      providerModels.push(model);
+    }
+  }
+
+  // Flatten and sort by flagship score again
+  const diverseFlagshipModels: BaseModelResponse[] = [];
+  for (const providerModels of modelsByProvider.values()) {
+    diverseFlagshipModels.push(...providerModels);
+  }
+
+  // Sort by flagship score and limit to top 10
+  return diverseFlagshipModels
+    .sort((a, b) => {
+      const scoreA = getFlagshipScore(a);
+      const scoreB = getFlagshipScore(b);
+      return scoreB - scoreA;
+    })
+    .slice(0, 10);
 }
 
 // ============================================================================

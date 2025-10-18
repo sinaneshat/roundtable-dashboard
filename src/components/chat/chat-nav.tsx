@@ -183,7 +183,6 @@ function AppSidebarComponent({ ...props }: React.ComponentProps<typeof Sidebar>)
                 <SidebarMenuButton size="lg" asChild>
                   <Link
                     href="/chat"
-                    // ✅ OPTIMIZATION: Enable prefetch for instant navigation to main chat page
                     onClick={() => {
                       if (isMobile) {
                         setOpenMobile(false);

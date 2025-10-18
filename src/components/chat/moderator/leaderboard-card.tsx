@@ -85,14 +85,15 @@ export function LeaderboardCard({ leaderboard }: LeaderboardCardProps) {
       <ScrollArea className="w-full">
         <div className="flex gap-3 pb-4">
           {leaderboard.map((entry, index) => {
-            const rankIcon = getRankIcon(entry.rank);
-            const isTopThree = entry.rank <= 3;
+            // ✅ AI SDK V5 PATTERN: Use optional chaining for partial objects
+            const rankIcon = entry.rank ? getRankIcon(entry.rank) : null;
+            const isTopThree = (entry.rank ?? 0) <= 3;
 
             // ✅ Use getAvatarPropsFromModelId for proper icon loading
-            const avatarProps = getAvatarPropsFromModelId('assistant', entry.modelId);
+            const avatarProps = getAvatarPropsFromModelId('assistant', entry.modelId ?? '');
             const model = allModels.find(m => m.id === entry.modelId);
             const provider = model?.provider;
-            const ratingColor = getRatingColor(entry.overallRating);
+            const ratingColor = entry.overallRating ? getRatingColor(entry.overallRating) : 'text-foreground/60';
 
             return (
               <motion.div
@@ -152,7 +153,7 @@ export function LeaderboardCard({ leaderboard }: LeaderboardCardProps) {
                 {/* Rating - Prominent */}
                 <div className="flex flex-col items-center gap-1 py-2 rounded-md bg-background/20">
                   <span className={cn('text-2xl font-bold', ratingColor)}>
-                    {entry.overallRating.toFixed(1)}
+                    {entry.overallRating?.toFixed(1) ?? '...'}
                   </span>
                   <span className="text-xs text-foreground/60">/10</span>
                 </div>

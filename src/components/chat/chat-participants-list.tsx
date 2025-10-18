@@ -326,10 +326,8 @@ function RoleSelector({
     <div className="flex items-center gap-1">
       <Popover open={rolePopoverOpen} onOpenChange={handleOpenChange}>
         <PopoverTrigger asChild>
-          <Button
-            variant="secondary"
-            size="sm"
-            className="h-6 text-xs px-2 pr-1 rounded-lg gap-1 hover:bg-secondary"
+          <div
+            className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 bg-secondary text-secondary-foreground shadow-sm hover:bg-secondary/80 h-6 text-xs px-2 pr-1 rounded-lg gap-1 cursor-pointer"
           >
             <span>{participant.role}</span>
             <button
@@ -342,7 +340,7 @@ function RoleSelector({
             >
               <Plus className="size-3 rotate-45" />
             </button>
-          </Button>
+          </div>
         </PopoverTrigger>
         <PopoverContent className="w-[calc(100vw-2rem)] max-w-[320px] sm:w-64 p-0" align="start" side="bottom" sideOffset={4}>
           <Command>

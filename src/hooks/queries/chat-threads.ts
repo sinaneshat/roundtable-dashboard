@@ -168,6 +168,14 @@ export function useThreadChangelogQuery(threadId: string, enabled?: boolean) {
  * Returns all moderator analyses ordered by round number
  * Protected endpoint - requires authentication
  *
+ * ✅ OPTIMIZED POLLING: Minimal polling to prevent rapid API calls
+ * - Primary trigger: onRoundComplete callback in ChatThreadScreen (immediate invalidation)
+ * - Backup polling: Every 2 minutes only if there are recent pending/streaming analyses
+ * - Stops automatically when all analyses complete, fail, or get too old (> 3 minutes)
+ *
+ * This prevents the rapid API calls issue seen in the Network tab while ensuring
+ * analyses are eventually discovered if the immediate trigger fails.
+ *
  * @param threadId - Thread ID
  * @param enabled - Optional control over whether to fetch (default: based on threadId and auth)
  */
@@ -179,9 +187,33 @@ export function useThreadAnalysesQuery(threadId: string, enabled?: boolean) {
     queryKey: queryKeys.threads.analyses(threadId),
     queryFn: () => getThreadAnalysesService({ param: { id: threadId } }),
     staleTime: STALE_TIMES.threadAnalyses, // 1 minute
-    // ✅ Poll for analysis updates every 10 seconds
-    // Stops polling automatically when analysis completes or query is disabled
-    refetchInterval: 10000, // Poll every 10 seconds for pending/streaming analyses
+    // ✅ OPTIMIZED POLLING: Reduced frequency to prevent rapid API calls
+    // The primary trigger is onRoundComplete callback which immediately invalidates
+    // This polling is just a backup safety net
+    refetchInterval: (query) => {
+      const data = query.state.data;
+      if (!data?.success)
+        return false;
+
+      const THREE_MINUTES_MS = 3 * 60 * 1000;
+      const now = Date.now();
+
+      // Check if any analyses are pending or streaming AND not too old
+      const hasActivePendingAnalysis = data.data.items.some((item) => {
+        if (item.status !== 'pending' && item.status !== 'streaming')
+          return false;
+
+        // Check age - if older than 3 minutes, consider it stuck (don't poll for stuck analyses)
+        const createdAt = new Date(item.createdAt).getTime();
+        const ageMs = now - createdAt;
+
+        return ageMs <= THREE_MINUTES_MS;
+      });
+
+      // ✅ CRITICAL FIX: Poll every 2 MINUTES (not 30 seconds) to prevent rapid API calls
+      // The immediate refetch via onRoundComplete callback makes frequent polling unnecessary
+      return hasActivePendingAnalysis ? 120000 : false; // 2 minutes
+    },
     enabled: enabled !== undefined ? enabled : (isAuthenticated && !!threadId),
     retry: false,
   });

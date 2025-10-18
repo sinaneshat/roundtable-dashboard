@@ -345,6 +345,9 @@
       }
     },
     "errors": {
+      "streamError": "AI Model Failed to Respond",
+      "retry": "Retry",
+      "retryHint": "The AI model failed after multiple retries. Click Retry to try again with all participants.",
       "unknownModel": "Unknown model",
       "generationCancelled": "Generation cancelled",
       "rateLimitReached": "Rate limit reached",
@@ -394,7 +397,10 @@
       "nonRetryableHint": "This error cannot be automatically retried. Please try a different approach.",
       "modelLabel": "Model",
       "technicalDetails": "Technical Details",
-      "howToFix": "How to fix"
+      "howToFix": "How to fix",
+      "emptyResponse": "No Response Generated",
+      "tryDifferentModel": "Try using a different AI model",
+      "tryDifferentPrompt": "Rephrase your question or use a different prompt"
     },
     "addToFavorites": "Add to favorites",
     "addingToFavorites": "Adding to favorites...",
@@ -694,23 +700,36 @@
     "signIn": {
       "title": "Sign In",
       "description": "Sign in to your account to access AI collaboration tools and manage your conversations.",
-      "keywords": ["sign in", "login", "authentication"]
+      "keywords": [
+        "sign in",
+        "login",
+        "authentication"
+      ]
     },
     "signUp": {
       "title": "Sign Up",
       "description": "Create an account to start collaborating with multiple AI models in real-time conversations.",
-      "keywords": ["sign up", "register"]
+      "keywords": [
+        "sign up",
+        "register"
+      ]
     },
     "legal": {
       "privacy": {
         "title": "Privacy Policy",
         "description": "Learn how we collect, use, and protect your personal information when you use our AI collaboration platform.",
-        "keywords": ["privacy", "user data"]
+        "keywords": [
+          "privacy",
+          "user data"
+        ]
       },
       "terms": {
         "title": "Terms of Service",
         "description": "Read our terms and conditions for using the AI collaboration platform and managing your account.",
-        "keywords": ["legal", "compliance"]
+        "keywords": [
+          "legal",
+          "compliance"
+        ]
       }
     }
   },
@@ -743,6 +762,9 @@
     "retry": "Retry",
     "viewFullAnalysis": "View Full Analysis",
     "participantAnalysis": "Participant Analysis",
+    "completed": "Completed",
+    "failed": "Failed",
+    "pending": "Pending",
     "thinkingMessages": [
       "Evaluating participant insights...",
       "Comparing response quality...",

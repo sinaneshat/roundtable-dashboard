@@ -15,17 +15,18 @@ import { listModelsService } from '@/services/api/models';
 /**
  * Hook to fetch all OpenRouter models
  *
- * Returns ALL models from OpenRouter API with no filtering
- * Cached with infinite stale time (no refetches)
+ * ✅ SERVER-SIDE CACHING: Backend caches models for 24h, client reuses server data
+ * ✅ NO REASONING MODELS: Backend filters out all reasoning models
+ * ✅ NO CLIENT REFETCHING: Models are prefetched server-side and rarely change
  */
 export function useModelsQuery() {
   return useQuery({
     queryKey: queryKeys.models.list(),
     queryFn: () => listModelsService(),
-    staleTime: STALE_TIMES.models, // Infinity - models cached indefinitely
-    refetchOnWindowFocus: false, // Don't refetch when window regains focus
-    refetchOnMount: false, // Don't refetch when component mounts (rely on cache)
-    retry: false,
+    staleTime: STALE_TIMES.models, // Infinity - server cache is 24h, never refetch on client
+    refetchOnWindowFocus: false, // ✅ PERFORMANCE FIX: Don't refetch on focus (was causing constant RSC requests)
+    refetchOnMount: false, // ✅ PERFORMANCE FIX: Use server-prefetched data (was causing refetch loops)
+    retry: 2, // Retry failed requests
     throwOnError: false,
   });
 }

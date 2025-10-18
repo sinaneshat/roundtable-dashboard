@@ -52,6 +52,7 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
   const user = useMemo(() => threadResponse?.user, [threadResponse]);
 
   // Convert server messages to AI SDK format using the same helper as ChatThreadScreen
+  // API returns dates as strings, chatMessagesToUIMessages handles both Date and string
   const messages: UIMessage[] = useMemo(() => chatMessagesToUIMessages(serverMessages), [serverMessages]);
 
   // Create a merged timeline of messages and grouped changelog entries
@@ -210,7 +211,6 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
                             {message.parts.map((part, partIndex) => {
                               if (part.type === 'text') {
                                 return (
-                                  // eslint-disable-next-line react/no-array-index-key -- Parts are stable content segments within a message
                                   <Response key={`${message.id}-${partIndex}`}>
                                     {part.text}
                                   </Response>

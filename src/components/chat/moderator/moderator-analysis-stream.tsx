@@ -1,221 +1,224 @@
 'use client';
 
 /**
- * ✅ AI SDK V5 OFFICIAL PATTERN: Streaming Object Generation with useObject
+ * Moderator Analysis Stream Component
  *
- * This component uses the experimental_useObject hook from @ai-sdk/react to:
- * 1. Stream analysis results in real-time from the backend
- * 2. Display partial objects as they arrive (leaderboard, skills, etc.)
- * 3. Show loading state and error handling
+ * ✅ AI SDK V5 REAL-TIME STREAMING PATTERN:
+ * - Uses experimental_useObject hook from @ai-sdk/react
+ * - Streams partial objects from /analyze endpoint as they're generated
+ * - Progressive UI updates (leaderboard → skills → participant analyses)
+ * - SIMPLIFIED: Display-only component, no complex trigger logic
  *
- * Reference: https://sdk.vercel.ai/docs/reference/ai-sdk-ui/use-object
- * Pattern: Official AI SDK documentation from Context7
+ * Reference: https://sdk.vercel.ai/docs/ai-sdk-ui/object-generation
+ * Pattern: "Render Visual Interface in Chat"
  */
 
 import { experimental_useObject as useObject } from '@ai-sdk/react';
-import { useQueryClient } from '@tanstack/react-query';
-import { useTranslations } from 'next-intl';
+import { motion } from 'framer-motion';
+import { Loader2 } from 'lucide-react';
 import { useEffect } from 'react';
 
-import type { LeaderboardEntry, ParticipantAnalysis } from '@/api/routes/chat/schema';
-import { ModeratorAnalysisSchema } from '@/api/services/moderator-analysis.service';
-import { queryKeys } from '@/lib/data/query-keys';
+import type { StoredModeratorAnalysis } from '@/api/routes/chat/schema';
+import { ModeratorAnalysisPayloadSchema } from '@/api/routes/chat/schema';
 
 import { LeaderboardCard } from './leaderboard-card';
 import { ParticipantAnalysisCard } from './participant-analysis-card';
 import { SkillsComparisonChart } from './skills-comparison-chart';
 
-// ✅ TYPE GUARDS: Filter partial/undefined objects to complete objects for rendering
-// Note: useObject returns partial objects where properties can be undefined during streaming
-function isCompleteLeaderboardEntry(entry: unknown): entry is LeaderboardEntry {
-  return entry != null
-    && typeof entry === 'object'
-    && 'rank' in entry && typeof entry.rank === 'number'
-    && 'participantIndex' in entry && typeof entry.participantIndex === 'number'
-    && 'modelId' in entry && typeof entry.modelId === 'string';
-}
-
-function isCompleteParticipantAnalysis(p: unknown): p is ParticipantAnalysis {
-  return p != null
-    && typeof p === 'object'
-    && 'participantIndex' in p && typeof p.participantIndex === 'number'
-    && 'skillsMatrix' in p && Array.isArray(p.skillsMatrix)
-    && 'pros' in p && Array.isArray(p.pros)
-    && 'cons' in p && Array.isArray(p.cons);
-}
-
 type ModeratorAnalysisStreamProps = {
-  /** Thread ID for the analysis */
   threadId: string;
-  /** Round number to analyze */
-  roundNumber: number;
-  /** Participant message IDs for this round */
-  participantMessageIds: string[];
-  /** Auto-trigger analysis on mount */
-  autoTrigger?: boolean;
+  analysis: StoredModeratorAnalysis;
+  onStreamComplete?: () => void;
 };
 
 /**
- * ModeratorAnalysisStream - Real-time streaming analysis component
+ * Moderator Analysis Stream - Real-time streaming display component
  *
- * ✅ OFFICIAL AI SDK V5 PATTERN:
- * - Uses experimental_useObject for streaming structured objects
- * - Displays partial results as they stream in
- * - Handles loading states and errors
- * - Persists to database via backend onFinish callback
- *
- * ✅ CODE REDUCTION:
- * - No manual polling logic
- * - No custom streaming implementation
- * - Uses official SDK patterns only
+ * ✅ AI SDK V5 SIMPLIFIED PATTERN:
+ * - Uses experimental_useObject hook to consume streaming endpoint
+ * - Displays partial objects as they arrive in real-time
+ * - Shows progressive UI updates (leaderboard, skills, analyses)
+ * - Calls onStreamComplete when streaming finishes
  */
 export function ModeratorAnalysisStream({
   threadId,
-  roundNumber,
-  participantMessageIds,
-  autoTrigger = true,
+  analysis,
+  onStreamComplete,
 }: ModeratorAnalysisStreamProps) {
-  const t = useTranslations('moderator');
-  const queryClient = useQueryClient();
-
-  // ✅ AI SDK V5 OFFICIAL PATTERN: useObject hook for streaming objects
-  const { object, submit, isLoading, error, stop } = useObject({
-    api: `/api/v1/chat/threads/${threadId}/rounds/${roundNumber}/analyze`,
-    schema: ModeratorAnalysisSchema,
+  // ✅ AI SDK V5 PATTERN: experimental_useObject hook for real-time streaming
+  // Reference: https://sdk.vercel.ai/docs/ai-sdk-ui/object-generation
+  const { object: partialAnalysis, submit, isLoading, error } = useObject({
+    api: `/api/v1/chat/threads/${threadId}/rounds/${analysis.roundNumber}/analyze`,
+    schema: ModeratorAnalysisPayloadSchema,
   });
 
-  // ✅ Auto-trigger analysis when component mounts
+  // ✅ AUTO-TRIGGER: Start streaming immediately when component mounts
+  // This replaces the complex trigger logic from the previous implementation
   useEffect(() => {
-    if (autoTrigger && participantMessageIds.length > 0 && !isLoading) {
-      // ✅ AI SDK V5 PATTERN: Submit sends request body (AI SDK handles JSON encoding)
-      // Backend expects: { participantMessageIds: string[] }
-      submit({ participantMessageIds });
+    if (analysis.status === 'pending' && !isLoading && !partialAnalysis && !error) {
+      submit({
+        participantMessageIds: analysis.participantMessageIds,
+      });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoTrigger]); // Only trigger on mount
+  }, [analysis.status, analysis.participantMessageIds, submit, isLoading, partialAnalysis, error]);
 
-  // ✅ Invalidate analyses query when streaming completes
+  // ✅ STREAM COMPLETE CALLBACK: Notify parent when streaming finishes
   useEffect(() => {
-    if (!isLoading && object && !error) {
-      // Analysis completed successfully - invalidate to refresh list
-      queryClient.invalidateQueries({ queryKey: queryKeys.threads.analyses(threadId) });
+    if (!isLoading && partialAnalysis && onStreamComplete) {
+      onStreamComplete();
     }
-  }, [isLoading, object, error, queryClient, threadId]);
+  }, [isLoading, partialAnalysis, onStreamComplete]);
 
-  // ✅ LOADING STATE: Show simple loading indicator
-  if (isLoading) {
-    return (
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <span className="size-1.5 rounded-full bg-primary/60 animate-pulse" />
-            <span>{t('analyzing')}</span>
-          </div>
-          <button
-            type="button"
-            onClick={stop}
-            className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-          >
-            {t('stop')}
-          </button>
-        </div>
-
-        {/* ✅ PARTIAL STREAMING: Show partial results as they arrive */}
-        {object && (
-          <div className="space-y-4 opacity-75">
-            {/* Leaderboard - shows as soon as available */}
-            {object.leaderboard && object.leaderboard.length > 0 && (
-              <LeaderboardCard
-                leaderboard={object.leaderboard.filter(isCompleteLeaderboardEntry)}
-              />
-            )}
-
-            {/* Skills comparison - shows as participants analyzed */}
-            {object.participantAnalyses && object.participantAnalyses.length > 0 && (
-              <SkillsComparisonChart
-                participants={object.participantAnalyses.filter(isCompleteParticipantAnalysis)}
-              />
-            )}
-
-            {/* Individual analyses - shows as each completes */}
-            {object.participantAnalyses && object.participantAnalyses.length > 0 && (
-              <div className="space-y-3">
-                {object.participantAnalyses.filter(isCompleteParticipantAnalysis).map((participant, index) => (
-                  <ParticipantAnalysisCard
-                    key={`${participant.participantIndex}-${index}`}
-                    analysis={participant}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  // ✅ ERROR STATE: Show error message
+  // ❌ ERROR STATE: Show error if streaming fails
   if (error) {
     return (
       <div className="flex items-center gap-2 py-2 text-sm text-destructive">
         <span className="size-1.5 rounded-full bg-destructive/80" />
-        <span>{error.message || t('errorAnalyzing')}</span>
+        <span>
+          Failed to generate analysis:
+          {error.message}
+        </span>
       </div>
     );
   }
 
-  // ✅ COMPLETED STATE: Show final results
-  if (!object) {
-    return null;
+  // ⏳ LOADING STATE: Show loading while waiting for first partial
+  if (isLoading && !partialAnalysis) {
+    return (
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        className="space-y-3"
+      >
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Loader2 className="size-4 animate-spin" />
+          <span>Starting analysis...</span>
+        </div>
+      </motion.div>
+    );
   }
 
-  return (
-    <div className="space-y-4">
-      {/* Leaderboard */}
-      {object.leaderboard && object.leaderboard.length > 0 && (
-        <LeaderboardCard
-          leaderboard={object.leaderboard.filter(isCompleteLeaderboardEntry)}
-        />
-      )}
+  // ✅ STREAMING/COMPLETED STATE: Display partial object as it arrives
+  // Progressive rendering: show each section as it becomes available
+  if (partialAnalysis) {
+    // ✅ TYPE SAFETY: Filter out undefined partial objects
+    // experimental_useObject returns PartialObject types which can have undefined values
+    const leaderboard = partialAnalysis.leaderboard?.filter(entry => entry !== undefined) as Array<{
+      rank: number;
+      participantIndex: number;
+      participantRole: string | null;
+      modelId: string;
+      modelName: string;
+      overallRating: number;
+      badge: string | null;
+    }> | undefined;
 
-      {/* Skills Comparison Chart */}
-      {object.participantAnalyses && object.participantAnalyses.length > 0 && (
-        <SkillsComparisonChart
-          participants={object.participantAnalyses.filter(isCompleteParticipantAnalysis)}
-        />
-      )}
+    const participantAnalyses = partialAnalysis.participantAnalyses?.filter(p => p !== undefined) as Array<{
+      participantIndex: number;
+      participantRole: string | null;
+      modelId: string;
+      modelName: string;
+      overallRating: number;
+      skillsMatrix: Array<{ skillName: string; rating: number }>;
+      pros: string[];
+      cons: string[];
+      summary: string;
+    }> | undefined;
 
-      {/* Participant Analysis Cards */}
-      {object.participantAnalyses && object.participantAnalyses.length > 0 && (
-        <div className="space-y-3">
-          {object.participantAnalyses.filter(isCompleteParticipantAnalysis).map((participant, index) => (
-            <ParticipantAnalysisCard
-              key={`${participant.participantIndex}-${index}`}
-              analysis={participant}
-            />
-          ))}
-        </div>
-      )}
+    return (
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        className="space-y-4"
+      >
+        {/* Leaderboard - appears first */}
+        {leaderboard && leaderboard.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3 }}
+          >
+            <LeaderboardCard leaderboard={leaderboard} />
+          </motion.div>
+        )}
 
-      {/* Overall Summary */}
-      {object.overallSummary && (
-        <div className="space-y-2 pt-2">
-          <h3 className="text-sm font-semibold">{t('summary')}</h3>
-          <p className="text-sm text-muted-foreground leading-relaxed">
-            {object.overallSummary}
-          </p>
-        </div>
-      )}
+        {/* Skills Comparison Chart */}
+        {participantAnalyses && participantAnalyses.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, delay: 0.1 }}
+          >
+            <SkillsComparisonChart participants={participantAnalyses} />
+          </motion.div>
+        )}
 
-      {/* Conclusion */}
-      {object.conclusion && (
-        <div className="space-y-2 pt-2">
-          <h3 className="text-sm font-semibold text-primary">{t('conclusion')}</h3>
-          <p className="text-sm leading-relaxed">
-            {object.conclusion}
-          </p>
-        </div>
-      )}
-    </div>
-  );
+        {/* Participant Analysis Cards - stream in as they're generated */}
+        {participantAnalyses && participantAnalyses.length > 0 && (
+          <motion.div
+            className="space-y-3"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.3, delay: 0.2 }}
+          >
+            {participantAnalyses.map((participant, index) => (
+              <motion.div
+                key={`${analysis.id}-participant-${participant.participantIndex ?? index}`}
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.3, delay: 0.1 * index }}
+              >
+                <ParticipantAnalysisCard analysis={participant} />
+              </motion.div>
+            ))}
+          </motion.div>
+        )}
+
+        {/* Overall Summary */}
+        {partialAnalysis.overallSummary && (
+          <motion.div
+            className="space-y-2 pt-2"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, delay: 0.3 }}
+          >
+            <h3 className="text-sm font-semibold">Summary</h3>
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              {partialAnalysis.overallSummary}
+            </p>
+          </motion.div>
+        )}
+
+        {/* Conclusion */}
+        {partialAnalysis.conclusion && (
+          <motion.div
+            className="space-y-2 pt-2"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, delay: 0.4 }}
+          >
+            <h3 className="text-sm font-semibold text-primary">Conclusion</h3>
+            <p className="text-sm leading-relaxed">
+              {partialAnalysis.conclusion}
+            </p>
+          </motion.div>
+        )}
+
+        {/* Loading indicator while streaming continues */}
+        {isLoading && (
+          <motion.div
+            className="flex items-center gap-2 text-xs text-muted-foreground"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+          >
+            <span className="size-1.5 rounded-full bg-primary/60 animate-pulse" />
+            <span>Generating analysis...</span>
+          </motion.div>
+        )}
+      </motion.div>
+    );
+  }
+
+  // Default: Nothing to render yet
+  return null;
 }

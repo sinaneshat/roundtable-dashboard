@@ -3,8 +3,9 @@ import type { RouteHandler } from '@hono/zod-openapi';
 import { createHandler, Responses } from '@/api/core';
 import type { ApiEnv } from '@/api/types';
 import { getDbAsync } from '@/db';
+import { STATIC_CACHE_TAGS } from '@/db/cache/cache-tags';
 
-import type { detailedHealthRoute, healthRoute } from './route';
+import type { clearCacheRoute, detailedHealthRoute, healthRoute } from './route';
 
 /**
  * Basic health check handler
@@ -118,3 +119,54 @@ function checkEnvironment(c: HealthCheckContext) {
     };
   }
 }
+
+/**
+ * Clear all backend caches handler
+ * Invalidates all known cache tags to force fresh data
+ */
+export const clearCacheHandler: RouteHandler<typeof clearCacheRoute, ApiEnv> = createHandler(
+  {
+    auth: 'public',
+    operationName: 'clearCache',
+  },
+  async (c) => {
+    try {
+      const db = await getDbAsync();
+
+      // List of all cache tags that will be cleared
+      const clearedTags: string[] = [];
+
+      // Invalidate all static cache tags
+      if (db.$cache) {
+        // Build list of all known static tags
+        const staticTags = [
+          STATIC_CACHE_TAGS.ACTIVE_PRODUCTS,
+          STATIC_CACHE_TAGS.ACTIVE_PRICES,
+        ];
+
+        await db.$cache.invalidate({
+          tags: staticTags,
+        });
+
+        clearedTags.push(...staticTags);
+        clearedTags.push('all-static-caches-invalidated');
+      } else {
+        clearedTags.push('no-cache-configured');
+      }
+
+      return c.json({
+        ok: true,
+        message: 'All backend caches cleared successfully. Note: User-specific caches will be cleared on next mutation.',
+        timestamp: new Date().toISOString(),
+        clearedTags,
+      });
+    } catch (error) {
+      return c.json({
+        ok: false,
+        message: `Failed to clear caches: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        timestamp: new Date().toISOString(),
+        clearedTags: [],
+      }, 500);
+    }
+  },
+);

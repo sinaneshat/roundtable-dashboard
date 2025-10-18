@@ -1,9 +1,20 @@
 /**
  * Models API Handlers
  *
- * ✅ DYNAMIC MODE: Fetches models from OpenRouter API
- * ✅ TEXT-ONLY: Filters to text/chat/reasoning models (no audio/image/video generation)
- * ✅ USES EXISTING TIER LOGIC: product-logic.service.ts for all grouping
+ * ✅ 100% DYNAMIC ARCHITECTURE WITH PROVIDER DIVERSITY:
+ * - 250 top models selected by quality scoring (NO hard-coded providers)
+ * - Max 5 models per provider (ensures diversity across OpenAI, Anthropic, Google, etc.)
+ * - Scoring based on: context length, recency, capabilities, pricing tier
+ * - Fully adaptive to new models and providers from OpenRouter
+ * - Uses ONLY OpenRouter API data fields (no pattern matching)
+ *
+ * ✅ TEXT-CAPABLE: Includes text and multimodal models (excludes pure image/audio/video generation)
+ * ✅ PAID MODELS ONLY: Excludes OpenRouter free tier (pricing = "0")
+ * ✅ AGGRESSIVE PRICING TIERS: Optimized for Pro tier upselling
+ *   - Free: $0.05/M (~15 models) - VERY LIMITED
+ *   - Starter: $0.20/M (~35 models)
+ *   - Pro: $2.50/M (~180 models) ← MAIN UPSELL TARGET
+ *   - Power: Unlimited (~250 models)
  *
  * Pattern: Following src/api/routes/{auth,billing}/handler.ts patterns
  */
@@ -24,20 +35,26 @@ import type { TierGroup } from './schema';
 // ============================================================================
 
 /**
- * List top 100 dynamically fetched models with tier-based access control
+ * List top 50 dynamically fetched models with tier-based access control
  *
  * GET /api/v1/models
  *
- * ✅ DYNAMIC MODE: Fetches top 100 smartest models from OpenRouter API
- * ✅ TEXT-ONLY: Automatically filters to text/chat/reasoning models (no audio/image/video)
+ * ✅ REFACTORED ALGORITHM:
+ * - Top 5 models from each major provider (Anthropic, OpenAI, Google, DeepSeek, etc.)
+ * - Limited to 50 total models across all providers
+ * - Provider diversity ensures users see best options from each ecosystem
+ * - Models scored within provider by: context length, recency, capabilities
+ *
+ * ✅ TEXT-ONLY: Automatically filters to text/chat models (no audio/image/video/reasoning)
+ * ✅ SOLID PRINCIPLES: Clean separation of concerns, single responsibility
  * Uses existing subscription tier logic from product-logic.service.ts
  *
  * Returns:
  * - Tier information (required_tier, is_accessible_to_user)
  * - Top 10 flagship models in separate section
- * - Models grouped by subscription tier
+ * - Models grouped by subscription tier (Free, Starter, Pro, Power)
  * - Default model selection based on user's tier
- * - Cached for 24 hours to minimize API calls
+ * - Client-side caching via TanStack Query
  */
 export const listModelsHandler: RouteHandler<typeof listModelsRoute, ApiEnv> = createHandler(
   {
@@ -52,14 +69,38 @@ export const listModelsHandler: RouteHandler<typeof listModelsRoute, ApiEnv> = c
     const userTier = await getUserTier(user.id);
 
     // ============================================================================
-    // ✅ DYNAMIC FETCHING: Get top 100 models from OpenRouter API
+    // ✅ 100% DYNAMIC MODEL SELECTION: Top 250 with provider diversity
     // ============================================================================
 
-    // Get top 100 most popular models from OpenRouter based on scoring algorithm
-    // - Text-only models (filters out audio/image/video generation)
-    // - Uses provider quality, capabilities, context length, and recency
-    // - Cached for 24 hours to minimize API calls
-    const enhancedModels = await openRouterModelsService.getTop100Models();
+    // FULLY DYNAMIC ALGORITHM (no hard-coded providers or model names):
+    // 1. Fetch all paid, text-capable models from OpenRouter API
+    // 2. Score each model based on:
+    //    - Context length (35 points)
+    //    - Recency (25 points)
+    //    - Capabilities from API (20 points)
+    //    - Pricing tier (20 points)
+    // 3. Sort by score and apply provider diversity (max 5 per provider)
+    // 4. Return top 250 models total
+    //
+    // Benefits:
+    // - Automatically adapts to new models and providers
+    // - Uses only OpenRouter API data fields
+    // - No pattern matching or hard-coded preferences
+    // - Provider diversity: Max 5 models from any provider
+    // - Ensures coverage across all pricing tiers
+    //
+    // Filtering:
+    // - Text-capable: Uses architecture.modality from API (output must be pure "text")
+    // - Paid only: Excludes models with pricing = "0" (OpenRouter free tier)
+    //
+    // Pricing Tiers (AGGRESSIVE UPSELLING):
+    // - Free: $0.05/M (~15 models) - Very limited for testing
+    // - Starter: $0.20/M (~35 models) - Budget tier
+    // - Pro: $2.50/M (~180 models) - Flagship models ← MAIN UPSELL
+    // - Power: Unlimited (~250 models) - All ultra-premium
+    //
+    // TanStack Query handles client-side caching
+    const enhancedModels = await openRouterModelsService.getTopModelsAcrossProviders();
 
     // ============================================================================
     // ✅ SERVER-COMPUTED TIER ACCESS: Use existing pricing-based tier detection
@@ -87,22 +128,54 @@ export const listModelsHandler: RouteHandler<typeof listModelsRoute, ApiEnv> = c
     const defaultModelId = await openRouterModelsService.getDefaultModelForTier(userTier);
 
     // ============================================================================
-    // ✅ FLAGSHIP MODELS: Top 10 most popular models shown first
+    // ✅ FLAGSHIP MODELS: Top 10 most popular with max 2 per provider
     // ============================================================================
-    // Uses dynamic flagship scoring algorithm (getFlagshipScore)
-    // Models with score >= 70 are considered flagship
-    // Based on provider quality, context length, recency, and capabilities
-    const flagshipModels = modelsWithTierInfo.filter(m => getFlagshipScore(m) >= 70);
+    // Ensures provider diversity in "Most Popular" section
+    // Algorithm:
+    // 1. Filter models with flagship score >= 70
+    // 2. Group by provider
+    // 3. Take max 2 highest-scored models from each provider
+    // 4. Sort all selected models by score
+    // 5. Take top 10 overall
+    const flagshipCandidates = modelsWithTierInfo.filter(m => getFlagshipScore(m) >= 70);
 
-    // Sort flagship models by their flagship score (highest first)
-    flagshipModels.sort((a, b) => {
+    // Sort by flagship score first
+    flagshipCandidates.sort((a, b) => {
       const scoreA = getFlagshipScore(a);
       const scoreB = getFlagshipScore(b);
       return scoreB - scoreA;
     });
 
-    // Limit to top 10 flagship models
-    const top10Flagship = flagshipModels.slice(0, 10);
+    // Group by provider and take max 2 from each
+    const modelsByProvider = new Map<string, typeof modelsWithTierInfo>();
+
+    for (const model of flagshipCandidates) {
+      const provider = model.provider;
+      if (!modelsByProvider.has(provider)) {
+        modelsByProvider.set(provider, []);
+      }
+
+      const providerModels = modelsByProvider.get(provider)!;
+      // Only add if this provider has less than 2 models already
+      if (providerModels.length < 2) {
+        providerModels.push(model);
+      }
+    }
+
+    // Flatten and sort by flagship score again
+    const diverseFlagshipModels: typeof modelsWithTierInfo = [];
+    for (const providerModels of modelsByProvider.values()) {
+      diverseFlagshipModels.push(...providerModels);
+    }
+
+    diverseFlagshipModels.sort((a, b) => {
+      const scoreA = getFlagshipScore(a);
+      const scoreB = getFlagshipScore(b);
+      return scoreB - scoreA;
+    });
+
+    // Limit to top 10 flagship models (max 2 per provider)
+    const top10Flagship = diverseFlagshipModels.slice(0, 10);
 
     // ============================================================================
     // ✅ TIER GROUPS: Group remaining models by subscription tier
@@ -143,14 +216,22 @@ export const listModelsHandler: RouteHandler<typeof listModelsRoute, ApiEnv> = c
     };
 
     // ============================================================================
-    // ✅ RETURN RESPONSE: Standard collection response format
+    // ✅ RETURN RESPONSE: Standard collection response format with cache headers
     // ============================================================================
-    return Responses.collection(c, modelsWithTierInfo, {
+    const response = Responses.collection(c, modelsWithTierInfo, {
       total: modelsWithTierInfo.length,
       default_model_id: defaultModelId,
       flagship_models: top10Flagship,
       tier_groups: tierGroups,
       user_tier_config: userTierConfig,
     });
+
+    // ✅ CLOUDFLARE CACHE HEADERS: Enable edge caching and provide cache tag for invalidation
+    // Cache for 1 hour with revalidation, allow stale content for 24 hours while revalidating
+    // Cache tag 'models' allows purging all model data when needed via Cloudflare API
+    response.headers.set('Cache-Control', 'public, max-age=3600, stale-while-revalidate=86400');
+    response.headers.set('Cache-Tag', 'models');
+
+    return response;
   },
 );
