@@ -225,7 +225,7 @@ export default function ChatThreadScreen({
     setSelectedParticipants(newParticipants);
   }, []);
 
-  // ✅ Initialize context when component mounts or thread changes
+  // ✅ Initialize context when component mounts or thread/messages change
   useEffect(() => {
     // Convert initial messages to UIMessage format
     const uiMessages = chatMessagesToUIMessages(initialMessages);
@@ -241,10 +241,13 @@ export default function ChatThreadScreen({
       }
     });
 
-    // ✅ CRITICAL: Only depend on thread.id to prevent infinite loops
-    // participants/initialMessages come from server props and shouldn't trigger re-initialization
+    // ✅ CRITICAL FIX: Include initialMessages.length to sync reasoning and other message parts
+    // When navigating to a chat page, initialMessages may contain new data (including reasoning)
+    // that needs to be synced to the chat context. Without this dependency, reasoning parts
+    // won't appear until page refresh.
+    // Using length as dependency to avoid unnecessary re-initialization when only message content changes
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [thread.id]);
+  }, [thread.id, initialMessages.length]);
 
   // ✅ FIX: Separate useEffect for round completion to prevent re-registering callback
   // This ensures the callback is only set once and uses stable thread.id reference
@@ -661,16 +664,56 @@ export default function ChatThreadScreen({
     });
   }, [messagesWithAnalysesAndChangelog, analyses, changelog]);
 
-  // ✅ VIRTUALIZATION: TanStack Virtual v3 - Direct scroll container pattern
-  // Following official examples: virtualizer controls its own scroll container
+  // ✅ VIRTUALIZATION: TanStack Virtual v3 - Use layout's scroll container
+  // The layout provides #chat-scroll-container, we use that instead of creating a nested scroll container
   // Reference: https://tanstack.com/virtual/latest/docs/framework/react/examples/dynamic
-  const parentRef = useRef<HTMLDivElement>(null);
+  const parentRef = useRef<HTMLElement | null>(null);
+  const scrollingRef = useRef<number | undefined>(undefined);
+
+  // Get the layout's scroll container on mount
+  useEffect(() => {
+    parentRef.current = document.getElementById('chat-scroll-container');
+  }, []);
+
+  // ✅ SMOOTH SCROLL: Custom scrollToFn with easing animation for TanStack Virtual v3
+  const easeInOutQuint = useCallback((t: number) => {
+    return t < 0.5 ? 16 * t * t * t * t * t : 1 + 16 * --t * t * t * t * t;
+  }, []);
+
+  const scrollToFn = useCallback(
+    (offset: number, _options: { adjustments?: number; behavior?: ScrollBehavior }) => {
+      const duration = 500;
+      const start = parentRef.current?.scrollTop || 0;
+      const startTime = (scrollingRef.current = Date.now());
+
+      const run = () => {
+        if (scrollingRef.current !== startTime)
+          return;
+
+        const now = Date.now();
+        const elapsed = now - startTime;
+        const progress = easeInOutQuint(Math.min(elapsed / duration, 1));
+        const interpolated = start + (offset - start) * progress;
+
+        if (elapsed < duration && parentRef.current) {
+          parentRef.current.scrollTop = interpolated;
+          requestAnimationFrame(run);
+        } else if (parentRef.current) {
+          parentRef.current.scrollTop = interpolated;
+        }
+      };
+
+      requestAnimationFrame(run);
+    },
+    [easeInOutQuint],
+  );
 
   const rowVirtualizer = useVirtualizer({
     count: messagesWithAnalysesAndChangelog.length,
     getScrollElement: () => parentRef.current,
-    estimateSize: () => 200,
+    estimateSize: () => 200, // Estimate for dynamic content
     overscan: 5,
+    scrollToFn, // ✅ Smooth scrolling for better UX
   });
 
   const virtualItems = rowVirtualizer.getVirtualItems();
@@ -685,47 +728,71 @@ export default function ChatThreadScreen({
     });
   }, [messagesWithAnalysesAndChangelog.length, virtualItems.length, rowVirtualizer]);
 
-  // ✅ AUTO-SCROLL: Scroll to bottom when new messages arrive (using our scroll container)
+  // ✅ AUTO-SCROLL: Enhanced scroll-to-bottom when new messages arrive
+  // Uses virtualizer's scrollToIndex for smooth, optimized scrolling
+  const isNearBottomRef = useRef(true); // Track if user is viewing bottom
+
+  // Track scroll position to determine if user is near bottom
   useEffect(() => {
     if (!parentRef.current)
       return;
 
     const scrollContainer = parentRef.current;
-    const { scrollTop, scrollHeight, clientHeight } = scrollContainer;
-    const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
-    const isNearBottom = distanceFromBottom < 200;
 
-    // Only auto-scroll if we're already near the bottom
-    if (isNearBottom) {
+    const handleScroll = () => {
+      const { scrollTop, scrollHeight, clientHeight } = scrollContainer;
+      const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+      // Consider "near bottom" if within 200px of bottom
+      isNearBottomRef.current = distanceFromBottom < 200;
+    };
+
+    scrollContainer.addEventListener('scroll', handleScroll);
+    return () => scrollContainer.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  // Auto-scroll to bottom when new messages arrive (only if user is near bottom)
+  useEffect(() => {
+    if (!parentRef.current || messagesWithAnalysesAndChangelog.length === 0) {
+      return;
+    }
+
+    // Only auto-scroll if user is viewing the bottom
+    // This prevents disrupting users who are reading older messages
+    if (isNearBottomRef.current) {
+      // Use virtualizer's scrollToIndex with smooth scrolling
+      // This is more efficient than manual scrollTo
       requestAnimationFrame(() => {
-        scrollContainer.scrollTo({
-          top: scrollContainer.scrollHeight,
+        rowVirtualizer.scrollToIndex(messagesWithAnalysesAndChangelog.length - 1, {
+          align: 'end',
           behavior: 'smooth',
         });
       });
     }
-  }, [messages.length]);
+  }, [messagesWithAnalysesAndChangelog.length, rowVirtualizer]);
 
   return (
-    <div className="absolute inset-0 flex flex-col">
-      {/* Spacer for header */}
-      <div className="h-16 flex-shrink-0" />
-
-      {/* ✅ VIRTUALIZATION: Scroll container - this element has overflow */}
-      <div
-        ref={parentRef}
-        className="flex-1 overflow-y-auto"
-        style={{
-          contain: 'strict',
-        }}
-      >
-        <div className="container max-w-3xl mx-auto px-4 sm:px-6 pt-16" style={{ paddingBottom: '250px' }}>
-          {/* ✅ VIRTUALIZATION: Inner container with calculated total height */}
+    <>
+      {/* ✅ Use layout's scroll container - no nested scroll container needed */}
+      {/* Content container with virtualization */}
+      <div className="container max-w-3xl mx-auto px-4 sm:px-6 pt-16" style={{ paddingBottom: '250px' }}>
+        {/* ✅ VIRTUALIZATION: Inner container with calculated total height */}
+        <div
+          style={{
+            height: `${rowVirtualizer.getTotalSize()}px`,
+            width: '100%',
+            position: 'relative',
+          }}
+        >
+          {/* ✅ DYNAMIC PATTERN: Wrapper div translated by first item's start position
+               Reference: TanStack Virtual dynamic example
+               Items inside are NOT absolutely positioned - naturally laid out */}
           <div
             style={{
-              height: `${rowVirtualizer.getTotalSize()}px`,
+              position: 'absolute',
+              top: 0,
+              left: 0,
               width: '100%',
-              position: 'relative',
+              transform: `translateY(${virtualItems[0]?.start ?? 0}px)`,
             }}
           >
             {/* ✅ VIRTUALIZATION: Render only visible items for performance */}
@@ -745,23 +812,16 @@ export default function ChatThreadScreen({
                     ? item.data[0]?.roundNumber || 1
                     : 1;
 
-              // ✅ VIRTUALIZATION: Absolutely positioned item wrapper
-              // Official TanStack Virtual pattern - direct scroll container
+              // ✅ DYNAMIC PATTERN: Item is naturally laid out (NO absolute positioning)
+              // measureElement ref allows virtualizer to measure actual height
               return (
                 <div
                   key={virtualItem.key}
                   data-index={virtualItem.index}
                   ref={rowVirtualizer.measureElement}
-                  style={{
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    width: '100%',
-                    transform: `translateY(${virtualItem.start}px)`,
-                  }}
                 >
                   {item.type === 'changelog' && item.data.length > 0 && (
-                  // ✅ Changelog before round - ALL changes for this round in ONE accordion
+                    // ✅ Changelog before round - ALL changes for this round in ONE accordion
                     <ConfigurationChangesGroup
                       className="mb-6"
                       group={{
@@ -772,7 +832,7 @@ export default function ChatThreadScreen({
                   )}
 
                   {item.type === 'messages' && (
-                  // Messages for this round + Actions + Feedback (AI Elements pattern)
+                    // Messages for this round + Actions + Feedback (AI Elements pattern)
                     <div className="space-y-3">
                       <ChatMessageList
                         messages={item.data}
@@ -789,7 +849,7 @@ export default function ChatThreadScreen({
 
                       {/* ✅ AI ELEMENTS PATTERN: Actions + Feedback after messages, before analysis */}
                       {!isStreaming && (() => {
-                      // ✅ TYPE-SAFE ERROR CHECK: Use validated MessageMetadata type
+                        // ✅ TYPE-SAFE ERROR CHECK: Use validated MessageMetadata type
                         const hasRoundError = item.data.some((msg) => {
                           const parseResult = MessageMetadataSchema.safeParse(msg.metadata);
                           return parseResult.success && messageHasError(parseResult.data);
@@ -832,7 +892,7 @@ export default function ChatThreadScreen({
                   )}
 
                   {item.type === 'analysis' && (
-                  // Analysis after round (shows results)
+                    // Analysis after round (shows results)
                     <RoundAnalysisCard
                       className="mt-6"
                       analysis={item.data}
@@ -844,20 +904,20 @@ export default function ChatThreadScreen({
               );
             })}
           </div>
-
-          {/* Streaming participants loader */}
-          {isStreaming && selectedParticipants.length > 1 && (
-            <StreamingParticipantsLoader
-              className="mt-8"
-              participants={selectedParticipants}
-              currentParticipantIndex={currentParticipantIndex}
-            />
-          )}
         </div>
+
+        {/* Streaming participants loader */}
+        {isStreaming && selectedParticipants.length > 1 && (
+          <StreamingParticipantsLoader
+            className="mt-8"
+            participants={selectedParticipants}
+            currentParticipantIndex={currentParticipantIndex}
+          />
+        )}
       </div>
 
-      {/* Input container - absolute positioning within parent flex column */}
-      <div className="absolute bottom-0 left-0 right-0 z-50 w-full">
+      {/* Input container - sticky to scroll container bottom */}
+      <div className="sticky bottom-0 z-50 mt-auto -mx-4 sm:-mx-6 bg-gradient-to-t from-background via-background to-transparent pt-6">
         <div className="container max-w-3xl mx-auto px-4 sm:px-6 py-4 md:py-6 w-full">
           <ChatInput
             value={inputValue}
@@ -899,6 +959,6 @@ export default function ChatThreadScreen({
         threadId={thread.id}
         threadSlug={slug}
       />
-    </div>
+    </>
   );
 }

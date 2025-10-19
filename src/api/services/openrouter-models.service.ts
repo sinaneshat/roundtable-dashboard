@@ -136,15 +136,24 @@ class OpenRouterModelsService {
     // These are low-quality models provided free by OpenRouter, not premium models
     const paidModels = textCapableModels.filter(model => !this.isOpenRouterFreeTier(model));
 
+    // ✅ FILTER: Exclude :free suffix models with severe rate limits
+    // These models have restrictive rate limits (20/min, 50/day) that cause 429 errors in production
+    const nonFreeTierModels = paidModels.filter(model => !this.isFreeTierModel(model));
+
     // ✅ FILTER: Exclude fine-tuned and training models
     // These models require special data policies (like "Paid model training") that most users don't have enabled
     // This prevents runtime errors when users try to use models they don't have access to
-    const standardModels = paidModels.filter(model => !this.isFineTunedOrTrainingModel(model));
+    const standardModels = nonFreeTierModels.filter(model => !this.isFineTunedOrTrainingModel(model));
 
     // ✅ FILTER: Exclude research derivative models requiring data policy opt-in
     // Research labs sometimes publish models based on other companies' models as initialization
     // These require "Paid model training" opt-in, filtered dynamically by description analysis
-    const accessibleModels = standardModels.filter(model => !this.isResearchDerivativeModel(model));
+    const nonDerivativeModels = standardModels.filter(model => !this.isResearchDerivativeModel(model));
+
+    // ✅ FILTER: Exclude models requiring moderation
+    // Some models return 403 errors if user input triggers content filtering
+    // This prevents unpredictable failures based on user input content
+    const accessibleModels = nonDerivativeModels.filter(model => !this.isModeratedModel(model));
 
     // Enhance models with computed fields
     const enhancedModels = accessibleModels.map(model => this.enhanceModel(model));
@@ -166,6 +175,57 @@ class OpenRouterModelsService {
 
     // If both prompt and completion are free (0), it's OpenRouter free tier
     return promptPrice === MIN_PRICING_THRESHOLD && completionPrice === MIN_PRICING_THRESHOLD;
+  }
+
+  /**
+   * ✅ FILTER: Exclude models with :free suffix
+   *
+   * Models with `:free` suffix have severe rate limits that cause production errors:
+   * - 20 requests per minute
+   * - 50 requests per day (without $10 credits)
+   * - 1000 requests per day (with $10 credits)
+   *
+   * These rate limits are too restrictive for production use and will cause
+   * 429 Rate Limit errors for users, especially in a multi-model chat application.
+   *
+   * Examples:
+   * - meta-llama/llama-3.3-70b-instruct:free
+   * - google/gemini-2.0-flash-exp:free
+   *
+   * Error when rate limit exceeded:
+   * "RateLimitError: OpenrouterException - Rate limit exceeded"
+   *
+   * @param model - Raw model from OpenRouter API
+   * @returns true if model has :free suffix (should be excluded)
+   */
+  private isFreeTierModel(model: RawOpenRouterModel): boolean {
+    return model.id.endsWith(':free');
+  }
+
+  /**
+   * ✅ FILTER: Exclude models requiring moderation
+   *
+   * Some models require moderation and will return 403 errors if user input is flagged.
+   * This causes unpredictable failures based on user input content.
+   *
+   * Error when content is flagged:
+   * "403 Forbidden: Your chosen model requires moderation and your input was flagged"
+   *
+   * The error metadata includes:
+   * - reasons: Array of why input was flagged
+   * - flagged_input: The text segment that was flagged (max 100 chars)
+   *
+   * Examples of moderated models:
+   * - Some Google Gemini variants with strict content filtering
+   * - Models that enforce provider-side content policies
+   *
+   * Detection: Uses the top_provider.is_moderated field from OpenRouter API
+   *
+   * @param model - Raw model from OpenRouter API
+   * @returns true if model requires moderation (should be excluded)
+   */
+  private isModeratedModel(model: RawOpenRouterModel): boolean {
+    return model.top_provider?.is_moderated === true;
   }
 
   /**

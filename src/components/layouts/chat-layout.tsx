@@ -2,7 +2,7 @@ import { dehydrate, HydrationBoundary } from '@tanstack/react-query';
 import type React from 'react';
 import { Suspense } from 'react';
 
-import { NavigationHeader } from '@/components/chat/chat-header';
+import { ChatHeaderSwitch } from '@/components/chat/chat-header-switch';
 import { AppSidebar } from '@/components/chat/chat-nav';
 import { ThreadHeaderProvider } from '@/components/chat/thread-header-context';
 import { ContentLoadingFallback, SidebarLoadingFallback } from '@/components/loading';
@@ -126,13 +126,18 @@ export default async function ChatLayout({ children, modal }: ChatLayoutProps) {
           </Suspense>
 
           <SidebarInset className="h-svh relative">
-            <NavigationHeader />
+            <ChatHeaderSwitch />
 
             {/* ✅ OPTIMIZATION: Suspense boundary for main content streaming */}
             {/* Content fills viewport below fixed header - THIS IS THE PRIMARY SCROLL CONTAINER */}
             {/* Page-level scrolling happens here, not in inner divs */}
             {/* top-16 (64px) for header clearance, no bottom offset - content padding handles spacing */}
-            <div id="chat-scroll-container" className="absolute inset-0 top-16 overflow-y-auto overflow-x-hidden">
+            {/* contain: 'strict' for better virtualization performance (TanStack Virtual best practice) */}
+            <div
+              id="chat-scroll-container"
+              className="absolute inset-0 top-16 overflow-y-auto overflow-x-hidden"
+              style={{ contain: 'strict' }}
+            >
               <Suspense fallback={<ContentLoadingFallback />}>
                 {children}
               </Suspense>

@@ -76,12 +76,14 @@ type OrderedModel = {
 
 function RoleSelector({
   participant,
+  allParticipants,
   customRoles,
   onRoleChange,
   onClearRole,
   onRequestSelection,
 }: {
   participant: ParticipantConfig | null;
+  allParticipants: ParticipantConfig[]; // ✅ All participants to check for custom role uniqueness
   customRoles: CustomRole[]; // ✅ Using RPC-inferred type from service
   onRoleChange: (role: string, customRoleId?: string) => void;
   onClearRole: () => void;
@@ -106,6 +108,20 @@ function RoleSelector({
     }
     setRolePopoverOpen(open);
   };
+
+  // ✅ CUSTOM ROLE UNIQUENESS: Filter custom roles already assigned to OTHER participants
+  // A custom role can only be assigned to one participant at a time
+  const customRolesInUseByOthers = new Set(
+    allParticipants
+      .filter(p => p.customRoleId && p.id !== participant?.id) // Exclude current participant
+      .map(p => p.customRoleId)
+      .filter((id): id is string => Boolean(id)),
+  );
+
+  // Filter available custom roles (exclude those assigned to other participants)
+  const availableCustomRoles = customRoles.filter(
+    role => !customRolesInUseByOthers.has(role.id),
+  );
 
   // Combine all existing roles for checking duplicates
   const allRoles = [
@@ -226,11 +242,11 @@ function RoleSelector({
                 </CommandGroup>
 
                 {/* Custom Roles */}
-                {customRoles.length > 0 && (
+                {availableCustomRoles.length > 0 && (
                   <>
                     <CommandSeparator />
                     <CommandGroup heading={t('customRoles')}>
-                      {customRoles.map(role => (
+                      {availableCustomRoles.map(role => (
                         <CommandItem
                           key={role.id}
                           value={role.name}
@@ -387,11 +403,11 @@ function RoleSelector({
               </CommandGroup>
 
               {/* Custom Roles */}
-              {customRoles.length > 0 && (
+              {availableCustomRoles.length > 0 && (
                 <>
                   <CommandSeparator />
                   <CommandGroup heading={t('customRoles')}>
-                    {customRoles.map(role => (
+                    {availableCustomRoles.map(role => (
                       <CommandItem
                         key={role.id}
                         value={role.name}
@@ -483,6 +499,7 @@ function RoleSelector({
 
 function ModelItem({
   orderedModel,
+  allParticipants,
   customRoles,
   onToggle,
   onRoleChange,
@@ -494,6 +511,7 @@ function ModelItem({
   userTierInfo,
 }: {
   orderedModel: OrderedModel;
+  allParticipants: ParticipantConfig[]; // ✅ All participants for custom role uniqueness check
   customRoles: CustomRole[]; // ✅ Using RPC-inferred type from service
   onToggle: () => void;
   onRoleChange: (role: string, customRoleId?: string) => void;
@@ -640,10 +658,11 @@ function ModelItem({
               </div>
             </div>
 
-            {/* Role Selector - only shown when enabled and model is selected or selectable */}
-            {!isDisabled && (
+            {/* Role Selector - shown for selected models (even if disabled as last participant) or enabled unselected models */}
+            {(isSelected || !isDisabled) && (
               <RoleSelector
                 participant={participant}
+                allParticipants={allParticipants}
                 customRoles={customRoles}
                 onRoleChange={onRoleChange}
                 onClearRole={onClearRole}
@@ -1033,6 +1052,7 @@ export function ChatParticipantsList({
                             <ModelItem
                               key={orderedModel.participant!.id}
                               orderedModel={orderedModel}
+                              allParticipants={participants}
                               customRoles={customRoles}
                               onToggle={() => handleToggleModel(orderedModel.model.id)}
                               onRoleChange={(role, customRoleId) => handleRoleChange(orderedModel.model.id, role, customRoleId)}
@@ -1054,6 +1074,7 @@ export function ChatParticipantsList({
                           <ModelItem
                             key={`search-${model.id}`}
                             orderedModel={{ model, participant: null, order: index }}
+                            allParticipants={participants}
                             customRoles={customRoles}
                             onToggle={() => handleToggleModel(model.id)}
                             onRoleChange={(role, customRoleId) => handleRoleChange(model.id, role, customRoleId)}
@@ -1099,6 +1120,7 @@ export function ChatParticipantsList({
                             <ModelItem
                               key={orderedModel.participant!.id}
                               orderedModel={orderedModel}
+                              allParticipants={participants}
                               customRoles={customRoles}
                               onToggle={() => handleToggleModel(orderedModel.model.id)}
                               onRoleChange={(role, customRoleId) => handleRoleChange(orderedModel.model.id, role, customRoleId)}
@@ -1148,6 +1170,7 @@ export function ChatParticipantsList({
                               <ModelItem
                                 key={`flagship-${model.id}`}
                                 orderedModel={{ model, participant: null, order: index }}
+                                allParticipants={participants}
                                 customRoles={customRoles}
                                 onToggle={() => handleToggleModel(model.id)}
                                 onRoleChange={(role, customRoleId) => handleRoleChange(model.id, role, customRoleId)}
@@ -1229,6 +1252,7 @@ export function ChatParticipantsList({
                                   <ModelItem
                                     key={`tier-${tierGroup.tier}-${model.id}`}
                                     orderedModel={{ model, participant: null, order: index }}
+                                    allParticipants={participants}
                                     customRoles={customRoles}
                                     onToggle={() => handleToggleModel(model.id)}
                                     onRoleChange={(role, customRoleId) => handleRoleChange(model.id, role, customRoleId)}

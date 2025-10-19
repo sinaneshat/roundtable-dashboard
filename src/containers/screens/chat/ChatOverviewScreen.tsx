@@ -12,7 +12,6 @@ import { ChatMessageList } from '@/components/chat/chat-message-list';
 import { ChatModeSelector } from '@/components/chat/chat-mode-selector';
 import { ChatParticipantsList } from '@/components/chat/chat-participants-list';
 import { ChatQuickStart } from '@/components/chat/chat-quick-start';
-import { ChatScrollButton } from '@/components/chat/chat-scroll-button';
 import { StreamingParticipantsLoader } from '@/components/chat/streaming-participants-loader';
 import { useThreadHeader } from '@/components/chat/thread-header-context';
 import { WavyBackground } from '@/components/ui/wavy-background';
@@ -322,14 +321,14 @@ export default function ChatOverviewScreen() {
   useAutoScrollToBottom(messages.length, !showInitialUI);
 
   return (
-    <div className="absolute inset-0">
+    <>
       {/* Background - fixed behind all content */}
       <div className="fixed inset-0 -z-10 overflow-hidden">
         <WavyBackground containerClassName="h-full w-full" />
       </div>
 
       {/* Main content - flows naturally with padding creating scroll boundaries */}
-      <div className="container max-w-3xl mx-auto px-4 sm:px-6 pt-16">
+      <div className="container max-w-3xl mx-auto px-4 sm:px-6 pt-16" style={{ paddingBottom: '50px' }}>
         {/* ✅ ANIMATED: Initial UI (logo, suggestions) - fades out when streaming starts */}
         <AnimatePresence>
           {showInitialUI && (
@@ -441,11 +440,8 @@ export default function ChatOverviewScreen() {
         </AnimatePresence>
       </div>
 
-      {/* Custom scroll-to-bottom button - detects page-level scroll */}
-      <ChatScrollButton />
-
-      {/* Input container - absolute positioning within parent */}
-      <div className="absolute bottom-0 left-0 right-0 z-50 w-full">
+      {/* Input container - sticky to scroll container bottom */}
+      <div className="sticky bottom-0 z-50 mt-auto -mx-4 sm:-mx-6 bg-gradient-to-t from-background via-background to-transparent pt-6">
         <div className="container max-w-3xl mx-auto px-4 sm:px-6 py-4 md:py-6 w-full">
           <ChatInput
             value={inputValue}
@@ -471,6 +467,6 @@ export default function ChatOverviewScreen() {
           />
         </div>
       </div>
-    </div>
+    </>
   );
 }

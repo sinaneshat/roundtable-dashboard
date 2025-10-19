@@ -155,11 +155,9 @@ function NavigationHeaderComponent({
         </div>
 
         {/* Action buttons at the right end - passed from server as props */}
-        {threadActions && (
-          <div className="flex items-center gap-2 flex-shrink-0">
-            {threadActions}
-          </div>
-        )}
+        <div className="flex items-center gap-2 flex-shrink-0">
+          {threadActions}
+        </div>
       </div>
     </header>
   );
