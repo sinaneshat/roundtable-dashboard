@@ -14,6 +14,7 @@
  * OFFICIAL AI SDK IMPORTS
  * Following patterns from: https://sdk.vercel.ai/docs
  */
+import { z } from '@hono/zod-openapi';
 import { createOpenRouter } from '@openrouter/ai-sdk-provider';
 import type { UIMessage } from 'ai';
 import { convertToModelMessages, generateText } from 'ai';
@@ -31,29 +32,41 @@ function isValidOpenRouterModelId(modelId: string): boolean {
   return /^[\w-]+\/[\w.-]+$/.test(modelId);
 }
 
-/**
- * OpenRouter service configuration
- */
-type OpenRouterServiceConfig = {
-  apiKey: string;
-  appName?: string;
-  appUrl?: string;
-};
+// ============================================================================
+// ZOD SCHEMAS (Single Source of Truth)
+// ============================================================================
 
 /**
- * Text generation parameters using AI SDK v5 UIMessage format
- *
- * OFFICIAL AI SDK PATTERN: Accept UIMessage[] and use convertToModelMessages()
- * See: https://sdk.vercel.ai/docs/ai-sdk-core/generating-text
+ * OpenRouter service configuration schema
+ * Used for runtime validation when initializing the service
  */
-export type GenerateTextParams = {
-  modelId: string;
-  messages: UIMessage[];
-  system?: string;
-  temperature?: number;
-  maxTokens?: number;
-  topP?: number;
-};
+const OpenRouterServiceConfigSchema = z.object({
+  apiKey: z.string().min(1),
+  appName: z.string().optional(),
+  appUrl: z.string().url().optional(),
+});
+
+export type OpenRouterServiceConfig = z.infer<typeof OpenRouterServiceConfigSchema>;
+
+/**
+ * Text generation parameters schema
+ * Uses z.custom() for AI SDK's UIMessage type which is a complex generic
+ *
+ * AI SDK provides runtime validation via validateUIMessages()
+ */
+export const GenerateTextParamsSchema = z.object({
+  modelId: z.string().min(1),
+  messages: z.array(z.custom<UIMessage>((data) => {
+    // Basic validation - AI SDK's validateUIMessages() does full validation
+    return typeof data === 'object' && data !== null && 'id' in data && 'role' in data;
+  })),
+  system: z.string().optional(),
+  temperature: z.number().min(0).max(2).optional(),
+  maxTokens: z.number().int().positive().optional(),
+  topP: z.number().min(0).max(1).optional(),
+});
+
+export type GenerateTextParams = z.infer<typeof GenerateTextParamsSchema>;
 
 /**
  * OpenRouter service class
@@ -65,10 +78,25 @@ class OpenRouterService {
   /**
    * Initialize OpenRouter client with configuration
    * Must be called before using any OpenRouter methods
+   *
+   * ✅ ZOD VALIDATION: Config validated at runtime
    */
   initialize(config: OpenRouterServiceConfig): void {
     if (this.client) {
       return; // Already initialized
+    }
+
+    // ✅ Runtime validation with Zod
+    const validationResult = OpenRouterServiceConfigSchema.safeParse(config);
+    if (!validationResult.success) {
+      const context: ErrorContext = {
+        errorType: 'configuration',
+        service: 'openrouter',
+      };
+      throw createError.internal(
+        `Invalid OpenRouter configuration: ${validationResult.error.message}`,
+        context,
+      );
     }
 
     this.client = createOpenRouter({

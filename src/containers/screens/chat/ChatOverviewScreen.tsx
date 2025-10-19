@@ -313,7 +313,7 @@ export default function ChatOverviewScreen() {
       </div>
 
       {/* Conversation wrapper - scrollable content area */}
-      <Conversation className="relative z-10 flex-1 flex flex-col min-h-0">
+      <Conversation className="relative z-10 flex-1 flex-col min-h-0">
         <ConversationContent className="p-0">
           {/*
             Bottom padding for scroll clearance:
@@ -337,7 +337,7 @@ export default function ChatOverviewScreen() {
                   transition={{ duration: 0.3 }}
                   className="pb-8"
                 >
-                  <div className="flex flex-col items-center gap-4 sm:gap-5 md:gap-6 text-center">
+                  <div className="flex flex-col items-center gap-4 sm:gap-6 text-center">
                     {/* Brand Logo */}
                     <motion.div
                       className="relative h-20 w-20 xs:h-24 xs:w-24 sm:h-28 sm:w-28 md:h-32 md:w-32 lg:h-36 lg:w-36"
@@ -426,12 +426,11 @@ export default function ChatOverviewScreen() {
 
                   {/* ✅ STREAMING PARTICIPANTS LOADER: Show when streaming (same as thread screen) */}
                   {isStreaming && selectedParticipants.length > 1 && (
-                    <div className="mt-4">
-                      <StreamingParticipantsLoader
-                        participants={selectedParticipants}
-                        currentParticipantIndex={currentParticipantIndex}
-                      />
-                    </div>
+                    <StreamingParticipantsLoader
+                      className="mt-4"
+                      participants={selectedParticipants}
+                      currentParticipantIndex={currentParticipantIndex}
+                    />
                   )}
                 </motion.div>
               )}
@@ -443,8 +442,8 @@ export default function ChatOverviewScreen() {
         <ConversationScrollButton />
       </Conversation>
 
-      {/* Fixed positioned input - always visible at bottom, centered with content */}
-      <div className="fixed bottom-0 left-0 right-0 z-20 pb-6 md:left-[var(--sidebar-width-icon)] md:pr-2 md:pb-8">
+      {/* Sticky positioned input - stays at bottom within SidebarInset content area */}
+      <div className="sticky bottom-0 z-20 pb-6 md:pb-8 w-full">
         <div className="mx-auto max-w-3xl px-4">
           <ChatInput
             value={inputValue}

@@ -102,8 +102,10 @@ const ChatParticipantSchema = chatParticipantSelectSchema
 /**
  * ✅ SHARED: Message metadata schema
  * Extracted as a shared schema to avoid duplication
+ * Includes all fields that may be saved by the backend during message creation
  */
 export const MessageMetadataSchema = z.object({
+  // ✅ Core AI SDK fields
   model: z.string().optional(),
   finishReason: z.string().optional(),
   usage: z.object({
@@ -111,8 +113,36 @@ export const MessageMetadataSchema = z.object({
     completionTokens: z.number().optional(),
     totalTokens: z.number().optional(),
   }).optional(),
-  isEmptyResponse: z.boolean().optional(), // Flag for models that returned no content
+
+  // ✅ Participant context fields
+  participantId: z.string().optional(),
+  participantIndex: z.number().optional(),
+  participantRole: z.string().optional(),
+  roundNumber: z.number().optional(),
+
+  // ✅ Error handling fields
+  hasError: z.boolean().optional(),
+  errorType: z.string().optional(),
+  errorMessage: z.string().optional(),
+  errorCategory: z.string().optional(),
+  providerMessage: z.string().optional(),
+  openRouterError: z.record(z.string(), z.unknown()).optional(),
+  isTransient: z.boolean().optional(),
+  retryAttempts: z.number().optional(),
+
+  // ✅ Response state flags
+  isEmptyResponse: z.boolean().optional(),
 }).passthrough().nullable();
+
+export type MessageMetadata = z.infer<typeof MessageMetadataSchema>;
+
+/**
+ * ✅ TYPE GUARD: Check if a message has an error
+ * Safe utility function to check message error status without type assertions
+ */
+export function messageHasError(metadata: MessageMetadata): boolean {
+  return metadata?.hasError === true;
+}
 
 /**
  * ✅ SHARED: Message part schema for AI SDK message parts

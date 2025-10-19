@@ -1,6 +1,7 @@
 /**
  * Stripe Service
  *
+ * ✅ ZOD-FIRST: All types inferred from Zod schemas
  * Handles all Stripe API interactions for billing operations.
  * Provides type-safe methods for:
  * - Product and price management
@@ -10,21 +11,30 @@
  * - Webhook event processing
  */
 
+import { z } from '@hono/zod-openapi';
 import Stripe from 'stripe';
 
 import { createError } from '@/api/common/error-handling';
 import type { ErrorContext } from '@/api/core';
 import type { ApiEnv } from '@/api/types';
 
+// ============================================================================
+// ZOD SCHEMAS (Single Source of Truth)
+// ============================================================================
+
 /**
- * Stripe service configuration
+ * Stripe service configuration schema
+ * Used for runtime validation when initializing the service
  */
-type StripeServiceConfig = {
-  secretKey: string;
-  webhookSecret: string;
-  portalConfigId?: string;
-  apiVersion?: Stripe.LatestApiVersion;
-};
+const StripeServiceConfigSchema = z.object({
+  secretKey: z.string().min(1),
+  webhookSecret: z.string().min(1),
+  portalConfigId: z.string().optional(),
+  // apiVersion uses Stripe library type - optional, has default value
+  apiVersion: z.custom<Stripe.LatestApiVersion>().optional(),
+});
+
+export type StripeServiceConfig = z.infer<typeof StripeServiceConfigSchema>;
 
 /**
  * Stripe service class
@@ -38,10 +48,25 @@ class StripeService {
   /**
    * Initialize Stripe client with configuration
    * Must be called before using any Stripe methods
+   *
+   * ✅ ZOD VALIDATION: Config validated at runtime
    */
   initialize(config: StripeServiceConfig): void {
     if (this.stripe) {
       return; // Already initialized
+    }
+
+    // ✅ Runtime validation with Zod
+    const validationResult = StripeServiceConfigSchema.safeParse(config);
+    if (!validationResult.success) {
+      const context: ErrorContext = {
+        errorType: 'configuration',
+        service: 'stripe',
+      };
+      throw createError.internal(
+        `Invalid Stripe configuration: ${validationResult.error.message}`,
+        context,
+      );
     }
 
     this.stripe = new Stripe(config.secretKey, {

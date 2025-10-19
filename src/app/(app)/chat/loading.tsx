@@ -84,7 +84,7 @@ export default function ChatOverviewLoading() {
       </div>
 
       {/* Chat Input - EXACT match to ChatOverviewScreen.tsx:447 using chatGlass.inputBox */}
-      <div className="fixed bottom-0 left-0 right-0 z-20 pb-6 md:left-[var(--sidebar-width-icon)] md:pr-2 md:pb-8">
+      <div className="sticky bottom-0 z-20 pb-6 md:pb-8 w-full">
         <div className="mx-auto max-w-3xl px-4">
           {/* Using chatGlass.inputBox from chat-input.tsx:87 */}
           <div className={cn(chatGlass.inputBox, 'rounded-lg shadow-2xl p-4')}>

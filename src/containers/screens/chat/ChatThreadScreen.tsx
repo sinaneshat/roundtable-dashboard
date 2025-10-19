@@ -8,6 +8,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useStickToBottomContext } from 'use-stick-to-bottom';
 
 import type { ChatMessage, ChatParticipant, ChatThread } from '@/api/routes/chat/schema';
+import { messageHasError, MessageMetadataSchema } from '@/api/routes/chat/schema';
 import { Action, Actions } from '@/components/ai-elements/actions';
 import { Conversation, ConversationContent } from '@/components/ai-elements/conversation';
 import { ChatDeleteDialog } from '@/components/chat/chat-delete-dialog';
@@ -314,9 +315,11 @@ export default function ChatThreadScreen({
         },
       );
 
-      // ✅ Then invalidate to refetch fresh data from backend
-      // This ensures we get the updated list after backend deletes old data
-      queryClient.invalidateQueries({ queryKey: queryKeys.threads.analyses(currentThreadId) });
+      // ✅ CRITICAL FIX: DO NOT invalidate immediately
+      // Reason: Invalidation triggers immediate refetch BEFORE backend deletes the old analysis
+      // This causes a race condition where the old analysis gets fetched again
+      // Instead: Let onRoundComplete refetch when the new round finishes
+      // The cache removal above is sufficient to hide the old analysis immediately
     });
   }, [thread.id, setOnRetry, queryClient, analysesResponse]);
 
@@ -675,9 +678,9 @@ export default function ChatThreadScreen({
   }, [messagesWithAnalysesAndChangelog, analyses, changelog]);
 
   return (
-    <div className="relative flex flex-1 flex-col min-h-0">
+    <div className="flex flex-1 flex-col min-h-0">
       {/* Conversation wrapper - scrollable content area */}
-      <Conversation className="flex-1 flex flex-col min-h-0">
+      <Conversation className="flex-1 flex-col min-h-0">
         {/* Scroll button updater component */}
         <ThreadHeaderScrollUpdater
           thread={thread}
@@ -714,14 +717,14 @@ export default function ChatThreadScreen({
               if (item.type === 'changelog' && item.data.length > 0) {
                 // ✅ Changelog before round - ALL changes for this round in ONE accordion
                 return (
-                  <div key={item.key} className="mb-6">
-                    <ConfigurationChangesGroup
-                      group={{
-                        timestamp: new Date(item.data[0]!.createdAt),
-                        changes: item.data, // ✅ Pass ALL changes - component groups by action
-                      }}
-                    />
-                  </div>
+                  <ConfigurationChangesGroup
+                    key={item.key}
+                    className="mb-6"
+                    group={{
+                      timestamp: new Date(item.data[0]!.createdAt),
+                      changes: item.data, // ✅ Pass ALL changes - component groups by action
+                    }}
+                  />
                 );
               }
 
@@ -743,38 +746,46 @@ export default function ChatThreadScreen({
                     />
 
                     {/* ✅ AI ELEMENTS PATTERN: Actions + Feedback after messages, before analysis */}
-                    {!isStreaming && (
-                      <Actions className="mt-3">
-                        {/* ✅ Round Feedback: Like/Dislike buttons */}
-                        {feedbackHandlersMap.has(roundNumber) && (
-                          <RoundFeedback
-                            threadId={thread.id}
-                            roundNumber={roundNumber}
-                            currentFeedback={feedbackByRound.get(roundNumber) ?? null}
-                            onFeedbackChange={feedbackHandlersMap.get(roundNumber)!}
-                            disabled={isStreaming}
-                            isPending={
-                              setRoundFeedbackMutation.isPending
-                              && pendingFeedback?.roundNumber === roundNumber
-                            }
-                            pendingType={
-                              pendingFeedback?.roundNumber === roundNumber
-                                ? pendingFeedback.type
-                                : null
-                            }
-                          />
-                        )}
+                    {!isStreaming && (() => {
+                      // ✅ TYPE-SAFE ERROR CHECK: Use validated MessageMetadata type
+                      const hasRoundError = item.data.some((msg) => {
+                        const parseResult = MessageMetadataSchema.safeParse(msg.metadata);
+                        return parseResult.success && messageHasError(parseResult.data);
+                      });
 
-                        {/* ✅ Round Actions: Retry */}
-                        <Action
-                          onClick={retryRound}
-                          label={t('errors.retry')}
-                          tooltip={t('errors.retryRound')}
-                        >
-                          <RefreshCcwIcon className="size-3" />
-                        </Action>
-                      </Actions>
-                    )}
+                      return (
+                        <Actions className="mt-3">
+                          {/* ✅ Round Feedback: Like/Dislike buttons - only show if round succeeded */}
+                          {!hasRoundError && feedbackHandlersMap.has(roundNumber) && (
+                            <RoundFeedback
+                              threadId={thread.id}
+                              roundNumber={roundNumber}
+                              currentFeedback={feedbackByRound.get(roundNumber) ?? null}
+                              onFeedbackChange={feedbackHandlersMap.get(roundNumber)!}
+                              disabled={isStreaming}
+                              isPending={
+                                setRoundFeedbackMutation.isPending
+                                && pendingFeedback?.roundNumber === roundNumber
+                              }
+                              pendingType={
+                                pendingFeedback?.roundNumber === roundNumber
+                                  ? pendingFeedback.type
+                                  : null
+                              }
+                            />
+                          )}
+
+                          {/* ✅ Round Actions: Retry - always shown */}
+                          <Action
+                            onClick={retryRound}
+                            label={t('errors.retry')}
+                            tooltip={t('errors.retryRound')}
+                          >
+                            <RefreshCcwIcon className="size-3" />
+                          </Action>
+                        </Actions>
+                      );
+                    })()}
                   </div>
                 );
               }
@@ -782,13 +793,13 @@ export default function ChatThreadScreen({
               if (item.type === 'analysis') {
                 // Analysis after round (shows results)
                 return (
-                  <div key={item.key} className="mt-6">
-                    <RoundAnalysisCard
-                      analysis={item.data}
-                      threadId={thread.id}
-                      isLatest={itemIndex === messagesWithAnalysesAndChangelog.length - 1}
-                    />
-                  </div>
+                  <RoundAnalysisCard
+                    key={item.key}
+                    className="mt-6"
+                    analysis={item.data}
+                    threadId={thread.id}
+                    isLatest={itemIndex === messagesWithAnalysesAndChangelog.length - 1}
+                  />
                 );
               }
 
@@ -797,19 +808,18 @@ export default function ChatThreadScreen({
 
             {/* Streaming participants loader */}
             {isStreaming && selectedParticipants.length > 1 && (
-              <div className="mt-4">
-                <StreamingParticipantsLoader
-                  participants={selectedParticipants}
-                  currentParticipantIndex={currentParticipantIndex}
-                />
-              </div>
+              <StreamingParticipantsLoader
+                className="mt-4"
+                participants={selectedParticipants}
+                currentParticipantIndex={currentParticipantIndex}
+              />
             )}
           </div>
         </ConversationContent>
       </Conversation>
 
-      {/* Fixed positioned input - always visible at bottom, centered with content */}
-      <div className="fixed bottom-0 left-0 right-0 z-20 pb-6 md:left-[var(--sidebar-width-icon)] md:pr-2 md:pb-8">
+      {/* Sticky positioned input - stays at bottom within SidebarInset content area */}
+      <div className="sticky bottom-0 z-20 pb-6 md:pb-8 w-full">
         <div className="mx-auto max-w-3xl px-4">
           <ChatInput
             value={inputValue}

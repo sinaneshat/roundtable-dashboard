@@ -2,30 +2,49 @@
  * Moderator Analysis Service
  *
  * ✅ SINGLE SOURCE OF TRUTH: Schema now in @/api/routes/chat/schema.ts
+ * ✅ ZOD-FIRST: All types inferred from Zod schemas
  * This service only contains prompt building logic for AI SDK streamObject()
  */
 
+import { z } from '@hono/zod-openapi';
+
 import type { ModeratorAnalysisPayload } from '@/api/routes/chat/schema';
-import type { ChatModeId } from '@/lib/config/chat-modes';
+import { CHAT_MODES } from '@/lib/config/chat-modes';
 import { extractModelName } from '@/lib/utils/ai-display';
 
 export type ModeratorAnalysis = ModeratorAnalysisPayload;
-export type ModeratorPromptConfig = {
+
+// ============================================================================
+// ZOD SCHEMAS (Single Source of Truth)
+// ============================================================================
+
+/**
+ * Participant response schema for moderator analysis
+ */
+const ParticipantResponseSchema = z.object({
+  participantIndex: z.number().int().nonnegative(),
+  participantRole: z.string().nullable(),
+  modelId: z.string().min(1),
+  modelName: z.string().min(1),
+  responseContent: z.string().min(1),
+});
+
+/**
+ * Moderator prompt configuration schema
+ * Used for building prompts for AI SDK streamObject()
+ */
+export const ModeratorPromptConfigSchema = z.object({
   /** Conversation mode */
-  mode: ChatModeId;
+  mode: z.enum(CHAT_MODES),
   /** Round number (1-indexed) */
-  roundNumber: number;
+  roundNumber: z.number().int().positive(),
   /** User's original question */
-  userQuestion: string;
+  userQuestion: z.string().min(1),
   /** All participants with their messages */
-  participantResponses: Array<{
-    participantIndex: number;
-    participantRole: string | null;
-    modelId: string;
-    modelName: string;
-    responseContent: string;
-  }>;
-};
+  participantResponses: z.array(ParticipantResponseSchema).min(1),
+});
+
+export type ModeratorPromptConfig = z.infer<typeof ModeratorPromptConfigSchema>;
 
 /**
  * Builds structured system prompt for AI moderator analysis of roundtable discussions.

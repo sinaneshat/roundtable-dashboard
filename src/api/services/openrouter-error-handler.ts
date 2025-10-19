@@ -3,63 +3,135 @@
  *
  * ✅ AI SDK v5 COMPLIANT: Uses APICallError and proper error type checking
  * ✅ OPENROUTER API COMPLIANT: Based on official error specification
- * ✅ ZOD-FIRST: All types imported from route schemas (single source of truth)
+ * ✅ ZOD-FIRST: All validation and type inference from Zod schemas
  *
  * Official OpenRouter Error Documentation:
  * https://openrouter.ai/docs/api-reference/errors
  *
- * OpenRouter Error Response Format:
- * {
- *   error: {
- *     code: number;        // HTTP status code (400, 401, 402, 403, 408, 429, 502, 503)
- *     message: string;     // Error description
- *     metadata?: {
- *       provider_name?: string;  // Provider that encountered error
- *       raw?: string;            // Raw error from provider
- *       reasons?: string[];      // Moderation reasons (if 403)
- *       flagged_input?: string;  // Flagged text (if 403)
- *     }
- *   }
- * }
- *
  * Following AI SDK error handling best practices:
  * https://ai-sdk.dev/docs/ai-sdk-core/error-handling
+ *
+ * Following codebase patterns from:
+ * - @/api/core/schemas.ts: ErrorContextSchema discriminated union
+ * - @/api/routes/chat/schema.ts: Shared validation schemas with z.infer
  */
 
+import { z } from '@hono/zod-openapi';
 import { APICallError } from 'ai';
 
-/**
- * OpenRouter error types for classification
- * Based on HTTP status codes from official documentation
- */
-export type OpenRouterErrorType
-  = | 'rate_limit' // 429: Rate limited
-    | 'model_unavailable' // 502/503: Model down or no provider available
-    | 'invalid_request' // 400: Bad request, invalid params, CORS
-    | 'authentication' // 401: Invalid credentials, expired OAuth
-    | 'insufficient_credits' // 402: No credits available
-    | 'moderation' // 403: Input flagged by moderation
-    | 'timeout' // 408: Request timeout
-    | 'network' // Network errors, connection issues
-    | 'empty_response' // Model returned no content
-    | 'unknown'; // Unclassified errors
+// ============================================================================
+// OPENROUTER ERROR SCHEMAS (Official API Specification)
+// ============================================================================
 
 /**
- * Classified error with type metadata
+ * OpenRouter error metadata schema
+ * Contains provider-specific error details and moderation information
+ *
+ * Based on official spec: https://openrouter.ai/docs/api-reference/errors
  */
-export type ClassifiedError = {
-  type: OpenRouterErrorType;
-  message: string;
-  technicalMessage: string;
-  maxRetries: number;
-  baseDelayMs: number;
-  shouldRetry: boolean;
-  isTransient: boolean;
-};
+const OpenRouterErrorMetadataSchema = z.object({
+  provider_name: z.string().optional(),
+  raw: z.string().optional(),
+  reasons: z.array(z.string()).optional(),
+  flagged_input: z.string().optional(),
+  // Additional documented fields that OpenRouter may include
+  provider_status_code: z.number().optional(),
+  provider_error_code: z.string().optional(),
+});
+
+/**
+ * OpenRouter error object schema
+ * Core error structure returned by OpenRouter API
+ */
+const OpenRouterErrorObjectSchema = z.object({
+  code: z.number().int(),
+  message: z.string(),
+  metadata: OpenRouterErrorMetadataSchema.optional(),
+});
+
+/**
+ * OpenRouter error response schema (complete API response)
+ * This is what OpenRouter actually returns when an error occurs
+ */
+const OpenRouterErrorResponseSchema = z.object({
+  error: OpenRouterErrorObjectSchema,
+});
+
+/**
+ * OpenRouter error types enum
+ * Based on documented HTTP status codes from official API
+ */
+export const OpenRouterErrorTypeSchema = z.enum([
+  'rate_limit', // 429: Rate limited
+  'model_unavailable', // 502/503: Model down or no provider available
+  'invalid_request', // 400/404: Bad request, invalid params, CORS, config errors
+  'authentication', // 401: Invalid credentials, expired OAuth
+  'insufficient_credits', // 402: No credits available
+  'moderation', // 403: Input flagged by moderation
+  'timeout', // 408/504: Request timeout or gateway timeout
+  'network', // Network errors, connection issues
+  'empty_response', // Model returned no content
+  'unknown', // Unclassified errors
+]);
+
+export type OpenRouterErrorType = z.infer<typeof OpenRouterErrorTypeSchema>;
+
+/**
+ * AI SDK retry error wrapper schema
+ * AI SDK wraps errors in retry logic and stores the actual error in these properties
+ */
+export const RetryErrorWrapperSchema = z.custom<Error & {
+  cause?: Error;
+  lastError?: Error;
+  errors?: Error[];
+}>(data => data instanceof Error);
+
+type RetryErrorWrapper = z.infer<typeof RetryErrorWrapperSchema>;
+
+/**
+ * Type guard to check if an error is a RetryErrorWrapper
+ */
+function isRetryErrorWrapper(error: Error): error is RetryErrorWrapper {
+  return 'lastError' in error || 'errors' in error || 'cause' in error;
+}
+
+/**
+ * Classified error schema
+ * Result of error classification with metadata
+ */
+export const ClassifiedErrorSchema = z.object({
+  type: OpenRouterErrorTypeSchema,
+  message: z.string(),
+  technicalMessage: z.string(),
+  maxRetries: z.number().int().nonnegative(),
+  baseDelayMs: z.number().int().nonnegative(),
+  shouldRetry: z.boolean(),
+  isTransient: z.boolean(),
+});
+
+export type ClassifiedError = z.infer<typeof ClassifiedErrorSchema>;
+
+/**
+ * Error format for database storage
+ * Extended with all available debugging information
+ */
+export const DatabaseErrorFormatSchema = z.object({
+  error: z.string(),
+  errorMessage: z.string(),
+  errorType: OpenRouterErrorTypeSchema,
+  errorDetails: z.string(),
+  isTransient: z.boolean(),
+});
+
+export type DatabaseErrorFormat = z.infer<typeof DatabaseErrorFormatSchema>;
+
+// ============================================================================
+// ERROR TYPE METADATA
+// ============================================================================
 
 /**
  * Error type metadata for classification and handling
- * Based on OpenRouter official error codes
+ * Based on OpenRouter official HTTP status codes
  *
  * ⚠️ CLARIFICATION: This is metadata ONLY - not retry configuration
  * Actual retry count is controlled by AI_RETRY_CONFIG.maxAttempts = 10 in @/api/routes/chat/schema
@@ -67,7 +139,7 @@ export type ClassifiedError = {
  * Per USER REQUIREMENT: All errors retry 10 times via AI_RETRY_CONFIG
  */
 const ERROR_TYPE_METADATA: Record<OpenRouterErrorType, {
-  maxRetries: number; // Metadata only - actual retries controlled by AI_RETRY_CONFIG
+  maxRetries: number;
   baseDelayMs: number;
   shouldRetry: boolean;
   isTransient: boolean;
@@ -86,7 +158,7 @@ const ERROR_TYPE_METADATA: Record<OpenRouterErrorType, {
     shouldRetry: true,
     isTransient: true,
   },
-  // 400: Bad request - permanent, don't retry
+  // 400/404: Bad request - permanent, don't retry
   invalid_request: {
     maxRetries: 0,
     baseDelayMs: 0,
@@ -114,7 +186,7 @@ const ERROR_TYPE_METADATA: Record<OpenRouterErrorType, {
     shouldRetry: false,
     isTransient: false,
   },
-  // 408: Timeout - transient, retry
+  // 408/504: Timeout - transient, retry
   timeout: {
     maxRetries: 2,
     baseDelayMs: 1000,
@@ -144,112 +216,39 @@ const ERROR_TYPE_METADATA: Record<OpenRouterErrorType, {
   },
 };
 
-/**
- * OpenRouter error response structure (official specification)
- * https://openrouter.ai/docs/api-reference/errors
- *
- * Note: This type is for documentation purposes only (not actively used in code)
- */
-export type _OpenRouterErrorResponse = {
-  error: {
-    code: number; // HTTP status code
-    message: string; // Error description
-    metadata?: {
-      provider_name?: string; // Provider that encountered error
-      raw?: string; // Raw error from provider
-      reasons?: string[]; // Moderation reasons (if 403)
-      flagged_input?: string; // Flagged text (if 403)
-    };
-  };
-};
+// ============================================================================
+// ERROR EXTRACTION AND CLASSIFICATION
+// ============================================================================
 
 /**
- * Extract error details from OpenRouter response body
- * Based on official OpenRouter error specification
+ * Extracted error details schema
+ * This is what extractErrorDetails returns after validation
+ */
+export const ExtractedErrorDetailsSchema = z.object({
+  message: z.string().nullable(),
+  code: z.number().nullable(),
+  providerName: z.string().nullable(),
+  providerRaw: z.string().nullable(),
+  moderationReasons: z.array(z.string()).nullable(),
+  flaggedInput: z.string().nullable(),
+});
+
+type ExtractedErrorDetails = z.infer<typeof ExtractedErrorDetailsSchema>;
+
+/**
+ * Extract and validate error details from OpenRouter response body
+ * Uses Zod for runtime validation instead of manual type checking
  *
  * Priority:
  * 1. error.metadata.raw - Actual upstream provider error (MOST DETAILED)
  * 2. error.message - OpenRouter's error message
  * 3. error.code - HTTP status code for classification
+ *
+ * Handles string, object, or undefined response bodies
  */
-export function extractErrorDetails(responseBody: unknown): {
-  message: string | null;
-  code: number | null;
-  providerName: string | null;
-  providerRaw: string | null;
-  moderationReasons: string[] | null;
-  flaggedInput: string | null;
-} {
-  try {
-    if (!responseBody || typeof responseBody !== 'object') {
-      return {
-        message: null,
-        code: null,
-        providerName: null,
-        providerRaw: null,
-        moderationReasons: null,
-        flaggedInput: null,
-      };
-    }
-
-    const body = responseBody as Record<string, unknown>;
-
-    // OpenRouter official format: { error: { code, message, metadata } }
-    if (body.error && typeof body.error === 'object') {
-      const errorObj = body.error as Record<string, unknown>;
-
-      const message = typeof errorObj.message === 'string' ? errorObj.message : null;
-      const code = typeof errorObj.code === 'number' ? errorObj.code : null;
-
-      // Extract metadata if present
-      let providerName: string | null = null;
-      let providerRaw: string | null = null;
-      let moderationReasons: string[] | null = null;
-      let flaggedInput: string | null = null;
-
-      if (errorObj.metadata && typeof errorObj.metadata === 'object') {
-        const metadata = errorObj.metadata as Record<string, unknown>;
-
-        // Provider error details
-        if (typeof metadata.provider_name === 'string') {
-          providerName = metadata.provider_name;
-        }
-        if (typeof metadata.raw === 'string') {
-          providerRaw = metadata.raw;
-        }
-
-        // Moderation error details (403)
-        if (Array.isArray(metadata.reasons)) {
-          moderationReasons = metadata.reasons.filter(r => typeof r === 'string') as string[];
-        }
-        if (typeof metadata.flagged_input === 'string') {
-          flaggedInput = metadata.flagged_input;
-        }
-      }
-
-      return {
-        message,
-        code,
-        providerName,
-        providerRaw,
-        moderationReasons,
-        flaggedInput,
-      };
-    }
-
-    // Fallback: Try to extract message and code from top level
-    const message = typeof body.message === 'string' ? body.message : null;
-    const code = typeof body.code === 'number' ? body.code : null;
-
-    return {
-      message,
-      code,
-      providerName: null,
-      providerRaw: null,
-      moderationReasons: null,
-      flaggedInput: null,
-    };
-  } catch {
+export function extractErrorDetails(responseBody: string | object | undefined): ExtractedErrorDetails {
+  // Handle undefined or string response bodies
+  if (!responseBody || typeof responseBody === 'string') {
     return {
       message: null,
       code: null,
@@ -259,16 +258,45 @@ export function extractErrorDetails(responseBody: unknown): {
       flaggedInput: null,
     };
   }
+
+  // ✅ ZOD VALIDATION: Parse OpenRouter error response
+  const result = OpenRouterErrorResponseSchema.safeParse(responseBody);
+
+  if (!result.success) {
+    // Not a valid OpenRouter error response
+    return {
+      message: null,
+      code: null,
+      providerName: null,
+      providerRaw: null,
+      moderationReasons: null,
+      flaggedInput: null,
+    };
+  }
+
+  const { error } = result.data;
+
+  // Extract metadata if present
+  const metadata = error.metadata;
+
+  return {
+    message: error.message,
+    code: error.code,
+    providerName: metadata?.provider_name ?? null,
+    providerRaw: metadata?.raw ?? null,
+    moderationReasons: metadata?.reasons ?? null,
+    flaggedInput: metadata?.flagged_input ?? null,
+  };
 }
 
 /**
- * ✅ AI SDK v5 COMPLIANT + OPENROUTER API COMPLIANT
+ * ✅ AI SDK v5 COMPLIANT + OPENROUTER API COMPLIANT + ZOD-FIRST
  * Classify error using APICallError and OpenRouter error specification
  *
  * Classification strategy:
  * 1. Check for AI SDK retry wrapper errors (extract underlying error)
  * 2. Use HTTP status code ONLY for classification (NO string matching)
- * 3. Extract raw provider message from metadata.raw
+ * 3. Extract raw provider message from metadata.raw via Zod validation
  * 4. Use error.message as fallback
  *
  * OpenRouter HTTP Status Codes (official):
@@ -276,59 +304,56 @@ export function extractErrorDetails(responseBody: unknown): {
  * - 401: Invalid credentials
  * - 402: Insufficient credits
  * - 403: Moderation flagged
+ * - 404: Not found (config/privacy issues)
  * - 408: Request timeout
  * - 429: Rate limited
- * - 502: Model down or invalid response
+ * - 500/502: Model down or invalid response
  * - 503: No available provider
+ * - 504: Gateway timeout
  *
  * @see https://sdk.vercel.ai/docs/reference/ai-sdk-errors/ai-api-call-error
  * @see https://openrouter.ai/docs/api-reference/errors
  */
-export function classifyOpenRouterError(error: unknown): ClassifiedError {
+export function classifyOpenRouterError(error: Error): ClassifiedError {
   // ✅ STEP 1: Check for AI SDK retry wrapper errors
   // AI SDK wraps errors like: "Failed after 3 attempts. Last error: <actual error>"
   // The ACTUAL error with all details is in error.lastError or error.errors[last]
-  if (error instanceof Error) {
-    const retryMatch = error.message.match(/Failed after \d+ attempts\. Last error: (.+)/);
-    if (retryMatch) {
-      // ✅ CRITICAL: Extract the actual APICallError from the retry wrapper
-      // AI SDK stores the last error in error.lastError or error.errors array
-      const errorObj = error as Error & {
-        cause?: unknown;
-        lastError?: unknown;
-        errors?: unknown[];
-      };
+  let actualError: Error = error;
 
-      // Try to get the underlying error with full details
-      let underlyingError: unknown = error;
+  const retryMatch = error.message.match(/Failed after \d+ attempts\. Last error: (.+)/);
+  if (retryMatch && isRetryErrorWrapper(error)) {
+    // ✅ CRITICAL: Extract the actual APICallError from the retry wrapper
+    // AI SDK stores the last error in error.lastError or error.errors array
 
-      // Priority 1: Check lastError property (AI SDK retry pattern)
-      if (errorObj.lastError) {
-        underlyingError = errorObj.lastError;
-      } else if (Array.isArray(errorObj.errors) && errorObj.errors.length > 0) {
-        // Priority 2: Check errors array (get the last error)
-        underlyingError = errorObj.errors[errorObj.errors.length - 1];
-      } else if (errorObj.cause) {
-        // Priority 3: Check cause property
-        underlyingError = errorObj.cause;
+    // Priority 1: Check lastError property (AI SDK retry pattern)
+    if (error.lastError) {
+      actualError = error.lastError;
+    } else if (Array.isArray(error.errors) && error.errors.length > 0) {
+      // Priority 2: Check errors array (get the last error)
+      const lastError = error.errors[error.errors.length - 1];
+      if (lastError) {
+        actualError = lastError;
       }
-
-      // If we found an underlying error (not the same as the wrapper), classify that
-      if (underlyingError !== error) {
-        return classifyOpenRouterError(underlyingError);
-      }
-
-      // If no underlying error found, create one with the extracted message
-      const extractedError = new Error(retryMatch[1]);
-      return classifyOpenRouterError(extractedError);
+    } else if (error.cause) {
+      // Priority 3: Check cause property
+      actualError = error.cause;
     }
+
+    // If we found an underlying error (not the same as the wrapper), classify that
+    if (actualError !== error) {
+      return classifyOpenRouterError(actualError);
+    }
+
+    // If no underlying error found, create one with the extracted message
+    const extractedError = new Error(retryMatch[1]);
+    return classifyOpenRouterError(extractedError);
   }
 
   // ✅ STEP 2: Check if this is an AI SDK APICallError with OpenRouter response
   if (APICallError.isInstance(error)) {
     const { statusCode, responseBody, url } = error;
 
-    // Extract OpenRouter error details from response body
+    // ✅ ZOD VALIDATION: Extract OpenRouter error details from response body
     const errorDetails = extractErrorDetails(responseBody);
 
     // Determine the message to show user (prioritize provider raw error)
@@ -516,7 +541,36 @@ export function calculateRetryDelay(
 }
 
 /**
- * ✅ AI SDK v5 COMPLIANT: Format error for database storage with full context
+ * Comprehensive error details object schema
+ * Contains all available debugging information
+ */
+export const ErrorDetailsObjectSchema = z.object({
+  technicalMessage: z.string(),
+  userMessage: z.string(),
+  modelId: z.string(),
+  timestamp: z.string(),
+  isTransient: z.boolean(),
+  shouldRetry: z.boolean(),
+  statusCode: z.number().optional(),
+  url: z.string().optional(),
+  isRetryable: z.boolean().optional(),
+  openRouterMessage: z.string().optional(),
+  openRouterCode: z.number().optional(),
+  providerName: z.string().optional(),
+  providerRaw: z.string().optional(),
+  moderationReasons: z.array(z.string()).optional(),
+  flaggedInput: z.string().optional(),
+  responseBody: z.string().optional(),
+  errorName: z.string().optional(),
+  errorMessage: z.string().optional(),
+  errorStack: z.string().optional(),
+});
+
+type ErrorDetailsObject = z.infer<typeof ErrorDetailsObjectSchema>;
+
+/**
+ * ✅ AI SDK v5 COMPLIANT + ZOD-FIRST
+ * Format error for database storage with full context
  *
  * Includes all available error details from APICallError for debugging:
  * - HTTP status code
@@ -525,17 +579,14 @@ export function calculateRetryDelay(
  * - Response body (for debugging)
  * - Retry information
  */
-export function formatErrorForDatabase(error: unknown, modelId: string): {
-  error: string;
-  errorMessage: string;
-  errorType: OpenRouterErrorType;
-  errorDetails: string;
-  isTransient: boolean;
-} {
+export function formatErrorForDatabase(
+  error: Error,
+  modelId: string,
+): DatabaseErrorFormat {
   const classified = classifyOpenRouterError(error);
 
   // Build comprehensive error details object
-  const errorDetailsObj: Record<string, unknown> = {
+  const errorDetailsObj: Partial<ErrorDetailsObject> = {
     technicalMessage: classified.technicalMessage,
     userMessage: classified.message,
     modelId,
@@ -552,7 +603,7 @@ export function formatErrorForDatabase(error: unknown, modelId: string): {
     errorDetailsObj.url = url;
     errorDetailsObj.isRetryable = isRetryable;
 
-    // Extract OpenRouter-specific error details
+    // ✅ ZOD VALIDATION: Extract OpenRouter-specific error details
     const openRouterDetails = extractErrorDetails(responseBody);
     if (openRouterDetails.message) {
       errorDetailsObj.openRouterMessage = openRouterDetails.message;

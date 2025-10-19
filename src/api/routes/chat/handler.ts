@@ -74,6 +74,8 @@ import {
   AddParticipantRequestSchema,
   CreateCustomRoleRequestSchema,
   CreateThreadRequestSchema,
+  messageHasError,
+  MessageMetadataSchema,
   ModeratorAnalysisPayloadSchema,
   ModeratorAnalysisRequestSchema,
   RoundAnalysisParamSchema,
@@ -2494,19 +2496,24 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
     const modelSupportsTemperature = !participant.modelId.includes('o4-mini') && !participant.modelId.includes('o4-deep');
     const temperatureValue = modelSupportsTemperature ? (participant.settings?.temperature ?? 0.7) : undefined;
 
-    // ✅ CRITICAL FIX: Backend-only retry loop for empty responses
+    // ✅ CRITICAL FIX: Retry loop for ALL errors and empty responses
     // The AI SDK's maxRetries only retries API errors (network, 5xx, rate limits)
-    // It does NOT retry "successful" responses that are empty (0 output tokens)
-    // We retry the ENTIRE streamText() call until we get valid content or exhaust retries
-    const MAX_EMPTY_RESPONSE_RETRIES = 5;
-    let emptyResponseAttempt = 0;
+    // It does NOT retry:
+    // - Type validation errors (reasoning models with different response formats)
+    // - Empty responses (0 output tokens, content filter errors)
+    // - Provider format inconsistencies
+    //
+    // We retry the ENTIRE streamText() call until we get valid content
+    const MAX_TOTAL_RETRIES = 10; // Maximum 10 attempts per model
+    let totalAttempts = 0;
+    let lastError: Error | null = null;
 
-    while (emptyResponseAttempt < MAX_EMPTY_RESPONSE_RETRIES) {
-      emptyResponseAttempt++;
+    while (totalAttempts < MAX_TOTAL_RETRIES) {
+      totalAttempts++;
 
-      console.warn(emptyResponseAttempt === 1
+      console.warn(totalAttempts === 1
         ? '[streamChatHandler] 🚀 Starting streamText'
-        : '[streamChatHandler] 🔄 Retrying streamText (empty response)', {
+        : '[streamChatHandler] 🔄 Retrying streamText', {
         threadId,
         participantIndex,
         participantId: participant.id,
@@ -2517,92 +2524,114 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
         modelSupportsTemperature,
         timeoutMs: AI_TIMEOUT_CONFIG.perAttemptMs,
         maxRetries: AI_RETRY_CONFIG.maxAttempts,
-        ...(emptyResponseAttempt > 1 && {
-          retryAttempt: emptyResponseAttempt,
-          maxRetryAttempts: MAX_EMPTY_RESPONSE_RETRIES,
+        ...(totalAttempts > 1 && {
+          retryAttempt: totalAttempts,
+          maxRetryAttempts: MAX_TOTAL_RETRIES,
+          lastError: lastError?.message,
         }),
       });
 
-      const result = streamText({
-        model: client(participant.modelId),
-        system: systemPrompt,
-        messages: modelMessages,
-        maxOutputTokens,
-        ...(modelSupportsTemperature && { temperature: temperatureValue }),
+      try {
+        const result = streamText({
+          model: client(participant.modelId),
+          system: systemPrompt,
+          messages: modelMessages,
+          maxOutputTokens,
+          ...(modelSupportsTemperature && { temperature: temperatureValue }),
 
-        // ✅ AI SDK RETRY: Handles ALL errors (network, server, timeouts, rate limits)
-        // Reference: https://sdk.vercel.ai/docs/ai-sdk-core/error-handling
-        // ✅ RETRY UP TO 10 TIMES: Then save error/response and move to next participant
-        maxRetries: AI_RETRY_CONFIG.maxAttempts,
+          // ✅ AI SDK RETRY: Handles ALL errors (network, server, timeouts, rate limits)
+          // Reference: https://sdk.vercel.ai/docs/ai-sdk-core/error-handling
+          // ✅ RETRY UP TO 10 TIMES: Then save error/response and move to next participant
+          maxRetries: AI_RETRY_CONFIG.maxAttempts,
 
-        abortSignal: AbortSignal.any([
-          (c.req as unknown as { raw: Request }).raw.signal, // Cancel on client disconnect
-          AbortSignal.timeout(AI_TIMEOUT_CONFIG.perAttemptMs), // Server-side timeout
-        ]),
+          abortSignal: AbortSignal.any([
+            (c.req as unknown as { raw: Request }).raw.signal, // Cancel on client disconnect
+            AbortSignal.timeout(AI_TIMEOUT_CONFIG.perAttemptMs), // Server-side timeout
+          ]),
 
-        experimental_telemetry: {
-          isEnabled: true,
-          functionId: `chat.thread.${threadId}.participant.${participant.id}`,
-        },
+          experimental_telemetry: {
+            isEnabled: true,
+            functionId: `chat.thread.${threadId}.participant.${participant.id}`,
+          },
 
-      // ✅ NO onFinish CALLBACK: We'll handle persistence after checking if response is valid
-      // This allows us to retry before persisting anything
-      });
+          // ✅ NO onFinish CALLBACK: We'll handle persistence after checking if response is valid
+          // This allows us to retry before persisting anything
+        });
 
-      // ✅ CRITICAL: Await the full response to check if it's empty
-      // This blocks the retry loop until we know if we need to retry
-      const text = await result.text;
-      const usage = await result.usage;
+        // ✅ CRITICAL: Await the full response to check if it's empty or has errors
+        // This blocks the retry loop until we know if we need to retry
+        const text = await result.text;
+        const usage = await result.usage;
 
-      console.warn('[streamChatHandler] 📊 Response received', {
-        threadId,
-        participantIndex,
-        modelId: participant.modelId,
-        attempt: emptyResponseAttempt,
-        outputTokens: usage.outputTokens,
-        textLength: text?.length || 0,
-        isEmpty: !text || text.trim().length === 0 || usage.outputTokens === 0,
-      });
-
-      // Check if response is empty
-      const isEmptyResponse = !text || text.trim().length === 0 || usage.outputTokens === 0;
-
-      if (!isEmptyResponse) {
-        // ✅ SUCCESS: Valid response received
-        console.warn('[streamChatHandler] ✅ Valid response received', {
+        console.warn('[streamChatHandler] 📊 Response received', {
           threadId,
           participantIndex,
           modelId: participant.modelId,
-          attempt: emptyResponseAttempt,
-          textLength: text.length,
+          attempt: totalAttempts,
           outputTokens: usage.outputTokens,
+          textLength: text?.length || 0,
+          isEmpty: !text || text.trim().length === 0 || usage.outputTokens === 0,
         });
 
-        break; // Exit retry loop - we'll create fresh stream below
-      }
+        // Check if response is empty
+        const isEmptyResponse = !text || text.trim().length === 0 || usage.outputTokens === 0;
 
-      // Empty response - check if we should retry
-      if (emptyResponseAttempt < MAX_EMPTY_RESPONSE_RETRIES) {
+        if (!isEmptyResponse) {
+          // ✅ SUCCESS: Valid response received
+          console.warn('[streamChatHandler] ✅ Valid response received', {
+            threadId,
+            participantIndex,
+            modelId: participant.modelId,
+            attempt: totalAttempts,
+            textLength: text.length,
+            outputTokens: usage.outputTokens,
+          });
+
+          break; // Exit retry loop - we'll create fresh stream below
+        }
+
+        // Empty response - log and retry
         console.warn('[streamChatHandler] ⚠️ Empty response - will retry', {
           threadId,
           participantIndex,
           modelId: participant.modelId,
-          attempt: emptyResponseAttempt,
-          remainingAttempts: MAX_EMPTY_RESPONSE_RETRIES - emptyResponseAttempt,
+          attempt: totalAttempts,
+          remainingAttempts: MAX_TOTAL_RETRIES - totalAttempts,
         });
 
         // Delay before retry to avoid rate limits
         await new Promise(resolve => setTimeout(resolve, 2000)); // 2 second delay
         // Continue loop for next attempt
-      } else {
-        console.warn('[streamChatHandler] ❌ Max retries exceeded - empty response', {
+      } catch (error) {
+        // ✅ CATCH ALL ERRORS: Type validation, network, API, etc.
+        lastError = error instanceof Error ? error : new Error(String(error));
+
+        console.warn('[streamChatHandler] ❌ Error during streamText - will retry', {
           threadId,
           participantIndex,
           modelId: participant.modelId,
-          totalAttempts: emptyResponseAttempt,
+          attempt: totalAttempts,
+          remainingAttempts: MAX_TOTAL_RETRIES - totalAttempts,
+          errorType: lastError.name,
+          errorMessage: lastError.message,
+          isTypeValidationError: lastError.message.includes('Type validation'),
         });
-        // Break out of loop - final stream will still be created, but will likely be empty
-        break;
+
+        // If we've exhausted retries, break
+        if (totalAttempts >= MAX_TOTAL_RETRIES) {
+          console.error('[streamChatHandler] ❌ Max retries exceeded - giving up', {
+            threadId,
+            participantIndex,
+            modelId: participant.modelId,
+            totalAttempts,
+            lastError: lastError.message,
+          });
+          break;
+        }
+
+        // Delay before retry
+        await new Promise(resolve => setTimeout(resolve, 2000)); // 2 second delay
+        // Continue loop for next attempt
       }
     }
 
@@ -2612,7 +2641,8 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
       threadId,
       participantIndex,
       modelId: participant.modelId,
-      attemptsTaken: emptyResponseAttempt,
+      attemptsTaken: totalAttempts,
+      hadErrors: lastError !== null,
     });
 
     const finalResult = streamText({
@@ -2675,11 +2705,39 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
             }
           }
 
-          // ✅ DETECT EMPTY RESPONSES: Check for meaningful content
+          // ✅ DETECT EMPTY RESPONSES: Check for meaningful content in BOTH text and reasoning
           // Note: Empty responses should have been filtered out by the retry loop
           // If we get here with an empty response, all retries were exhausted
           const trimmedText = (text || '').trim();
-          const isEmptyResponse = !text || trimmedText.length === 0 || usage?.outputTokens === 0;
+          const trimmedReasoning = (reasoningText || '').trim();
+
+          // ✅ REASONING BUNDLE SUPPORT: Consider reasoning content as valid output
+          // Some models (o1, o3, DeepSeek-R1, Alibaba DeepResearch) return reasoning bundles
+          // where the main content is in the reasoning field, not the text field
+          const combinedContent = trimmedText || trimmedReasoning;
+          const combinedLength = trimmedText.length + trimmedReasoning.length;
+
+          // ✅ STRICTER CHECK: Require meaningful content (at least 50 characters)
+          // This prevents models that return minimal/useless responses from passing
+          // Rationale: A substantive response in a conversation needs at least a few sentences
+          const MIN_CONTENT_LENGTH = 50;
+
+          // ✅ DETECT REFUSAL PATTERNS: Common phrases indicating model refused to respond
+          // Only check main text field - reasoning field typically doesn't contain refusals
+          const refusalPatterns = [
+            /^i\s+(cannot|can't|am unable to|apologize|must decline)/i,
+            /^sorry,?\s+i\s+(cannot|can't|am unable to)/i,
+            /^(unfortunately|regrettably),?\s+i\s+(cannot|can't)/i,
+            /i'm\s+(not able to|unable to|sorry)/i,
+          ];
+          const containsRefusal = refusalPatterns.some(pattern => pattern.test(trimmedText));
+
+          // ✅ VALID RESPONSE: Has meaningful content in EITHER text OR reasoning field
+          const isEmptyResponse = !combinedContent
+            || combinedLength === 0
+            || combinedLength < MIN_CONTENT_LENGTH
+            || usage?.outputTokens === 0
+            || containsRefusal;
 
           // Generate comprehensive error message
           let errorMessage: string | undefined;
@@ -2713,6 +2771,25 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
               providerMessage = `Model returned empty response. Input: ${inputTokens} tokens, Output: 0 tokens, Status: ${finishReason}`;
               errorMessage = providerMessage; // Show exact same message to user - no generic text
               errorCategory = errorCategory || 'empty_response';
+            } else if (containsRefusal) {
+              // Model explicitly refused to respond
+              providerMessage = `Model refused to respond: "${trimmedText.substring(0, 100)}${trimmedText.length > 100 ? '...' : ''}". Input: ${inputTokens} tokens, Output: ${outputTokens} tokens, Status: ${finishReason}`;
+              errorMessage = providerMessage;
+              errorCategory = 'refusal';
+            } else if (combinedLength < MIN_CONTENT_LENGTH) {
+              // Response is too short to be useful
+              // ✅ REASONING BUNDLE SUPPORT: Report which field(s) had content
+              const contentBreakdown = trimmedText.length > 0 && trimmedReasoning.length > 0
+                ? `text: ${trimmedText.length} chars, reasoning: ${trimmedReasoning.length} chars`
+                : trimmedText.length > 0
+                  ? `text only: ${trimmedText.length} chars`
+                  : trimmedReasoning.length > 0
+                    ? `reasoning only: ${trimmedReasoning.length} chars`
+                    : 'no content';
+
+              providerMessage = `Model returned insufficient content (${combinedLength} characters total [${contentBreakdown}], minimum ${MIN_CONTENT_LENGTH} required). Input: ${inputTokens} tokens, Output: ${outputTokens} tokens, Status: ${finishReason}`;
+              errorMessage = providerMessage;
+              errorCategory = 'empty_response';
             } else {
               // Rare case: has some tokens but no useful text
               providerMessage = `Model returned ${outputTokens} token(s) but no text. Input: ${inputTokens} tokens, Status: ${finishReason}`;
@@ -2748,7 +2825,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
                 openRouterError,
                 isTransient: hasError,
                 // ✅ Include retry attempt count for debugging
-                retryAttempts: emptyResponseAttempt,
+                retryAttempts: totalAttempts,
               },
               createdAt: new Date(),
             })
@@ -2765,25 +2842,55 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
 
           await incrementMessageUsage(user.id, 1);
 
-          // ✅ TRIGGER ANALYSIS: When last participant finishes
+          // ✅ TRIGGER ANALYSIS: When last participant finishes AND all participants succeeded
           if (participantIndex === participants.length - 1 && savedMessage) {
-            console.warn('[streamChatHandler] 🎯 Last participant finished - triggering analysis', {
-              threadId,
-              participantIndex,
-              roundNumber: Math.ceil((participantIndex + 1) / participants.length),
-              totalParticipants: participants.length,
+            const currentRoundNumber = Math.ceil((participantIndex + 1) / participants.length);
+
+            // ✅ VALIDATE ROUND: Check if all participants in this round succeeded
+            // Query all messages for the current round to ensure none have errors
+            const roundMessages = await db.query.chatMessage.findMany({
+              where: and(
+                eq(tables.chatMessage.threadId, threadId),
+                eq(tables.chatMessage.roundNumber, currentRoundNumber),
+              ),
+              orderBy: [tables.chatMessage.createdAt],
             });
 
-            triggerRoundAnalysisAsync({
-              threadId,
-              thread: { ...thread, participants },
-              allParticipants: participants,
-              savedMessageId: savedMessage.id,
-              db,
-              env: c.env, // ✅ ADDED: Pass env for background analysis generation
-            }).catch((error) => {
-              console.error('[streamChatHandler] ❌ Failed to trigger analysis (non-blocking):', error);
-            });
+            // ✅ TYPE-SAFE ERROR CHECK: Use validated MessageMetadata type
+            const messagesWithErrors = roundMessages.filter(msg =>
+              MessageMetadataSchema.safeParse(msg.metadata).success
+              && messageHasError(MessageMetadataSchema.parse(msg.metadata)),
+            );
+            const hasAnyError = messagesWithErrors.length > 0;
+
+            if (hasAnyError) {
+              console.warn('[streamChatHandler] ⚠️ Round has errors - skipping analysis', {
+                threadId,
+                participantIndex,
+                roundNumber: currentRoundNumber,
+                totalParticipants: participants.length,
+                messagesInRound: roundMessages.length,
+                errorCount: messagesWithErrors.length,
+              });
+            } else {
+              console.warn('[streamChatHandler] 🎯 Last participant finished - triggering analysis', {
+                threadId,
+                participantIndex,
+                roundNumber: currentRoundNumber,
+                totalParticipants: participants.length,
+              });
+
+              triggerRoundAnalysisAsync({
+                threadId,
+                thread: { ...thread, participants },
+                allParticipants: participants,
+                savedMessageId: savedMessage.id,
+                db,
+                env: c.env, // ✅ ADDED: Pass env for background analysis generation
+              }).catch((error) => {
+                console.error('[streamChatHandler] ❌ Failed to trigger analysis (non-blocking):', error);
+              });
+            }
           }
         } catch (dbError) {
           // ✅ NON-BLOCKING ERROR: Log but don't throw
@@ -2809,7 +2916,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
       participantIndex,
       participantId: participant.id,
       modelId: participant.modelId,
-      retriesPerformed: emptyResponseAttempt - 1, // -1 because first attempt isn't a retry
+      retriesPerformed: totalAttempts - 1, // -1 because first attempt isn't a retry
     });
 
     return finalResult.toUIMessageStreamResponse({
@@ -3080,6 +3187,8 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
 
     // ✅ CRITICAL FIX: Enhanced idempotency with race condition prevention
     // Multiple simultaneous requests must not create duplicate analyses
+    let analysisIdToUse: string | null = null; // Track if we're using existing analysis
+
     const existingAnalysis = await db.query.chatModeratorAnalysis.findFirst({
       where: (fields, { and: andOp, eq: eqOp }) =>
         andOp(
@@ -3122,32 +3231,51 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
         );
       }
 
-      // ✅ PENDING: Check age and either fail if stuck or return 202 if recent
+      // ✅ PENDING: Transition to streaming and process it
+      // The "pending" status means the backend created the record and is waiting for frontend to trigger
+      // When frontend calls /analyze, we should process it, not return 409!
       if (existingAnalysis.status === 'pending') {
         const ageMs = Date.now() - existingAnalysis.createdAt.getTime();
         const TWO_MINUTES_MS = 2 * 60 * 1000;
 
         if (ageMs > TWO_MINUTES_MS) {
-          // Stuck pending - mark as failed and allow fresh retry
-          console.warn('[analyzeRoundHandler] ⏱️ Pending analysis stuck (> 2 min), marking as failed', existingAnalysis.id);
-          await db.update(tables.chatModeratorAnalysis)
-            .set({
-              status: 'failed',
-              errorMessage: 'Analysis timed out - stuck in pending state for over 2 minutes',
-            })
+          // Stuck pending - delete to allow fresh retry
+          console.warn('[analyzeRoundHandler] ⏱️ Pending analysis stuck (> 2 min), deleting', existingAnalysis.id);
+          await db.delete(tables.chatModeratorAnalysis)
             .where(eq(tables.chatModeratorAnalysis.id, existingAnalysis.id));
-          // Fall through to create new analysis
+          // Fall through to create new analysis below
         } else {
-          // ✅ CRITICAL FIX: Recent pending - return 409 Conflict (experimental_useObject can't handle 202)
-          console.warn(`[analyzeRoundHandler] ⏳ Recent pending analysis, returning 409 Conflict (age: ${ageMs}ms)`, existingAnalysis.id);
-          throw createError.conflict(
-            'Analysis is already pending. Another request is processing this round. Please wait and refresh.',
-            {
-              errorType: 'resource',
-              resource: 'moderator_analysis',
-              resourceId: existingAnalysis.id,
-            },
-          );
+          // ✅ ATOMIC UPDATE: Transition pending → streaming with race condition protection
+          // Only the first request that updates status wins, others will fail and should retry
+          console.warn(`[analyzeRoundHandler] ✅ Attempting to claim pending analysis (age: ${ageMs}ms)`, existingAnalysis.id);
+
+          // ✅ CRITICAL: Atomic update - only succeed if status is still 'pending'
+          // This prevents multiple requests from processing the same analysis
+          const updateResult = await db.update(tables.chatModeratorAnalysis)
+            .set({ status: 'streaming' })
+            .where(and(
+              eq(tables.chatModeratorAnalysis.id, existingAnalysis.id),
+              eq(tables.chatModeratorAnalysis.status, 'pending'), // CRITICAL: Only update if still pending
+            ))
+            .returning();
+
+          // Check if update succeeded (status was pending and we claimed it)
+          if (updateResult.length === 0) {
+            // Another request already claimed it - return 409 to prevent duplicate
+            console.warn('[analyzeRoundHandler] ⚠️ Analysis already claimed by another request', existingAnalysis.id);
+            throw createError.conflict(
+              'Analysis is already being processed by another request. Please wait.',
+              {
+                errorType: 'resource',
+                resource: 'moderator_analysis',
+                resourceId: existingAnalysis.id,
+              },
+            );
+          }
+
+          // ✅ Successfully claimed the pending analysis - process it
+          console.warn('[analyzeRoundHandler] ✅ Successfully claimed pending analysis', existingAnalysis.id);
+          analysisIdToUse = existingAnalysis.id;
         }
       }
 
@@ -3271,32 +3399,60 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
 
     // ✅ CRITICAL: Create streaming analysis record BEFORE starting stream
     // This acts as a distributed lock to prevent duplicate analysis generation
-    // If another request comes in, it will see this streaming record and return 202
-    const analysisId = ulid();
+    // If another request comes in, it will see this streaming record and return 409
+    // If we already have a pending analysis that we updated to streaming, use that ID
+    const analysisId = analysisIdToUse || ulid();
 
-    console.warn('[analyzeRoundHandler] 🆕 Creating new streaming analysis', {
-      analysisId,
-      threadId,
-      roundNumber: roundNum,
-      participantCount: body.participantMessageIds.length,
-    });
+    if (!analysisIdToUse) {
+      // Only create new record if we're not using an existing pending analysis
+      console.warn('[analyzeRoundHandler] 🆕 Creating new streaming analysis', {
+        analysisId,
+        threadId,
+        roundNumber: roundNum,
+        participantCount: body.participantMessageIds.length,
+      });
 
-    await db.insert(tables.chatModeratorAnalysis).values({
-      id: analysisId,
-      threadId,
-      roundNumber: roundNum,
-      mode: thread.mode,
-      userQuestion,
-      status: 'streaming', // Mark as streaming immediately
-      participantMessageIds: body.participantMessageIds,
-      createdAt: new Date(),
-    });
+      await db.insert(tables.chatModeratorAnalysis).values({
+        id: analysisId,
+        threadId,
+        roundNumber: roundNum,
+        mode: thread.mode,
+        userQuestion,
+        status: 'streaming', // Mark as streaming immediately
+        participantMessageIds: body.participantMessageIds,
+        createdAt: new Date(),
+      });
 
-    console.warn('[analyzeRoundHandler] ✅ Streaming analysis created, starting AI stream', analysisId);
+      console.warn('[analyzeRoundHandler] ✅ Streaming analysis created, starting AI stream', analysisId);
+    } else {
+      console.warn('[analyzeRoundHandler] ✅ Using existing pending analysis, starting AI stream', analysisId);
+    }
 
-    // ✅ AI SDK streamObject() Pattern: Stream structured JSON as it's generated
+    // ✅ FINAL SAFEGUARD: Double-check analysis isn't already streaming before starting
+    // This prevents race conditions if multiple requests somehow got past earlier checks
+    // Skip this check if we just transitioned a pending analysis to streaming ourselves
+    if (!analysisIdToUse) {
+      const finalCheck = await db.query.chatModeratorAnalysis.findFirst({
+        where: eq(tables.chatModeratorAnalysis.id, analysisId),
+      });
+
+      if (finalCheck && finalCheck.status === 'streaming') {
+        // Someone else is already streaming this analysis
+        console.warn('[analyzeRoundHandler] ⚠️ Final check failed - analysis already streaming', analysisId);
+        throw createError.conflict(
+          'Analysis is already being generated by another request.',
+          {
+            errorType: 'resource',
+            resource: 'moderator_analysis',
+            resourceId: analysisId,
+          },
+        );
+      }
+    }
+
+    // ✅ AI SDK v5 streamObject() Pattern: Stream structured JSON as it's generated
     // Real streaming approach - sends partial objects as they arrive
-    // Frontend uses useObject() hook from @ai-sdk/react for consumption
+    // Frontend uses experimental_useObject() hook from @ai-sdk/react for consumption
     //
     // Reference: https://sdk.vercel.ai/docs/ai-sdk-core/generating-structured-data
     // Reference: https://sdk.vercel.ai/docs/ai-sdk-ui/object-generation

@@ -61,10 +61,11 @@ export function ModeratorAnalysisStream({
   const initialStatusRef = useRef(analysis.status);
 
   // ✅ AUTO-TRIGGER: Start streaming immediately when component mounts
-  // CRITICAL FIX: Only trigger ONCE using stable dependencies AND only if not already streaming
+  // CRITICAL: Only trigger ONCE using stable dependencies AND only if not already streaming
+  // Following AI SDK v5 best practice: avoid multiple stream initiations
   useEffect(() => {
-    // ✅ NEW: Don't trigger if the analysis was already streaming/completed when we mounted
-    // This prevents duplicate requests when navigating to a page with an existing analysis
+    // ✅ Prevent trigger if analysis was already streaming/completed when mounted
+    // This prevents duplicate requests when navigating to a page with existing analysis
     if (initialStatusRef.current === 'streaming' || initialStatusRef.current === 'completed') {
       console.warn('[ModeratorAnalysisStream] ⏭️ Skipping trigger - analysis already in progress', {
         analysisId: analysis.id,
@@ -73,12 +74,12 @@ export function ModeratorAnalysisStream({
       return;
     }
 
-    // Only trigger if:
-    // 1. Analysis is pending
-    // 2. We haven't triggered yet (ref check)
-    // 3. Not already loading
-    // 4. No existing partial object
-    // 5. No error
+    // ✅ Only trigger if ALL conditions are met:
+    // 1. Analysis is pending (not streaming/completed/failed)
+    // 2. We haven't triggered yet (ref-based guard)
+    // 3. Not already loading (stream not started)
+    // 4. No existing partial object (no data received)
+    // 5. No error occurred
     if (
       analysis.status === 'pending'
       && !hasTriggeredRef.current
@@ -86,33 +87,37 @@ export function ModeratorAnalysisStream({
       && !partialAnalysis
       && !error
     ) {
-      console.warn('[ModeratorAnalysisStream] 🚀 Triggering analysis', {
+      console.warn('[ModeratorAnalysisStream] 🚀 Triggering analysis stream', {
         analysisId: analysis.id,
         roundNumber: analysis.roundNumber,
         participantMessageCount: analysis.participantMessageIds.length,
       });
 
+      // ✅ Mark as triggered BEFORE calling submit to prevent race conditions
       hasTriggeredRef.current = true;
 
+      // ✅ AI SDK v5 Pattern: Submit once, stream handles the rest
       submit({
         participantMessageIds: analysis.participantMessageIds,
       });
     }
   }, [
-    // ✅ STABLE DEPENDENCIES ONLY:
-    // - analysis.id (changes only when analysis changes)
-    // - analysis.status (string value)
-    // - isLoading (boolean from useObject)
-    // - partialAnalysis (stable reference from useObject)
-    // - error (stable reference from useObject)
-    // ❌ REMOVED: analysis.participantMessageIds (unstable array reference)
-    // ❌ REMOVED: submit (may change reference)
+    // ✅ CRITICAL: STABLE DEPENDENCIES ONLY
+    // These values should NOT cause re-triggers:
+    // - analysis.id: Only changes when switching to different analysis
+    // - analysis.status: String value, stable
+    // - isLoading: Boolean from useObject hook, stable
+    // - partialAnalysis: Object reference from useObject, stable
+    // - error: Error object from useObject, stable
+    //
+    // ❌ EXCLUDED (unstable references that cause unnecessary re-renders):
+    // - analysis.participantMessageIds: Array reference changes on every render
+    // - submit: Function reference may change
     analysis.id,
     analysis.status,
     isLoading,
     partialAnalysis,
     error,
-    submit,
   ]);
 
   // ✅ STREAM COMPLETE CALLBACK: Notify parent when streaming finishes
