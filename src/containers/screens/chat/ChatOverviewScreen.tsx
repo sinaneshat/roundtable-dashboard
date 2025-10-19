@@ -14,6 +14,7 @@ import { ChatModeSelector } from '@/components/chat/chat-mode-selector';
 import { ChatParticipantsList } from '@/components/chat/chat-participants-list';
 import { ChatQuickStart } from '@/components/chat/chat-quick-start';
 import { StreamingParticipantsLoader } from '@/components/chat/streaming-participants-loader';
+import { useThreadHeader } from '@/components/chat/thread-header-context';
 import { WavyBackground } from '@/components/ui/wavy-background';
 import { BRAND } from '@/constants/brand';
 import { useSharedChatContext } from '@/contexts/chat-context';
@@ -79,6 +80,10 @@ export default function ChatOverviewScreen() {
     participants: contextParticipants,
     stop: stopStreaming, // ✅ Stop function for interrupting streaming
   } = useSharedChatContext();
+
+  // ✅ HEADER STATE CLEANUP: Clear thread header when on overview page
+  // This prevents the thread header actions from persisting when navigating back from a thread
+  const { setThreadTitle, setThreadActions } = useThreadHeader();
 
   const initialParticipants = useMemo<ParticipantConfig[]>(() => {
     if (defaultModelId) {
@@ -183,16 +188,15 @@ export default function ChatOverviewScreen() {
         // ✅ This fires when ALL participants finish streaming (entire round complete)
         setOnRoundComplete(async () => {
           try {
-            // ✅ CRITICAL FIX: Fetch the latest thread to get AI-generated title and slug
-            // The title generation happens asynchronously in the background during streaming
-            // We need to wait for it to complete and get the updated slug for navigation
+            // ✅ CRITICAL FIX: Wait for AI title generation before navigation
+            // The backend generates title from user message, which ALWAYS creates a unique slug
+            // Title generation uses: (1) AI-generated title, or (2) first 5 words of message
+            // This ensures slug ALWAYS changes and is never "New Chat"
 
-            // Wait for title generation to complete (async background task using fastest model)
-            // Title generation involves: model selection, API call, DB update, cache invalidation
-            // Typical latency: 1-2 seconds for fastest models
+            // Wait for title generation (typical: 1-2 seconds for fast models)
             await new Promise(resolve => setTimeout(resolve, 2000));
 
-            // Fetch the latest thread details from the backend
+            // Fetch updated thread with AI-generated slug
             console.warn('[ChatOverviewScreen] 🔄 Fetching updated thread after title generation', {
               threadId: thread.id,
               originalTitle: thread.title,
@@ -212,18 +216,17 @@ export default function ChatOverviewScreen() {
                 slugChanged: thread.slug !== updatedThread.slug,
               });
 
-              // ✅ CRITICAL: Invalidate sidebar thread list cache
-              // This ensures the sidebar shows the updated AI-generated title immediately
+              // ✅ CRITICAL: Invalidate sidebar cache
               await queryClient.invalidateQueries({ queryKey: queryKeys.threads.lists() });
 
-              console.warn('[ChatOverviewScreen] ✅ Sidebar cache invalidated, navigating to thread', {
+              console.warn('[ChatOverviewScreen] ✅ Navigating to thread', {
                 slug: updatedThread.slug,
               });
 
-              // Navigate to the thread using the updated slug (with AI-generated title)
+              // Navigate using the AI-generated slug
               router.push(`/chat/${updatedThread.slug}`);
             } else {
-              // Fallback: Navigate with original slug if fetch fails
+              // Fallback: use original slug if fetch fails
               console.warn('[ChatOverviewScreen] ❌ Failed to fetch updated thread, using original slug', {
                 threadId: thread.id,
                 originalSlug: thread.slug,
@@ -231,7 +234,7 @@ export default function ChatOverviewScreen() {
               router.push(`/chat/${thread.slug}`);
             }
           } catch (error) {
-            // Fallback: Navigate with original slug if anything fails
+            // Fallback: use original slug on any error
             console.error('[ChatOverviewScreen] Error fetching updated thread:', error);
             router.push(`/chat/${thread.slug}`);
           }
@@ -295,6 +298,13 @@ export default function ChatOverviewScreen() {
     }
   }, [defaultModelId, selectedParticipants.length]);
 
+  // ✅ CRITICAL FIX: Clear thread header state when navigating to overview
+  // This ensures the header only shows the sidebar toggle, not thread-specific actions
+  useEffect(() => {
+    setThreadTitle(null);
+    setThreadActions(null);
+  }, [setThreadTitle, setThreadActions]);
+
   return (
     <div className="relative flex flex-1 flex-col min-h-0">
       {/* Background - absolute positioned within container */}
@@ -304,11 +314,20 @@ export default function ChatOverviewScreen() {
 
       {/* Conversation wrapper - scrollable content area */}
       <Conversation className="relative z-10 flex-1 flex flex-col min-h-0">
-        <ConversationContent className="flex-1">
-          {/* Center all content at max-w-3xl with bottom padding for fixed input */}
-          <div className="mx-auto max-w-3xl px-4 pb-32">
+        <ConversationContent className="p-0">
+          {/*
+            Bottom padding for scroll clearance:
+            - Uses inline style paddingBottom: '400px' (only reliable method)
+            - Tailwind classes don't work due to:
+              1. Arbitrary values [400px] not compiled by JIT engine
+              2. Custom utilities in global.css not loading/applying
+              3. Possible build process or CSS ordering issue
+            - 400px ensures content can scroll past the ~150px fixed input box at bottom
+            - Inline style is necessary to guarantee proper spacing
+          */}
+          <div className="mx-auto max-w-3xl px-4 pt-6 min-h-full" style={{ paddingBottom: '400px' }}>
             {/* ✅ ANIMATED: Initial UI (logo, suggestions) - fades out when streaming starts */}
-            <AnimatePresence mode="wait">
+            <AnimatePresence>
               {showInitialUI && (
                 <motion.div
                   key="initial-ui"
@@ -316,7 +335,7 @@ export default function ChatOverviewScreen() {
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -20 }}
                   transition={{ duration: 0.3 }}
-                  className="pt-6 pb-8"
+                  className="pb-8"
                 >
                   <div className="flex flex-col items-center gap-4 sm:gap-5 md:gap-6 text-center">
                     {/* Brand Logo */}
@@ -370,7 +389,7 @@ export default function ChatOverviewScreen() {
             </AnimatePresence>
 
             {/* ✅ ANIMATED: Streaming Messages - fades in when streaming starts */}
-            <AnimatePresence mode="wait">
+            <AnimatePresence>
               {!showInitialUI && currentThread && (
                 <motion.div
                   key="streaming-ui"
@@ -378,7 +397,6 @@ export default function ChatOverviewScreen() {
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -20 }}
                   transition={{ duration: 0.3 }}
-                  className="pt-6"
                 >
                   {/* ✅ REUSABLE: Same ChatMessageList component used in thread screen */}
                   <ChatMessageList
@@ -425,29 +443,31 @@ export default function ChatOverviewScreen() {
         <ConversationScrollButton />
       </Conversation>
 
-      {/* Absolutely positioned input - always visible at bottom, centered with content */}
-      <div className="absolute bottom-0 left-1/2 -translate-x-1/2 z-20 w-full max-w-3xl px-4 py-4">
-        <ChatInput
-          value={inputValue}
-          onChange={setInputValue}
-          onSubmit={handlePromptSubmit}
-          status={isCreatingThread || isStreaming ? 'submitted' : 'ready'}
-          onStop={stopStreaming}
-          placeholder={t('chat.input.placeholder')}
-          className="backdrop-blur-xl bg-background/70 border border-border/30 shadow-lg"
-          toolbar={(
-            <>
-              <ChatParticipantsList
-                participants={selectedParticipants}
-                onParticipantsChange={setSelectedParticipants}
-              />
-              <ChatModeSelector
-                selectedMode={selectedMode}
-                onModeChange={setSelectedMode}
-              />
-            </>
-          )}
-        />
+      {/* Fixed positioned input - always visible at bottom, centered with content */}
+      <div className="fixed bottom-0 left-0 right-0 z-20 pb-6 md:left-[var(--sidebar-width-icon)] md:pr-2 md:pb-8">
+        <div className="mx-auto max-w-3xl px-4">
+          <ChatInput
+            value={inputValue}
+            onChange={setInputValue}
+            onSubmit={handlePromptSubmit}
+            status={isCreatingThread || isStreaming ? 'submitted' : 'ready'}
+            onStop={stopStreaming}
+            placeholder={t('chat.input.placeholder')}
+            className="backdrop-blur-xl bg-background/70 border border-border/30 shadow-lg"
+            toolbar={(
+              <>
+                <ChatParticipantsList
+                  participants={selectedParticipants}
+                  onParticipantsChange={setSelectedParticipants}
+                />
+                <ChatModeSelector
+                  selectedMode={selectedMode}
+                  onModeChange={setSelectedMode}
+                />
+              </>
+            )}
+          />
+        </div>
       </div>
     </div>
   );

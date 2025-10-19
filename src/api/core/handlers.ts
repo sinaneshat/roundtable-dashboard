@@ -119,7 +119,7 @@ export type RegularHandler<
   TQuery extends z.ZodSchema = never,
   TParams extends z.ZodSchema = never,
 > = (
-  c: HandlerContext<TEnv, TBody, TQuery, TParams>
+  c: HandlerContext<TEnv, TBody, TQuery, TParams>,
 ) => Promise<Response>;
 
 /**
@@ -147,7 +147,7 @@ export type BatchHandler<
   TParams extends z.ZodSchema = never,
 > = (
   c: HandlerContext<TEnv, TBody, TQuery, TParams>,
-  batch: BatchContext
+  batch: BatchContext,
 ) => Promise<Response>;
 
 // ============================================================================
@@ -239,10 +239,10 @@ async function validateRequest<
   c: Context,
   config: Pick<HandlerConfig<RouteConfig, TBody, TQuery, TParams>, 'validateBody' | 'validateQuery' | 'validateParams'>,
 ): Promise<{
-    body: [TBody] extends [never] ? undefined : z.infer<TBody>;
-    query: [TQuery] extends [never] ? undefined : z.infer<TQuery>;
-    params: [TParams] extends [never] ? undefined : z.infer<TParams>;
-  }> {
+  body: [TBody] extends [never] ? undefined : z.infer<TBody>;
+  query: [TQuery] extends [never] ? undefined : z.infer<TQuery>;
+  params: [TParams] extends [never] ? undefined : z.infer<TParams>;
+}> {
   const validated: {
     body?: [TBody] extends [never] ? undefined : z.infer<TBody>;
     query?: [TQuery] extends [never] ? undefined : z.infer<TQuery>;

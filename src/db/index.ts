@@ -119,10 +119,10 @@ export const getDb = cache(() => {
     // Initialize KV cache for D1 (production/preview only)
     const kvCache = env.KV
       ? new CloudflareKVCache({
-        kv: env.KV,
-        global: false, // Opt-in caching (use .$withCache())
-        defaultTtl: 300, // 5 minutes
-      })
+          kv: env.KV,
+          global: false, // Opt-in caching (use .$withCache())
+          defaultTtl: 300, // 5 minutes
+        })
       : undefined;
 
     return drizzleD1(env.DB, {
@@ -164,10 +164,10 @@ export const getDbAsync = cache(async () => {
     // Initialize KV cache for D1 (production/preview only)
     const kvCache = env.KV
       ? new CloudflareKVCache({
-        kv: env.KV,
-        global: false, // Opt-in caching (use .$withCache())
-        defaultTtl: 300, // 5 minutes
-      })
+          kv: env.KV,
+          global: false, // Opt-in caching (use .$withCache())
+          defaultTtl: 300, // 5 minutes
+        })
       : undefined;
 
     return drizzleD1(env.DB, {
@@ -215,10 +215,10 @@ function createDbInstance(): ReturnType<typeof drizzleD1<typeof schema>> | Retur
     const kvBinding = getKVBinding();
     const kvCache = kvBinding
       ? new CloudflareKVCache({
-        kv: kvBinding,
-        global: false,
-        defaultTtl: 300,
-      })
+          kv: kvBinding,
+          global: false,
+          defaultTtl: 300,
+        })
       : undefined;
 
     return drizzleD1(d1Database, {

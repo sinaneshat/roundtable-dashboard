@@ -136,8 +136,18 @@ class OpenRouterModelsService {
     // These are low-quality models provided free by OpenRouter, not premium models
     const paidModels = textCapableModels.filter(model => !this.isOpenRouterFreeTier(model));
 
+    // ✅ FILTER: Exclude fine-tuned and training models
+    // These models require special data policies (like "Paid model training") that most users don't have enabled
+    // This prevents runtime errors when users try to use models they don't have access to
+    const standardModels = paidModels.filter(model => !this.isFineTunedOrTrainingModel(model));
+
+    // ✅ FILTER: Exclude research derivative models requiring data policy opt-in
+    // Research labs sometimes publish models based on other companies' models as initialization
+    // These require "Paid model training" opt-in, filtered dynamically by description analysis
+    const accessibleModels = standardModels.filter(model => !this.isResearchDerivativeModel(model));
+
     // Enhance models with computed fields
-    const enhancedModels = paidModels.map(model => this.enhanceModel(model));
+    const enhancedModels = accessibleModels.map(model => this.enhanceModel(model));
 
     return enhancedModels;
   }
@@ -156,6 +166,241 @@ class OpenRouterModelsService {
 
     // If both prompt and completion are free (0), it's OpenRouter free tier
     return promptPrice === MIN_PRICING_THRESHOLD && completionPrice === MIN_PRICING_THRESHOLD;
+  }
+
+  /**
+   * ✅ FILTER: Exclude fine-tuned and training models
+   *
+   * Fine-tuned models often require special OpenRouter data policies like "Paid model training"
+   * that most users don't have enabled. Using these models causes runtime errors:
+   * "No endpoints found matching your data policy (Paid model training)"
+   *
+   * Detection criteria (100% dynamic based on OpenRouter API data):
+   * 1. Provider-based filtering: Known fine-tuning/research organizations
+   * 2. Description contains fine-tuning keywords (case-insensitive)
+   * 3. Model ID contains fine-tuning patterns (rpr, ft, lora, qlora, etc.)
+   * 4. Description mentions training methods or dataset tuning
+   *
+   * This ensures users only see pre-trained models that work without special data policies.
+   *
+   * Examples of excluded models:
+   * - nousresearch/* (Nous Research - fine-tuning organization)
+   * - arliai/qwq-32b-arliai-rpr-v1 (fine-tuned with RPR - RolePlay Refined)
+   * - Any model with "fine-tuned from X" in description
+   * - Models trained with QLORA, LoRA, or other fine-tuning methods
+   *
+   * @param model - Raw model from OpenRouter API
+   * @returns true if model is fine-tuned/training model (should be excluded)
+   */
+  private isFineTunedOrTrainingModel(model: RawOpenRouterModel): boolean {
+    const description = model.description?.toLowerCase() || '';
+    const modelId = model.id.toLowerCase();
+    const modelName = model.name?.toLowerCase() || '';
+    const provider = modelId.split('/')[0] || '';
+
+    // ═══════════════════════════════════════════════════════════════
+    // PROVIDER-BASED FILTERING: Known fine-tuning/research organizations
+    // ═══════════════════════════════════════════════════════════════
+    // These providers are known to publish fine-tuned or research models
+    // that require "Paid model training" data policy opt-in
+    const fineTuningProviders = [
+      'nousresearch', // Nous Research - fine-tuning organization
+      'arliai', // ArliAI - fine-tuning organization
+      'cognitivecomputations', // Cognitive Computations - fine-tuning org
+      'gryphe', // Gryphe - fine-tuning organization
+      'sao10k', // sao10k - fine-tuning organization
+      'sophosympatheia', // Sophosympatheia - fine-tuning organization
+      'neversleep', // NeverSleep - fine-tuning organization
+      'fimbulvetr', // Fimbulvetr - fine-tuning organization
+    ];
+
+    if (fineTuningProviders.includes(provider)) {
+      return true; // Exclude all models from fine-tuning providers
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // DESCRIPTION-BASED DETECTION: Fine-tuning keywords
+    // ═══════════════════════════════════════════════════════════════
+    const fineTuningKeywords = [
+      'fine-tuned',
+      'fine tuned',
+      'finetuned',
+      'trained using',
+      'trained with',
+      'trained on',
+      'qlora',
+      'q-lora',
+      'lora',
+      'parameter efficient',
+      'curated dataset',
+      'roleplay dataset',
+      'rpr series',
+      'rpmax series',
+      'instruct tuning',
+      'instruction tuning',
+      'chat tuning',
+      'alignment tuning',
+    ];
+
+    for (const keyword of fineTuningKeywords) {
+      if (description.includes(keyword)) {
+        return true; // Exclude fine-tuned models
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // MODEL ID PATTERN DETECTION: Common fine-tuning suffixes
+    // ═══════════════════════════════════════════════════════════════
+    const fineTuningPatterns = [
+      '-rpr-', // RolePlay Refined
+      '-ft-', // Fine-Tuned
+      '-lora-', // LoRA fine-tuning
+      '-qlora-', // Quantized LoRA
+      '-sft-', // Supervised Fine-Tuning
+      '-dpo-', // Direct Preference Optimization
+      '-rlhf-', // Reinforcement Learning from Human Feedback
+      ':finetune', // OpenRouter fine-tune suffix
+      '-instruct', // Instruction-tuned (when not from original provider)
+      '-chat', // Chat-tuned (when not from original provider)
+    ];
+
+    for (const pattern of fineTuningPatterns) {
+      if (modelId.includes(pattern) || modelName.includes(pattern)) {
+        // Allow original providers' own instruction/chat models
+        // e.g., "meta-llama/llama-3-8b-instruct" is OK (official from Meta)
+        // but "randomorg/llama-3-8b-instruct" is NOT OK (derivative)
+        const isOfficialInstructModel = (
+          (pattern === '-instruct' || pattern === '-chat')
+          && this.isOfficialProvider(provider)
+        );
+
+        if (!isOfficialInstructModel) {
+          return true; // Exclude models with fine-tuning patterns
+        }
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // PASS: Model is a standard pre-trained model
+    // ═══════════════════════════════════════════════════════════════
+    return false;
+  }
+
+  /**
+   * Check if a provider is an official model creator (not a fine-tuner)
+   * Official providers can publish their own instruction-tuned models
+   */
+  private isOfficialProvider(provider: string): boolean {
+    const officialProviders = [
+      'meta-llama', // Meta (official Llama provider)
+      'meta', // Meta
+      'anthropic', // Anthropic
+      'openai', // OpenAI
+      'google', // Google
+      'cohere', // Cohere
+      'mistralai', // Mistral AI
+      'microsoft', // Microsoft
+      'ai21', // AI21 Labs
+      'amazon', // Amazon
+      'perplexity', // Perplexity
+      'alibaba', // Alibaba (Qwen)
+      'deepseek', // DeepSeek
+      'nvidia', // NVIDIA
+      'databricks', // Databricks
+      'ibm', // IBM
+      'stabilityai', // Stability AI
+      'huggingface', // Hugging Face (official models only)
+      '01-ai', // 01.AI
+      'xai', // xAI (Grok)
+    ];
+
+    return officialProviders.includes(provider);
+  }
+
+  /**
+   * ✅ FILTER: Exclude research derivative models requiring "Paid model training" data policy
+   *
+   * Research labs sometimes publish models that use OTHER COMPANIES' models as initialization
+   * or base models. These derivative models require "Paid model training" opt-in to use.
+   *
+   * Error when using without opt-in:
+   * "No endpoints found matching your data policy (Paid model training).
+   * Configure: https://openrouter.ai/settings/privacy"
+   *
+   * **100% DYNAMIC DETECTION** based on description patterns:
+   *
+   * Detection criteria:
+   * 1. Description mentions using another model as base/initialization
+   * 2. Phrases like "benchmarked against", "initialization from", "builds upon"
+   * 3. References to other companies' models (Qwen, Llama, GPT, etc.) as foundation
+   *
+   * Examples of research derivatives (EXCLUDED):
+   * - "pre-trained base models serve as the initialization for its language component"
+   * - "benchmarked against the Qwen2.5 Chat models"
+   * - "builds upon the [CompanyX] model"
+   *
+   * vs. Legitimate models (INCLUDED):
+   * - Models that mention comparisons but aren't derived: "outperforms GPT-4"
+   * - Models from original creators: "Qwen3 from Alibaba"
+   * - Standard product descriptions without derivative language
+   *
+   * This dynamically catches research lab models without hardcoding provider names.
+   *
+   * @param model - Raw model from OpenRouter API
+   * @returns true if model is a research derivative requiring data policy (should be excluded)
+   */
+  private isResearchDerivativeModel(model: RawOpenRouterModel): boolean {
+    const description = model.description?.toLowerCase() || '';
+
+    // ═══════════════════════════════════════════════════════════════
+    // RESEARCH DERIVATIVE INDICATORS: Model uses another as base
+    // ═══════════════════════════════════════════════════════════════
+    const researchDerivativePatterns = [
+      // Direct initialization/base model language
+      'serve as the initialization',
+      'serves as the initialization',
+      'initialized from',
+      'initialization from',
+      'as the initialization for',
+
+      // Building upon other models
+      'builds upon the',
+      'built upon the',
+      'building upon',
+
+      // Derivative research language (when combined with model names)
+      'benchmarked against the',
+      'compared to the',
+      'based on the pre-trained',
+
+      // Research modification patterns
+      'whose pre-trained',
+      'benefiting from native',
+    ];
+
+    for (const pattern of researchDerivativePatterns) {
+      if (description.includes(pattern)) {
+        // Additional check: Ensure it's referencing another company's model
+        // Look for common model family names that indicate using another's base
+        const isDerivativeOfOtherModel = (
+          description.includes('qwen')
+          || description.includes('llama')
+          || description.includes('gpt')
+          || description.includes('claude')
+          || description.includes('gemini')
+          || description.includes('mistral')
+        );
+
+        if (isDerivativeOfOtherModel) {
+          return true; // Exclude research derivative models
+        }
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // PASS: Not a research derivative model
+    // ═══════════════════════════════════════════════════════════════
+    return false;
   }
 
   /**

@@ -9,7 +9,7 @@
  * - Test without needing a real public thread
  * - Iterate on styling and layout
  */
-/* eslint-disable @next/next/no-img-element */
+/* eslint-disable next/no-img-element */
 /* eslint-disable react/no-array-index-key */
 import { ImageResponse } from 'next/og';
 

@@ -97,6 +97,7 @@ export default async function PublicChatThreadPage({
   const { slug } = await params;
   const queryClient = getQueryClient();
 
+  // ✅ Data fetching and validation in try/catch
   try {
     // Prefetch public thread data on server for instant hydration
     await queryClient.prefetchQuery({
@@ -116,12 +117,6 @@ export default async function PublicChatThreadPage({
       });
       redirect(`/auth/sign-in?${params.toString()}`);
     }
-
-    return (
-      <HydrationBoundary state={dehydrate(queryClient)}>
-        <PublicChatThreadScreen slug={slug} />
-      </HydrationBoundary>
-    );
   } catch (error: unknown) {
     console.error('Error fetching public thread:', error);
 
@@ -168,6 +163,14 @@ export default async function PublicChatThreadPage({
 
     redirect(`/auth/sign-in?${params.toString()}`);
   }
+
+  // ✅ Render JSX outside try/catch to follow React best practices
+  // React doesn't immediately render components, so errors wouldn't be caught by try/catch anyway
+  return (
+    <HydrationBoundary state={dehydrate(queryClient)}>
+      <PublicChatThreadScreen slug={slug} />
+    </HydrationBoundary>
+  );
 }
 
 /**

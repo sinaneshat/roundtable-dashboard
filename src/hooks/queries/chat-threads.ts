@@ -147,6 +147,9 @@ export function useThreadMessagesQuery(threadId: string, enabled?: boolean) {
  * Returns configuration changes ordered by creation time (newest first)
  * Protected endpoint - requires authentication
  *
+ * ✅ OPTIMIZED: No automatic refetching - changelog updates are triggered by mutations
+ * Changelog only changes when user modifies participants, so we don't need polling
+ *
  * @param threadId - Thread ID
  * @param enabled - Optional control over whether to fetch (default: based on threadId and auth)
  */
@@ -158,6 +161,16 @@ export function useThreadChangelogQuery(threadId: string, enabled?: boolean) {
     queryKey: queryKeys.threads.changelog(threadId),
     queryFn: () => getThreadChangelogService({ param: { id: threadId } }),
     staleTime: STALE_TIMES.threadChangelog, // 30 seconds
+    // ✅ FIX: Disable automatic refetching - changelog is invalidated by mutations
+    // This prevents unnecessary API calls when changelog hasn't changed
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    // ✅ CRITICAL FIX: Preserve previous data during refetches
+    // This prevents changelog from disappearing when query is invalidated
+    // Without this, changelog temporarily becomes empty array during refetch,
+    // causing items to be removed from DOM and re-added at the bottom
+    placeholderData: previousData => previousData,
     enabled: enabled !== undefined ? enabled : (isAuthenticated && !!threadId),
     retry: false,
   });
@@ -168,13 +181,13 @@ export function useThreadChangelogQuery(threadId: string, enabled?: boolean) {
  * Returns all moderator analyses ordered by round number
  * Protected endpoint - requires authentication
  *
- * ✅ OPTIMIZED POLLING: Minimal polling to prevent rapid API calls
+ * ✅ ADAPTIVE POLLING: Aggressive polling for active analyses, stops when complete
  * - Primary trigger: onRoundComplete callback in ChatThreadScreen (immediate invalidation)
- * - Backup polling: Every 2 minutes only if there are recent pending/streaming analyses
- * - Stops automatically when all analyses complete, fail, or get too old (> 3 minutes)
+ * - Active analyses (pending/streaming): Poll every 3 seconds to detect completion quickly
+ * - Completed analyses: No polling
+ * - Stuck analyses (> 3 minutes): No polling (considered failed)
  *
- * This prevents the rapid API calls issue seen in the Network tab while ensuring
- * analyses are eventually discovered if the immediate trigger fails.
+ * This ensures analyses show up quickly when completed while preventing unnecessary polling.
  *
  * @param threadId - Thread ID
  * @param enabled - Optional control over whether to fetch (default: based on threadId and auth)
@@ -186,10 +199,9 @@ export function useThreadAnalysesQuery(threadId: string, enabled?: boolean) {
   return useQuery({
     queryKey: queryKeys.threads.analyses(threadId),
     queryFn: () => getThreadAnalysesService({ param: { id: threadId } }),
-    staleTime: STALE_TIMES.threadAnalyses, // 1 minute
-    // ✅ OPTIMIZED POLLING: Reduced frequency to prevent rapid API calls
-    // The primary trigger is onRoundComplete callback which immediately invalidates
-    // This polling is just a backup safety net
+    staleTime: 1000, // 1 second - keep data fresh when actively polling
+    // ✅ ADAPTIVE POLLING: Aggressive polling for active analyses
+    // This ensures completed analyses are detected quickly (within 3 seconds)
     refetchInterval: (query) => {
       const data = query.state.data;
       if (!data?.success)
@@ -210,10 +222,16 @@ export function useThreadAnalysesQuery(threadId: string, enabled?: boolean) {
         return ageMs <= THREE_MINUTES_MS;
       });
 
-      // ✅ CRITICAL FIX: Poll every 2 MINUTES (not 30 seconds) to prevent rapid API calls
-      // The immediate refetch via onRoundComplete callback makes frequent polling unnecessary
-      return hasActivePendingAnalysis ? 120000 : false; // 2 minutes
+      // ✅ CRITICAL FIX: Poll every 3 SECONDS for active analyses
+      // This ensures users see completed analyses within 3 seconds
+      // Once all analyses are complete/failed, polling stops automatically
+      return hasActivePendingAnalysis ? 3000 : false; // 3 seconds for active, stop when complete
     },
+    // ✅ CRITICAL FIX: Preserve previous data during refetches and polling
+    // This prevents analyses from disappearing when query refetches
+    // Without this, analyses temporarily become empty array during refetch,
+    // causing items to be removed from DOM and re-added at the bottom
+    placeholderData: previousData => previousData,
     enabled: enabled !== undefined ? enabled : (isAuthenticated && !!threadId),
     retry: false,
   });

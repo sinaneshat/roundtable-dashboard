@@ -111,13 +111,20 @@ export async function generateTitleFromMessage(
       });
     }
 
-    // If title is empty or too short, use fallback
+    // ✅ FIX: If title is empty or very short, use first few words of message
+    // NO "New Chat" fallback - always ensure slug will be unique and change
     if (title.length < 3) {
-      console.warn('[generateTitleFromMessage] ⚠️ Title too short, using fallback', {
+      // Extract first 5 words from the user's message
+      const messageWords = firstMessage.trim().split(/\s+/).slice(0, 5).join(' ');
+      title = messageWords.length > 0 && messageWords.length <= 50
+        ? messageWords
+        : messageWords.substring(0, 50).trim() || 'Chat';
+
+      console.warn('[generateTitleFromMessage] ⚠️ Title too short, using message excerpt', {
         shortTitle: title,
-        fallback: 'New Chat',
+        originalMessage: firstMessage.substring(0, 100),
+        extractedTitle: title,
       });
-      title = 'New Chat';
     }
 
     console.warn('[generateTitleFromMessage] 🎉 Final title generated', {
@@ -133,12 +140,14 @@ export async function generateTitleFromMessage(
       stack: error instanceof Error ? error.stack : undefined,
     });
 
-    // Fallback: Use first 5 words of message (enforcing 5-word constraint)
-    const words = firstMessage.split(/\s+/).slice(0, 5).join(' ');
-    const fallbackTitle = words.length > 50 ? words.substring(0, 50).trim() : words || 'New Chat';
+    // ✅ FIX: Fallback uses first 5 words of message - NO "New Chat"
+    // This ensures slug will always be unique and change
+    const words = firstMessage.trim().split(/\s+/).slice(0, 5).join(' ');
+    const fallbackTitle = words.length > 50 ? words.substring(0, 50).trim() : words || 'Chat';
 
-    console.warn('[generateTitleFromMessage] 📝 Using fallback title', {
+    console.warn('[generateTitleFromMessage] 📝 Using fallback title from message', {
       fallbackTitle,
+      originalMessage: firstMessage.substring(0, 100),
     });
 
     return fallbackTitle;

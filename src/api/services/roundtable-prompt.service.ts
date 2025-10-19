@@ -449,12 +449,12 @@ export function buildRoundtablePrompt(
   _messageHistory: CoreMessage[] = [],
 ): {
   /** System prompt defining behavior (for AI SDK 'system' parameter) */
-    systemPrompt: string;
-    /** Context message to prepend to conversation (as user message) */
-    contextMessage: string;
-    /** Participant info map for reference */
-    participantMap: Map<string, ParticipantInfo>;
-  } {
+  systemPrompt: string;
+  /** Context message to prepend to conversation (as user message) */
+  contextMessage: string;
+  /** Participant info map for reference */
+  participantMap: Map<string, ParticipantInfo>;
+} {
   // Build system prompt (behavior definition)
   const systemPrompt = buildRoundtableSystemPrompt(config);
 

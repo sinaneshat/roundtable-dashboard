@@ -110,12 +110,12 @@ export type SeoMetadata = z.infer<typeof SeoMetadataSchema>;
  * Union type for all metadata types
  * Enables type-safe metadata handling across domains
  */
-export type TypedMetadata =
-  | ProductMetadata
-  | SubscriptionMetadata
-  | UserMetadata
-  | SeoMetadata
-  | BaseMetadata;
+export type TypedMetadata
+  = | ProductMetadata
+    | SubscriptionMetadata
+    | UserMetadata
+    | SeoMetadata
+    | BaseMetadata;
 
 // ============================================================================
 // Validation Functions

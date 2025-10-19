@@ -30,16 +30,16 @@ export async function capturePaymentFailure(searchParams?: {
   error_code?: string;
   error_type?: string;
 }): Promise<{
-    success: boolean;
-    data?: {
-      error?: string;
-      errorCode?: string;
-      errorType?: 'payment_failed' | 'sync_failed' | 'authentication_failed' | 'unknown';
-      stripeError?: string;
-      timestamp?: string;
-    };
+  success: boolean;
+  data?: {
     error?: string;
-  }> {
+    errorCode?: string;
+    errorType?: 'payment_failed' | 'sync_failed' | 'authentication_failed' | 'unknown';
+    stripeError?: string;
+    timestamp?: string;
+  };
+  error?: string;
+}> {
   try {
     // 1. Get authenticated session
     const headersList = await headers();

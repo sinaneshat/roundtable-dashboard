@@ -1,13 +1,47 @@
 "use client"
 
+/**
+ * Recharts Chart Components
+ *
+ * ✅ OFFICIAL RECHARTS V3+ PATTERNS:
+ * - Uses official Recharts TypeScript types (no inline casting)
+ * - ResponsiveContainer with width="100%" and explicit height
+ * - Built-in accessibility with accessibilityLayer prop
+ * - ChartConfig for centralized color and label management
+ * - Proper generic type parameters from Recharts
+ *
+ * USAGE EXAMPLE:
+ * ```tsx
+ * const chartConfig = {
+ *   desktop: { label: "Desktop", color: "hsl(var(--chart-1))" }
+ * } satisfies ChartConfig
+ *
+ * <ChartContainer config={chartConfig}>
+ *   <BarChart data={chartData} accessibilityLayer>
+ *     <Bar dataKey="desktop" fill="var(--color-desktop)" />
+ *   </BarChart>
+ * </ChartContainer>
+ * ```
+ *
+ * Reference: recharts v3+ official types
+ */
+
 import * as React from "react"
 import * as RechartsPrimitive from "recharts"
+import type { NameType, Payload, ValueType } from "recharts/types/component/DefaultTooltipContent"
 
 import { cn } from "@/lib/ui/cn"
 
 // Format: { THEME_NAME: CSS_SELECTOR }
 const THEMES = { light: "", dark: ".dark" } as const
 
+/**
+ * ChartConfig - Centralized configuration for chart colors, labels, and icons
+ *
+ * ✅ OFFICIAL PATTERN:
+ * Define chart styling and labeling in a single config object.
+ * Supports both static colors and theme-based colors.
+ */
 export type ChartConfig = {
   [k in string]: {
     label?: React.ReactNode
@@ -102,9 +136,11 @@ ${colorConfig
   )
 }
 
+// ============================================================================
+// Tooltip Content Component
+// ============================================================================
 
-
-function ChartTooltipContent({
+function ChartTooltipContent<TValue extends ValueType, TName extends NameType>({
   active,
   payload,
   className,
@@ -118,14 +154,30 @@ function ChartTooltipContent({
   color,
   nameKey,
   labelKey,
-}: React.ComponentProps<typeof RechartsPrimitive.Tooltip> &
-  React.ComponentProps<"div"> & {
-    hideLabel?: boolean
-    hideIndicator?: boolean
-    indicator?: "line" | "dot" | "dashed"
-    nameKey?: string
-    labelKey?: string
-  }) {
+}: {
+  active?: boolean
+  payload?: Payload<TValue, TName>[]
+  label?: string | number
+  className?: string
+  indicator?: "line" | "dot" | "dashed"
+  hideLabel?: boolean
+  hideIndicator?: boolean
+  labelFormatter?: (
+    value: string | number | React.ReactNode,
+    payload: Payload<TValue, TName>[]
+  ) => React.ReactNode
+  formatter?: (
+    value: TValue,
+    name: TName,
+    item: Payload<TValue, TName>,
+    index: number,
+    payload: Payload<TValue, TName>[]
+  ) => React.ReactNode
+  color?: string
+  nameKey?: string
+  labelKey?: string
+  labelClassName?: string
+}) {
   const { config } = useChart()
 
   const tooltipLabel = React.useMemo(() => {
@@ -182,18 +234,18 @@ function ChartTooltipContent({
         {payload.map((item, index) => {
           const key = `${nameKey || item.name || item.dataKey || "value"}`
           const itemConfig = getPayloadConfigFromPayload(config, item, key)
-          const indicatorColor = color || item.payload.fill || item.color
+          const indicatorColor = color || item.payload?.fill || item.color
 
           return (
             <div
-              key={item.dataKey}
+              key={index}
               className={cn(
                 "[&>svg]:text-muted-foreground flex w-full flex-wrap items-stretch gap-2 [&>svg]:h-2.5 [&>svg]:w-2.5",
                 indicator === "dot" && "items-center"
               )}
             >
               {formatter && item?.value !== undefined && item.name ? (
-                formatter(item.value, item.name, item, index, item.payload)
+                formatter(item.value, item.name, item, index, payload)
               ) : (
                 <>
                   {itemConfig?.icon ? (
@@ -248,19 +300,23 @@ function ChartTooltipContent({
   )
 }
 
+// ============================================================================
+// Legend Content Component
+// ============================================================================
 
-
-function ChartLegendContent({
+function ChartLegendContent<TValue extends ValueType, TName extends NameType>({
   className,
   hideIcon = false,
   payload,
   verticalAlign = "bottom",
   nameKey,
-}: React.ComponentProps<"div"> &
-  Pick<RechartsPrimitive.LegendProps, "payload" | "verticalAlign"> & {
-    hideIcon?: boolean
-    nameKey?: string
-  }) {
+}: {
+  className?: string
+  hideIcon?: boolean
+  payload?: Payload<TValue, TName>[]
+  verticalAlign?: "top" | "bottom"
+  nameKey?: string
+}) {
   const { config } = useChart()
 
   if (!payload?.length) {
@@ -275,13 +331,13 @@ function ChartLegendContent({
         className
       )}
     >
-      {payload.map((item) => {
+      {payload.map((item, index) => {
         const key = `${nameKey || item.dataKey || "value"}`
         const itemConfig = getPayloadConfigFromPayload(config, item, key)
 
         return (
           <div
-            key={item.value}
+            key={index}
             className={cn(
               "[&>svg]:text-muted-foreground flex items-center gap-1.5 [&>svg]:h-3 [&>svg]:w-3"
             )}
@@ -343,6 +399,10 @@ function getPayloadConfigFromPayload(
     : config[key as keyof typeof config]
 }
 
+// ============================================================================
+// Exports
+// ============================================================================
+
 export {
   ChartContainer,
   ChartLegendContent,
@@ -351,7 +411,37 @@ export {
   RechartsPrimitive,
 }
 
-// Export Recharts components directly without useless const reassignments
+/**
+ * ✅ OFFICIAL RECHARTS V3 DIRECT EXPORTS
+ *
+ * Export Recharts primitives directly for convenience.
+ * Use these in combination with ChartContainer and custom content components.
+ */
 export const ChartTooltip = RechartsPrimitive.Tooltip
 export const ChartLegend = RechartsPrimitive.Legend
 
+/**
+ * Export commonly used Recharts components for convenience
+ */
+export const {
+  Area,
+  AreaChart,
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  ComposedChart,
+  Line,
+  LineChart,
+  Pie,
+  PieChart,
+  PolarAngleAxis,
+  PolarGrid,
+  Radar,
+  RadarChart,
+  Scatter,
+  ScatterChart,
+  XAxis,
+  YAxis,
+  ZAxis,
+} = RechartsPrimitive

@@ -30,7 +30,7 @@ import { useBoolean } from '@/hooks/utils';
 import type { ChatModeId } from '@/lib/config/chat-modes';
 import { queryKeys } from '@/lib/data/query-keys';
 import type { ParticipantConfig } from '@/lib/types/participant-config';
-import { chatMessagesToUIMessages, getMessageMetadata } from '@/lib/utils/message-transforms';
+import { chatMessagesToUIMessages } from '@/lib/utils/message-transforms';
 
 type ChatThreadScreenProps = {
   thread: ChatThread;
@@ -134,15 +134,31 @@ export default function ChatThreadScreen({
     initializeThread,
     setOnStreamComplete,
     setOnRoundComplete,
+    setOnRetry, // ✅ NEW: Set callback for retry events
     participants: contextParticipants,
     updateParticipants, // ✅ Need this to sync context after mutation
   } = useSharedChatContext();
 
   const { data: changelogResponse } = useThreadChangelogQuery(thread.id);
-  const changelog = useMemo(
-    () => (changelogResponse?.success ? changelogResponse.data.items || [] : []),
-    [changelogResponse],
-  );
+  const changelog = useMemo(() => {
+    if (!changelogResponse?.success)
+      return [];
+
+    // ✅ FIX: Deduplicate changelog entries by ID to prevent duplicate accordions
+    // The backend should prevent duplicates, but we add this safety net
+    const items = changelogResponse.data.items || [];
+    const seen = new Set<string>();
+    const deduplicated = items.filter((item) => {
+      if (seen.has(item.id)) {
+        console.warn('[ChatThreadScreen] ⚠️ Duplicate changelog entry detected and filtered', item.id);
+        return false;
+      }
+      seen.add(item.id);
+      return true;
+    });
+
+    return deduplicated;
+  }, [changelogResponse]);
 
   const { data: analysesResponse } = useThreadAnalysesQuery(thread.id, true);
   const analyses = useMemo(
@@ -182,7 +198,14 @@ export default function ChatThreadScreen({
   }, [feedbackData]);
 
   // ✅ MUTATION: Set round feedback
-  const setFeedbackMutation = useSetRoundFeedbackMutation();
+  // Get full mutation object to track isPending state
+  const setRoundFeedbackMutation = useSetRoundFeedbackMutation();
+
+  // ✅ LOADING STATE: Track which round and feedback type is currently being updated
+  const [pendingFeedback, setPendingFeedback] = useState<{
+    roundNumber: number;
+    type: 'like' | 'dislike';
+  } | null>(null);
 
   // Chat state
   const [selectedMode, setSelectedMode] = useState<ChatModeId>(thread.mode as ChatModeId);
@@ -202,6 +225,10 @@ export default function ChatThreadScreen({
 
   // ✅ TIMING FIX: Track pending message to send after participant update
   const [pendingMessage, setPendingMessage] = useState<string | null>(null);
+
+  // ✅ CRITICAL FIX: Track expected participant IDs from mutation
+  // This ensures we only send when the context has the RIGHT participants
+  const [expectedParticipantIds, setExpectedParticipantIds] = useState<string[] | null>(null);
 
   // ✅ SIMPLIFIED: No participantsOverride state needed
   // Context manages the active participants
@@ -229,16 +256,69 @@ export default function ChatThreadScreen({
       }
     });
 
-    // Set up round completion callback for analysis triggers
-    setOnRoundComplete(() => {
-      // ✅ Immediately invalidate analyses when round completes
-      // React Query will auto-refetch and the hook will get fresh data
-      queryClient.invalidateQueries({ queryKey: queryKeys.threads.analyses(thread.id) });
-    });
     // ✅ CRITICAL: Only depend on thread.id to prevent infinite loops
     // participants/initialMessages come from server props and shouldn't trigger re-initialization
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [thread.id]);
+
+  // ✅ FIX: Separate useEffect for round completion to prevent re-registering callback
+  // This ensures the callback is only set once and uses stable thread.id reference
+  useEffect(() => {
+    // Set up round completion callback for analysis triggers
+    const currentThreadId = thread.id; // Capture thread.id in closure
+    setOnRoundComplete(() => {
+      // ✅ Immediately invalidate analyses when round completes
+      // React Query will auto-refetch and the hook will get fresh data
+      queryClient.invalidateQueries({ queryKey: queryKeys.threads.analyses(currentThreadId) });
+    });
+  }, [thread.id, setOnRoundComplete, queryClient]);
+
+  // ✅ CRITICAL FIX: Set up retry callback to immediately remove old analysis when round is retried
+  // This ensures the old analysis disappears from UI BEFORE regeneration starts
+  useEffect(() => {
+    const currentThreadId = thread.id; // Capture thread.id in closure
+    setOnRetry((roundNumber: number) => {
+      console.warn('[ChatThreadScreen] ♻️ Retry triggered for round', {
+        threadId: currentThreadId,
+        roundNumber,
+      });
+
+      // ✅ CRITICAL: Immediately remove the old analysis from cache
+      // Don't wait for refetch - remove it now so UI updates instantly
+      queryClient.setQueryData(
+        queryKeys.threads.analyses(currentThreadId),
+        (oldData: typeof analysesResponse) => {
+          if (!oldData?.success) {
+            return oldData;
+          }
+
+          // Filter out the analysis for the round being regenerated
+          const filteredItems = (oldData.data.items || []).filter(
+            item => item.roundNumber !== roundNumber,
+          );
+
+          console.warn('[ChatThreadScreen] ♻️ Removed analysis from cache', {
+            threadId: currentThreadId,
+            roundNumber,
+            oldCount: oldData.data.items?.length || 0,
+            newCount: filteredItems.length,
+          });
+
+          return {
+            ...oldData,
+            data: {
+              ...oldData.data,
+              items: filteredItems,
+            },
+          };
+        },
+      );
+
+      // ✅ Then invalidate to refetch fresh data from backend
+      // This ensures we get the updated list after backend deletes old data
+      queryClient.invalidateQueries({ queryKey: queryKeys.threads.analyses(currentThreadId) });
+    });
+  }, [thread.id, setOnRetry, queryClient, analysesResponse]);
 
   // ✅ SYNC CONTEXT: Update context when thread query data changes (after mutation)
   // This is the proper React Query pattern - mutation invalidates, query refetches, effect syncs
@@ -268,24 +348,39 @@ export default function ChatThreadScreen({
     }
   }, [threadQueryData, thread.id, contextParticipants, updateParticipants]);
 
-  // ✅ TIMING FIX: Send pending message after context participants update
-  // This ensures sendMessage uses fresh participants, not stale ones
+  // ✅ CRITICAL FIX: Send pending message ONLY when context has the RIGHT participants
+  // This prevents sending messages with stale participant data
   useEffect(() => {
-    if (pendingMessage && contextParticipants.length > 0) {
-      console.warn('[ChatThreadScreen] 🚀 Sending pending message with fresh participants', {
+    if (!pendingMessage || !expectedParticipantIds) {
+      return;
+    }
+
+    // ✅ WAIT for context participants to match the expected IDs from mutation
+    const currentIds = contextParticipants.map(p => p.id).sort().join(',');
+    const expectedIds = expectedParticipantIds.sort().join(',');
+
+    if (currentIds === expectedIds) {
+      console.warn('[ChatThreadScreen] ✅ Context participants match expected - sending message', {
         threadId: thread.id,
         participantCount: contextParticipants.length,
         participantIds: contextParticipants.map(p => p.id),
         messagePreview: pendingMessage.substring(0, 50),
       });
 
-      // Clear pending message first to prevent re-triggering
+      // Clear pending state first to prevent re-triggering
       setPendingMessage(null);
+      setExpectedParticipantIds(null);
 
-      // Now send the message - context has fresh participants
+      // Now send the message - context has the RIGHT participants
       sendMessage(pendingMessage);
+    } else {
+      console.warn('[ChatThreadScreen] ⏳ Waiting for context to update with fresh participants', {
+        threadId: thread.id,
+        currentIds,
+        expectedIds,
+      });
     }
-  }, [pendingMessage, contextParticipants, sendMessage, thread.id]);
+  }, [pendingMessage, expectedParticipantIds, contextParticipants, sendMessage, thread.id]);
 
   // ✅ AI SDK v5 PATTERN: Submit handler with participant persistence
   const handlePromptSubmit = useCallback(
@@ -335,9 +430,20 @@ export default function ChatThreadScreen({
             participantIds: participantsWithDates.map(p => p.id),
           });
 
-          // ✅ TIMING FIX: Set pending message instead of calling sendMessage immediately
-          // The useEffect will trigger sendMessage after context state propagates
+          // ✅ CRITICAL FIX: Set expected participant IDs AND pending message
+          // The useEffect will only send when context participants match these IDs
+          const freshIds = participantsWithDates.map(p => p.id);
+          setExpectedParticipantIds(freshIds);
           setPendingMessage(trimmed);
+
+          console.warn('[ChatThreadScreen] 📝 Set expected participant IDs', {
+            threadId: thread.id,
+            expectedIds: freshIds,
+          });
+
+          // ✅ CRITICAL FIX: Invalidate changelog query to fetch fresh changelog entries
+          // This ensures the new changelog entry (created by the mutation) is fetched
+          queryClient.invalidateQueries({ queryKey: queryKeys.threads.changelog(thread.id) });
         } else {
           // No participants in response - fallback to immediate send
           console.warn('[ChatThreadScreen] ⚠️ No participants in mutation response, sending immediately');
@@ -386,6 +492,7 @@ export default function ChatThreadScreen({
     });
 
     // Group changelog by roundNumber
+    // ✅ FIX: Deduplicate changelog entries within each round to prevent multiple accordions
     const changelogByRound = new Map<number, (typeof changelog)>();
     changelog.forEach((change) => {
       const roundNumber = change.roundNumber || 1;
@@ -393,7 +500,18 @@ export default function ChatThreadScreen({
       if (!changelogByRound.has(roundNumber)) {
         changelogByRound.set(roundNumber, []);
       }
-      changelogByRound.get(roundNumber)!.push(change);
+
+      // ✅ FIX: Only add if not already in the round (safety check)
+      const roundChanges = changelogByRound.get(roundNumber)!;
+      const exists = roundChanges.some(existing => existing.id === change.id);
+      if (!exists) {
+        roundChanges.push(change);
+      } else {
+        console.warn('[ChatThreadScreen] ⚠️ Duplicate changelog in round grouping', {
+          changeId: change.id,
+          roundNumber,
+        });
+      }
     });
 
     // ✅ FIX: Get all unique round numbers from BOTH messages AND changelog
@@ -440,48 +558,121 @@ export default function ChatThreadScreen({
     return items;
   }, [messages, analyses, changelog]);
 
-  // ✅ DEBUG: Log when items update to track rendering
+  // ✅ Single stable feedback handler to prevent infinite re-renders
+  // Using useCallback with proper dependencies
+  const handleFeedbackChange = useCallback(
+    (roundNumber: number, feedbackType: 'like' | 'dislike' | null) => {
+      // ✅ Track which feedback type is being updated (for loading state)
+      // If feedbackType is null, we're clearing feedback (no loading needed)
+      if (feedbackType) {
+        setPendingFeedback({ roundNumber, type: feedbackType });
+      }
+
+      setRoundFeedbackMutation.mutate(
+        {
+          param: {
+            threadId: thread.id,
+            roundNumber: String(roundNumber),
+          },
+          json: { feedbackType },
+        },
+        {
+          // Clear pending state when mutation completes or fails
+          onSettled: () => {
+            setPendingFeedback(null);
+          },
+        },
+      );
+    },
+    [setRoundFeedbackMutation, thread.id],
+  );
+
+  // ✅ Create stable bound handlers per round using useMemo
+  // This ensures each round gets a stable callback reference
+  const feedbackHandlersMap = useMemo(() => {
+    const map = new Map<number, (feedbackType: 'like' | 'dislike' | null) => void>();
+
+    messagesWithAnalysesAndChangelog.forEach((item) => {
+      // Create handlers for all rounds (messages, analysis, changelog)
+      let roundNumber: number;
+
+      if (item.type === 'messages') {
+        roundNumber = ((item.data[0]?.metadata as Record<string, unknown> | undefined)?.roundNumber as number) || 1;
+      } else if (item.type === 'analysis') {
+        roundNumber = item.data.roundNumber;
+      } else if (item.type === 'changelog') {
+        roundNumber = item.data[0]?.roundNumber || 1;
+      } else {
+        return;
+      }
+
+      // Create a bound handler for this specific round (avoid duplicates)
+      if (!map.has(roundNumber)) {
+        map.set(roundNumber, feedbackType => handleFeedbackChange(roundNumber, feedbackType));
+      }
+    });
+
+    return map;
+  }, [messagesWithAnalysesAndChangelog, handleFeedbackChange]);
+
+  // ✅ DEBUG: Log when items update to track rendering and round numbers
   useEffect(() => {
     console.warn('[ChatThreadScreen] 🔄 Messages with analyses and changelog updated', {
       totalItems: messagesWithAnalysesAndChangelog.length,
       messagesGroups: messagesWithAnalysesAndChangelog.filter(i => i.type === 'messages').length,
       analysesGroups: messagesWithAnalysesAndChangelog.filter(i => i.type === 'analysis').length,
       changelogGroups: messagesWithAnalysesAndChangelog.filter(i => i.type === 'changelog').length,
-      items: messagesWithAnalysesAndChangelog.map(item => ({
-        type: item.type,
-        key: item.key,
-        itemCount: item.type === 'messages' ? item.data.length : item.type === 'changelog' ? item.data.length : undefined,
+      items: messagesWithAnalysesAndChangelog.map((item) => {
+        if (item.type === 'messages') {
+          const firstMsg = item.data[0];
+          const metadata = firstMsg?.metadata as Record<string, unknown> | undefined;
+          return {
+            type: item.type,
+            key: item.key,
+            roundNumber: metadata?.roundNumber,
+            messageCount: item.data.length,
+          };
+        }
+        if (item.type === 'changelog') {
+          return {
+            type: item.type,
+            key: item.key,
+            roundNumber: item.data[0]?.roundNumber,
+            changeCount: item.data.length,
+          };
+        }
+        // ✅ TYPE SAFETY: item.type is 'analysis' here (only remaining case)
+        return {
+          type: item.type,
+          key: item.key,
+          roundNumber: item.data.roundNumber,
+          status: item.data.status,
+        };
+      }),
+    });
+
+    // ✅ DEBUG: Log analyses array to track round numbers
+    console.warn('[ChatThreadScreen] 📊 Current analyses', {
+      count: analyses.length,
+      analyses: analyses.map(a => ({
+        id: a.id,
+        roundNumber: a.roundNumber,
+        status: a.status,
+        createdAt: a.createdAt,
       })),
     });
-  }, [messagesWithAnalysesAndChangelog]);
 
-  // ✅ ROUND-LEVEL ERROR DETECTION: Check if the last completed round has errors
-  // A round is considered complete when:
-  // 1. Not currently streaming
-  // 2. Last message is an assistant message (round finished)
-  // 3. At least one assistant message in the round has an error
-  const lastRoundHasErrors = useMemo(() => {
-    if (isStreaming || messages.length === 0) {
-      return false;
-    }
-
-    // Find the last user message to determine the current round
-    const lastUserMessageIndex = messages.findLastIndex(m => m.role === 'user');
-    if (lastUserMessageIndex === -1) {
-      return false;
-    }
-
-    // Get all assistant messages after the last user message (current round)
-    const currentRoundAssistantMessages = messages.slice(lastUserMessageIndex + 1).filter(m => m.role === 'assistant');
-
-    // Check if any assistant message in this round has an error
-    const hasErrorInRound = currentRoundAssistantMessages.some((message) => {
-      const metadata = getMessageMetadata(message.metadata);
-      return metadata?.hasError === true || !!metadata?.error || !!metadata?.errorMessage;
+    // ✅ DEBUG: Log changelog array to track round numbers
+    console.warn('[ChatThreadScreen] 📝 Current changelog', {
+      count: changelog.length,
+      changelog: changelog.map(c => ({
+        id: c.id,
+        roundNumber: c.roundNumber,
+        changeType: c.changeType, // ✅ FIX: Use correct field name from schema
+        createdAt: c.createdAt,
+      })),
     });
-
-    return hasErrorInRound;
-  }, [messages, isStreaming]);
+  }, [messagesWithAnalysesAndChangelog, analyses, changelog]);
 
   return (
     <div className="relative flex flex-1 flex-col min-h-0">
@@ -495,91 +686,114 @@ export default function ChatThreadScreen({
         />
 
         {/* Scrollable content area */}
-        <ConversationContent className="flex-1">
-          <div className="mx-auto max-w-3xl px-4 pt-6 pb-32">
+        <ConversationContent className="p-0">
+          {/*
+            Bottom padding for scroll clearance:
+            - Uses inline style paddingBottom: '400px' (only reliable method)
+            - Tailwind classes don't work due to:
+              1. Arbitrary values [400px] not compiled by JIT engine
+              2. Custom utilities in global.css not loading/applying
+              3. Possible build process or CSS ordering issue
+            - 400px ensures content can scroll past the ~150px fixed input box at bottom
+            - Inline style is necessary to guarantee proper spacing
+          */}
+          <div className="mx-auto max-w-3xl px-4 pt-6 min-h-full" style={{ paddingBottom: '400px' }}>
             {/* ✅ Configuration changes are now shown inline between rounds */}
 
-            {/* ✅ ROUND-BASED RENDERING: Changelog → Messages → Analysis */}
-            {messagesWithAnalysesAndChangelog.map((item, itemIndex) => (
-              <div key={item.key}>
-                {item.type === 'changelog' && item.data.length > 0
-                  ? (
+            {/* ✅ ROUND-BASED RENDERING: Changelog → Messages → Actions/Feedback → Analysis */}
+            {messagesWithAnalysesAndChangelog.map((item, itemIndex) => {
+              // Extract round number for this item
+              const roundNumber = item.type === 'messages'
+                ? ((item.data[0]?.metadata as Record<string, unknown> | undefined)?.roundNumber as number) || 1
+                : item.type === 'analysis'
+                  ? item.data.roundNumber
+                  : item.type === 'changelog'
+                    ? item.data[0]?.roundNumber || 1
+                    : 1;
+
+              if (item.type === 'changelog' && item.data.length > 0) {
                 // ✅ Changelog before round - ALL changes for this round in ONE accordion
-                      <div className="mb-6">
-                        <ConfigurationChangesGroup
-                          group={{
-                            timestamp: new Date(item.data[0]!.createdAt),
-                            changes: item.data, // ✅ Pass ALL changes - component groups by action
-                          }}
-                        />
-                      </div>
-                    )
-                  : item.type === 'messages'
-                    ? (
-                  // Messages for this round
-                        <ChatMessageList
-                          messages={item.data}
-                          user={user}
-                          participants={activeParticipants}
-                          isStreaming={isStreaming}
-                          currentParticipantIndex={currentParticipantIndex}
-                          currentStreamingParticipant={
-                            isStreaming && activeParticipants[currentParticipantIndex]
-                              ? activeParticipants[currentParticipantIndex]
-                              : null
-                          }
-                        />
-                      )
-                    : item.type === 'analysis'
-                      ? (
-                    // Analysis after round (shows results) + Round Feedback
-                          <div className="mt-6 space-y-4">
-                            {/* ✅ Round Feedback: Like/Dislike buttons above changelog/analysis */}
-                            <div className="flex justify-start min-h-[32px]">
-                              <RoundFeedback
-                                threadId={thread.id}
-                                roundNumber={item.data.roundNumber}
-                                currentFeedback={feedbackByRound.get(item.data.roundNumber) ?? null}
-                                onFeedbackChange={(feedbackType) => {
-                                  setFeedbackMutation.mutate({
-                                    param: {
-                                      threadId: thread.id,
-                                      roundNumber: String(item.data.roundNumber),
-                                    },
-                                    json: { feedbackType },
-                                  });
-                                }}
-                                disabled={isStreaming}
-                              />
-                            </div>
+                return (
+                  <div key={item.key} className="mb-6">
+                    <ConfigurationChangesGroup
+                      group={{
+                        timestamp: new Date(item.data[0]!.createdAt),
+                        changes: item.data, // ✅ Pass ALL changes - component groups by action
+                      }}
+                    />
+                  </div>
+                );
+              }
 
-                            <RoundAnalysisCard
-                              analysis={item.data}
-                              threadId={thread.id}
-                              isLatest={itemIndex === messagesWithAnalysesAndChangelog.length - 1}
-                            />
-                          </div>
-                        )
-                      : null}
-              </div>
-            ))}
+              if (item.type === 'messages') {
+                // Messages for this round + Actions + Feedback (AI Elements pattern)
+                return (
+                  <div key={item.key} className="space-y-3">
+                    <ChatMessageList
+                      messages={item.data}
+                      user={user}
+                      participants={activeParticipants}
+                      isStreaming={isStreaming}
+                      currentParticipantIndex={currentParticipantIndex}
+                      currentStreamingParticipant={
+                        isStreaming && activeParticipants[currentParticipantIndex]
+                          ? activeParticipants[currentParticipantIndex]
+                          : null
+                      }
+                    />
 
-            {/* ✅ ROUND-LEVEL RETRY: Show after entire round completes with errors */}
-            {/* Following AI Elements Actions pattern - retry button appears after failed round */}
-            {/* ✅ MOVED TO FAR LEFT: Changed justify-center to justify-start */}
-            {lastRoundHasErrors && !isStreaming && (
-              <div className="flex justify-start mt-6 mb-4">
-                <Actions>
-                  <Action
-                    onClick={retryRound}
-                    label={t('errors.retry')}
-                    tooltip={t('errors.retryRound')}
-                  >
-                    <RefreshCcwIcon className="size-3" />
-                  </Action>
-                </Actions>
-              </div>
-            )}
+                    {/* ✅ AI ELEMENTS PATTERN: Actions + Feedback after messages, before analysis */}
+                    {!isStreaming && (
+                      <Actions className="mt-3">
+                        {/* ✅ Round Feedback: Like/Dislike buttons */}
+                        {feedbackHandlersMap.has(roundNumber) && (
+                          <RoundFeedback
+                            threadId={thread.id}
+                            roundNumber={roundNumber}
+                            currentFeedback={feedbackByRound.get(roundNumber) ?? null}
+                            onFeedbackChange={feedbackHandlersMap.get(roundNumber)!}
+                            disabled={isStreaming}
+                            isPending={
+                              setRoundFeedbackMutation.isPending
+                              && pendingFeedback?.roundNumber === roundNumber
+                            }
+                            pendingType={
+                              pendingFeedback?.roundNumber === roundNumber
+                                ? pendingFeedback.type
+                                : null
+                            }
+                          />
+                        )}
+
+                        {/* ✅ Round Actions: Retry */}
+                        <Action
+                          onClick={retryRound}
+                          label={t('errors.retry')}
+                          tooltip={t('errors.retryRound')}
+                        >
+                          <RefreshCcwIcon className="size-3" />
+                        </Action>
+                      </Actions>
+                    )}
+                  </div>
+                );
+              }
+
+              if (item.type === 'analysis') {
+                // Analysis after round (shows results)
+                return (
+                  <div key={item.key} className="mt-6">
+                    <RoundAnalysisCard
+                      analysis={item.data}
+                      threadId={thread.id}
+                      isLatest={itemIndex === messagesWithAnalysesAndChangelog.length - 1}
+                    />
+                  </div>
+                );
+              }
+
+              return null;
+            })}
 
             {/* Streaming participants loader */}
             {isStreaming && selectedParticipants.length > 1 && (
@@ -594,29 +808,31 @@ export default function ChatThreadScreen({
         </ConversationContent>
       </Conversation>
 
-      {/* Absolutely positioned input - always visible at bottom, centered with content */}
-      <div className="absolute bottom-0 left-1/2 -translate-x-1/2 z-20 w-full max-w-3xl px-4 py-4">
-        <ChatInput
-          value={inputValue}
-          onChange={setInputValue}
-          onSubmit={handlePromptSubmit}
-          status={isStreaming ? 'submitted' : 'ready'}
-          onStop={stopStreaming}
-          placeholder={t('input.placeholder')}
-          className="backdrop-blur-xl bg-background/70 border border-border/30 shadow-lg"
-          toolbar={(
-            <>
-              <ChatParticipantsList
-                participants={selectedParticipants}
-                onParticipantsChange={handleParticipantsChange}
-              />
-              <ChatModeSelector
-                selectedMode={selectedMode}
-                onModeChange={setSelectedMode}
-              />
-            </>
-          )}
-        />
+      {/* Fixed positioned input - always visible at bottom, centered with content */}
+      <div className="fixed bottom-0 left-0 right-0 z-20 pb-6 md:left-[var(--sidebar-width-icon)] md:pr-2 md:pb-8">
+        <div className="mx-auto max-w-3xl px-4">
+          <ChatInput
+            value={inputValue}
+            onChange={setInputValue}
+            onSubmit={handlePromptSubmit}
+            status={isStreaming ? 'submitted' : 'ready'}
+            onStop={stopStreaming}
+            placeholder={t('input.placeholder')}
+            className="backdrop-blur-xl bg-background/70 border border-border/30 shadow-lg"
+            toolbar={(
+              <>
+                <ChatParticipantsList
+                  participants={selectedParticipants}
+                  onParticipantsChange={handleParticipantsChange}
+                />
+                <ChatModeSelector
+                  selectedMode={selectedMode}
+                  onModeChange={setSelectedMode}
+                />
+              </>
+            )}
+          />
+        </div>
       </div>
 
       {/* Delete Dialog */}

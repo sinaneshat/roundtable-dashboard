@@ -81,7 +81,7 @@
 import { useChat } from '@ai-sdk/react';
 import type { UIMessage } from 'ai';
 import { DefaultChatTransport } from 'ai';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { ChatParticipant } from '@/api/routes/chat/schema';
 
@@ -91,6 +91,7 @@ type UseMultiParticipantChatOptions = {
   messages?: UIMessage[]; // ✅ AI SDK v5 uses 'messages' not 'initialMessages'
   onComplete?: () => void;
   onRoundComplete?: () => void; // ✅ NEW: Triggered when all participants finish responding (round complete)
+  onRetry?: (roundNumber: number) => void; // ✅ NEW: Triggered when retry is called (to invalidate old analyses)
   onError?: (error: Error) => void;
 };
 
@@ -127,16 +128,54 @@ export function useMultiParticipantChat({
   messages: initialMessages = [],
   onComplete,
   onRoundComplete,
+  onRetry,
   onError,
 }: UseMultiParticipantChatOptions): UseMultiParticipantChatReturn {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [pendingNextParticipant, setPendingNextParticipant] = useState(false);
+
+  // ✅ REGENERATION STATE: Track when we're regenerating a round (for retry)
+  // When set, the transport will send this to the backend to delete old round data
+  const [regenerateRoundNumber, setRegenerateRoundNumber] = useState<number | null>(null);
 
   // ✅ FIX: Use refs to track current index AND queue for immediate access
   // State updates don't happen immediately, so we need refs for the callbacks to read
   const currentIndexRef = useRef(0);
   const participantQueueRef = useRef<number[]>([]);
   const participantsRef = useRef<ChatParticipant[]>(participants);
+
+  // ✅ CRITICAL FIX: Track which participants have already had errors to prevent duplicates
+  // Prevents both onError and onFinish from creating duplicate error messages
+  const erroredParticipantsRef = useRef<Set<string>>(new Set());
+
+  // ✅ CRITICAL FIX: Track which participants have already advanced the queue
+  // Prevents both onError and onFinish from advancing the queue multiple times for the same participant
+  const queueAdvancedForParticipantRef = useRef<Set<string>>(new Set());
+
+  // ✅ Define request preparation callback outside useMemo to allow ref access
+  // Refs are accessed in the callback (at request time), not during render
+  const prepareSendMessagesRequest = useCallback(({ id, messages }: { id: string; messages: unknown[] }) => ({
+    body: {
+      id,
+      messages,
+      participantIndex: currentIndexRef.current, // ✅ FIX: Use ref for immediate value (accessed in callback, not render)
+      participants: participantsRef.current, // ✅ RACE CONDITION FIX: Send current participant configuration (accessed in callback, not render)
+      ...(regenerateRoundNumber && { regenerateRound: regenerateRoundNumber }), // ✅ REGENERATION: Send round number to replace
+    },
+  }), [regenerateRoundNumber]);
+
+  // ✅ Memoize transport to prevent creating new instances on every render
+  // Valid pattern: prepareSendMessagesRequest accesses refs in callback (at request time), not during render.
+  // This is necessary to get current participant state at request time.
+  /* eslint-disable react-hooks/refs */
+  const transport = useMemo(
+    () => new DefaultChatTransport({
+      api: '/api/v1/chat',
+      prepareSendMessagesRequest,
+    }),
+    [prepareSendMessagesRequest], // Recreate transport when callback changes
+  );
+  /* eslint-enable react-hooks/refs */
 
   // ✅ SIMPLIFIED: Single useChat instance, backend handles participants
   const {
@@ -148,17 +187,7 @@ export function useMultiParticipantChat({
     stop,
   } = useChat({
     id: threadId,
-    transport: new DefaultChatTransport({
-      api: '/api/v1/chat',
-      prepareSendMessagesRequest: ({ id, messages }) => ({
-        body: {
-          id,
-          messages,
-          participantIndex: currentIndexRef.current, // ✅ FIX: Use ref for immediate value
-          participants: participantsRef.current, // ✅ RACE CONDITION FIX: Send current participant configuration
-        },
-      }),
-    }),
+    transport,
     messages: initialMessages,
 
     onError: (error) => {
@@ -177,6 +206,10 @@ export function useMultiParticipantChat({
         modelId?: string;
         openRouterError?: string;
         openRouterCode?: string;
+        shouldRetry?: boolean;
+        isTransient?: boolean;
+        retryCount?: number;
+        maxRetries?: number;
       } | null = null;
 
       let errorMessage = error instanceof Error ? error.message : String(error);
@@ -199,44 +232,100 @@ export function useMultiParticipantChat({
       // ✅ NO FRONTEND RETRIES: Errors that reach here have already been retried by the server
       // Display error inline and move to next participant
       if (currentParticipant) {
-        const errorMessageId = `error-${Date.now()}-${currentIndexRef.current}`;
-        const errorUIMessage: UIMessage = {
-          id: errorMessageId,
-          role: 'assistant',
-          // ✅ CRITICAL FIX: Add empty text part to ensure message card renders
-          // The MessageErrorDetails component will show the full error from metadata
-          parts: [{ type: 'text', text: '' }],
-          metadata: {
+        // ✅ CRITICAL FIX: Generate a unique error key for this specific participant + error combination
+        // This prevents duplicate error messages if both onError and onFinish fire
+        const errorKey = `${currentParticipant.id}-${currentIndexRef.current}`;
+
+        // Only create error message if we haven't already created one for this participant
+        if (!erroredParticipantsRef.current.has(errorKey)) {
+          console.warn('[useMultiParticipantChat] ⚠️ Creating error message for participant', {
             participantId: currentParticipant.id,
             participantIndex: currentIndexRef.current,
-            participantRole: currentParticipant.role,
-            model: currentParticipant.modelId,
-            hasError: true,
-            errorType: errorMetadata?.errorCategory || 'error',
-            errorMessage,
+            modelId: currentParticipant.modelId,
             errorCategory: errorMetadata?.errorCategory,
-            statusCode: errorMetadata?.statusCode,
-            rawErrorMessage: errorMetadata?.rawErrorMessage,
-            providerMessage: errorMetadata?.rawErrorMessage || errorMessage,
-            openRouterError: errorMetadata?.openRouterError,
-            openRouterCode: errorMetadata?.openRouterCode,
-          },
-        };
+            errorMessage,
+          });
 
-        setMessages(prev => [...prev, errorUIMessage]);
+          erroredParticipantsRef.current.add(errorKey);
+
+          const errorMessageId = `error-${crypto.randomUUID()}-${currentIndexRef.current}`;
+          const errorUIMessage: UIMessage = {
+            id: errorMessageId,
+            role: 'assistant',
+            // ✅ CRITICAL FIX: Add empty text part to ensure message card renders
+            // The MessageErrorDetails component will show the full error from metadata
+            parts: [{ type: 'text', text: '' }],
+            metadata: {
+              participantId: currentParticipant.id,
+              participantIndex: currentIndexRef.current,
+              participantRole: currentParticipant.role,
+              model: currentParticipant.modelId,
+              hasError: true,
+              errorType: errorMetadata?.errorCategory || 'error',
+              errorMessage,
+              errorCategory: errorMetadata?.errorCategory,
+              statusCode: errorMetadata?.statusCode,
+              rawErrorMessage: errorMetadata?.rawErrorMessage,
+              providerMessage: errorMetadata?.rawErrorMessage || errorMessage,
+              openRouterError: errorMetadata?.openRouterError,
+              openRouterCode: errorMetadata?.openRouterCode,
+            },
+          };
+
+          setMessages(prev => [...prev, errorUIMessage]);
+        } else {
+          console.warn('[useMultiParticipantChat] ⏭️ Skipping duplicate error message for participant', {
+            participantId: currentParticipant.id,
+            participantIndex: currentIndexRef.current,
+            modelId: currentParticipant.modelId,
+          });
+        }
       }
 
-      // ✅ MOVE TO NEXT PARTICIPANT: Don't retry - server already did that
-      const nextIndex = participantQueueRef.current.shift();
-      if (nextIndex !== undefined) {
-        currentIndexRef.current = nextIndex;
-        setCurrentIndex(nextIndex);
-        // Trigger next participant after small delay
-        setPendingNextParticipant(true);
+      // ✅ CRITICAL FIX: Only advance queue if we haven't already for this participant
+      // Both onError and onFinish can fire for the same error - prevent double-advancement
+      const queueAdvanceKey = `${currentParticipant?.id || 'unknown'}-${currentIndexRef.current}`;
+
+      if (!queueAdvancedForParticipantRef.current.has(queueAdvanceKey)) {
+        console.warn('[useMultiParticipantChat] 🔄 Advancing queue after error', {
+          participantId: currentParticipant?.id,
+          participantIndex: currentIndexRef.current,
+          queueLength: participantQueueRef.current.length,
+        });
+
+        queueAdvancedForParticipantRef.current.add(queueAdvanceKey);
+
+        // ✅ MOVE TO NEXT PARTICIPANT: Don't retry - server already did that
+        const nextIndex = participantQueueRef.current.shift();
+        if (nextIndex !== undefined) {
+          currentIndexRef.current = nextIndex;
+          setCurrentIndex(nextIndex);
+          // ✅ CRITICAL FIX: Don't wait for AI SDK status - trigger immediately with timeout
+          // The AI SDK status might not reset to 'ready' after an error, causing deadlock
+          setTimeout(() => {
+            console.warn('[useMultiParticipantChat] 🚀 Triggering next participant after error', {
+              currentIndex: currentIndexRef.current,
+              queueLength: participantQueueRef.current.length,
+            });
+            setPendingNextParticipant(true);
+          }, 500); // Small delay to ensure error is fully processed
+        } else {
+          // No more participants - round complete
+          // ✅ CRITICAL FIX: Reset all tracking for next round
+          currentIndexRef.current = 0;
+          setCurrentIndex(0);
+          participantQueueRef.current = [];
+          erroredParticipantsRef.current.clear();
+          queueAdvancedForParticipantRef.current.clear();
+
+          onRoundComplete?.();
+          onComplete?.();
+        }
       } else {
-        // No more participants - round complete
-        onRoundComplete?.();
-        onComplete?.();
+        console.warn('[useMultiParticipantChat] ⏭️ Skipping duplicate queue advancement (onError)', {
+          participantId: currentParticipant?.id,
+          participantIndex: currentIndexRef.current,
+        });
       }
 
       // Notify parent component
@@ -256,42 +345,90 @@ export function useMultiParticipantChat({
 
         // ✅ CREATE ERROR MESSAGE: Make the failure visible to the user
         if (currentParticipant) {
-          const errorMessageId = `error-no-message-${Date.now()}-${currentIndexRef.current}`;
-          const errorUIMessage: UIMessage = {
-            id: errorMessageId,
-            role: 'assistant',
-            // ✅ CRITICAL FIX: Add empty text part to ensure message card renders
-            // Previously parts: [] would cause the message card to potentially not render
-            // The MessageErrorDetails component will show the full error from metadata
-            parts: [{ type: 'text', text: '' }],
-            metadata: {
+          // ✅ CRITICAL FIX: Check if we've already created an error for this participant
+          const errorKey = `${currentParticipant.id}-${currentIndexRef.current}`;
+
+          if (!erroredParticipantsRef.current.has(errorKey)) {
+            console.warn('[useMultiParticipantChat] ⚠️ Creating silent failure error (no message from AI SDK)', {
               participantId: currentParticipant.id,
               participantIndex: currentIndexRef.current,
-              participantRole: currentParticipant.role,
-              model: currentParticipant.modelId,
-              hasError: true,
-              errorType: 'silent_failure',
-              errorMessage: 'This model failed to generate a response. The AI SDK did not create a message object.',
-              providerMessage: 'No response text available',
-            },
-          };
+              modelId: currentParticipant.modelId,
+            });
 
-          setMessages(prev => [...prev, errorUIMessage]);
+            erroredParticipantsRef.current.add(errorKey);
+
+            const errorMessageId = `error-no-message-${crypto.randomUUID()}-${currentIndexRef.current}`;
+            const errorUIMessage: UIMessage = {
+              id: errorMessageId,
+              role: 'assistant',
+              // ✅ CRITICAL FIX: Add empty text part to ensure message card renders
+              // Previously parts: [] would cause the message card to potentially not render
+              // The MessageErrorDetails component will show the full error from metadata
+              parts: [{ type: 'text', text: '' }],
+              metadata: {
+                participantId: currentParticipant.id,
+                participantIndex: currentIndexRef.current,
+                participantRole: currentParticipant.role,
+                model: currentParticipant.modelId,
+                hasError: true,
+                errorType: 'silent_failure',
+                errorMessage: 'This model failed to generate a response. The AI SDK did not create a message object.',
+                providerMessage: 'No response text available',
+              },
+            };
+
+            setMessages(prev => [...prev, errorUIMessage]);
+          } else {
+            console.warn('[useMultiParticipantChat] ⏭️ Skipping duplicate silent failure error', {
+              participantId: currentParticipant.id,
+              participantIndex: currentIndexRef.current,
+              modelId: currentParticipant.modelId,
+            });
+          }
         }
 
-        // ✅ MOVE TO NEXT PARTICIPANT: Don't stop the round, just advance
-        const nextIndex = participantQueueRef.current.shift();
-        if (nextIndex !== undefined) {
-          currentIndexRef.current = nextIndex;
-          setCurrentIndex(nextIndex);
-          // Trigger next participant
-          setPendingNextParticipant(true);
+        // ✅ CRITICAL FIX: Only advance queue if we haven't already for this participant
+        const queueAdvanceKey = `${currentParticipant?.id || 'unknown'}-${currentIndexRef.current}`;
+
+        if (!queueAdvancedForParticipantRef.current.has(queueAdvanceKey)) {
+          console.warn('[useMultiParticipantChat] 🔄 Advancing queue after silent failure', {
+            participantId: currentParticipant?.id,
+            participantIndex: currentIndexRef.current,
+            queueLength: participantQueueRef.current.length,
+          });
+
+          queueAdvancedForParticipantRef.current.add(queueAdvanceKey);
+
+          // ✅ MOVE TO NEXT PARTICIPANT: Don't stop the round, just advance
+          const nextIndex = participantQueueRef.current.shift();
+          if (nextIndex !== undefined) {
+            currentIndexRef.current = nextIndex;
+            setCurrentIndex(nextIndex);
+            // ✅ CRITICAL FIX: Don't wait for AI SDK status - trigger immediately
+            setTimeout(() => {
+              console.warn('[useMultiParticipantChat] 🚀 Triggering next participant after silent failure', {
+                currentIndex: currentIndexRef.current,
+                queueLength: participantQueueRef.current.length,
+              });
+              setPendingNextParticipant(true);
+            }, 500);
+          } else {
+            // No more participants - round complete
+            // ✅ CRITICAL FIX: Reset all tracking for next round
+            currentIndexRef.current = 0;
+            setCurrentIndex(0);
+            participantQueueRef.current = [];
+            erroredParticipantsRef.current.clear();
+            queueAdvancedForParticipantRef.current.clear();
+
+            onRoundComplete?.();
+            onComplete?.();
+          }
         } else {
-          // No more participants - round complete
-          currentIndexRef.current = 0;
-          setCurrentIndex(0);
-          onRoundComplete?.();
-          onComplete?.();
+          console.warn('[useMultiParticipantChat] ⏭️ Skipping duplicate queue advancement (onFinish - no message)', {
+            participantId: currentParticipant?.id,
+            participantIndex: currentIndexRef.current,
+          });
         }
 
         // Notify parent component of the error
@@ -344,6 +481,9 @@ export function useMultiParticipantChat({
           }),
         };
 
+        // ✅ Backend now handles all retries - frontend just displays the final result
+        // Empty responses are retried up to 5 times on the backend before streaming to frontend
+
         setMessages((prev) => {
           // ✅ CRITICAL FIX: Check if message exists in array before trying to update
           const messageExists = prev.some(msg => msg.id === data.message.id);
@@ -362,37 +502,74 @@ export function useMultiParticipantChat({
           });
         });
 
-        // ✅ NO FRONTEND RETRIES: Server already handled retries
+        // ✅ NO FRONTEND RETRIES: Server already handled retries (unless shouldAutoRetry is set)
         // If there's an error at this point, it's already been saved to the database
         // Just continue to next participant
       }
 
-      // ✅ ALWAYS ADVANCE TO NEXT PARTICIPANT: After message is processed (success or error)
-      // Process next participant in queue using REF (immediate access)
-      if (participantQueueRef.current.length > 0) {
-        const nextIndex = participantQueueRef.current[0];
-        const remaining = participantQueueRef.current.slice(1);
-        if (nextIndex !== undefined) {
-          // ✅ FIX: Update both ref and state immediately
-          currentIndexRef.current = nextIndex;
-          setCurrentIndex(nextIndex);
-          participantQueueRef.current = remaining;
+      // ✅ CLEAR REGENERATION FLAG: After first participant completes, clear the flag
+      // This ensures only the first participant's request includes the regenerateRound parameter
+      if (currentIndexRef.current === 0 && regenerateRoundNumber !== null) {
+        console.warn('[useMultiParticipantChat] ♻️ Clearing regeneration flag after first participant', {
+          regenerateRoundNumber,
+        });
+        setRegenerateRoundNumber(null);
+      }
 
-          // ✅ CRITICAL FIX: Set pending flag instead of immediately calling aiSendMessage
-          // This allows us to wait for AI SDK status to reset in useEffect
-          setPendingNextParticipant(true);
+      // ✅ CRITICAL FIX: Only advance queue if we haven't already for this participant
+      // Both onError and onFinish can fire - prevent double-advancement
+      const queueAdvanceKey = `${currentParticipant?.id || 'unknown'}-${currentIndexRef.current}`;
+
+      if (!queueAdvancedForParticipantRef.current.has(queueAdvanceKey)) {
+        queueAdvancedForParticipantRef.current.add(queueAdvanceKey);
+
+        // ✅ ALWAYS ADVANCE TO NEXT PARTICIPANT: After message is processed (success or error)
+        // Process next participant in queue using REF (immediate access)
+        if (participantQueueRef.current.length > 0) {
+          const nextIndex = participantQueueRef.current[0];
+          const remaining = participantQueueRef.current.slice(1);
+          if (nextIndex !== undefined) {
+            console.warn('[useMultiParticipantChat] 🔄 Advancing queue after success', {
+              participantId: currentParticipant?.id,
+              participantIndex: currentIndexRef.current,
+              nextIndex,
+              queueLength: remaining.length,
+            });
+
+            // ✅ FIX: Update both ref and state immediately
+            currentIndexRef.current = nextIndex;
+            setCurrentIndex(nextIndex);
+            participantQueueRef.current = remaining;
+
+            // ✅ CRITICAL FIX: Set pending flag instead of immediately calling aiSendMessage
+            // This allows us to wait for AI SDK status to reset in useEffect
+            setPendingNextParticipant(true);
+          }
+        } else {
+          // All participants finished successfully
+          console.warn('[useMultiParticipantChat] ✅ Round complete - all participants finished', {
+            participantId: currentParticipant?.id,
+            participantIndex: currentIndexRef.current,
+          });
+
+          // ✅ CRITICAL FIX: Reset all tracking for next round
+          currentIndexRef.current = 0;
+          setCurrentIndex(0);
+          participantQueueRef.current = [];
+          erroredParticipantsRef.current.clear();
+          queueAdvancedForParticipantRef.current.clear();
+
+          // ✅ CRITICAL: Trigger round completion callback FIRST
+          // This allows the frontend to immediately refetch analyses
+          // before calling the general onComplete callback
+          onRoundComplete?.();
+          onComplete?.();
         }
       } else {
-        // All participants finished successfully
-        currentIndexRef.current = 0;
-        setCurrentIndex(0);
-        participantQueueRef.current = [];
-
-        // ✅ CRITICAL: Trigger round completion callback FIRST
-        // This allows the frontend to immediately refetch analyses
-        // before calling the general onComplete callback
-        onRoundComplete?.();
-        onComplete?.();
+        console.warn('[useMultiParticipantChat] ⏭️ Skipping duplicate queue advancement (onFinish - success)', {
+          participantId: currentParticipant?.id,
+          participantIndex: currentIndexRef.current,
+        });
       }
     },
   });
@@ -406,6 +583,17 @@ export function useMultiParticipantChat({
     participantsRef.current = participants;
   }, [participants]);
 
+  // ✅ DEBUG: Log AI SDK status changes for debugging loading state issues
+  useEffect(() => {
+    console.warn('[useMultiParticipantChat] 📊 AI SDK Status Changed', {
+      status,
+      currentParticipantIndex: currentIndexRef.current,
+      pendingNextParticipant,
+      queueLength: participantQueueRef.current.length,
+      isStreaming: status !== 'ready',
+    });
+  }, [status, pendingNextParticipant]);
+
   useEffect(() => {
     if (!pendingNextParticipant || status !== 'ready') {
       return;
@@ -415,6 +603,11 @@ export function useMultiParticipantChat({
     // This prevents race conditions where status becomes 'ready' but stream hasn't fully completed
     // ✅ FIX: Assign timeout to variable for proper cleanup
     const timeoutId = setTimeout(() => {
+      console.warn('[useMultiParticipantChat] 🚀 Triggering next participant', {
+        currentIndex: currentIndexRef.current,
+        queueLength: participantQueueRef.current.length,
+      });
+
       // AI SDK is ready for the next message - reset pending state
       setPendingNextParticipant(false);
 
@@ -459,6 +652,9 @@ export function useMultiParticipantChat({
     currentIndexRef.current = 0;
     setCurrentIndex(0);
     setPendingNextParticipant(false);
+    // ✅ CRITICAL FIX: Clear all tracking for new round
+    erroredParticipantsRef.current.clear();
+    queueAdvancedForParticipantRef.current.clear();
 
     // ✅ CRITICAL FIX: Find the last user message to re-trigger streaming
     // Instead of sending an empty message, we send the actual last user message
@@ -516,6 +712,9 @@ export function useMultiParticipantChat({
       currentIndexRef.current = 0;
       setCurrentIndex(0);
       setPendingNextParticipant(false);
+      // ✅ CRITICAL FIX: Clear all tracking for new round
+      erroredParticipantsRef.current.clear();
+      queueAdvancedForParticipantRef.current.clear();
 
       // Send user message (first participant responds automatically)
       aiSendMessage({ text: trimmed });
@@ -526,7 +725,7 @@ export function useMultiParticipantChat({
   /**
    * ✅ AI SDK v5 PATTERN: Retry functionality
    * Retries the last message (useful when a participant fails)
-   * This will restart the entire round from the beginning with all participants
+   * This will REGENERATE the entire round - replacing old messages and analysis
    */
   const retry = useCallback(() => {
     if (status !== 'ready') {
@@ -545,14 +744,45 @@ export function useMultiParticipantChat({
       return;
     }
 
-    // Remove the failed assistant messages (keep all messages up to and including the last user message)
-    const lastUserIndex = messages.findLastIndex(m => m.role === 'user');
-    const messagesUpToLastUser = messages.slice(0, lastUserIndex + 1);
-    setMessages(messagesUpToLastUser);
+    // ✅ CRITICAL FIX: Get the round number from the last user message
+    // This is the round we want to REGENERATE (replace)
+    const metadata = lastUserMessage.metadata as Record<string, unknown> | undefined;
+    const roundNumber = (metadata?.roundNumber as number) || 1;
 
-    // Retry the same message
+    console.warn('[useMultiParticipantChat] ♻️ Starting round regeneration', {
+      roundNumber,
+      messageText: textPart.text.substring(0, 50),
+      currentMessageCount: messages.length,
+    });
+
+    // ✅ CRITICAL FIX: Notify parent that retry is happening for this round
+    // This triggers invalidation of the old analysis BEFORE retrying
+    if (onRetry) {
+      onRetry(roundNumber);
+    }
+
+    // ✅ CRITICAL: Set regenerate flag so transport sends it to backend
+    // The backend will delete all messages and analysis for this round
+    setRegenerateRoundNumber(roundNumber);
+
+    // ✅ CRITICAL FIX: Remove the ENTIRE round from UI (user + assistant messages)
+    // We need to remove ALL messages from this round, not just assistant messages
+    // Then send a fresh user message which will create a new round with the same number
+    const lastUserIndex = messages.findLastIndex(m => m.role === 'user');
+    const messagesBeforeRound = messages.slice(0, lastUserIndex); // Remove user message too
+
+    console.warn('[useMultiParticipantChat] ♻️ Removing round from UI', {
+      roundNumber,
+      messagesBeforeRound: messagesBeforeRound.length,
+      messagesRemoved: messages.length - messagesBeforeRound.length,
+    });
+
+    setMessages(messagesBeforeRound);
+
+    // ✅ Send fresh user message - this will create new user + assistant messages
+    // The backend will see regenerateRound and delete old database messages first
     sendMessage(textPart.text);
-  }, [messages, sendMessage, status, setMessages]);
+  }, [messages, sendMessage, status, setMessages, onRetry]);
 
   return {
     messages,

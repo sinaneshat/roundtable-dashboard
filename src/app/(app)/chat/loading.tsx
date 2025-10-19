@@ -30,8 +30,8 @@ export default function ChatOverviewLoading() {
       {/* Content Layer - EXACT match to ChatOverviewScreen.tsx:407 */}
       <div className="relative z-10 flex flex-1 flex-col overflow-x-hidden">
         <div className="w-full flex-1 flex flex-col justify-center">
-          {/* Hero Section - EXACT match to ChatOverviewScreen.tsx:419 */}
-          <div className="w-full max-w-full sm:max-w-3xl lg:max-w-4xl mx-auto px-3 sm:px-4 md:px-6 lg:px-8 py-6 sm:py-8">
+          {/* Hero Section - EXACT match to ChatOverviewScreen.tsx:328 */}
+          <div className="mx-auto max-w-3xl px-4 py-6 sm:py-8">
             <div className="flex flex-col items-center gap-4 sm:gap-5 md:gap-6 text-center">
               {/* Logo - EXACT match to ChatOverviewScreen.tsx:427 */}
               <div className="relative h-20 w-20 xs:h-24 xs:w-24 sm:h-28 sm:w-28 md:h-32 md:w-32 lg:h-36 lg:w-36">
@@ -54,7 +54,7 @@ export default function ChatOverviewLoading() {
           </div>
 
           {/* Quick Start Cards - EXACT match to chat-quick-start.tsx:308-373 */}
-          <div className="w-full max-w-full sm:max-w-3xl lg:max-w-4xl mx-auto px-3 sm:px-4 md:px-6 lg:px-8 py-4">
+          <div className="mx-auto max-w-3xl px-4 py-4">
             <div className="w-full relative z-20">
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3 md:gap-4">
                 {Array.from({ length: 3 }, (_, i) => (
@@ -83,9 +83,9 @@ export default function ChatOverviewLoading() {
         </div>
       </div>
 
-      {/* Chat Input - EXACT match to ChatOverviewScreen.tsx:571 using chatGlass.inputBox */}
-      <div className="sticky bottom-0 z-10 mt-auto">
-        <div className="w-full max-w-full sm:max-w-3xl lg:max-w-4xl mx-auto px-3 sm:px-4 md:px-6 lg:px-8 py-4">
+      {/* Chat Input - EXACT match to ChatOverviewScreen.tsx:447 using chatGlass.inputBox */}
+      <div className="fixed bottom-0 left-0 right-0 z-20 pb-6 md:left-[var(--sidebar-width-icon)] md:pr-2 md:pb-8">
+        <div className="mx-auto max-w-3xl px-4">
           {/* Using chatGlass.inputBox from chat-input.tsx:87 */}
           <div className={cn(chatGlass.inputBox, 'rounded-lg shadow-2xl p-4')}>
             <Skeleton className="h-20 w-full bg-white/10" />

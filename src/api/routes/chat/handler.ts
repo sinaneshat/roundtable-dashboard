@@ -1,6 +1,6 @@
 import type { RouteHandler } from '@hono/zod-openapi';
 import type { UIMessage } from 'ai';
-import { consumeStream, convertToModelMessages, generateText, streamText, validateUIMessages } from 'ai';
+import { consumeStream, convertToModelMessages, streamText, validateUIMessages } from 'ai';
 import type { SQL } from 'drizzle-orm';
 import { and, asc, desc, eq, ne } from 'drizzle-orm';
 import Fuse from 'fuse.js';
@@ -103,6 +103,9 @@ import {
  *
  * @param error - Error from AI SDK (unknown type for safety)
  * @param participant - Participant information for context
+ * @param participant.id - Unique identifier for the participant
+ * @param participant.modelId - Model ID being used (e.g., "anthropic/claude-3.5-sonnet")
+ * @param participant.role - Role description of the participant (nullable)
  * @returns Comprehensive structured error metadata
  */
 function structureErrorMetadata(error: unknown, participant: { id: string; modelId: string; role: string | null }) {
@@ -147,9 +150,8 @@ function structureErrorMetadata(error: unknown, participant: { id: string; model
         if (openRouterError.message) {
           errorMessage = String(openRouterError.message);
         }
-      }
-      // Alternative format: { message, error }
-      else if (parsed.message) {
+      } else if (parsed.message) {
+        // Alternative format: { message, error }
         openRouterError = {
           message: parsed.message,
           code: parsed.code,
@@ -194,10 +196,9 @@ function structureErrorMetadata(error: unknown, participant: { id: string; model
     errorCategory = 'provider_rate_limit';
     errorIsTransient = true;
     shouldRetry = true; // Use INFINITE_RETRY_CONFIG
-    userFriendlyMessage = `OpenRouter Rate Limit: ${errorMessage}. Retrying with exponential backoff...`;
-  }
-  // ✅ PROVIDER: NETWORK/CONNECTIVITY (transient - retry indefinitely)
-  else if (
+    userFriendlyMessage = errorMessage; // ✅ RAW ERROR: Show exact OpenRouter error message
+  } else if (
+    // ✅ PROVIDER: NETWORK/CONNECTIVITY (transient - retry indefinitely)
     statusCode === 502
     || statusCode === 503
     || statusCode === 504
@@ -214,15 +215,12 @@ function structureErrorMetadata(error: unknown, participant: { id: string; model
     errorCategory = 'provider_network';
     errorIsTransient = true;
     shouldRetry = true; // Use INFINITE_RETRY_CONFIG
-    userFriendlyMessage = `OpenRouter Network Error: ${errorMessage}. Retrying with exponential backoff...`;
-  }
-
-  // ========================================
-  // MODEL-LEVEL ERRORS (fail fast - don't retry or very limited)
-  // ========================================
-
-  // ✅ MODEL: NOT FOUND / NO ENDPOINTS (permanent - don't retry)
-  else if (
+    userFriendlyMessage = errorMessage; // ✅ RAW ERROR: Show exact OpenRouter error message
+  } else if (
+    // ========================================
+    // MODEL-LEVEL ERRORS (fail fast - don't retry or very limited)
+    // ========================================
+    // ✅ MODEL: NOT FOUND / NO ENDPOINTS (permanent - don't retry)
     statusCode === 404
     || openRouterCode === 'model_not_found'
     || openRouterCode === 'no_endpoints'
@@ -235,10 +233,9 @@ function structureErrorMetadata(error: unknown, participant: { id: string; model
     errorCategory = 'model_not_found';
     errorIsTransient = false;
     shouldRetry = false; // Don't retry - model permanently unavailable
-    userFriendlyMessage = `Model Error: "${participant.modelId}" is not available. ${errorMessage}`;
-  }
-  // ✅ MODEL: CONTENT FILTERING / SAFETY (permanent - don't retry)
-  else if (
+    userFriendlyMessage = errorMessage; // ✅ RAW ERROR: Show exact OpenRouter error message
+  } else if (
+    // ✅ MODEL: CONTENT FILTERING / SAFETY (permanent - don't retry)
     errorLower.includes('content')
     || errorLower.includes('filter')
     || errorLower.includes('safety')
@@ -249,15 +246,12 @@ function structureErrorMetadata(error: unknown, participant: { id: string; model
     errorCategory = 'model_content_filter';
     errorIsTransient = false;
     shouldRetry = false; // Don't retry - content violates guidelines
-    userFriendlyMessage = `Content Filter: ${errorMessage}. This content violates model safety guidelines.`;
-  }
-
-  // ========================================
-  // AUTHENTICATION & VALIDATION ERRORS (permanent - don't retry)
-  // ========================================
-
-  // ✅ AUTHENTICATION ERRORS (permanent - requires user action)
-  else if (
+    userFriendlyMessage = errorMessage; // ✅ RAW ERROR: Show exact OpenRouter error message
+  } else if (
+    // ========================================
+    // AUTHENTICATION & VALIDATION ERRORS (permanent - don't retry)
+    // ========================================
+    // ✅ AUTHENTICATION ERRORS (permanent - requires user action)
     statusCode === 401
     || statusCode === 403
     || openRouterCode === 'unauthorized'
@@ -270,10 +264,9 @@ function structureErrorMetadata(error: unknown, participant: { id: string; model
     errorCategory = 'authentication';
     errorIsTransient = false;
     shouldRetry = false; // Don't retry - requires API key fix
-    userFriendlyMessage = `Authentication Error: ${errorMessage}. Please check your OpenRouter API key.`;
-  }
-  // ✅ VALIDATION ERRORS (permanent - bad request)
-  else if (
+    userFriendlyMessage = errorMessage; // ✅ RAW ERROR: Show exact OpenRouter error message
+  } else if (
+    // ✅ VALIDATION ERRORS (permanent - bad request)
     statusCode === 400
     || openRouterCode === 'invalid_request'
     || errorLower.includes('invalid')
@@ -283,19 +276,16 @@ function structureErrorMetadata(error: unknown, participant: { id: string; model
     errorCategory = 'validation';
     errorIsTransient = false;
     shouldRetry = false; // Don't retry - request is malformed
-    userFriendlyMessage = `Validation Error: ${errorMessage}`;
-  }
-
-  // ========================================
-  // UNKNOWN ERRORS (cautious retry)
-  // ========================================
-
-  // ✅ UNKNOWN ERRORS (assume transient but log for investigation)
-  else {
+    userFriendlyMessage = errorMessage; // ✅ RAW ERROR: Show exact OpenRouter error message
+  } else {
+    // ========================================
+    // UNKNOWN ERRORS (cautious retry)
+    // ========================================
+    // ✅ UNKNOWN ERRORS (assume transient but log for investigation)
     errorCategory = 'unknown';
     errorIsTransient = true;
     shouldRetry = true; // Retry but monitor
-    userFriendlyMessage = `OpenRouter Error: ${errorMessage}`;
+    userFriendlyMessage = errorMessage; // ✅ RAW ERROR: Show exact OpenRouter error message
   }
 
   // ✅ STEP 4: Extract OpenRouter request/response IDs for debugging
@@ -485,7 +475,7 @@ async function triggerRoundAnalysisAsync(params: {
 async function verifyThreadOwnership(
   threadId: string,
   userId: string,
-  db: Awaited<ReturnType<typeof getDbAsync>>
+  db: Awaited<ReturnType<typeof getDbAsync>>,
 ): Promise<typeof tables.chatThread.$inferSelect>;
 
 /**
@@ -495,7 +485,7 @@ async function verifyThreadOwnership(
   threadId: string,
   userId: string,
   db: Awaited<ReturnType<typeof getDbAsync>>,
-  options: { includeParticipants: true }
+  options: { includeParticipants: true },
 ): Promise<typeof tables.chatThread.$inferSelect & {
   participants: Array<typeof tables.chatParticipant.$inferSelect>;
 }>;
@@ -1755,7 +1745,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
   },
   async (c) => {
     const { user } = c.auth();
-    const { messages, id: threadId, participantIndex, participants: providedParticipants } = c.validated.body;
+    const { messages, id: threadId, participantIndex, participants: providedParticipants, regenerateRound } = c.validated.body;
 
     console.warn('[streamChatHandler] 🚀 REQUEST START', {
       threadId,
@@ -1763,6 +1753,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
       userId: user.id,
       messageCount: messages?.length || 0,
       hasProvidedParticipants: !!providedParticipants,
+      regenerateRound,
     });
 
     // Validate messages array exists and is not empty
@@ -1811,6 +1802,85 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
         requestUser: user.id,
       });
       throw createError.unauthorized('Not authorized to access this thread');
+    }
+
+    // =========================================================================
+    // STEP 1.3: ✅ REGENERATE ROUND: Delete old messages and analysis if regenerating
+    // =========================================================================
+    // When regenerateRound is provided, we delete all existing messages and analysis
+    // for that round number. This allows the new streaming to reuse the same round number
+    // and effectively "replace" the old round with new content.
+    //
+    // This is only done by the first participant (index 0) to avoid race conditions
+    // where multiple participants try to delete the same messages simultaneously.
+
+    if (regenerateRound && participantIndex === 0) {
+      console.warn('[streamChatHandler] ♻️ REGENERATING ROUND: Deleting old messages and analysis', {
+        threadId,
+        regenerateRound,
+        participantIndex,
+      });
+
+      try {
+        // Delete all messages from the specified round
+        const deletedMessages = await db
+          .delete(tables.chatMessage)
+          .where(
+            and(
+              eq(tables.chatMessage.threadId, threadId),
+              eq(tables.chatMessage.roundNumber, regenerateRound),
+            ),
+          )
+          .returning();
+
+        console.warn('[streamChatHandler] ♻️ Deleted messages from round', {
+          threadId,
+          regenerateRound,
+          deletedCount: deletedMessages.length,
+        });
+
+        // Delete analysis for the specified round (if exists)
+        const deletedAnalyses = await db
+          .delete(tables.chatModeratorAnalysis)
+          .where(
+            and(
+              eq(tables.chatModeratorAnalysis.threadId, threadId),
+              eq(tables.chatModeratorAnalysis.roundNumber, regenerateRound),
+            ),
+          )
+          .returning();
+
+        console.warn('[streamChatHandler] ♻️ Deleted analyses from round', {
+          threadId,
+          regenerateRound,
+          deletedCount: deletedAnalyses.length,
+        });
+
+        // Delete feedback for the specified round (if exists)
+        await db
+          .delete(tables.chatRoundFeedback)
+          .where(
+            and(
+              eq(tables.chatRoundFeedback.threadId, threadId),
+              eq(tables.chatRoundFeedback.roundNumber, regenerateRound),
+            ),
+          );
+
+        console.warn('[streamChatHandler] ♻️ Round regeneration complete', {
+          threadId,
+          regenerateRound,
+          messagesDeleted: deletedMessages.length,
+          analysesDeleted: deletedAnalyses.length,
+        });
+      } catch (error) {
+        console.error('[streamChatHandler] ❌ REGENERATION ERROR: Failed to delete old round data', {
+          threadId,
+          regenerateRound,
+          error,
+        });
+        // Don't fail the request - continue with streaming
+        // The old messages will remain but new ones will be added with a higher round number
+      }
     }
 
     // =========================================================================
@@ -2424,165 +2494,134 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
     const modelSupportsTemperature = !participant.modelId.includes('o4-mini') && !participant.modelId.includes('o4-deep');
     const temperatureValue = modelSupportsTemperature ? (participant.settings?.temperature ?? 0.7) : undefined;
 
-    // ✅ RETRY CONFIGURATION: Server-side retry for empty responses
-    const RETRY_CONFIG = {
-      minRetryWindowMs: 10000, // Retry for at least 10 seconds
-      delayBetweenRetriesMs: 3000, // 3 seconds between each retry
-      maxAttempts: 5, // Max 5 attempts within the 10 second window
-    };
+    // ✅ CRITICAL FIX: Backend-only retry loop for empty responses
+    // The AI SDK's maxRetries only retries API errors (network, 5xx, rate limits)
+    // It does NOT retry "successful" responses that are empty (0 output tokens)
+    // We retry the ENTIRE streamText() call until we get valid content or exhaust retries
+    const MAX_EMPTY_RESPONSE_RETRIES = 5;
+    let emptyResponseAttempt = 0;
 
-    console.warn('[streamChatHandler] 🚀 Starting generation with retry wrapper', {
-      threadId,
-      participantIndex,
-      participantId: participant.id,
-      modelId: participant.modelId,
-      modelRole: participant.role,
-      maxOutputTokens,
-      temperature: temperatureValue,
-      modelSupportsTemperature,
-      timeoutMs: AI_TIMEOUT_CONFIG.perAttemptMs,
-      maxRetries: AI_RETRY_CONFIG.maxAttempts,
-      retryWindowMs: RETRY_CONFIG.minRetryWindowMs,
-      retryDelayMs: RETRY_CONFIG.delayBetweenRetriesMs,
-    });
+    while (emptyResponseAttempt < MAX_EMPTY_RESPONSE_RETRIES) {
+      emptyResponseAttempt++;
 
-    // ✅ RETRY WRAPPER: Call generateText() with retry logic for empty responses
-    let attemptNumber = 0;
-    let finalResult: Awaited<ReturnType<typeof generateText>> | null = null;
-    let lastError: unknown;
-    const startTime = Date.now();
-
-    // Helper to check if response is empty
-    const isResponseEmpty = (text: string | undefined, usage: any) => {
-      const trimmedText = (text || '').trim();
-      return !text || trimmedText.length === 0 || usage?.outputTokens === 0;
-    };
-
-    // Helper to wait between retries
-    const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-
-    // ✅ RETRY LOOP: Keep trying until we get a valid response or exhaust retries
-    while (attemptNumber < RETRY_CONFIG.maxAttempts) {
-      attemptNumber++;
-      const elapsedMs = Date.now() - startTime;
-
-      console.warn('[streamChatHandler] 🔄 Retry attempt', {
+      console.warn(emptyResponseAttempt === 1
+        ? '[streamChatHandler] 🚀 Starting streamText'
+        : '[streamChatHandler] 🔄 Retrying streamText (empty response)', {
         threadId,
         participantIndex,
-        attemptNumber,
-        elapsedMs,
+        participantId: participant.id,
+        modelId: participant.modelId,
+        modelRole: participant.role,
+        maxOutputTokens,
+        temperature: temperatureValue,
+        modelSupportsTemperature,
+        timeoutMs: AI_TIMEOUT_CONFIG.perAttemptMs,
+        maxRetries: AI_RETRY_CONFIG.maxAttempts,
+        ...(emptyResponseAttempt > 1 && {
+          retryAttempt: emptyResponseAttempt,
+          maxRetryAttempts: MAX_EMPTY_RESPONSE_RETRIES,
+        }),
       });
 
-      try {
-        // ✅ Call generateText (non-streaming) to get full response
-        const generationResult = await generateText({
-          model: client(participant.modelId),
-          system: systemPrompt,
-          messages: modelMessages,
-          maxOutputTokens,
-          ...(modelSupportsTemperature && { temperature: temperatureValue }),
-          maxRetries: AI_RETRY_CONFIG.maxAttempts,
-          abortSignal: AbortSignal.any([
-            (c.req as unknown as { raw: Request }).raw.signal,
-            AbortSignal.timeout(AI_TIMEOUT_CONFIG.perAttemptMs),
-          ]),
-          experimental_telemetry: {
-            isEnabled: true,
-            functionId: `chat.thread.${threadId}.participant.${participant.id}.attempt.${attemptNumber}`,
-          },
-        });
+      const result = streamText({
+        model: client(participant.modelId),
+        system: systemPrompt,
+        messages: modelMessages,
+        maxOutputTokens,
+        ...(modelSupportsTemperature && { temperature: temperatureValue }),
 
-        // ✅ Check if response is empty
-        if (isResponseEmpty(generationResult.text, generationResult.usage)) {
-          const elapsedAfter = Date.now() - startTime;
+        // ✅ AI SDK RETRY: Handles ALL errors (network, server, timeouts, rate limits)
+        // Reference: https://sdk.vercel.ai/docs/ai-sdk-core/error-handling
+        // ✅ RETRY UP TO 10 TIMES: Then save error/response and move to next participant
+        maxRetries: AI_RETRY_CONFIG.maxAttempts,
 
-          console.warn('[streamChatHandler] ⚠️ Empty response received', {
-            threadId,
-            participantIndex,
-            attemptNumber,
-            elapsedMs: elapsedAfter,
-            textLength: generationResult.text?.length || 0,
-            outputTokens: generationResult.usage?.outputTokens || 0,
-          });
+        abortSignal: AbortSignal.any([
+          (c.req as unknown as { raw: Request }).raw.signal, // Cancel on client disconnect
+          AbortSignal.timeout(AI_TIMEOUT_CONFIG.perAttemptMs), // Server-side timeout
+        ]),
 
-          // Check if we should retry
-          if (attemptNumber < RETRY_CONFIG.maxAttempts && elapsedAfter < RETRY_CONFIG.minRetryWindowMs) {
-            console.warn('[streamChatHandler] 🔄 Retrying after delay', {
-              threadId,
-              participantIndex,
-              delayMs: RETRY_CONFIG.delayBetweenRetriesMs,
-              nextAttempt: attemptNumber + 1,
-            });
+        experimental_telemetry: {
+          isEnabled: true,
+          functionId: `chat.thread.${threadId}.participant.${participant.id}`,
+        },
 
-            // Wait before retrying
-            await sleep(RETRY_CONFIG.delayBetweenRetriesMs);
-            continue; // Retry
-          } else {
-            // Exhausted retries - save empty response
-            console.error('[streamChatHandler] ❌ Exhausted retries - empty response', {
-              threadId,
-              participantIndex,
-              attemptNumber,
-              elapsedMs: elapsedAfter,
-            });
-            finalResult = generationResult;
-            break;
-          }
-        } else {
-          // ✅ Valid response received
-          console.warn('[streamChatHandler] ✅ Valid response received', {
-            threadId,
-            participantIndex,
-            attemptNumber,
-            elapsedMs: Date.now() - startTime,
-            textLength: generationResult.text?.length || 0,
-            outputTokens: generationResult.usage?.outputTokens || 0,
-          });
-          finalResult = generationResult;
-          break;
-        }
-      } catch (error) {
-        console.error('[streamChatHandler] ❌ Generation error', {
+      // ✅ NO onFinish CALLBACK: We'll handle persistence after checking if response is valid
+      // This allows us to retry before persisting anything
+      });
+
+      // ✅ CRITICAL: Await the full response to check if it's empty
+      // This blocks the retry loop until we know if we need to retry
+      const text = await result.text;
+      const usage = await result.usage;
+
+      console.warn('[streamChatHandler] 📊 Response received', {
+        threadId,
+        participantIndex,
+        modelId: participant.modelId,
+        attempt: emptyResponseAttempt,
+        outputTokens: usage.outputTokens,
+        textLength: text?.length || 0,
+        isEmpty: !text || text.trim().length === 0 || usage.outputTokens === 0,
+      });
+
+      // Check if response is empty
+      const isEmptyResponse = !text || text.trim().length === 0 || usage.outputTokens === 0;
+
+      if (!isEmptyResponse) {
+        // ✅ SUCCESS: Valid response received
+        console.warn('[streamChatHandler] ✅ Valid response received', {
           threadId,
           participantIndex,
-          attemptNumber,
-          error: error instanceof Error ? error.message : String(error),
+          modelId: participant.modelId,
+          attempt: emptyResponseAttempt,
+          textLength: text.length,
+          outputTokens: usage.outputTokens,
         });
 
-        lastError = error;
+        break; // Exit retry loop - we'll create fresh stream below
+      }
 
-        // Check if we should retry
-        const elapsedAfter = Date.now() - startTime;
-        if (attemptNumber < RETRY_CONFIG.maxAttempts && elapsedAfter < RETRY_CONFIG.minRetryWindowMs) {
-          console.warn('[streamChatHandler] 🔄 Retrying after error', {
-            threadId,
-            participantIndex,
-            delayMs: RETRY_CONFIG.delayBetweenRetriesMs,
-            nextAttempt: attemptNumber + 1,
-          });
-          await sleep(RETRY_CONFIG.delayBetweenRetriesMs);
-          continue; // Retry
-        } else {
-          // Exhausted retries - throw error
-          throw error;
-        }
+      // Empty response - check if we should retry
+      if (emptyResponseAttempt < MAX_EMPTY_RESPONSE_RETRIES) {
+        console.warn('[streamChatHandler] ⚠️ Empty response - will retry', {
+          threadId,
+          participantIndex,
+          modelId: participant.modelId,
+          attempt: emptyResponseAttempt,
+          remainingAttempts: MAX_EMPTY_RESPONSE_RETRIES - emptyResponseAttempt,
+        });
+
+        // Delay before retry to avoid rate limits
+        await new Promise(resolve => setTimeout(resolve, 2000)); // 2 second delay
+        // Continue loop for next attempt
+      } else {
+        console.warn('[streamChatHandler] ❌ Max retries exceeded - empty response', {
+          threadId,
+          participantIndex,
+          modelId: participant.modelId,
+          totalAttempts: emptyResponseAttempt,
+        });
+        // Break out of loop - final stream will still be created, but will likely be empty
+        break;
       }
     }
 
-    // If we exhausted retries without a result, throw the last error
-    if (!finalResult) {
-      throw lastError || new Error('Failed to generate response after retries');
-    }
+    // ✅ CRITICAL: Create fresh stream for the final result
+    // We can't return the consumed stream, so create a new one with same params
+    console.warn('[streamChatHandler] 📤 Creating fresh stream for response', {
+      threadId,
+      participantIndex,
+      modelId: participant.modelId,
+      attemptsTaken: emptyResponseAttempt,
+    });
 
-    // ✅ NOW use streamText for the UI response (reusing the same config)
-    // We need to stream to maintain UI compatibility, but we've already validated the response
-    const result = streamText({
+    const finalResult = streamText({
       model: client(participant.modelId),
       system: systemPrompt,
       messages: modelMessages,
       maxOutputTokens,
       ...(modelSupportsTemperature && { temperature: temperatureValue }),
-      maxRetries: 0, // Don't retry - we already did that above
+      maxRetries: AI_RETRY_CONFIG.maxAttempts,
       abortSignal: AbortSignal.any([
         (c.req as unknown as { raw: Request }).raw.signal,
         AbortSignal.timeout(AI_TIMEOUT_CONFIG.perAttemptMs),
@@ -2592,16 +2631,8 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
         functionId: `chat.thread.${threadId}.participant.${participant.id}`,
       },
 
-      // ✅ OFFICIAL PATTERN: onFinish for message persistence only
-      // Reference: https://sdk.vercel.ai/docs/ai-sdk-core/generating-text#on-finish
+      // ✅ PERSIST MESSAGE: Save to database after streaming completes
       onFinish: async (finishResult) => {
-        console.warn('[streamChatHandler] ✨ onFinish triggered', {
-          threadId,
-          participantIndex,
-          participantId: participant.id,
-          modelId: participant.modelId,
-        });
-
         const { text, usage, finishReason, providerMetadata, response } = finishResult;
 
         // ✅ REASONING SUPPORT: Extract reasoning for o1/o3/DeepSeek models
@@ -2644,13 +2675,11 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
             }
           }
 
-          // ✅ IMPROVED EMPTY RESPONSE DETECTION: Check for meaningful content
+          // ✅ DETECT EMPTY RESPONSES: Check for meaningful content
+          // Note: Empty responses should have been filtered out by the retry loop
+          // If we get here with an empty response, all retries were exhausted
           const trimmedText = (text || '').trim();
-          const isEmptyResponse = (
-            !text
-            || trimmedText.length === 0
-            || usage?.outputTokens === 0
-          );
+          const isEmptyResponse = !text || trimmedText.length === 0 || usage?.outputTokens === 0;
 
           // Generate comprehensive error message
           let errorMessage: string | undefined;
@@ -2680,20 +2709,19 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
               }
             } else if (outputTokens === 0) {
               // Model refused to respond - no OpenRouter error but empty output
-              providerMessage = `Model refused or was filtered. Input: ${inputTokens} tokens, Output: 0 tokens, Status: ${finishReason}`;
-              errorMessage = `The model (${participant.modelId}) refused to respond. This typically indicates content filtering, safety constraints, or model limitations.`;
+              // ✅ SHOW RAW ERROR: Use exact status/metadata from response, not generic message
+              providerMessage = `Model returned empty response. Input: ${inputTokens} tokens, Output: 0 tokens, Status: ${finishReason}`;
+              errorMessage = providerMessage; // Show exact same message to user - no generic text
               errorCategory = errorCategory || 'empty_response';
             } else {
               // Rare case: has some tokens but no useful text
-              providerMessage = `Empty response. Input: ${inputTokens} tokens, Output: ${outputTokens} tokens, Status: ${finishReason}`;
-              errorMessage = `The model (${participant.modelId}) did not generate a valid response despite producing ${outputTokens} tokens.`;
+              providerMessage = `Model returned ${outputTokens} token(s) but no text. Input: ${inputTokens} tokens, Status: ${finishReason}`;
+              errorMessage = providerMessage; // Show exact same message to user - no generic text
               errorCategory = 'empty_response';
             }
           }
 
-          // ✅ CRITICAL FIX: Save empty string for content (error details shown via MessageErrorDetails component)
-          // The MessageErrorDetails component reads from metadata.errorMessage and displays comprehensive error info
-          // We keep content empty to maintain consistency - errors are always shown via metadata, not content
+          // ✅ SAVE MESSAGE: Content and metadata to database
           const contentToSave = text || '';
           const hasError = isEmptyResponse || !!openRouterError;
 
@@ -2705,7 +2733,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
               role: 'assistant' as const,
               content: contentToSave,
               reasoning: reasoningText,
-              roundNumber: currentRoundNumber, // ✅ EVENT-BASED ROUND TRACKING: Use same round as user message
+              roundNumber: currentRoundNumber,
               metadata: {
                 model: participant.modelId,
                 participantId: participant.id,
@@ -2713,14 +2741,14 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
                 participantRole: participant.role,
                 usage,
                 finishReason,
-                // ✅ COMPREHENSIVE ERROR STATE: Include all error details from OpenRouter
                 hasError,
                 errorType: errorCategory || (hasError ? 'empty_response' : undefined),
                 errorMessage,
-                providerMessage, // ✅ CRITICAL: Raw OpenRouter error message
-                openRouterError, // ✅ CRITICAL: Original OpenRouter error for debugging
-                // ✅ RETRY DECISION: Empty responses and provider errors should retry
-                isTransient: hasError, // All empty responses and provider errors are transient (should retry)
+                providerMessage,
+                openRouterError,
+                isTransient: hasError,
+                // ✅ Include retry attempt count for debugging
+                retryAttempts: emptyResponseAttempt,
               },
               createdAt: new Date(),
             })
@@ -2781,9 +2809,10 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
       participantIndex,
       participantId: participant.id,
       modelId: participant.modelId,
+      retriesPerformed: emptyResponseAttempt - 1, // -1 because first attempt isn't a retry
     });
 
-    return result.toUIMessageStreamResponse({
+    return finalResult.toUIMessageStreamResponse({
       sendReasoning: true, // Stream reasoning for o1/o3/DeepSeek models
 
       // ✅ OFFICIAL PATTERN: Pass original messages for type-safe metadata
@@ -3049,8 +3078,8 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
     // Verify thread ownership
     const thread = await verifyThreadOwnership(threadId, user.id, db);
 
-    // ✅ IDEMPOTENCY: Check if analysis exists in ANY state (pending, streaming, completed, failed)
-    // Prevents duplicate analyses if user refreshes during generation
+    // ✅ CRITICAL FIX: Enhanced idempotency with race condition prevention
+    // Multiple simultaneous requests must not create duplicate analyses
     const existingAnalysis = await db.query.chatModeratorAnalysis.findFirst({
       where: (fields, { and: andOp, eq: eqOp }) =>
         andOp(
@@ -3060,8 +3089,16 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
     });
 
     if (existingAnalysis) {
+      console.warn('[analyzeRoundHandler] 🔍 Existing analysis found', {
+        analysisId: existingAnalysis.id,
+        status: existingAnalysis.status,
+        roundNumber: roundNum,
+        ageMs: Date.now() - existingAnalysis.createdAt.getTime(),
+      });
+
       // ✅ COMPLETED: Return existing analysis data
       if (existingAnalysis.status === 'completed' && existingAnalysis.analysisData) {
+        console.warn('[analyzeRoundHandler] ✅ Returning completed analysis', existingAnalysis.id);
         return Responses.ok(c, {
           object: {
             ...existingAnalysis.analysisData,
@@ -3072,46 +3109,51 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
         });
       }
 
-      // ✅ STREAMING: Return 202 Accepted if actively streaming
-      // Frontend should handle this by showing loading state without re-triggering
+      // ✅ STREAMING: Return 409 Conflict (experimental_useObject can't handle 202)
       if (existingAnalysis.status === 'streaming') {
-        return Responses.accepted(c, {
-          status: existingAnalysis.status,
-          message: 'Analysis is currently being generated. Please wait...',
-          analysisId: existingAnalysis.id,
-          createdAt: existingAnalysis.createdAt,
-        }); // 202 Accepted - request accepted but not yet completed
+        console.warn('[analyzeRoundHandler] 🔄 Analysis already streaming, returning 409 Conflict', existingAnalysis.id);
+        throw createError.conflict(
+          'Analysis is already being generated. Please refresh the page to see the completed analysis.',
+          {
+            errorType: 'resource',
+            resource: 'moderator_analysis',
+            resourceId: existingAnalysis.id,
+          },
+        );
       }
 
-      // ✅ PENDING: Check if stuck (created > 2 minutes ago)
-      // If stuck, delete and allow retry. Otherwise, proceed with generation
+      // ✅ PENDING: Check age and either fail if stuck or return 202 if recent
       if (existingAnalysis.status === 'pending') {
         const ageMs = Date.now() - existingAnalysis.createdAt.getTime();
         const TWO_MINUTES_MS = 2 * 60 * 1000;
 
         if (ageMs > TWO_MINUTES_MS) {
           // Stuck pending - mark as failed and allow fresh retry
-          console.warn('[analyzeRoundHandler] Pending analysis is stuck (> 2 min), marking as failed:', existingAnalysis.id);
+          console.warn('[analyzeRoundHandler] ⏱️ Pending analysis stuck (> 2 min), marking as failed', existingAnalysis.id);
           await db.update(tables.chatModeratorAnalysis)
             .set({
               status: 'failed',
               errorMessage: 'Analysis timed out - stuck in pending state for over 2 minutes',
             })
             .where(eq(tables.chatModeratorAnalysis.id, existingAnalysis.id));
-
           // Fall through to create new analysis
         } else {
-          // Recent pending - proceed with generation (don't return early!)
-          console.warn('[analyzeRoundHandler] Found recent pending analysis, proceeding with generation:', existingAnalysis.id);
-          // Delete pending and create streaming below
-          await db.delete(tables.chatModeratorAnalysis)
-            .where(eq(tables.chatModeratorAnalysis.id, existingAnalysis.id));
+          // ✅ CRITICAL FIX: Recent pending - return 409 Conflict (experimental_useObject can't handle 202)
+          console.warn(`[analyzeRoundHandler] ⏳ Recent pending analysis, returning 409 Conflict (age: ${ageMs}ms)`, existingAnalysis.id);
+          throw createError.conflict(
+            'Analysis is already pending. Another request is processing this round. Please wait and refresh.',
+            {
+              errorType: 'resource',
+              resource: 'moderator_analysis',
+              resourceId: existingAnalysis.id,
+            },
+          );
         }
       }
 
-      // ✅ FAILED: Allow retry by creating new analysis
+      // ✅ FAILED: Delete failed analysis to allow retry
       if (existingAnalysis.status === 'failed') {
-        // Delete failed analysis to allow fresh retry
+        console.warn('[analyzeRoundHandler] 🔄 Deleting failed analysis to allow retry', existingAnalysis.id);
         await db.delete(tables.chatModeratorAnalysis)
           .where(eq(tables.chatModeratorAnalysis.id, existingAnalysis.id));
       }
@@ -3227,10 +3269,18 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
     initializeOpenRouter(c.env);
     const client = openRouterService.getClient();
 
-    // ✅ CRITICAL: Create pending analysis record BEFORE streaming starts
+    // ✅ CRITICAL: Create streaming analysis record BEFORE starting stream
     // This acts as a distributed lock to prevent duplicate analysis generation
-    // If another request comes in (e.g., page refresh), it will see this pending record
+    // If another request comes in, it will see this streaming record and return 202
     const analysisId = ulid();
+
+    console.warn('[analyzeRoundHandler] 🆕 Creating new streaming analysis', {
+      analysisId,
+      threadId,
+      roundNumber: roundNum,
+      participantCount: body.participantMessageIds.length,
+    });
+
     await db.insert(tables.chatModeratorAnalysis).values({
       id: analysisId,
       threadId,
@@ -3241,6 +3291,8 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
       participantMessageIds: body.participantMessageIds,
       createdAt: new Date(),
     });
+
+    console.warn('[analyzeRoundHandler] ✅ Streaming analysis created, starting AI stream', analysisId);
 
     // ✅ AI SDK streamObject() Pattern: Stream structured JSON as it's generated
     // Real streaming approach - sends partial objects as they arrive
@@ -3274,17 +3326,27 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
 
         // ✅ Stream callbacks for server-side logging and database persistence
         onFinish: async ({ object: finalObject, error, usage: _usage }) => {
+          console.warn('[analyzeRoundHandler] 🏁 onFinish called', {
+            analysisId,
+            hasError: !!error,
+            hasObject: !!finalObject,
+            errorMessage: error instanceof Error ? error.message : error ? String(error) : undefined,
+          });
+
           // ✅ FAILED: Update status to failed with error message
           if (error) {
             try {
+              console.warn('[analyzeRoundHandler] ❌ Marking analysis as failed', analysisId);
               await db.update(tables.chatModeratorAnalysis)
                 .set({
                   status: 'failed',
                   errorMessage: error instanceof Error ? error.message : String(error),
                 })
                 .where(eq(tables.chatModeratorAnalysis.id, analysisId));
-            } catch {
-              // Suppress error - analysis status update is best effort
+              console.warn('[analyzeRoundHandler] ✅ Analysis marked as failed', analysisId);
+            } catch (updateError) {
+              // ✅ CRITICAL FIX: Log the error instead of suppressing
+              console.error('[analyzeRoundHandler] ❌ Failed to update analysis status to failed:', updateError);
             }
             return;
           }
@@ -3292,14 +3354,17 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
           // ✅ NO OBJECT: Mark as failed
           if (!finalObject) {
             try {
+              console.warn('[analyzeRoundHandler] ❌ No object generated, marking as failed', analysisId);
               await db.update(tables.chatModeratorAnalysis)
                 .set({
                   status: 'failed',
                   errorMessage: 'Analysis completed but no object was generated',
                 })
                 .where(eq(tables.chatModeratorAnalysis.id, analysisId));
-            } catch {
-              // Suppress error - analysis status update is best effort
+              console.warn('[analyzeRoundHandler] ✅ Analysis marked as failed (no object)', analysisId);
+            } catch (updateError) {
+              // ✅ CRITICAL FIX: Log the error instead of suppressing
+              console.error('[analyzeRoundHandler] ❌ Failed to update analysis status to failed (no object):', updateError);
             }
             return;
           }
@@ -3314,20 +3379,24 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
 
           if (!hasValidStructure) {
             try {
+              console.warn('[analyzeRoundHandler] ❌ Invalid structure, marking as failed', analysisId);
               await db.update(tables.chatModeratorAnalysis)
                 .set({
                   status: 'failed',
                   errorMessage: 'Analysis generated but structure is invalid',
                 })
                 .where(eq(tables.chatModeratorAnalysis.id, analysisId));
-            } catch {
-              // Suppress error - analysis status update is best effort
+              console.warn('[analyzeRoundHandler] ✅ Analysis marked as failed (invalid structure)', analysisId);
+            } catch (updateError) {
+              // ✅ CRITICAL FIX: Log the error instead of suppressing
+              console.error('[analyzeRoundHandler] ❌ Failed to update analysis status (invalid structure):', updateError);
             }
             return;
           }
 
           // ✅ SUCCESS: Update existing record with analysis data and mark as completed
           try {
+            console.warn('[analyzeRoundHandler] ✅ Marking analysis as completed', analysisId);
             await db.update(tables.chatModeratorAnalysis)
               .set({
                 status: 'completed',
@@ -3340,8 +3409,14 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
                 completedAt: new Date(),
               })
               .where(eq(tables.chatModeratorAnalysis.id, analysisId));
-          } catch {
-            // Suppress error - analysis completion update is best effort
+            console.warn('[analyzeRoundHandler] 🎉 Analysis successfully completed', analysisId);
+          } catch (updateError) {
+            // ✅ CRITICAL FIX: Log the error instead of suppressing
+            console.error('[analyzeRoundHandler] ❌ CRITICAL: Failed to save completed analysis to database:', {
+              analysisId,
+              error: updateError,
+            });
+            // Analysis stays in "streaming" status - this is a critical failure!
           }
         },
       });
@@ -3352,6 +3427,25 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
       // Reference: https://sdk.vercel.ai/docs/ai-sdk-ui/object-generation
       return result.toTextStreamResponse();
     } catch (error) {
+      // ✅ CRITICAL FIX: Mark analysis as failed before throwing
+      // This prevents the analysis from being stuck in "streaming" status forever
+      console.error('[analyzeRoundHandler] ❌ Stream failed, marking analysis as failed', {
+        analysisId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+
+      try {
+        await db.update(tables.chatModeratorAnalysis)
+          .set({
+            status: 'failed',
+            errorMessage: error instanceof Error ? error.message : String(error),
+          })
+          .where(eq(tables.chatModeratorAnalysis.id, analysisId));
+        console.warn('[analyzeRoundHandler] ✅ Analysis marked as failed after stream error', analysisId);
+      } catch (updateError) {
+        console.error('[analyzeRoundHandler] ❌ Failed to update analysis status after stream error:', updateError);
+      }
+
       // Handle NoObjectGeneratedError specifically
       const { NoObjectGeneratedError } = await import('ai');
       if (NoObjectGeneratedError.isInstance(error)) {

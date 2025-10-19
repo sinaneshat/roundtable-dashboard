@@ -66,11 +66,11 @@ type BatchQuery = BatchItem<'sqlite'>;
  * Accepts both D1 and Better-SQLite3 with any schema type
  * Using Record<string, unknown> for schema flexibility as per Drizzle patterns
  */
-type BatchCapableDatabase<TSchema extends Record<string, unknown> = Record<string, unknown>> =
-  | DrizzleD1Database<TSchema>
-  | BetterSQLite3Database<TSchema>
-  | (DrizzleD1Database<TSchema> & { $client: unknown })
-  | (BetterSQLite3Database<TSchema> & { $client: unknown });
+type BatchCapableDatabase<TSchema extends Record<string, unknown> = Record<string, unknown>>
+  = | DrizzleD1Database<TSchema>
+    | BetterSQLite3Database<TSchema>
+    | (DrizzleD1Database<TSchema> & { $client: unknown })
+    | (BetterSQLite3Database<TSchema> & { $client: unknown });
 
 /**
  * Execute multiple Drizzle ORM queries atomically using D1's batch API

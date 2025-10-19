@@ -51,8 +51,8 @@ function calculatePeriodEnd(
 /**
  * Synced subscription state type (similar to Theo's STRIPE_SUB_CACHE)
  */
-export type SyncedSubscriptionState =
-  | {
+export type SyncedSubscriptionState
+  = | {
     status: 'active' | 'past_due' | 'unpaid' | 'canceled' | 'incomplete' | 'incomplete_expired' | 'trialing' | 'paused';
     subscriptionId: string;
     priceId: string;

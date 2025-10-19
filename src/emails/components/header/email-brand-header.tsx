@@ -50,7 +50,7 @@ export function EmailBrandHeader({
         <Column align="center">
           {showLogo && (
             <div style={{ marginBottom: children ? spacing[4] : '0' }}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
+              {/* eslint-disable-next-line next/no-img-element */}
               <img
                 src={logoSrc}
                 width={logoWidth}

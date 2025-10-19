@@ -17,8 +17,8 @@ import { chatGlass } from '@/lib/ui/glassmorphism';
 export default function ChatThreadLoading() {
   return (
     <div className="relative flex flex-1 flex-col min-h-0 h-full">
-      {/* Content - EXACT match to ChatThreadScreen.tsx:324 */}
-      <div className="w-full max-w-full sm:max-w-3xl lg:max-w-4xl mx-auto px-3 sm:px-4 md:px-6 lg:px-8 pt-20 pb-32 space-y-4">
+      {/* Content - EXACT match to ChatThreadScreen.tsx:700 */}
+      <div className="mx-auto max-w-3xl px-4 pt-20 pb-32 space-y-4">
         {/* User Message Skeleton - matches Message from="user" layout */}
         <div className="flex items-start gap-3 justify-end">
           <div className="flex flex-col gap-2 max-w-[80%]">
@@ -72,9 +72,9 @@ export default function ChatThreadLoading() {
         ))}
       </div>
 
-      {/* Chat Input - EXACT match using chatGlass.inputBox */}
-      <div className="sticky bottom-0 z-10 mt-auto">
-        <div className="w-full max-w-full sm:max-w-3xl lg:max-w-4xl mx-auto px-3 sm:px-4 md:px-6 lg:px-8 py-4">
+      {/* Chat Input - EXACT match to ChatThreadScreen.tsx:840 using chatGlass.inputBox */}
+      <div className="fixed bottom-0 left-0 right-0 z-20 pb-6 md:left-[var(--sidebar-width-icon)] md:pr-2 md:pb-8">
+        <div className="mx-auto max-w-3xl px-4">
           {/* Using chatGlass.inputBox from chat-input.tsx:87 */}
           <div className={cn(chatGlass.inputBox, 'rounded-lg shadow-2xl p-4')}>
             <Skeleton className="h-20 w-full bg-white/10" />

@@ -89,6 +89,8 @@ export type DefaultRole = typeof DEFAULT_ROLES[number];
 const PROVIDER_ICON_MAP: Record<string, string> = {
   // Only map providers we actually have icon files for
   // If a provider is not in this list, it automatically gets the OpenRouter fallback icon
+
+  // Major AI Providers
   'anthropic': 'anthropic.png',
   'openai': 'openai.png',
   'google': 'google.png',
@@ -99,9 +101,13 @@ const PROVIDER_ICON_MAP: Record<string, string> = {
   'cohere': 'cohere.png',
   'inflection': 'inflection.png',
   'ai21': 'ai21.png',
+
+  // Cloud Providers
   'amazon': 'aws.png',
   'aws': 'aws.png',
   'azure': 'azure.png',
+
+  // Chinese AI Providers
   'alibaba': 'alibaba.png',
   'baidu': 'baidu.png',
   'bytedance': 'bytedance.png',
@@ -118,6 +124,8 @@ const PROVIDER_ICON_MAP: Record<string, string> = {
   'minimax': 'minimax.png',
   'hunyuan': 'hunyuan.png',
   'kimi': 'kimi.png',
+
+  // Other AI Providers
   'perplexity': 'perplexity.png',
   'x-ai': 'xai.png',
   'xai': 'xai.png',
@@ -127,6 +135,15 @@ const PROVIDER_ICON_MAP: Record<string, string> = {
   'groq': 'groq.png',
   'replicate': 'replicate.png',
   'together': 'together.png',
+  'togetherai': 'together.png',
+
+  // Enterprise/Developer AI
+  'databricks': 'databricks.png',
+  'ibm': 'ibm.png',
+  'stabilityai': 'stabilityai.png',
+  'stability': 'stabilityai.png',
+  'stability-ai': 'stabilityai.png',
+  'huggingface': 'huggingface.png',
 
   // Model name aliases (for backward compatibility)
   'claude': 'anthropic.png',

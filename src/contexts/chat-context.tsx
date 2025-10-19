@@ -48,7 +48,7 @@ type ChatContextValue = {
   initializeThread: (
     thread: ChatThread,
     participants: ChatParticipant[],
-    initialMessages?: UIMessage[]
+    initialMessages?: UIMessage[],
   ) => void;
   clearThread: () => void;
   updateParticipants: (participants: ChatParticipant[]) => void; // ✅ Update participants (local only, persisted on next message)
@@ -58,6 +58,8 @@ type ChatContextValue = {
   setOnStreamComplete: (callback: (() => void) | undefined) => void;
   onRoundComplete?: () => void;
   setOnRoundComplete: (callback: (() => void) | undefined) => void;
+  onRetry?: (roundNumber: number) => void;
+  setOnRetry: (callback: ((roundNumber: number) => void) | undefined) => void;
 };
 
 const ChatContext = createContext<ChatContextValue | undefined>(undefined);
@@ -71,6 +73,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   // Completion callbacks (set by components for custom behavior)
   const [onStreamComplete, setOnStreamComplete] = useState<(() => void) | undefined>(undefined);
   const [onRoundComplete, setOnRoundComplete] = useState<(() => void) | undefined>(undefined);
+  const [onRetry, setOnRetry] = useState<((roundNumber: number) => void) | undefined>(undefined);
 
   // Single chat instance shared across all screens
   // This is the core AI SDK v5 pattern - one hook instance for entire app
@@ -90,11 +93,21 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         onRoundComplete();
       }
     },
+    onRetry: (roundNumber) => {
+      // Call the retry callback if set (for invalidating old analyses)
+      if (onRetry) {
+        onRetry(roundNumber);
+      }
+    },
   });
 
   /**
    * Initialize or update thread context
    * Called when navigating to a thread or creating a new one
+   *
+   * ✅ CRITICAL FIX: Must use setMessages from chat to sync AI SDK state
+   * Setting initialMessages state alone doesn't update the AI SDK's internal message state
+   * when navigating between screens. We need to explicitly call setMessages.
    */
   const initializeThread = useCallback(
     (
@@ -102,17 +115,26 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       newParticipants: ChatParticipant[],
       newMessages?: UIMessage[],
     ) => {
+      console.warn('[ChatContext] 🔄 Initializing thread', {
+        threadId: newThread.id,
+        participantCount: newParticipants.length,
+        messageCount: newMessages?.length || 0,
+      });
+
       setThread(newThread);
       setParticipants(newParticipants);
 
-      // Convert and set initial messages if provided
+      // ✅ CRITICAL FIX: Update AI SDK's message state using setMessages
+      // This ensures retry() and other functions have access to the correct messages
       if (newMessages) {
         setInitialMessages(newMessages);
+        chat.setMessages(newMessages); // ✅ Sync AI SDK state immediately
       } else {
         setInitialMessages([]);
+        chat.setMessages([]); // ✅ Clear AI SDK state
       }
     },
-    [],
+    [chat],
   );
 
   /**
@@ -125,6 +147,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     setInitialMessages([]);
     setOnStreamComplete(undefined);
     setOnRoundComplete(undefined);
+    setOnRetry(undefined);
   }, []);
 
   /**
@@ -133,6 +156,20 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
    */
   const updateParticipants = useCallback((newParticipants: ChatParticipant[]) => {
     setParticipants(newParticipants);
+  }, []);
+
+  // ✅ Wrap setters to handle function state correctly
+  // React treats function arguments as state updaters, so we need to wrap them
+  const wrappedSetOnStreamComplete = useCallback((callback: (() => void) | undefined) => {
+    setOnStreamComplete(() => callback);
+  }, []);
+
+  const wrappedSetOnRoundComplete = useCallback((callback: (() => void) | undefined) => {
+    setOnRoundComplete(() => callback);
+  }, []);
+
+  const wrappedSetOnRetry = useCallback((callback: ((roundNumber: number) => void) | undefined) => {
+    setOnRetry(() => callback);
   }, []);
 
   const value = useMemo(
@@ -144,13 +181,13 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       clearThread,
       updateParticipants,
       onStreamComplete,
-      setOnStreamComplete: (callback: (() => void) | undefined) =>
-        setOnStreamComplete(() => callback),
+      setOnStreamComplete: wrappedSetOnStreamComplete,
       onRoundComplete,
-      setOnRoundComplete: (callback: (() => void) | undefined) =>
-        setOnRoundComplete(() => callback),
+      setOnRoundComplete: wrappedSetOnRoundComplete,
+      onRetry,
+      setOnRetry: wrappedSetOnRetry,
     }),
-    [thread, participants, chat, initializeThread, clearThread, updateParticipants, onStreamComplete, onRoundComplete],
+    [thread, participants, chat, initializeThread, clearThread, updateParticipants, onStreamComplete, onRoundComplete, onRetry, wrappedSetOnStreamComplete, wrappedSetOnRoundComplete, wrappedSetOnRetry],
   );
 
   return <ChatContext value={value}>{children}</ChatContext>;

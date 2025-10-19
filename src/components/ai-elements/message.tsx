@@ -49,8 +49,8 @@ const messageContentVariants = cva(
   },
 );
 
-export type MessageContentProps = HTMLAttributes<HTMLDivElement> &
-  VariantProps<typeof messageContentVariants>;
+export type MessageContentProps = HTMLAttributes<HTMLDivElement>
+  & VariantProps<typeof messageContentVariants>;
 
 export function MessageContent({
   children,

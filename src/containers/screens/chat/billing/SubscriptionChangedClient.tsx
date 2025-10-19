@@ -15,6 +15,39 @@ import { useCurrentSubscriptionQuery, useSubscriptionsQuery } from '@/hooks/quer
 import { useUsageStatsQuery } from '@/hooks/queries/usage';
 
 /**
+ * Change Badge Component
+ * Shows upgrade/downgrade/change badge with appropriate styling
+ */
+function ChangeBadge({ changeType, t }: {
+  changeType: 'upgrade' | 'downgrade' | 'change';
+  t: ReturnType<typeof useTranslations>;
+}) {
+  if (changeType === 'upgrade') {
+    return (
+      <Badge className="bg-green-500/10 text-green-600 hover:bg-green-500/20 border-green-500/20">
+        <ArrowUp className="mr-1 size-3" />
+        {t('billing.subscriptionChanged.upgrade')}
+      </Badge>
+    );
+  }
+
+  if (changeType === 'downgrade') {
+    return (
+      <Badge className="bg-orange-500/10 text-orange-600 hover:bg-orange-500/20 border-orange-500/20">
+        <ArrowDown className="mr-1 size-3" />
+        {t('billing.subscriptionChanged.downgrade')}
+      </Badge>
+    );
+  }
+
+  return (
+    <Badge variant="outline">
+      {t('billing.subscriptionChanged.change')}
+    </Badge>
+  );
+}
+
+/**
  * Subscription Changed Client Component
  *
  * This component displays a success page after a user upgrades or downgrades their subscription.
@@ -167,26 +200,6 @@ export function SubscriptionChangedClient() {
     ? new Date(displaySubscription.currentPeriodEnd).toLocaleDateString()
     : null;
 
-  const ChangeBadge = () => {
-    if (isUpgrade) {
-      return (
-        <Badge className="bg-green-500/10 text-green-600 hover:bg-green-500/20 border-green-500/20">
-          <ArrowUp className="mr-1 size-3" />
-          {t('billing.subscriptionChanged.upgrade')}
-        </Badge>
-      );
-    }
-    if (isDowngrade) {
-      return (
-        <Badge className="bg-blue-500/10 text-blue-600 hover:bg-blue-500/20 border-blue-500/20">
-          <ArrowDown className="mr-1 size-3" />
-          {t('billing.subscriptionChanged.downgrade')}
-        </Badge>
-      );
-    }
-    return null;
-  };
-
   return (
     <div className="flex min-h-screen w-full flex-col items-center justify-start px-4 pt-16 md:pt-20">
       <StaggerContainer
@@ -207,7 +220,7 @@ export function SubscriptionChangedClient() {
             <h1 className="text-2xl font-bold tracking-tight md:text-3xl">
               {t('billing.subscriptionChanged.title')}
             </h1>
-            <ChangeBadge />
+            {changeType && <ChangeBadge changeType={changeType} t={t} />}
           </div>
           <p className="text-sm text-muted-foreground md:text-base">
             {isUpgrade

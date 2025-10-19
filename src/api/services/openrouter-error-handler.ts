@@ -2,7 +2,25 @@
  * OpenRouter Error Handler Service
  *
  * ✅ AI SDK v5 COMPLIANT: Uses APICallError and proper error type checking
+ * ✅ OPENROUTER API COMPLIANT: Based on official error specification
  * ✅ ZOD-FIRST: All types imported from route schemas (single source of truth)
+ *
+ * Official OpenRouter Error Documentation:
+ * https://openrouter.ai/docs/api-reference/errors
+ *
+ * OpenRouter Error Response Format:
+ * {
+ *   error: {
+ *     code: number;        // HTTP status code (400, 401, 402, 403, 408, 429, 502, 503)
+ *     message: string;     // Error description
+ *     metadata?: {
+ *       provider_name?: string;  // Provider that encountered error
+ *       raw?: string;            // Raw error from provider
+ *       reasons?: string[];      // Moderation reasons (if 403)
+ *       flagged_input?: string;  // Flagged text (if 403)
+ *     }
+ *   }
+ * }
  *
  * Following AI SDK error handling best practices:
  * https://ai-sdk.dev/docs/ai-sdk-core/error-handling
@@ -12,17 +30,19 @@ import { APICallError } from 'ai';
 
 /**
  * OpenRouter error types for classification
+ * Based on HTTP status codes from official documentation
  */
-export type OpenRouterErrorType =
-  | 'rate_limit'
-  | 'model_unavailable'
-  | 'invalid_request'
-  | 'authentication'
-  | 'model_error'
-  | 'timeout'
-  | 'network'
-  | 'empty_response'
-  | 'unknown';
+export type OpenRouterErrorType
+  = | 'rate_limit' // 429: Rate limited
+    | 'model_unavailable' // 502/503: Model down or no provider available
+    | 'invalid_request' // 400: Bad request, invalid params, CORS
+    | 'authentication' // 401: Invalid credentials, expired OAuth
+    | 'insufficient_credits' // 402: No credits available
+    | 'moderation' // 403: Input flagged by moderation
+    | 'timeout' // 408: Request timeout
+    | 'network' // Network errors, connection issues
+    | 'empty_response' // Model returned no content
+    | 'unknown'; // Unclassified errors
 
 /**
  * Classified error with type metadata
@@ -39,6 +59,7 @@ export type ClassifiedError = {
 
 /**
  * Error type metadata for classification and handling
+ * Based on OpenRouter official error codes
  *
  * ⚠️ CLARIFICATION: This is metadata ONLY - not retry configuration
  * Actual retry count is controlled by AI_RETRY_CONFIG.maxAttempts = 10 in @/api/routes/chat/schema
@@ -51,54 +72,70 @@ const ERROR_TYPE_METADATA: Record<OpenRouterErrorType, {
   shouldRetry: boolean;
   isTransient: boolean;
 }> = {
+  // 429: Rate limited - transient, retry with backoff
   rate_limit: {
     maxRetries: 3,
     baseDelayMs: 2000,
     shouldRetry: true,
     isTransient: true,
   },
+  // 502/503: Model unavailable or down - transient, retry
   model_unavailable: {
     maxRetries: 2,
     baseDelayMs: 3000,
     shouldRetry: true,
     isTransient: true,
   },
+  // 400: Bad request - permanent, don't retry
   invalid_request: {
     maxRetries: 0,
     baseDelayMs: 0,
     shouldRetry: false,
     isTransient: false,
   },
+  // 401: Authentication failed - permanent, don't retry
   authentication: {
     maxRetries: 0,
     baseDelayMs: 0,
     shouldRetry: false,
     isTransient: false,
   },
+  // 402: Insufficient credits - permanent, don't retry
+  insufficient_credits: {
+    maxRetries: 0,
+    baseDelayMs: 0,
+    shouldRetry: false,
+    isTransient: false,
+  },
+  // 403: Moderation flagged - permanent, don't retry
+  moderation: {
+    maxRetries: 0,
+    baseDelayMs: 0,
+    shouldRetry: false,
+    isTransient: false,
+  },
+  // 408: Timeout - transient, retry
   timeout: {
     maxRetries: 2,
     baseDelayMs: 1000,
     shouldRetry: true,
     isTransient: true,
   },
+  // Network errors - transient, retry
   network: {
     maxRetries: 3,
     baseDelayMs: 1000,
     shouldRetry: true,
     isTransient: true,
   },
+  // Empty response - transient, retry once
   empty_response: {
     maxRetries: 1,
     baseDelayMs: 1000,
     shouldRetry: true,
     isTransient: true,
   },
-  model_error: {
-    maxRetries: 0,
-    baseDelayMs: 0,
-    shouldRetry: false,
-    isTransient: false,
-  },
+  // Unknown errors - cautiously retry
   unknown: {
     maxRetries: 1,
     baseDelayMs: 2000,
@@ -108,103 +145,152 @@ const ERROR_TYPE_METADATA: Record<OpenRouterErrorType, {
 };
 
 /**
- * User-friendly error messages for each error type
+ * OpenRouter error response structure (official specification)
+ * https://openrouter.ai/docs/api-reference/errors
+ *
+ * Note: This type is for documentation purposes only (not actively used in code)
  */
-const ERROR_MESSAGES: Record<OpenRouterErrorType, string> = {
-  rate_limit: 'This model is currently experiencing high demand. Retrying...',
-  model_unavailable: 'This model is temporarily unavailable. Retrying with a different server...',
-  invalid_request: 'Unable to process request for this model. Please check your input.',
-  authentication: 'Authentication error with AI provider. Please contact support.',
-  timeout: 'Request timed out. Retrying...',
-  network: 'Network connection issue. Retrying...',
-  empty_response: 'Model generated no response. Retrying...',
-  model_error: 'This model encountered an error processing your request. This may be due to content filters or input length.',
-  unknown: 'An unexpected error occurred. Retrying...',
+export type _OpenRouterErrorResponse = {
+  error: {
+    code: number; // HTTP status code
+    message: string; // Error description
+    metadata?: {
+      provider_name?: string; // Provider that encountered error
+      raw?: string; // Raw error from provider
+      reasons?: string[]; // Moderation reasons (if 403)
+      flagged_input?: string; // Flagged text (if 403)
+    };
+  };
 };
 
 /**
- * Extract error details from OpenRouter/AI provider response body
+ * Extract error details from OpenRouter response body
+ * Based on official OpenRouter error specification
  *
- * OpenRouter error format hierarchy (prioritize most detailed):
- * 1. error.metadata.raw - Actual upstream provider message (MOST DETAILED)
- * 2. error.message - OpenRouter's wrapper message
- * 3. message - Fallback top-level message
+ * Priority:
+ * 1. error.metadata.raw - Actual upstream provider error (MOST DETAILED)
+ * 2. error.message - OpenRouter's error message
+ * 3. error.code - HTTP status code for classification
  */
 export function extractErrorDetails(responseBody: unknown): {
-  providerMessage: string | null;
-  providerCode: string | null;
+  message: string | null;
+  code: number | null;
+  providerName: string | null;
+  providerRaw: string | null;
+  moderationReasons: string[] | null;
+  flaggedInput: string | null;
 } {
   try {
     if (!responseBody || typeof responseBody !== 'object') {
-      return { providerMessage: null, providerCode: null };
+      return {
+        message: null,
+        code: null,
+        providerName: null,
+        providerRaw: null,
+        moderationReasons: null,
+        flaggedInput: null,
+      };
     }
 
     const body = responseBody as Record<string, unknown>;
 
-    // OpenRouter error format: { error: { message: string, code?: string, metadata?: { raw: string } } }
+    // OpenRouter official format: { error: { code, message, metadata } }
     if (body.error && typeof body.error === 'object') {
       const errorObj = body.error as Record<string, unknown>;
 
-      // ✅ PRIORITY 1: Check metadata.raw for upstream provider's actual message
-      // This contains the REAL error from the model provider (e.g., "deepseek/deepseek-r1:free is temporarily rate-limited upstream...")
+      const message = typeof errorObj.message === 'string' ? errorObj.message : null;
+      const code = typeof errorObj.code === 'number' ? errorObj.code : null;
+
+      // Extract metadata if present
+      let providerName: string | null = null;
+      let providerRaw: string | null = null;
+      let moderationReasons: string[] | null = null;
+      let flaggedInput: string | null = null;
+
       if (errorObj.metadata && typeof errorObj.metadata === 'object') {
         const metadata = errorObj.metadata as Record<string, unknown>;
-        if (typeof metadata.raw === 'string' && metadata.raw.trim()) {
-          return {
-            providerMessage: metadata.raw,
-            providerCode: typeof errorObj.code === 'string' ? errorObj.code : null,
-          };
+
+        // Provider error details
+        if (typeof metadata.provider_name === 'string') {
+          providerName = metadata.provider_name;
+        }
+        if (typeof metadata.raw === 'string') {
+          providerRaw = metadata.raw;
+        }
+
+        // Moderation error details (403)
+        if (Array.isArray(metadata.reasons)) {
+          moderationReasons = metadata.reasons.filter(r => typeof r === 'string') as string[];
+        }
+        if (typeof metadata.flagged_input === 'string') {
+          flaggedInput = metadata.flagged_input;
         }
       }
 
-      // ✅ PRIORITY 2: Fall back to error.message (usually generic like "Provider returned error")
-      if (typeof errorObj.message === 'string' && errorObj.message.trim()) {
-        return {
-          providerMessage: errorObj.message,
-          providerCode: typeof errorObj.code === 'string' ? errorObj.code : null,
-        };
-      }
-
       return {
-        providerMessage: null,
-        providerCode: typeof errorObj.code === 'string' ? errorObj.code : null,
+        message,
+        code,
+        providerName,
+        providerRaw,
+        moderationReasons,
+        flaggedInput,
       };
     }
 
-    // Alternative format: { message: string, code?: string }
-    if (body.message) {
-      return {
-        providerMessage: typeof body.message === 'string' ? body.message : null,
-        providerCode: typeof body.code === 'string' ? body.code : null,
-      };
-    }
+    // Fallback: Try to extract message and code from top level
+    const message = typeof body.message === 'string' ? body.message : null;
+    const code = typeof body.code === 'number' ? body.code : null;
 
-    return { providerMessage: null, providerCode: null };
+    return {
+      message,
+      code,
+      providerName: null,
+      providerRaw: null,
+      moderationReasons: null,
+      flaggedInput: null,
+    };
   } catch {
-    return { providerMessage: null, providerCode: null };
+    return {
+      message: null,
+      code: null,
+      providerName: null,
+      providerRaw: null,
+      moderationReasons: null,
+      flaggedInput: null,
+    };
   }
 }
 
 /**
- * ✅ AI SDK v5 COMPLIANT: Classify error using APICallError
+ * ✅ AI SDK v5 COMPLIANT + OPENROUTER API COMPLIANT
+ * Classify error using APICallError and OpenRouter error specification
  *
- * Following AI SDK error handling patterns:
- * - Uses APICallError.isInstance() for type checking
- * - Extracts statusCode for accurate classification
- * - Parses responseBody for provider-specific error messages
- * - Falls back to error.message for non-API errors
+ * Classification strategy:
+ * 1. Check for AI SDK retry wrapper errors (extract underlying error)
+ * 2. Use HTTP status code ONLY for classification (NO string matching)
+ * 3. Extract raw provider message from metadata.raw
+ * 4. Use error.message as fallback
  *
- * @see https://ai-sdk.dev/docs/reference/ai-sdk-errors/ai-api-call-error
+ * OpenRouter HTTP Status Codes (official):
+ * - 400: Bad Request (invalid params, CORS)
+ * - 401: Invalid credentials
+ * - 402: Insufficient credits
+ * - 403: Moderation flagged
+ * - 408: Request timeout
+ * - 429: Rate limited
+ * - 502: Model down or invalid response
+ * - 503: No available provider
+ *
+ * @see https://sdk.vercel.ai/docs/reference/ai-sdk-errors/ai-api-call-error
+ * @see https://openrouter.ai/docs/api-reference/errors
  */
 export function classifyOpenRouterError(error: unknown): ClassifiedError {
-  // ✅ STEP 0: Check for AI SDK retry wrapper errors
+  // ✅ STEP 1: Check for AI SDK retry wrapper errors
   // AI SDK wraps errors like: "Failed after 3 attempts. Last error: <actual error>"
   // The ACTUAL error with all details is in error.lastError or error.errors[last]
   if (error instanceof Error) {
     const retryMatch = error.message.match(/Failed after \d+ attempts\. Last error: (.+)/);
     if (retryMatch) {
-      const actualErrorMessage = retryMatch[1];
-
       // ✅ CRITICAL: Extract the actual APICallError from the retry wrapper
       // AI SDK stores the last error in error.lastError or error.errors array
       const errorObj = error as Error & {
@@ -233,138 +319,154 @@ export function classifyOpenRouterError(error: unknown): ClassifiedError {
       }
 
       // If no underlying error found, create one with the extracted message
-      // This should rarely happen - it means AI SDK changed their error structure
-      const extractedError = new Error(actualErrorMessage);
+      const extractedError = new Error(retryMatch[1]);
       return classifyOpenRouterError(extractedError);
     }
   }
 
-  // ✅ STEP 1: Check if this is an AI SDK APICallError
+  // ✅ STEP 2: Check if this is an AI SDK APICallError with OpenRouter response
   if (APICallError.isInstance(error)) {
     const { statusCode, responseBody, url } = error;
 
-    // Extract detailed error message from response body
-    const { providerMessage, providerCode } = extractErrorDetails(responseBody);
+    // Extract OpenRouter error details from response body
+    const errorDetails = extractErrorDetails(responseBody);
+
+    // Determine the message to show user (prioritize provider raw error)
+    const displayMessage = errorDetails.providerRaw
+      || errorDetails.message
+      || `HTTP ${statusCode}`;
 
     // Build detailed technical message for logging
-    const technicalParts: string[] = [
-      `HTTP ${statusCode}`,
-      `URL: ${url}`,
-    ];
+    const technicalParts: string[] = [`HTTP ${statusCode}`, `URL: ${url}`];
 
-    if (providerCode) {
-      technicalParts.push(`Code: ${providerCode}`);
+    if (errorDetails.code) {
+      technicalParts.push(`Code: ${errorDetails.code}`);
     }
-
-    if (providerMessage) {
-      technicalParts.push(`Provider: ${providerMessage}`);
-    } else {
-      // Include raw response body for debugging if no structured message
-      technicalParts.push(`Body: ${JSON.stringify(responseBody)}`);
+    if (errorDetails.providerName) {
+      technicalParts.push(`Provider: ${errorDetails.providerName}`);
+    }
+    if (errorDetails.providerRaw) {
+      technicalParts.push(`Raw: ${errorDetails.providerRaw}`);
+    }
+    if (errorDetails.moderationReasons && errorDetails.moderationReasons.length > 0) {
+      technicalParts.push(`Moderation: ${errorDetails.moderationReasons.join(', ')}`);
+    }
+    if (errorDetails.flaggedInput) {
+      technicalParts.push(`Flagged: ${errorDetails.flaggedInput}`);
     }
 
     const technicalMessage = technicalParts.join(' | ');
 
-    // ✅ STEP 2: Classify based on HTTP status code (most reliable)
+    // ✅ STEP 3: Classify based on HTTP status code ONLY (official OpenRouter codes)
+    // NO string matching - rely solely on documented HTTP status codes
     switch (statusCode) {
-      case 429: {
-        // Rate limit - ALWAYS use provider message if available for max detail
-        // Provider message contains specific info like "deepseek/deepseek-r1:free is temporarily rate-limited upstream..."
-        const userMessage = providerMessage || ERROR_MESSAGES.rate_limit;
-
-        return {
-          type: 'rate_limit',
-          message: userMessage,
-          technicalMessage,
-          ...ERROR_TYPE_METADATA.rate_limit,
-        };
-      }
-
-      case 503: {
-        // Service unavailable / model unavailable
-        const userMessage = providerMessage || ERROR_MESSAGES.model_unavailable;
-        return {
-          type: 'model_unavailable',
-          message: userMessage,
-          technicalMessage,
-          ...ERROR_TYPE_METADATA.model_unavailable,
-        };
-      }
-
       case 400: {
-        // Bad request - show provider's specific error
-        const userMessage = providerMessage || ERROR_MESSAGES.invalid_request;
+        // Bad Request: invalid params, CORS, etc.
         return {
           type: 'invalid_request',
-          message: userMessage,
+          message: displayMessage,
           technicalMessage,
           ...ERROR_TYPE_METADATA.invalid_request,
         };
       }
 
-      case 401:
-      case 403: {
-        // Authentication error
-        const userMessage = providerMessage || ERROR_MESSAGES.authentication;
+      case 401: {
+        // Invalid credentials, expired OAuth
         return {
           type: 'authentication',
-          message: userMessage,
+          message: displayMessage,
           technicalMessage,
           ...ERROR_TYPE_METADATA.authentication,
         };
       }
 
+      case 402: {
+        // Insufficient credits
+        return {
+          type: 'insufficient_credits',
+          message: displayMessage,
+          technicalMessage,
+          ...ERROR_TYPE_METADATA.insufficient_credits,
+        };
+      }
+
+      case 403: {
+        // Moderation flagged
+        return {
+          type: 'moderation',
+          message: displayMessage,
+          technicalMessage,
+          ...ERROR_TYPE_METADATA.moderation,
+        };
+      }
+
+      case 404: {
+        // Not found - treat as invalid request
+        // (e.g., "No endpoints found matching your data policy")
+        return {
+          type: 'invalid_request',
+          message: displayMessage,
+          technicalMessage,
+          ...ERROR_TYPE_METADATA.invalid_request,
+        };
+      }
+
+      case 408: {
+        // Request timeout
+        return {
+          type: 'timeout',
+          message: displayMessage,
+          technicalMessage,
+          ...ERROR_TYPE_METADATA.timeout,
+        };
+      }
+
+      case 429: {
+        // Rate limited
+        return {
+          type: 'rate_limit',
+          message: displayMessage,
+          technicalMessage,
+          ...ERROR_TYPE_METADATA.rate_limit,
+        };
+      }
+
       case 500:
-      case 502:
-      case 504: {
-        // Server errors
-        const userMessage = providerMessage || 'The AI service encountered a server error. Retrying...';
+      case 502: {
+        // Model down or invalid response
         return {
           type: 'model_unavailable',
-          message: userMessage,
+          message: displayMessage,
           technicalMessage,
           ...ERROR_TYPE_METADATA.model_unavailable,
         };
       }
 
+      case 503: {
+        // No available provider
+        return {
+          type: 'model_unavailable',
+          message: displayMessage,
+          technicalMessage,
+          ...ERROR_TYPE_METADATA.model_unavailable,
+        };
+      }
+
+      case 504: {
+        // Gateway timeout
+        return {
+          type: 'timeout',
+          message: displayMessage,
+          technicalMessage,
+          ...ERROR_TYPE_METADATA.timeout,
+        };
+      }
+
       default: {
-        // ✅ STEP 3: Check provider message for specific error types
-        if (providerMessage) {
-          const messageLower = providerMessage.toLowerCase();
-
-          // Check for context length / token limit errors
-          if (messageLower.includes('context') || messageLower.includes('token') || messageLower.includes('length')) {
-            return {
-              type: 'model_error',
-              message: `Context length exceeded: ${providerMessage}`,
-              technicalMessage,
-              ...ERROR_TYPE_METADATA.model_error,
-            };
-          }
-
-          // Check for safety/content filter errors
-          if (messageLower.includes('safety') || messageLower.includes('filter') || messageLower.includes('policy')) {
-            return {
-              type: 'model_error',
-              message: `Content filtered: ${providerMessage}`,
-              technicalMessage,
-              ...ERROR_TYPE_METADATA.model_error,
-            };
-          }
-
-          // Use provider message directly for unknown status codes
-          return {
-            type: 'unknown',
-            message: providerMessage,
-            technicalMessage,
-            ...ERROR_TYPE_METADATA.unknown,
-          };
-        }
-
-        // No provider message, use generic error
+        // Unknown HTTP status code - return raw message
         return {
           type: 'unknown',
-          message: ERROR_MESSAGES.unknown,
+          message: displayMessage,
           technicalMessage,
           ...ERROR_TYPE_METADATA.unknown,
         };
@@ -372,62 +474,23 @@ export function classifyOpenRouterError(error: unknown): ClassifiedError {
     }
   }
 
-  // ✅ STEP 4: Handle non-API errors (network, timeout, etc.)
+  // ✅ STEP 4: Handle non-API errors (network, timeout, AbortError)
+  // These don't have HTTP status codes, so we check error type/name
   const errorMessage = error instanceof Error ? error.message : String(error);
-  const errorLower = errorMessage.toLowerCase();
 
-  // Check error message for specific patterns
   if (error instanceof Error && error.name === 'AbortError') {
     return {
       type: 'timeout',
-      message: ERROR_MESSAGES.timeout,
+      message: errorMessage,
       technicalMessage: errorMessage,
       ...ERROR_TYPE_METADATA.timeout,
     };
   }
 
-  if (errorLower.includes('timeout') || errorLower.includes('timed out')) {
-    return {
-      type: 'timeout',
-      message: ERROR_MESSAGES.timeout,
-      technicalMessage: errorMessage,
-      ...ERROR_TYPE_METADATA.timeout,
-    };
-  }
-
-  if (errorLower.includes('network') || errorLower.includes('connection') || errorLower.includes('econnrefused') || errorLower.includes('enotfound') || errorLower.includes('fetch')) {
-    return {
-      type: 'network',
-      message: ERROR_MESSAGES.network,
-      technicalMessage: errorMessage,
-      ...ERROR_TYPE_METADATA.network,
-    };
-  }
-
-  // ✅ USER FIX: Check for "high demand" / rate limit messages
-  // Even if not HTTP 429, treat as rate limit for proper retry handling
-  if (errorLower.includes('high demand') || errorLower.includes('rate limit') || errorLower.includes('too many requests')) {
-    return {
-      type: 'rate_limit',
-      message: ERROR_MESSAGES.rate_limit,
-      technicalMessage: errorMessage,
-      ...ERROR_TYPE_METADATA.rate_limit,
-    };
-  }
-
-  if (errorLower.includes('empty') || errorLower.includes('no content') || errorLower.includes('no response')) {
-    return {
-      type: 'empty_response',
-      message: ERROR_MESSAGES.empty_response,
-      technicalMessage: errorMessage,
-      ...ERROR_TYPE_METADATA.empty_response,
-    };
-  }
-
-  // Default to unknown error with the actual error message
+  // For other errors, return unknown with raw message
   return {
     type: 'unknown',
-    message: errorMessage || ERROR_MESSAGES.unknown,
+    message: errorMessage || 'Unknown error',
     technicalMessage: errorMessage,
     ...ERROR_TYPE_METADATA.unknown,
   };
@@ -489,13 +552,25 @@ export function formatErrorForDatabase(error: unknown, modelId: string): {
     errorDetailsObj.url = url;
     errorDetailsObj.isRetryable = isRetryable;
 
-    // Extract provider-specific error details
-    const { providerMessage, providerCode } = extractErrorDetails(responseBody);
-    if (providerMessage) {
-      errorDetailsObj.providerMessage = providerMessage;
+    // Extract OpenRouter-specific error details
+    const openRouterDetails = extractErrorDetails(responseBody);
+    if (openRouterDetails.message) {
+      errorDetailsObj.openRouterMessage = openRouterDetails.message;
     }
-    if (providerCode) {
-      errorDetailsObj.providerCode = providerCode;
+    if (openRouterDetails.code) {
+      errorDetailsObj.openRouterCode = openRouterDetails.code;
+    }
+    if (openRouterDetails.providerName) {
+      errorDetailsObj.providerName = openRouterDetails.providerName;
+    }
+    if (openRouterDetails.providerRaw) {
+      errorDetailsObj.providerRaw = openRouterDetails.providerRaw;
+    }
+    if (openRouterDetails.moderationReasons) {
+      errorDetailsObj.moderationReasons = openRouterDetails.moderationReasons;
+    }
+    if (openRouterDetails.flaggedInput) {
+      errorDetailsObj.flaggedInput = openRouterDetails.flaggedInput;
     }
 
     // Include raw response body for debugging (truncate if too large)

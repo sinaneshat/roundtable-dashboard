@@ -27,8 +27,8 @@ import type { DrizzleD1Database } from 'drizzle-orm/d1';
  * // db.batch() -> ✅ Correct!
  * ```
  */
-export type D1BatchDatabase<TSchema extends Record<string, unknown> = Record<string, never>> =
-  Omit<DrizzleD1Database<TSchema>, 'transaction'> & {
+export type D1BatchDatabase<TSchema extends Record<string, unknown> = Record<string, never>>
+  = Omit<DrizzleD1Database<TSchema>, 'transaction'> & {
     /**
      * @deprecated Transactions are not supported with Cloudflare D1.
      * Use db.batch() instead for atomic operations.
@@ -78,11 +78,11 @@ export function warnIfTransactionExists<T extends Record<string, unknown>>(
  *
  * These types document what operations can be batched together.
  */
-export type BatchableOperation<TSchema extends Record<string, unknown> = Record<string, never>> =
-  | ReturnType<DrizzleD1Database<TSchema>['insert']>
-  | ReturnType<DrizzleD1Database<TSchema>['update']>
-  | ReturnType<DrizzleD1Database<TSchema>['delete']>
-  | ReturnType<DrizzleD1Database<TSchema>['select']>;
+export type BatchableOperation<TSchema extends Record<string, unknown> = Record<string, never>>
+  = | ReturnType<DrizzleD1Database<TSchema>['insert']>
+    | ReturnType<DrizzleD1Database<TSchema>['update']>
+    | ReturnType<DrizzleD1Database<TSchema>['delete']>
+    | ReturnType<DrizzleD1Database<TSchema>['select']>;
 
 /**
  * Documentation for developers

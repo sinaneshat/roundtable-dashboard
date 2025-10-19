@@ -5,7 +5,7 @@ import { Bot, Check, GripVertical, Lock, Plus, Trash2 } from 'lucide-react';
 import { motion, Reorder, useDragControls } from 'motion/react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 
 // ✅ ZOD-INFERRED TYPE: Import from schema (no hardcoded interfaces)
 // EnhancedModelResponse includes tier access fields (is_accessible_to_user, required_tier, required_tier_name)
@@ -721,6 +721,9 @@ export function ChatParticipantsList({
   const [open, setOpen] = useState(false);
   const [modelSearchQuery, setModelSearchQuery] = useState('');
 
+  // ✅ Counter for generating unique participant IDs (avoids Date.now() which is impure)
+  const participantIdCounterRef = useRef(0);
+
   // Only fetch when popover is open (not on page load)
   const { data: customRolesData } = useCustomRolesQuery(open && !isStreaming);
   const { data: modelsData } = useModelsQuery(); // Fetch ALL models with tier groups
@@ -823,8 +826,10 @@ export function ChatParticipantsList({
       onParticipantsChange(reindexed);
     } else {
       // Select - add to participants without role by default
+      // ✅ Generate unique ID for new participant using counter ref (avoids impure Date.now())
+      participantIdCounterRef.current += 1;
       const newParticipant: ParticipantConfig = {
-        id: `participant-${Date.now()}`,
+        id: `participant-${participantIdCounterRef.current}`,
         modelId,
         role: '', // No role by default
         order: participants.length,

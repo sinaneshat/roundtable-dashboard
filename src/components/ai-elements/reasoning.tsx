@@ -63,11 +63,15 @@ export function Reasoning({
 }: ReasoningProps) {
   const [open, setOpen] = useState(defaultOpen);
 
-  // Automatically open when streaming begins
+  // ✅ Automatically open when streaming begins
+  // This is a valid use case for setState in useEffect - we're synchronizing UI state
+  // with the streaming state prop. The component should auto-expand when AI starts reasoning.
+
   useEffect(() => {
-    if (isStreaming) {
+    if (isStreaming && !open) {
       setOpen(true);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Intentional: only trigger on isStreaming change
   }, [isStreaming]);
 
   const contextValue = useMemo(

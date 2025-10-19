@@ -457,6 +457,20 @@ export const StreamChatRequestSchema = z.object({
     ],
   }),
 
+  /**
+   * ✅ REGENERATE ROUND: Replace an existing round instead of creating a new one (OPTIONAL)
+   * When provided, backend will:
+   * 1. Delete all messages from the specified round
+   * 2. Delete analysis for that round (if exists)
+   * 3. Create new messages with the same round number
+   *
+   * This enables true "retry/regenerate" functionality where old responses are replaced.
+   */
+  regenerateRound: z.number().int().positive().optional().openapi({
+    description: 'Round number to regenerate (replace). If provided, deletes old messages and analysis for that round first.',
+    example: 2,
+  }),
+
 }).openapi('StreamChatRequest');
 
 const MessagesListPayloadSchema = z.object({
