@@ -29,8 +29,8 @@ export function HeaderScrollButton({ ariaLabel = 'Scroll to bottom' }: { ariaLab
 
   // Check scroll position and update visibility
   const checkScrollPosition = useCallback(() => {
-    // Find the scroll container (SidebarInset for page-level scrolling)
-    const scrollContainer = document.querySelector('[data-slot="sidebar-inset"]') as HTMLElement;
+    // Find the scroll container (chat-scroll-container for page-level scrolling)
+    const scrollContainer = document.getElementById('chat-scroll-container');
 
     if (!scrollContainer) {
       isVisible.onFalse();
@@ -47,7 +47,7 @@ export function HeaderScrollButton({ ariaLabel = 'Scroll to bottom' }: { ariaLab
 
   // Scroll to bottom handler
   const scrollToBottom = useCallback(() => {
-    const scrollContainer = document.querySelector('[data-slot="sidebar-inset"]') as HTMLElement;
+    const scrollContainer = document.getElementById('chat-scroll-container');
 
     if (!scrollContainer)
       return;
@@ -60,7 +60,7 @@ export function HeaderScrollButton({ ariaLabel = 'Scroll to bottom' }: { ariaLab
 
   // Set up scroll listener
   useEffect(() => {
-    const scrollContainer = document.querySelector('[data-slot="sidebar-inset"]') as HTMLElement;
+    const scrollContainer = document.getElementById('chat-scroll-container');
 
     if (!scrollContainer)
       return;

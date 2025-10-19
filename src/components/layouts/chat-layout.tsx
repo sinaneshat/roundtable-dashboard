@@ -129,8 +129,10 @@ export default async function ChatLayout({ children, modal }: ChatLayoutProps) {
             <NavigationHeader />
 
             {/* ✅ OPTIMIZATION: Suspense boundary for main content streaming */}
-            {/* Content fills viewport below fixed header - no overflow restrictions */}
-            <div className="absolute inset-0 top-16">
+            {/* Content fills viewport below fixed header - THIS IS THE PRIMARY SCROLL CONTAINER */}
+            {/* Page-level scrolling happens here, not in inner divs */}
+            {/* top-16 (64px) for header clearance, no bottom offset - content padding handles spacing */}
+            <div id="chat-scroll-container" className="absolute inset-0 top-16 overflow-y-auto overflow-x-hidden">
               <Suspense fallback={<ContentLoadingFallback />}>
                 {children}
               </Suspense>

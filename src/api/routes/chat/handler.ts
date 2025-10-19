@@ -2555,10 +2555,148 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
 
         const text = validationResult.text;
         const usage = validationResult.usage;
+        const finishReason = validationResult.finishReason;
+
+        // ✅ DEBUG LOGGING: Capture full response structure for empty responses
+        // This helps identify if content is in alternative fields (parts, content blocks, etc.)
+        const isEmptyText = !text || text.trim().length === 0;
+        if (isEmptyText && totalAttempts === 1) {
+          // eslint-disable-next-line ts/no-explicit-any -- Debugging: accessing undocumented AI SDK fields
+          const debugResult = validationResult as any;
+          console.error('[streamChatHandler] 🔍 EMPTY RESPONSE DEBUG - Full structure', {
+            threadId,
+            participantIndex,
+            modelId: participant.modelId,
+            provider: participant.modelId.split('/')[0],
+            attempt: totalAttempts,
+            // Response structure analysis
+            hasText: !!validationResult.text,
+            textValue: validationResult.text,
+            textType: typeof validationResult.text,
+            // Check for alternative response fields
+            hasResponse: !!validationResult.response,
+            responseKeys: validationResult.response ? Object.keys(validationResult.response) : [],
+            hasResponseMessages: !!debugResult.response?.messages,
+            responseMessagesLength: debugResult.response?.messages?.length || 0,
+            // Check experimental/provider metadata
+            hasExperimental: !!debugResult.experimental_providerMetadata,
+            experimentalKeys: debugResult.experimental_providerMetadata
+              ? Object.keys(debugResult.experimental_providerMetadata)
+              : [],
+            // Token information
+            finishReason,
+            inputTokens: usage.inputTokens || 0,
+            outputTokens: usage.outputTokens || 0,
+            totalTokens: usage.totalTokens || 0,
+            // Full result preview (truncated to avoid massive logs)
+            topLevelKeys: Object.keys(validationResult),
+            fullResultPreview: JSON.stringify(validationResult, null, 2).substring(0, 2000),
+          });
+        }
+
+        // ✅ SAFETY FILTER DETECTION: Detect when provider blocks output
+        // Pattern: finishReason='stop' + inputTokens>0 + outputTokens=0 + empty text
+        // This indicates content was blocked by safety filters (Google, OpenAI, etc.)
+        const inputTokens = usage.inputTokens || 0;
+        const outputTokens = usage.outputTokens || 0;
+        const isSafetyFilter = finishReason === 'stop'
+          && inputTokens > 0
+          && outputTokens === 0
+          && (!text || text.trim().length === 0);
+
+        if (isSafetyFilter) {
+          // ✅ PERMANENT ERROR: Safety filters won't change on retry - fail immediately
+          const safetyError = new Error(
+            `Safety filter blocked response. Provider: ${participant.modelId.split('/')[0]}, `
+            + `Model: ${participant.modelId}, Input: ${inputTokens} tokens, Output: 0 tokens, `
+            + `Status: ${finishReason}. This content may violate the provider's safety guidelines. `
+            + `Retrying will not help - the filter will block it every time.`,
+          );
+
+          console.error('[streamChatHandler] 🚫 SAFETY FILTER DETECTED - Not retrying', {
+            threadId,
+            participantIndex,
+            modelId: participant.modelId,
+            provider: participant.modelId.split('/')[0],
+            attempt: totalAttempts,
+            finishReason,
+            inputTokens,
+            outputTokens,
+            textLength: 0,
+            isSafetyFilter: true,
+          });
+
+          throw safetyError; // Exit retry loop immediately
+        }
+
+        // ✅ ALTERNATIVE CONTENT EXTRACTION: Check for content in other fields
+        // Some models (e.g., Amazon Nova) might return content in alternative fields
+        // eslint-disable-next-line ts/no-explicit-any -- Accessing undocumented AI SDK fields for fallback extraction
+        const resultWithExtras = validationResult as any;
+        let finalText = text || '';
+
+        // If text is empty, check alternative content sources
+        if (!finalText || finalText.trim().length === 0) {
+          // Check 1: reasoning/reasoningText (for models like o1, DeepSeek R1)
+          const reasoningText = resultWithExtras.reasoningText;
+          if (reasoningText && typeof reasoningText === 'string' && reasoningText.trim().length > 0) {
+            finalText = reasoningText.trim();
+            console.warn('[streamChatHandler] 🔄 Extracted content from reasoningText field', {
+              threadId,
+              participantIndex,
+              modelId: participant.modelId,
+              reasoningTextLength: finalText.length,
+            });
+          }
+
+          // Check 2: content array (ContentPart[])
+          if ((!finalText || finalText.trim().length === 0) && Array.isArray(resultWithExtras.content)) {
+            const contentParts = resultWithExtras.content;
+            const textParts: string[] = [];
+
+            for (const part of contentParts) {
+              if (part.type === 'text' && part.text) {
+                textParts.push(part.text);
+              } else if (part.type === 'reasoning' && part.text) {
+                textParts.push(part.text);
+              }
+            }
+
+            if (textParts.length > 0) {
+              finalText = textParts.join('\n\n').trim();
+              console.warn('[streamChatHandler] 🔄 Extracted content from content parts array', {
+                threadId,
+                participantIndex,
+                modelId: participant.modelId,
+                partsCount: textParts.length,
+                extractedTextLength: finalText.length,
+              });
+            }
+          }
+
+          // Check 3: response.body (provider-specific format)
+          if ((!finalText || finalText.trim().length === 0) && resultWithExtras.response?.body) {
+            const body = resultWithExtras.response.body;
+
+            // Try to extract text from common provider response formats
+            if (body.choices && Array.isArray(body.choices) && body.choices.length > 0) {
+              const choice = body.choices[0];
+              if (choice.message?.content) {
+                finalText = choice.message.content.trim();
+                console.warn('[streamChatHandler] 🔄 Extracted content from response.body.choices', {
+                  threadId,
+                  participantIndex,
+                  modelId: participant.modelId,
+                  extractedTextLength: finalText.length,
+                });
+              }
+            }
+          }
+        }
 
         // ✅ CONTENT VALIDATION: Same comprehensive checks as before
         const MIN_CONTENT_LENGTH = 50;
-        const trimmedText = (text || '').trim();
+        const trimmedText = finalText.trim();
         const combinedLength = trimmedText.length;
 
         // ✅ DETECT REFUSAL PATTERNS
@@ -2582,11 +2720,17 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
           participantIndex,
           modelId: participant.modelId,
           attempt: totalAttempts,
+          finishReason,
+          inputTokens,
+          outputTokens,
           totalTokens: usage.totalTokens,
-          textLength: text?.length || 0,
+          originalTextLength: text?.length || 0,
+          finalTextLength: finalText?.length || 0,
+          extractedFromAlternativeSource: finalText !== text && !!finalText,
           trimmedLength: combinedLength,
           hasInsufficientContent,
           containsRefusal,
+          isSafetyFilter: false,
           minRequired: MIN_CONTENT_LENGTH,
         });
 
@@ -2597,8 +2741,9 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
             participantIndex,
             modelId: participant.modelId,
             attempt: totalAttempts,
-            textLength: text.length,
+            textLength: finalText.length,
             totalTokens: usage.totalTokens,
+            extractedFromAlternativeSource: finalText !== text && !!finalText,
           });
 
           validatedSuccessfully = true;
@@ -2616,7 +2761,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
               : 'no_tokens';
 
         // Create error for this attempt
-        lastError = new Error(`${retryReason}: ${text.substring(0, 100)}`);
+        lastError = new Error(`${retryReason}: ${finalText.substring(0, 100)}`);
 
         console.warn('[streamChatHandler] ⚠️ Insufficient response - will retry', {
           threadId,
@@ -2678,25 +2823,41 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
 
     // ✅ CHECK IF VALIDATION FAILED: If so, throw error to frontend
     if (!validatedSuccessfully) {
+      const errorMessage = lastError?.message || 'Unknown error';
+      const isSafetyFilterError = errorMessage.includes('Safety filter blocked response');
+
       console.error('[streamChatHandler] ❌ All retries failed - returning error', {
         threadId,
         participantIndex,
         modelId: participant.modelId,
+        provider: participant.modelId.split('/')[0],
         totalAttempts,
-        errorMessage: lastError?.message || 'Unknown error',
+        errorMessage,
+        isSafetyFilterError,
       });
 
+      // ✅ CATEGORIZE ERROR: Provide specific category and user-friendly guidance
+      const errorCategory = isSafetyFilterError
+        ? 'safety_filter'
+        : totalAttempts >= MAX_TOTAL_RETRIES
+          ? 'max_retries_exceeded'
+          : 'validation_failed';
+
       const errorMetadata = {
-        errorCategory: 'max_retries_exceeded',
-        errorMessage: `Model ${participant.modelId} failed after ${totalAttempts} attempts: ${lastError?.message || 'All attempts returned insufficient content'}`,
-        rawErrorMessage: lastError?.message || 'All attempts returned insufficient content',
+        errorCategory,
+        // ✅ DETAILED ERROR MESSAGE: Include provider, model, and exact failure reason
+        errorMessage: isSafetyFilterError
+          ? `[${participant.modelId.split('/')[0]} Safety Filter] ${participant.modelId}: ${errorMessage}`
+          : `Model ${participant.modelId} failed after ${totalAttempts} attempts: ${errorMessage}`,
+        rawErrorMessage: errorMessage,
         errorType: lastError?.name || 'ValidationError',
         participantId: participant.id,
         participantIndex,
         modelId: participant.modelId,
+        provider: participant.modelId.split('/')[0],
         retryCount: totalAttempts,
         maxRetries: MAX_TOTAL_RETRIES,
-        isTransient: false,
+        isTransient: !isSafetyFilterError, // Safety filters are permanent
       };
 
       throw new Error(JSON.stringify(errorMetadata));

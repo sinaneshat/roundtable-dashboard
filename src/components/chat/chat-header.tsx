@@ -168,6 +168,25 @@ function NavigationHeaderComponent({
 // Export memoized version to prevent unnecessary re-renders
 export const NavigationHeader = React.memo(NavigationHeaderComponent);
 
+// Minimal Header - for overview/introduction pages (no breadcrumbs, just sidebar toggle)
+function MinimalHeaderComponent({ className }: { className?: string } = {}) {
+  return (
+    <header
+      className={cn(
+        'absolute top-0 left-0 right-0 z-50 flex h-16 shrink-0 items-center',
+        'border-b border-border/40 backdrop-blur-xl bg-background/60 supports-[backdrop-filter]:bg-background/60',
+        className,
+      )}
+    >
+      <div className="flex items-center gap-2 px-4 md:px-6 lg:px-8 h-16">
+        <SidebarTrigger className="-ms-1" />
+      </div>
+    </header>
+  );
+}
+
+export const MinimalHeader = React.memo(MinimalHeaderComponent);
+
 // Page Header - replaces page-header.tsx
 type PageHeaderProps = {
   title: string;

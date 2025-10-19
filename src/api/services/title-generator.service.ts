@@ -17,141 +17,187 @@ import { getDbAsync } from '@/db';
 import * as tables from '@/db/schema';
 
 import { initializeOpenRouter, openRouterService } from './openrouter.service';
-import { openRouterModelsService } from './openrouter-models.service';
 import { generateUniqueSlug } from './slug-generator.service';
 
 /**
- * Get the best model for title generation
- * ✅ FULLY DYNAMIC: Selects fastest available model from OpenRouter API
- * Prioritizes speed over cost for low-latency title generation
- * No hard-coded model preferences
+ * Get the model for title generation
+ * ✅ FIXED MODEL: Uses Google Gemini 2.5 Flash for reliability
+ * - Very fast response times (< 1 second)
+ * - Cheap (cost-effective for high-volume operations)
+ * - Smart enough for title generation
+ * - Highly reliable and available
  */
-async function getTitleGenerationModel(): Promise<string> {
-  // ✅ DYNAMIC MODEL SELECTION: Get fastest available model for title generation
-  // Title generation is latency-sensitive, so we prioritize speed over cost
-  const fastestModel = await openRouterModelsService.getFastestAvailableModel();
-
-  if (!fastestModel) {
-    throw new Error('No models available for title generation');
-  }
-
-  return fastestModel.id;
+function getTitleGenerationModel(): string {
+  // ✅ RELIABLE MODEL: Google Gemini 2.5 Flash
+  // Verified model ID from OpenRouter API (2025-10-19)
+  // This model is:
+  // - Fast: Optimized for low latency
+  // - Cheap: Cost-effective for high-volume operations
+  // - Smart: Capable of understanding context and generating concise titles
+  // - Available: High uptime and availability on OpenRouter
+  return 'google/gemini-2.5-flash';
 }
 
 /**
  * Generate title from first user message
- * ✅ FULLY DYNAMIC: Uses fastest available model from OpenRouter API for low-latency response
+ * ✅ FIXED MODEL: Uses Google Gemini Flash 1.5 8B for reliable, fast title generation
+ * ✅ RETRY LOGIC: Attempts up to 10 times before falling back
  */
 export async function generateTitleFromMessage(
   firstMessage: string,
   env: ApiEnv['Bindings'],
 ): Promise<string> {
-  try {
-    console.warn('[generateTitleFromMessage] 🎯 Starting title generation', {
-      messagePreview: firstMessage.substring(0, 100),
-      messageLength: firstMessage.length,
-    });
+  console.warn('[generateTitleFromMessage] 🎯 Starting title generation', {
+    messagePreview: firstMessage.substring(0, 100),
+    messageLength: firstMessage.length,
+  });
 
-    // Initialize OpenRouter with API key
-    initializeOpenRouter(env);
+  // Initialize OpenRouter with API key
+  initializeOpenRouter(env);
 
-    // ✅ DYNAMIC MODEL SELECTION: Get best model for title generation
-    const titleModel = await getTitleGenerationModel();
+  // ✅ FIXED MODEL: Get reliable model for title generation
+  const titleModel = getTitleGenerationModel();
 
-    console.warn('[generateTitleFromMessage] 🤖 Using model for title generation', {
-      modelId: titleModel,
-    });
+  console.warn('[generateTitleFromMessage] 🤖 Using model for title generation', {
+    modelId: titleModel,
+  });
 
-    // Using AI SDK v5 UIMessage format with consolidated config
-    const result = await openRouterService.generateText({
-      modelId: titleModel,
-      messages: [
-        {
-          id: 'msg-title-gen',
-          role: 'user',
-          parts: [
-            {
-              type: 'text',
-              text: firstMessage,
-            },
-          ],
-        },
-      ],
-      system: TITLE_GENERATION_CONFIG.systemPrompt,
-      temperature: TITLE_GENERATION_CONFIG.temperature,
-      maxTokens: TITLE_GENERATION_CONFIG.maxTokens,
-    });
+  // ✅ RETRY LOOP: Try up to 10 times before falling back
+  const MAX_ATTEMPTS = 10;
+  let lastError: Error | null = null;
 
-    console.warn('[generateTitleFromMessage] ✅ Raw title generated from model', {
-      rawTitle: result.text,
-      rawLength: result.text.length,
-    });
-
-    // Clean up the generated title
-    let title = result.text.trim();
-
-    // Remove quotes if AI added them
-    title = title.replace(/^["']|["']$/g, '');
-
-    // Enforce 5-word maximum constraint
-    const words = title.split(/\s+/);
-    if (words.length > 5) {
-      title = words.slice(0, 5).join(' ');
-      console.warn('[generateTitleFromMessage] ✂️ Truncated to 5 words', {
-        originalWords: words.length,
-        truncatedTitle: title,
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    try {
+      console.warn(attempt === 1
+        ? '[generateTitleFromMessage] 🚀 Attempting title generation'
+        : '[generateTitleFromMessage] 🔄 Retrying title generation', {
+        attempt,
+        maxAttempts: MAX_ATTEMPTS,
+        ...(lastError && { lastError: lastError.message }),
       });
-    }
 
-    // Limit to 50 characters max (5 words ~= 50 chars)
-    if (title.length > 50) {
-      title = title.substring(0, 50).trim();
-      console.warn('[generateTitleFromMessage] ✂️ Truncated to 50 characters', {
-        truncatedTitle: title,
+      // Using AI SDK v5 UIMessage format with consolidated config
+      const result = await openRouterService.generateText({
+        modelId: titleModel,
+        messages: [
+          {
+            id: 'msg-title-gen',
+            role: 'user',
+            parts: [
+              {
+                type: 'text',
+                text: firstMessage,
+              },
+            ],
+          },
+        ],
+        system: TITLE_GENERATION_CONFIG.systemPrompt,
+        temperature: TITLE_GENERATION_CONFIG.temperature,
+        maxTokens: TITLE_GENERATION_CONFIG.maxTokens,
       });
-    }
 
-    // ✅ FIX: If title is empty or very short, use first few words of message
-    // NO "New Chat" fallback - always ensure slug will be unique and change
-    if (title.length < 3) {
-      // Extract first 5 words from the user's message
-      const messageWords = firstMessage.trim().split(/\s+/).slice(0, 5).join(' ');
-      title = messageWords.length > 0 && messageWords.length <= 50
-        ? messageWords
-        : messageWords.substring(0, 50).trim() || 'Chat';
-
-      console.warn('[generateTitleFromMessage] ⚠️ Title too short, using message excerpt', {
-        shortTitle: title,
-        originalMessage: firstMessage.substring(0, 100),
-        extractedTitle: title,
+      console.warn('[generateTitleFromMessage] ✅ Raw title generated from model', {
+        rawTitle: result.text,
+        rawLength: result.text.length,
+        attempt,
       });
+
+      // Clean up the generated title
+      let title = result.text.trim();
+
+      // Remove quotes if AI added them
+      title = title.replace(/^["']|["']$/g, '');
+
+      // Enforce 5-word maximum constraint
+      const words = title.split(/\s+/);
+      if (words.length > 5) {
+        title = words.slice(0, 5).join(' ');
+        console.warn('[generateTitleFromMessage] ✂️ Truncated to 5 words', {
+          originalWords: words.length,
+          truncatedTitle: title,
+        });
+      }
+
+      // Limit to 50 characters max (5 words ~= 50 chars)
+      if (title.length > 50) {
+        title = title.substring(0, 50).trim();
+        console.warn('[generateTitleFromMessage] ✂️ Truncated to 50 characters', {
+          truncatedTitle: title,
+        });
+      }
+
+      // ✅ VALIDATE: Ensure title is meaningful (at least 3 characters)
+      if (title.length < 3) {
+        const validationError = new Error(`Generated title too short: "${title}" (${title.length} chars)`);
+        lastError = validationError;
+
+        console.warn('[generateTitleFromMessage] ⚠️ Generated title too short, retrying', {
+          shortTitle: title,
+          titleLength: title.length,
+          attempt,
+          remainingAttempts: MAX_ATTEMPTS - attempt,
+        });
+
+        // Retry if we haven't exhausted attempts
+        if (attempt < MAX_ATTEMPTS) {
+          await new Promise(resolve => setTimeout(resolve, 1000)); // 1 second delay
+          continue;
+        }
+
+        // Last attempt failed - fall through to fallback
+        throw validationError;
+      }
+
+      // ✅ SUCCESS: Return valid title
+      console.warn('[generateTitleFromMessage] 🎉 Final title generated', {
+        finalTitle: title,
+        finalLength: title.length,
+        wordCount: title.split(/\s+/).length,
+        attemptsNeeded: attempt,
+      });
+
+      return title;
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+
+      console.warn('[generateTitleFromMessage] ❌ Title generation attempt failed', {
+        attempt,
+        remainingAttempts: MAX_ATTEMPTS - attempt,
+        errorMessage: lastError.message,
+        errorType: lastError.name,
+      });
+
+      // If we've exhausted all attempts, break and use fallback
+      if (attempt >= MAX_ATTEMPTS) {
+        console.error('[generateTitleFromMessage] ❌ All retry attempts exhausted', {
+          totalAttempts: MAX_ATTEMPTS,
+          lastError: lastError.message,
+        });
+        break;
+      }
+
+      // Delay before next retry (1 second)
+      await new Promise(resolve => setTimeout(resolve, 1000));
     }
-
-    console.warn('[generateTitleFromMessage] 🎉 Final title generated', {
-      finalTitle: title,
-      finalLength: title.length,
-      wordCount: title.split(/\s+/).length,
-    });
-
-    return title;
-  } catch (error) {
-    console.error('[generateTitleFromMessage] ❌ Title generation failed, using fallback', {
-      error: error instanceof Error ? error.message : String(error),
-      stack: error instanceof Error ? error.stack : undefined,
-    });
-
-    // ✅ FIX: Fallback uses first 5 words of message - NO "New Chat"
-    // This ensures slug will always be unique and change
-    const words = firstMessage.trim().split(/\s+/).slice(0, 5).join(' ');
-    const fallbackTitle = words.length > 50 ? words.substring(0, 50).trim() : words || 'Chat';
-
-    console.warn('[generateTitleFromMessage] 📝 Using fallback title from message', {
-      fallbackTitle,
-      originalMessage: firstMessage.substring(0, 100),
-    });
-
-    return fallbackTitle;
   }
+
+  // ✅ FALLBACK: Only reached if ALL 10 attempts failed
+  console.error('[generateTitleFromMessage] ⚠️ Using fallback after all retries failed', {
+    totalAttempts: MAX_ATTEMPTS,
+    lastError: lastError?.message,
+    stack: lastError?.stack,
+  });
+
+  // Extract first 5 words from message as fallback
+  const words = firstMessage.trim().split(/\s+/).slice(0, 5).join(' ');
+  const fallbackTitle = words.length > 50 ? words.substring(0, 50).trim() : words || 'Chat';
+
+  console.warn('[generateTitleFromMessage] 📝 Using fallback title from message', {
+    fallbackTitle,
+    originalMessage: firstMessage.substring(0, 100),
+  });
+
+  return fallbackTitle;
 }
 
 /**

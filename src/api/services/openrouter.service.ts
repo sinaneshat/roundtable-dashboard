@@ -190,14 +190,22 @@ class OpenRouterService {
           totalTokens: result.usage.totalTokens ?? 0,
         },
       };
-    } catch {
+    } catch (error) {
+      // ✅ PRESERVE ACTUAL ERROR: Include original error message for debugging
+      const errorMessage = error instanceof Error ? error.message : String(error);
+
       const context: ErrorContext = {
         errorType: 'external_service',
         service: 'openrouter',
         operation: 'generate_text',
         resourceId: params.modelId,
       };
-      throw createError.internal('Failed to generate text from OpenRouter', context);
+
+      // Include actual error details in the thrown error
+      throw createError.internal(
+        `Failed to generate text from OpenRouter (${params.modelId}): ${errorMessage}`,
+        context,
+      );
     }
   }
 

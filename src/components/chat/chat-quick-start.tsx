@@ -5,7 +5,7 @@ import { useCallback, useMemo } from 'react';
 
 import type { SubscriptionTier } from '@/api/services/product-logic.service';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Card } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useModelsQuery } from '@/hooks/queries/models';
 import { useUsageStatsQuery } from '@/hooks/queries/usage';
 import type { ChatModeId } from '@/lib/config/chat-modes';
@@ -42,6 +42,7 @@ type ChatQuickStartProps = {
  *
  * Compact, mobile-friendly quick start suggestions
  * Filters suggestions based on user's subscription tier
+ * ✅ ENSURES UNIQUE PROVIDERS: Each card uses models from different providers
  */
 export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartProps) {
   // Get user's subscription tier
@@ -60,34 +61,71 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
     return allModels.filter(model => model.is_accessible_to_user ?? true);
   }, [allModels]);
 
-  // ✅ SELECT MODELS: Simply take first N accessible models (backend already filtered by tier)
-  const selectQuickStartModels = useCallback(
-    (count: number = 4): string[] => {
-      return accessibleModels.slice(0, count).map(m => m.id);
+  // ✅ GROUP MODELS BY PROVIDER: Essential for ensuring unique providers per card
+  const modelsByProvider = useMemo(() => {
+    const grouped = new Map<string, typeof accessibleModels>();
+
+    for (const model of accessibleModels) {
+      const provider = model.provider || model.id.split('/')[0] || 'unknown';
+
+      if (!grouped.has(provider)) {
+        grouped.set(provider, []);
+      }
+      grouped.get(provider)!.push(model);
+    }
+
+    return grouped;
+  }, [accessibleModels]);
+
+  // ✅ SELECT MODELS WITH UNIQUE PROVIDERS: Each model must be from a different provider
+  const selectUniqueProviderModels = useCallback(
+    (count: number): string[] => {
+      const selectedModels: string[] = [];
+      const usedProviders = new Set<string>();
+
+      // Get providers sorted by number of models (prefer providers with more options)
+      const providers = Array.from(modelsByProvider.entries())
+        .sort((a, b) => b[1].length - a[1].length)
+        .map(([provider]) => provider);
+
+      // Select one model from each provider until we have enough
+      for (const provider of providers) {
+        if (selectedModels.length >= count)
+          break;
+        if (usedProviders.has(provider))
+          continue;
+
+        const providerModels = modelsByProvider.get(provider);
+        if (!providerModels || providerModels.length === 0)
+          continue;
+
+        // Take the first (usually most popular) model from this provider
+        const model = providerModels[0];
+        if (model) {
+          selectedModels.push(model.id);
+          usedProviders.add(provider);
+        }
+      }
+
+      return selectedModels;
     },
-    [accessibleModels],
+    [modelsByProvider],
   );
 
   // Tier-based gray area questions - always returns exactly 3 suggestions
   // Designed to be morally ambiguous, thought-provoking, and accessible to each tier
-  // ✅ FULLY DYNAMIC: Models selected from OpenRouter API based on pricing tiers
+  // ✅ FULLY DYNAMIC: Models selected from OpenRouter API with UNIQUE PROVIDERS per card
   const suggestions: QuickStartSuggestion[] = useMemo(() => {
     // Return empty array while models are loading
-    if (modelsLoading || accessibleModels.length === 0) {
+    if (modelsLoading || accessibleModels.length === 0 || modelsByProvider.size === 0) {
       return [];
     }
 
-    // ✅ BACKEND FILTERING: Backend already filtered models by user's tier
-    // Just select first N models for each suggestion tier
-    const freeModels = selectQuickStartModels(2);
-    const starterModels = selectQuickStartModels(3);
-    const proModels = selectQuickStartModels(4);
-    const powerModels = selectQuickStartModels(6);
-
-    // Destructure models for use in suggestions
-    const [starterModel1, starterModel2, starterModel3] = starterModels;
-    const [proModel1, proModel2, proModel3, proModel4] = proModels;
-    const [powerModel1, powerModel2, powerModel3, powerModel4, powerModel5, powerModel6] = powerModels;
+    // ✅ UNIQUE PROVIDERS: Each suggestion uses models from different providers
+    const freeModels = selectUniqueProviderModels(2);
+    const starterModels = selectUniqueProviderModels(3);
+    const proModels = selectUniqueProviderModels(4);
+    const powerModels = selectUniqueProviderModels(6);
 
     const freeTierSuggestions: QuickStartSuggestion[] = freeModels.length >= 2
       ? [
@@ -114,14 +152,12 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
             prompt: 'Does hard work truly determine success, or is meritocracy just a comforting lie that masks systemic advantages and inherited privilege?',
             mode: 'debating',
             participants: [
-              { id: 'p1', modelId: freeModels[1] || '', role: 'Sociologist', order: 0, customRoleId: undefined },
-              { id: 'p2', modelId: freeModels[0] || '', role: 'Economist', order: 1, customRoleId: undefined },
+              { id: 'p1', modelId: freeModels[0] || '', role: 'Sociologist', order: 0, customRoleId: undefined },
+              { id: 'p2', modelId: freeModels[1] || '', role: 'Economist', order: 1, customRoleId: undefined },
             ],
           },
         ]
       : [];
-
-    // Starter tier models are now selected using the centralized service
 
     const starterTierSuggestions: QuickStartSuggestion[] = starterModels.length >= 3
       ? [
@@ -140,9 +176,9 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
             prompt: 'With cultured meat becoming viable, is traditional animal agriculture morally defensible? What about cultural traditions and livelihoods?',
             mode: 'analyzing',
             participants: [
-              { id: 'p1', modelId: starterModel2 || '', role: 'Animal Ethicist', order: 0, customRoleId: undefined },
-              { id: 'p2', modelId: starterModel1 || '', role: 'Agronomist', order: 1, customRoleId: undefined },
-              { id: 'p3', modelId: starterModel3 || '', role: 'Cultural Anthropologist', order: 2, customRoleId: undefined },
+              { id: 'p1', modelId: starterModels[1] || '', role: 'Animal Ethicist', order: 0, customRoleId: undefined },
+              { id: 'p2', modelId: starterModels[0] || '', role: 'Agronomist', order: 1, customRoleId: undefined },
+              { id: 'p3', modelId: starterModels[2] || '', role: 'Cultural Anthropologist', order: 2, customRoleId: undefined },
             ],
           },
           {
@@ -150,15 +186,13 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
             prompt: 'Nuclear power could solve climate change but carries catastrophic risks. Can we trust ourselves with this technology long-term?',
             mode: 'debating',
             participants: [
-              { id: 'p1', modelId: starterModel1 || '', role: 'Energy Policy Expert', order: 0, customRoleId: undefined },
-              { id: 'p2', modelId: starterModel2 || '', role: 'Nuclear Physicist', order: 1, customRoleId: undefined },
-              { id: 'p3', modelId: starterModel3 || '', role: 'Environmental Activist', order: 2, customRoleId: undefined },
+              { id: 'p1', modelId: starterModels[0] || '', role: 'Energy Policy Expert', order: 0, customRoleId: undefined },
+              { id: 'p2', modelId: starterModels[1] || '', role: 'Nuclear Physicist', order: 1, customRoleId: undefined },
+              { id: 'p3', modelId: starterModels[2] || '', role: 'Environmental Activist', order: 2, customRoleId: undefined },
             ],
           },
         ]
       : [];
-
-    // Pro tier models are now selected using the centralized service
 
     const proTierSuggestions: QuickStartSuggestion[] = proModels.length >= 3
       ? [
@@ -170,7 +204,7 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
               { id: 'p1', modelId: proModels[0] || '', role: 'Bioethicist', order: 0, customRoleId: undefined },
               { id: 'p2', modelId: proModels[1] || '', role: 'Geneticist', order: 1, customRoleId: undefined },
               { id: 'p3', modelId: proModels[2] || '', role: 'Disability Rights Advocate', order: 2, customRoleId: undefined },
-              ...(proModels.length > 3 ? [{ id: 'p4', modelId: proModels[3] || '', role: 'Medical Ethicist', order: 3, customRoleId: undefined }] : []),
+              ...(proModels[3] ? [{ id: 'p4', modelId: proModels[3] || '', role: 'Medical Ethicist', order: 3, customRoleId: undefined }] : []),
             ],
           },
           {
@@ -178,10 +212,10 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
             prompt: 'If we create AGI smarter than us, can we ensure it shares our values? Or is catastrophic misalignment inevitable?',
             mode: 'analyzing',
             participants: [
-              { id: 'p1', modelId: proModel1 || '', role: 'AI Safety Researcher', order: 0, customRoleId: undefined },
-              { id: 'p2', modelId: proModel2 || '', role: 'Machine Learning Engineer', order: 1, customRoleId: undefined },
-              { id: 'p3', modelId: proModel3 || '', role: 'Ethics Philosopher', order: 2, customRoleId: undefined },
-              ...(proModel4 ? [{ id: 'p4', modelId: proModel4 || '', role: 'Systems Architect', order: 3, customRoleId: undefined }] : []),
+              { id: 'p1', modelId: proModels[1] || '', role: 'AI Safety Researcher', order: 0, customRoleId: undefined },
+              { id: 'p2', modelId: proModels[0] || '', role: 'Machine Learning Engineer', order: 1, customRoleId: undefined },
+              { id: 'p3', modelId: proModels[2] || '', role: 'Ethics Philosopher', order: 2, customRoleId: undefined },
+              ...(proModels[3] ? [{ id: 'p4', modelId: proModels[3] || '', role: 'Systems Architect', order: 3, customRoleId: undefined }] : []),
             ],
           },
           {
@@ -189,15 +223,13 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
             prompt: 'Capitalism demands perpetual growth, but Earth has limits. Must we choose between prosperity and survival, or can we transcend this paradox?',
             mode: 'debating',
             participants: [
-              { id: 'p1', modelId: proModel2 || '', role: 'Ecological Economist', order: 0, customRoleId: undefined },
-              { id: 'p2', modelId: proModel1 || '', role: 'Free Market Theorist', order: 1, customRoleId: undefined },
-              { id: 'p3', modelId: proModel3 || '', role: 'Systems Thinker', order: 2, customRoleId: undefined },
+              { id: 'p1', modelId: proModels[2] || '', role: 'Ecological Economist', order: 0, customRoleId: undefined },
+              { id: 'p2', modelId: proModels[0] || '', role: 'Free Market Theorist', order: 1, customRoleId: undefined },
+              { id: 'p3', modelId: proModels[1] || '', role: 'Systems Thinker', order: 2, customRoleId: undefined },
             ],
           },
         ]
       : [];
-
-    // Power tier models are now selected using the centralized service
 
     const powerTierSuggestions: QuickStartSuggestion[] = powerModels.length >= 3
       ? [
@@ -206,12 +238,12 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
             prompt: 'Terraforming Mars could create a second home for humanity, but would we be destroying irreplaceable alien ecosystems before we even discover them?',
             mode: 'debating',
             participants: [
-              { id: 'p1', modelId: powerModel1 || '', role: 'Planetary Scientist', order: 0, customRoleId: undefined },
-              { id: 'p2', modelId: powerModel2 || '', role: 'Exobiologist', order: 1, customRoleId: undefined },
-              { id: 'p3', modelId: powerModel3 || '', role: 'Space Ethicist', order: 2, customRoleId: undefined },
-              ...(powerModel4 ? [{ id: 'p4', modelId: powerModel4 || '', role: 'Space Policy Expert', order: 3, customRoleId: undefined }] : []),
-              ...(powerModel5 ? [{ id: 'p5', modelId: powerModel5 || '', role: 'Astrogeologist', order: 4, customRoleId: undefined }] : []),
-              ...(powerModel6 ? [{ id: 'p6', modelId: powerModel6 || '', role: 'Astrobiologist', order: 5, customRoleId: undefined }] : []),
+              { id: 'p1', modelId: powerModels[0] || '', role: 'Planetary Scientist', order: 0, customRoleId: undefined },
+              { id: 'p2', modelId: powerModels[1] || '', role: 'Exobiologist', order: 1, customRoleId: undefined },
+              { id: 'p3', modelId: powerModels[2] || '', role: 'Space Ethicist', order: 2, customRoleId: undefined },
+              ...(powerModels[3] ? [{ id: 'p4', modelId: powerModels[3] || '', role: 'Space Policy Expert', order: 3, customRoleId: undefined }] : []),
+              ...(powerModels[4] ? [{ id: 'p5', modelId: powerModels[4] || '', role: 'Astrogeologist', order: 4, customRoleId: undefined }] : []),
+              ...(powerModels[5] ? [{ id: 'p6', modelId: powerModels[5] || '', role: 'Astrobiologist', order: 5, customRoleId: undefined }] : []),
             ],
           },
           {
@@ -219,12 +251,12 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
             prompt: 'Can moral truths exist in a purely materialist universe without divine authority? Or are ethics just evolutionary programming and social contracts?',
             mode: 'analyzing',
             participants: [
-              { id: 'p1', modelId: powerModel1 || '', role: 'Moral Philosopher', order: 0, customRoleId: undefined },
-              { id: 'p2', modelId: powerModel2 || '', role: 'Evolutionary Psychologist', order: 1, customRoleId: undefined },
-              { id: 'p3', modelId: powerModel3 || '', role: 'Theologian', order: 2, customRoleId: undefined },
-              ...(powerModel4 ? [{ id: 'p4', modelId: powerModel4 || '', role: 'Neuroscientist', order: 3, customRoleId: undefined }] : []),
-              ...(powerModel5 ? [{ id: 'p5', modelId: powerModel5 || '', role: 'Cognitive Scientist', order: 4, customRoleId: undefined }] : []),
-              ...(powerModel6 ? [{ id: 'p6', modelId: powerModel6 || '', role: 'Ethics Scholar', order: 5, customRoleId: undefined }] : []),
+              { id: 'p1', modelId: powerModels[1] || '', role: 'Moral Philosopher', order: 0, customRoleId: undefined },
+              { id: 'p2', modelId: powerModels[0] || '', role: 'Evolutionary Psychologist', order: 1, customRoleId: undefined },
+              { id: 'p3', modelId: powerModels[2] || '', role: 'Theologian', order: 2, customRoleId: undefined },
+              ...(powerModels[3] ? [{ id: 'p4', modelId: powerModels[3] || '', role: 'Neuroscientist', order: 3, customRoleId: undefined }] : []),
+              ...(powerModels[4] ? [{ id: 'p5', modelId: powerModels[4] || '', role: 'Cognitive Scientist', order: 4, customRoleId: undefined }] : []),
+              ...(powerModels[5] ? [{ id: 'p6', modelId: powerModels[5] || '', role: 'Ethics Scholar', order: 5, customRoleId: undefined }] : []),
             ],
           },
           {
@@ -232,12 +264,12 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
             prompt: 'If we develop sentient AI, do we have moral obligations to them? Could creating digital consciousness be the greatest crime or the greatest gift?',
             mode: 'debating',
             participants: [
-              { id: 'p1', modelId: powerModel1 || '', role: 'AI Consciousness Researcher', order: 0, customRoleId: undefined },
-              { id: 'p2', modelId: powerModel2 || '', role: 'Digital Rights Advocate', order: 1, customRoleId: undefined },
-              { id: 'p3', modelId: powerModel4 || powerModel1 || '', role: 'Bioethicist', order: 2, customRoleId: undefined },
-              ...(powerModel3 ? [{ id: 'p4', modelId: powerModel3 || '', role: 'Philosophy of Mind Expert', order: 3, customRoleId: undefined }] : []),
-              ...(powerModel5 ? [{ id: 'p5', modelId: powerModel5 || '', role: 'Computational Consciousness Expert', order: 4, customRoleId: undefined }] : []),
-              ...(powerModel6 ? [{ id: 'p6', modelId: powerModel6 || '', role: 'AI Ethics Researcher', order: 5, customRoleId: undefined }] : []),
+              { id: 'p1', modelId: powerModels[0] || '', role: 'AI Consciousness Researcher', order: 0, customRoleId: undefined },
+              { id: 'p2', modelId: powerModels[1] || '', role: 'Digital Rights Advocate', order: 1, customRoleId: undefined },
+              { id: 'p3', modelId: powerModels[2] || '', role: 'Bioethicist', order: 2, customRoleId: undefined },
+              ...(powerModels[3] ? [{ id: 'p4', modelId: powerModels[3] || '', role: 'Philosophy of Mind Expert', order: 3, customRoleId: undefined }] : []),
+              ...(powerModels[4] ? [{ id: 'p5', modelId: powerModels[4] || '', role: 'Computational Consciousness Expert', order: 4, customRoleId: undefined }] : []),
+              ...(powerModels[5] ? [{ id: 'p6', modelId: powerModels[5] || '', role: 'AI Ethics Researcher', order: 5, customRoleId: undefined }] : []),
             ],
           },
         ]
@@ -257,70 +289,81 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
       tierSuggestions = powerTierSuggestions;
     }
 
-    // Suggestions are already tier-appropriate, no filtering needed
     return tierSuggestions;
-  }, [userTier, modelsLoading, accessibleModels, selectQuickStartModels]);
+  }, [userTier, modelsLoading, accessibleModels, modelsByProvider.size, selectUniqueProviderModels]);
 
   return (
     <div className={cn('w-full relative z-20', className)}>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3 md:gap-4">
-        {suggestions.map((suggestion) => {
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+        {suggestions.map((suggestion, index) => {
           return (
             <motion.div
               key={suggestion.title}
-              initial={{ opacity: 0, y: 8 }}
+              initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{
-                duration: 0.3,
-                ease: [0.16, 1, 0.3, 1],
+                duration: 0.4,
+                delay: index * 0.1,
+                ease: [0.25, 0.46, 0.45, 0.94],
               }}
               className="flex min-w-0"
             >
               <Card
                 variant="glass"
-                className="cursor-pointer p-3 sm:p-4 hover:shadow-2xl transition-all group flex-1 flex flex-col min-w-0 gap-2 sm:gap-3 border-0"
+                className="cursor-pointer hover:shadow-2xl transition-shadow duration-300 group w-full focus-visible:ring-2 focus-visible:ring-white/50 focus-visible:outline-none"
                 onClick={() => onSuggestionClick(suggestion.prompt, suggestion.mode, suggestion.participants)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    onSuggestionClick(suggestion.prompt, suggestion.mode, suggestion.participants);
+                  }
+                }}
+                tabIndex={0}
+                role="button"
+                aria-label={suggestion.title}
               >
-                {/* Title - Show full question without truncation */}
-                <h3 className="font-semibold text-xs sm:text-sm text-white/90 drop-shadow-md leading-relaxed">
-                  {suggestion.title}
-                </h3>
+                <CardHeader>
+                  <CardTitle className="text-sm md:text-base text-white/90">
+                    {suggestion.title}
+                  </CardTitle>
+                </CardHeader>
 
-                {/* Model Participants - Compact inline display with icons */}
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  {suggestion.participants
-                    .sort((a, b) => a.order - b.order)
-                    .map((participant) => {
-                      // ✅ SINGLE SOURCE: Find model from backend API data
-                      const model = allModels.find(m => m.id === participant.modelId);
-                      if (!model)
-                        return null;
+                <CardContent>
+                  <div className="flex flex-col gap-2">
+                    {suggestion.participants
+                      .sort((a, b) => a.order - b.order)
+                      .map((participant) => {
+                        // ✅ SINGLE SOURCE: Find model from backend API data
+                        const model = allModels.find(m => m.id === participant.modelId);
+                        if (!model)
+                          return null;
 
-                      // ✅ SINGLE SOURCE: Use backend-computed accessibility
-                      const isAccessible = model.is_accessible_to_user ?? true;
-                      const provider = model.id.split('/')[0] || 'unknown';
+                        // ✅ SINGLE SOURCE: Use backend-computed accessibility
+                        const isAccessible = model.is_accessible_to_user ?? true;
+                        const provider = model.provider || model.id.split('/')[0] || 'unknown';
 
-                      return (
-                        <div
-                          key={participant.id}
-                          className={cn(
-                            'flex items-center gap-1 shrink-0',
-                            !isAccessible && 'opacity-50',
-                          )}
-                        >
-                          <Avatar className="size-4 ring-1 ring-white/10">
-                            <AvatarImage src={getProviderIcon(provider)} alt={model.name} />
-                            <AvatarFallback className="text-[8px]">
-                              {model.name.slice(0, 2).toUpperCase()}
-                            </AvatarFallback>
-                          </Avatar>
-                          <span className="text-[10px] sm:text-xs font-medium text-white/80">
-                            {model.name}
-                          </span>
-                        </div>
-                      );
-                    })}
-                </div>
+                        return (
+                          <div
+                            key={participant.id}
+                            className={cn(
+                              'flex items-center gap-2',
+                              !isAccessible && 'opacity-50',
+                            )}
+                          >
+                            <Avatar className="size-4">
+                              <AvatarImage src={getProviderIcon(provider)} alt={model.name} />
+                              <AvatarFallback className="text-[8px]">
+                                {model.name.slice(0, 2).toUpperCase()}
+                              </AvatarFallback>
+                            </Avatar>
+                            <span className="text-xs text-white/70">
+                              {model.name}
+                            </span>
+                          </div>
+                        );
+                      })}
+                  </div>
+                </CardContent>
               </Card>
             </motion.div>
           );

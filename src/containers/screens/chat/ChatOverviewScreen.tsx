@@ -7,12 +7,12 @@ import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
-import { Conversation, ConversationContent, ConversationScrollButton } from '@/components/ai-elements/conversation';
 import { ChatInput } from '@/components/chat/chat-input';
 import { ChatMessageList } from '@/components/chat/chat-message-list';
 import { ChatModeSelector } from '@/components/chat/chat-mode-selector';
 import { ChatParticipantsList } from '@/components/chat/chat-participants-list';
 import { ChatQuickStart } from '@/components/chat/chat-quick-start';
+import { ChatScrollButton } from '@/components/chat/chat-scroll-button';
 import { StreamingParticipantsLoader } from '@/components/chat/streaming-participants-loader';
 import { useThreadHeader } from '@/components/chat/thread-header-context';
 import { WavyBackground } from '@/components/ui/wavy-background';
@@ -20,6 +20,7 @@ import { BRAND } from '@/constants/brand';
 import { useSharedChatContext } from '@/contexts/chat-context';
 import { useCreateThreadMutation } from '@/hooks/mutations/chat-mutations';
 import { useModelsQuery } from '@/hooks/queries/models';
+import { useAutoScrollToBottom } from '@/hooks/use-auto-scroll-to-bottom';
 import { useSession } from '@/lib/auth/client';
 import type { ChatModeId } from '@/lib/config/chat-modes';
 import { getDefaultChatMode } from '@/lib/config/chat-modes';
@@ -261,9 +262,21 @@ export default function ChatOverviewScreen() {
     ],
   );
 
-  const handleSuggestionClick = useCallback((suggestion: string) => {
-    setInputValue(suggestion);
+  const handleSuggestionClick = useCallback((prompt: string, mode: ChatModeId, participants: ParticipantConfig[]) => {
+    setInputValue(prompt);
+    setSelectedMode(mode);
+    setSelectedParticipants(participants);
   }, []);
+
+  const handleRemoveParticipant = useCallback((participantId: string) => {
+    // Filter out the removed participant and reindex
+    const filtered = selectedParticipants.filter(p => p.id !== participantId);
+    // Prevent removing the last participant
+    if (filtered.length === 0)
+      return;
+    const reindexed = filtered.map((p, index) => ({ ...p, order: index }));
+    setSelectedParticipants(reindexed);
+  }, [selectedParticipants]);
 
   // ✅ CRITICAL: Send initial user message once context is initialized and ready
   // This effect waits for:
@@ -305,136 +318,135 @@ export default function ChatOverviewScreen() {
     setThreadActions(null);
   }, [setThreadTitle, setThreadActions]);
 
+  // ✅ AUTO-SCROLL: Scroll to bottom when new messages arrive (page-level scrolling)
+  useAutoScrollToBottom(messages.length, !showInitialUI);
+
   return (
     <div className="absolute inset-0">
-      {/* Background - fixed to full viewport */}
-      <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
+      {/* Background - fixed behind all content */}
+      <div className="fixed inset-0 -z-10 overflow-hidden">
         <WavyBackground containerClassName="h-full w-full" />
       </div>
 
-      {/* Conversation wrapper fills viewport - scrollbar at edge */}
-      <Conversation className="absolute inset-0 z-10">
-        <ConversationContent className="pb-[180px]">
-          <div className="mx-auto max-w-3xl px-4 sm:px-6 pt-6">
-            {/* ✅ ANIMATED: Initial UI (logo, suggestions) - fades out when streaming starts */}
-            <AnimatePresence>
-              {showInitialUI && (
+      {/* Main content - flows naturally with padding creating scroll boundaries */}
+      <div className="container max-w-3xl mx-auto px-4 sm:px-6 pt-16">
+        {/* ✅ ANIMATED: Initial UI (logo, suggestions) - fades out when streaming starts */}
+        <AnimatePresence>
+          {showInitialUI && (
+            <motion.div
+              key="initial-ui"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ duration: 0.3 }}
+              className="pb-8"
+            >
+              <div className="flex flex-col items-center gap-4 sm:gap-6 text-center">
+                {/* Brand Logo */}
                 <motion.div
-                  key="initial-ui"
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -20 }}
-                  transition={{ duration: 0.3 }}
-                  className="pb-8"
+                  className="relative h-20 w-20 xs:h-24 xs:w-24 sm:h-28 sm:w-28 md:h-32 md:w-32 lg:h-36 lg:w-36"
+                  initial={{ scale: 0.8, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  transition={{ delay: 0.1 }}
                 >
-                  <div className="flex flex-col items-center gap-4 sm:gap-6 text-center">
-                    {/* Brand Logo */}
-                    <motion.div
-                      className="relative h-20 w-20 xs:h-24 xs:w-24 sm:h-28 sm:w-28 md:h-32 md:w-32 lg:h-36 lg:w-36"
-                      initial={{ scale: 0.8, opacity: 0 }}
-                      animate={{ scale: 1, opacity: 1 }}
-                      transition={{ delay: 0.1 }}
-                    >
-                      <Image
-                        src={BRAND.logos.main}
-                        alt={BRAND.name}
-                        fill
-                        className="object-contain"
-                        priority
-                      />
-                    </motion.div>
-
-                    {/* Brand Title */}
-                    <motion.h1
-                      className="text-2xl xs:text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold text-gray-900 dark:text-white"
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      transition={{ delay: 0.2 }}
-                    >
-                      {BRAND.name}
-                    </motion.h1>
-
-                    {/* Brand Tagline */}
-                    <motion.p
-                      className="text-base xs:text-lg sm:text-xl md:text-2xl text-gray-600 dark:text-gray-300 max-w-2xl"
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      transition={{ delay: 0.3 }}
-                    >
-                      {BRAND.tagline}
-                    </motion.p>
-
-                    {/* Quick Start Suggestions */}
-                    <motion.div
-                      className="w-full mt-4 sm:mt-6 md:mt-8"
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      transition={{ delay: 0.4 }}
-                    >
-                      <ChatQuickStart onSuggestionClick={handleSuggestionClick} />
-                    </motion.div>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-            {/* ✅ ANIMATED: Streaming Messages - fades in when streaming starts */}
-            <AnimatePresence>
-              {!showInitialUI && currentThread && (
-                <motion.div
-                  key="streaming-ui"
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -20 }}
-                  transition={{ duration: 0.3 }}
-                >
-                  {/* ✅ REUSABLE: Same ChatMessageList component used in thread screen */}
-                  <ChatMessageList
-                    messages={messages}
-                    user={{
-                      name: sessionUser?.name || 'You',
-                      image: sessionUser?.image || null,
-                    }}
-                    participants={contextParticipants}
-                    isStreaming={isStreaming}
-                    currentParticipantIndex={currentParticipantIndex}
-                    currentStreamingParticipant={currentStreamingParticipant}
+                  <Image
+                    src={BRAND.logos.main}
+                    alt={BRAND.name}
+                    fill
+                    className="object-contain"
+                    priority
                   />
-
-                  {/* ✅ RETRY BUTTON: Show after error (same as thread screen) */}
-                  {streamError && !isStreaming && (
-                    <div className="flex justify-center mt-4">
-                      <button
-                        type="button"
-                        onClick={retryRound}
-                        className="px-4 py-2 text-sm font-medium rounded-lg bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 transition-colors"
-                      >
-                        {t('chat.errors.retry')}
-                      </button>
-                    </div>
-                  )}
-
-                  {/* ✅ STREAMING PARTICIPANTS LOADER: Show when streaming (same as thread screen) */}
-                  {isStreaming && selectedParticipants.length > 1 && (
-                    <StreamingParticipantsLoader
-                      className="mt-4"
-                      participants={selectedParticipants}
-                      currentParticipantIndex={currentParticipantIndex}
-                    />
-                  )}
                 </motion.div>
+
+                {/* Brand Title */}
+                <motion.h1
+                  className="text-2xl xs:text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold text-gray-900 dark:text-white"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.2 }}
+                >
+                  {BRAND.name}
+                </motion.h1>
+
+                {/* Brand Tagline */}
+                <motion.p
+                  className="text-base xs:text-lg sm:text-xl md:text-2xl text-gray-600 dark:text-gray-300 max-w-2xl"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.3 }}
+                >
+                  {BRAND.tagline}
+                </motion.p>
+
+                {/* Quick Start Suggestions */}
+                <motion.div
+                  className="w-full mt-4 sm:mt-6 md:mt-8"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.4 }}
+                >
+                  <ChatQuickStart onSuggestionClick={handleSuggestionClick} />
+                </motion.div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* ✅ ANIMATED: Streaming Messages - fades in when streaming starts */}
+        <AnimatePresence>
+          {!showInitialUI && currentThread && (
+            <motion.div
+              key="streaming-ui"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ duration: 0.3 }}
+            >
+              {/* ✅ REUSABLE: Same ChatMessageList component used in thread screen */}
+              <ChatMessageList
+                messages={messages}
+                user={{
+                  name: sessionUser?.name || 'You',
+                  image: sessionUser?.image || null,
+                }}
+                participants={contextParticipants}
+                isStreaming={isStreaming}
+                currentParticipantIndex={currentParticipantIndex}
+                currentStreamingParticipant={currentStreamingParticipant}
+              />
+
+              {/* ✅ RETRY BUTTON: Show after error (same as thread screen) */}
+              {streamError && !isStreaming && (
+                <div className="flex justify-center mt-4">
+                  <button
+                    type="button"
+                    onClick={retryRound}
+                    className="px-4 py-2 text-sm font-medium rounded-lg bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 transition-colors"
+                  >
+                    {t('chat.errors.retry')}
+                  </button>
+                </div>
               )}
-            </AnimatePresence>
-          </div>
-        </ConversationContent>
 
-        {/* Scroll to bottom button - appears when scrolled up from bottom */}
-        <ConversationScrollButton />
-      </Conversation>
+              {/* ✅ STREAMING PARTICIPANTS LOADER: Show when streaming (same as thread screen) */}
+              {isStreaming && selectedParticipants.length > 1 && (
+                <StreamingParticipantsLoader
+                  className="mt-4"
+                  participants={selectedParticipants}
+                  currentParticipantIndex={currentParticipantIndex}
+                />
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
 
-      {/* Fixed input at bottom - matches content width exactly */}
-      <div className="absolute bottom-0 left-0 right-0 z-20 pb-6 md:pb-8 w-full pointer-events-none">
-        <div className="mx-auto max-w-3xl px-4 sm:px-6 pointer-events-auto">
+      {/* Custom scroll-to-bottom button - detects page-level scroll */}
+      <ChatScrollButton />
+
+      {/* Input container - absolute positioning within parent */}
+      <div className="absolute bottom-0 left-0 right-0 z-50 w-full">
+        <div className="container max-w-3xl mx-auto px-4 sm:px-6 py-4 md:py-6 w-full">
           <ChatInput
             value={inputValue}
             onChange={setInputValue}
@@ -442,7 +454,8 @@ export default function ChatOverviewScreen() {
             status={isCreatingThread || isStreaming ? 'submitted' : 'ready'}
             onStop={stopStreaming}
             placeholder={t('chat.input.placeholder')}
-            className="backdrop-blur-xl bg-background/70 border border-border/30 shadow-lg"
+            participants={selectedParticipants}
+            onRemoveParticipant={handleRemoveParticipant}
             toolbar={(
               <>
                 <ChatParticipantsList

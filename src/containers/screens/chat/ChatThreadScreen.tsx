@@ -1,15 +1,15 @@
 'use client';
 
 import { useQueryClient } from '@tanstack/react-query';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import { RefreshCcwIcon } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { ChatMessage, ChatParticipant, ChatThread } from '@/api/routes/chat/schema';
 import { messageHasError, MessageMetadataSchema } from '@/api/routes/chat/schema';
 import { Action, Actions } from '@/components/ai-elements/actions';
-import { Conversation, ConversationContent, ConversationScrollButton } from '@/components/ai-elements/conversation';
 import { ChatDeleteDialog } from '@/components/chat/chat-delete-dialog';
 import { ChatInput } from '@/components/chat/chat-input';
 import { ChatMessageList } from '@/components/chat/chat-message-list';
@@ -661,17 +661,82 @@ export default function ChatThreadScreen({
     });
   }, [messagesWithAnalysesAndChangelog, analyses, changelog]);
 
-  return (
-    <div className="absolute inset-0">
-      {/* Conversation wrapper fills viewport - scrollbar at edge */}
-      <Conversation className="absolute inset-0">
-        <ConversationContent className="pb-[180px]">
-          <div className="mx-auto max-w-3xl px-4 sm:px-6 pt-6">
-            {/* ✅ Configuration changes are now shown inline between rounds */}
+  // ✅ VIRTUALIZATION: TanStack Virtual v3 - Direct scroll container pattern
+  // Following official examples: virtualizer controls its own scroll container
+  // Reference: https://tanstack.com/virtual/latest/docs/framework/react/examples/dynamic
+  const parentRef = useRef<HTMLDivElement>(null);
 
-            {/* ✅ ROUND-BASED RENDERING: Changelog → Messages → Actions/Feedback → Analysis */}
-            {messagesWithAnalysesAndChangelog.map((item, itemIndex) => {
-            // Extract round number for this item
+  const rowVirtualizer = useVirtualizer({
+    count: messagesWithAnalysesAndChangelog.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => 200,
+    overscan: 5,
+  });
+
+  const virtualItems = rowVirtualizer.getVirtualItems();
+
+  // Debug: Log virtualization to verify it's working
+  useEffect(() => {
+    console.warn('[Virtualizer] 📊 Active:', {
+      totalItems: messagesWithAnalysesAndChangelog.length,
+      renderedItems: virtualItems.length,
+      isVirtualizing: virtualItems.length < messagesWithAnalysesAndChangelog.length,
+      totalHeight: rowVirtualizer.getTotalSize(),
+    });
+  }, [messagesWithAnalysesAndChangelog.length, virtualItems.length, rowVirtualizer]);
+
+  // ✅ AUTO-SCROLL: Scroll to bottom when new messages arrive (using our scroll container)
+  useEffect(() => {
+    if (!parentRef.current)
+      return;
+
+    const scrollContainer = parentRef.current;
+    const { scrollTop, scrollHeight, clientHeight } = scrollContainer;
+    const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+    const isNearBottom = distanceFromBottom < 200;
+
+    // Only auto-scroll if we're already near the bottom
+    if (isNearBottom) {
+      requestAnimationFrame(() => {
+        scrollContainer.scrollTo({
+          top: scrollContainer.scrollHeight,
+          behavior: 'smooth',
+        });
+      });
+    }
+  }, [messages.length]);
+
+  return (
+    <div className="absolute inset-0 flex flex-col">
+      {/* Spacer for header */}
+      <div className="h-16 flex-shrink-0" />
+
+      {/* ✅ VIRTUALIZATION: Scroll container - this element has overflow */}
+      <div
+        ref={parentRef}
+        className="flex-1 overflow-y-auto"
+        style={{
+          contain: 'strict',
+        }}
+      >
+        <div className="container max-w-3xl mx-auto px-4 sm:px-6 pt-16" style={{ paddingBottom: '250px' }}>
+          {/* ✅ VIRTUALIZATION: Inner container with calculated total height */}
+          <div
+            style={{
+              height: `${rowVirtualizer.getTotalSize()}px`,
+              width: '100%',
+              position: 'relative',
+            }}
+          >
+            {/* ✅ VIRTUALIZATION: Render only visible items for performance */}
+            {virtualItems.map((virtualItem) => {
+              const item = messagesWithAnalysesAndChangelog[virtualItem.index];
+              if (!item)
+                return null;
+
+              const itemIndex = virtualItem.index;
+
+              // Extract round number for this item
               const roundNumber = item.type === 'messages'
                 ? ((item.data[0]?.metadata as Record<string, unknown> | undefined)?.roundNumber as number) || 1
                 : item.type === 'analysis'
@@ -680,116 +745,120 @@ export default function ChatThreadScreen({
                     ? item.data[0]?.roundNumber || 1
                     : 1;
 
-              if (item.type === 'changelog' && item.data.length > 0) {
-              // ✅ Changelog before round - ALL changes for this round in ONE accordion
-                return (
-                  <ConfigurationChangesGroup
-                    key={item.key}
-                    className="mb-6"
-                    group={{
-                      timestamp: new Date(item.data[0]!.createdAt),
-                      changes: item.data, // ✅ Pass ALL changes - component groups by action
-                    }}
-                  />
-                );
-              }
-
-              if (item.type === 'messages') {
-              // Messages for this round + Actions + Feedback (AI Elements pattern)
-                return (
-                  <div key={item.key} className="space-y-3">
-                    <ChatMessageList
-                      messages={item.data}
-                      user={user}
-                      participants={activeParticipants}
-                      isStreaming={isStreaming}
-                      currentParticipantIndex={currentParticipantIndex}
-                      currentStreamingParticipant={
-                        isStreaming && activeParticipants[currentParticipantIndex]
-                          ? activeParticipants[currentParticipantIndex]
-                          : null
-                      }
+              // ✅ VIRTUALIZATION: Absolutely positioned item wrapper
+              // Official TanStack Virtual pattern - direct scroll container
+              return (
+                <div
+                  key={virtualItem.key}
+                  data-index={virtualItem.index}
+                  ref={rowVirtualizer.measureElement}
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    width: '100%',
+                    transform: `translateY(${virtualItem.start}px)`,
+                  }}
+                >
+                  {item.type === 'changelog' && item.data.length > 0 && (
+                  // ✅ Changelog before round - ALL changes for this round in ONE accordion
+                    <ConfigurationChangesGroup
+                      className="mb-6"
+                      group={{
+                        timestamp: new Date(item.data[0]!.createdAt),
+                        changes: item.data, // ✅ Pass ALL changes - component groups by action
+                      }}
                     />
+                  )}
 
-                    {/* ✅ AI ELEMENTS PATTERN: Actions + Feedback after messages, before analysis */}
-                    {!isStreaming && (() => {
-                    // ✅ TYPE-SAFE ERROR CHECK: Use validated MessageMetadata type
-                      const hasRoundError = item.data.some((msg) => {
-                        const parseResult = MessageMetadataSchema.safeParse(msg.metadata);
-                        return parseResult.success && messageHasError(parseResult.data);
-                      });
+                  {item.type === 'messages' && (
+                  // Messages for this round + Actions + Feedback (AI Elements pattern)
+                    <div className="space-y-3">
+                      <ChatMessageList
+                        messages={item.data}
+                        user={user}
+                        participants={activeParticipants}
+                        isStreaming={isStreaming}
+                        currentParticipantIndex={currentParticipantIndex}
+                        currentStreamingParticipant={
+                          isStreaming && activeParticipants[currentParticipantIndex]
+                            ? activeParticipants[currentParticipantIndex]
+                            : null
+                        }
+                      />
 
-                      return (
-                        <Actions className="mt-3">
-                          {/* ✅ Round Feedback: Like/Dislike buttons - only show if round succeeded */}
-                          {!hasRoundError && feedbackHandlersMap.has(roundNumber) && (
-                            <RoundFeedback
-                              threadId={thread.id}
-                              roundNumber={roundNumber}
-                              currentFeedback={feedbackByRound.get(roundNumber) ?? null}
-                              onFeedbackChange={feedbackHandlersMap.get(roundNumber)!}
-                              disabled={isStreaming}
-                              isPending={
-                                setRoundFeedbackMutation.isPending
-                                && pendingFeedback?.roundNumber === roundNumber
-                              }
-                              pendingType={
-                                pendingFeedback?.roundNumber === roundNumber
-                                  ? pendingFeedback.type
-                                  : null
-                              }
-                            />
-                          )}
+                      {/* ✅ AI ELEMENTS PATTERN: Actions + Feedback after messages, before analysis */}
+                      {!isStreaming && (() => {
+                      // ✅ TYPE-SAFE ERROR CHECK: Use validated MessageMetadata type
+                        const hasRoundError = item.data.some((msg) => {
+                          const parseResult = MessageMetadataSchema.safeParse(msg.metadata);
+                          return parseResult.success && messageHasError(parseResult.data);
+                        });
 
-                          {/* ✅ Round Actions: Retry - always shown */}
-                          <Action
-                            onClick={retryRound}
-                            label={t('errors.retry')}
-                            tooltip={t('errors.retryRound')}
-                          >
-                            <RefreshCcwIcon className="size-3" />
-                          </Action>
-                        </Actions>
-                      );
-                    })()}
-                  </div>
-                );
-              }
+                        return (
+                          <Actions className="mt-3">
+                            {/* ✅ Round Feedback: Like/Dislike buttons - only show if round succeeded */}
+                            {!hasRoundError && feedbackHandlersMap.has(roundNumber) && (
+                              <RoundFeedback
+                                threadId={thread.id}
+                                roundNumber={roundNumber}
+                                currentFeedback={feedbackByRound.get(roundNumber) ?? null}
+                                onFeedbackChange={feedbackHandlersMap.get(roundNumber)!}
+                                disabled={isStreaming}
+                                isPending={
+                                  setRoundFeedbackMutation.isPending
+                                  && pendingFeedback?.roundNumber === roundNumber
+                                }
+                                pendingType={
+                                  pendingFeedback?.roundNumber === roundNumber
+                                    ? pendingFeedback.type
+                                    : null
+                                }
+                              />
+                            )}
 
-              if (item.type === 'analysis') {
-              // Analysis after round (shows results)
-                return (
-                  <RoundAnalysisCard
-                    key={item.key}
-                    className="mt-6"
-                    analysis={item.data}
-                    threadId={thread.id}
-                    isLatest={itemIndex === messagesWithAnalysesAndChangelog.length - 1}
-                  />
-                );
-              }
+                            {/* ✅ Round Actions: Retry - always shown */}
+                            <Action
+                              onClick={retryRound}
+                              label={t('errors.retry')}
+                              tooltip={t('errors.retryRound')}
+                            >
+                              <RefreshCcwIcon className="size-3" />
+                            </Action>
+                          </Actions>
+                        );
+                      })()}
+                    </div>
+                  )}
 
-              return null;
+                  {item.type === 'analysis' && (
+                  // Analysis after round (shows results)
+                    <RoundAnalysisCard
+                      className="mt-6"
+                      analysis={item.data}
+                      threadId={thread.id}
+                      isLatest={itemIndex === messagesWithAnalysesAndChangelog.length - 1}
+                    />
+                  )}
+                </div>
+              );
             })}
-
-            {/* Streaming participants loader */}
-            {isStreaming && selectedParticipants.length > 1 && (
-              <StreamingParticipantsLoader
-                className="mt-4"
-                participants={selectedParticipants}
-                currentParticipantIndex={currentParticipantIndex}
-              />
-            )}
           </div>
-        </ConversationContent>
 
-        {/* Scroll to bottom button - appears when scrolled up from bottom */}
-        <ConversationScrollButton />
-      </Conversation>
+          {/* Streaming participants loader */}
+          {isStreaming && selectedParticipants.length > 1 && (
+            <StreamingParticipantsLoader
+              className="mt-8"
+              participants={selectedParticipants}
+              currentParticipantIndex={currentParticipantIndex}
+            />
+          )}
+        </div>
+      </div>
 
-      {/* Fixed input at bottom - matches content width exactly */}
-      <div className="absolute bottom-0 left-0 right-0 z-20 pb-6 md:pb-8 w-full pointer-events-none">
-        <div className="mx-auto max-w-3xl px-4 sm:px-6 pointer-events-auto">
+      {/* Input container - absolute positioning within parent flex column */}
+      <div className="absolute bottom-0 left-0 right-0 z-50 w-full">
+        <div className="container max-w-3xl mx-auto px-4 sm:px-6 py-4 md:py-6 w-full">
           <ChatInput
             value={inputValue}
             onChange={setInputValue}
@@ -797,7 +866,16 @@ export default function ChatThreadScreen({
             status={isStreaming ? 'submitted' : 'ready'}
             onStop={stopStreaming}
             placeholder={t('input.placeholder')}
-            className="backdrop-blur-xl bg-background/70 border border-border/30 shadow-lg"
+            participants={selectedParticipants}
+            onRemoveParticipant={(participantId) => {
+              // Filter out the removed participant and reindex
+              const filtered = selectedParticipants.filter(p => p.id !== participantId);
+              // Prevent removing the last participant
+              if (filtered.length === 0)
+                return;
+              const reindexed = filtered.map((p, index) => ({ ...p, order: index }));
+              handleParticipantsChange(reindexed);
+            }}
             toolbar={(
               <>
                 <ChatParticipantsList
