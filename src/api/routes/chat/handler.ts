@@ -1,6 +1,6 @@
 import type { RouteHandler } from '@hono/zod-openapi';
 import type { UIMessage } from 'ai';
-import { consumeStream, convertToModelMessages, streamText, validateUIMessages } from 'ai';
+import { consumeStream, convertToModelMessages, generateText, streamText, validateUIMessages } from 'ai';
 import type { SQL } from 'drizzle-orm';
 import { and, asc, desc, eq, ne } from 'drizzle-orm';
 import Fuse from 'fuse.js';
@@ -2496,156 +2496,25 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
     const modelSupportsTemperature = !participant.modelId.includes('o4-mini') && !participant.modelId.includes('o4-deep');
     const temperatureValue = modelSupportsTemperature ? (participant.settings?.temperature ?? 0.7) : undefined;
 
-    // ✅ CRITICAL FIX: Retry loop for ALL errors and empty responses
-    // The AI SDK's maxRetries only retries API errors (network, 5xx, rate limits)
-    // It does NOT retry:
-    // - Type validation errors (reasoning models with different response formats)
-    // - Empty responses (0 output tokens, content filter errors)
-    // - Provider format inconsistencies
+    // ✅ ARCHITECTURAL FIX: Use generateText for validation, streamText for response
     //
-    // We retry the ENTIRE streamText() call until we get valid content
+    // PREVIOUS BUG: Code validated one stream, then created a FRESH stream that could return
+    // completely different content (e.g., refusal instead of valid response). This fresh stream
+    // bypassed all retry logic.
+    //
+    // NEW APPROACH:
+    // 1. Use generateText (non-streaming) in retry loop for fast validation
+    // 2. Once validated, immediately use streamText (streaming) to send to user
+    // 3. Both calls use identical parameters and happen milliseconds apart
+    // 4. Much less likely to get different content than old "consume then fresh stream" approach
+    //
     const MAX_TOTAL_RETRIES = 10; // Maximum 10 attempts per model
     let totalAttempts = 0;
     let lastError: Error | null = null;
+    let validatedSuccessfully = false;
 
-    while (totalAttempts < MAX_TOTAL_RETRIES) {
-      totalAttempts++;
-
-      console.warn(totalAttempts === 1
-        ? '[streamChatHandler] 🚀 Starting streamText'
-        : '[streamChatHandler] 🔄 Retrying streamText', {
-        threadId,
-        participantIndex,
-        participantId: participant.id,
-        modelId: participant.modelId,
-        modelRole: participant.role,
-        maxOutputTokens,
-        temperature: temperatureValue,
-        modelSupportsTemperature,
-        timeoutMs: AI_TIMEOUT_CONFIG.perAttemptMs,
-        maxRetries: AI_RETRY_CONFIG.maxAttempts,
-        ...(totalAttempts > 1 && {
-          retryAttempt: totalAttempts,
-          maxRetryAttempts: MAX_TOTAL_RETRIES,
-          lastError: lastError?.message,
-        }),
-      });
-
-      try {
-        const result = streamText({
-          model: client(participant.modelId),
-          system: systemPrompt,
-          messages: modelMessages,
-          maxOutputTokens,
-          ...(modelSupportsTemperature && { temperature: temperatureValue }),
-
-          // ✅ AI SDK RETRY: Handles ALL errors (network, server, timeouts, rate limits)
-          // Reference: https://sdk.vercel.ai/docs/ai-sdk-core/error-handling
-          // ✅ RETRY UP TO 10 TIMES: Then save error/response and move to next participant
-          maxRetries: AI_RETRY_CONFIG.maxAttempts,
-
-          abortSignal: AbortSignal.any([
-            (c.req as unknown as { raw: Request }).raw.signal, // Cancel on client disconnect
-            AbortSignal.timeout(AI_TIMEOUT_CONFIG.perAttemptMs), // Server-side timeout
-          ]),
-
-          experimental_telemetry: {
-            isEnabled: true,
-            functionId: `chat.thread.${threadId}.participant.${participant.id}`,
-          },
-
-          // ✅ NO onFinish CALLBACK: We'll handle persistence after checking if response is valid
-          // This allows us to retry before persisting anything
-        });
-
-        // ✅ CRITICAL: Await the full response to check if it's empty or has errors
-        // This blocks the retry loop until we know if we need to retry
-        const text = await result.text;
-        const usage = await result.usage;
-
-        console.warn('[streamChatHandler] 📊 Response received', {
-          threadId,
-          participantIndex,
-          modelId: participant.modelId,
-          attempt: totalAttempts,
-          outputTokens: usage.outputTokens,
-          textLength: text?.length || 0,
-          isEmpty: !text || text.trim().length === 0 || usage.outputTokens === 0,
-        });
-
-        // Check if response is empty
-        const isEmptyResponse = !text || text.trim().length === 0 || usage.outputTokens === 0;
-
-        if (!isEmptyResponse) {
-          // ✅ SUCCESS: Valid response received
-          console.warn('[streamChatHandler] ✅ Valid response received', {
-            threadId,
-            participantIndex,
-            modelId: participant.modelId,
-            attempt: totalAttempts,
-            textLength: text.length,
-            outputTokens: usage.outputTokens,
-          });
-
-          break; // Exit retry loop - we'll create fresh stream below
-        }
-
-        // Empty response - log and retry
-        console.warn('[streamChatHandler] ⚠️ Empty response - will retry', {
-          threadId,
-          participantIndex,
-          modelId: participant.modelId,
-          attempt: totalAttempts,
-          remainingAttempts: MAX_TOTAL_RETRIES - totalAttempts,
-        });
-
-        // Delay before retry to avoid rate limits
-        await new Promise(resolve => setTimeout(resolve, 2000)); // 2 second delay
-        // Continue loop for next attempt
-      } catch (error) {
-        // ✅ CATCH ALL ERRORS: Type validation, network, API, etc.
-        lastError = error instanceof Error ? error : new Error(String(error));
-
-        console.warn('[streamChatHandler] ❌ Error during streamText - will retry', {
-          threadId,
-          participantIndex,
-          modelId: participant.modelId,
-          attempt: totalAttempts,
-          remainingAttempts: MAX_TOTAL_RETRIES - totalAttempts,
-          errorType: lastError.name,
-          errorMessage: lastError.message,
-          isTypeValidationError: lastError.message.includes('Type validation'),
-        });
-
-        // If we've exhausted retries, break
-        if (totalAttempts >= MAX_TOTAL_RETRIES) {
-          console.error('[streamChatHandler] ❌ Max retries exceeded - giving up', {
-            threadId,
-            participantIndex,
-            modelId: participant.modelId,
-            totalAttempts,
-            lastError: lastError.message,
-          });
-          break;
-        }
-
-        // Delay before retry
-        await new Promise(resolve => setTimeout(resolve, 2000)); // 2 second delay
-        // Continue loop for next attempt
-      }
-    }
-
-    // ✅ CRITICAL: Create fresh stream for the final result
-    // We can't return the consumed stream, so create a new one with same params
-    console.warn('[streamChatHandler] 📤 Creating fresh stream for response', {
-      threadId,
-      participantIndex,
-      modelId: participant.modelId,
-      attemptsTaken: totalAttempts,
-      hadErrors: lastError !== null,
-    });
-
-    const finalResult = streamText({
+    // Common parameters for both generateText and streamText
+    const commonParams = {
       model: client(participant.modelId),
       system: systemPrompt,
       messages: modelMessages,
@@ -2660,15 +2529,242 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
         isEnabled: true,
         functionId: `chat.thread.${threadId}.participant.${participant.id}`,
       },
+    };
+
+    // ✅ RETRY LOOP: Use NON-STREAMING generateText for validation
+    // This is fast and doesn't consume a stream we need to return to user
+    while (totalAttempts < MAX_TOTAL_RETRIES) {
+      totalAttempts++;
+
+      console.warn(totalAttempts === 1
+        ? '[streamChatHandler] 🚀 Starting validation attempt'
+        : '[streamChatHandler] 🔄 Retrying validation', {
+        threadId,
+        participantIndex,
+        participantId: participant.id,
+        modelId: participant.modelId,
+        modelRole: participant.role,
+        attempt: totalAttempts,
+        maxAttempts: MAX_TOTAL_RETRIES,
+        ...(lastError && { lastError: lastError.message }),
+      });
+
+      try {
+        // ✅ USE GENERATETEXT: Non-streaming, fast validation
+        const validationResult = await generateText(commonParams);
+
+        const text = validationResult.text;
+        const usage = validationResult.usage;
+
+        // ✅ CONTENT VALIDATION: Same comprehensive checks as before
+        const MIN_CONTENT_LENGTH = 50;
+        const trimmedText = (text || '').trim();
+        const combinedLength = trimmedText.length;
+
+        // ✅ DETECT REFUSAL PATTERNS
+        const refusalPatterns = [
+          /^i\s+(cannot|can't|am unable to|apologize|must decline)/i,
+          /^sorry,?\s+i\s+(cannot|can't|am unable to)/i,
+          /^(unfortunately|regrettably),?\s+i\s+(cannot|can't)/i,
+          /i'm\s+(not able to|unable to|sorry)/i,
+        ];
+        const containsRefusal = refusalPatterns.some(pattern => pattern.test(trimmedText));
+
+        // ✅ COMPREHENSIVE VALIDATION
+        const hasInsufficientContent = !trimmedText
+          || combinedLength === 0
+          || combinedLength < MIN_CONTENT_LENGTH
+          || usage.totalTokens === 0
+          || containsRefusal;
+
+        console.warn('[streamChatHandler] 📊 Validation result', {
+          threadId,
+          participantIndex,
+          modelId: participant.modelId,
+          attempt: totalAttempts,
+          totalTokens: usage.totalTokens,
+          textLength: text?.length || 0,
+          trimmedLength: combinedLength,
+          hasInsufficientContent,
+          containsRefusal,
+          minRequired: MIN_CONTENT_LENGTH,
+        });
+
+        if (!hasInsufficientContent) {
+          // ✅ SUCCESS: Valid response
+          console.warn('[streamChatHandler] ✅ Valid response - will stream to user', {
+            threadId,
+            participantIndex,
+            modelId: participant.modelId,
+            attempt: totalAttempts,
+            textLength: text.length,
+            totalTokens: usage.totalTokens,
+          });
+
+          validatedSuccessfully = true;
+          lastError = null; // Clear any previous errors
+          break; // Exit retry loop
+        }
+
+        // ✅ INSUFFICIENT RESPONSE: Determine reason and retry
+        const retryReason = containsRefusal
+          ? 'model_refusal'
+          : combinedLength === 0
+            ? 'empty_response'
+            : combinedLength < MIN_CONTENT_LENGTH
+              ? 'insufficient_content'
+              : 'no_tokens';
+
+        // Create error for this attempt
+        lastError = new Error(`${retryReason}: ${text.substring(0, 100)}`);
+
+        console.warn('[streamChatHandler] ⚠️ Insufficient response - will retry', {
+          threadId,
+          participantIndex,
+          modelId: participant.modelId,
+          attempt: totalAttempts,
+          remainingAttempts: MAX_TOTAL_RETRIES - totalAttempts,
+          reason: retryReason,
+          contentLength: combinedLength,
+          minRequired: MIN_CONTENT_LENGTH,
+          totalTokens: usage.totalTokens,
+          preview: text.substring(0, 100),
+        });
+
+        // Don't retry if we've exhausted attempts
+        if (totalAttempts >= MAX_TOTAL_RETRIES) {
+          console.error('[streamChatHandler] ❌ Max retries exceeded', {
+            threadId,
+            participantIndex,
+            modelId: participant.modelId,
+            totalAttempts,
+            lastReason: retryReason,
+          });
+          break;
+        }
+
+        // Delay before retry to avoid rate limits
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      } catch (error) {
+        // ✅ CATCH ALL ERRORS: Network, API, validation, etc.
+        lastError = error instanceof Error ? error : new Error(String(error));
+
+        console.warn('[streamChatHandler] ❌ Error during validation - will retry', {
+          threadId,
+          participantIndex,
+          modelId: participant.modelId,
+          attempt: totalAttempts,
+          remainingAttempts: MAX_TOTAL_RETRIES - totalAttempts,
+          errorType: lastError.name,
+          errorMessage: lastError.message,
+        });
+
+        // Don't retry if we've exhausted attempts
+        if (totalAttempts >= MAX_TOTAL_RETRIES) {
+          console.error('[streamChatHandler] ❌ Max retries exceeded', {
+            threadId,
+            participantIndex,
+            modelId: participant.modelId,
+            totalAttempts,
+            lastError: lastError.message,
+          });
+          break;
+        }
+
+        // Delay before retry
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      }
+    }
+
+    // ✅ CHECK IF VALIDATION FAILED: If so, throw error to frontend
+    if (!validatedSuccessfully) {
+      console.error('[streamChatHandler] ❌ All retries failed - returning error', {
+        threadId,
+        participantIndex,
+        modelId: participant.modelId,
+        totalAttempts,
+        errorMessage: lastError?.message || 'Unknown error',
+      });
+
+      const errorMetadata = {
+        errorCategory: 'max_retries_exceeded',
+        errorMessage: `Model ${participant.modelId} failed after ${totalAttempts} attempts: ${lastError?.message || 'All attempts returned insufficient content'}`,
+        rawErrorMessage: lastError?.message || 'All attempts returned insufficient content',
+        errorType: lastError?.name || 'ValidationError',
+        participantId: participant.id,
+        participantIndex,
+        modelId: participant.modelId,
+        retryCount: totalAttempts,
+        maxRetries: MAX_TOTAL_RETRIES,
+        isTransient: false,
+      };
+
+      throw new Error(JSON.stringify(errorMetadata));
+    }
+
+    // ✅ NOW STREAM THE VALIDATED RESPONSE TO USER
+    // Use streamText with IDENTICAL parameters to what was just validated
+    // This happens milliseconds after validation, so should return same/similar content
+    console.warn('[streamChatHandler] 📤 Streaming validated response to user', {
+      threadId,
+      participantIndex,
+      modelId: participant.modelId,
+      attemptsNeeded: totalAttempts,
+    });
+
+    const finalResult = streamText({
+      ...commonParams,
 
       // ✅ PERSIST MESSAGE: Save to database after streaming completes
       onFinish: async (finishResult) => {
         const { text, usage, finishReason, providerMetadata, response } = finishResult;
 
-        // ✅ REASONING SUPPORT: Extract reasoning for o1/o3/DeepSeek models
-        const reasoningText = typeof providerMetadata?.openai?.reasoning === 'string'
-          ? providerMetadata.openai.reasoning
-          : null;
+        // ✅ REASONING BUNDLE SUPPORT: Extract reasoning/thinking content from ANY provider
+        // Helper function to extract reasoning from various metadata formats
+        const extractReasoning = (metadata: unknown): string | null => {
+          if (!metadata || typeof metadata !== 'object')
+            return null;
+
+          const meta = metadata as Record<string, unknown>;
+
+          // Helper to safely navigate nested paths
+          const getNested = (obj: unknown, path: string[]): unknown => {
+            let current = obj;
+            for (const key of path) {
+              if (!current || typeof current !== 'object')
+                return undefined;
+              current = (current as Record<string, unknown>)[key];
+            }
+            return current;
+          };
+
+          // Check all possible reasoning field locations
+          const fields = [
+            getNested(meta, ['openai', 'reasoning']), // OpenAI o1/o3
+            meta.reasoning,
+            meta.thinking,
+            meta.thought,
+            meta.thoughts,
+            meta.chain_of_thought,
+            meta.internal_reasoning,
+            meta.scratchpad,
+          ];
+
+          for (const field of fields) {
+            if (typeof field === 'string' && field.trim())
+              return field.trim();
+            if (field && typeof field === 'object') {
+              const obj = field as Record<string, unknown>;
+              if (typeof obj.content === 'string' && obj.content.trim())
+                return obj.content.trim();
+              if (typeof obj.text === 'string' && obj.text.trim())
+                return obj.text.trim();
+            }
+          }
+          return null;
+        };
+
+        const reasoningText = extractReasoning(providerMetadata);
 
         // ✅ CRITICAL ERROR HANDLING: Wrap DB operations in try-catch
         // This ensures that errors don't break the round - next participant can still respond

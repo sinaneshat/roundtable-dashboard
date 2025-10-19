@@ -1,16 +1,15 @@
 'use client';
 
 import { useQueryClient } from '@tanstack/react-query';
-import { ArrowDownIcon, RefreshCcwIcon } from 'lucide-react';
+import { RefreshCcwIcon } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useStickToBottomContext } from 'use-stick-to-bottom';
 
 import type { ChatMessage, ChatParticipant, ChatThread } from '@/api/routes/chat/schema';
 import { messageHasError, MessageMetadataSchema } from '@/api/routes/chat/schema';
 import { Action, Actions } from '@/components/ai-elements/actions';
-import { Conversation, ConversationContent } from '@/components/ai-elements/conversation';
+import { Conversation, ConversationContent, ConversationScrollButton } from '@/components/ai-elements/conversation';
 import { ChatDeleteDialog } from '@/components/chat/chat-delete-dialog';
 import { ChatInput } from '@/components/chat/chat-input';
 import { ChatMessageList } from '@/components/chat/chat-message-list';
@@ -22,7 +21,6 @@ import { RoundAnalysisCard } from '@/components/chat/moderator/round-analysis-ca
 import { RoundFeedback } from '@/components/chat/round-feedback';
 import { StreamingParticipantsLoader } from '@/components/chat/streaming-participants-loader';
 import { useThreadHeader } from '@/components/chat/thread-header-context';
-import { Button } from '@/components/ui/button';
 import { useSharedChatContext } from '@/contexts/chat-context';
 import { useSetRoundFeedbackMutation, useUpdateThreadMutation } from '@/hooks/mutations/chat-mutations';
 import { useThreadFeedbackQuery } from '@/hooks/queries/chat-feedback';
@@ -45,10 +43,9 @@ type ChatThreadScreenProps = {
 };
 
 /**
- * Component that injects scroll button into thread header when not at bottom
- * Must be rendered inside Conversation to access StickToBottomContext
+ * Component that sets thread header title and actions
  */
-function ThreadHeaderScrollUpdater({
+function useThreadHeaderUpdater({
   thread,
   slug,
   onDeleteClick,
@@ -57,39 +54,19 @@ function ThreadHeaderScrollUpdater({
   slug: string;
   onDeleteClick: () => void;
 }) {
-  const { isAtBottom, scrollToBottom } = useStickToBottomContext();
   const { setThreadActions, setThreadTitle } = useThreadHeader();
 
-  const handleScrollToBottom = useCallback(() => {
-    scrollToBottom();
-  }, [scrollToBottom]);
-
-  // Update thread header with title and actions (including scroll button when not at bottom)
+  // Update thread header with title and actions
   useEffect(() => {
     setThreadTitle(thread.title);
     setThreadActions(
-      <div className="flex items-center gap-2">
-        {!isAtBottom && (
-          <Button
-            onClick={handleScrollToBottom}
-            size="sm"
-            variant="ghost"
-            className="rounded-full"
-            type="button"
-          >
-            <ArrowDownIcon className="size-4" />
-          </Button>
-        )}
-        <ChatThreadActions
-          thread={thread}
-          slug={slug}
-          onDeleteClick={onDeleteClick}
-        />
-      </div>,
+      <ChatThreadActions
+        thread={thread}
+        slug={slug}
+        onDeleteClick={onDeleteClick}
+      />,
     );
-  }, [thread, slug, isAtBottom, onDeleteClick, setThreadTitle, setThreadActions, handleScrollToBottom]);
-
-  return null; // This component only updates context
+  }, [thread, slug, onDeleteClick, setThreadTitle, setThreadActions]);
 }
 
 /**
@@ -122,6 +99,15 @@ export default function ChatThreadScreen({
   const router = useRouter();
   const t = useTranslations('chat');
   const queryClient = useQueryClient();
+
+  const isDeleteDialogOpen = useBoolean(false);
+
+  // Update thread header with title and actions
+  useThreadHeaderUpdater({
+    thread,
+    slug,
+    onDeleteClick: isDeleteDialogOpen.onTrue,
+  });
 
   // ✅ AI SDK v5 PATTERN: Access shared chat context (no duplicate hook)
   const {
@@ -178,8 +164,6 @@ export default function ChatThreadScreen({
     },
     [analysesResponse],
   );
-
-  const isDeleteDialogOpen = useBoolean(false);
 
   // ✅ MUTATION: Update thread (including participants)
   const updateThreadMutation = useUpdateThreadMutation();
@@ -678,34 +662,16 @@ export default function ChatThreadScreen({
   }, [messagesWithAnalysesAndChangelog, analyses, changelog]);
 
   return (
-    <div className="flex flex-1 flex-col min-h-0">
-      {/* Conversation wrapper - scrollable content area */}
-      <Conversation className="flex-1 flex-col min-h-0">
-        {/* Scroll button updater component */}
-        <ThreadHeaderScrollUpdater
-          thread={thread}
-          slug={slug}
-          onDeleteClick={isDeleteDialogOpen.onTrue}
-        />
-
-        {/* Scrollable content area */}
-        <ConversationContent className="p-0">
-          {/*
-            Bottom padding for scroll clearance:
-            - Uses inline style paddingBottom: '400px' (only reliable method)
-            - Tailwind classes don't work due to:
-              1. Arbitrary values [400px] not compiled by JIT engine
-              2. Custom utilities in global.css not loading/applying
-              3. Possible build process or CSS ordering issue
-            - 400px ensures content can scroll past the ~150px fixed input box at bottom
-            - Inline style is necessary to guarantee proper spacing
-          */}
-          <div className="mx-auto max-w-3xl px-4 pt-6 min-h-full" style={{ paddingBottom: '400px' }}>
+    <div className="absolute inset-0">
+      {/* Conversation wrapper fills viewport - scrollbar at edge */}
+      <Conversation className="absolute inset-0">
+        <ConversationContent className="pb-[180px]">
+          <div className="mx-auto max-w-3xl px-4 sm:px-6 pt-6">
             {/* ✅ Configuration changes are now shown inline between rounds */}
 
             {/* ✅ ROUND-BASED RENDERING: Changelog → Messages → Actions/Feedback → Analysis */}
             {messagesWithAnalysesAndChangelog.map((item, itemIndex) => {
-              // Extract round number for this item
+            // Extract round number for this item
               const roundNumber = item.type === 'messages'
                 ? ((item.data[0]?.metadata as Record<string, unknown> | undefined)?.roundNumber as number) || 1
                 : item.type === 'analysis'
@@ -715,7 +681,7 @@ export default function ChatThreadScreen({
                     : 1;
 
               if (item.type === 'changelog' && item.data.length > 0) {
-                // ✅ Changelog before round - ALL changes for this round in ONE accordion
+              // ✅ Changelog before round - ALL changes for this round in ONE accordion
                 return (
                   <ConfigurationChangesGroup
                     key={item.key}
@@ -729,7 +695,7 @@ export default function ChatThreadScreen({
               }
 
               if (item.type === 'messages') {
-                // Messages for this round + Actions + Feedback (AI Elements pattern)
+              // Messages for this round + Actions + Feedback (AI Elements pattern)
                 return (
                   <div key={item.key} className="space-y-3">
                     <ChatMessageList
@@ -747,7 +713,7 @@ export default function ChatThreadScreen({
 
                     {/* ✅ AI ELEMENTS PATTERN: Actions + Feedback after messages, before analysis */}
                     {!isStreaming && (() => {
-                      // ✅ TYPE-SAFE ERROR CHECK: Use validated MessageMetadata type
+                    // ✅ TYPE-SAFE ERROR CHECK: Use validated MessageMetadata type
                       const hasRoundError = item.data.some((msg) => {
                         const parseResult = MessageMetadataSchema.safeParse(msg.metadata);
                         return parseResult.success && messageHasError(parseResult.data);
@@ -791,7 +757,7 @@ export default function ChatThreadScreen({
               }
 
               if (item.type === 'analysis') {
-                // Analysis after round (shows results)
+              // Analysis after round (shows results)
                 return (
                   <RoundAnalysisCard
                     key={item.key}
@@ -816,11 +782,14 @@ export default function ChatThreadScreen({
             )}
           </div>
         </ConversationContent>
+
+        {/* Scroll to bottom button - appears when scrolled up from bottom */}
+        <ConversationScrollButton />
       </Conversation>
 
-      {/* Sticky positioned input - stays at bottom within SidebarInset content area */}
-      <div className="sticky bottom-0 z-20 pb-6 md:pb-8 w-full">
-        <div className="mx-auto max-w-3xl px-4">
+      {/* Fixed input at bottom - matches content width exactly */}
+      <div className="absolute bottom-0 left-0 right-0 z-20 pb-6 md:pb-8 w-full pointer-events-none">
+        <div className="mx-auto max-w-3xl px-4 sm:px-6 pointer-events-auto">
           <ChatInput
             value={inputValue}
             onChange={setInputValue}

@@ -98,7 +98,7 @@ function NavigationHeaderComponent({
   return (
     <header
       className={cn(
-        'sticky top-0 z-50 flex h-16 shrink-0 items-center gap-2 transition-all duration-200 ease-in-out',
+        'absolute top-0 left-0 right-0 z-50 flex h-16 shrink-0 items-center gap-2 transition-all duration-200 ease-in-out',
         'border-b border-border/40 backdrop-blur-xl bg-background/60 supports-[backdrop-filter]:bg-background/60 w-full',
         className,
       )}

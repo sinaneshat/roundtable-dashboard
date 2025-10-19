@@ -306,26 +306,16 @@ export default function ChatOverviewScreen() {
   }, [setThreadTitle, setThreadActions]);
 
   return (
-    <div className="relative flex flex-1 flex-col min-h-0">
-      {/* Background - absolute positioned within container */}
+    <div className="absolute inset-0">
+      {/* Background - fixed to full viewport */}
       <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
         <WavyBackground containerClassName="h-full w-full" />
       </div>
 
-      {/* Conversation wrapper - scrollable content area */}
-      <Conversation className="relative z-10 flex-1 flex-col min-h-0">
-        <ConversationContent className="p-0">
-          {/*
-            Bottom padding for scroll clearance:
-            - Uses inline style paddingBottom: '400px' (only reliable method)
-            - Tailwind classes don't work due to:
-              1. Arbitrary values [400px] not compiled by JIT engine
-              2. Custom utilities in global.css not loading/applying
-              3. Possible build process or CSS ordering issue
-            - 400px ensures content can scroll past the ~150px fixed input box at bottom
-            - Inline style is necessary to guarantee proper spacing
-          */}
-          <div className="mx-auto max-w-3xl px-4 pt-6 min-h-full" style={{ paddingBottom: '400px' }}>
+      {/* Conversation wrapper fills viewport - scrollbar at edge */}
+      <Conversation className="absolute inset-0 z-10">
+        <ConversationContent className="pb-[180px]">
+          <div className="mx-auto max-w-3xl px-4 sm:px-6 pt-6">
             {/* ✅ ANIMATED: Initial UI (logo, suggestions) - fades out when streaming starts */}
             <AnimatePresence>
               {showInitialUI && (
@@ -438,13 +428,13 @@ export default function ChatOverviewScreen() {
           </div>
         </ConversationContent>
 
-        {/* Scroll button at bottom for overview screen (no header context) */}
+        {/* Scroll to bottom button - appears when scrolled up from bottom */}
         <ConversationScrollButton />
       </Conversation>
 
-      {/* Sticky positioned input - stays at bottom within SidebarInset content area */}
-      <div className="sticky bottom-0 z-20 pb-6 md:pb-8 w-full">
-        <div className="mx-auto max-w-3xl px-4">
+      {/* Fixed input at bottom - matches content width exactly */}
+      <div className="absolute bottom-0 left-0 right-0 z-20 pb-6 md:pb-8 w-full pointer-events-none">
+        <div className="mx-auto max-w-3xl px-4 sm:px-6 pointer-events-auto">
           <ChatInput
             value={inputValue}
             onChange={setInputValue}
