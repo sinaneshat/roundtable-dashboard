@@ -321,14 +321,14 @@ export default function ChatOverviewScreen() {
   useAutoScrollToBottom(messages.length, !showInitialUI);
 
   return (
-    <>
+    <div className="h-full flex flex-col">
       {/* Background - fixed behind all content */}
       <div className="fixed inset-0 -z-10 overflow-hidden">
         <WavyBackground containerClassName="h-full w-full" />
       </div>
 
-      {/* Main content - flows naturally with padding creating scroll boundaries */}
-      <div className="container max-w-3xl mx-auto px-4 sm:px-6 pt-16" style={{ paddingBottom: '50px' }}>
+      {/* Main content - natural size, stays at top */}
+      <div className="container max-w-3xl mx-auto px-4 sm:px-6 pt-16">
         {/* ✅ ANIMATED: Initial UI (logo, suggestions) - fades out when streaming starts */}
         <AnimatePresence>
           {showInitialUI && (
@@ -440,9 +440,9 @@ export default function ChatOverviewScreen() {
         </AnimatePresence>
       </div>
 
-      {/* Input container - sticky to scroll container bottom */}
-      <div className="sticky bottom-0 z-50 mt-auto -mx-4 sm:-mx-6 bg-gradient-to-t from-background via-background to-transparent pt-6">
-        <div className="container max-w-3xl mx-auto px-4 sm:px-6 py-4 md:py-6 w-full">
+      {/* Input container - pushed to bottom with mt-auto, creating space between content and input */}
+      <div className="sticky bottom-0 z-50 mt-auto bg-gradient-to-t from-background via-background to-transparent pt-6 pb-4">
+        <div className="container max-w-3xl mx-auto px-4 sm:px-6">
           <ChatInput
             value={inputValue}
             onChange={setInputValue}
@@ -467,6 +467,6 @@ export default function ChatOverviewScreen() {
           />
         </div>
       </div>
-    </>
+    </div>
   );
 }

@@ -916,9 +916,9 @@ export default function ChatThreadScreen({
         )}
       </div>
 
-      {/* Input container - sticky to scroll container bottom */}
-      <div className="sticky bottom-0 z-50 mt-auto -mx-4 sm:-mx-6 bg-gradient-to-t from-background via-background to-transparent pt-6">
-        <div className="container max-w-3xl mx-auto px-4 sm:px-6 py-4 md:py-6 w-full">
+      {/* Input container - fixed at bottom with consistent padding */}
+      <div className="sticky bottom-0 z-50 bg-gradient-to-t from-background via-background to-transparent pt-6 pb-4">
+        <div className="container max-w-3xl mx-auto px-4 sm:px-6">
           <ChatInput
             value={inputValue}
             onChange={setInputValue}
