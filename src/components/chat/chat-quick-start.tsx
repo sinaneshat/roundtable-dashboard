@@ -1,5 +1,6 @@
 'use client';
 
+import { MessageSquare, Users } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useCallback, useMemo } from 'react';
 
@@ -292,10 +293,97 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
     return tierSuggestions;
   }, [userTier, modelsLoading, accessibleModels, modelsByProvider.size, selectUniqueProviderModels]);
 
+  // Helper function to get mode icon and color
+  const getModeConfig = (mode: ChatModeId) => {
+    switch (mode) {
+      case 'debating':
+        return {
+          icon: Users,
+          label: 'Debate',
+          color: 'text-blue-400',
+          bgColor: 'bg-blue-500/10',
+          borderColor: 'border-blue-500/20',
+        };
+      case 'analyzing':
+        return {
+          icon: MessageSquare,
+          label: 'Analyze',
+          color: 'text-purple-400',
+          bgColor: 'bg-purple-500/10',
+          borderColor: 'border-purple-500/20',
+        };
+      default:
+        return {
+          icon: MessageSquare,
+          label: 'Chat',
+          color: 'text-gray-400',
+          bgColor: 'bg-gray-500/10',
+          borderColor: 'border-gray-500/20',
+        };
+    }
+  };
+
+  // Helper to render participant item
+  const renderParticipant = (participant: ParticipantConfig, variant: 'desktop' | 'mobile') => {
+    const model = allModels.find(m => m.id === participant.modelId);
+    if (!model)
+      return null;
+
+    const isAccessible = model.is_accessible_to_user ?? true;
+    const provider = model.provider || model.id.split('/')[0] || 'unknown';
+
+    if (variant === 'desktop') {
+      return (
+        <div
+          key={participant.id}
+          className={cn(
+            'flex items-center gap-2 text-left',
+            !isAccessible && 'opacity-50',
+          )}
+        >
+          <Avatar className="size-5 shrink-0">
+            <AvatarImage src={getProviderIcon(provider)} alt={model.name} />
+            <AvatarFallback className="text-[9px] bg-white/10">
+              {model.name.slice(0, 2).toUpperCase()}
+            </AvatarFallback>
+          </Avatar>
+          <div className="text-sm text-white/80 truncate text-left">
+            {participant.role}
+          </div>
+        </div>
+      );
+    }
+
+    // Mobile variant
+    return (
+      <div
+        key={participant.id}
+        className={cn(
+          'flex items-center gap-1.5 shrink-0',
+          !isAccessible && 'opacity-50',
+        )}
+      >
+        <Avatar className="size-4 shrink-0">
+          <AvatarImage src={getProviderIcon(provider)} alt={model.name} />
+          <AvatarFallback className="text-[8px] bg-white/10">
+            {model.name.slice(0, 2).toUpperCase()}
+          </AvatarFallback>
+        </Avatar>
+        <span className="text-xs text-white/70 whitespace-nowrap">
+          {participant.role}
+        </span>
+      </div>
+    );
+  };
+
   return (
     <div className={cn('w-full relative z-20', className)}>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+      {/* Desktop: Card Grid Layout */}
+      <div className="hidden lg:grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
         {suggestions.map((suggestion, index) => {
+          const modeConfig = getModeConfig(suggestion.mode);
+          const ModeIcon = modeConfig.icon;
+
           return (
             <motion.div
               key={suggestion.title}
@@ -306,11 +394,11 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
                 delay: index * 0.1,
                 ease: [0.25, 0.46, 0.45, 0.94],
               }}
-              className="flex min-w-0"
+              className="flex min-w-0 h-full"
             >
               <Card
                 variant="glass"
-                className="cursor-pointer hover:shadow-2xl transition-shadow duration-300 group w-full focus-visible:ring-2 focus-visible:ring-white/50 focus-visible:outline-none"
+                className="cursor-pointer hover:bg-white/10 transition-all duration-200 group w-full h-full focus-visible:ring-2 focus-visible:ring-white/20 focus-visible:outline-none flex flex-col"
                 onClick={() => onSuggestionClick(suggestion.prompt, suggestion.mode, suggestion.participants)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' || e.key === ' ') {
@@ -323,49 +411,72 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
                 aria-label={suggestion.title}
               >
                 <CardHeader>
-                  <CardTitle className="text-sm md:text-base text-white/90">
+                  <CardTitle className="text-base font-medium text-left text-white/95 group-hover:text-white transition-colors leading-tight">
                     {suggestion.title}
                   </CardTitle>
                 </CardHeader>
 
-                <CardContent>
-                  <div className="flex flex-col gap-2">
+                <CardContent className="flex flex-col flex-1 justify-between gap-6">
+                  <div className="flex flex-col space-y-2">
                     {suggestion.participants
                       .sort((a, b) => a.order - b.order)
-                      .map((participant) => {
-                        // ✅ SINGLE SOURCE: Find model from backend API data
-                        const model = allModels.find(m => m.id === participant.modelId);
-                        if (!model)
-                          return null;
+                      .map(participant => renderParticipant(participant, 'desktop'))}
+                  </div>
 
-                        // ✅ SINGLE SOURCE: Use backend-computed accessibility
-                        const isAccessible = model.is_accessible_to_user ?? true;
-                        const provider = model.provider || model.id.split('/')[0] || 'unknown';
-
-                        return (
-                          <div
-                            key={participant.id}
-                            className={cn(
-                              'flex items-center gap-2',
-                              !isAccessible && 'opacity-50',
-                            )}
-                          >
-                            <Avatar className="size-4">
-                              <AvatarImage src={getProviderIcon(provider)} alt={model.name} />
-                              <AvatarFallback className="text-[8px]">
-                                {model.name.slice(0, 2).toUpperCase()}
-                              </AvatarFallback>
-                            </Avatar>
-                            <span className="text-xs text-white/70">
-                              {model.name}
-                            </span>
-                          </div>
-                        );
-                      })}
+                  <div className={cn(
+                    'flex items-center justify-center gap-1.5 text-xs pt-2',
+                    modeConfig.color,
+                  )}
+                  >
+                    <ModeIcon className="size-3" />
+                    <span>{modeConfig.label}</span>
                   </div>
                 </CardContent>
               </Card>
             </motion.div>
+          );
+        })}
+      </div>
+
+      {/* Mobile: Compact List Layout */}
+      <div className="lg:hidden flex flex-col gap-3">
+        {suggestions.map((suggestion, index) => {
+          const modeConfig = getModeConfig(suggestion.mode);
+          const ModeIcon = modeConfig.icon;
+
+          return (
+            <motion.button
+              key={suggestion.title}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{
+                duration: 0.4,
+                delay: index * 0.1,
+                ease: [0.25, 0.46, 0.45, 0.94],
+              }}
+              onClick={() => onSuggestionClick(suggestion.prompt, suggestion.mode, suggestion.participants)}
+              className="w-full text-left p-4 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 active:bg-white/15 transition-all duration-200 focus-visible:ring-2 focus-visible:ring-white/20 focus-visible:outline-none"
+            >
+              <div className="flex items-start justify-between gap-3 mb-2">
+                <h3 className="text-sm font-medium text-white/95 leading-snug flex-1">
+                  {suggestion.title}
+                </h3>
+                <div className={cn(
+                  'flex items-center gap-1 text-xs shrink-0',
+                  modeConfig.color,
+                )}
+                >
+                  <ModeIcon className="size-3" />
+                  <span>{modeConfig.label}</span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide">
+                {suggestion.participants
+                  .sort((a, b) => a.order - b.order)
+                  .map(participant => renderParticipant(participant, 'mobile'))}
+              </div>
+            </motion.button>
           );
         })}
       </div>

@@ -5,7 +5,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { ChatInput } from '@/components/chat/chat-input';
 import { ChatMessageList } from '@/components/chat/chat-message-list';
@@ -100,7 +100,7 @@ export default function ChatOverviewScreen() {
   }, [defaultModelId]);
 
   // ✅ SIMPLIFIED STATE: Only 3 variables (was 6)
-  const [selectedMode, setSelectedMode] = useState<ChatModeId>(getDefaultChatMode());
+  const [selectedMode, setSelectedMode] = useState<ChatModeId>(() => getDefaultChatMode());
   const [selectedParticipants, setSelectedParticipants] = useState<ParticipantConfig[]>(initialParticipants);
   const [inputValue, setInputValue] = useState('');
 
@@ -110,6 +110,9 @@ export default function ChatOverviewScreen() {
 
   // ✅ Store initial prompt for sending after thread initialization
   const [initialPrompt, setInitialPrompt] = useState<string | null>(null);
+
+  // Track if we've already sent the initial prompt to avoid double-sending
+  const hasSentInitialPromptRef = useRef(false);
 
   const createThreadMutation = useCreateThreadMutation();
 
@@ -137,7 +140,8 @@ export default function ChatOverviewScreen() {
       e.preventDefault();
 
       const prompt = inputValue.trim();
-      if (!prompt || isCreatingThread || isStreaming) {
+      // ✅ VALIDATION: Prevent submission if no input, no participants, or already processing
+      if (!prompt || selectedParticipants.length === 0 || isCreatingThread || isStreaming) {
         return;
       }
 
@@ -182,6 +186,7 @@ export default function ChatOverviewScreen() {
         initializeThread(threadWithDates, participantsWithDates, uiMessages);
 
         // Step 4: Store prompt for sending after context is ready
+        hasSentInitialPromptRef.current = false; // Reset flag for new thread
         setInitialPrompt(prompt);
 
         // Step 5: Set round completion callback for navigation
@@ -270,9 +275,6 @@ export default function ChatOverviewScreen() {
   const handleRemoveParticipant = useCallback((participantId: string) => {
     // Filter out the removed participant and reindex
     const filtered = selectedParticipants.filter(p => p.id !== participantId);
-    // Prevent removing the last participant
-    if (filtered.length === 0)
-      return;
     const reindexed = filtered.map((p, index) => ({ ...p, order: index }));
     setSelectedParticipants(reindexed);
   }, [selectedParticipants]);
@@ -283,12 +285,12 @@ export default function ChatOverviewScreen() {
   // 2. currentThread to exist (context initialized)
   // 3. isStreaming to be false (status is 'ready')
   useEffect(() => {
-    if (initialPrompt && currentThread && !isStreaming) {
+    if (initialPrompt && currentThread && !isStreaming && !hasSentInitialPromptRef.current) {
       console.warn('[ChatOverviewScreen] 🚀 Sending initial user message to trigger participants', {
         threadId: currentThread.id,
         promptPreview: initialPrompt.substring(0, 50),
       });
-      setInitialPrompt(null); // Reset flag
+      hasSentInitialPromptRef.current = true;
       sendMessage(initialPrompt); // Send user message - triggers first participant automatically
     }
   }, [initialPrompt, currentThread, isStreaming, sendMessage]);
@@ -296,19 +298,16 @@ export default function ChatOverviewScreen() {
   // ✅ Derive current streaming participant from context
   const currentStreamingParticipant = contextParticipants[currentParticipantIndex] || null;
 
-  // ✅ Initialize default participant when model loads
+  // ✅ Initialize default participant when model loads (only on initial mount)
   useEffect(() => {
-    if (selectedParticipants.length === 0 && defaultModelId) {
-      setSelectedParticipants([
-        {
-          id: 'participant-default',
-          modelId: defaultModelId,
-          role: '',
-          order: 0,
-        },
-      ]);
+    if (selectedParticipants.length === 0 && defaultModelId && initialParticipants.length > 0) {
+      // Only set default participant if we haven't initialized yet
+      // This prevents re-adding the participant after user intentionally removes it
+      // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect
+      setSelectedParticipants(initialParticipants);
     }
-  }, [defaultModelId, selectedParticipants.length]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [defaultModelId]); // Only run when defaultModelId changes, not when selectedParticipants changes
 
   // ✅ CRITICAL FIX: Clear thread header state when navigating to overview
   // This ensures the header only shows the sidebar toggle, not thread-specific actions
@@ -316,6 +315,16 @@ export default function ChatOverviewScreen() {
     setThreadTitle(null);
     setThreadActions(null);
   }, [setThreadTitle, setThreadActions]);
+
+  // ✅ CRITICAL FIX: Reset streaming state when showing initial UI
+  // This ensures the submit button is always shown when navigating back to overview
+  // Without this, the stop button persists from the previous thread screen
+  useEffect(() => {
+    if (showInitialUI && isStreaming) {
+      console.warn('[ChatOverviewScreen] 🛑 Resetting streaming state on initial UI');
+      stopStreaming();
+    }
+  }, [showInitialUI, isStreaming, stopStreaming]);
 
   // ✅ AUTO-SCROLL: Scroll to bottom when new messages arrive (page-level scrolling)
   useAutoScrollToBottom(messages.length, !showInitialUI);

@@ -504,7 +504,6 @@ function ModelItem({
   onToggle,
   onRoleChange,
   onClearRole,
-  isLastParticipant,
   selectedCount,
   maxModels,
   enableDrag = true,
@@ -516,7 +515,6 @@ function ModelItem({
   onToggle: () => void;
   onRoleChange: (role: string, customRoleId?: string) => void;
   onClearRole: () => void;
-  isLastParticipant: boolean;
   selectedCount: number;
   maxModels: number;
   enableDrag?: boolean;
@@ -531,16 +529,14 @@ function ModelItem({
   const isAccessible = model.is_accessible_to_user ?? isSelected;
 
   // Disable reasons (checked in order of priority):
-  // 1. Last participant - can't deselect if it's the only one
-  // 2. Tier restriction - can't select if tier too low (but can deselect if already selected)
-  // 3. Selection limit - can't select more when at limit (but can deselect)
-  const isDisabledDueToLastParticipant = isSelected && isLastParticipant;
+  // 1. Tier restriction - can't select if tier too low (but can deselect if already selected)
+  // 2. Selection limit - can't select more when at limit (but can deselect)
   const isDisabledDueToTier = !isSelected && !isAccessible; // Only block NEW selections
   const isDisabledDueToLimit = !isSelected && selectedCount >= maxModels; // Only block NEW selections
 
-  // Selected models are NEVER disabled (except last participant rule)
+  // Selected models are NEVER disabled
   // Unselected models can be disabled by tier or limit
-  const isDisabled = isDisabledDueToLastParticipant || isDisabledDueToTier || isDisabledDueToLimit;
+  const isDisabled = isDisabledDueToTier || isDisabledDueToLimit;
 
   // Create upgrade tooltip content with proper messaging (using backend tier names)
   let upgradeTooltipContent: string | undefined;
@@ -556,11 +552,24 @@ function ModelItem({
     <Tooltip delayDuration={300}>
       <TooltipTrigger asChild>
         <div
+          role="button"
+          tabIndex={isDisabled ? -1 : 0}
           className={cn(
-            'px-2 py-2 border-b last:border-0 transition-colors',
-            !isDisabled && 'hover:bg-accent/50',
+            'px-2 py-2 border-b last:border-0',
+            !isDisabled && 'hover:bg-accent/50 cursor-pointer transition-colors',
             isDisabled && 'opacity-50 cursor-not-allowed',
           )}
+          onClick={isDisabled ? undefined : () => onToggle()}
+          onKeyDown={
+            isDisabled
+              ? undefined
+              : (e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    onToggle();
+                  }
+                }
+          }
         >
           <div className="flex items-center gap-2">
             {/* Drag Handle - Only shown for selected models */}
@@ -594,30 +603,10 @@ function ModelItem({
               disabled={isDisabled}
               className="size-4 flex-shrink-0"
               onClick={e => e.stopPropagation()}
-              title={isDisabledDueToLastParticipant ? tModels('minimumRequired') : undefined}
             />
 
-            {/* Clickable Row Content - triggers checkbox toggle */}
-            <div
-              role="button"
-              tabIndex={isDisabled ? -1 : 0}
-              className={cn(
-                'flex items-center gap-2 flex-1 min-w-0',
-                !isDisabled && 'cursor-pointer',
-                isDisabled && 'cursor-not-allowed',
-              )}
-              onClick={isDisabled ? undefined : () => onToggle()}
-              onKeyDown={
-                isDisabled
-                  ? undefined
-                  : (e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault();
-                        onToggle();
-                      }
-                    }
-              }
-            >
+            {/* Model Avatar and Name */}
+            <div className="flex items-center gap-2 flex-1 min-w-0">
               {/* Model Avatar and Name */}
               <Avatar className="size-8 flex-shrink-0">
                 <AvatarImage src={getProviderIcon(model.provider)} alt={model.name} />
@@ -660,14 +649,24 @@ function ModelItem({
 
             {/* Role Selector - shown for selected models (even if disabled as last participant) or enabled unselected models */}
             {(isSelected || !isDisabled) && (
-              <RoleSelector
-                participant={participant}
-                allParticipants={allParticipants}
-                customRoles={customRoles}
-                onRoleChange={onRoleChange}
-                onClearRole={onClearRole}
-                onRequestSelection={!participant ? onToggle : undefined}
-              />
+              <div
+                onClick={e => e.stopPropagation()}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.stopPropagation();
+                  }
+                }}
+                role="presentation"
+              >
+                <RoleSelector
+                  participant={participant}
+                  allParticipants={allParticipants}
+                  customRoles={customRoles}
+                  onRoleChange={onRoleChange}
+                  onClearRole={onClearRole}
+                  onRequestSelection={!participant ? onToggle : undefined}
+                />
+              </div>
             )}
           </div>
         </div>
@@ -836,10 +835,7 @@ export function ChatParticipantsList({
     }
 
     if (orderedModel.participant) {
-      // Deselect - remove from participants (but prevent removing the last one)
-      if (participants.length <= 1) {
-        return; // Must have at least one participant
-      }
+      // Deselect - remove from participants
       const filtered = participants.filter(p => p.id !== orderedModel.participant!.id);
       const reindexed = filtered.map((p, index) => ({ ...p, order: index }));
       onParticipantsChange(reindexed);
@@ -1057,7 +1053,6 @@ export function ChatParticipantsList({
                               onToggle={() => handleToggleModel(orderedModel.model.id)}
                               onRoleChange={(role, customRoleId) => handleRoleChange(orderedModel.model.id, role, customRoleId)}
                               onClearRole={() => handleClearRole(orderedModel.model.id)}
-                              isLastParticipant={selectedModels.length === 1}
                               selectedCount={participants.length}
                               maxModels={maxModels}
                               userTierInfo={userTierInfo}
@@ -1079,7 +1074,6 @@ export function ChatParticipantsList({
                             onToggle={() => handleToggleModel(model.id)}
                             onRoleChange={(role, customRoleId) => handleRoleChange(model.id, role, customRoleId)}
                             onClearRole={() => handleClearRole(model.id)}
-                            isLastParticipant={false}
                             selectedCount={participants.length}
                             maxModels={maxModels}
                             enableDrag={false}
@@ -1125,7 +1119,6 @@ export function ChatParticipantsList({
                               onToggle={() => handleToggleModel(orderedModel.model.id)}
                               onRoleChange={(role, customRoleId) => handleRoleChange(orderedModel.model.id, role, customRoleId)}
                               onClearRole={() => handleClearRole(orderedModel.model.id)}
-                              isLastParticipant={selectedModels.length === 1}
                               selectedCount={participants.length}
                               maxModels={maxModels}
                               userTierInfo={userTierInfo}
@@ -1175,7 +1168,6 @@ export function ChatParticipantsList({
                                 onToggle={() => handleToggleModel(model.id)}
                                 onRoleChange={(role, customRoleId) => handleRoleChange(model.id, role, customRoleId)}
                                 onClearRole={() => handleClearRole(model.id)}
-                                isLastParticipant={false}
                                 selectedCount={participants.length}
                                 maxModels={maxModels}
                                 enableDrag={false}
@@ -1257,7 +1249,6 @@ export function ChatParticipantsList({
                                     onToggle={() => handleToggleModel(model.id)}
                                     onRoleChange={(role, customRoleId) => handleRoleChange(model.id, role, customRoleId)}
                                     onClearRole={() => handleClearRole(model.id)}
-                                    isLastParticipant={false}
                                     selectedCount={participants.length}
                                     maxModels={maxModels}
                                     enableDrag={false}

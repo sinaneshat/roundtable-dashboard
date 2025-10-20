@@ -2550,328 +2550,205 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
       });
 
       try {
-        // ✅ USE GENERATETEXT: Non-streaming, fast validation
-        const validationResult = await generateText(commonParams);
+        // ✅ TEST API CALL: If successful, proceed with streaming
+        // No content validation - any successful API response is valid
+        await generateText(commonParams);
 
-        const text = validationResult.text;
-        const usage = validationResult.usage;
-        const finishReason = validationResult.finishReason;
-
-        // ✅ DEBUG LOGGING: Capture full response structure for empty responses
-        // This helps identify if content is in alternative fields (parts, content blocks, etc.)
-        const isEmptyText = !text || text.trim().length === 0;
-        if (isEmptyText && totalAttempts === 1) {
-          // eslint-disable-next-line ts/no-explicit-any -- Debugging: accessing undocumented AI SDK fields
-          const debugResult = validationResult as any;
-          console.error('[streamChatHandler] 🔍 EMPTY RESPONSE DEBUG - Full structure', {
-            threadId,
-            participantIndex,
-            modelId: participant.modelId,
-            provider: participant.modelId.split('/')[0],
-            attempt: totalAttempts,
-            // Response structure analysis
-            hasText: !!validationResult.text,
-            textValue: validationResult.text,
-            textType: typeof validationResult.text,
-            // Check for alternative response fields
-            hasResponse: !!validationResult.response,
-            responseKeys: validationResult.response ? Object.keys(validationResult.response) : [],
-            hasResponseMessages: !!debugResult.response?.messages,
-            responseMessagesLength: debugResult.response?.messages?.length || 0,
-            // Check experimental/provider metadata
-            hasExperimental: !!debugResult.experimental_providerMetadata,
-            experimentalKeys: debugResult.experimental_providerMetadata
-              ? Object.keys(debugResult.experimental_providerMetadata)
-              : [],
-            // Token information
-            finishReason,
-            inputTokens: usage.inputTokens || 0,
-            outputTokens: usage.outputTokens || 0,
-            totalTokens: usage.totalTokens || 0,
-            // Full result preview (truncated to avoid massive logs)
-            topLevelKeys: Object.keys(validationResult),
-            fullResultPreview: JSON.stringify(validationResult, null, 2).substring(0, 2000),
-          });
-        }
-
-        // ✅ SAFETY FILTER DETECTION: Detect when provider blocks output
-        // Pattern: finishReason='stop' + inputTokens>0 + outputTokens=0 + empty text
-        // This indicates content was blocked by safety filters (Google, OpenAI, etc.)
-        const inputTokens = usage.inputTokens || 0;
-        const outputTokens = usage.outputTokens || 0;
-        const isSafetyFilter = finishReason === 'stop'
-          && inputTokens > 0
-          && outputTokens === 0
-          && (!text || text.trim().length === 0);
-
-        if (isSafetyFilter) {
-          // ✅ PERMANENT ERROR: Safety filters won't change on retry - fail immediately
-          const safetyError = new Error(
-            `Safety filter blocked response. Provider: ${participant.modelId.split('/')[0]}, `
-            + `Model: ${participant.modelId}, Input: ${inputTokens} tokens, Output: 0 tokens, `
-            + `Status: ${finishReason}. This content may violate the provider's safety guidelines. `
-            + `Retrying will not help - the filter will block it every time.`,
-          );
-
-          console.error('[streamChatHandler] 🚫 SAFETY FILTER DETECTED - Not retrying', {
-            threadId,
-            participantIndex,
-            modelId: participant.modelId,
-            provider: participant.modelId.split('/')[0],
-            attempt: totalAttempts,
-            finishReason,
-            inputTokens,
-            outputTokens,
-            textLength: 0,
-            isSafetyFilter: true,
-          });
-
-          throw safetyError; // Exit retry loop immediately
-        }
-
-        // ✅ ALTERNATIVE CONTENT EXTRACTION: Check for content in other fields
-        // Some models (e.g., Amazon Nova) might return content in alternative fields
-        // eslint-disable-next-line ts/no-explicit-any -- Accessing undocumented AI SDK fields for fallback extraction
-        const resultWithExtras = validationResult as any;
-        let finalText = text || '';
-
-        // If text is empty, check alternative content sources
-        if (!finalText || finalText.trim().length === 0) {
-          // Check 1: reasoning/reasoningText (for models like o1, DeepSeek R1)
-          const reasoningText = resultWithExtras.reasoningText;
-          if (reasoningText && typeof reasoningText === 'string' && reasoningText.trim().length > 0) {
-            finalText = reasoningText.trim();
-            console.warn('[streamChatHandler] 🔄 Extracted content from reasoningText field', {
-              threadId,
-              participantIndex,
-              modelId: participant.modelId,
-              reasoningTextLength: finalText.length,
-            });
-          }
-
-          // Check 2: content array (ContentPart[])
-          if ((!finalText || finalText.trim().length === 0) && Array.isArray(resultWithExtras.content)) {
-            const contentParts = resultWithExtras.content;
-            const textParts: string[] = [];
-
-            for (const part of contentParts) {
-              if (part.type === 'text' && part.text) {
-                textParts.push(part.text);
-              } else if (part.type === 'reasoning' && part.text) {
-                textParts.push(part.text);
-              }
-            }
-
-            if (textParts.length > 0) {
-              finalText = textParts.join('\n\n').trim();
-              console.warn('[streamChatHandler] 🔄 Extracted content from content parts array', {
-                threadId,
-                participantIndex,
-                modelId: participant.modelId,
-                partsCount: textParts.length,
-                extractedTextLength: finalText.length,
-              });
-            }
-          }
-
-          // Check 3: response.body (provider-specific format)
-          if ((!finalText || finalText.trim().length === 0) && resultWithExtras.response?.body) {
-            const body = resultWithExtras.response.body;
-
-            // Try to extract text from common provider response formats
-            if (body.choices && Array.isArray(body.choices) && body.choices.length > 0) {
-              const choice = body.choices[0];
-              if (choice.message?.content) {
-                finalText = choice.message.content.trim();
-                console.warn('[streamChatHandler] 🔄 Extracted content from response.body.choices', {
-                  threadId,
-                  participantIndex,
-                  modelId: participant.modelId,
-                  extractedTextLength: finalText.length,
-                });
-              }
-            }
-          }
-        }
-
-        // ✅ CONTENT VALIDATION: Same comprehensive checks as before
-        const MIN_CONTENT_LENGTH = 50;
-        const trimmedText = finalText.trim();
-        const combinedLength = trimmedText.length;
-
-        // ✅ DETECT REFUSAL PATTERNS
-        const refusalPatterns = [
-          /^i\s+(cannot|can't|am unable to|apologize|must decline)/i,
-          /^sorry,?\s+i\s+(cannot|can't|am unable to)/i,
-          /^(unfortunately|regrettably),?\s+i\s+(cannot|can't)/i,
-          /i'm\s+(not able to|unable to|sorry)/i,
-        ];
-        const containsRefusal = refusalPatterns.some(pattern => pattern.test(trimmedText));
-
-        // ✅ COMPREHENSIVE VALIDATION
-        const hasInsufficientContent = !trimmedText
-          || combinedLength === 0
-          || combinedLength < MIN_CONTENT_LENGTH
-          || usage.totalTokens === 0
-          || containsRefusal;
-
-        console.warn('[streamChatHandler] 📊 Validation result', {
+        console.warn('[streamChatHandler] ✅ API test successful', {
           threadId,
           participantIndex,
           modelId: participant.modelId,
           attempt: totalAttempts,
-          finishReason,
-          inputTokens,
-          outputTokens,
-          totalTokens: usage.totalTokens,
-          originalTextLength: text?.length || 0,
-          finalTextLength: finalText?.length || 0,
-          extractedFromAlternativeSource: finalText !== text && !!finalText,
-          trimmedLength: combinedLength,
-          hasInsufficientContent,
-          containsRefusal,
-          isSafetyFilter: false,
-          minRequired: MIN_CONTENT_LENGTH,
         });
 
-        if (!hasInsufficientContent) {
-          // ✅ SUCCESS: Valid response
-          console.warn('[streamChatHandler] ✅ Valid response - will stream to user', {
-            threadId,
-            participantIndex,
-            modelId: participant.modelId,
-            attempt: totalAttempts,
-            textLength: finalText.length,
-            totalTokens: usage.totalTokens,
-            extractedFromAlternativeSource: finalText !== text && !!finalText,
-          });
-
-          validatedSuccessfully = true;
-          lastError = null; // Clear any previous errors
-          break; // Exit retry loop
-        }
-
-        // ✅ INSUFFICIENT RESPONSE: Determine reason and retry
-        const retryReason = containsRefusal
-          ? 'model_refusal'
-          : combinedLength === 0
-            ? 'empty_response'
-            : combinedLength < MIN_CONTENT_LENGTH
-              ? 'insufficient_content'
-              : 'no_tokens';
-
-        // Create error for this attempt
-        lastError = new Error(`${retryReason}: ${finalText.substring(0, 100)}`);
-
-        console.warn('[streamChatHandler] ⚠️ Insufficient response - will retry', {
-          threadId,
-          participantIndex,
-          modelId: participant.modelId,
-          attempt: totalAttempts,
-          remainingAttempts: MAX_TOTAL_RETRIES - totalAttempts,
-          reason: retryReason,
-          contentLength: combinedLength,
-          minRequired: MIN_CONTENT_LENGTH,
-          totalTokens: usage.totalTokens,
-          preview: text.substring(0, 100),
-        });
-
-        // Don't retry if we've exhausted attempts
-        if (totalAttempts >= MAX_TOTAL_RETRIES) {
-          console.error('[streamChatHandler] ❌ Max retries exceeded', {
-            threadId,
-            participantIndex,
-            modelId: participant.modelId,
-            totalAttempts,
-            lastReason: retryReason,
-          });
-          break;
-        }
-
-        // Delay before retry to avoid rate limits
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        validatedSuccessfully = true;
+        lastError = null;
+        break;
       } catch (error) {
-        // ✅ CATCH ALL ERRORS: Network, API, validation, etc.
         lastError = error instanceof Error ? error : new Error(String(error));
 
-        console.warn('[streamChatHandler] ❌ Error during validation - will retry', {
+        // ✅ OPENROUTER ERROR STRUCTURE: { error: { message: string, code: number } }
+        // eslint-disable-next-line ts/no-explicit-any -- Accessing OpenRouter error structure
+        const errorObj = error as any;
+        const statusCode = errorObj.statusCode || errorObj.status || errorObj.code;
+        const errorName = errorObj.name;
+
+        // Classify error by HTTP status code
+        const isAuthError = statusCode === 401 || statusCode === 403;
+        const isModelNotFound = statusCode === 404 || statusCode === 400;
+        const isRateLimitError = statusCode === 429;
+        const isProviderOutage = statusCode === 502 || statusCode === 503 || statusCode === 504;
+        const isTimeoutError = errorName === 'AbortError' || errorName === 'TimeoutError';
+        const isNetworkError = errorName === 'FetchError' || errorName === 'NetworkError';
+
+        let errorCategory: string;
+        if (isAuthError) {
+          errorCategory = 'auth_error';
+        } else if (isModelNotFound) {
+          errorCategory = 'model_not_found';
+        } else if (isRateLimitError) {
+          errorCategory = 'rate_limit';
+        } else if (isProviderOutage) {
+          errorCategory = 'provider_outage';
+        } else if (isTimeoutError) {
+          errorCategory = 'timeout';
+        } else if (isNetworkError) {
+          errorCategory = 'network_error';
+        } else {
+          errorCategory = 'unknown';
+        }
+
+        console.error('[streamChatHandler] EXCEPTION_THROWN', {
           threadId,
           participantIndex,
           modelId: participant.modelId,
           attempt: totalAttempts,
-          remainingAttempts: MAX_TOTAL_RETRIES - totalAttempts,
-          errorType: lastError.name,
+          maxAttempts: MAX_TOTAL_RETRIES,
+          error,
+          statusCode,
+          errorName,
+          errorCategory,
           errorMessage: lastError.message,
         });
 
-        // Don't retry if we've exhausted attempts
+        // ✅ NON-RETRIABLE ERRORS: Don't retry these - they won't succeed
+        if (isAuthError || isModelNotFound) {
+          console.error('[streamChatHandler] NON_RETRIABLE_ERROR - Stopping retries', {
+            threadId,
+            participantIndex,
+            modelId: participant.modelId,
+            errorCategory,
+            errorMessage: lastError.message,
+          });
+          break; // Exit retry loop immediately
+        }
+
         if (totalAttempts >= MAX_TOTAL_RETRIES) {
-          console.error('[streamChatHandler] ❌ Max retries exceeded', {
+          console.error('[streamChatHandler] MAX_RETRIES_EXCEEDED_EXCEPTION', {
             threadId,
             participantIndex,
             modelId: participant.modelId,
             totalAttempts,
-            lastError: lastError.message,
+            error,
+            errorCategory,
           });
           break;
         }
 
-        // Delay before retry
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        // ✅ ADAPTIVE RETRY DELAY: Longer delays for rate limits and provider outages
+        let retryDelay: number;
+        if (isRateLimitError) {
+          retryDelay = 5000; // 5 seconds for rate limits
+        } else if (isProviderOutage) {
+          retryDelay = 10000; // 10 seconds for provider outages
+        } else {
+          retryDelay = 2000; // 2 seconds for other errors
+        }
+
+        console.warn('[streamChatHandler] 🔄 Retrying after error', {
+          threadId,
+          participantIndex,
+          modelId: participant.modelId,
+          attempt: totalAttempts,
+          retryDelay,
+          errorCategory,
+        });
+
+        await new Promise(resolve => setTimeout(resolve, retryDelay));
       }
     }
 
-    // ✅ CHECK IF VALIDATION FAILED: If so, throw error to frontend
     if (!validatedSuccessfully) {
       const errorMessage = lastError?.message || 'Unknown error';
-      const isSafetyFilterError = errorMessage.includes('Safety filter blocked response');
 
-      console.error('[streamChatHandler] ❌ All retries failed - returning error', {
+      // ✅ CLASSIFY ERROR BY HTTP STATUS CODE
+      // eslint-disable-next-line ts/no-explicit-any -- Accessing OpenRouter error structure
+      const errorObj = lastError as any;
+      const statusCode = errorObj.statusCode || errorObj.status || errorObj.code;
+      const errorName = errorObj.name;
+
+      // Determine error category
+      let errorCategory: string;
+      let userFriendlyMessage: string;
+      let suggestedAction: string;
+      let isTransient: boolean;
+
+      const provider = participant.modelId.split('/')[0];
+
+      if (statusCode === 401 || statusCode === 403) {
+        // Authentication errors
+        errorCategory = 'auth_error';
+        userFriendlyMessage = `[Authentication Error] Invalid API credentials for ${provider}`;
+        suggestedAction = 'Contact support about API credentials';
+        isTransient = false;
+      } else if (statusCode === 404 || statusCode === 400) {
+        // Model not found or invalid model
+        errorCategory = 'model_not_found';
+        userFriendlyMessage = `[Model Not Found] ${participant.modelId} is not available`;
+        suggestedAction = 'Select a different model';
+        isTransient = false;
+      } else if (statusCode === 429) {
+        // Rate limit exceeded
+        errorCategory = 'rate_limit';
+        userFriendlyMessage = `[Rate Limit] Provider ${provider} rate limit exceeded. Please try again in a few minutes.`;
+        suggestedAction = 'Wait a few minutes before trying again';
+        isTransient = true;
+      } else if (statusCode === 502 || statusCode === 503 || statusCode === 504) {
+        // Provider outage or service unavailable
+        errorCategory = 'provider_outage';
+        userFriendlyMessage = `[Provider Outage] ${provider} is experiencing issues. Please try a different model or wait a few minutes.`;
+        suggestedAction = 'Try a different model or wait for provider recovery';
+        isTransient = true;
+      } else if (errorName === 'AbortError' || errorName === 'TimeoutError') {
+        // Timeout errors
+        errorCategory = 'timeout';
+        userFriendlyMessage = `[Timeout] Request timed out after ${AI_TIMEOUT_CONFIG.perAttemptMs / 1000}s. Try a faster model or simpler prompt.`;
+        suggestedAction = 'Use a faster model or simplify your prompt';
+        isTransient = true;
+      } else if (errorName === 'FetchError' || errorName === 'NetworkError') {
+        // Network errors
+        errorCategory = 'network_error';
+        userFriendlyMessage = `[Network Error] Failed to connect to ${provider}`;
+        suggestedAction = 'Check your network connection and try again';
+        isTransient = true;
+      } else {
+        // Unknown or general errors
+        errorCategory = 'unknown_error';
+        userFriendlyMessage = `Model ${participant.modelId} failed after ${totalAttempts} attempts: ${errorMessage}`;
+        suggestedAction = 'Try again or contact support if the issue persists';
+        isTransient = true;
+      }
+
+      console.error('[streamChatHandler] ALL_RETRIES_FAILED', {
         threadId,
         participantIndex,
         modelId: participant.modelId,
-        provider: participant.modelId.split('/')[0],
         totalAttempts,
-        errorMessage,
-        isSafetyFilterError,
+        lastError,
+        statusCode,
+        errorName,
+        errorCategory,
       });
-
-      // ✅ CATEGORIZE ERROR: Provide specific category and user-friendly guidance
-      const errorCategory = isSafetyFilterError
-        ? 'safety_filter'
-        : totalAttempts >= MAX_TOTAL_RETRIES
-          ? 'max_retries_exceeded'
-          : 'validation_failed';
 
       const errorMetadata = {
         errorCategory,
-        // ✅ DETAILED ERROR MESSAGE: Include provider, model, and exact failure reason
-        errorMessage: isSafetyFilterError
-          ? `[${participant.modelId.split('/')[0]} Safety Filter] ${participant.modelId}: ${errorMessage}`
-          : `Model ${participant.modelId} failed after ${totalAttempts} attempts: ${errorMessage}`,
+        errorMessage: userFriendlyMessage,
         rawErrorMessage: errorMessage,
-        errorType: lastError?.name || 'ValidationError',
+        errorType: lastError?.name || 'APIError',
         participantId: participant.id,
         participantIndex,
         modelId: participant.modelId,
-        provider: participant.modelId.split('/')[0],
+        provider,
         retryCount: totalAttempts,
         maxRetries: MAX_TOTAL_RETRIES,
-        isTransient: !isSafetyFilterError, // Safety filters are permanent
+        isTransient,
+        suggestedAction,
       };
 
       throw new Error(JSON.stringify(errorMetadata));
     }
 
-    // ✅ NOW STREAM THE VALIDATED RESPONSE TO USER
-    // Use streamText with IDENTICAL parameters to what was just validated
-    // This happens milliseconds after validation, so should return same/similar content
-    console.warn('[streamChatHandler] 📤 Streaming validated response to user', {
-      threadId,
-      participantIndex,
-      modelId: participant.modelId,
-      attemptsNeeded: totalAttempts,
-    });
+    // Validation passed, stream response
 
     const finalResult = streamText({
       ...commonParams,
@@ -2880,52 +2757,68 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
       onFinish: async (finishResult) => {
         const { text, usage, finishReason, providerMetadata, response } = finishResult;
 
-        // ✅ REASONING BUNDLE SUPPORT: Extract reasoning/thinking content from ANY provider
-        // Helper function to extract reasoning from various metadata formats
-        const extractReasoning = (metadata: unknown): string | null => {
-          if (!metadata || typeof metadata !== 'object')
-            return null;
+        // ✅ CRITICAL FIX: Extract reasoning from finishResult directly
+        // The AI SDK v5 provides reasoning in the finishResult when sendReasoning: true
+        // This is the PRIMARY source of reasoning data that was streamed to the client
+        const finishResultWithReasoning = finishResult as typeof finishResult & { reasoning?: string };
+        let reasoningText: string | null = (typeof finishResultWithReasoning.reasoning === 'string' ? finishResultWithReasoning.reasoning : null) || null;
 
-          const meta = metadata as Record<string, unknown>;
+        // ✅ FALLBACK: If reasoning not in finishResult, try extracting from providerMetadata
+        // This handles cases where providers include reasoning in metadata instead
+        if (!reasoningText) {
+          const extractReasoning = (metadata: unknown): string | null => {
+            if (!metadata || typeof metadata !== 'object')
+              return null;
 
-          // Helper to safely navigate nested paths
-          const getNested = (obj: unknown, path: string[]): unknown => {
-            let current = obj;
-            for (const key of path) {
-              if (!current || typeof current !== 'object')
-                return undefined;
-              current = (current as Record<string, unknown>)[key];
+            const meta = metadata as Record<string, unknown>;
+
+            // Helper to safely navigate nested paths
+            const getNested = (obj: unknown, path: string[]): unknown => {
+              let current = obj;
+              for (const key of path) {
+                if (!current || typeof current !== 'object')
+                  return undefined;
+                current = (current as Record<string, unknown>)[key];
+              }
+              return current;
+            };
+
+            // Check all possible reasoning field locations
+            const fields = [
+              getNested(meta, ['openai', 'reasoning']), // OpenAI o1/o3
+              meta.reasoning,
+              meta.thinking,
+              meta.thought,
+              meta.thoughts,
+              meta.chain_of_thought,
+              meta.internal_reasoning,
+              meta.scratchpad,
+            ];
+
+            for (const field of fields) {
+              if (typeof field === 'string' && field.trim())
+                return field.trim();
+              if (field && typeof field === 'object') {
+                const obj = field as Record<string, unknown>;
+                if (typeof obj.content === 'string' && obj.content.trim())
+                  return obj.content.trim();
+                if (typeof obj.text === 'string' && obj.text.trim())
+                  return obj.text.trim();
+              }
             }
-            return current;
+            return null;
           };
 
-          // Check all possible reasoning field locations
-          const fields = [
-            getNested(meta, ['openai', 'reasoning']), // OpenAI o1/o3
-            meta.reasoning,
-            meta.thinking,
-            meta.thought,
-            meta.thoughts,
-            meta.chain_of_thought,
-            meta.internal_reasoning,
-            meta.scratchpad,
-          ];
+          reasoningText = extractReasoning(providerMetadata);
+        }
 
-          for (const field of fields) {
-            if (typeof field === 'string' && field.trim())
-              return field.trim();
-            if (field && typeof field === 'object') {
-              const obj = field as Record<string, unknown>;
-              if (typeof obj.content === 'string' && obj.content.trim())
-                return obj.content.trim();
-              if (typeof obj.text === 'string' && obj.text.trim())
-                return obj.text.trim();
-            }
-          }
-          return null;
-        };
-
-        const reasoningText = extractReasoning(providerMetadata);
+        console.warn('[streamChatHandler] 🧠 Reasoning extracted', {
+          threadId,
+          participantIndex,
+          modelId: participant.modelId,
+          reasoningLength: reasoningText?.length || 0,
+          source: finishResultWithReasoning.reasoning ? 'finishResult' : reasoningText ? 'providerMetadata' : 'none',
+        });
 
         // ✅ CRITICAL ERROR HANDLING: Wrap DB operations in try-catch
         // This ensures that errors don't break the round - next participant can still respond
@@ -2974,11 +2867,6 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
           const combinedContent = trimmedText || trimmedReasoning;
           const combinedLength = trimmedText.length + trimmedReasoning.length;
 
-          // ✅ STRICTER CHECK: Require meaningful content (at least 50 characters)
-          // This prevents models that return minimal/useless responses from passing
-          // Rationale: A substantive response in a conversation needs at least a few sentences
-          const MIN_CONTENT_LENGTH = 50;
-
           // ✅ DETECT REFUSAL PATTERNS: Common phrases indicating model refused to respond
           // Only check main text field - reasoning field typically doesn't contain refusals
           const refusalPatterns = [
@@ -2989,10 +2877,11 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
           ];
           const containsRefusal = refusalPatterns.some(pattern => pattern.test(trimmedText));
 
-          // ✅ VALID RESPONSE: Has meaningful content in EITHER text OR reasoning field
+          // ✅ VALID RESPONSE: Accept ANY response with content (no minimum length)
+          // Only reject if TRULY empty (no content at all) or explicit refusal
+          // Rationale: Short responses like "Hi", "Yes", "No" are valid model outputs
           const isEmptyResponse = !combinedContent
             || combinedLength === 0
-            || combinedLength < MIN_CONTENT_LENGTH
             || usage?.outputTokens === 0
             || containsRefusal;
 
@@ -3033,20 +2922,6 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
               providerMessage = `Model refused to respond: "${trimmedText.substring(0, 100)}${trimmedText.length > 100 ? '...' : ''}". Input: ${inputTokens} tokens, Output: ${outputTokens} tokens, Status: ${finishReason}`;
               errorMessage = providerMessage;
               errorCategory = 'refusal';
-            } else if (combinedLength < MIN_CONTENT_LENGTH) {
-              // Response is too short to be useful
-              // ✅ REASONING BUNDLE SUPPORT: Report which field(s) had content
-              const contentBreakdown = trimmedText.length > 0 && trimmedReasoning.length > 0
-                ? `text: ${trimmedText.length} chars, reasoning: ${trimmedReasoning.length} chars`
-                : trimmedText.length > 0
-                  ? `text only: ${trimmedText.length} chars`
-                  : trimmedReasoning.length > 0
-                    ? `reasoning only: ${trimmedReasoning.length} chars`
-                    : 'no content';
-
-              providerMessage = `Model returned insufficient content (${combinedLength} characters total [${contentBreakdown}], minimum ${MIN_CONTENT_LENGTH} required). Input: ${inputTokens} tokens, Output: ${outputTokens} tokens, Status: ${finishReason}`;
-              errorMessage = providerMessage;
-              errorCategory = 'empty_response';
             } else {
               // Rare case: has some tokens but no useful text
               providerMessage = `Model returned ${outputTokens} token(s) but no text. Input: ${inputTokens} tokens, Status: ${finishReason}`;
@@ -3165,16 +3040,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
       },
     });
 
-    // ✅ OFFICIAL PATTERN: Return UI message stream response
-    // Reference: https://sdk.vercel.ai/docs/ai-sdk-core/streaming-text-to-response#toUIMessageStreamResponse
-
-    console.warn('[streamChatHandler] 📤 Returning stream response', {
-      threadId,
-      participantIndex,
-      participantId: participant.id,
-      modelId: participant.modelId,
-      retriesPerformed: totalAttempts - 1, // -1 because first attempt isn't a retry
-    });
+    // Return stream response
 
     return finalResult.toUIMessageStreamResponse({
       sendReasoning: true, // Stream reasoning for o1/o3/DeepSeek models
@@ -3189,24 +3055,15 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
       consumeSseStream: consumeStream,
 
       onError: (error) => {
-        // ✅ OPENROUTER PROVIDER ERROR HANDLING: Extract comprehensive error details
-        const errorMetadata = structureErrorMetadata(error, participant);
-
-        // ✅ ESSENTIAL PROVIDER ERROR LOGGING: Log structured OpenRouter error
-        console.error('[streamChatHandler] ❌ OpenRouter Error', {
+        console.error('[streamChatHandler] STREAM_ERROR', {
           threadId,
           participantIndex,
-          category: errorMetadata.errorCategory,
-          isTransient: errorMetadata.isTransient,
-          modelId: errorMetadata.modelId,
-          statusCode: errorMetadata.statusCode,
-          openRouterCode: errorMetadata.openRouterCode,
-          requestId: errorMetadata.requestId,
-          message: errorMetadata.rawErrorMessage,
+          modelId: participant.modelId,
+          error,
         });
 
-        // ✅ AI SDK v5 PATTERN: Return error metadata as JSON string
-        // The frontend will parse this and display appropriate error information
+        const errorMetadata = structureErrorMetadata(error, participant);
+
         return JSON.stringify(errorMetadata);
       },
     });

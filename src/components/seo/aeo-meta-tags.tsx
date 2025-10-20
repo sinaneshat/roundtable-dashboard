@@ -14,6 +14,10 @@
  * - Q&A format support
  */
 
+// Stable default values to prevent re-renders
+const EMPTY_ENTITIES: string[] = [];
+const EMPTY_RELATED_QUESTIONS: string[] = [];
+
 type AeoMetaTagsProps = {
   /** Primary question this page answers */
   primaryQuestion?: string;
@@ -50,8 +54,8 @@ export function AeoMetaTags(props: AeoMetaTagsProps) {
     primaryQuestion,
     primaryAnswer,
     contentType,
-    entities = [],
-    relatedQuestions = [],
+    entities = EMPTY_ENTITIES,
+    relatedQuestions = EMPTY_RELATED_QUESTIONS,
     contentLevel,
     readingTime,
     lastUpdated,

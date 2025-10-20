@@ -12,9 +12,9 @@ type CardProps = React.ComponentProps<"div"> & {
 function Card({ className, variant = "default", ...props }: CardProps) {
   const variantClasses = {
     default: "bg-card text-card-foreground rounded-xl border py-6 shadow-sm",
-    glass: cn(glassCard("medium"), "rounded-xl border border-white/30 dark:border-white/20 py-6"),
-    "glass-subtle": cn(glassCard("subtle"), "rounded-xl border border-white/20 dark:border-white/10 py-6"),
-    "glass-strong": cn(glassCard("strong"), "rounded-xl border border-white/40 dark:border-white/30 py-6"),
+    glass: cn(glassCard("medium"), "rounded-xl py-6"),
+    "glass-subtle": cn(glassCard("subtle"), "rounded-xl py-6"),
+    "glass-strong": cn(glassCard("strong"), "rounded-xl py-6"),
   };
 
   return (

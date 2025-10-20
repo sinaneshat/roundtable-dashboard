@@ -126,29 +126,7 @@ export async function generateTitleFromMessage(
         });
       }
 
-      // ✅ VALIDATE: Ensure title is meaningful (at least 3 characters)
-      if (title.length < 3) {
-        const validationError = new Error(`Generated title too short: "${title}" (${title.length} chars)`);
-        lastError = validationError;
-
-        console.warn('[generateTitleFromMessage] ⚠️ Generated title too short, retrying', {
-          shortTitle: title,
-          titleLength: title.length,
-          attempt,
-          remainingAttempts: MAX_ATTEMPTS - attempt,
-        });
-
-        // Retry if we haven't exhausted attempts
-        if (attempt < MAX_ATTEMPTS) {
-          await new Promise(resolve => setTimeout(resolve, 1000)); // 1 second delay
-          continue;
-        }
-
-        // Last attempt failed - fall through to fallback
-        throw validationError;
-      }
-
-      // ✅ SUCCESS: Return valid title
+      // ✅ SUCCESS: Return title (no minimum length validation - accept any model response)
       console.warn('[generateTitleFromMessage] 🎉 Final title generated', {
         finalTitle: title,
         finalLength: title.length,

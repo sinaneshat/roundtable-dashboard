@@ -1,6 +1,17 @@
 import { BRAND } from '@/constants/brand';
 import { getBaseUrl } from '@/utils/helpers';
 
+// Stable default values to prevent re-renders
+const DEFAULT_FEATURES = [
+  'Multi-model AI collaboration',
+  'Real-time chat interface',
+  'Session management',
+  'Public sharing',
+  'Usage tracking',
+];
+const DEFAULT_LANGUAGES = ['en-US'];
+const DEFAULT_SCREENSHOTS = [`${getBaseUrl()}/static/og-image.png`];
+
 /**
  * Props for the SoftwareApplicationSchema component
  * Enhanced for 2025 AI search optimization
@@ -62,17 +73,11 @@ export function SoftwareApplicationSchema(props: SoftwareApplicationSchemaProps)
     ratingCount,
     reviewCount,
     releaseDate,
-    features = [
-      'Multi-model AI collaboration',
-      'Real-time chat interface',
-      'Session management',
-      'Public sharing',
-      'Usage tracking',
-    ],
-    inLanguage = ['en-US'],
+    features = DEFAULT_FEATURES,
+    inLanguage = DEFAULT_LANGUAGES,
     softwareRequirements = 'Requires JavaScript. Requires HTML5. Works on any modern browser.',
     supportUrl = `${getBaseUrl()}/support`,
-    screenshots = [`${getBaseUrl()}/static/og-image.png`],
+    screenshots = DEFAULT_SCREENSHOTS,
   } = props;
 
   const baseUrl = getBaseUrl();

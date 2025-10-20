@@ -13,6 +13,9 @@ import { useUsageStatsQuery } from '@/hooks/queries/usage';
 import { getAvatarPropsFromModelId } from '@/lib/utils/ai-display';
 import { deduplicateConsecutiveUserMessages, filterNonEmptyMessages, getMessageMetadata } from '@/lib/utils/message-transforms';
 
+// Stable default values to prevent re-renders
+const EMPTY_PARTICIPANTS: ChatParticipant[] = [];
+
 type ChatMessageListProps = {
   messages: UIMessage[];
   /** User information for displaying user messages. Optional - defaults to generic user. */
@@ -39,7 +42,7 @@ type ChatMessageListProps = {
 export function ChatMessageList({
   messages,
   user = null,
-  participants = [],
+  participants = EMPTY_PARTICIPANTS,
   hideMetadata = false,
   isLoading = false,
   isStreaming = false,

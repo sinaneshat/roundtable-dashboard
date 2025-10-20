@@ -704,7 +704,7 @@ export const ParticipantAnalysisSchema = z.object({
     description: 'List of weaknesses or areas for improvement',
     example: ['Could have explored more unconventional approaches'],
   }),
-  summary: z.string().min(20).max(300).describe('Brief summary of this participant\'s contribution (1-2 sentences)').openapi({
+  summary: z.string().max(300).describe('Brief summary of this participant\'s contribution (1-2 sentences)').openapi({
     description: 'Brief summary of this participant\'s contribution',
     example: 'Provided innovative solutions with strong creative direction.',
   }),
@@ -777,11 +777,11 @@ export const ModeratorAnalysisPayloadSchema = z.object({
   leaderboard: z.array(LeaderboardEntrySchema).min(1).describe('Ranked list of participants by overall performance').openapi({
     description: 'Ranked list of participants by overall performance',
   }),
-  overallSummary: z.string().min(100).max(800).describe('Comprehensive summary of the round, highlighting key insights and comparing approaches').openapi({
+  overallSummary: z.string().max(800).describe('Comprehensive summary of the round, highlighting key insights and comparing approaches').openapi({
     description: 'Comprehensive summary of the round',
     example: 'This brainstorming round showcased diverse creative approaches...',
   }),
-  conclusion: z.string().min(50).max(400).describe('Final conclusion and recommendation on the best path forward').openapi({
+  conclusion: z.string().max(400).describe('Final conclusion and recommendation on the best path forward').openapi({
     description: 'Final conclusion and recommendation',
     example: 'The combination of Participant 1\'s creative ideas with Participant 2\'s practical insights provides the best path forward...',
   }),

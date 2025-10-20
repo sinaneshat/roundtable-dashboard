@@ -215,6 +215,9 @@ export default function ChatThreadScreen({
   // This ensures we only send when the context has the RIGHT participants
   const [expectedParticipantIds, setExpectedParticipantIds] = useState<string[] | null>(null);
 
+  // Track if we've already sent the pending message to avoid double-sending
+  const hasSentPendingMessageRef = useRef(false);
+
   // ✅ SIMPLIFIED: No participantsOverride state needed
   // Context manages the active participants
 
@@ -341,7 +344,7 @@ export default function ChatThreadScreen({
   // ✅ CRITICAL FIX: Send pending message ONLY when context has the RIGHT participants
   // This prevents sending messages with stale participant data
   useEffect(() => {
-    if (!pendingMessage || !expectedParticipantIds) {
+    if (!pendingMessage || !expectedParticipantIds || hasSentPendingMessageRef.current) {
       return;
     }
 
@@ -357,9 +360,8 @@ export default function ChatThreadScreen({
         messagePreview: pendingMessage.substring(0, 50),
       });
 
-      // Clear pending state first to prevent re-triggering
-      setPendingMessage(null);
-      setExpectedParticipantIds(null);
+      // Mark as sent to prevent re-triggering
+      hasSentPendingMessageRef.current = true;
 
       // Now send the message - context has the RIGHT participants
       sendMessage(pendingMessage);
@@ -377,7 +379,8 @@ export default function ChatThreadScreen({
     async (e: React.FormEvent) => {
       e.preventDefault();
       const trimmed = inputValue.trim();
-      if (!trimmed) {
+      // ✅ VALIDATION: Prevent submission if no input or no participants selected
+      if (!trimmed || selectedParticipants.length === 0) {
         return;
       }
 
@@ -423,6 +426,7 @@ export default function ChatThreadScreen({
           // ✅ CRITICAL FIX: Set expected participant IDs AND pending message
           // The useEffect will only send when context participants match these IDs
           const freshIds = participantsWithDates.map(p => p.id);
+          hasSentPendingMessageRef.current = false; // Reset flag for new message
           setExpectedParticipantIds(freshIds);
           setPendingMessage(trimmed);
 
@@ -447,7 +451,7 @@ export default function ChatThreadScreen({
 
       setInputValue('');
     },
-    [inputValue, sendMessage, thread.id, selectedParticipants, updateThreadMutation, updateParticipants],
+    [inputValue, sendMessage, thread.id, selectedParticipants, updateThreadMutation, updateParticipants, queryClient],
   );
 
   // ✅ Derive active participants from context
@@ -504,11 +508,12 @@ export default function ChatThreadScreen({
       }
     });
 
-    // ✅ FIX: Get all unique round numbers from BOTH messages AND changelog
-    // This ensures changelog for upcoming rounds (where participant changes were made) displays
+    // ✅ FIX: Get all unique round numbers from messages, changelog, AND analyses
+    // This ensures all rounds are displayed even if they only have analyses
     const allRoundNumbers = new Set([
       ...messagesByRound.keys(),
       ...changelogByRound.keys(),
+      ...analyses.map(a => a.roundNumber),
     ]);
     const sortedRounds = Array.from(allRoundNumbers).sort((a, b) => a - b);
 
@@ -772,183 +777,186 @@ export default function ChatThreadScreen({
 
   return (
     <>
-      {/* ✅ Use layout's scroll container - no nested scroll container needed */}
-      {/* Content container with virtualization */}
-      <div className="container max-w-3xl mx-auto px-4 sm:px-6 pt-16" style={{ paddingBottom: '250px' }}>
-        {/* ✅ VIRTUALIZATION: Inner container with calculated total height */}
-        <div
-          style={{
-            height: `${rowVirtualizer.getTotalSize()}px`,
-            width: '100%',
-            position: 'relative',
-          }}
-        >
-          {/* ✅ DYNAMIC PATTERN: Wrapper div translated by first item's start position
-               Reference: TanStack Virtual dynamic example
-               Items inside are NOT absolutely positioned - naturally laid out */}
+      {/* ✅ FLEX LAYOUT: Wrapper to maximize spacing between content and input */}
+      <div className="flex flex-col min-h-full justify-between h-full">
+        {/* ✅ Use layout's scroll container - no nested scroll container needed */}
+        {/* Content container with virtualization - flex-1 to take available space */}
+        <div className="flex-1 container max-w-3xl mx-auto px-4 sm:px-6 pt-16 pb-8">
+          {/* ✅ VIRTUALIZATION: Inner container with calculated total height */}
           <div
             style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
+              height: `${rowVirtualizer.getTotalSize()}px`,
               width: '100%',
-              transform: `translateY(${virtualItems[0]?.start ?? 0}px)`,
+              position: 'relative',
             }}
           >
-            {/* ✅ VIRTUALIZATION: Render only visible items for performance */}
-            {virtualItems.map((virtualItem) => {
-              const item = messagesWithAnalysesAndChangelog[virtualItem.index];
-              if (!item)
-                return null;
+            {/* ✅ DYNAMIC PATTERN: Wrapper div translated by first item's start position
+               Reference: TanStack Virtual dynamic example
+               Items inside are NOT absolutely positioned - naturally laid out */}
+            <div
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                width: '100%',
+                transform: `translateY(${virtualItems[0]?.start ?? 0}px)`,
+              }}
+            >
+              {/* ✅ VIRTUALIZATION: Render only visible items for performance */}
+              {virtualItems.map((virtualItem) => {
+                const item = messagesWithAnalysesAndChangelog[virtualItem.index];
+                if (!item)
+                  return null;
 
-              const itemIndex = virtualItem.index;
+                const itemIndex = virtualItem.index;
 
-              // Extract round number for this item
-              const roundNumber = item.type === 'messages'
-                ? ((item.data[0]?.metadata as Record<string, unknown> | undefined)?.roundNumber as number) || 1
-                : item.type === 'analysis'
-                  ? item.data.roundNumber
-                  : item.type === 'changelog'
-                    ? item.data[0]?.roundNumber || 1
-                    : 1;
+                // Extract round number for this item
+                const roundNumber = item.type === 'messages'
+                  ? ((item.data[0]?.metadata as Record<string, unknown> | undefined)?.roundNumber as number) || 1
+                  : item.type === 'analysis'
+                    ? item.data.roundNumber
+                    : item.type === 'changelog'
+                      ? item.data[0]?.roundNumber || 1
+                      : 1;
 
-              // ✅ DYNAMIC PATTERN: Item is naturally laid out (NO absolute positioning)
-              // measureElement ref allows virtualizer to measure actual height
-              return (
-                <div
-                  key={virtualItem.key}
-                  data-index={virtualItem.index}
-                  ref={rowVirtualizer.measureElement}
-                >
-                  {item.type === 'changelog' && item.data.length > 0 && (
+                // ✅ DYNAMIC PATTERN: Item is naturally laid out (NO absolute positioning)
+                // measureElement ref allows virtualizer to measure actual height
+                return (
+                  <div
+                    key={virtualItem.key}
+                    data-index={virtualItem.index}
+                    ref={rowVirtualizer.measureElement}
+                  >
+                    {item.type === 'changelog' && item.data.length > 0 && (
                     // ✅ Changelog before round - ALL changes for this round in ONE accordion
-                    <ConfigurationChangesGroup
-                      className="mb-6"
-                      group={{
-                        timestamp: new Date(item.data[0]!.createdAt),
-                        changes: item.data, // ✅ Pass ALL changes - component groups by action
-                      }}
-                    />
-                  )}
-
-                  {item.type === 'messages' && (
-                    // Messages for this round + Actions + Feedback (AI Elements pattern)
-                    <div className="space-y-3">
-                      <ChatMessageList
-                        messages={item.data}
-                        user={user}
-                        participants={activeParticipants}
-                        isStreaming={isStreaming}
-                        currentParticipantIndex={currentParticipantIndex}
-                        currentStreamingParticipant={
-                          isStreaming && activeParticipants[currentParticipantIndex]
-                            ? activeParticipants[currentParticipantIndex]
-                            : null
-                        }
+                      <ConfigurationChangesGroup
+                        className="mb-6"
+                        group={{
+                          timestamp: new Date(item.data[0]!.createdAt),
+                          changes: item.data, // ✅ Pass ALL changes - component groups by action
+                        }}
                       />
+                    )}
 
-                      {/* ✅ AI ELEMENTS PATTERN: Actions + Feedback after messages, before analysis */}
-                      {!isStreaming && (() => {
+                    {item.type === 'messages' && (
+                    // Messages for this round + Actions + Feedback (AI Elements pattern)
+                      <div className="space-y-3">
+                        <ChatMessageList
+                          messages={item.data}
+                          user={user}
+                          participants={activeParticipants}
+                          isStreaming={isStreaming}
+                          currentParticipantIndex={currentParticipantIndex}
+                          currentStreamingParticipant={
+                            isStreaming && activeParticipants[currentParticipantIndex]
+                              ? activeParticipants[currentParticipantIndex]
+                              : null
+                          }
+                        />
+
+                        {/* ✅ AI ELEMENTS PATTERN: Actions + Feedback after messages, before analysis */}
+                        {!isStreaming && (() => {
                         // ✅ TYPE-SAFE ERROR CHECK: Use validated MessageMetadata type
-                        const hasRoundError = item.data.some((msg) => {
-                          const parseResult = MessageMetadataSchema.safeParse(msg.metadata);
-                          return parseResult.success && messageHasError(parseResult.data);
-                        });
+                          const hasRoundError = item.data.some((msg) => {
+                            const parseResult = MessageMetadataSchema.safeParse(msg.metadata);
+                            return parseResult.success && messageHasError(parseResult.data);
+                          });
 
-                        return (
-                          <Actions className="mt-3">
-                            {/* ✅ Round Feedback: Like/Dislike buttons - only show if round succeeded */}
-                            {!hasRoundError && feedbackHandlersMap.has(roundNumber) && (
-                              <RoundFeedback
-                                threadId={thread.id}
-                                roundNumber={roundNumber}
-                                currentFeedback={feedbackByRound.get(roundNumber) ?? null}
-                                onFeedbackChange={feedbackHandlersMap.get(roundNumber)!}
-                                disabled={isStreaming}
-                                isPending={
-                                  setRoundFeedbackMutation.isPending
-                                  && pendingFeedback?.roundNumber === roundNumber
-                                }
-                                pendingType={
-                                  pendingFeedback?.roundNumber === roundNumber
-                                    ? pendingFeedback.type
-                                    : null
-                                }
-                              />
-                            )}
+                          return (
+                            <Actions className="mt-3">
+                              {/* ✅ Round Feedback: Like/Dislike buttons - only show if round succeeded */}
+                              {!hasRoundError && feedbackHandlersMap.has(roundNumber) && (
+                                <RoundFeedback
+                                  threadId={thread.id}
+                                  roundNumber={roundNumber}
+                                  currentFeedback={feedbackByRound.get(roundNumber) ?? null}
+                                  onFeedbackChange={feedbackHandlersMap.get(roundNumber)!}
+                                  disabled={isStreaming}
+                                  isPending={
+                                    setRoundFeedbackMutation.isPending
+                                    && pendingFeedback?.roundNumber === roundNumber
+                                  }
+                                  pendingType={
+                                    pendingFeedback?.roundNumber === roundNumber
+                                      ? pendingFeedback.type
+                                      : null
+                                  }
+                                />
+                              )}
 
-                            {/* ✅ Round Actions: Retry - always shown */}
-                            <Action
-                              onClick={retryRound}
-                              label={t('errors.retry')}
-                              tooltip={t('errors.retryRound')}
-                            >
-                              <RefreshCcwIcon className="size-3" />
-                            </Action>
-                          </Actions>
-                        );
-                      })()}
-                    </div>
-                  )}
+                              {/* ✅ Round Actions: Retry - always shown */}
+                              <Action
+                                onClick={retryRound}
+                                label={t('errors.retry')}
+                                tooltip={t('errors.retryRound')}
+                              >
+                                <RefreshCcwIcon className="size-3" />
+                              </Action>
+                            </Actions>
+                          );
+                        })()}
+                      </div>
+                    )}
 
-                  {item.type === 'analysis' && (
+                    {item.type === 'analysis' && (
                     // Analysis after round (shows results)
-                    <RoundAnalysisCard
-                      className="mt-6"
-                      analysis={item.data}
-                      threadId={thread.id}
-                      isLatest={itemIndex === messagesWithAnalysesAndChangelog.length - 1}
-                    />
-                  )}
-                </div>
-              );
-            })}
+                      <RoundAnalysisCard
+                        className="mt-6"
+                        analysis={item.data}
+                        threadId={thread.id}
+                        isLatest={itemIndex === messagesWithAnalysesAndChangelog.length - 1}
+                      />
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           </div>
+
+          {/* Streaming participants loader */}
+          {isStreaming && selectedParticipants.length > 1 && (
+            <StreamingParticipantsLoader
+              className="mt-8"
+              participants={selectedParticipants}
+              currentParticipantIndex={currentParticipantIndex}
+            />
+          )}
         </div>
 
-        {/* Streaming participants loader */}
-        {isStreaming && selectedParticipants.length > 1 && (
-          <StreamingParticipantsLoader
-            className="mt-8"
-            participants={selectedParticipants}
-            currentParticipantIndex={currentParticipantIndex}
-          />
-        )}
-      </div>
-
-      {/* Input container - fixed at bottom with consistent padding */}
-      <div className="sticky bottom-0 z-50 bg-gradient-to-t from-background via-background to-transparent pt-6 pb-4">
-        <div className="container max-w-3xl mx-auto px-4 sm:px-6">
-          <ChatInput
-            value={inputValue}
-            onChange={setInputValue}
-            onSubmit={handlePromptSubmit}
-            status={isStreaming ? 'submitted' : 'ready'}
-            onStop={stopStreaming}
-            placeholder={t('input.placeholder')}
-            participants={selectedParticipants}
-            onRemoveParticipant={(participantId) => {
+        {/* ✅ INPUT CONTAINER: mt-auto pushes to bottom, maximizing distance from content */}
+        <div className="mt-auto sticky bottom-0 z-50 bg-gradient-to-t from-background via-background to-transparent pt-6 pb-4">
+          <div className="container max-w-3xl mx-auto px-4 sm:px-6">
+            <ChatInput
+              value={inputValue}
+              onChange={setInputValue}
+              onSubmit={handlePromptSubmit}
+              status={isStreaming ? 'submitted' : 'ready'}
+              onStop={stopStreaming}
+              placeholder={t('input.placeholder')}
+              participants={selectedParticipants}
+              onRemoveParticipant={(participantId) => {
               // Filter out the removed participant and reindex
-              const filtered = selectedParticipants.filter(p => p.id !== participantId);
-              // Prevent removing the last participant
-              if (filtered.length === 0)
-                return;
-              const reindexed = filtered.map((p, index) => ({ ...p, order: index }));
-              handleParticipantsChange(reindexed);
-            }}
-            toolbar={(
-              <>
-                <ChatParticipantsList
-                  participants={selectedParticipants}
-                  onParticipantsChange={handleParticipantsChange}
-                />
-                <ChatModeSelector
-                  selectedMode={selectedMode}
-                  onModeChange={setSelectedMode}
-                />
-              </>
-            )}
-          />
+                const filtered = selectedParticipants.filter(p => p.id !== participantId);
+                // Prevent removing the last participant
+                if (filtered.length === 0)
+                  return;
+                const reindexed = filtered.map((p, index) => ({ ...p, order: index }));
+                handleParticipantsChange(reindexed);
+              }}
+              toolbar={(
+                <>
+                  <ChatParticipantsList
+                    participants={selectedParticipants}
+                    onParticipantsChange={handleParticipantsChange}
+                  />
+                  <ChatModeSelector
+                    selectedMode={selectedMode}
+                    onModeChange={setSelectedMode}
+                  />
+                </>
+              )}
+            />
+          </div>
         </div>
       </div>
 

@@ -17,6 +17,9 @@ import { cn } from '@/lib/ui/cn';
 // Following official documentation - no custom types or logic
 // ============================================================================
 
+// Stable default values to prevent re-renders
+const EMPTY_PARTICIPANTS: ParticipantConfig[] = [];
+
 type ChatInputProps = {
   /** Current input value */
   value: string;
@@ -71,7 +74,7 @@ export function ChatInput({
   disabled = false,
   autoFocus = false,
   toolbar,
-  participants = [],
+  participants = EMPTY_PARTICIPANTS,
   onRemoveParticipant,
   className,
 }: ChatInputProps) {
@@ -91,14 +94,16 @@ export function ChatInput({
   const isStreaming = status !== 'ready';
   // Submit button should be disabled when explicitly disabled or when not ready AND not streaming (error state)
   const isDisabled = disabled || status === 'error';
+  // ✅ VALIDATION: Submit should be disabled if no participants are selected or input is empty
+  const hasValidInput = value.trim().length > 0 && participants.length > 0;
 
   return (
     <div className="w-full">
-      {/* ✅ DOUBLE-LAYER GLASS BORDER: Outer container (same pattern as pricing cards) */}
+      {/* ✅ DOUBLE-LAYER GLASS BORDER: Outer container with subtle border */}
       <div className={cn(
         'relative h-full',
         'rounded-2xl md:rounded-3xl',
-        'border-2 border-white/20 dark:border-white/10',
+        'border border-white/10 dark:border-white/5',
         'p-2 md:p-3',
         'shadow-lg',
         className,
@@ -115,12 +120,11 @@ export function ChatInput({
           inactiveZone={0.01}
         />
 
-        {/* ✅ INNER GLASS LAYER: Second border with backdrop blur */}
+        {/* ✅ INNER GLASS LAYER: Glass see-through design with strong blur */}
         <div className={cn(
           'relative flex flex-col overflow-hidden',
           'rounded-xl',
-          'border border-white/20 dark:border-white/10',
-          'bg-background/50 backdrop-blur-sm',
+          'bg-white/5 dark:bg-white/5 backdrop-blur-xl',
           'dark:shadow-[0px_0px_27px_0px_#2D2D2D]',
         )}
         >
@@ -144,7 +148,7 @@ export function ChatInput({
             </div>
 
             {/* Footer Section: Two rows - toolbar first, then chips */}
-            <div className="border-t border-white/10">
+            <div className="border-t border-white/5">
               {/* Row 1: Toolbar buttons and submit button */}
               <div className="px-5 py-3 flex items-center gap-2">
                 {/* Toolbar buttons on the left */}
@@ -170,7 +174,7 @@ export function ChatInput({
                       <Button
                         type="submit"
                         size="icon"
-                        disabled={isDisabled || !value.trim()}
+                        disabled={isDisabled || !hasValidInput}
                         variant="outline"
                         className="size-8 rounded-lg shrink-0"
                       >
