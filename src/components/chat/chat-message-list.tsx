@@ -76,6 +76,7 @@ export function ChatMessageList({
           return (
             <Message from="user" key={message.id}>
               <MessageContent>
+                {/* eslint-disable react/no-array-index-key -- Parts array is stable, order is meaningful, and scoped by message.id */}
                 {message.parts.map((part, partIndex) => {
                   if (part.type === 'text') {
                     return (
@@ -198,10 +199,10 @@ export function ChatMessageList({
               <div className="mt-2 ml-12 space-y-1">
                 <p className="text-xs font-medium text-muted-foreground">{t('sources.title')}</p>
                 <div className="space-y-1">
-                  {sourceParts.map((sourcePart, sourceIndex) => {
+                  {sourceParts.map((sourcePart) => {
                     if ('type' in sourcePart && sourcePart.type === 'source-url' && 'url' in sourcePart) {
                       return (
-                        <div key={`${message.id}-source-${sourceIndex}`} className="text-xs">
+                        <div key={`${message.id}-source-${sourcePart.url}`} className="text-xs">
                           <a
                             href={sourcePart.url as string}
                             target="_blank"

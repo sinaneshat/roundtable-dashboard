@@ -227,6 +227,7 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
                             return (
                               <Message from="user" key={message.id}>
                                 <MessageContent>
+                                  { }
                                   {message.parts.map((part, partIndex) => {
                                     if (part.type === 'text') {
                                       return (

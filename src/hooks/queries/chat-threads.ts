@@ -181,16 +181,15 @@ export function useThreadChangelogQuery(threadId: string, enabled?: boolean) {
  * Returns all moderator analyses ordered by round number
  * Protected endpoint - requires authentication
  *
- * ✅ OPTIMIZED POLLING: Minimal polling strategy for streaming analyses
- * - Primary mechanism: Real-time streaming via experimental_useObject hook
- * - Polling role: Only detect server-side completion of stuck/failed streams
- * - Pending analyses: No polling (useObject hook handles streaming)
- * - Streaming analyses: Slow polling (30s) only to detect abnormal completion
- * - Completed/failed analyses: No polling
- * - Stuck analyses (> 3 minutes): No polling (considered failed)
+ * ✅ AI SDK v5 PATTERN: Fetch completed analyses from database
+ * - Used on page refresh to load persisted analyses
+ * - Real-time streaming handled by experimental_useObject in ModeratorAnalysisStream component
+ * - NO POLLING needed - streaming provides real-time updates via experimental_useObject
+ * - Query invalidated when analysis completes (via onFinish callback)
+ * - Query invalidated when round completes to fetch newly created pending analyses
  *
- * This eliminates overlap between streaming and polling, allowing useObject
- * to properly render partial objects in real-time.
+ * Pattern: Fetch persisted data, stream new data via experimental_useObject
+ * Reference: https://sdk.vercel.ai/docs/ai-sdk-core/stream-object
  *
  * @param threadId - Thread ID
  * @param enabled - Optional control over whether to fetch (default: based on threadId and auth)
@@ -199,45 +198,28 @@ export function useThreadAnalysesQuery(threadId: string, enabled?: boolean) {
   const { data: session, isPending } = useSession();
   const isAuthenticated = !isPending && !!session?.user?.id;
 
-  return useQuery({
+  // ✅ AI SDK v5 PATTERN: No polling - streaming handled by experimental_useObject
+  // The streaming component (ModeratorAnalysisStream) handles real-time updates
+  // This query is only for fetching persisted data on mount/invalidation
+  const query = useQuery({
     queryKey: queryKeys.threads.analyses(threadId),
     queryFn: () => getThreadAnalysesService({ param: { id: threadId } }),
-    staleTime: 5000, // 5 seconds - moderate staleness during streaming
-    // ✅ MINIMAL POLLING: Only for detecting abnormal stream completion
-    // useObject hook handles real-time streaming, so aggressive polling is unnecessary
-    refetchInterval: (query) => {
-      const data = query.state.data;
-      if (!data?.success)
-        return false;
-
-      const THREE_MINUTES_MS = 3 * 60 * 1000;
-      const now = Date.now();
-
-      // Check if any analyses are streaming (not pending - those are handled by useObject)
-      const hasActiveStreamingAnalysis = data.data.items.some((item) => {
-        // Only poll for "streaming" status (server-side streaming)
-        // Don't poll for "pending" - useObject hook will handle it
-        if (item.status !== 'streaming')
-          return false;
-
-        // Check age - if older than 3 minutes, consider it stuck (don't poll for stuck analyses)
-        const createdAt = new Date(item.createdAt).getTime();
-        const ageMs = now - createdAt;
-
-        return ageMs <= THREE_MINUTES_MS;
-      });
-
-      // ✅ SLOW POLLING: Only poll every 30 seconds for streaming analyses
-      // This is only a safety net for detecting server-side completion
-      // Real-time updates come from useObject hook's partialObjectStream
-      return hasActiveStreamingAnalysis ? 30000 : false; // 30 seconds, or no polling
-    },
-    // ✅ CRITICAL FIX: Preserve previous data during refetches and polling
+    staleTime: STALE_TIMES.threadAnalyses, // 30 seconds - match server-side prefetch
+    // ✅ NO POLLING: Streaming via experimental_useObject provides real-time updates
+    // Query is invalidated by:
+    // 1. onRoundComplete callback when participants finish (creates pending analysis)
+    // 2. onStreamComplete callback when analysis streaming completes
+    // ✅ CRITICAL FIX: Only fetch on initial mount if data is not already prefetched
+    // This prevents unnecessary refetches when component remounts during streaming
+    refetchOnMount: false, // ✅ CHANGED: Don't refetch on mount - data is prefetched server-side
+    refetchOnWindowFocus: false, // Don't refetch on window focus
+    refetchOnReconnect: false, // Don't refetch on reconnect
+    // ✅ CRITICAL FIX: Preserve previous data during refetches
     // This prevents analyses from disappearing when query refetches
-    // Without this, analyses temporarily become empty array during refetch,
-    // causing items to be removed from DOM and re-added at the bottom
     placeholderData: previousData => previousData,
     enabled: enabled !== undefined ? enabled : (isAuthenticated && !!threadId),
     retry: false,
   });
+
+  return query;
 }

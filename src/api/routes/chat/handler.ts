@@ -1,6 +1,6 @@
 import type { RouteHandler } from '@hono/zod-openapi';
 import type { UIMessage } from 'ai';
-import { consumeStream, convertToModelMessages, streamText, validateUIMessages } from 'ai';
+import { consumeStream, convertToModelMessages, streamObject, streamText, validateUIMessages } from 'ai';
 import type { SQL } from 'drizzle-orm';
 import { and, asc, desc, eq, ne } from 'drizzle-orm';
 import Fuse from 'fuse.js';
@@ -18,6 +18,15 @@ import {
   Responses,
 } from '@/api/core';
 import { IdParamSchema } from '@/api/core/schemas';
+import {
+  processAnalysisInBackground,
+  restartStaleAnalysis,
+} from '@/api/services/analysis-background.service';
+import type { ModeratorPromptConfig } from '@/api/services/moderator-analysis.service';
+import {
+  buildModeratorSystemPrompt,
+  buildModeratorUserPrompt,
+} from '@/api/services/moderator-analysis.service';
 import { initializeOpenRouter, openRouterService } from '@/api/services/openrouter.service';
 import { extractModeratorModelName, openRouterModelsService } from '@/api/services/openrouter-models.service';
 import {
@@ -1894,7 +1903,18 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
 
     let currentRoundNumber: number;
 
-    if (participantIndex === 0) {
+    if (regenerateRound && participantIndex === 0) {
+      // ✅ REGENERATION: Reuse the exact round number being regenerated
+      // This ensures the new messages replace the old round instead of creating a new round
+      currentRoundNumber = regenerateRound;
+
+      console.warn('[streamChatHandler] ♻️ Using round number from regeneration', {
+        threadId,
+        participantIndex,
+        regenerateRound,
+        currentRoundNumber,
+      });
+    } else if (participantIndex === 0) {
       // First participant: Calculate round number
       const existingUserMessages = await db.query.chatMessage.findMany({
         where: and(
@@ -2485,6 +2505,70 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
     }
 
     // =========================================================================
+    // STEP 6.5: ✅ VALIDATE MESSAGE HISTORY: Ensure last message is from user
+    // =========================================================================
+    // OpenRouter and most LLM APIs require conversations to end with a user message.
+    // This validation prevents the "Last message cannot be from the assistant" error.
+    //
+    // WHY THIS HAPPENS:
+    // - Frontend sends empty user messages to trigger subsequent participants
+    // - Backend filters out empty user messages (line 2454)
+    // - Result: Message history ends with assistant message → API rejects it
+    //
+    // FIX: If last message is from assistant, duplicate the last user message to ensure
+    // proper conversation structure for multi-participant flows.
+    const lastModelMessage = modelMessages[modelMessages.length - 1];
+    if (!lastModelMessage || lastModelMessage.role !== 'user') {
+      console.warn('[streamChatHandler] ⚠️ INVALID MESSAGE HISTORY: Last message must be from user', {
+        threadId,
+        participantIndex,
+        lastMessageRole: lastModelMessage?.role,
+        messageCount: modelMessages.length,
+      });
+
+      // Find the last user message to duplicate
+      const lastUserMessage = nonEmptyMessages.findLast(m => m.role === 'user');
+      if (!lastUserMessage) {
+        console.error('[streamChatHandler] ❌ NO USER MESSAGE FOUND', {
+          threadId,
+          participantIndex,
+          messageCount: nonEmptyMessages.length,
+        });
+        throw createError.badRequest('No valid user message found in conversation history');
+      }
+
+      // Extract text content from last user message
+      const lastUserText = lastUserMessage.parts?.find(p => p.type === 'text' && 'text' in p);
+      if (!lastUserText || !('text' in lastUserText)) {
+        console.error('[streamChatHandler] ❌ USER MESSAGE HAS NO TEXT', {
+          threadId,
+          participantIndex,
+          messageId: lastUserMessage.id,
+        });
+        throw createError.badRequest('Last user message has no valid text content');
+      }
+
+      // Re-convert with the last user message duplicated at the end
+      // This ensures the conversation structure is: [user, assistant, user, assistant, ..., user]
+      modelMessages = convertToModelMessages([
+        ...nonEmptyMessages,
+        {
+          id: `user-continuation-${ulid()}`,
+          role: 'user',
+          parts: [{ type: 'text', text: lastUserText.text }],
+        },
+      ]);
+
+      console.warn('[streamChatHandler] ✅ Fixed message history by duplicating last user message', {
+        threadId,
+        participantIndex,
+        originalMessageCount: modelMessages.length - 1,
+        newMessageCount: modelMessages.length,
+        userMessageText: lastUserText.text.substring(0, 50),
+      });
+    }
+
+    // =========================================================================
     // STEP 7: ✅ OFFICIAL AI SDK v5 STREAMING PATTERN
     // Reference: https://sdk.vercel.ai/docs/ai-sdk-core/generating-text#stream-text
     // Reference: https://sdk.vercel.ai/docs/ai-sdk-core/error-handling
@@ -2535,6 +2619,49 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
         isEnabled: true,
         functionId: `chat.thread.${threadId}.participant.${participant.id}`,
       },
+      // ✅ CONDITIONAL RETRY: Don't retry validation errors (400), authentication errors (401, 403)
+      // These are permanent errors that won't be fixed by retrying
+      shouldRetry: ({ error }: { error: unknown }) => {
+        // Extract status code from error
+        const err = error as Error & { statusCode?: number; responseBody?: string };
+        const statusCode = err?.statusCode;
+
+        // Don't retry validation errors (400) - malformed requests
+        if (statusCode === 400) {
+          console.warn('[streamChatHandler] ⏭️ Skipping retry for validation error (400)', {
+            threadId,
+            participantIndex,
+            statusCode,
+            errorMessage: err?.message,
+          });
+          return false;
+        }
+
+        // Don't retry authentication errors (401, 403) - requires API key fix
+        if (statusCode === 401 || statusCode === 403) {
+          console.warn('[streamChatHandler] ⏭️ Skipping retry for authentication error', {
+            threadId,
+            participantIndex,
+            statusCode,
+            errorMessage: err?.message,
+          });
+          return false;
+        }
+
+        // Don't retry model not found errors (404) - model doesn't exist
+        if (statusCode === 404) {
+          console.warn('[streamChatHandler] ⏭️ Skipping retry for not found error (404)', {
+            threadId,
+            participantIndex,
+            statusCode,
+            errorMessage: err?.message,
+          });
+          return false;
+        }
+
+        // Retry everything else (rate limits, network errors, etc.)
+        return true;
+      },
     };
 
     // ✅ REASONING CAPTURE: Accumulate reasoning deltas from stream
@@ -2542,13 +2669,165 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
     // but doesn't include the full reasoning in finishResult for most models
     const reasoningDeltas: string[] = [];
 
-    // ✅ STREAM RESPONSE: Direct streaming, let AI SDK handle retries
+    // =========================================================================
+    // ✅ EMPTY RESPONSE RETRY LOGIC
+    // =========================================================================
+    // Some models return 0 tokens even with finishReason='stop', which indicates
+    // possible content filtering or model instability. We retry these cases.
+    //
+    // STRATEGY: Single loop with inline retry logic
+    // - Make up to MAX_EMPTY_RESPONSE_RETRIES attempts
+    // - Each attempt consumes stream to check if empty
+    // - On success OR final attempt, make one more call with onFinish for persistence
+    const MAX_EMPTY_RESPONSE_RETRIES = AI_RETRY_CONFIG.maxAttempts;
+    let totalRetryAttempts = 0;
+    let lastAttemptWasEmpty = false;
+
+    for (let attempt = 1; attempt <= MAX_EMPTY_RESPONSE_RETRIES; attempt++) {
+      totalRetryAttempts = attempt;
+
+      console.warn('[streamChatHandler] 🔄 Attempting stream', {
+        threadId,
+        participantIndex,
+        modelId: participant.modelId,
+        attempt,
+        maxAttempts: MAX_EMPTY_RESPONSE_RETRIES,
+      });
+
+      // Clear reasoning deltas for this attempt
+      reasoningDeltas.length = 0;
+
+      try {
+        // ✅ STREAM RESPONSE: Call model
+        const result = streamText({
+          ...streamParams,
+
+          onChunk: async ({ chunk }) => {
+            if (chunk.type === 'reasoning-delta') {
+              reasoningDeltas.push(chunk.text);
+            }
+          },
+        });
+
+        // ✅ CONSUME STREAM: Wait for completion to check output tokens
+        const text = await result.text;
+        const usage = await result.usage;
+        const finishReason = await result.finishReason;
+
+        const outputTokens = usage?.outputTokens || 0;
+        const isEmptyResponse = outputTokens === 0;
+
+        console.warn('[streamChatHandler] 📊 Stream completed', {
+          threadId,
+          participantIndex,
+          modelId: participant.modelId,
+          attempt,
+          outputTokens,
+          finishReason,
+          textLength: text?.length || 0,
+          isEmptyResponse,
+        });
+
+        lastAttemptWasEmpty = isEmptyResponse;
+
+        // ✅ SUCCESS: Got valid response (> 0 tokens)
+        if (!isEmptyResponse) {
+          console.warn('[streamChatHandler] ✅ Valid response received', {
+            threadId,
+            participantIndex,
+            modelId: participant.modelId,
+            attempt,
+            outputTokens,
+          });
+          break; // Exit retry loop - will make final call for persistence
+        }
+
+        // ✅ RETRY: Empty response, try again (if not last attempt)
+        if (attempt < MAX_EMPTY_RESPONSE_RETRIES) {
+          console.warn('[streamChatHandler] ⚠️ Empty response detected, retrying', {
+            threadId,
+            participantIndex,
+            modelId: participant.modelId,
+            attempt,
+            remainingAttempts: MAX_EMPTY_RESPONSE_RETRIES - attempt,
+            finishReason,
+          });
+          continue; // Try again
+        } else {
+          // ✅ EXHAUSTED: All retries failed
+          console.error('[streamChatHandler] ❌ Empty response after all retries', {
+            threadId,
+            participantIndex,
+            modelId: participant.modelId,
+            totalAttempts: attempt,
+            finishReason,
+          });
+          break; // Exit - will make final call to persist the error
+        }
+      } catch (streamError) {
+        // Check if this error should be retried using the same logic as shouldRetry
+        const err = streamError as Error & { statusCode?: number; responseBody?: string };
+        const statusCode = err?.statusCode;
+
+        // Check if error is non-retryable (validation, auth, not found, data policy errors)
+        const isNonRetryable = (
+          statusCode === 400 // Validation error
+          || statusCode === 401 // Authentication error
+          || statusCode === 403 // Forbidden/authentication error
+          || statusCode === 404 // Not found (including data policy errors)
+        );
+
+        console.error('[streamChatHandler] ❌ Stream error during attempt', {
+          threadId,
+          participantIndex,
+          modelId: participant.modelId,
+          attempt,
+          statusCode,
+          error: streamError instanceof Error ? streamError.message : String(streamError),
+          remainingAttempts: MAX_EMPTY_RESPONSE_RETRIES - attempt,
+          isNonRetryable,
+        });
+
+        // Don't retry non-retryable errors - throw immediately
+        if (isNonRetryable) {
+          console.warn('[streamChatHandler] ⏭️ Non-retryable error detected - stopping retry loop', {
+            threadId,
+            participantIndex,
+            statusCode,
+            errorType: statusCode === 404 ? 'Data policy or model not found' : 'Validation or authentication',
+          });
+          throw streamError;
+        }
+
+        // If last attempt, throw error
+        if (attempt >= MAX_EMPTY_RESPONSE_RETRIES) {
+          throw streamError;
+        }
+
+        // Otherwise, retry (for transient errors like rate limits, network issues)
+        continue;
+      }
+    }
+
+    // =========================================================================
+    // ✅ FINAL STREAM: Make one final call with onFinish for DB persistence
+    // =========================================================================
+    // This call will be streamed to the frontend and saved to database
+    console.warn('[streamChatHandler] 🚀 Final stream with persistence', {
+      threadId,
+      participantIndex,
+      modelId: participant.modelId,
+      totalAttempts: totalRetryAttempts,
+      lastAttemptWasEmpty,
+    });
+
+    // Clear reasoning deltas before final attempt
+    reasoningDeltas.length = 0;
+
+    // ✅ STREAM RESPONSE: Final attempt with persistence
     const finalResult = streamText({
       ...streamParams,
 
-      // ✅ REASONING EXTRACTION: Capture reasoning from stream chunks
-      // This is necessary because finishResult.reasoning is undefined for most models
-      // Only certain models (OpenAI o1, DeepSeek R1) include reasoning in finishResult
       onChunk: async ({ chunk }) => {
         if (chunk.type === 'reasoning-delta') {
           reasoningDeltas.push(chunk.text);
@@ -2558,6 +2837,16 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
       // ✅ PERSIST MESSAGE: Save to database after streaming completes
       onFinish: async (finishResult) => {
         const { text, usage, finishReason, providerMetadata, response } = finishResult;
+
+        // ✅ ADD RETRY METADATA: Track how many attempts were made
+        console.warn('[streamChatHandler] 💾 Saving message with retry metadata', {
+          threadId,
+          participantIndex,
+          modelId: participant.modelId,
+          totalRetryAttempts,
+          outputTokens: usage?.outputTokens || 0,
+          finishReason,
+        });
 
         // ✅ CRITICAL FIX: Extract reasoning from accumulated deltas first
         // Priority 1: Use accumulated reasoning deltas from stream chunks
@@ -2784,6 +3073,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
                 providerMessage,
                 openRouterError,
                 isTransient: isTransientError,
+                retryAttempts: totalRetryAttempts > 1 ? totalRetryAttempts : undefined, // Only include if retried
               },
               createdAt: new Date(),
             })
@@ -3075,27 +3365,143 @@ export const deleteCustomRoleHandler: RouteHandler<typeof deleteCustomRoleRoute,
 );
 
 // ============================================================================
+// Moderator Analysis Helper Functions
+// ============================================================================
+
+/**
+ * Generate Moderator Analysis using AI SDK streamObject()
+ *
+ * ✅ AI SDK v5 PATTERN: Uses streamObject() for real-time structured object streaming
+ * ✅ CHEAP MODEL: Uses Claude 3.5 Sonnet (cost-effective for analysis)
+ * ✅ STRUCTURED OUTPUT: Returns streaming object conforming to ModeratorAnalysisPayloadSchema
+ * ✅ PERSISTENCE: Uses onFinish callback to persist without consuming stream
+ *
+ * Pattern follows analysis-background.service.ts:145,163
+ *
+ * @param config - Analysis configuration including round, mode, user question, responses, IDs, and env
+ * @param config.analysisId - Database ID of the analysis record to update
+ * @param config.threadId - Thread ID for logging
+ * @param config.env - API environment with OpenRouter config
+ * @returns StreamObject result
+ */
+function generateModeratorAnalysis(
+  config: ModeratorPromptConfig & {
+    env: ApiEnv['Bindings'];
+    analysisId: string;
+    threadId: string;
+  },
+) {
+  const { roundNumber, mode, userQuestion, participantResponses, env, analysisId, threadId } = config;
+
+  // ✅ ESTABLISHED PATTERN: Initialize OpenRouter and get client
+  // Reference: src/api/services/analysis-background.service.ts:144-145
+  initializeOpenRouter(env);
+  const client = openRouterService.getClient();
+
+  // ✅ FIXED MODEL: Always use Claude 3.5 Sonnet for analysis
+  const analysisModelId = 'anthropic/claude-3.5-sonnet';
+
+  // Build prompts using service layer
+  const systemPrompt = buildModeratorSystemPrompt({
+    roundNumber,
+    mode,
+    userQuestion,
+    participantResponses,
+  });
+
+  const userPrompt = buildModeratorUserPrompt({
+    roundNumber,
+    mode,
+    userQuestion,
+    participantResponses,
+  });
+
+  // ✅ AI SDK streamObject(): Stream structured analysis
+  // Pattern follows analysis-background.service.ts:162-177
+  return streamObject({
+    model: client.chat(analysisModelId),
+    schema: ModeratorAnalysisPayloadSchema,
+    schemaName: 'ModeratorAnalysis',
+    system: systemPrompt,
+    prompt: userPrompt,
+    mode: 'json', // Force JSON mode for better schema adherence
+    temperature: 0.3, // Lower temperature for more consistent analysis
+
+    // ✅ Telemetry for monitoring
+    experimental_telemetry: {
+      isEnabled: true,
+      functionId: `moderator-analysis-round-${roundNumber}`,
+    },
+
+    // ✅ CRITICAL FIX: Use onFinish callback to persist completed analysis
+    // This avoids consuming the stream separately, ensuring smooth progressive streaming to the frontend
+    // The onFinish callback runs after streaming completes without interfering with the stream
+    onFinish: async ({ object: finalObject, error: finishError }) => {
+      if (finishError) {
+        console.error('[generateModeratorAnalysis] ❌ Stream error:', finishError);
+        try {
+          const db = await getDbAsync();
+          await db.update(tables.chatModeratorAnalysis)
+            .set({
+              status: 'failed',
+              errorMessage: finishError instanceof Error ? finishError.message : 'Unknown error',
+            })
+            .where(eq(tables.chatModeratorAnalysis.id, analysisId));
+        } catch (dbError) {
+          console.error('[generateModeratorAnalysis] ❌ Failed to update error status:', dbError);
+        }
+        return;
+      }
+
+      if (finalObject) {
+        console.warn('[generateModeratorAnalysis] ✅ Persisting completed analysis', {
+          analysisId,
+          threadId,
+          roundNumber,
+        });
+        try {
+          const db = await getDbAsync();
+          await db.update(tables.chatModeratorAnalysis)
+            .set({
+              status: 'completed',
+              analysisData: finalObject,
+              completedAt: new Date(),
+            })
+            .where(eq(tables.chatModeratorAnalysis.id, analysisId));
+        } catch (dbError) {
+          console.error('[generateModeratorAnalysis] ❌ Failed to persist analysis:', dbError);
+        }
+      }
+    },
+  });
+}
+
+// ============================================================================
 // Moderator Analysis Handler
 // ============================================================================
 
 /**
  * Analyze Conversation Round Handler
  *
- * ✅ AI SDK streamObject() Pattern: Generates structured analysis instead of text
- * ✅ Follows Existing Patterns: Similar to streamChatHandler but for analysis
- * ✅ Cheap Model: Uses GPT-4o-mini for cost-effective moderation
+ * ✅ AI SDK streamObject() Pattern: Real-time streaming of structured analysis
+ * ✅ Official AI SDK v5 Pattern: Uses streamObject() with onFinish() callback to persist
+ * ✅ Follows Existing Patterns: Similar to streamChatHandler but for structured objects
+ * ✅ Cheap Model: Uses Claude 3.5 Sonnet for reliable structured output
  * ✅ Integrated Flow: Not a separate service, part of the chat system
  *
  * This handler:
  * 1. Fetches all participant messages for the round
- * 2. Builds a moderator prompt with all responses
- * 3. Streams structured JSON analysis using streamObject()
- * 4. Returns ratings, pros/cons, leaderboard, and insights
+ * 2. Checks for existing completed analysis (idempotency)
+ * 3. Streams structured analysis object in real-time using streamObject()
+ * 4. Persists final analysis to database via onFinish() callback
  *
- * Frontend Integration:
- * - Call this after all participants have responded in a round
- * - Use AI SDK's useObject() hook to stream and display the analysis
- * - Render skills matrix, leaderboard, and insights as they stream in
+ * Frontend Integration (AI SDK v5):
+ * - Use experimental_useObject hook to consume stream
+ * - Progressive rendering as object properties stream in
+ * - On page refresh, use GET /analyses to fetch persisted data
+ * - No polling needed - real-time streaming provides updates
+ *
+ * Reference: https://sdk.vercel.ai/docs/ai-sdk-core/stream-object
  */
 export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv> = createHandler(
   {
@@ -3125,17 +3531,51 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
     // Verify thread ownership
     const thread = await verifyThreadOwnership(threadId, user.id, db);
 
-    // ✅ CRITICAL FIX: Enhanced idempotency with race condition prevention
-    // Multiple simultaneous requests must not create duplicate analyses
-    let analysisIdToUse: string | null = null; // Track if we're using existing analysis
-
-    const existingAnalysis = await db.query.chatModeratorAnalysis.findFirst({
+    // ✅ REGENERATION FIX: Check for ALL existing analyses (not just first)
+    // During regeneration, multiple analyses might exist for the same round
+    const existingAnalyses = await db.query.chatModeratorAnalysis.findMany({
       where: (fields, { and: andOp, eq: eqOp }) =>
         andOp(
           eqOp(fields.threadId, threadId),
           eqOp(fields.roundNumber, roundNum),
         ),
+      orderBy: [desc(tables.chatModeratorAnalysis.createdAt)], // Most recent first
     });
+
+    // ✅ REGENERATION FIX: If multiple analyses exist, keep only the most recent completed one
+    // Delete all others to prevent conflicts
+    if (existingAnalyses.length > 1) {
+      console.warn('[analyzeRoundHandler] ⚠️ Multiple analyses found for round - cleaning up', {
+        threadId,
+        roundNumber: roundNum,
+        count: existingAnalyses.length,
+      });
+
+      // Find the most recent completed analysis (if any)
+      const completedAnalysis = existingAnalyses.find(a => a.status === 'completed');
+
+      // Delete all except the most recent completed
+      const analysesToDelete = existingAnalyses.filter(a =>
+        a.id !== completedAnalysis?.id,
+      );
+
+      if (analysesToDelete.length > 0) {
+        console.warn('[analyzeRoundHandler] 🗑️ Deleting stale analyses', {
+          count: analysesToDelete.length,
+          ids: analysesToDelete.map(a => a.id),
+        });
+
+        for (const analysis of analysesToDelete) {
+          await db.delete(tables.chatModeratorAnalysis)
+            .where(eq(tables.chatModeratorAnalysis.id, analysis.id));
+        }
+      }
+    }
+
+    // Get the remaining analysis (if any)
+    const existingAnalysis = existingAnalyses.length === 1
+      ? existingAnalyses[0]
+      : existingAnalyses.find(a => a.status === 'completed');
 
     if (existingAnalysis) {
       console.warn('[analyzeRoundHandler] 🔍 Existing analysis found', {
@@ -3145,7 +3585,7 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
         ageMs: Date.now() - existingAnalysis.createdAt.getTime(),
       });
 
-      // ✅ COMPLETED: Return existing analysis data
+      // ✅ COMPLETED: Return existing analysis data (no streaming needed)
       if (existingAnalysis.status === 'completed' && existingAnalysis.analysisData) {
         console.warn('[analyzeRoundHandler] ✅ Returning completed analysis', existingAnalysis.id);
         return Responses.ok(c, {
@@ -3158,64 +3598,28 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
         });
       }
 
-      // ✅ STREAMING: Return 409 Conflict (experimental_useObject can't handle 202)
+      // ✅ STREAMING: Return 409 Conflict (another request is already streaming)
+      // This should rarely happen now since we cleaned up duplicates above
       if (existingAnalysis.status === 'streaming') {
-        console.warn('[analyzeRoundHandler] 🔄 Analysis already streaming, returning 409 Conflict', existingAnalysis.id);
-        throw createError.conflict(
-          'Analysis is already being generated. Please refresh the page to see the completed analysis.',
-          {
-            errorType: 'resource',
-            resource: 'moderator_analysis',
-            resourceId: existingAnalysis.id,
-          },
-        );
-      }
-
-      // ✅ PENDING: Transition to streaming and process it
-      // The "pending" status means the backend created the record and is waiting for frontend to trigger
-      // When frontend calls /analyze, we should process it, not return 409!
-      if (existingAnalysis.status === 'pending') {
         const ageMs = Date.now() - existingAnalysis.createdAt.getTime();
-        const TWO_MINUTES_MS = 2 * 60 * 1000;
+        const TEN_SECONDS_MS = 10 * 1000;
 
-        if (ageMs > TWO_MINUTES_MS) {
-          // Stuck pending - delete to allow fresh retry
-          console.warn('[analyzeRoundHandler] ⏱️ Pending analysis stuck (> 2 min), deleting', existingAnalysis.id);
+        // ✅ REGENERATION FIX: If streaming analysis is stale, delete it
+        if (ageMs > TEN_SECONDS_MS) {
+          console.warn('[analyzeRoundHandler] ⏱️ Streaming analysis stuck (> 10 sec), deleting', existingAnalysis.id);
           await db.delete(tables.chatModeratorAnalysis)
             .where(eq(tables.chatModeratorAnalysis.id, existingAnalysis.id));
-          // Fall through to create new analysis below
+          // Fall through to create new analysis
         } else {
-          // ✅ ATOMIC UPDATE: Transition pending → streaming with race condition protection
-          // Only the first request that updates status wins, others will fail and should retry
-          console.warn(`[analyzeRoundHandler] ✅ Attempting to claim pending analysis (age: ${ageMs}ms)`, existingAnalysis.id);
-
-          // ✅ CRITICAL: Atomic update - only succeed if status is still 'pending'
-          // This prevents multiple requests from processing the same analysis
-          const updateResult = await db.update(tables.chatModeratorAnalysis)
-            .set({ status: 'streaming' })
-            .where(and(
-              eq(tables.chatModeratorAnalysis.id, existingAnalysis.id),
-              eq(tables.chatModeratorAnalysis.status, 'pending'), // CRITICAL: Only update if still pending
-            ))
-            .returning();
-
-          // Check if update succeeded (status was pending and we claimed it)
-          if (updateResult.length === 0) {
-            // Another request already claimed it - return 409 to prevent duplicate
-            console.warn('[analyzeRoundHandler] ⚠️ Analysis already claimed by another request', existingAnalysis.id);
-            throw createError.conflict(
-              'Analysis is already being processed by another request. Please wait.',
-              {
-                errorType: 'resource',
-                resource: 'moderator_analysis',
-                resourceId: existingAnalysis.id,
-              },
-            );
-          }
-
-          // ✅ Successfully claimed the pending analysis - process it
-          console.warn('[analyzeRoundHandler] ✅ Successfully claimed pending analysis', existingAnalysis.id);
-          analysisIdToUse = existingAnalysis.id;
+          console.warn('[analyzeRoundHandler] 🔄 Analysis already streaming, returning 409 Conflict', existingAnalysis.id);
+          throw createError.conflict(
+            'Analysis is already being generated. Please wait for it to complete.',
+            {
+              errorType: 'resource',
+              resource: 'moderator_analysis',
+              resourceId: existingAnalysis.id,
+            },
+          );
         }
       }
 
@@ -3225,11 +3629,18 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
         await db.delete(tables.chatModeratorAnalysis)
           .where(eq(tables.chatModeratorAnalysis.id, existingAnalysis.id));
       }
+
+      // ✅ PENDING: Delete immediately instead of trying to claim
+      // This is safer during regeneration to prevent race conditions
+      if (existingAnalysis.status === 'pending') {
+        console.warn('[analyzeRoundHandler] ♻️ Deleting pending analysis to create fresh one', existingAnalysis.id);
+        await db.delete(tables.chatModeratorAnalysis)
+          .where(eq(tables.chatModeratorAnalysis.id, existingAnalysis.id));
+        // Fall through to create new analysis
+      }
     }
 
-    // ✅ AI SDK V5 PATTERN: Support optional participantMessageIds
-    // If not provided, query automatically (future enhancement)
-    // For now, require them with clear error message
+    // ✅ Validate participantMessageIds
     if (!body.participantMessageIds || body.participantMessageIds.length === 0) {
       throw createError.badRequest(
         'participantMessageIds array is required for analysis',
@@ -3241,7 +3652,6 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
     }
 
     // Fetch all participant messages for this round
-    // Safe to assert: we validated participantMessageIds exists above
     const messageIds = body.participantMessageIds!;
     const participantMessages = await db.query.chatMessage.findMany({
       where: (fields, { inArray, eq: eqOp, and: andOp }) =>
@@ -3251,9 +3661,9 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
           eqOp(fields.role, 'assistant'),
         ),
       with: {
-        participant: true, // Include participant info (model, role, etc.)
+        participant: true,
       },
-      orderBy: [tables.chatMessage.createdAt], // Maintain response order
+      orderBy: [tables.chatMessage.createdAt],
     });
 
     // Validation: Ensure we have all requested messages
@@ -3281,7 +3691,7 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
       );
     }
 
-    // Find the user's question (the last user message before these assistant messages)
+    // Find the user's question
     const userMessages = await db.query.chatMessage.findMany({
       where: (fields, { and: andOp, eq: eqOp }) =>
         andOp(
@@ -3289,10 +3699,9 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
           eqOp(fields.role, 'user'),
         ),
       orderBy: [desc(tables.chatMessage.createdAt)],
-      limit: 10, // Get last 10 user messages to find the relevant one
+      limit: 10,
     });
 
-    // The user question is the last user message before the earliest participant message
     const earliestParticipantTime = Math.min(...participantMessages.map(m => m.createdAt.getTime()));
     const relevantUserMessage = userMessages.find(
       m => m.createdAt.getTime() < earliestParticipantTime,
@@ -3314,235 +3723,113 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
       };
     });
 
-    // Build moderator prompts using the service
-    const { buildModeratorSystemPrompt, buildModeratorUserPrompt } = await import('@/api/services/moderator-analysis.service');
-
-    const moderatorConfig = {
-      mode: thread.mode as ChatModeId,
+    // ✅ Create analysis record with 'streaming' status
+    const analysisId = ulid();
+    console.warn('[analyzeRoundHandler] 🆕 Creating analysis record for streaming', {
+      analysisId,
+      threadId,
       roundNumber: roundNum,
+      participantCount: body.participantMessageIds.length,
+    });
+
+    await db.insert(tables.chatModeratorAnalysis).values({
+      id: analysisId,
+      threadId,
+      roundNumber: roundNum,
+      mode: thread.mode,
+      userQuestion,
+      status: 'streaming',
+      participantMessageIds: body.participantMessageIds,
+      createdAt: new Date(),
+    });
+
+    // ✅ AI SDK streamObject(): Stream structured analysis in real-time
+    // ✅ CRITICAL FIX: Persistence handled by onFinish callback in generateModeratorAnalysis
+    // This ensures the stream is NOT consumed separately, allowing smooth progressive updates to the frontend
+    const result = generateModeratorAnalysis({
+      roundNumber: roundNum,
+      mode: thread.mode,
       userQuestion,
       participantResponses,
-    };
+      analysisId, // Pass ID for onFinish callback persistence
+      threadId, // Pass for logging
+      env: c.env,
+    });
 
-    const systemPrompt = buildModeratorSystemPrompt(moderatorConfig);
-    const userPrompt = buildModeratorUserPrompt(moderatorConfig);
+    console.warn('[analyzeRoundHandler] 🌊 Streaming analysis', {
+      analysisId,
+      threadId,
+      roundNumber: roundNum,
+    });
 
-    // ✅ FIXED MODEL: Always use Claude 3.5 Sonnet for analysis
-    // This model provides the most reliable structured output generation
-    // and best JSON schema compliance for complex analysis tasks
-    const analysisModelId = 'anthropic/claude-3.5-sonnet';
-
-    // Initialize OpenRouter with Claude 3.5 Sonnet
-    initializeOpenRouter(c.env);
-    const client = openRouterService.getClient();
-
-    // ✅ CRITICAL: Create or use streaming analysis record
-    // This acts as a distributed lock to prevent duplicate analysis generation
-    // If another request comes in, it will see this streaming record and return 409
-    // If we already have a pending analysis that we updated to streaming, use that ID
-    const analysisId = analysisIdToUse || ulid();
-
-    if (!analysisIdToUse) {
-      // Only create new record if we're not using an existing pending analysis
-      console.warn('[analyzeRoundHandler] 🆕 Creating new analysis', {
-        analysisId,
-        threadId,
-        roundNumber: roundNum,
-        participantCount: body.participantMessageIds.length,
-      });
-
-      // ✅ CRITICAL FIX: Create with 'streaming' status since we're about to stream
-      // The stream will update to 'completed' in onFinish callback
-      await db.insert(tables.chatModeratorAnalysis).values({
-        id: analysisId,
-        threadId,
-        roundNumber: roundNum,
-        mode: thread.mode,
-        userQuestion,
-        status: 'streaming', // Mark as streaming since we're streaming in this request
-        participantMessageIds: body.participantMessageIds,
-        createdAt: new Date(),
-      });
-
-      console.warn('[analyzeRoundHandler] ✅ Analysis record created, starting AI stream', analysisId);
-    } else {
-      console.warn('[analyzeRoundHandler] ✅ Using existing pending analysis, starting AI stream', analysisId);
-    }
-
-    // ✅ AI SDK v5 streamObject() Pattern: Stream structured JSON as it's generated
-    // Real streaming approach - sends partial objects as they arrive
-    // Frontend uses experimental_useObject() hook from @ai-sdk/react for consumption
-    //
-    // Reference: https://sdk.vercel.ai/docs/ai-sdk-core/generating-structured-data
-    // Reference: https://sdk.vercel.ai/docs/ai-sdk-ui/object-generation
-    const { streamObject } = await import('ai');
-
-    try {
-      const result = streamObject({
-        model: client.chat(analysisModelId),
-        schema: ModeratorAnalysisPayloadSchema,
-        schemaName: 'ModeratorAnalysis',
-        system: systemPrompt,
-        prompt: userPrompt,
-        mode: 'json', // Force JSON mode for better schema adherence with Claude
-
-        // ✅ Telemetry for monitoring
-        experimental_telemetry: {
-          isEnabled: true,
-          functionId: `moderator-analysis-round-${roundNum}`,
-        },
-
-        // ✅ Timeout protection
-        abortSignal: AbortSignal.any([
-          c.req.raw.signal, // Client disconnect
-          AbortSignal.timeout(AI_TIMEOUT_CONFIG.moderatorAnalysisMs), // Centralized timeout for analysis
-        ]),
-
-        // ✅ Stream callbacks for server-side logging and database persistence
-        onFinish: async ({ object: finalObject, error, usage: _usage }) => {
-          console.warn('[analyzeRoundHandler] 🏁 onFinish called', {
-            analysisId,
-            hasError: !!error,
-            hasObject: !!finalObject,
-            errorMessage: error instanceof Error ? error.message : error ? String(error) : undefined,
-          });
-
-          // ✅ FAILED: Update status to failed with error message
-          if (error) {
-            try {
-              console.warn('[analyzeRoundHandler] ❌ Marking analysis as failed', analysisId);
-              await db.update(tables.chatModeratorAnalysis)
-                .set({
-                  status: 'failed',
-                  errorMessage: error instanceof Error ? error.message : String(error),
-                })
-                .where(eq(tables.chatModeratorAnalysis.id, analysisId));
-              console.warn('[analyzeRoundHandler] ✅ Analysis marked as failed', analysisId);
-            } catch (updateError) {
-              // ✅ CRITICAL FIX: Log the error instead of suppressing
-              console.error('[analyzeRoundHandler] ❌ Failed to update analysis status to failed:', updateError);
-            }
-            return;
-          }
-
-          // ✅ NO OBJECT: Mark as failed
-          if (!finalObject) {
-            try {
-              console.warn('[analyzeRoundHandler] ❌ No object generated, marking as failed', analysisId);
-              await db.update(tables.chatModeratorAnalysis)
-                .set({
-                  status: 'failed',
-                  errorMessage: 'Analysis completed but no object was generated',
-                })
-                .where(eq(tables.chatModeratorAnalysis.id, analysisId));
-              console.warn('[analyzeRoundHandler] ✅ Analysis marked as failed (no object)', analysisId);
-            } catch (updateError) {
-              // ✅ CRITICAL FIX: Log the error instead of suppressing
-              console.error('[analyzeRoundHandler] ❌ Failed to update analysis status to failed (no object):', updateError);
-            }
-            return;
-          }
-
-          // ✅ Validate schema before saving to prevent corrupt data
-          const hasValidStructure = finalObject.participantAnalyses
-            && Array.isArray(finalObject.participantAnalyses)
-            && finalObject.leaderboard
-            && Array.isArray(finalObject.leaderboard)
-            && finalObject.overallSummary
-            && finalObject.conclusion;
-
-          if (!hasValidStructure) {
-            try {
-              console.warn('[analyzeRoundHandler] ❌ Invalid structure, marking as failed', analysisId);
-              await db.update(tables.chatModeratorAnalysis)
-                .set({
-                  status: 'failed',
-                  errorMessage: 'Analysis generated but structure is invalid',
-                })
-                .where(eq(tables.chatModeratorAnalysis.id, analysisId));
-              console.warn('[analyzeRoundHandler] ✅ Analysis marked as failed (invalid structure)', analysisId);
-            } catch (updateError) {
-              // ✅ CRITICAL FIX: Log the error instead of suppressing
-              console.error('[analyzeRoundHandler] ❌ Failed to update analysis status (invalid structure):', updateError);
-            }
-            return;
-          }
-
-          // ✅ SUCCESS: Update existing record with analysis data and mark as completed
-          try {
-            console.warn('[analyzeRoundHandler] ✅ Marking analysis as completed', analysisId);
-            await db.update(tables.chatModeratorAnalysis)
-              .set({
-                status: 'completed',
-                analysisData: {
-                  leaderboard: finalObject.leaderboard,
-                  participantAnalyses: finalObject.participantAnalyses,
-                  overallSummary: finalObject.overallSummary,
-                  conclusion: finalObject.conclusion,
-                },
-                completedAt: new Date(),
-              })
-              .where(eq(tables.chatModeratorAnalysis.id, analysisId));
-            console.warn('[analyzeRoundHandler] 🎉 Analysis successfully completed', analysisId);
-          } catch (updateError) {
-            // ✅ CRITICAL FIX: Log the error instead of suppressing
-            console.error('[analyzeRoundHandler] ❌ CRITICAL: Failed to save completed analysis to database:', {
-              analysisId,
-              error: updateError,
-            });
-            // Analysis stays in "streaming" status - this is a critical failure!
-          }
-        },
-      });
-
-      // ✅ AI SDK Pattern: Return streaming text response using toTextStreamResponse()
-      // Sets content-type to 'text/plain; charset=utf-8' with streaming
-      // Frontend consumes via useObject() hook from @ai-sdk/react
-      // Reference: https://sdk.vercel.ai/docs/ai-sdk-ui/object-generation
-      return result.toTextStreamResponse();
-    } catch (error) {
-      // ✅ CRITICAL FIX: Mark analysis as failed before throwing
-      // This prevents the analysis from being stuck in "streaming" status forever
-      console.error('[analyzeRoundHandler] ❌ Stream failed, marking analysis as failed', {
-        analysisId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-
-      try {
-        await db.update(tables.chatModeratorAnalysis)
-          .set({
-            status: 'failed',
-            errorMessage: error instanceof Error ? error.message : String(error),
-          })
-          .where(eq(tables.chatModeratorAnalysis.id, analysisId));
-        console.warn('[analyzeRoundHandler] ✅ Analysis marked as failed after stream error', analysisId);
-      } catch (updateError) {
-        console.error('[analyzeRoundHandler] ❌ Failed to update analysis status after stream error:', updateError);
-      }
-
-      // Handle NoObjectGeneratedError specifically
-      const { NoObjectGeneratedError } = await import('ai');
-      if (NoObjectGeneratedError.isInstance(error)) {
-        throw createError.internal(
-          'Failed to generate analysis',
-          {
-            errorType: 'external_service',
-            service: 'OpenRouter AI',
-          },
-        );
-      }
-
-      // Re-throw other errors
-      throw error;
-    }
+    // ✅ Return streaming response (Content-Type: text/plain; charset=utf-8)
+    // The stream will flow directly to the frontend for progressive rendering
+    // Persistence happens automatically via the onFinish callback
+    return result.toTextStreamResponse();
   },
 );
+
+/**
+ * Background Analysis Processing Handler (Internal Only)
+ *
+ * ✅ NOT EXPOSED IN OPENAPI: Internal endpoint for background processing only
+ * ✅ Called via WORKER_SELF_REFERENCE service binding
+ * ✅ Performs actual AI streaming and database updates
+ *
+ * This handler is invoked by analyzeRoundHandler via service binding
+ * and runs the analysis in the background, decoupled from HTTP lifecycle.
+ *
+ * POST /chat/analyze-background (internal)
+ */
+// eslint-disable-next-line ts/no-explicit-any -- Generic Hono context type for internal handler
+export async function analyzeBackgroundHandler(c: any): Promise<Response> {
+  try {
+    const body = await c.req.json();
+    const {
+      analysisId,
+      threadId,
+      roundNum,
+      userQuestion,
+      participantResponses,
+      mode,
+    } = body;
+
+    console.warn('[analyzeBackgroundHandler] 🚀 Background processing started', {
+      analysisId,
+      threadId,
+      roundNumber: roundNum,
+    });
+
+    // Process analysis in background using service layer
+    // Service accepts full env bindings from context
+    await processAnalysisInBackground({
+      analysisId,
+      threadId,
+      roundNum,
+      userQuestion,
+      participantResponses,
+      mode,
+      env: c.env,
+    });
+
+    console.warn('[analyzeBackgroundHandler] ✅ Background processing completed', analysisId);
+
+    return c.json({ success: true, analysisId }, 200);
+  } catch (error) {
+    console.error('[analyzeBackgroundHandler] ❌ Background processing failed:', error);
+    return c.json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+    }, 500);
+  }
+}
 
 /**
  * Get Thread Analyses Handler
  *
  * ✅ Fetches all persisted moderator analyses for a thread
  * ✅ Returns analyses ordered by round number
+ * ✅ WATCHDOG: Detects and restarts stale analyses automatically
  *
  * GET /api/v1/chat/threads/:id/analyses
  */
@@ -3568,6 +3855,46 @@ export const getThreadAnalysesHandler: RouteHandler<typeof getThreadAnalysesRout
       where: eq(tables.chatModeratorAnalysis.threadId, threadId),
       orderBy: [desc(tables.chatModeratorAnalysis.roundNumber), desc(tables.chatModeratorAnalysis.createdAt)],
     });
+
+    // ✅ WATCHDOG: Check for stale streaming analyses and restart them
+    const STALE_THRESHOLD_MS = 2 * 60 * 1000; // 2 minutes
+    const now = Date.now();
+
+    for (const analysis of allAnalyses) {
+      if (analysis.status === 'streaming') {
+        const ageMs = now - analysis.createdAt.getTime();
+
+        if (ageMs > STALE_THRESHOLD_MS) {
+          console.warn('[WATCHDOG] 🔍 Detected stale streaming analysis', {
+            analysisId: analysis.id,
+            roundNumber: analysis.roundNumber,
+            ageMs,
+            ageMinutes: Math.round(ageMs / 60000),
+          });
+
+          // Use service layer to restart stale analysis
+          try {
+            await restartStaleAnalysis(
+              {
+                id: analysis.id,
+                threadId: analysis.threadId,
+                roundNumber: analysis.roundNumber,
+                mode: analysis.mode,
+                userQuestion: analysis.userQuestion,
+              },
+              analysis.participantMessageIds || [],
+              c.env,
+            );
+          } catch (error) {
+            console.error('[WATCHDOG] ❌ Failed to restart stale analysis:', {
+              analysisId: analysis.id,
+              error: error instanceof Error ? error.message : String(error),
+            });
+            // Continue with other stale analyses even if one fails
+          }
+        }
+      }
+    }
 
     // ✅ Deduplicate by round number - keep only the latest analysis for each round
     const analysesMap = new Map<number, typeof allAnalyses[0]>();

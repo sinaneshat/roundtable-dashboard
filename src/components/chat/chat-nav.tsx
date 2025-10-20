@@ -1,6 +1,6 @@
 'use client';
 
-import { Flame, MessageSquare, Plus, Search, Star } from 'lucide-react';
+import { Flame, MessageSquare, MessageSquarePlus, Plus, Search, Star } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -16,6 +16,14 @@ import { CommandSearch } from '@/components/chat/command-search';
 import { NavUser } from '@/components/chat/nav-user';
 import { SidebarSection } from '@/components/chat/sidebar-section';
 import { Button } from '@/components/ui/button';
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from '@/components/ui/empty';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Sidebar,
@@ -323,6 +331,29 @@ function AppSidebarComponent({ ...props }: React.ComponentProps<typeof Sidebar>)
                     <p className="text-xs text-muted-foreground">
                       {error?.message || t('states.error.description')}
                     </p>
+                  </div>
+                )}
+
+                {/* Empty State - No chats yet */}
+                {!isLoading && !isError && chats.length === 0 && (
+                  <div className="px-2 py-4 group-data-[collapsible=icon]:hidden">
+                    <Empty className="border-none p-4">
+                      <EmptyHeader>
+                        <EmptyMedia variant="icon">
+                          <MessageSquarePlus />
+                        </EmptyMedia>
+                        <EmptyTitle className="text-base">{t('chat.noChatsYet')}</EmptyTitle>
+                        <EmptyDescription className="text-xs">
+                          {t('chat.noChatsDescription')}
+                        </EmptyDescription>
+                      </EmptyHeader>
+                      <EmptyContent>
+                        <Button onClick={handleNewChat} size="sm">
+                          <Plus className="mr-2 size-4" />
+                          {t('navigation.newChat')}
+                        </Button>
+                      </EmptyContent>
+                    </Empty>
                   </div>
                 )}
 

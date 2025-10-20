@@ -81,7 +81,7 @@
 import { useChat } from '@ai-sdk/react';
 import type { UIMessage } from 'ai';
 import { DefaultChatTransport } from 'ai';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 import type { ChatParticipant } from '@/api/routes/chat/schema';
 
@@ -159,7 +159,7 @@ export function useMultiParticipantChat({
       id,
       messages,
       participantIndex: currentIndexRef.current, // ✅ FIX: Use ref for immediate value (accessed in callback, not render)
-      participants: participantsRef.current, // ✅ RACE CONDITION FIX: Send current participant configuration (accessed in callback, not render)
+      participants: participantsRef.current, // ✅ FIX: Send current participant configuration (accessed in callback, not render)
       ...(regenerateRoundNumber && { regenerateRound: regenerateRoundNumber }), // ✅ REGENERATION: Send round number to replace
     },
   }), [regenerateRoundNumber]);
@@ -578,8 +578,11 @@ export function useMultiParticipantChat({
   // This effect waits for status to return to 'ready' before sending next participant
   // This is essential for reasoning models which take longer to complete state transitions
   // ChatStatus: 'submitted' | 'streaming' | 'ready' | 'error'
-  // ✅ RACE CONDITION FIX: Keep participantsRef in sync with participants prop
-  useEffect(() => {
+
+  // ✅ FIX: Sync participants ref before any useEffect can run
+  // useLayoutEffect runs synchronously after render but before browser paint
+  // This ensures participantsRef.current is always in sync when transport callback is invoked
+  useLayoutEffect(() => {
     participantsRef.current = participants;
   }, [participants]);
 

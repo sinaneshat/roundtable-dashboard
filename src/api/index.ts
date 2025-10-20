@@ -75,6 +75,7 @@ import {
 // Chat routes
 import {
   addParticipantHandler,
+  analyzeBackgroundHandler,
   analyzeRoundHandler,
   createCustomRoleHandler,
   createThreadHandler,
@@ -410,6 +411,15 @@ const appRoutes = app
 // ============================================================================
 
 export type AppType = typeof appRoutes;
+
+// ============================================================================
+// Step 5.5: Internal Background Processing Endpoints (NOT in OpenAPI)
+// ============================================================================
+
+// ✅ INTERNAL ONLY: Background analysis processing endpoint
+// NOT exposed in OpenAPI documentation
+// Called via WORKER_SELF_REFERENCE service binding
+appRoutes.post('/chat/analyze-background', analyzeBackgroundHandler);
 
 // ============================================================================
 // Step 6: OpenAPI documentation endpoints

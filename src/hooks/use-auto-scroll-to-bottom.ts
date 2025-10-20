@@ -49,8 +49,15 @@ export function useAutoScrollToBottom(dependency: unknown, enabled = true) {
     // This ensures smooth streaming experience while respecting user's manual scrolling
     if (isStreamingActive || isNearBottom) {
       requestAnimationFrame(() => {
+        // ✅ CRITICAL FIX: Account for scroll-padding-bottom when scrolling to bottom
+        // Get the scroll-padding-bottom value from computed styles
+        const computedStyle = window.getComputedStyle(scrollContainer);
+        const scrollPaddingBottom = Number.parseFloat(computedStyle.scrollPaddingBottom) || 0;
+
+        // Scroll to the bottom, accounting for scroll-padding-bottom
+        // This ensures content is visible above the fixed input
         scrollContainer.scrollTo({
-          top: scrollContainer.scrollHeight,
+          top: scrollContainer.scrollHeight - scrollPaddingBottom,
           behavior: 'smooth',
         });
       });

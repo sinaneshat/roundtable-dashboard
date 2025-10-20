@@ -98,11 +98,11 @@ export function buildModeratorSystemPrompt(config: ModeratorPromptConfig): strin
     '',
   );
 
-  // 2. RATING CRITERIA
+  // 2. RATING CRITERIA - EXACTLY 5 SKILLS FOR PENTAGON VISUALIZATION
   sections.push(
     '## Rating Criteria',
     '',
-    'Evaluate each participant on these skills (1-10 scale):',
+    '⚠️ CRITICAL: Evaluate each participant on EXACTLY 5 skills (1-10 scale) for pentagon radar chart visualization:',
     '',
   );
 
@@ -184,9 +184,12 @@ export function buildModeratorSystemPrompt(config: ModeratorPromptConfig): strin
     '      "modelId": "anthropic/claude-sonnet-4.5",  // MUST be camelCase',
     '      "modelName": "Claude Sonnet 4.5",  // MUST be camelCase',
     '      "overallRating": 8.5,  // MUST be camelCase',
-    '      "skillsMatrix": [  // MUST be camelCase AND an array',
+    '      "skillsMatrix": [  // MUST be camelCase AND an array of EXACTLY 5 skills',
     '        { "skillName": "Creativity", "rating": 9 },',
-    '        { "skillName": "Diversity", "rating": 8 }',
+    '        { "skillName": "Diversity", "rating": 8 },',
+    '        { "skillName": "Practicality", "rating": 7 },',
+    '        { "skillName": "Building on Others", "rating": 8 },',
+    '        { "skillName": "Inspiration", "rating": 9 }',
     '      ],',
     '      "pros": ["...", "..."],',
     '      "cons": ["..."],',
@@ -339,6 +342,8 @@ export function buildModeratorUserPrompt(config: ModeratorPromptConfig): string 
   sections.push(
     '## Your Task',
     '',
+    `⚠️ CRITICAL: Analyze ALL ${participantResponses.length} participant responses listed above. The participantAnalyses array MUST contain exactly ${participantResponses.length} entries, and the leaderboard array MUST also contain exactly ${participantResponses.length} entries - one for each participant.`,
+    '',
     'Analyze each participant\'s response using the rating criteria defined in your system prompt.',
     'Generate a complete structured analysis with ratings, skills matrix, pros/cons, leaderboard, summary, and conclusion.',
     '',
@@ -366,6 +371,8 @@ export function buildModeratorUserPrompt(config: ModeratorPromptConfig): string 
     '- Show how far above/below average each participant scored',
     '',
     '**For leaderboard entries**:',
+    `- MUST include ALL ${participantResponses.length} participants in the leaderboard array`,
+    '- Rank participants from 1 (best) to N (where N = total number of participants)',
     '- Include scoreBreakdown mapping skill names to ratings',
     '- Add comparative context (percentile, above/below average)',
     '- List 2-3 key strengths and weaknesses as short phrases',

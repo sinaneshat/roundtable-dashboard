@@ -121,9 +121,9 @@ export function ParticipantAnalysisCard({ analysis, rank }: ParticipantAnalysisC
               <h4 className="text-xs font-semibold text-foreground">{t('strengths')}</h4>
             </div>
             <ul className="space-y-1 text-foreground/80">
-              {(analysis.pros ?? []).slice(0, 3).map((pro, idx) => (
+              {(analysis.pros ?? []).slice(0, 3).map(pro => (
                 <li
-                  key={`pro-${analysis.participantIndex ?? 'unknown'}-${idx}`}
+                  key={`pro-${analysis.participantIndex ?? 'unknown'}-${pro.substring(0, 50)}`}
                   className="flex items-start gap-2"
                 >
                   <span className="text-green-500 flex-shrink-0 text-xs mt-0.5">✓</span>
@@ -148,9 +148,9 @@ export function ParticipantAnalysisCard({ analysis, rank }: ParticipantAnalysisC
               <h4 className="text-xs font-semibold text-foreground">{t('areasForImprovement')}</h4>
             </div>
             <ul className="space-y-1 text-foreground/80">
-              {(analysis.cons ?? []).slice(0, 3).map((con, idx) => (
+              {(analysis.cons ?? []).slice(0, 3).map(con => (
                 <li
-                  key={`con-${analysis.participantIndex ?? 'unknown'}-${idx}`}
+                  key={`con-${analysis.participantIndex ?? 'unknown'}-${con.substring(0, 50)}`}
                   className="flex items-start gap-2"
                 >
                   <span className="text-orange-500 flex-shrink-0 text-xs mt-0.5">!</span>

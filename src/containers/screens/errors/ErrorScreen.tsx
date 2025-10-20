@@ -1,10 +1,17 @@
 'use client';
 
-import { RefreshCw } from 'lucide-react';
+import { AlertTriangle, RefreshCw } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader } from '@/components/ui/card';
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from '@/components/ui/empty';
 
 type ErrorScreenProps = {
   error: Error & { digest?: string };
@@ -18,27 +25,26 @@ export default function ErrorScreen({ error: _error, reset }: ErrorScreenProps) 
   // No need for useEffect here
 
   return (
-    <div className="flex min-h-dvh items-center justify-center bg-gradient-to-br from-background via-muted/30 to-background">
-      <div className="w-full max-w-lg px-4">
-        <Card className="relative rounded-xl border bg-card/50 shadow-lg backdrop-blur-xl">
-          <CardHeader>
-            <h1 className="text-2xl font-semibold">{t('states.error.default')}</h1>
-            <p className="text-sm text-muted-foreground">
-              {t('states.error.unexpectedError')}
-            </p>
-          </CardHeader>
-          <CardContent className="flex justify-center">
-            <Button
-              onClick={() => reset()}
-              variant="outline"
-              className="flex items-center"
-            >
-              <RefreshCw className="me-2 size-4" />
-              {t('states.error.tryAgain')}
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
+    <div className="flex min-h-dvh items-center justify-center bg-gradient-to-br from-background via-muted/30 to-background px-4 py-12">
+      <Empty className="max-w-lg border-none">
+        <EmptyHeader>
+          <EmptyMedia variant="icon">
+            <AlertTriangle className="text-destructive" />
+          </EmptyMedia>
+          <EmptyTitle className="text-2xl font-semibold">
+            {t('states.error.default')}
+          </EmptyTitle>
+          <EmptyDescription className="text-base">
+            {t('states.error.unexpectedError')}
+          </EmptyDescription>
+        </EmptyHeader>
+        <EmptyContent>
+          <Button onClick={() => reset()} variant="outline" size="lg">
+            <RefreshCw className="me-2 size-4" />
+            {t('states.error.tryAgain')}
+          </Button>
+        </EmptyContent>
+      </Empty>
     </div>
   );
 }

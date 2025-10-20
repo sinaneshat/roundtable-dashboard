@@ -35,6 +35,9 @@ type RoundAnalysisCardProps = {
   threadId: string;
   isLatest?: boolean;
   className?: string;
+  onStreamComplete?: (completedAnalysisData?: unknown) => void;
+  // ✅ NEW: Signal to force close when a new round starts
+  streamingRoundNumber?: number | null;
 };
 
 /**
@@ -52,20 +55,23 @@ export function RoundAnalysisCard({
   threadId,
   isLatest = false,
   className,
+  onStreamComplete,
+  streamingRoundNumber,
 }: RoundAnalysisCardProps) {
   const t = useTranslations('moderator');
 
-  // ✅ TIMEOUT CHECK: If analysis is pending/streaming for > 2 minutes, treat as failed
+  // ✅ TIMEOUT CHECK: If analysis is pending/streaming for > 5 minutes, treat as failed
+  // Backend watchdog handles timeouts at 2 minutes, so give extra buffer
   // Calculate age directly (Date.now() is impure, but this is a valid use case for timeout checking)
-  const TWO_MINUTES_MS = 2 * 60 * 1000;
+  const FIVE_MINUTES_MS = 5 * 60 * 1000;
   // eslint-disable-next-line react-hooks/purity -- Valid use case: timeout check requires current time. Date.now() is intentionally impure here to detect stuck analyses on each render.
   const ageMs = Date.now() - new Date(analysis.createdAt).getTime();
-  const isStuck = ageMs > TWO_MINUTES_MS && (analysis.status === 'pending' || analysis.status === 'streaming');
+  const isStuck = ageMs > FIVE_MINUTES_MS && (analysis.status === 'pending' || analysis.status === 'streaming');
 
   // Override status if stuck
   const effectiveStatus = isStuck ? 'failed' : analysis.status;
   const effectiveErrorMessage = isStuck
-    ? 'Analysis timed out after 2 minutes. Backend generation may have failed.'
+    ? 'Analysis timed out after 5 minutes. Backend generation may have failed.'
     : analysis.errorMessage;
 
   // Status configuration
@@ -99,31 +105,39 @@ export function RoundAnalysisCard({
   const config = statusConfig[effectiveStatus];
   const StatusIcon = config.icon;
 
-  // ✅ CONTROLLED STATE: Auto-collapse older analyses when new rounds begin
-  // - Latest analysis stays open
-  // - Older analyses automatically collapse when new rounds are added
-  // - Follows same pattern as changelog (collapsed by default, latest open)
+  // ✅ CONTROLLED STATE: Smart accordion behavior
+  // - Latest analysis stays open by default
+  // - Users can manually open/close ANY analysis (including previous rounds)
+  // - Manual choices are respected and persist
+  // - RESET when new round starts: all previous rounds auto-close
   const [isManuallyControlled, setIsManuallyControlled] = useState(false);
   const [manuallyOpen, setManuallyOpen] = useState(false);
 
+  // ✅ AUTO-CLOSE PREVIOUS ROUNDS: When a new round starts streaming, reset manual control
+  // This forces all previous analyses to close (only latest stays open)
+  useEffect(() => {
+    // Only reset if:
+    // 1. streamingRoundNumber is provided
+    // 2. This is NOT the latest round
+    // 3. A new round has started (streamingRoundNumber > this round)
+    if (streamingRoundNumber != null && !isLatest && streamingRoundNumber > analysis.roundNumber) {
+      console.warn('[RoundAnalysisCard] 🔒 Auto-closing previous round', {
+        analysisRound: analysis.roundNumber,
+        streamingRound: streamingRoundNumber,
+      });
+      setIsManuallyControlled(false);
+      setManuallyOpen(false);
+    }
+  }, [streamingRoundNumber, isLatest, analysis.roundNumber]);
+
   // ✅ DEFAULT BEHAVIOR: Latest is open, others collapsed
-  // If user manually toggles, respect their choice
+  // If user manually toggles, ALWAYS respect their choice (unless new round starts)
   const isOpen = isManuallyControlled ? manuallyOpen : isLatest;
 
   const handleOpenChange = useCallback((open: boolean) => {
     setIsManuallyControlled(true);
     setManuallyOpen(open);
   }, []);
-
-  // ✅ RESET manual control when isLatest changes
-  // This ensures older analyses collapse when new rounds are added
-  useEffect(() => {
-    if (!isLatest && isManuallyControlled) {
-      // Reset manual control when this is no longer the latest
-      setIsManuallyControlled(false);
-      setManuallyOpen(false);
-    }
-  }, [isLatest, isManuallyControlled]);
 
   // ✅ AUTO-SCROLL: Scroll to completed analysis if user is not actively interacting
   const containerRef = useRef<HTMLDivElement>(null);
@@ -220,9 +234,10 @@ export function RoundAnalysisCard({
                   <ModeratorAnalysisStream
                     threadId={threadId}
                     analysis={analysis}
-                    onStreamComplete={() => {
+                    onStreamComplete={(completedData) => {
                       console.warn('[RoundAnalysisCard] Stream completed for round', analysis.roundNumber);
-                      // Polling will automatically detect the completed analysis and re-render
+                      // ✅ Pass completed analysis data to parent for cache update
+                      onStreamComplete?.(completedData);
                     }}
                   />
                 )

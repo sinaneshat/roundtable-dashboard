@@ -3,45 +3,37 @@
 /**
  * SkillsComparisonChart Component
  *
- * ✅ RADAR/SPIDER CHART PATTERN:
- * - Uses radar chart (spider/pentagon chart) for skills matrix visualization
- * - Perfect for comparing multiple dimensions/skills across participants
- * - Creates distinctive pentagon/spider web shape showing strengths/weaknesses
- * - Each participant is a colored layer on the radar chart
+ * ✅ ENHANCED RADAR CHART PATTERN:
+ * - Borderless design with horizontal layout
+ * - ScrollArea legend on left, radar chart on right
+ * - Vibrant, see-through colors using chroma-js for distinctive overlapping visualization
+ * - Multiple overlapping Radar series for participant comparison
+ * - Space-efficient horizontal layout
  *
- * ✅ RECHARTS V3 PATTERNS (Context7 Documentation):
+ * ✅ COLOR GENERATION:
+ * - Uses chroma.js for vibrant, distinctive color palette
+ * - HSL color space for better perceptual distribution
+ * - 30% opacity for see-through overlapping effect
+ *
+ * ✅ RECHARTS V3 PATTERNS:
  * - Uses RadarChart with PolarGrid and PolarAngleAxis
- * - Accessibility built-in with Recharts v3 (keyboard navigation)
- * - ChartContainer with ChartConfig for theme-aware colors
- * - Multiple Radar series for participant comparison
+ * - Multiple Radar series with transparent fill for overlap visibility
  *
- * ✅ FRONTEND PATTERNS:
- * - Uses shadcn/ui chart components (ChartContainer, ChartLegend, etc.)
- * - Different colors for each participant using golden ratio distribution
- * - Safe null/undefined handling for partial AI-generated data
- * - Responsive square aspect ratio for optimal radar visualization
- *
- * Reference: /recharts/recharts/v3_2_1 (Context7)
+ * Reference: @shadcn/chart-radar-multiple, @shadcn/scroll-area
  */
 
-import { motion } from 'framer-motion';
-import { Target } from 'lucide-react';
+import chroma from 'chroma-js';
 import { useTranslations } from 'next-intl';
+import { useMemo } from 'react';
+import { PolarAngleAxis, PolarGrid, Radar, RadarChart } from 'recharts';
 
-import { Badge } from '@/components/ui/badge';
 import type { ChartConfig } from '@/components/ui/chart';
 import {
   ChartContainer,
   ChartTooltip,
   ChartTooltipContent,
-  PolarAngleAxis,
-  PolarGrid,
-  Radar,
-  RadarChart,
 } from '@/components/ui/chart';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { useModelsQuery } from '@/hooks/queries/models';
-import { getAvatarPropsFromModelId } from '@/lib/utils/ai-display';
 
 type ParticipantSkills = {
   participantIndex: number;
@@ -58,37 +50,11 @@ type SkillsComparisonChartProps = {
 };
 
 /**
- * Generate a visually distinct color for a participant using HSL color space
- *
- * ✅ STRATEGY:
- * - Uses golden ratio (0.618034) to distribute hues evenly across the color wheel
- * - Keeps saturation (70%) and lightness (60%) consistent for visual harmony
- * - Deterministic based on index for consistency across re-renders
- * - Supports unlimited participants with unique colors
- *
- * @param index - Participant index (0-based)
- * @returns HSL color string (e.g., "hsl(210, 70%, 60%)")
- */
-function generateParticipantColor(index: number): string {
-  // Golden ratio conjugate for evenly distributed hues
-  const goldenRatioConjugate = 0.618033988749895;
-
-  // Calculate hue (0-360 degrees) using golden ratio
-  // This ensures maximum visual distinction between adjacent colors
-  const hue = Math.round((index * goldenRatioConjugate * 360) % 360);
-
-  // Fixed saturation and lightness for consistent visual appearance
-  const saturation = 70; // 70% saturation for vibrant colors
-  const lightness = 60; // 60% lightness for good contrast on dark backgrounds
-
-  return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
-}
-
-/**
  * SkillsComparisonChart - Radar/spider chart comparing participant skills
  *
- * Visualizes skills matrix as a pentagon/radar chart where each participant
- * is represented as a colored layer showing their ratings across all skills.
+ * Visualizes skills matrix as a radar chart where each participant
+ * is represented as a vibrant, see-through colored layer showing their ratings.
+ * Horizontal layout: scrollable legend (left) + radar chart (right).
  *
  * @param props - Component props
  * @param props.participants - Array of participant skill data
@@ -96,9 +62,32 @@ function generateParticipantColor(index: number): string {
 export function SkillsComparisonChart({ participants }: SkillsComparisonChartProps) {
   const t = useTranslations('moderator');
 
-  // ✅ SINGLE SOURCE OF TRUTH: Fetch models from backend
-  const { data: modelsData } = useModelsQuery();
-  const allModels = modelsData?.data?.items || [];
+  // ✅ BRAND COLORS: Use design system colors with transparency for overlapping areas
+  const vibrantColors = useMemo(() => {
+    // Create a color scale using chroma.js with brand-aligned professional colors
+    // Transparent colors allow see-through effect when areas overlap
+    const colorCount = participants.length;
+
+    if (colorCount === 0)
+      return [];
+
+    // Generate colors using chroma.scale with brand-aligned nude tones
+    const scale = chroma
+      .scale([
+        '#2563eb', // Primary Blue
+        '#f59e0b', // Warm Amber
+        '#64748b', // Slate Gray
+        '#3b82f6', // Accent Blue
+        '#8b5cf6', // Soft Purple
+        '#06b6d4', // Soft Cyan
+        '#84cc16', // Soft Lime
+        '#ec4899', // Soft Rose
+      ])
+      .mode('lch') // Use LCH color space for perceptually uniform colors
+      .colors(colorCount);
+
+    return scale;
+  }, [participants.length]);
 
   if (participants.length === 0) {
     return null;
@@ -120,12 +109,11 @@ export function SkillsComparisonChart({ participants }: SkillsComparisonChartPro
     return dataPoint;
   });
 
-  // ✅ OFFICIAL SHADCN PATTERN: Use 'satisfies ChartConfig' instead of explicit typing
-  // Generate unique colors for each participant using golden ratio distribution
+  // ✅ VIBRANT COLOR CONFIG: Use chroma.js generated colors
   const chartConfig = participants.reduce(
     (config, participant, index) => {
       const key = `participant${participant?.participantIndex ?? index}`;
-      const color = generateParticipantColor(index);
+      const color = vibrantColors[index] ?? vibrantColors[0]!;
 
       config[key] = {
         label: participant?.modelName ?? 'Unknown',
@@ -138,91 +126,53 @@ export function SkillsComparisonChart({ participants }: SkillsComparisonChartPro
   ) satisfies ChartConfig;
 
   return (
-    <div className="space-y-2">
-      {/* Header Section */}
-      <div className="flex items-center gap-2 px-1">
-        <Target className="size-4 text-primary" />
-        <h3 className="text-sm font-semibold text-foreground">{t('skillsComparison')}</h3>
-        <Badge variant="secondary" className="text-xs h-5">
-          {skillNames.length}
-          {' '}
-          skills
-        </Badge>
-      </div>
+    <div className="space-y-3">
+      {/* Header */}
+      <h3 className="text-sm font-semibold px-1">{t('skillsComparison')}</h3>
 
-      {/* Two-Column Layout: Model List (Left) + Radar Chart (Right) */}
-      <motion.div
-        initial={{ opacity: 0, y: 4 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3, ease: 'easeOut' }}
-        className="flex gap-4"
-      >
-        {/* Left Column: Model Names with Inline Scroll - Minimal Design */}
-        <ScrollArea className="h-[400px] w-[120px] flex-shrink-0">
-          <div className="space-y-1.5 pr-2">
+      {/* Horizontal Layout: Legend (left) + Chart (right) */}
+      <div className="flex gap-4 items-start w-full">
+        {/* Left: ScrollArea Legend */}
+        <ScrollArea className="h-[300px] w-full max-w-[240px]">
+          <div className="space-y-2 pr-4">
             {participants.map((participant, index) => {
-              const avatarProps = getAvatarPropsFromModelId('assistant', participant.modelId ?? '');
-              const model = allModels.find(m => m.id === participant.modelId);
-              const color = generateParticipantColor(index);
+              const key = `participant${participant?.participantIndex ?? index}`;
+              const color = vibrantColors[index] ?? vibrantColors[0]!;
 
               return (
                 <div
-                  key={`model-${participant.participantIndex ?? index}`}
-                  className="flex items-center gap-2 p-1.5 hover:bg-background/5 transition-colors rounded"
+                  key={key}
+                  className="flex items-center gap-2 p-1.5 rounded hover:bg-muted/50 transition-colors"
                 >
-                  {/* Color indicator dot */}
-                  <div className="size-2 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
-
-                  {/* Avatar - No borders or wrappers */}
-                  <img
-                    src={avatarProps.src}
-                    alt={avatarProps.name}
-                    className="size-5 flex-shrink-0 object-contain"
+                  <div
+                    className="size-3 rounded-full flex-shrink-0"
+                    style={{ backgroundColor: color }}
                   />
-
-                  {/* Model Name and Provider */}
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[10px] font-medium text-foreground/90 truncate leading-tight">
-                      {participant.modelName}
-                    </p>
-                    {model?.provider && (
-                      <p className="text-[8px] text-muted-foreground/70 truncate leading-tight">
-                        {model.provider}
-                      </p>
-                    )}
-                  </div>
+                  <span className="text-xs font-medium text-foreground/90 truncate">
+                    {participant?.modelName ?? 'Unknown'}
+                  </span>
                 </div>
               );
             })}
           </div>
         </ScrollArea>
 
-        {/* Right Column: Radar Chart - Skills labeled at each vertex (BIGGER) */}
-        <div className="flex-1 min-w-0">
-          <ChartContainer config={chartConfig} className="mx-auto aspect-square max-h-[400px] w-full">
-            <RadarChart data={chartData} margin={{ top: 40, right: 40, bottom: 40, left: 40 }}>
+        {/* Right: Radar Chart */}
+        <div className="flex-1">
+          <ChartContainer
+            config={chartConfig}
+            className="mx-auto aspect-square max-h-[300px]"
+          >
+            <RadarChart data={chartData}>
               <ChartTooltip
                 cursor={false}
                 content={<ChartTooltipContent indicator="line" />}
               />
-              <PolarAngleAxis
-                dataKey="skill"
-                tick={{
-                  fontSize: 13,
-                  fill: 'hsl(var(--foreground))',
-                  fontWeight: 700,
-                }}
-                tickLine={false}
-                stroke="hsl(var(--foreground))"
-              />
-              <PolarGrid
-                className="stroke-border/30"
-                gridType="polygon"
-                polarRadius={[0, 25, 50, 75, 100]}
-              />
+              <PolarAngleAxis dataKey="skill" className="text-xs" />
+              <PolarGrid strokeDasharray="3 3" className="stroke-muted" />
               {participants.map((participant, index) => {
                 const key = `participant${participant?.participantIndex ?? index}`;
-                const color = generateParticipantColor(index);
+                const color = vibrantColors[index] ?? vibrantColors[0]!;
 
                 return (
                   <Radar
@@ -230,21 +180,15 @@ export function SkillsComparisonChart({ participants }: SkillsComparisonChartPro
                     dataKey={key}
                     stroke={color}
                     fill={color}
-                    fillOpacity={0.2}
+                    fillOpacity={0.3}
                     strokeWidth={2}
-                    dot={{
-                      r: 4,
-                      fill: color,
-                      strokeWidth: 2,
-                      stroke: 'hsl(var(--background))',
-                    }}
                   />
                 );
               })}
             </RadarChart>
           </ChartContainer>
         </div>
-      </motion.div>
+      </div>
     </div>
   );
 }

@@ -5,8 +5,16 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from '@/components/ui/empty';
 
 export default function AuthErrorScreen() {
   const t = useTranslations();
@@ -73,42 +81,41 @@ export default function AuthErrorScreen() {
   const errorInfo = getErrorInfo(error);
 
   return (
-    <Card className="w-full max-w-sm">
-      <CardHeader className="text-center">
-        <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-destructive/10">
-          <AlertCircle className="h-10 w-10 text-destructive" />
-        </div>
-        <CardTitle>{errorInfo.title}</CardTitle>
-        <CardDescription>
+    <Empty className="w-full max-w-sm border-none">
+      <EmptyHeader>
+        <EmptyMedia variant="icon">
+          <AlertCircle className="text-destructive" />
+        </EmptyMedia>
+        <EmptyTitle className="text-xl font-semibold">
+          {errorInfo.title}
+        </EmptyTitle>
+        <EmptyDescription className="text-base">
           {errorInfo.description}
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="rounded-lg bg-muted p-4">
+        </EmptyDescription>
+      </EmptyHeader>
+      <EmptyContent className="space-y-4">
+        <div className="rounded-lg bg-muted p-3">
           <p className="text-sm text-muted-foreground text-center">
             {t('auth.errors.errorCode')}
             {' '}
-            <code className="font-mono text-xs">{error}</code>
+            <Badge variant="secondary" className="font-mono text-xs">
+              {error}
+            </Badge>
           </p>
         </div>
-        <Button
-          onClick={() => router.back()}
-          className="w-full"
-        >
-          <RefreshCw className="me-2 h-4 w-4" />
-          {t('auth.errors.tryAgain')}
-        </Button>
-        <Button
-          asChild
-          variant="outline"
-          className="w-full"
-        >
-          <Link href="/auth/sign-in">
-            <ArrowLeft className="me-2 h-4 w-4" />
-            {t('auth.errors.backToSignIn')}
-          </Link>
-        </Button>
-      </CardContent>
-    </Card>
+        <div className="flex flex-col gap-2 w-full">
+          <Button onClick={() => router.back()} className="w-full">
+            <RefreshCw className="me-2 h-4 w-4" />
+            {t('auth.errors.tryAgain')}
+          </Button>
+          <Button asChild variant="outline" className="w-full">
+            <Link href="/auth/sign-in">
+              <ArrowLeft className="me-2 h-4 w-4" />
+              {t('auth.errors.backToSignIn')}
+            </Link>
+          </Button>
+        </div>
+      </EmptyContent>
+    </Empty>
   );
 }

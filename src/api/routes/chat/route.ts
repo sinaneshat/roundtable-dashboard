@@ -15,6 +15,7 @@ import {
   GetThreadFeedbackResponseSchema,
   MessagesListResponseSchema,
   ModeratorAnalysisListResponseSchema,
+  ModeratorAnalysisPayloadSchema,
   ModeratorAnalysisRequestSchema,
   ParticipantDetailResponseSchema,
   RoundAnalysisParamSchema,
@@ -952,8 +953,8 @@ export const analyzeRoundRoute = createRoute({
   method: 'post',
   path: '/chat/threads/:threadId/rounds/:roundNumber/analyze',
   tags: ['chat'],
-  summary: 'Analyze conversation round with AI moderator',
-  description: 'Generate AI-powered analysis, ratings, and insights for all participant responses in a conversation round. Uses structured object streaming for real-time updates.',
+  summary: 'Analyze conversation round with AI moderator (streaming)',
+  description: 'Generate AI-powered analysis, ratings, and insights for all participant responses in a conversation round. Streams structured analysis object in real-time using AI SDK streamObject(). Use experimental_useObject hook on frontend for progressive rendering. Returns completed analysis immediately if already exists.',
   request: {
     params: RoundAnalysisParamSchema,
     body: {
@@ -967,14 +968,21 @@ export const analyzeRoundRoute = createRoute({
   },
   responses: {
     [HttpStatusCodes.OK]: {
-      description: 'Streaming moderator analysis (AI SDK text stream with structured JSON objects). Consumed via @ai-sdk/react useObject() hook.',
+      description: 'Analysis streaming in progress OR completed analysis returned (if already exists). Content-Type: text/plain for streaming, application/json for completed.',
       content: {
-        'text/plain; charset=utf-8': {
-          schema: z.object({
-            partialObject: z.any().openapi({
-              description: 'Partial ModeratorAnalysisPayload being streamed via AI SDK streamObject()',
-            }),
-          }),
+        'text/plain': {
+          schema: z.string().describe('Streaming object data (AI SDK format)'),
+        },
+        'application/json': {
+          schema: createApiResponseSchema(ModeratorAnalysisPayloadSchema).describe('Completed analysis (if already exists)'),
+        },
+      },
+    },
+    [HttpStatusCodes.CONFLICT]: {
+      description: 'Analysis already in progress or completed for this round',
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
         },
       },
     },

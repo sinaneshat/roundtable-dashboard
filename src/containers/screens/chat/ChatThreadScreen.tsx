@@ -147,22 +147,52 @@ export default function ChatThreadScreen({
     return deduplicated;
   }, [changelogResponse]);
 
+  // ✅ REGENERATION STATE: Track which rounds are being regenerated
+  // This ensures old analyses are immediately hidden from UI when retry is triggered
+  // Must be declared before analyses memo to avoid "used before declaration" error
+  // Thread-aware state: automatically resets when thread.id changes
+  const [regeneratingRounds, setRegeneratingRounds] = useState<{
+    threadId: string;
+    rounds: Set<number>;
+  }>(() => ({ threadId: thread.id, rounds: new Set() }));
+
   const { data: analysesResponse } = useThreadAnalysesQuery(thread.id, true);
   const analyses = useMemo(
     () => {
+      // Get current rounds for this thread, or empty set if thread changed
+      const currentRegeneratingRounds = regeneratingRounds.threadId === thread.id
+        ? regeneratingRounds.rounds
+        : new Set<number>();
+
       const items = analysesResponse?.success ? analysesResponse.data.items || [] : [];
       // Transform date strings to Date objects (API returns ISO strings, component expects Dates)
       // ✅ SHOW ALL ANALYSES: Include pending, streaming, completed (but not failed)
       // Pending/streaming will show loading state, completed will show full analysis
-      return items
+
+      // ✅ CRITICAL FIX: Deduplicate analyses by roundNumber to prevent duplicate analyses during regeneration
+      // Keep only the MOST RECENT analysis for each round (by createdAt)
+      // This handles race conditions where both old and new analyses might appear briefly
+      const deduplicatedItems = items
         .filter(item => item.status !== 'failed') // Only exclude failed
+        .filter(item => !currentRegeneratingRounds.has(item.roundNumber)) // ✅ FIX: Exclude rounds being regenerated
+        .reduce((acc, item) => {
+          const existing = acc.get(item.roundNumber);
+          if (!existing || new Date(item.createdAt) > new Date(existing.createdAt)) {
+            // Keep the newest analysis for this round
+            acc.set(item.roundNumber, item);
+          }
+          return acc;
+        }, new Map<number, typeof items[number]>());
+
+      return Array.from(deduplicatedItems.values())
+        .sort((a, b) => a.roundNumber - b.roundNumber) // Sort by round number
         .map(item => ({
           ...item,
           createdAt: typeof item.createdAt === 'string' ? new Date(item.createdAt) : item.createdAt,
           completedAt: item.completedAt ? (typeof item.completedAt === 'string' ? new Date(item.completedAt) : item.completedAt) : null,
         }));
     },
-    [analysesResponse],
+    [analysesResponse, regeneratingRounds, thread.id],
   );
 
   // ✅ MUTATION: Update thread (including participants)
@@ -192,9 +222,39 @@ export default function ChatThreadScreen({
     type: 'like' | 'dislike';
   } | null>(null);
 
+  // ✅ AUTO-CLOSE PREVIOUS ROUNDS: Track current streaming round to close previous accordions
+  const [streamingRoundNumber, setStreamingRoundNumber] = useState<number | null>(null);
+
   // Chat state
   const [selectedMode, setSelectedMode] = useState<ChatModeId>(thread.mode as ChatModeId);
   const [inputValue, setInputValue] = useState('');
+
+  // ✅ PERSIST IMMEDIATELY: Mode changes are persisted to database right away
+  const handleModeChange = useCallback(async (newMode: ChatModeId) => {
+    // Update local state immediately for responsive UI
+    setSelectedMode(newMode);
+
+    // Persist to backend to ensure changes survive page refresh
+    try {
+      await updateThreadMutation.mutateAsync({
+        param: { id: thread.id },
+        json: {
+          mode: newMode,
+        },
+      });
+
+      console.warn('[ChatThreadScreen] ✅ Mode persisted', {
+        threadId: thread.id,
+        mode: newMode,
+      });
+
+      // Invalidate changelog query to fetch fresh changelog entries
+      queryClient.invalidateQueries({ queryKey: queryKeys.threads.changelog(thread.id) });
+    } catch (error) {
+      console.error('[ChatThreadScreen] ❌ Failed to persist mode change:', error);
+      // Keep local state updated even if persistence fails
+    }
+  }, [thread.id, updateThreadMutation, queryClient]);
   const [selectedParticipants, setSelectedParticipants] = useState<ParticipantConfig[]>(() => {
     return participants
       .filter(p => p.isEnabled)
@@ -221,12 +281,55 @@ export default function ChatThreadScreen({
   // ✅ SIMPLIFIED: No participantsOverride state needed
   // Context manages the active participants
 
-  // ✅ SIMPLIFIED: Participant changes handler
-  // Changes are persisted via updateThreadMutation when user submits next message
-  // This prevents unwanted API calls when user is just exploring options
-  const handleParticipantsChange = useCallback((newParticipants: ParticipantConfig[]) => {
+  // ✅ PERSIST IMMEDIATELY: Participant changes are persisted to database right away
+  // This ensures settings are preserved across page refreshes
+  const handleParticipantsChange = useCallback(async (newParticipants: ParticipantConfig[]) => {
+    // Update local state immediately for responsive UI
     setSelectedParticipants(newParticipants);
-  }, []);
+
+    // Persist to backend to ensure changes survive page refresh
+    try {
+      // Convert to API format
+      const participantsForUpdate = newParticipants.map(p => ({
+        id: p.id.startsWith('participant-') ? undefined : p.id, // Omit temp IDs for new participants
+        modelId: p.modelId,
+        role: p.role || null,
+        customRoleId: p.customRoleId || null,
+        priority: p.order,
+        isEnabled: true,
+      }));
+
+      const result = await updateThreadMutation.mutateAsync({
+        param: { id: thread.id },
+        json: {
+          participants: participantsForUpdate,
+        },
+      });
+
+      // Update context with fresh participants from mutation response
+      if (result.success && result.data.participants) {
+        const participantsWithDates = result.data.participants.map(p => ({
+          ...p,
+          createdAt: new Date(p.createdAt),
+          updatedAt: new Date(p.updatedAt),
+        }));
+
+        updateParticipants(participantsWithDates);
+
+        console.warn('[ChatThreadScreen] ✅ Participants persisted and context updated', {
+          threadId: thread.id,
+          participantCount: participantsWithDates.length,
+        });
+
+        // Invalidate changelog query to fetch fresh changelog entries
+        queryClient.invalidateQueries({ queryKey: queryKeys.threads.changelog(thread.id) });
+      }
+    } catch (error) {
+      console.error('[ChatThreadScreen] ❌ Failed to persist participant changes:', error);
+      // Keep local state updated even if persistence fails
+      // User will see their changes but they won't survive refresh
+    }
+  }, [thread.id, updateThreadMutation, updateParticipants, queryClient]);
 
   // ✅ Initialize context when component mounts or thread/messages change
   // ✅ REASONING FIX: Compute stable hash of messages to detect content changes (not just length)
@@ -265,12 +368,87 @@ export default function ChatThreadScreen({
   useEffect(() => {
     // Set up round completion callback for analysis triggers
     const currentThreadId = thread.id; // Capture thread.id in closure
+    const currentThreadMode = thread.mode; // Capture mode in closure
+
     setOnRoundComplete(() => {
-      // ✅ Immediately invalidate analyses when round completes
-      // React Query will auto-refetch and the hook will get fresh data
-      queryClient.invalidateQueries({ queryKey: queryKeys.threads.analyses(currentThreadId) });
+      // ✅ ACTIVE SESSION OPTIMIZATION: Add pending analysis directly to cache
+      // This skips unnecessary GET request and triggers streaming immediately
+      // Only after page refresh should GET /analyses be used to fetch existing pending analyses
+
+      // Calculate round number from current messages
+      const userMessages = messages.filter(m => m.role === 'user');
+      const roundNumber = userMessages.length;
+
+      // Get participant message IDs from the messages that were just created
+      const assistantMessages = messages.filter(m => m.role === 'assistant');
+      const participantCount = contextParticipants.length;
+      const recentAssistantMessages = assistantMessages.slice(-participantCount);
+      const participantMessageIds = recentAssistantMessages.map(m => m.id);
+
+      // Get user question for this round (last user message)
+      const lastUserMessage = userMessages[userMessages.length - 1];
+      const userQuestion = lastUserMessage?.parts
+        ?.filter(p => p.type === 'text')
+        .map(p => p.type === 'text' ? p.text : '')
+        .join('')
+        .trim() || 'N/A';
+
+      console.warn('[ChatThreadScreen] 🎯 Round complete - adding pending analysis to cache', {
+        threadId: currentThreadId,
+        roundNumber,
+        participantMessageIds,
+      });
+
+      // Create pending analysis object to trigger streaming
+      const pendingAnalysis = {
+        id: `pending-${currentThreadId}-${roundNumber}`, // Temporary ID
+        threadId: currentThreadId,
+        roundNumber,
+        mode: currentThreadMode,
+        userQuestion,
+        status: 'pending' as const,
+        participantMessageIds,
+        analysisData: null,
+        createdAt: new Date(),
+        completedAt: null,
+        errorMessage: null,
+      };
+
+      // Add pending analysis directly to cache (no GET request)
+      queryClient.setQueryData(
+        queryKeys.threads.analyses(currentThreadId),
+        (oldData: unknown) => {
+          const typedData = oldData as typeof analysesResponse;
+
+          if (!typedData?.success) {
+            // If no existing data, create new response structure
+            return {
+              success: true,
+              data: {
+                items: [pendingAnalysis],
+              },
+            };
+          }
+
+          // Add pending analysis to existing items
+          return {
+            ...typedData,
+            data: {
+              ...typedData.data,
+              items: [...(typedData.data.items || []), pendingAnalysis],
+            },
+          };
+        },
+      );
+
+      // ✅ CLEAR REGENERATING STATE: Round is complete, new analysis will be created
+      // Clear all regenerating rounds since the participants have finished speaking
+      setRegeneratingRounds({ threadId: currentThreadId, rounds: new Set() });
+
+      // ✅ CLEAR STREAMING ROUND: Round completed, reset to allow new round
+      setStreamingRoundNumber(null);
     });
-  }, [thread.id, setOnRoundComplete, queryClient]);
+  }, [thread.id, thread.mode, setOnRoundComplete, queryClient, messages, contextParticipants, analysesResponse]);
 
   // ✅ CRITICAL FIX: Set up retry callback to immediately remove old analysis when round is retried
   // This ensures the old analysis disappears from UI BEFORE regeneration starts
@@ -282,31 +460,44 @@ export default function ChatThreadScreen({
         roundNumber,
       });
 
+      // ✅ IMMEDIATE UI UPDATE: Add round to regenerating state
+      // This immediately hides the old analysis from UI, preventing any visual glitches
+      setRegeneratingRounds((prev) => {
+        // Only update if same thread, otherwise start fresh
+        const currentRounds = prev.threadId === currentThreadId ? prev.rounds : new Set<number>();
+        const newRounds = new Set(currentRounds);
+        newRounds.add(roundNumber);
+        return { threadId: currentThreadId, rounds: newRounds };
+      });
+
       // ✅ CRITICAL: Immediately remove the old analysis from cache
       // Don't wait for refetch - remove it now so UI updates instantly
       queryClient.setQueryData(
         queryKeys.threads.analyses(currentThreadId),
-        (oldData: typeof analysesResponse) => {
-          if (!oldData?.success) {
-            return oldData;
+        (oldData: unknown) => {
+          // ✅ FIX: Use unknown type to avoid dependency on analysesResponse
+          const typedData = oldData as typeof analysesResponse;
+
+          if (!typedData?.success) {
+            return typedData;
           }
 
           // Filter out the analysis for the round being regenerated
-          const filteredItems = (oldData.data.items || []).filter(
+          const filteredItems = (typedData.data.items || []).filter(
             item => item.roundNumber !== roundNumber,
           );
 
           console.warn('[ChatThreadScreen] ♻️ Removed analysis from cache', {
             threadId: currentThreadId,
             roundNumber,
-            oldCount: oldData.data.items?.length || 0,
+            oldCount: typedData.data.items?.length || 0,
             newCount: filteredItems.length,
           });
 
           return {
-            ...oldData,
+            ...typedData,
             data: {
-              ...oldData.data,
+              ...typedData.data,
               items: filteredItems,
             },
           };
@@ -317,9 +508,9 @@ export default function ChatThreadScreen({
       // Reason: Invalidation triggers immediate refetch BEFORE backend deletes the old analysis
       // This causes a race condition where the old analysis gets fetched again
       // Instead: Let onRoundComplete refetch when the new round finishes
-      // The cache removal above is sufficient to hide the old analysis immediately
+      // The cache removal above + deduplication logic ensures old analysis doesn't appear
     });
-  }, [thread.id, setOnRetry, queryClient, analysesResponse]);
+  }, [thread.id, setOnRetry, queryClient]); // ✅ REMOVED analysesResponse dependency to prevent stale callbacks
 
   // ✅ SYNC CONTEXT: Update context when thread query data changes (after mutation)
   // This is the proper React Query pattern - mutation invalidates, query refetches, effect syncs
@@ -371,6 +562,18 @@ export default function ChatThreadScreen({
       // Mark as sent to prevent re-triggering
       hasSentPendingMessageRef.current = true;
 
+      // ✅ CALCULATE NEW ROUND NUMBER: Count existing user messages + 1
+      const userMessages = messages.filter(m => m.role === 'user');
+      const newRoundNumber = userMessages.length + 1;
+
+      // ✅ SET STREAMING ROUND: Signal all previous accordions to close
+      setStreamingRoundNumber(newRoundNumber);
+
+      console.warn('[ChatThreadScreen] 🎬 Starting new round', {
+        roundNumber: newRoundNumber,
+        userMessageCount: userMessages.length,
+      });
+
       // Now send the message - context has the RIGHT participants
       sendMessage(pendingMessage);
     } else {
@@ -380,7 +583,7 @@ export default function ChatThreadScreen({
         expectedIds,
       });
     }
-  }, [pendingMessage, expectedParticipantIds, contextParticipants, sendMessage, thread.id]);
+  }, [pendingMessage, expectedParticipantIds, contextParticipants, sendMessage, thread.id, messages]);
 
   // ✅ AI SDK v5 PATTERN: Submit handler with participant persistence
   const handlePromptSubmit = useCallback(
@@ -745,6 +948,16 @@ export default function ChatThreadScreen({
   // Uses virtualizer's scrollToIndex for smooth, optimized scrolling
   const isNearBottomRef = useRef(true); // Track if user is viewing bottom
 
+  // ✅ ANALYSIS AUTO-SCROLL TRACKING: Track which analyses we've already scrolled to
+  // This ensures we only auto-scroll to an analysis ONCE when it first appears
+  // Prevents forcing users back when analysis updates (status changes, new data)
+  const scrolledToAnalysesRef = useRef<Set<string>>(new Set());
+
+  // ✅ CLEANUP: Reset tracked analyses when thread changes
+  useEffect(() => {
+    scrolledToAnalysesRef.current.clear();
+  }, [thread.id]);
+
   // Track scroll position to determine if user is near bottom
   useEffect(() => {
     if (!parentRef.current)
@@ -763,35 +976,137 @@ export default function ChatThreadScreen({
     return () => scrollContainer.removeEventListener('scroll', handleScroll);
   }, []);
 
-  // ✅ CRITICAL FIX: Auto-scroll to bottom when new messages arrive or during streaming
-  // Track both length AND last message content to trigger on streaming updates
-  // Extract last message content for dependency tracking
-  const lastItem = messagesWithAnalysesAndChangelog[messagesWithAnalysesAndChangelog.length - 1];
-  const lastItemContent = lastItem?.type === 'messages'
-    ? lastItem.data.map(m => m.parts?.map(p => p.type === 'text' ? p.text : '').join('')).join('')
+  // ✅ CRITICAL FIX: Track MESSAGE items separately to prevent auto-scroll on changelog/analysis insertions
+  // This prevents the race condition where changelog insertion triggers scroll during streaming
+  const messageItems = useMemo(() => {
+    return messagesWithAnalysesAndChangelog.filter(item => item.type === 'messages');
+  }, [messagesWithAnalysesAndChangelog]);
+
+  // Track message count and content for auto-scroll dependency
+  const messageCount = messageItems.length;
+  const lastMessageItem = messageItems[messageItems.length - 1];
+  const lastMessageContent = lastMessageItem
+    ? lastMessageItem.data.map(m => m.parts?.map(p => p.type === 'text' ? p.text : '').join('')).join('')
     : '';
+
+  // ✅ CRITICAL FIX: Find the index of the last MESSAGE item (not analysis/changelog)
+  // This prevents auto-scrolling past analyses/changelogs when they're inserted
+  const lastMessageItemIndex = useMemo(() => {
+    for (let i = messagesWithAnalysesAndChangelog.length - 1; i >= 0; i--) {
+      if (messagesWithAnalysesAndChangelog[i]?.type === 'messages') {
+        return i;
+      }
+    }
+    return messagesWithAnalysesAndChangelog.length - 1;
+  }, [messagesWithAnalysesAndChangelog]);
+
+  // ✅ NEW: Reference to fixed input container for height measurement
+  const inputContainerRef = useRef<HTMLDivElement | null>(null);
+
+  // ✅ CRITICAL FIX: Set scroll-padding-bottom on scroll container to account for fixed input
+  // This ensures scrollToIndex properly accounts for the fixed input at the bottom
+  useEffect(() => {
+    const updateScrollPadding = () => {
+      if (parentRef.current && inputContainerRef.current) {
+        const inputHeight = inputContainerRef.current.offsetHeight;
+        // ✅ FIX: Add BOTH the input container height AND the content padding (pb-8 = 32px)
+        // This ensures content is fully visible when scrolled to bottom
+        const contentBottomPadding = 32; // pb-8 from content container (8 * 4px = 32px)
+        const totalPadding = inputHeight + contentBottomPadding;
+
+        // Add scroll-padding-bottom to reserve space for fixed input + content padding
+        // This works natively with scrollToIndex to ensure content is visible
+        parentRef.current.style.scrollPaddingBottom = `${totalPadding}px`;
+      }
+    };
+
+    // Set initial padding (wait for refs to be ready)
+    const timer = setTimeout(updateScrollPadding, 0);
+
+    // Update padding on window resize (input height might change)
+    window.addEventListener('resize', updateScrollPadding);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('resize', updateScrollPadding);
+    };
+  }, []);
+
+  // ✅ INITIAL SCROLL: Scroll to bottom on page load/refresh
+  // This ensures the page starts at the bottom with all content visible
+  useEffect(() => {
+    if (!parentRef.current || messagesWithAnalysesAndChangelog.length === 0) {
+      return;
+    }
+
+    // Wait for content to render and scroll padding to be set
+    const timer = setTimeout(() => {
+      if (parentRef.current && messagesWithAnalysesAndChangelog.length > 0) {
+        // Scroll to the last item on initial load
+        rowVirtualizer.scrollToIndex(messagesWithAnalysesAndChangelog.length - 1, {
+          align: 'end',
+          behavior: 'auto', // Instant scroll on initial load
+        });
+      }
+    }, 100);
+
+    return () => clearTimeout(timer);
+    // Only run on initial mount (when thread.id changes)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [thread.id]);
 
   useEffect(() => {
     if (!parentRef.current || messagesWithAnalysesAndChangelog.length === 0) {
       return;
     }
 
-    // ✅ CRITICAL FIX: Always auto-scroll when streaming is active
-    // This ensures continuous scrolling during streaming updates
-    // Otherwise, only auto-scroll if user is viewing the bottom
-    const shouldScroll = isStreaming || isNearBottomRef.current;
+    // ✅ CRITICAL FIX: Detect NEW analyses that we haven't scrolled to yet
+    // Only auto-scroll to an analysis ONCE when it first appears
+    // This prevents forcing users back when analysis updates
+    const newAnalyses = analyses.filter(a => !scrolledToAnalysesRef.current.has(a.id));
+    const hasNewAnalysis = newAnalyses.length > 0;
+
+    // ✅ CRITICAL FIX: During streaming, scroll to last MESSAGE item, not last item overall
+    // This prevents analyses/changelog from being dragged down during streaming
+    // When NOT streaming, use normal behavior (scroll to actual bottom if user is near bottom)
+    const targetIndex = isStreaming ? lastMessageItemIndex : messagesWithAnalysesAndChangelog.length - 1;
+
+    // ✅ ENHANCED SCROLL LOGIC:
+    // 1. Always scroll during message streaming (to show new messages)
+    // 2. Scroll ONCE when a NEW analysis appears (not on updates) - BUT NOT DURING STREAMING
+    // 3. Scroll when user is near bottom and content changes
+    // ✅ FIX: Don't scroll for new analyses during streaming - this prevents the bug where
+    // analyses from previous rounds get scrolled past when they load during current round streaming
+    const shouldScrollForAnalysis = hasNewAnalysis && !isStreaming;
+    const shouldScroll = isStreaming || shouldScrollForAnalysis || isNearBottomRef.current;
 
     if (shouldScroll) {
-      // Use virtualizer's scrollToIndex with smooth scrolling
-      // This is more efficient than manual scrollTo
+      // ✅ Mark new analyses as seen to prevent repeated scrolling
+      if (hasNewAnalysis) {
+        newAnalyses.forEach(a => scrolledToAnalysesRef.current.add(a.id));
+        console.warn('[ChatThreadScreen] 📍 New analysis detected', {
+          analysisIds: newAnalyses.map(a => a.id),
+          roundNumbers: newAnalyses.map(a => a.roundNumber),
+          isStreaming,
+          willScroll: shouldScrollForAnalysis || isStreaming,
+        });
+      }
+
+      // ✅ FIX: Use virtualizer scrollToIndex with scroll-padding-bottom handling the offset
+      // The scroll-padding-bottom CSS property ensures content appears above the fixed input
       requestAnimationFrame(() => {
-        rowVirtualizer.scrollToIndex(messagesWithAnalysesAndChangelog.length - 1, {
+        rowVirtualizer.scrollToIndex(targetIndex, {
           align: 'end',
           behavior: 'smooth',
         });
       });
     }
-  }, [messagesWithAnalysesAndChangelog.length, lastItemContent, isStreaming, rowVirtualizer]);
+    // ✅ INTENTIONAL: messagesWithAnalysesAndChangelog.length is NOT in dependencies
+    // We only want to trigger on MESSAGE changes (messageCount, lastMessageContent)
+    // Adding the full array length would trigger on changelog/analysis insertions,
+    // causing the race condition bug we just fixed. The length is used inside the effect
+    // but the effect triggers correctly via messageCount and analyses dependencies.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messageCount, lastMessageContent, isStreaming, rowVirtualizer, lastMessageItemIndex, analyses]);
 
   return (
     <>
@@ -923,6 +1238,51 @@ export default function ChatThreadScreen({
                         analysis={item.data}
                         threadId={thread.id}
                         isLatest={itemIndex === messagesWithAnalysesAndChangelog.length - 1}
+                        streamingRoundNumber={streamingRoundNumber}
+                        onStreamComplete={(completedData) => {
+                          // ✅ ACTIVE SESSION OPTIMIZATION: Update cache directly with completed analysis
+                          // This skips unnecessary GET request after streaming completes
+                          console.warn('[ChatThreadScreen] Analysis stream completed, updating cache directly');
+
+                          queryClient.setQueryData(
+                            queryKeys.threads.analyses(thread.id),
+                            (oldData: unknown) => {
+                              const typedData = oldData as typeof analysesResponse;
+
+                              if (!typedData?.success) {
+                                return typedData;
+                              }
+
+                              // Replace the pending analysis with completed analysis
+                              const updatedItems = (typedData.data.items || []).map((analysis) => {
+                                // Match by round number (pending analysis has temporary ID)
+                                if (analysis.roundNumber === item.data.roundNumber) {
+                                  return {
+                                    ...analysis,
+                                    status: 'completed' as const,
+                                    analysisData: completedData,
+                                    completedAt: new Date(),
+                                  };
+                                }
+                                return analysis;
+                              });
+
+                              console.warn('[ChatThreadScreen] ✅ Updated analysis in cache', {
+                                threadId: thread.id,
+                                roundNumber: item.data.roundNumber,
+                                itemCount: updatedItems.length,
+                              });
+
+                              return {
+                                ...typedData,
+                                data: {
+                                  ...typedData.data,
+                                  items: updatedItems,
+                                },
+                              };
+                            },
+                          );
+                        }}
                       />
                     )}
                   </div>
@@ -942,7 +1302,7 @@ export default function ChatThreadScreen({
         </div>
 
         {/* ✅ INPUT CONTAINER: mt-auto pushes to bottom, maximizing distance from content */}
-        <div className="mt-auto sticky bottom-0 z-50 bg-gradient-to-t from-background via-background to-transparent pt-6 pb-4">
+        <div ref={inputContainerRef} className="mt-auto sticky bottom-0 z-50 bg-gradient-to-t from-background via-background to-transparent pt-6 pb-4">
           <div className="container max-w-3xl mx-auto px-4 sm:px-6">
             <ChatInput
               value={inputValue}
@@ -969,7 +1329,7 @@ export default function ChatThreadScreen({
                   />
                   <ChatModeSelector
                     selectedMode={selectedMode}
-                    onModeChange={setSelectedMode}
+                    onModeChange={handleModeChange}
                   />
                 </>
               )}

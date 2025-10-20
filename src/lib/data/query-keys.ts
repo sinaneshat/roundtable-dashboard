@@ -165,7 +165,12 @@ export const invalidationPatterns = {
     queryKeys.threads.detail(threadId),
     queryKeys.threads.lists(),
     queryKeys.threads.changelog(threadId), // ✅ Invalidate changelog when thread details change
-    queryKeys.threads.analyses(threadId), // ✅ Invalidate analyses when thread details change
+    // ❌ REMOVED: Don't invalidate analyses when thread details change
+    // Analyses are tied to specific rounds and don't change when participants/mode are updated
+    // Analyses are only invalidated when:
+    // 1. onRoundComplete callback (creates new pending analysis)
+    // 2. onStreamComplete callback (analysis finishes streaming)
+    // queryKeys.threads.analyses(threadId),
   ],
 
   // After thread message - invalidate thread detail and usage

@@ -335,6 +335,34 @@ export default function ChatOverviewScreen() {
     !showInitialUI,
   );
 
+  // ✅ NEW: Reference to fixed input container for height measurement
+  const inputContainerRef = useRef<HTMLDivElement | null>(null);
+
+  // ✅ CRITICAL FIX: Set scroll-padding-bottom on scroll container to account for fixed input
+  // This ensures auto-scroll properly accounts for the fixed input at the bottom
+  useEffect(() => {
+    const scrollContainer = document.getElementById('chat-scroll-container');
+
+    const updateScrollPadding = () => {
+      if (scrollContainer && inputContainerRef.current) {
+        const inputHeight = inputContainerRef.current.offsetHeight;
+        // Add scroll-padding-bottom to reserve space for fixed input
+        // This works with the auto-scroll hook to ensure content is visible
+        scrollContainer.style.scrollPaddingBottom = `${inputHeight}px`;
+      }
+    };
+
+    // Set initial padding (wait for refs to be ready)
+    const timer = setTimeout(updateScrollPadding, 0);
+
+    // Update padding on window resize (input height might change)
+    window.addEventListener('resize', updateScrollPadding);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('resize', updateScrollPadding);
+    };
+  }, []);
+
   return (
     <div className="h-full flex flex-col">
       {/* Background - fixed behind all content */}
@@ -456,7 +484,7 @@ export default function ChatOverviewScreen() {
       </div>
 
       {/* Input container - pushed to bottom with mt-auto, creating space between content and input */}
-      <div className="sticky bottom-0 z-50 mt-auto bg-gradient-to-t from-background via-background to-transparent pt-6 pb-4">
+      <div ref={inputContainerRef} className="sticky bottom-0 z-50 mt-auto bg-gradient-to-t from-background via-background to-transparent pt-6 pb-4">
         <div className="container max-w-3xl mx-auto px-4 sm:px-6">
           <ChatInput
             value={inputValue}

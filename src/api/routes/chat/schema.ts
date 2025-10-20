@@ -675,7 +675,8 @@ export const ParticipantAnalysisSchema = z.object({
   overallRating: z.number().min(1).max(10).describe('Overall rating out of 10 for this response'),
 
   skillsMatrix: z.array(SkillRatingSchema)
-    .describe('Individual skill ratings for visualization (array of {skillName, rating} objects)'),
+    .length(5)
+    .describe('Individual skill ratings for pentagon visualization - MUST be exactly 5 skills (e.g., Creativity, Technical Depth, Clarity, Analysis, Innovation)'),
 
   pros: z.array(z.string()).min(1).describe('List of strengths in this response (2-4 items)'),
 
@@ -731,6 +732,18 @@ export const ModeratorAnalysisPayloadSchema = z.object({
 }).openapi('ModeratorAnalysisPayload');
 
 export const ModeratorAnalysisResponseSchema = createApiResponseSchema(ModeratorAnalysisPayloadSchema).openapi('ModeratorAnalysisResponse');
+
+/**
+ * ✅ BACKGROUND PROCESSING: 202 Accepted response when analysis starts
+ * Returned immediately when background processing is initiated
+ */
+export const AnalysisAcceptedPayloadSchema = z.object({
+  analysisId: z.string().describe('ID of the analysis record being processed'),
+  status: z.literal('processing').describe('Status indicating background processing has started'),
+  message: z.string().optional().describe('Optional message about polling for completion'),
+}).openapi('AnalysisAcceptedPayload');
+
+export const AnalysisAcceptedResponseSchema = AnalysisAcceptedPayloadSchema.openapi('AnalysisAcceptedResponse');
 
 /**
  * ✅ REUSE: Stored moderator analysis from database validation

@@ -8,7 +8,7 @@
 
 'use client';
 
-import { Loader2, Plus } from 'lucide-react';
+import { Key, Loader2, Plus } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useTranslations } from 'next-intl';
 import { useState } from 'react';
@@ -26,6 +26,14 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from '@/components/ui/empty';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useDeleteApiKeyMutation } from '@/hooks';
 import { showApiErrorToast } from '@/lib/toast';
@@ -80,13 +88,23 @@ export function ApiKeysList({ apiKeys, isLoading, onCreateNew }: ApiKeysListProp
   // Empty state
   if (apiKeys.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-12 text-center">
-        <p className="text-muted-foreground mb-4">{t('apiKeys.list.noKeys')}</p>
-        <Button onClick={onCreateNew} size="sm">
-          <Plus className="mr-2 size-4" />
-          {t('apiKeys.list.createNew')}
-        </Button>
-      </div>
+      <Empty className="border-dashed">
+        <EmptyHeader>
+          <EmptyMedia variant="icon">
+            <Key />
+          </EmptyMedia>
+          <EmptyTitle>{t('apiKeys.list.noKeys')}</EmptyTitle>
+          <EmptyDescription>
+            {t('apiKeys.list.noKeysDescription')}
+          </EmptyDescription>
+        </EmptyHeader>
+        <EmptyContent>
+          <Button onClick={onCreateNew} size="sm">
+            <Plus className="mr-2 size-4" />
+            {t('apiKeys.list.createNew')}
+          </Button>
+        </EmptyContent>
+      </Empty>
     );
   }
 

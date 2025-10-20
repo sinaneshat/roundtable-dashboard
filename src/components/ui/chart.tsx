@@ -439,6 +439,8 @@ export const {
   PolarGrid,
   Radar,
   RadarChart,
+  RadialBar,
+  RadialBarChart,
   Scatter,
   ScatterChart,
   XAxis,

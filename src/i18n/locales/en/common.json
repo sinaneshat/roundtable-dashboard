@@ -111,6 +111,7 @@
     },
     "list": {
       "noKeys": "No API keys yet",
+      "noKeysDescription": "Create your first API key to start using our programmatic API access",
       "createNew": "Create API Key",
       "unnamedKey": "Unnamed Key",
       "createdAt": "Created",
@@ -509,6 +510,8 @@
     "removedFromFavoritesDescription": "Thread has been removed from your favorites",
     "scrollToBottom": "Scroll to bottom",
     "searchChats": "Search chats...",
+    "noChatsYet": "No chats yet",
+    "noChatsDescription": "Start a new conversation to begin collaborating with AI participants",
     "status": {
       "streaming": "AI is thinking...",
       "navigating": "Navigating to conversation..."
