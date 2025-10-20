@@ -393,12 +393,6 @@ export default function ChatThreadScreen({
         .join('')
         .trim() || 'N/A';
 
-      console.warn('[ChatThreadScreen] 🎯 Round complete - adding pending analysis to cache', {
-        threadId: currentThreadId,
-        roundNumber,
-        participantMessageIds,
-      });
-
       // Create pending analysis object to trigger streaming
       // ✅ UNIQUE ID: Include timestamp to ensure uniqueness for retries
       // When a round is retried, we need a different ID than the previous attempt
@@ -415,6 +409,14 @@ export default function ChatThreadScreen({
         completedAt: null,
         errorMessage: null,
       };
+
+      console.warn('[ChatThreadScreen] 🎯 Round complete - adding pending analysis to cache', {
+        threadId: currentThreadId,
+        roundNumber,
+        participantMessageIds,
+        pendingAnalysisId: pendingAnalysis.id,
+        isRetry: regeneratingRounds.threadId === currentThreadId && regeneratingRounds.rounds.has(roundNumber),
+      });
 
       // Add pending analysis directly to cache (no GET request)
       queryClient.setQueryData(
@@ -433,13 +435,22 @@ export default function ChatThreadScreen({
           }
 
           // Add pending analysis to existing items
-          return {
+          const updatedData = {
             ...typedData,
             data: {
               ...typedData.data,
               items: [...(typedData.data.items || []), pendingAnalysis],
             },
           };
+
+          console.warn('[ChatThreadScreen] ✅ Pending analysis added to cache', {
+            threadId: currentThreadId,
+            roundNumber,
+            pendingAnalysisId: pendingAnalysis.id,
+            totalAnalyses: updatedData.data.items.length,
+          });
+
+          return updatedData;
         },
       );
 
