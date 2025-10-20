@@ -326,8 +326,14 @@ export default function ChatOverviewScreen() {
     }
   }, [showInitialUI, isStreaming, stopStreaming]);
 
-  // ✅ AUTO-SCROLL: Scroll to bottom when new messages arrive (page-level scrolling)
-  useAutoScrollToBottom(messages.length, !showInitialUI);
+  // ✅ AUTO-SCROLL: Scroll to bottom when new messages arrive or during streaming (page-level scrolling)
+  // Track both messages.length AND last message content to trigger on streaming updates
+  const lastMessage = messages[messages.length - 1];
+  const lastMessageContent = lastMessage?.parts?.map(p => p.type === 'text' ? p.text : '').join('') || '';
+  useAutoScrollToBottom(
+    { length: messages.length, content: lastMessageContent, isStreaming },
+    !showInitialUI,
+  );
 
   return (
     <div className="h-full flex flex-col">

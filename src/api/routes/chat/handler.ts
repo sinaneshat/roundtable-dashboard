@@ -1,6 +1,6 @@
 import type { RouteHandler } from '@hono/zod-openapi';
 import type { UIMessage } from 'ai';
-import { consumeStream, convertToModelMessages, generateText, streamText, validateUIMessages } from 'ai';
+import { consumeStream, convertToModelMessages, streamText, validateUIMessages } from 'ai';
 import type { SQL } from 'drizzle-orm';
 import { and, asc, desc, eq, ne } from 'drizzle-orm';
 import Fuse from 'fuse.js';
@@ -2503,31 +2503,30 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
     const modelSupportsTemperature = !participant.modelId.includes('o4-mini') && !participant.modelId.includes('o4-deep');
     const temperatureValue = modelSupportsTemperature ? (participant.settings?.temperature ?? 0.7) : undefined;
 
-    // ✅ ARCHITECTURAL FIX: Use generateText for validation, streamText for response
+    // ✅ STREAMING APPROACH: Direct streamText() without validation
     //
-    // PREVIOUS BUG: Code validated one stream, then created a FRESH stream that could return
-    // completely different content (e.g., refusal instead of valid response). This fresh stream
-    // bypassed all retry logic.
+    // PHILOSOPHY:
+    // - Stream responses immediately without pre-validation
+    // - AI SDK built-in retry handles transient errors (network, rate limits)
+    // - onFinish callback handles response-level errors (empty responses, content filters)
+    // - No double API calls, no validation overhead, faster response times
     //
-    // NEW APPROACH:
-    // 1. Use generateText (non-streaming) in retry loop for fast validation
-    // 2. Once validated, immediately use streamText (streaming) to send to user
-    // 3. Both calls use identical parameters and happen milliseconds apart
-    // 4. Much less likely to get different content than old "consume then fresh stream" approach
-    //
-    const MAX_TOTAL_RETRIES = 10; // Maximum 10 attempts per model
-    let totalAttempts = 0;
-    let lastError: Error | null = null;
-    let validatedSuccessfully = false;
+    console.warn('[streamChatHandler] 🚀 Starting stream', {
+      threadId,
+      participantIndex,
+      participantId: participant.id,
+      modelId: participant.modelId,
+      modelRole: participant.role,
+    });
 
-    // Common parameters for both generateText and streamText
-    const commonParams = {
+    // Parameters for streamText
+    const streamParams = {
       model: client(participant.modelId),
       system: systemPrompt,
       messages: modelMessages,
       maxOutputTokens,
       ...(modelSupportsTemperature && { temperature: temperatureValue }),
-      maxRetries: AI_RETRY_CONFIG.maxAttempts,
+      maxRetries: AI_RETRY_CONFIG.maxAttempts, // AI SDK handles retries
       abortSignal: AbortSignal.any([
         (c.req as unknown as { raw: Request }).raw.signal,
         AbortSignal.timeout(AI_TIMEOUT_CONFIG.perAttemptMs),
@@ -2538,243 +2537,9 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
       },
     };
 
-    // ✅ RETRY LOOP: Use NON-STREAMING generateText for validation
-    // This is fast and doesn't consume a stream we need to return to user
-    while (totalAttempts < MAX_TOTAL_RETRIES) {
-      totalAttempts++;
-
-      console.warn(totalAttempts === 1
-        ? '[streamChatHandler] 🚀 Starting validation attempt'
-        : '[streamChatHandler] 🔄 Retrying validation', {
-        threadId,
-        participantIndex,
-        participantId: participant.id,
-        modelId: participant.modelId,
-        modelRole: participant.role,
-        attempt: totalAttempts,
-        maxAttempts: MAX_TOTAL_RETRIES,
-        ...(lastError && { lastError: lastError.message }),
-      });
-
-      try {
-        // ✅ VALIDATION CALL: Check if model can generate actual content
-        // This prevents wasting a stream on a model that will return empty
-        const validationResult = await generateText(commonParams);
-
-        // ✅ VALIDATE CONTENT: Ensure model actually generated text
-        const validationText = validationResult.text?.trim() || '';
-        const validationTokens = validationResult.usage?.outputTokens || 0;
-
-        // ✅ PROVIDER SUCCESS CHECK: If generateText() returned without throwing an exception,
-        // the provider successfully processed the request. Even 1 token is a valid response.
-        // Only retry when we get actual provider errors (caught in catch block), not minimal model output.
-        // NOTE: Refusal detection removed - optimized system prompts prevent refusals by design
-        if (validationTokens === 0) {
-          throw createError.internal(
-            `Model provider returned no tokens - possible provider issue`,
-          );
-        }
-
-        console.warn('[streamChatHandler] ✅ Validation successful - model generated content', {
-          threadId,
-          participantIndex,
-          modelId: participant.modelId,
-          attempt: totalAttempts,
-          textLength: validationText.length,
-          outputTokens: validationTokens,
-        });
-
-        validatedSuccessfully = true;
-        lastError = null;
-        break;
-      } catch (error) {
-        lastError = error instanceof Error ? error : new Error(String(error));
-
-        // ✅ OPENROUTER ERROR STRUCTURE: { error: { message: string, code: number } }
-        // eslint-disable-next-line ts/no-explicit-any -- Accessing OpenRouter error structure
-        const errorObj = error as any;
-        const statusCode = errorObj.statusCode || errorObj.status || errorObj.code;
-        const errorName = errorObj.name;
-
-        // Classify error by HTTP status code
-        const isAuthError = statusCode === 401 || statusCode === 403;
-        const isModelNotFound = statusCode === 404 || statusCode === 400;
-        const isRateLimitError = statusCode === 429;
-        const isProviderOutage = statusCode === 502 || statusCode === 503 || statusCode === 504;
-        const isTimeoutError = errorName === 'AbortError' || errorName === 'TimeoutError';
-        const isNetworkError = errorName === 'FetchError' || errorName === 'NetworkError';
-
-        let errorCategory: string;
-        if (isAuthError) {
-          errorCategory = 'auth_error';
-        } else if (isModelNotFound) {
-          errorCategory = 'model_not_found';
-        } else if (isRateLimitError) {
-          errorCategory = 'rate_limit';
-        } else if (isProviderOutage) {
-          errorCategory = 'provider_outage';
-        } else if (isTimeoutError) {
-          errorCategory = 'timeout';
-        } else if (isNetworkError) {
-          errorCategory = 'network_error';
-        } else {
-          errorCategory = 'unknown';
-        }
-
-        console.error('[streamChatHandler] EXCEPTION_THROWN', {
-          threadId,
-          participantIndex,
-          modelId: participant.modelId,
-          attempt: totalAttempts,
-          maxAttempts: MAX_TOTAL_RETRIES,
-          error,
-          statusCode,
-          errorName,
-          errorCategory,
-          errorMessage: lastError.message,
-        });
-
-        // ✅ NON-RETRIABLE ERRORS: Don't retry these - they won't succeed
-        if (isAuthError || isModelNotFound) {
-          console.error('[streamChatHandler] NON_RETRIABLE_ERROR - Stopping retries', {
-            threadId,
-            participantIndex,
-            modelId: participant.modelId,
-            errorCategory,
-            errorMessage: lastError.message,
-          });
-          break; // Exit retry loop immediately
-        }
-
-        if (totalAttempts >= MAX_TOTAL_RETRIES) {
-          console.error('[streamChatHandler] MAX_RETRIES_EXCEEDED_EXCEPTION', {
-            threadId,
-            participantIndex,
-            modelId: participant.modelId,
-            totalAttempts,
-            error,
-            errorCategory,
-          });
-          break;
-        }
-
-        // ✅ ADAPTIVE RETRY DELAY: Longer delays for rate limits and provider outages
-        let retryDelay: number;
-        if (isRateLimitError) {
-          retryDelay = 5000; // 5 seconds for rate limits
-        } else if (isProviderOutage) {
-          retryDelay = 10000; // 10 seconds for provider outages
-        } else {
-          retryDelay = 2000; // 2 seconds for other errors
-        }
-
-        console.warn('[streamChatHandler] 🔄 Retrying after error', {
-          threadId,
-          participantIndex,
-          modelId: participant.modelId,
-          attempt: totalAttempts,
-          retryDelay,
-          errorCategory,
-        });
-
-        await new Promise(resolve => setTimeout(resolve, retryDelay));
-      }
-    }
-
-    if (!validatedSuccessfully) {
-      const errorMessage = lastError?.message || 'Unknown error';
-
-      // ✅ CLASSIFY ERROR BY HTTP STATUS CODE
-      // eslint-disable-next-line ts/no-explicit-any -- Accessing OpenRouter error structure
-      const errorObj = lastError as any;
-      const statusCode = errorObj.statusCode || errorObj.status || errorObj.code;
-      const errorName = errorObj.name;
-
-      // Determine error category
-      let errorCategory: string;
-      let userFriendlyMessage: string;
-      let suggestedAction: string;
-      let isTransient: boolean;
-
-      const provider = participant.modelId.split('/')[0];
-
-      if (statusCode === 401 || statusCode === 403) {
-        // Authentication errors
-        errorCategory = 'auth_error';
-        userFriendlyMessage = `[Authentication Error] Invalid API credentials for ${provider}`;
-        suggestedAction = 'Contact support about API credentials';
-        isTransient = false;
-      } else if (statusCode === 404 || statusCode === 400) {
-        // Model not found or invalid model
-        errorCategory = 'model_not_found';
-        userFriendlyMessage = `[Model Not Found] ${participant.modelId} is not available`;
-        suggestedAction = 'Select a different model';
-        isTransient = false;
-      } else if (statusCode === 429) {
-        // Rate limit exceeded
-        errorCategory = 'rate_limit';
-        userFriendlyMessage = `[Rate Limit] Provider ${provider} rate limit exceeded. Please try again in a few minutes.`;
-        suggestedAction = 'Wait a few minutes before trying again';
-        isTransient = true;
-      } else if (statusCode === 502 || statusCode === 503 || statusCode === 504) {
-        // Provider outage or service unavailable
-        errorCategory = 'provider_outage';
-        userFriendlyMessage = `[Provider Outage] ${provider} is experiencing issues. Please try a different model or wait a few minutes.`;
-        suggestedAction = 'Try a different model or wait for provider recovery';
-        isTransient = true;
-      } else if (errorName === 'AbortError' || errorName === 'TimeoutError') {
-        // Timeout errors
-        errorCategory = 'timeout';
-        userFriendlyMessage = `[Timeout] Request timed out after ${AI_TIMEOUT_CONFIG.perAttemptMs / 1000}s. Try a faster model or simpler prompt.`;
-        suggestedAction = 'Use a faster model or simplify your prompt';
-        isTransient = true;
-      } else if (errorName === 'FetchError' || errorName === 'NetworkError') {
-        // Network errors
-        errorCategory = 'network_error';
-        userFriendlyMessage = `[Network Error] Failed to connect to ${provider}`;
-        suggestedAction = 'Check your network connection and try again';
-        isTransient = true;
-      } else {
-        // Unknown or general errors
-        errorCategory = 'unknown_error';
-        userFriendlyMessage = `Model ${participant.modelId} failed after ${totalAttempts} attempts: ${errorMessage}`;
-        suggestedAction = 'Try again or contact support if the issue persists';
-        isTransient = true;
-      }
-
-      console.error('[streamChatHandler] ALL_RETRIES_FAILED', {
-        threadId,
-        participantIndex,
-        modelId: participant.modelId,
-        totalAttempts,
-        lastError,
-        statusCode,
-        errorName,
-        errorCategory,
-      });
-
-      const errorMetadata = {
-        errorCategory,
-        errorMessage: userFriendlyMessage,
-        rawErrorMessage: errorMessage,
-        errorType: lastError?.name || 'APIError',
-        participantId: participant.id,
-        participantIndex,
-        modelId: participant.modelId,
-        provider,
-        retryCount: totalAttempts,
-        maxRetries: MAX_TOTAL_RETRIES,
-        isTransient,
-        suggestedAction,
-      };
-
-      throw new Error(JSON.stringify(errorMetadata));
-    }
-
-    // Validation passed, stream response
-
+    // ✅ STREAM RESPONSE: Direct streaming, let AI SDK handle retries
     const finalResult = streamText({
-      ...commonParams,
+      ...streamParams,
 
       // ✅ PERSIST MESSAGE: Save to database after streaming completes
       onFinish: async (finishResult) => {
@@ -2886,6 +2651,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
           // According to AI SDK best practices: if the provider returns tokens without
           // throwing an exception, it's a valid response. Only check for truly empty
           // responses (0 tokens from provider).
+          // Accept responses with 1+ tokens even if text content is minimal or empty.
           // NOTE: Refusal detection removed - optimized system prompts prevent refusals by design
           const outputTokens = usage?.outputTokens || 0;
           const isEmptyResponse = outputTokens === 0;
@@ -2923,6 +2689,8 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
               errorMessage = providerMessage; // Show exact same message to user - no generic text
               errorCategory = errorCategory || 'empty_response';
             }
+            // Note: We no longer reject responses with tokens but minimal/empty text content.
+            // If model generated 1+ tokens, it's considered a valid response even if text is empty.
           }
 
           // ✅ SAVE MESSAGE: Content and metadata to database
@@ -2951,8 +2719,6 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
                 providerMessage,
                 openRouterError,
                 isTransient: hasError,
-                // ✅ Include retry attempt count for debugging
-                retryAttempts: totalAttempts,
               },
               createdAt: new Date(),
             })

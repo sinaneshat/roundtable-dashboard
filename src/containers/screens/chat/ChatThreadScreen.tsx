@@ -755,15 +755,25 @@ export default function ChatThreadScreen({
     return () => scrollContainer.removeEventListener('scroll', handleScroll);
   }, []);
 
-  // Auto-scroll to bottom when new messages arrive (only if user is near bottom)
+  // ✅ CRITICAL FIX: Auto-scroll to bottom when new messages arrive or during streaming
+  // Track both length AND last message content to trigger on streaming updates
+  // Extract last message content for dependency tracking
+  const lastItem = messagesWithAnalysesAndChangelog[messagesWithAnalysesAndChangelog.length - 1];
+  const lastItemContent = lastItem?.type === 'messages'
+    ? lastItem.data.map(m => m.parts?.map(p => p.type === 'text' ? p.text : '').join('')).join('')
+    : '';
+
   useEffect(() => {
     if (!parentRef.current || messagesWithAnalysesAndChangelog.length === 0) {
       return;
     }
 
-    // Only auto-scroll if user is viewing the bottom
-    // This prevents disrupting users who are reading older messages
-    if (isNearBottomRef.current) {
+    // ✅ CRITICAL FIX: Always auto-scroll when streaming is active
+    // This ensures continuous scrolling during streaming updates
+    // Otherwise, only auto-scroll if user is viewing the bottom
+    const shouldScroll = isStreaming || isNearBottomRef.current;
+
+    if (shouldScroll) {
       // Use virtualizer's scrollToIndex with smooth scrolling
       // This is more efficient than manual scrollTo
       requestAnimationFrame(() => {
@@ -773,7 +783,7 @@ export default function ChatThreadScreen({
         });
       });
     }
-  }, [messagesWithAnalysesAndChangelog.length, rowVirtualizer]);
+  }, [messagesWithAnalysesAndChangelog.length, lastItemContent, isStreaming, rowVirtualizer]);
 
   return (
     <>

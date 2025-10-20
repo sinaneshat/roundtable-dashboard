@@ -763,7 +763,6 @@ export const ParticipantAnalysisSchema = z.object({
    */
   detailedInsights: z.object({
     keyStrengths: z.array(z.string())
-      .optional()
       .describe('Most notable strengths with specific examples')
       .openapi({
         example: [
@@ -773,7 +772,6 @@ export const ParticipantAnalysisSchema = z.object({
       }),
 
     missedOpportunities: z.array(z.string())
-      .optional()
       .describe('Opportunities that could have strengthened the response')
       .openapi({
         example: [
@@ -783,7 +781,6 @@ export const ParticipantAnalysisSchema = z.object({
       }),
 
     uniqueContributions: z.array(z.string())
-      .optional()
       .describe('What this participant uniquely brought to the discussion')
       .openapi({
         example: [
@@ -792,6 +789,7 @@ export const ParticipantAnalysisSchema = z.object({
         ],
       }),
   })
+    .partial()
     .optional()
     .describe('Deeper insights into response quality and contribution')
     .openapi({
@@ -802,15 +800,15 @@ export const ParticipantAnalysisSchema = z.object({
    * Comparative context within this round
    */
   comparativeInsights: z.object({
-    rankInRound: z.number().int().min(1).optional().describe('Rank among participants in this round').openapi({ example: 2 }),
+    rankInRound: z.number().int().min(1).describe('Rank among participants in this round').openapi({ example: 2 }),
 
     scoreRelativeToAverage: z.number()
-      .optional()
       .describe('How much above/below the round average (positive = above)')
       .openapi({ example: 1.2 }),
 
-    percentileScore: z.number().min(0).max(100).optional().describe('Percentile ranking (0-100, where 100 is best)').openapi({ example: 75 }),
+    percentileScore: z.number().min(0).max(100).describe('Percentile ranking (0-100, where 100 is best)').openapi({ example: 75 }),
   })
+    .partial()
     .optional()
     .describe('Performance relative to other participants in this round')
     .openapi({
@@ -884,16 +882,17 @@ export const LeaderboardEntrySchema = z.object({
    * Quantitative measures of the response quality
    */
   responseMetrics: z.object({
-    wordCount: z.number().int().nonnegative().optional().describe('Number of words in the response').openapi({ example: 342 }),
+    wordCount: z.number().int().nonnegative().describe('Number of words in the response').openapi({ example: 342 }),
 
-    responseTime: z.number().nonnegative().optional().describe('Response time in seconds (if available)').openapi({ example: 4.2 }),
+    responseTime: z.number().nonnegative().describe('Response time in seconds (if available)').openapi({ example: 4.2 }),
 
-    uniqueIdeas: z.number().int().nonnegative().optional().describe('Number of unique/distinct ideas presented').openapi({ example: 5 }),
+    uniqueIdeas: z.number().int().nonnegative().describe('Number of unique/distinct ideas presented').openapi({ example: 5 }),
 
-    examplesProvided: z.number().int().nonnegative().optional().describe('Number of concrete examples given').openapi({ example: 3 }),
+    examplesProvided: z.number().int().nonnegative().describe('Number of concrete examples given').openapi({ example: 3 }),
 
-    questionsRaised: z.number().int().nonnegative().optional().describe('Number of thought-provoking questions asked').openapi({ example: 2 }),
+    questionsRaised: z.number().int().nonnegative().describe('Number of thought-provoking questions asked').openapi({ example: 2 }),
   })
+    .partial()
     .optional()
     .describe('Quantitative metrics about the response characteristics')
     .openapi({
@@ -904,25 +903,23 @@ export const LeaderboardEntrySchema = z.object({
    * Comparative metrics showing performance relative to other participants
    */
   comparative: z.object({
-    percentile: z.number().min(0).max(100).optional().describe('Percentile rank among all participants (0-100)').openapi({ example: 85 }),
+    percentile: z.number().min(0).max(100).describe('Percentile rank among all participants (0-100)').openapi({ example: 85 }),
 
     aboveAverage: z.boolean()
-      .optional()
       .describe('Whether this participant scored above the round average')
       .openapi({ example: true }),
 
     scoreDifference: z.number()
-      .optional()
       .describe('Difference from average score (positive = above average)')
       .openapi({ example: 1.2 }),
 
     improvement: z.number()
-      .optional()
       .describe('Rating improvement vs previous round (if applicable)')
       .openapi({ example: 0.5 }),
 
-    rankChange: z.number().int().optional().describe('Change in rank vs previous round (positive = improved, negative = dropped)').openapi({ example: 2 }),
+    rankChange: z.number().int().describe('Change in rank vs previous round (positive = improved, negative = dropped)').openapi({ example: 2 }),
   })
+    .partial()
     .optional()
     .describe('Comparative metrics relative to other participants and previous rounds')
     .openapi({
