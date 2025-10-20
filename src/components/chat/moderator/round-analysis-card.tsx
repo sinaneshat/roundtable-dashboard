@@ -60,18 +60,19 @@ export function RoundAnalysisCard({
 }: RoundAnalysisCardProps) {
   const t = useTranslations('moderator');
 
-  // ✅ TIMEOUT CHECK: If analysis is pending/streaming for > 5 minutes, treat as failed
-  // Backend watchdog handles timeouts at 2 minutes, so give extra buffer
+  // ✅ TIMEOUT CHECK: If analysis is pending/streaming for too long, treat as failed
+  // - 30s-2min: Likely stuck from page refresh, will auto-recover via polling
+  // - > 2min: Definitely stuck, show as failed with recovery instructions
   // Calculate age directly (Date.now() is impure, but this is a valid use case for timeout checking)
-  const FIVE_MINUTES_MS = 5 * 60 * 1000;
+  const TWO_MINUTES_MS = 2 * 60 * 1000;
   // eslint-disable-next-line react-hooks/purity -- Valid use case: timeout check requires current time. Date.now() is intentionally impure here to detect stuck analyses on each render.
   const ageMs = Date.now() - new Date(analysis.createdAt).getTime();
-  const isStuck = ageMs > FIVE_MINUTES_MS && (analysis.status === 'pending' || analysis.status === 'streaming');
+  const isStuck = ageMs > TWO_MINUTES_MS && (analysis.status === 'pending' || analysis.status === 'streaming');
 
   // Override status if stuck
   const effectiveStatus = isStuck ? 'failed' : analysis.status;
   const effectiveErrorMessage = isStuck
-    ? 'Analysis timed out after 5 minutes. Backend generation may have failed.'
+    ? 'Analysis timed out after 2 minutes. This may happen if the page was refreshed during analysis. Try refreshing the page or retrying the round.'
     : analysis.errorMessage;
 
   // Status configuration
@@ -251,9 +252,18 @@ export function RoundAnalysisCard({
                       )}
 
                       {/* Skills Comparison Chart */}
-                      {analysis.analysisData.participantAnalyses && analysis.analysisData.participantAnalyses.length > 0 && (
-                        <SkillsComparisonChart participants={analysis.analysisData.participantAnalyses} />
-                      )}
+                      {(() => {
+                        const shouldRender = analysis.analysisData.participantAnalyses && analysis.analysisData.participantAnalyses.length > 0;
+                        console.log('[RoundAnalysisCard] Skills Comparison check:', {
+                          hasParticipantAnalyses: Boolean(analysis.analysisData.participantAnalyses),
+                          participantAnalysesLength: analysis.analysisData.participantAnalyses?.length,
+                          shouldRender,
+                          participantAnalyses: analysis.analysisData.participantAnalyses,
+                        });
+                        return shouldRender
+                          ? <SkillsComparisonChart participants={analysis.analysisData.participantAnalyses} />
+                          : null;
+                      })()}
 
                       {/* Participant Analysis Cards */}
                       {analysis.analysisData.participantAnalyses && analysis.analysisData.participantAnalyses.length > 0 && (

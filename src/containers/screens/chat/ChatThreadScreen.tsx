@@ -225,6 +225,10 @@ export default function ChatThreadScreen({
   // ✅ AUTO-CLOSE PREVIOUS ROUNDS: Track current streaming round to close previous accordions
   const [streamingRoundNumber, setStreamingRoundNumber] = useState<number | null>(null);
 
+  // ✅ FIX: Use ref to track the current round number for onRoundComplete callback
+  // This ensures the callback always reads the latest round number, not a stale closure value
+  const currentRoundNumberRef = useRef<number | null>(null);
+
   // Chat state
   const [selectedMode, setSelectedMode] = useState<ChatModeId>(thread.mode as ChatModeId);
   const [inputValue, setInputValue] = useState('');
@@ -370,14 +374,29 @@ export default function ChatThreadScreen({
     const currentThreadId = thread.id; // Capture thread.id in closure
     const currentThreadMode = thread.mode; // Capture mode in closure
 
-    setOnRoundComplete(() => {
+    setOnRoundComplete(async () => {
+      // ✅ CRITICAL: Wait for messages to be persisted to database
+      // Messages are created during streaming but might not be committed immediately
+      // This ensures POST /analyze can find the participant messages
+      console.warn('[ChatThreadScreen] 🎯 Round completed - waiting for messages to persist', {
+        threadId: currentThreadId,
+      });
+
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      console.warn('[ChatThreadScreen] ✅ Messages should be persisted - triggering analysis', {
+        threadId: currentThreadId,
+      });
+
       // ✅ ACTIVE SESSION OPTIMIZATION: Add pending analysis directly to cache
       // This skips unnecessary GET request and triggers streaming immediately
       // Only after page refresh should GET /analyses be used to fetch existing pending analyses
 
-      // Calculate round number from current messages
+      // ✅ FIX: Use the round number from the ref that was set when the message was sent
+      // This avoids closure issues with stale messages array
+      // If ref is null (shouldn't happen), fall back to calculating from messages
       const userMessages = messages.filter(m => m.role === 'user');
-      const roundNumber = userMessages.length;
+      const roundNumber = currentRoundNumberRef.current ?? (userMessages.length || 1);
 
       // Get participant message IDs from the messages that were just created
       const assistantMessages = messages.filter(m => m.role === 'assistant');
@@ -388,8 +407,8 @@ export default function ChatThreadScreen({
       // Get user question for this round (last user message)
       const lastUserMessage = userMessages[userMessages.length - 1];
       const userQuestion = lastUserMessage?.parts
-        ?.filter(p => p.type === 'text')
-        .map(p => p.type === 'text' ? p.text : '')
+        ?.filter((p): p is Extract<typeof p, { type: 'text' }> => p.type === 'text')
+        .map(p => p.text)
         .join('')
         .trim() || 'N/A';
 
@@ -460,6 +479,7 @@ export default function ChatThreadScreen({
 
       // ✅ CLEAR STREAMING ROUND: Round completed, reset to allow new round
       setStreamingRoundNumber(null);
+      currentRoundNumberRef.current = null;
     });
   }, [thread.id, thread.mode, setOnRoundComplete, queryClient, messages, contextParticipants, analysesResponse]);
 
@@ -581,6 +601,9 @@ export default function ChatThreadScreen({
 
       // ✅ SET STREAMING ROUND: Signal all previous accordions to close
       setStreamingRoundNumber(newRoundNumber);
+
+      // ✅ UPDATE REF: Store round number for onRoundComplete callback
+      currentRoundNumberRef.current = newRoundNumber;
 
       console.warn('[ChatThreadScreen] 🎬 Starting new round', {
         roundNumber: newRoundNumber,

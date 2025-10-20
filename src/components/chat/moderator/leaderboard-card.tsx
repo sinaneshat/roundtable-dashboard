@@ -15,6 +15,13 @@
  * - Automatic scrolling for very tall charts (>400px)
  * - Medal icons for top 3 positions
  * - Thin, compact bars with maxBarSize={20}
+ * - LabelList showing "X.X/10" scores on each bar
+ *
+ * ✅ LABELS (shadcn pattern):
+ * - Uses Recharts LabelList component for proper label positioning
+ * - Shows rating as "X.X/10" format aligned to the right of bars
+ * - 60px right margin to accommodate labels
+ * - XAxis shows scale from 0-10 with visible ticks
  *
  * ✅ DYNAMIC SIZING (shadcn pattern):
  * - Container height: max(180px, participantCount * 32px + 40px)
@@ -33,7 +40,7 @@ import { motion } from 'framer-motion';
 import { Award, Medal, Trophy } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useMemo } from 'react';
-import { Bar, BarChart, Cell, XAxis, YAxis } from 'recharts';
+import { Bar, BarChart, Cell, LabelList, XAxis, YAxis } from 'recharts';
 
 import type { LeaderboardEntry } from '@/api/routes/chat/schema';
 import { Badge } from '@/components/ui/badge';
@@ -240,9 +247,16 @@ export function LeaderboardCard({ leaderboard }: LeaderboardCardProps) {
             <BarChart
               data={chartData}
               layout="vertical"
-              margin={{ left: 0, right: 10, top: 10, bottom: 10 }}
+              margin={{ left: 0, right: 60, top: 10, bottom: 10 }}
             >
-              <XAxis type="number" domain={[0, 10]} hide />
+              <XAxis
+                type="number"
+                domain={[0, 10]}
+                tickLine={false}
+                axisLine={false}
+                tick={{ fontSize: 10 }}
+                tickFormatter={value => `${value}`}
+              />
               <YAxis
                 dataKey="modelName"
                 type="category"
@@ -263,6 +277,13 @@ export function LeaderboardCard({ leaderboard }: LeaderboardCardProps) {
                     fill={entry.fill}
                   />
                 ))}
+                <LabelList
+                  dataKey="rating"
+                  position="right"
+                  offset={8}
+                  className="fill-foreground text-[10px] font-semibold"
+                  formatter={(value: unknown) => `${Number(value).toFixed(1)}/10`}
+                />
               </Bar>
             </BarChart>
           </ChartContainer>

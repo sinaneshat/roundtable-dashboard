@@ -67,15 +67,24 @@ export function ModeratorAnalysisStream({
     },
   });
 
-  // ✅ AUTO-TRIGGER: Start streaming when component mounts for pending status
+  // ✅ AUTO-TRIGGER: Start streaming when component mounts for pending/streaming status
+  // ✅ FIX: Also handle 'streaming' status to recover from interrupted streams (page refresh)
   useEffect(() => {
-    // Only trigger if analysis is pending and we haven't triggered yet
-    if (analysis.status === 'pending' && !hasTriggeredRef.current) {
+    // Only trigger if analysis is pending/streaming and we haven't triggered yet
+    // 'streaming' status can occur if page was refreshed mid-stream
+    const shouldTrigger = (analysis.status === 'pending' || analysis.status === 'streaming')
+      && !hasTriggeredRef.current;
+
+    if (shouldTrigger) {
       hasTriggeredRef.current = true;
-      console.warn('[ModeratorAnalysisStream] 🌊 Starting stream for pending analysis');
+      console.warn('[ModeratorAnalysisStream] 🌊 Starting stream', {
+        status: analysis.status,
+        roundNumber: analysis.roundNumber,
+        isRecovery: analysis.status === 'streaming',
+      });
       submit({ participantMessageIds: analysis.participantMessageIds });
     }
-  }, [analysis.status, analysis.participantMessageIds, submit]);
+  }, [analysis.status, analysis.participantMessageIds, submit, analysis.roundNumber]);
 
   // ✅ DEBUG: Log when partial data updates (helps verify streaming is working)
   // ✅ MUST BE BEFORE EARLY RETURNS: React hooks must be called in same order every render

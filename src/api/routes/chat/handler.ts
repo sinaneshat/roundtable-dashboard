@@ -18,10 +18,8 @@ import {
   Responses,
 } from '@/api/core';
 import { IdParamSchema } from '@/api/core/schemas';
-import {
-  processAnalysisInBackground,
-  restartStaleAnalysis,
-} from '@/api/services/analysis-background.service';
+// ✅ Background analysis service removed - using streaming with onFinish callback only
+// import { processAnalysisInBackground, restartStaleAnalysis } from '@/api/services/analysis-background.service';
 import type { ModeratorPromptConfig } from '@/api/services/moderator-analysis.service';
 import {
   buildModeratorSystemPrompt,
@@ -3640,38 +3638,125 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
       }
     }
 
-    // ✅ Validate participantMessageIds
-    if (!body.participantMessageIds || body.participantMessageIds.length === 0) {
-      throw createError.badRequest(
-        'participantMessageIds array is required for analysis',
-        {
-          errorType: 'validation',
-          field: 'participantMessageIds',
+    // ✅ FIX: Auto-calculate participant messages if IDs not provided
+    // Frontend may send temporary client IDs that don't match database IDs
+    // Instead, query for the most recent N assistant messages where N = participant count
+    type MessageWithParticipant = Awaited<ReturnType<typeof db.query.chatMessage.findMany>>[number] & {
+      participant: NonNullable<Awaited<ReturnType<typeof db.query.chatParticipant.findFirst>>>;
+    };
+    let participantMessages: MessageWithParticipant[] | null = null;
+
+    if (body.participantMessageIds && body.participantMessageIds.length > 0) {
+      // ✅ OPTION 1: Use provided IDs (if valid database IDs)
+      const messageIds = body.participantMessageIds;
+      const foundMessages = await db.query.chatMessage.findMany({
+        where: (fields, { inArray, eq: eqOp, and: andOp }) =>
+          andOp(
+            inArray(fields.id, messageIds),
+            eqOp(fields.threadId, threadId),
+            eqOp(fields.role, 'assistant'),
+          ),
+        with: {
+          participant: true,
         },
-      );
+        orderBy: [tables.chatMessage.createdAt],
+      });
+
+      // ✅ FIX: If provided IDs don't match (client IDs), fall back to auto-query
+      if (foundMessages.length === messageIds.length) {
+        participantMessages = foundMessages as MessageWithParticipant[];
+      } else {
+        console.warn('[analyzeRoundHandler] ⚠️ Provided message IDs not found, auto-calculating', {
+          providedIds: messageIds,
+          foundCount: foundMessages.length,
+          threadId,
+          roundNumber: roundNum,
+        });
+      }
     }
 
-    // Fetch all participant messages for this round
-    const messageIds = body.participantMessageIds!;
-    const participantMessages = await db.query.chatMessage.findMany({
-      where: (fields, { inArray, eq: eqOp, and: andOp }) =>
-        andOp(
-          inArray(fields.id, messageIds),
-          eqOp(fields.threadId, threadId),
-          eqOp(fields.role, 'assistant'),
-        ),
-      with: {
-        participant: true,
-      },
-      orderBy: [tables.chatMessage.createdAt],
-    });
+    // ✅ OPTION 2: Auto-calculate messages (no IDs provided OR provided IDs were invalid)
+    if (!participantMessages) {
+      try {
+        console.warn('[analyzeRoundHandler] 🔍 Auto-calculating participant messages', {
+          threadId,
+          roundNumber: roundNum,
+        });
 
-    // Validation: Ensure we have all requested messages
-    if (participantMessages.length !== messageIds.length) {
-      const foundIds = participantMessages.map(m => m.id);
-      const missingIds = messageIds.filter(id => !foundIds.includes(id));
+        // Get active participants for this thread
+        const activeParticipants = await db.query.chatParticipant.findMany({
+          where: (fields, { and: andOp, eq: eqOp }) =>
+            andOp(
+              eqOp(fields.threadId, threadId),
+              eqOp(fields.isEnabled, true),
+            ),
+          orderBy: [tables.chatParticipant.priority],
+        });
+
+        const participantCount = activeParticipants.length;
+
+        console.warn('[analyzeRoundHandler] 📊 Found active participants', {
+          threadId,
+          participantCount,
+          participantIds: activeParticipants.map(p => p.id),
+        });
+
+        if (participantCount === 0) {
+          throw createError.badRequest(
+            'No active participants found for this thread',
+            {
+              errorType: 'validation',
+              field: 'participants',
+            },
+          );
+        }
+
+        // Query for the most recent N assistant messages (where N = participant count)
+        // These should be the messages from the round we want to analyze
+        const recentMessages = await db.query.chatMessage.findMany({
+          where: (fields, { and: andOp, eq: eqOp }) =>
+            andOp(
+              eqOp(fields.threadId, threadId),
+              eqOp(fields.role, 'assistant'),
+            ),
+          with: {
+            participant: true,
+          },
+          orderBy: [desc(tables.chatMessage.createdAt)],
+          limit: participantCount,
+        });
+
+        console.warn('[analyzeRoundHandler] 📝 Queried recent messages', {
+          threadId,
+          foundCount: recentMessages.length,
+          requestedLimit: participantCount,
+        });
+
+        // Reverse to get chronological order (oldest first)
+        participantMessages = recentMessages.reverse() as MessageWithParticipant[];
+
+        console.warn('[analyzeRoundHandler] ✅ Auto-calculated participant messages', {
+          threadId,
+          roundNumber: roundNum,
+          participantCount,
+          foundMessages: participantMessages.length,
+          messageIds: participantMessages.map(m => m.id),
+        });
+      } catch (autoCalcError) {
+        console.error('[analyzeRoundHandler] ❌ Auto-calculation failed:', {
+          error: autoCalcError instanceof Error ? autoCalcError.message : String(autoCalcError),
+          stack: autoCalcError instanceof Error ? autoCalcError.stack : undefined,
+          threadId,
+          roundNumber: roundNum,
+        });
+        throw autoCalcError;
+      }
+    }
+
+    // ✅ Final validation: Ensure we have messages to analyze
+    if (participantMessages.length === 0) {
       throw createError.badRequest(
-        `Some participant messages not found: ${missingIds.join(', ')}`,
+        'No participant messages found for analysis',
         {
           errorType: 'validation',
           field: 'participantMessageIds',
@@ -3729,7 +3814,7 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
       analysisId,
       threadId,
       roundNumber: roundNum,
-      participantCount: body.participantMessageIds.length,
+      participantCount: participantMessages.length,
     });
 
     await db.insert(tables.chatModeratorAnalysis).values({
@@ -3739,7 +3824,7 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
       mode: thread.mode,
       userQuestion,
       status: 'streaming',
-      participantMessageIds: body.participantMessageIds,
+      participantMessageIds: participantMessages.map(m => m.id),
       createdAt: new Date(),
     });
 
@@ -3772,56 +3857,19 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
 /**
  * Background Analysis Processing Handler (Internal Only)
  *
- * ✅ NOT EXPOSED IN OPENAPI: Internal endpoint for background processing only
- * ✅ Called via WORKER_SELF_REFERENCE service binding
- * ✅ Performs actual AI streaming and database updates
- *
- * This handler is invoked by analyzeRoundHandler via service binding
- * and runs the analysis in the background, decoupled from HTTP lifecycle.
+ * ✅ DEPRECATED: No longer used - using streaming with onFinish callback instead
+ * ✅ Background analysis service removed - all analysis now done via real-time streaming
+ * ✅ This handler is kept for backward compatibility but should not be called
  *
  * POST /chat/analyze-background (internal)
  */
 // eslint-disable-next-line ts/no-explicit-any -- Generic Hono context type for internal handler
 export async function analyzeBackgroundHandler(c: any): Promise<Response> {
-  try {
-    const body = await c.req.json();
-    const {
-      analysisId,
-      threadId,
-      roundNum,
-      userQuestion,
-      participantResponses,
-      mode,
-    } = body;
-
-    console.warn('[analyzeBackgroundHandler] 🚀 Background processing started', {
-      analysisId,
-      threadId,
-      roundNumber: roundNum,
-    });
-
-    // Process analysis in background using service layer
-    // Service accepts full env bindings from context
-    await processAnalysisInBackground({
-      analysisId,
-      threadId,
-      roundNum,
-      userQuestion,
-      participantResponses,
-      mode,
-      env: c.env,
-    });
-
-    console.warn('[analyzeBackgroundHandler] ✅ Background processing completed', analysisId);
-
-    return c.json({ success: true, analysisId }, 200);
-  } catch (error) {
-    console.error('[analyzeBackgroundHandler] ❌ Background processing failed:', error);
-    return c.json({
-      success: false,
-      error: error instanceof Error ? error.message : String(error),
-    }, 500);
-  }
+  console.warn('[analyzeBackgroundHandler] ⚠️ DEPRECATED: This handler should not be called. Using streaming with onFinish callback instead.');
+  return c.json({
+    success: false,
+    error: 'This endpoint is deprecated. Analysis is now done via real-time streaming.',
+  }, 410); // 410 Gone - resource no longer available
 }
 
 /**
@@ -3829,7 +3877,8 @@ export async function analyzeBackgroundHandler(c: any): Promise<Response> {
  *
  * ✅ Fetches all persisted moderator analyses for a thread
  * ✅ Returns analyses ordered by round number
- * ✅ WATCHDOG: Detects and restarts stale analyses automatically
+ * ✅ Deduplicates analyses by round number (returns latest for each round)
+ * ✅ NO WATCHDOG: Analyses are handled by streaming with onFinish callback only
  *
  * GET /api/v1/chat/threads/:id/analyses
  */
@@ -3856,44 +3905,60 @@ export const getThreadAnalysesHandler: RouteHandler<typeof getThreadAnalysesRout
       orderBy: [desc(tables.chatModeratorAnalysis.roundNumber), desc(tables.chatModeratorAnalysis.createdAt)],
     });
 
-    // ✅ WATCHDOG: Check for stale streaming analyses and restart them
-    const STALE_THRESHOLD_MS = 2 * 60 * 1000; // 2 minutes
+    // ✅ CLEANUP ORPHANED ANALYSES: Mark stuck streaming analyses as failed
+    // This handles cases where streaming was interrupted (page refresh, connection lost)
+    // and the onFinish callback never ran to update the status
+    const TWO_MINUTES_MS = 2 * 60 * 1000;
     const now = Date.now();
+    const orphanedAnalyses = allAnalyses.filter((analysis) => {
+      if (analysis.status !== 'streaming' && analysis.status !== 'pending')
+        return false;
 
-    for (const analysis of allAnalyses) {
-      if (analysis.status === 'streaming') {
-        const ageMs = now - analysis.createdAt.getTime();
+      const ageMs = now - analysis.createdAt.getTime();
+      return ageMs > TWO_MINUTES_MS;
+    });
 
-        if (ageMs > STALE_THRESHOLD_MS) {
-          console.warn('[WATCHDOG] 🔍 Detected stale streaming analysis', {
-            analysisId: analysis.id,
-            roundNumber: analysis.roundNumber,
-            ageMs,
-            ageMinutes: Math.round(ageMs / 60000),
-          });
+    if (orphanedAnalyses.length > 0) {
+      console.warn('[getThreadAnalysesHandler] 🧹 Cleaning up orphaned analyses', {
+        threadId,
+        count: orphanedAnalyses.length,
+        analyses: orphanedAnalyses.map(a => ({
+          id: a.id,
+          roundNumber: a.roundNumber,
+          status: a.status,
+          ageMs: now - a.createdAt.getTime(),
+        })),
+      });
 
-          // Use service layer to restart stale analysis
-          try {
-            await restartStaleAnalysis(
-              {
-                id: analysis.id,
-                threadId: analysis.threadId,
-                roundNumber: analysis.roundNumber,
-                mode: analysis.mode,
-                userQuestion: analysis.userQuestion,
-              },
-              analysis.participantMessageIds || [],
-              c.env,
-            );
-          } catch (error) {
-            console.error('[WATCHDOG] ❌ Failed to restart stale analysis:', {
-              analysisId: analysis.id,
-              error: error instanceof Error ? error.message : String(error),
-            });
-            // Continue with other stale analyses even if one fails
-          }
+      // Mark all orphaned analyses as failed
+      for (const analysis of orphanedAnalyses) {
+        await db.update(tables.chatModeratorAnalysis)
+          .set({
+            status: 'failed',
+            errorMessage: 'Analysis timed out after 2 minutes. This may have been caused by a page refresh or connection issue during streaming.',
+          })
+          .where(eq(tables.chatModeratorAnalysis.id, analysis.id));
+      }
+
+      // Refetch analyses after cleanup to get updated statuses
+      const updatedAnalyses = await db.query.chatModeratorAnalysis.findMany({
+        where: eq(tables.chatModeratorAnalysis.threadId, threadId),
+        orderBy: [desc(tables.chatModeratorAnalysis.roundNumber), desc(tables.chatModeratorAnalysis.createdAt)],
+      });
+
+      // Use updated analyses for deduplication
+      const analysesMap = new Map<number, typeof updatedAnalyses[0]>();
+      for (const analysis of updatedAnalyses) {
+        if (!analysesMap.has(analysis.roundNumber)) {
+          analysesMap.set(analysis.roundNumber, analysis);
         }
       }
+
+      // Convert back to array and sort by round number ascending
+      const analyses = Array.from(analysesMap.values())
+        .sort((a, b) => a.roundNumber - b.roundNumber);
+
+      return Responses.collection(c, analyses);
     }
 
     // ✅ Deduplicate by round number - keep only the latest analysis for each round

@@ -287,6 +287,7 @@ class OpenRouterModelsService {
       'gryphe/mythomax-l2-13b', // Merge model with #merge tag
       'sao10k/l3-lunaris-8b', // "Strategic merge of multiple models"
       'neversleep/noromaid-20b', // Merge model with #merge #uncensored tags
+      'thudm/glm-z1-32b', // Tsinghua GLM model requiring "Paid model training" opt-in
       // Add more models here as they're discovered through error logs
     ];
 
@@ -345,6 +346,7 @@ class OpenRouterModelsService {
       'alfredpros', // AlfredPros - creates derivative models (1 model)
       'alpindale', // Alpindale - creates merge models like goliath-120b (1 model)
       'undi95', // Undi95 - creates #merge models like remm-slerp (1 model)
+      'thudm', // Tsinghua University - research models requiring data policy opt-in
     ];
 
     if (fineTuningProviders.includes(provider)) {

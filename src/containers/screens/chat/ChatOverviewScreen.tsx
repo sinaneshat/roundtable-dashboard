@@ -7,17 +7,20 @@ import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import type { StoredModeratorAnalysis } from '@/api/routes/chat/schema';
 import { ChatInput } from '@/components/chat/chat-input';
 import { ChatMessageList } from '@/components/chat/chat-message-list';
 import { ChatModeSelector } from '@/components/chat/chat-mode-selector';
 import { ChatParticipantsList } from '@/components/chat/chat-participants-list';
 import { ChatQuickStart } from '@/components/chat/chat-quick-start';
+import { RoundAnalysisCard } from '@/components/chat/moderator/round-analysis-card';
 import { StreamingParticipantsLoader } from '@/components/chat/streaming-participants-loader';
 import { useThreadHeader } from '@/components/chat/thread-header-context';
 import { WavyBackground } from '@/components/ui/wavy-background';
 import { BRAND } from '@/constants/brand';
 import { useSharedChatContext } from '@/contexts/chat-context';
 import { useCreateThreadMutation } from '@/hooks/mutations/chat-mutations';
+import { useThreadAnalysesQuery } from '@/hooks/queries/chat-threads';
 import { useModelsQuery } from '@/hooks/queries/models';
 import { useAutoScrollToBottom } from '@/hooks/use-auto-scroll-to-bottom';
 import { useSession } from '@/lib/auth/client';
@@ -114,6 +117,28 @@ export default function ChatOverviewScreen() {
   // Track if we've already sent the initial prompt to avoid double-sending
   const hasSentInitialPromptRef = useRef(false);
 
+  // ✅ Track created thread for analysis streaming
+  const [createdThreadId, setCreatedThreadId] = useState<string | null>(null);
+
+  // ✅ FIX: Use refs to track latest messages and participants for onRoundComplete callback
+  // This avoids stale closure values when callback executes
+  const messagesRef = useRef(messages);
+  const participantsRef = useRef(contextParticipants);
+
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
+
+  useEffect(() => {
+    participantsRef.current = contextParticipants;
+  }, [contextParticipants]);
+
+  // ✅ Fetch analyses for the created thread (if exists)
+  const { data: analysesResponse } = useThreadAnalysesQuery(
+    createdThreadId || '',
+    createdThreadId != null, // Only fetch if thread created
+  );
+
   const createThreadMutation = useCreateThreadMutation();
 
   /**
@@ -181,7 +206,10 @@ export default function ChatOverviewScreen() {
         setShowInitialUI(false);
         setInputValue('');
 
-        // Step 3: Initialize context with thread data
+        // Step 3: Set created thread ID for analysis tracking
+        setCreatedThreadId(thread.id);
+
+        // Step 4: Initialize context with thread data
         // ✅ CRITICAL: Backend returns empty messages array - user message will be created by sendMessage()
         initializeThread(threadWithDates, participantsWithDates, uiMessages);
 
@@ -189,60 +217,77 @@ export default function ChatOverviewScreen() {
         hasSentInitialPromptRef.current = false; // Reset flag for new thread
         setInitialPrompt(prompt);
 
-        // Step 5: Set round completion callback for navigation
+        // Step 5: Set round completion callback to add pending analysis to cache
         // ✅ This fires when ALL participants finish streaming (entire round complete)
+        // ✅ SIMPLIFIED: Just add pending analysis to cache - navigation happens via onStreamComplete
         setOnRoundComplete(async () => {
-          try {
-            // ✅ CRITICAL FIX: Wait for AI title generation before navigation
-            // The backend generates title from user message, which ALWAYS creates a unique slug
-            // Title generation uses: (1) AI-generated title, or (2) first 5 words of message
-            // This ensures slug ALWAYS changes and is never "New Chat"
+          console.warn('[ChatOverviewScreen] 🎯 Round completed - adding pending analysis', {
+            threadId: thread.id,
+          });
 
-            // Wait for title generation (typical: 1-2 seconds for fast models)
-            await new Promise(resolve => setTimeout(resolve, 2000));
+          // ✅ CRITICAL: Wait for messages to be persisted to database
+          await new Promise(resolve => setTimeout(resolve, 2000));
 
-            // Fetch updated thread with AI-generated slug
-            console.warn('[ChatOverviewScreen] 🔄 Fetching updated thread after title generation', {
-              threadId: thread.id,
-              originalTitle: thread.title,
-              originalSlug: thread.slug,
-            });
+          // ✅ FIX: Get participant message IDs from the latest messages (via ref)
+          // Use ref to avoid stale closure values
+          const currentMessages = messagesRef.current;
+          const currentParticipants = participantsRef.current;
 
-            const threadResponse = await getThreadService({ param: { id: thread.id } });
+          const assistantMessages = currentMessages.filter(m => m.role === 'assistant');
+          const participantCount = currentParticipants.length;
+          const recentAssistantMessages = assistantMessages.slice(-participantCount);
+          const participantMessageIds = recentAssistantMessages.map(m => m.id);
 
-            if (threadResponse.success) {
-              const { thread: updatedThread } = threadResponse.data;
+          console.warn('[ChatOverviewScreen] 📋 Calculated participant message IDs', {
+            threadId: thread.id,
+            participantCount,
+            assistantMessagesTotal: assistantMessages.length,
+            participantMessageIds,
+          });
 
-              console.warn('[ChatOverviewScreen] ✅ Updated thread fetched', {
-                threadId: updatedThread.id,
-                updatedTitle: updatedThread.title,
-                updatedSlug: updatedThread.slug,
-                titleChanged: thread.title !== updatedThread.title,
-                slugChanged: thread.slug !== updatedThread.slug,
-              });
+          // ✅ Add pending analysis to cache (triggers ModeratorAnalysisStream to render and stream)
+          const roundNumber = 1; // First round on overview screen
+          const pendingAnalysis = {
+            id: `pending-${thread.id}-${roundNumber}-${Date.now()}`,
+            threadId: thread.id,
+            roundNumber,
+            mode: thread.mode,
+            userQuestion: prompt, // Use the original prompt since messages might be stale in closure
+            status: 'pending' as const,
+            participantMessageIds, // ✅ FIX: Now properly populated!
+            analysisData: null,
+            createdAt: new Date(),
+            completedAt: null,
+            errorMessage: null,
+          };
 
-              // ✅ CRITICAL: Invalidate sidebar cache
-              await queryClient.invalidateQueries({ queryKey: queryKeys.threads.lists() });
+          queryClient.setQueryData(
+            queryKeys.threads.analyses(thread.id),
+            (oldData: unknown) => {
+              const typedData = oldData as typeof analysesResponse;
 
-              console.warn('[ChatOverviewScreen] ✅ Navigating to thread', {
-                slug: updatedThread.slug,
-              });
+              if (!typedData?.success) {
+                return {
+                  success: true,
+                  data: {
+                    items: [pendingAnalysis],
+                  },
+                };
+              }
 
-              // Navigate using the AI-generated slug
-              router.push(`/chat/${updatedThread.slug}`);
-            } else {
-              // Fallback: use original slug if fetch fails
-              console.warn('[ChatOverviewScreen] ❌ Failed to fetch updated thread, using original slug', {
-                threadId: thread.id,
-                originalSlug: thread.slug,
-              });
-              router.push(`/chat/${thread.slug}`);
-            }
-          } catch (error) {
-            // Fallback: use original slug on any error
-            console.error('[ChatOverviewScreen] Error fetching updated thread:', error);
-            router.push(`/chat/${thread.slug}`);
-          }
+              return {
+                ...typedData,
+                data: {
+                  ...typedData.data,
+                  items: [...(typedData.data.items || []), pendingAnalysis],
+                },
+              };
+            },
+          );
+
+          console.warn('[ChatOverviewScreen] ✅ Pending analysis added - RoundAnalysisCard will trigger streaming', {
+            analysisId: pendingAnalysis.id,
+          });
         });
       } catch (err) {
         console.error('Error creating thread:', err);
@@ -456,6 +501,105 @@ export default function ChatOverviewScreen() {
                 currentParticipantIndex={currentParticipantIndex}
                 currentStreamingParticipant={currentStreamingParticipant}
               />
+
+              {/* ✅ ANALYSIS: Show first round analysis on overview screen */}
+              {createdThreadId && analysesResponse?.success && analysesResponse.data.items.length > 0 && analysesResponse.data.items[0] && (
+                <div className="mt-6">
+                  <RoundAnalysisCard
+                    analysis={analysesResponse.data.items[0] as unknown as StoredModeratorAnalysis}
+                    threadId={createdThreadId}
+                    isLatest={true}
+                    onStreamComplete={async (completedData) => {
+                      console.warn('[ChatOverviewScreen] ✅ Analysis streaming completed', {
+                        threadId: createdThreadId,
+                        hasData: !!completedData,
+                      });
+
+                      // Update cache when stream completes
+                      queryClient.setQueryData(
+                        queryKeys.threads.analyses(createdThreadId),
+                        (oldData: unknown) => {
+                          const typedData = oldData as typeof analysesResponse;
+
+                          if (!typedData?.success) {
+                            return typedData;
+                          }
+
+                          const updatedItems = (typedData.data.items || []).map((analysis) => {
+                            if (analysis.roundNumber === 1) {
+                              return {
+                                ...analysis,
+                                status: 'completed' as const,
+                                analysisData: completedData,
+                                completedAt: new Date(),
+                              };
+                            }
+                            return analysis;
+                          });
+
+                          return {
+                            ...typedData,
+                            data: {
+                              ...typedData.data,
+                              items: updatedItems,
+                            },
+                          };
+                        },
+                      );
+
+                      // ✅ NAVIGATION: After analysis completes, wait for title and navigate
+                      console.warn('[ChatOverviewScreen] 🔍 Waiting for AI title generation before navigation');
+
+                      // Poll for title generation (slug update)
+                      const originalSlug = currentThread?.slug;
+                      let updatedThreadSlug = originalSlug;
+                      let slugAttempts = 0;
+                      const maxSlugAttempts = 15; // 15 seconds max
+
+                      // Only poll if we have an original slug to compare against
+                      if (originalSlug) {
+                        while (slugAttempts < maxSlugAttempts) {
+                          await new Promise(resolve => setTimeout(resolve, 1000));
+                          slugAttempts++;
+
+                          try {
+                            const threadResponse = await getThreadService({ param: { id: createdThreadId } });
+
+                            if (threadResponse.success) {
+                              updatedThreadSlug = threadResponse.data.thread.slug;
+
+                              if (updatedThreadSlug !== originalSlug) {
+                                console.warn('[ChatOverviewScreen] ✅ Title generated, navigating', {
+                                  originalSlug,
+                                  newSlug: updatedThreadSlug,
+                                  attempts: slugAttempts,
+                                });
+                                break;
+                              }
+                            }
+                          } catch (error) {
+                            console.error('[ChatOverviewScreen] Error fetching thread for slug:', error);
+                          }
+                        }
+                      }
+
+                      // Navigate to thread (use updated slug or fallback to original)
+                      const targetSlug = updatedThreadSlug || originalSlug || createdThreadId;
+
+                      console.warn('[ChatOverviewScreen] 🎯 Navigating to thread', {
+                        targetSlug,
+                        threadId: createdThreadId,
+                      });
+
+                      // Invalidate sidebar cache
+                      await queryClient.invalidateQueries({ queryKey: queryKeys.threads.lists() });
+
+                      // Navigate
+                      router.push(`/chat/${targetSlug}`);
+                    }}
+                  />
+                </div>
+              )}
 
               {/* ✅ RETRY BUTTON: Show after error (same as thread screen) */}
               {streamError && !isStreaming && (

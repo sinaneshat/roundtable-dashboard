@@ -184,11 +184,20 @@ export function useThreadChangelogQuery(threadId: string, enabled?: boolean) {
  * ✅ AI SDK v5 PATTERN: Fetch completed analyses from database
  * - Used on page refresh to load persisted analyses
  * - Real-time streaming handled by experimental_useObject in ModeratorAnalysisStream component
- * - NO POLLING needed - streaming provides real-time updates via experimental_useObject
+ * - SMART POLLING: Only polls for truly orphaned analyses (prevents overlap with active streaming)
  * - Query invalidated when analysis completes (via onFinish callback)
  * - Query invalidated when round completes to fetch newly created pending analyses
  *
- * Pattern: Fetch persisted data, stream new data via experimental_useObject
+ * ⚠️ CRITICAL POLLING STRATEGY (Prevents Overlap):
+ * - status='pending' → ModeratorAnalysisStream handles via experimental_useObject (NO POLLING)
+ * - status='streaming' + age < 2min → Active streaming in progress (NO POLLING - prevents overlap!)
+ * - status='streaming' + age > 2min → Orphaned from page refresh (POLL every 10s to check completion)
+ * - status='completed'/'failed' → No polling needed
+ *
+ * This ensures the query polling NEVER interferes with active experimental_useObject streaming,
+ * while still detecting and completing orphaned analyses after page refresh.
+ *
+ * Pattern: Fetch persisted data, stream new data via experimental_useObject, poll for orphaned analyses
  * Reference: https://sdk.vercel.ai/docs/ai-sdk-core/stream-object
  *
  * @param threadId - Thread ID
@@ -198,20 +207,62 @@ export function useThreadAnalysesQuery(threadId: string, enabled?: boolean) {
   const { data: session, isPending } = useSession();
   const isAuthenticated = !isPending && !!session?.user?.id;
 
-  // ✅ AI SDK v5 PATTERN: No polling - streaming handled by experimental_useObject
-  // The streaming component (ModeratorAnalysisStream) handles real-time updates
-  // This query is only for fetching persisted data on mount/invalidation
+  // ✅ SMART POLLING STRATEGY: Detect orphaned and stuck analyses quickly
+  // Orphaned = analyses that got stuck due to page refresh or connection issues
+  // This handles the case where user refreshes page while analysis is being generated
   const query = useQuery({
     queryKey: queryKeys.threads.analyses(threadId),
     queryFn: () => getThreadAnalysesService({ param: { id: threadId } }),
     staleTime: STALE_TIMES.threadAnalyses, // 30 seconds - match server-side prefetch
-    // ✅ NO POLLING: Streaming via experimental_useObject provides real-time updates
-    // Query is invalidated by:
-    // 1. onRoundComplete callback when participants finish (creates pending analysis)
-    // 2. onStreamComplete callback when analysis streaming completes
-    // ✅ CRITICAL FIX: Only fetch on initial mount if data is not already prefetched
-    // This prevents unnecessary refetches when component remounts during streaming
-    refetchOnMount: false, // ✅ CHANGED: Don't refetch on mount - data is prefetched server-side
+    // ✅ SMART POLLING: Check for orphaned/stuck analyses frequently
+    // CRITICAL: Poll for BOTH 'pending' and 'streaming' analyses that are old
+    // - 'pending' + fresh → ModeratorAnalysisStream will trigger (DON'T poll yet)
+    // - 'pending' + old (> 30s) → Likely stuck, need to check (DO poll)
+    // - 'streaming' + recent (< 30s) → Likely active streaming (poll to detect completion)
+    // - 'streaming' + old (> 30s) → Orphaned from page refresh (DO poll to check completion)
+    refetchInterval: (query) => {
+      const data = query.state.data as Awaited<ReturnType<typeof getThreadAnalysesService>> | undefined;
+
+      if (!data?.success)
+        return false;
+
+      const now = Date.now();
+      const THIRTY_SECONDS = 30 * 1000;
+
+      // ✅ FIX: Check for ANY incomplete analyses (pending or streaming)
+      // This catches both orphaned analyses AND recently completed ones
+      const hasIncompleteAnalyses = data.data.items?.some((analysis) => {
+        // Check both pending and streaming status
+        if (analysis.status !== 'pending' && analysis.status !== 'streaming')
+          return false;
+
+        const createdAt = new Date(analysis.createdAt).getTime();
+        const ageMs = now - createdAt;
+
+        // ✅ AGGRESSIVE POLLING: Poll for any incomplete analysis older than 30 seconds
+        // This quickly detects stuck analyses from page refreshes
+        // For fresh analyses (< 30s), ModeratorAnalysisStream handles via experimental_useObject
+        const isStuckOrOrphaned = ageMs > THIRTY_SECONDS;
+
+        if (isStuckOrOrphaned) {
+          console.warn('[useThreadAnalysesQuery] 🔍 Detected stuck/orphaned analysis', {
+            analysisId: analysis.id,
+            status: analysis.status,
+            ageMs,
+            roundNumber: analysis.roundNumber,
+          });
+        }
+
+        return isStuckOrOrphaned;
+      });
+
+      // Poll every 5 seconds for stuck/orphaned analyses
+      // Faster polling ensures quicker detection and recovery
+      return hasIncompleteAnalyses ? 5000 : false;
+    },
+    // ✅ CRITICAL FIX: Fetch on mount to check for orphaned analyses after page refresh
+    // This ensures we detect analyses that were in progress before refresh
+    refetchOnMount: true,
     refetchOnWindowFocus: false, // Don't refetch on window focus
     refetchOnReconnect: false, // Don't refetch on reconnect
     // ✅ CRITICAL FIX: Preserve previous data during refetches

@@ -137,6 +137,22 @@ export async function processAnalysisInBackground(
     );
   }
 
+  // ✅ Update analysis status to 'streaming' before starting
+  // This indicates that background processing has started
+  try {
+    const db = await getDbAsync();
+    await db.update(tables.chatModeratorAnalysis)
+      .set({ status: 'streaming' })
+      .where(eq(tables.chatModeratorAnalysis.id, analysisId));
+
+    console.warn('[processAnalysisInBackground] ✅ Updated status to streaming', {
+      analysisId,
+    });
+  } catch (updateError) {
+    console.error('[processAnalysisInBackground] ❌ Failed to update status:', updateError);
+    // Continue anyway - don't fail the entire process
+  }
+
   // ✅ FIXED MODEL: Always use Claude 3.5 Sonnet for analysis
   const analysisModelId = 'anthropic/claude-3.5-sonnet';
 
@@ -474,18 +490,28 @@ export async function restartStaleAnalysis(
       createdAt: new Date(),
     });
 
-    // ✅ STEP 5: Trigger background processing
-    await triggerBackgroundAnalysis(
-      {
-        analysisId: newAnalysisId,
-        threadId: staleAnalysis.threadId,
-        roundNum: staleAnalysis.roundNumber,
-        userQuestion: staleAnalysis.userQuestion,
-        mode: staleAnalysis.mode,
-        participantResponses,
-      },
+    // ✅ STEP 5: Trigger background processing directly (don't use service binding)
+    // Process immediately instead of trying to use WORKER_SELF_REFERENCE which may not be configured
+    console.warn('[restartStaleAnalysis] 🔥 Starting background processing directly', {
+      newAnalysisId,
+    });
+
+    // Call processAnalysisInBackground directly (fire-and-forget)
+    processAnalysisInBackground({
+      analysisId: newAnalysisId,
+      threadId: staleAnalysis.threadId,
+      roundNum: staleAnalysis.roundNumber,
+      userQuestion: staleAnalysis.userQuestion,
+      mode: staleAnalysis.mode,
+      participantResponses,
       env,
-    );
+    }).catch((error) => {
+      // Log but don't throw - this is fire-and-forget
+      console.error('[restartStaleAnalysis] ❌ Background processing failed:', {
+        newAnalysisId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    });
 
     console.warn('[restartStaleAnalysis] ✅ Stale analysis restarted', {
       oldAnalysisId: staleAnalysis.id,
