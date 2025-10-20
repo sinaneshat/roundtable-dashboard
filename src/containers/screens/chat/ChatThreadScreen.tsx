@@ -229,6 +229,16 @@ export default function ChatThreadScreen({
   }, []);
 
   // ✅ Initialize context when component mounts or thread/messages change
+  // ✅ REASONING FIX: Compute stable hash of messages to detect content changes (not just length)
+  // This ensures reasoning fields and other message content updates trigger re-initialization
+  const messagesHash = useMemo(() => {
+    // Create a hash from message IDs + content + reasoning to detect any content changes
+    // This is more efficient than JSON.stringify and catches reasoning field updates
+    return initialMessages
+      .map(m => `${m.id}:${m.content}:${m.reasoning || ''}`)
+      .join('|');
+  }, [initialMessages]);
+
   useEffect(() => {
     // Convert initial messages to UIMessage format
     const uiMessages = chatMessagesToUIMessages(initialMessages);
@@ -244,13 +254,11 @@ export default function ChatThreadScreen({
       }
     });
 
-    // ✅ CRITICAL FIX: Include initialMessages.length to sync reasoning and other message parts
-    // When navigating to a chat page, initialMessages may contain new data (including reasoning)
-    // that needs to be synced to the chat context. Without this dependency, reasoning parts
-    // won't appear until page refresh.
-    // Using length as dependency to avoid unnecessary re-initialization when only message content changes
+    // ✅ CRITICAL FIX: Use messagesHash instead of initialMessages.length
+    // This properly detects when message content changes (including reasoning fields)
+    // Previously used .length which missed content-only updates
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [thread.id, initialMessages.length]);
+  }, [thread.id, messagesHash]);
 
   // ✅ FIX: Separate useEffect for round completion to prevent re-registering callback
   // This ensures the callback is only set once and uses stable thread.id reference

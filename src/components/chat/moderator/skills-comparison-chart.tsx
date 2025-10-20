@@ -3,43 +3,41 @@
 /**
  * SkillsComparisonChart Component
  *
- * ✅ COMPACT HORIZONTAL LAYOUT:
- * - Uses horizontal bar chart for vertical space efficiency
- * - Model names in compact ScrollArea on the left side
- * - Chart on the right showing all skills in one view
- * - Vertical efficiency: ~200px max height instead of 320px
+ * ✅ RADAR/SPIDER CHART PATTERN:
+ * - Uses radar chart (spider/pentagon chart) for skills matrix visualization
+ * - Perfect for comparing multiple dimensions/skills across participants
+ * - Creates distinctive pentagon/spider web shape showing strengths/weaknesses
+ * - Each participant is a colored layer on the radar chart
  *
  * ✅ RECHARTS V3 PATTERNS (Context7 Documentation):
- * - Uses BarChart with horizontal orientation
+ * - Uses RadarChart with PolarGrid and PolarAngleAxis
  * - Accessibility built-in with Recharts v3 (keyboard navigation)
  * - ChartContainer with ChartConfig for theme-aware colors
- * - Multiple Bar series for participant comparison
+ * - Multiple Radar series for participant comparison
  *
  * ✅ FRONTEND PATTERNS:
  * - Uses shadcn/ui chart components (ChartContainer, ChartLegend, etc.)
- * - Different colors for each participant (up to 6)
+ * - Different colors for each participant using golden ratio distribution
  * - Safe null/undefined handling for partial AI-generated data
+ * - Responsive square aspect ratio for optimal radar visualization
  *
  * Reference: /recharts/recharts/v3_2_1 (Context7)
  */
 
 import { motion } from 'framer-motion';
-import { BarChart as BarChartIcon } from 'lucide-react';
+import { Target } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import type { ChartConfig } from '@/components/ui/chart';
 import {
-  Bar,
-  BarChart,
-  CartesianGrid,
   ChartContainer,
-  ChartLegend,
-  ChartLegendContent,
   ChartTooltip,
-  XAxis,
-  YAxis,
+  ChartTooltipContent,
+  PolarAngleAxis,
+  PolarGrid,
+  Radar,
+  RadarChart,
 } from '@/components/ui/chart';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useModelsQuery } from '@/hooks/queries/models';
@@ -87,7 +85,10 @@ function generateParticipantColor(index: number): string {
 }
 
 /**
- * SkillsComparisonChart - Compact horizontal bar chart comparing all participants
+ * SkillsComparisonChart - Radar/spider chart comparing participant skills
+ *
+ * Visualizes skills matrix as a pentagon/radar chart where each participant
+ * is represented as a colored layer showing their ratings across all skills.
  *
  * @param props - Component props
  * @param props.participants - Array of participant skill data
@@ -140,7 +141,7 @@ export function SkillsComparisonChart({ participants }: SkillsComparisonChartPro
     <div className="space-y-2">
       {/* Header Section */}
       <div className="flex items-center gap-2 px-1">
-        <BarChartIcon className="size-4 text-primary" />
+        <Target className="size-4 text-primary" />
         <h3 className="text-sm font-semibold text-foreground">{t('skillsComparison')}</h3>
         <Badge variant="secondary" className="text-xs h-5">
           {skillNames.length}
@@ -149,16 +150,16 @@ export function SkillsComparisonChart({ participants }: SkillsComparisonChartPro
         </Badge>
       </div>
 
-      {/* Horizontal Layout: Model List + Chart */}
+      {/* Two-Column Layout: Model List (Left) + Radar Chart (Right) */}
       <motion.div
         initial={{ opacity: 0, y: 4 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3, ease: 'easeOut' }}
-        className="flex gap-3"
+        className="flex gap-4"
       >
-        {/* Left: Model Names (Compact ScrollArea) */}
-        <ScrollArea className="h-[200px] w-[140px] flex-shrink-0 rounded-lg border border-border/40 bg-background/5">
-          <div className="space-y-1 p-2">
+        {/* Left Column: Model Names with Inline Scroll - Minimal Design */}
+        <ScrollArea className="h-[400px] w-[120px] flex-shrink-0">
+          <div className="space-y-1.5 pr-2">
             {participants.map((participant, index) => {
               const avatarProps = getAvatarPropsFromModelId('assistant', participant.modelId ?? '');
               const model = allModels.find(m => m.id === participant.modelId);
@@ -167,26 +168,25 @@ export function SkillsComparisonChart({ participants }: SkillsComparisonChartPro
               return (
                 <div
                   key={`model-${participant.participantIndex ?? index}`}
-                  className="flex items-center gap-2 rounded-md p-1.5 hover:bg-background/10"
+                  className="flex items-center gap-2 p-1.5 hover:bg-background/5 transition-colors rounded"
                 >
-                  {/* Color indicator */}
+                  {/* Color indicator dot */}
                   <div className="size-2 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
 
-                  {/* Avatar */}
-                  <Avatar className="size-6 ring-1 ring-border/40">
-                    <AvatarImage src={avatarProps.src} alt={avatarProps.name} />
-                    <AvatarFallback className="text-[9px] font-semibold">
-                      {avatarProps.name.slice(0, 2).toUpperCase()}
-                    </AvatarFallback>
-                  </Avatar>
+                  {/* Avatar - No borders or wrappers */}
+                  <img
+                    src={avatarProps.src}
+                    alt={avatarProps.name}
+                    className="size-5 flex-shrink-0 object-contain"
+                  />
 
-                  {/* Model Name */}
+                  {/* Model Name and Provider */}
                   <div className="flex-1 min-w-0">
-                    <p className="text-[10px] font-semibold text-foreground truncate">
+                    <p className="text-[10px] font-medium text-foreground/90 truncate leading-tight">
                       {participant.modelName}
                     </p>
                     {model?.provider && (
-                      <p className="text-[8px] text-muted-foreground truncate">
+                      <p className="text-[8px] text-muted-foreground/70 truncate leading-tight">
                         {model.provider}
                       </p>
                     )}
@@ -197,84 +197,51 @@ export function SkillsComparisonChart({ participants }: SkillsComparisonChartPro
           </div>
         </ScrollArea>
 
-        {/* Right: Horizontal Bar Chart */}
+        {/* Right Column: Radar Chart - Skills labeled at each vertex (BIGGER) */}
         <div className="flex-1 min-w-0">
-          <ChartContainer config={chartConfig} className="h-[200px] w-full">
-            <BarChart
-              data={chartData}
-              layout="vertical"
-              margin={{ top: 5, right: 10, left: 5, bottom: 5 }}
-              accessibilityLayer
-              barGap={1}
-            >
-              <CartesianGrid strokeDasharray="3 3" className="stroke-border/30" horizontal={false} />
-              <XAxis
-                type="number"
-                domain={[0, 10]}
-                tickLine={false}
-                axisLine={false}
-                tick={{ fontSize: 9, fill: 'hsl(var(--muted-foreground))' }}
-              />
-              <YAxis
-                type="category"
-                dataKey="skill"
-                tickLine={false}
-                axisLine={false}
-                width={80}
-                tick={{ fontSize: 9, fill: 'hsl(var(--foreground))', fontWeight: 600 }}
-              />
+          <ChartContainer config={chartConfig} className="mx-auto aspect-square max-h-[400px] w-full">
+            <RadarChart data={chartData} margin={{ top: 40, right: 40, bottom: 40, left: 40 }}>
               <ChartTooltip
-                cursor={{ fill: 'hsl(var(--muted))', opacity: 0.2 }}
-                content={({ active, payload }) => {
-                  if (!active || !payload || payload.length === 0)
-                    return null;
-
-                  return (
-                    <div className="rounded-lg border border-border/50 bg-background px-2 py-1.5 shadow-lg">
-                      <div className="space-y-1">
-                        <p className="text-xs font-semibold text-foreground mb-1">
-                          {payload[0]?.payload?.skill}
-                        </p>
-                        {payload.map((entry, index) => {
-                          const participant = participants[index];
-                          const color = generateParticipantColor(index);
-
-                          return (
-                            <div key={entry.dataKey} className="flex items-center justify-between gap-3">
-                              <div className="flex items-center gap-1.5">
-                                <div className="size-2 rounded-full" style={{ backgroundColor: color }} />
-                                <span className="text-[10px] text-muted-foreground">
-                                  {participant?.modelName ?? 'Unknown'}
-                                </span>
-                              </div>
-                              <span className="text-xs font-bold tabular-nums">
-                                {Number(entry.value).toFixed(1)}
-                              </span>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  );
+                cursor={false}
+                content={<ChartTooltipContent indicator="line" />}
+              />
+              <PolarAngleAxis
+                dataKey="skill"
+                tick={{
+                  fontSize: 13,
+                  fill: 'hsl(var(--foreground))',
+                  fontWeight: 700,
                 }}
+                tickLine={false}
+                stroke="hsl(var(--foreground))"
+              />
+              <PolarGrid
+                className="stroke-border/30"
+                gridType="polygon"
+                polarRadius={[0, 25, 50, 75, 100]}
               />
               {participants.map((participant, index) => {
                 const key = `participant${participant?.participantIndex ?? index}`;
                 const color = generateParticipantColor(index);
 
                 return (
-                  <Bar
+                  <Radar
                     key={key}
                     dataKey={key}
+                    stroke={color}
                     fill={color}
-                    radius={[0, 2, 2, 0]}
-                    maxBarSize={16}
-                    opacity={0.8}
+                    fillOpacity={0.2}
+                    strokeWidth={2}
+                    dot={{
+                      r: 4,
+                      fill: color,
+                      strokeWidth: 2,
+                      stroke: 'hsl(var(--background))',
+                    }}
                   />
                 );
               })}
-              <ChartLegend content={<ChartLegendContent />} />
-            </BarChart>
+            </RadarChart>
           </ChartContainer>
         </div>
       </motion.div>

@@ -176,36 +176,36 @@ export function RoundAnalysisCard({
     <div ref={containerRef} className={cn('py-1.5', className)}>
       <ChainOfThought open={isOpen} onOpenChange={handleOpenChange}>
         <ChainOfThoughtHeader>
-          <div className="flex items-center gap-2 w-full">
-            <Clock className="size-3.5 text-muted-foreground flex-shrink-0" />
-            <span className="text-xs font-medium">
+          <div className="flex items-center gap-2.5 w-full">
+            <Clock className="size-4 text-muted-foreground flex-shrink-0" />
+            <span className="text-sm font-medium">
               {t('roundAnalysis', { number: analysis.roundNumber })}
             </span>
 
             {/* Status Badge */}
             <Badge
               variant="outline"
-              className={cn('text-[10px] h-5', config.color)}
+              className={cn('text-xs h-6', config.color)}
             >
-              <StatusIcon className={cn('size-2.5 mr-1', config.iconClass)} />
+              <StatusIcon className={cn('size-3 mr-1', config.iconClass)} />
               {config.label}
             </Badge>
 
             {/* Mode Badge */}
-            <span className="hidden md:inline text-xs text-muted-foreground">•</span>
-            <span className="hidden md:inline text-[10px] text-muted-foreground capitalize">
+            <span className="hidden md:inline text-sm text-muted-foreground">•</span>
+            <span className="hidden md:inline text-xs text-muted-foreground capitalize">
               {t(`mode.${analysis.mode}`)}
             </span>
           </div>
         </ChainOfThoughtHeader>
 
         <ChainOfThoughtContent>
-          <div className="space-y-3">
+          <div className="space-y-4">
             {/* Question Context */}
             {analysis.userQuestion && analysis.userQuestion !== 'N/A' && (
-              <div className="space-y-0.5">
-                <p className="text-[10px] font-semibold text-muted-foreground">Question:</p>
-                <p className="text-xs text-foreground/80 leading-relaxed">
+              <div className="space-y-1">
+                <p className="text-xs font-semibold text-muted-foreground">Question:</p>
+                <p className="text-sm text-foreground/80 leading-relaxed">
                   {analysis.userQuestion}
                 </p>
               </div>
@@ -229,7 +229,7 @@ export function RoundAnalysisCard({
               : effectiveStatus === 'completed' && analysis.analysisData
                 ? (
                     // ✅ COMPLETED: Show completed analysis from database
-                    <div className="space-y-3">
+                    <div className="space-y-4">
                       {/* Leaderboard */}
                       {analysis.analysisData.leaderboard && analysis.analysisData.leaderboard.length > 0 && (
                         <LeaderboardCard leaderboard={analysis.analysisData.leaderboard} />
@@ -242,7 +242,7 @@ export function RoundAnalysisCard({
 
                       {/* Participant Analysis Cards */}
                       {analysis.analysisData.participantAnalyses && analysis.analysisData.participantAnalyses.length > 0 && (
-                        <div className="space-y-2">
+                        <div className="space-y-3">
                           {analysis.analysisData.participantAnalyses.map(participant => (
                             <ParticipantAnalysisCard
                               key={`${analysis.id}-participant-${participant.participantIndex}`}
@@ -254,9 +254,9 @@ export function RoundAnalysisCard({
 
                       {/* Overall Summary */}
                       {analysis.analysisData.overallSummary && (
-                        <div className="space-y-1 pt-1">
-                          <h3 className="text-xs font-semibold">{t('summary')}</h3>
-                          <p className="text-xs text-muted-foreground leading-relaxed">
+                        <div className="space-y-1.5 pt-2">
+                          <h3 className="text-sm font-semibold">{t('summary')}</h3>
+                          <p className="text-sm text-muted-foreground leading-relaxed">
                             {analysis.analysisData.overallSummary}
                           </p>
                         </div>
@@ -264,9 +264,9 @@ export function RoundAnalysisCard({
 
                       {/* Conclusion */}
                       {analysis.analysisData.conclusion && (
-                        <div className="space-y-1 pt-1">
-                          <h3 className="text-xs font-semibold text-primary">{t('conclusion')}</h3>
-                          <p className="text-xs leading-relaxed">
+                        <div className="space-y-1.5 pt-2">
+                          <h3 className="text-sm font-semibold text-primary">{t('conclusion')}</h3>
+                          <p className="text-sm leading-relaxed">
                             {analysis.analysisData.conclusion}
                           </p>
                         </div>

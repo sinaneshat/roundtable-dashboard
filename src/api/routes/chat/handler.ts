@@ -2537,21 +2537,40 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
       },
     };
 
+    // ✅ REASONING CAPTURE: Accumulate reasoning deltas from stream
+    // AI SDK streams reasoning in parts (reasoning-start, reasoning-delta, reasoning-end)
+    // but doesn't include the full reasoning in finishResult for most models
+    const reasoningDeltas: string[] = [];
+
     // ✅ STREAM RESPONSE: Direct streaming, let AI SDK handle retries
     const finalResult = streamText({
       ...streamParams,
+
+      // ✅ REASONING EXTRACTION: Capture reasoning from stream chunks
+      // This is necessary because finishResult.reasoning is undefined for most models
+      // Only certain models (OpenAI o1, DeepSeek R1) include reasoning in finishResult
+      onChunk: async ({ chunk }) => {
+        if (chunk.type === 'reasoning-delta') {
+          reasoningDeltas.push(chunk.text);
+        }
+      },
 
       // ✅ PERSIST MESSAGE: Save to database after streaming completes
       onFinish: async (finishResult) => {
         const { text, usage, finishReason, providerMetadata, response } = finishResult;
 
-        // ✅ CRITICAL FIX: Extract reasoning from finishResult directly
-        // The AI SDK v5 provides reasoning in the finishResult when sendReasoning: true
-        // This is the PRIMARY source of reasoning data that was streamed to the client
-        const finishResultWithReasoning = finishResult as typeof finishResult & { reasoning?: string };
-        let reasoningText: string | null = (typeof finishResultWithReasoning.reasoning === 'string' ? finishResultWithReasoning.reasoning : null) || null;
+        // ✅ CRITICAL FIX: Extract reasoning from accumulated deltas first
+        // Priority 1: Use accumulated reasoning deltas from stream chunks
+        let reasoningText: string | null = reasoningDeltas.length > 0 ? reasoningDeltas.join('') : null;
 
-        // ✅ FALLBACK: If reasoning not in finishResult, try extracting from providerMetadata
+        // ✅ FALLBACK 1: Extract reasoning from finishResult directly (for OpenAI o1/o3)
+        // The AI SDK v5 provides reasoning in the finishResult for certain models
+        const finishResultWithReasoning = finishResult as typeof finishResult & { reasoning?: string };
+        if (!reasoningText) {
+          reasoningText = (typeof finishResultWithReasoning.reasoning === 'string' ? finishResultWithReasoning.reasoning : null) || null;
+        }
+
+        // ✅ FALLBACK 2: If reasoning not in finishResult, try extracting from providerMetadata
         // This handles cases where providers include reasoning in metadata instead
         if (!reasoningText) {
           const extractReasoning = (metadata: unknown): string | null => {
@@ -2600,12 +2619,22 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
           reasoningText = extractReasoning(providerMetadata);
         }
 
+        // Determine source of reasoning for logging
+        const reasoningSource = reasoningDeltas.length > 0
+          ? 'stream-chunks'
+          : finishResultWithReasoning?.reasoning
+            ? 'finishResult'
+            : reasoningText
+              ? 'providerMetadata'
+              : 'none';
+
         console.warn('[streamChatHandler] 🧠 Reasoning extracted', {
           threadId,
           participantIndex,
           modelId: participant.modelId,
           reasoningLength: reasoningText?.length || 0,
-          source: finishResultWithReasoning.reasoning ? 'finishResult' : reasoningText ? 'providerMetadata' : 'none',
+          reasoningDeltaCount: reasoningDeltas.length,
+          source: reasoningSource,
         });
 
         // ✅ CRITICAL ERROR HANDLING: Wrap DB operations in try-catch
@@ -2684,10 +2713,35 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
               }
             } else if (outputTokens === 0) {
               // True provider empty response - 0 tokens generated
-              // ✅ SHOW RAW ERROR: Use exact status/metadata from response, not generic message
-              providerMessage = `Model returned empty response. Input: ${inputTokens} tokens, Output: 0 tokens, Status: ${finishReason}`;
-              errorMessage = providerMessage; // Show exact same message to user - no generic text
-              errorCategory = errorCategory || 'empty_response';
+              // Provide context-aware error messages based on finish reason
+              const baseStats = `Input: ${inputTokens} tokens, Output: 0 tokens, Status: ${finishReason}`;
+
+              if (finishReason === 'stop') {
+                // Model completed normally but returned no content - likely filtered or refused
+                providerMessage = `Model completed but returned no content. ${baseStats}. This may indicate content filtering, safety constraints, or the model chose not to respond.`;
+                errorMessage = `${participant.modelId} returned empty response - possible content filtering or safety block`;
+                errorCategory = 'content_filter';
+              } else if (finishReason === 'length') {
+                // Model hit token limit before generating anything
+                providerMessage = `Model hit token limit before generating content. ${baseStats}. Try reducing the conversation history or input length.`;
+                errorMessage = `${participant.modelId} exceeded token limit without generating content`;
+                errorCategory = 'provider_error';
+              } else if (finishReason === 'content-filter') {
+                // Explicit content filtering
+                providerMessage = `Content was filtered by safety systems. ${baseStats}`;
+                errorMessage = `${participant.modelId} blocked by content filter`;
+                errorCategory = 'content_filter';
+              } else if (finishReason === 'error' || finishReason === 'other') {
+                // Provider error
+                providerMessage = `Provider error prevented response generation. ${baseStats}. This may be a temporary issue with the model provider.`;
+                errorMessage = `${participant.modelId} encountered a provider error`;
+                errorCategory = 'provider_error';
+              } else {
+                // Unknown/unexpected finish reason
+                providerMessage = `Model returned empty response. ${baseStats}`;
+                errorMessage = `${participant.modelId} returned empty response (reason: ${finishReason})`;
+                errorCategory = 'empty_response';
+              }
             }
             // Note: We no longer reject responses with tokens but minimal/empty text content.
             // If model generated 1+ tokens, it's considered a valid response even if text is empty.
@@ -2696,6 +2750,17 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
           // ✅ SAVE MESSAGE: Content and metadata to database
           const contentToSave = text || '';
           const hasError = isEmptyResponse || !!openRouterError;
+
+          // ✅ DETERMINE IF ERROR IS TRANSIENT
+          // Empty responses with finish_reason='stop' are usually NOT transient
+          // (content filtering, safety, or model refusal - retrying won't help)
+          // Only mark as transient for network/provider errors
+          const isTransientError = hasError && (
+            errorCategory === 'provider_error'
+            || errorCategory === 'network'
+            || errorCategory === 'rate_limit'
+            || (errorCategory === 'empty_response' && finishReason !== 'stop')
+          );
 
           const [savedMessage] = await db.insert(tables.chatMessage)
             .values({
@@ -2718,7 +2783,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
                 errorMessage,
                 providerMessage,
                 openRouterError,
-                isTransient: hasError,
+                isTransient: isTransientError,
               },
               createdAt: new Date(),
             })
@@ -3262,13 +3327,12 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
     const systemPrompt = buildModeratorSystemPrompt(moderatorConfig);
     const userPrompt = buildModeratorUserPrompt(moderatorConfig);
 
-    // ✅ DYNAMIC MODEL SELECTION: Use optimal analysis model from OpenRouter
-    // Intelligently selects cheapest, fastest model for structured output
-    // Falls back to gpt-4o-mini if no suitable model found
-    const optimalModel = await openRouterModelsService.getOptimalAnalysisModel();
-    const analysisModelId = optimalModel?.id || 'openai/gpt-4o-mini';
+    // ✅ FIXED MODEL: Always use Claude 3.5 Sonnet for analysis
+    // This model provides the most reliable structured output generation
+    // and best JSON schema compliance for complex analysis tasks
+    const analysisModelId = 'anthropic/claude-3.5-sonnet';
 
-    // Initialize OpenRouter with selected optimal model
+    // Initialize OpenRouter with Claude 3.5 Sonnet
     initializeOpenRouter(c.env);
     const client = openRouterService.getClient();
 
@@ -3318,10 +3382,9 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
         model: client.chat(analysisModelId),
         schema: ModeratorAnalysisPayloadSchema,
         schemaName: 'ModeratorAnalysis',
-        schemaDescription: 'Structured analysis of a conversation round with participant ratings, skills, pros/cons, leaderboard, and summary',
         system: systemPrompt,
         prompt: userPrompt,
-        mode: 'json', // Force JSON mode for better schema adherence
+        mode: 'json', // Force JSON mode for better schema adherence with Claude
 
         // ✅ Telemetry for monitoring
         experimental_telemetry: {
