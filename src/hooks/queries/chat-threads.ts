@@ -181,13 +181,16 @@ export function useThreadChangelogQuery(threadId: string, enabled?: boolean) {
  * Returns all moderator analyses ordered by round number
  * Protected endpoint - requires authentication
  *
- * ✅ ADAPTIVE POLLING: Aggressive polling for active analyses, stops when complete
- * - Primary trigger: onRoundComplete callback in ChatThreadScreen (immediate invalidation)
- * - Active analyses (pending/streaming): Poll every 3 seconds to detect completion quickly
- * - Completed analyses: No polling
+ * ✅ OPTIMIZED POLLING: Minimal polling strategy for streaming analyses
+ * - Primary mechanism: Real-time streaming via experimental_useObject hook
+ * - Polling role: Only detect server-side completion of stuck/failed streams
+ * - Pending analyses: No polling (useObject hook handles streaming)
+ * - Streaming analyses: Slow polling (30s) only to detect abnormal completion
+ * - Completed/failed analyses: No polling
  * - Stuck analyses (> 3 minutes): No polling (considered failed)
  *
- * This ensures analyses show up quickly when completed while preventing unnecessary polling.
+ * This eliminates overlap between streaming and polling, allowing useObject
+ * to properly render partial objects in real-time.
  *
  * @param threadId - Thread ID
  * @param enabled - Optional control over whether to fetch (default: based on threadId and auth)
@@ -199,9 +202,9 @@ export function useThreadAnalysesQuery(threadId: string, enabled?: boolean) {
   return useQuery({
     queryKey: queryKeys.threads.analyses(threadId),
     queryFn: () => getThreadAnalysesService({ param: { id: threadId } }),
-    staleTime: 1000, // 1 second - keep data fresh when actively polling
-    // ✅ ADAPTIVE POLLING: Aggressive polling for active analyses
-    // This ensures completed analyses are detected quickly (within 3 seconds)
+    staleTime: 5000, // 5 seconds - moderate staleness during streaming
+    // ✅ MINIMAL POLLING: Only for detecting abnormal stream completion
+    // useObject hook handles real-time streaming, so aggressive polling is unnecessary
     refetchInterval: (query) => {
       const data = query.state.data;
       if (!data?.success)
@@ -210,9 +213,11 @@ export function useThreadAnalysesQuery(threadId: string, enabled?: boolean) {
       const THREE_MINUTES_MS = 3 * 60 * 1000;
       const now = Date.now();
 
-      // Check if any analyses are pending or streaming AND not too old
-      const hasActivePendingAnalysis = data.data.items.some((item) => {
-        if (item.status !== 'pending' && item.status !== 'streaming')
+      // Check if any analyses are streaming (not pending - those are handled by useObject)
+      const hasActiveStreamingAnalysis = data.data.items.some((item) => {
+        // Only poll for "streaming" status (server-side streaming)
+        // Don't poll for "pending" - useObject hook will handle it
+        if (item.status !== 'streaming')
           return false;
 
         // Check age - if older than 3 minutes, consider it stuck (don't poll for stuck analyses)
@@ -222,10 +227,10 @@ export function useThreadAnalysesQuery(threadId: string, enabled?: boolean) {
         return ageMs <= THREE_MINUTES_MS;
       });
 
-      // ✅ CRITICAL FIX: Poll every 3 SECONDS for active analyses
-      // This ensures users see completed analyses within 3 seconds
-      // Once all analyses are complete/failed, polling stops automatically
-      return hasActivePendingAnalysis ? 3000 : false; // 3 seconds for active, stop when complete
+      // ✅ SLOW POLLING: Only poll every 30 seconds for streaming analyses
+      // This is only a safety net for detecting server-side completion
+      // Real-time updates come from useObject hook's partialObjectStream
+      return hasActiveStreamingAnalysis ? 30000 : false; // 30 seconds, or no polling
     },
     // ✅ CRITICAL FIX: Preserve previous data during refetches and polling
     // This prevents analyses from disappearing when query refetches

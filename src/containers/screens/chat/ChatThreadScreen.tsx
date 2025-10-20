@@ -175,7 +175,7 @@ export default function ChatThreadScreen({
   // ✅ ROUND FEEDBACK: Fetch all feedback for this thread
   const { data: feedbackData } = useThreadFeedbackQuery(thread.id);
   const feedbackByRound = useMemo<Map<number, 'like' | 'dislike' | null>>(() => {
-    if (!feedbackData)
+    if (!feedbackData || !Array.isArray(feedbackData))
       return new Map();
     return new Map(
       feedbackData.map(f => [f.roundNumber, f.feedbackType] as const),

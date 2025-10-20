@@ -4,9 +4,6 @@ import type { Metadata } from 'next';
 import { BRAND } from '@/constants/brand';
 import { ChatOverviewScreen } from '@/containers/screens/chat';
 import { getQueryClient } from '@/lib/data/query-client';
-import { queryKeys } from '@/lib/data/query-keys';
-import { STALE_TIMES } from '@/lib/data/stale-times';
-import { listModelsService } from '@/services/api/models';
 import { createMetadata } from '@/utils/metadata';
 
 /**
@@ -38,27 +35,20 @@ export async function generateMetadata(): Promise<Metadata> {
  * - Recent chat history
  * - Favorite conversations
  *
- * Prefetching Strategy (SSG-like):
- * - ✅ Models: SERVER-SIDE prefetch with includeAll=true (all models + default_model_id cached at page load)
+ * Prefetching Strategy:
+ * - ✅ Models: Already prefetched in layout (chat-layout.tsx)
  * - ✅ Threads: Already prefetched in layout
- * - ✅ Infinite stale time: Models cached indefinitely (no refetches)
+ * - ✅ Usage stats: Already prefetched in layout
+ * - ✅ Subscriptions: Already prefetched in layout
  *
- * IMPORTANT: Models are prefetched server-side so they're immediately available
- * when the input box renders. Backend returns ALL models with tier information
- * AND the default_model_id (best accessible model from top 10 for user's tier).
- * Client components filter based on user's subscription tier and use default_model_id
- * for initial participant selection - all computed on backend, zero client requests.
+ * All critical data is pre-fetched at the layout level, eliminating
+ * all client-side loading states for optimal user experience.
  */
 export default async function ChatOverviewPage() {
   const queryClient = getQueryClient();
 
-  // ✅ SSG STRATEGY: Prefetch all models on server at page load time
-  // Models are cached with infinite stale time and available immediately
-  await queryClient.prefetchQuery({
-    queryKey: queryKeys.models.list(),
-    queryFn: () => listModelsService(),
-    staleTime: STALE_TIMES.models, // Infinity - cached indefinitely
-  });
+  // ✅ OPTIMIZATION: All data already pre-fetched at layout level
+  // No additional pre-fetching needed here
 
   return (
     <HydrationBoundary state={dehydrate(queryClient)}>

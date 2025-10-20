@@ -14,6 +14,7 @@
 
 import { Award, Clock, Loader2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import type { StoredModeratorAnalysis } from '@/api/routes/chat/schema';
 import {
@@ -98,9 +99,66 @@ export function RoundAnalysisCard({
   const config = statusConfig[effectiveStatus];
   const StatusIcon = config.icon;
 
-  // ✅ Auto-open if this is the latest round (regardless of status)
-  // Earlier rounds remain collapsed by default
-  const shouldDefaultOpen = isLatest;
+  // ✅ CONTROLLED STATE: Auto-collapse older analyses when new rounds begin
+  // - Latest analysis stays open
+  // - Older analyses automatically collapse when new rounds are added
+  // - Follows same pattern as changelog (collapsed by default, latest open)
+  const [isManuallyControlled, setIsManuallyControlled] = useState(false);
+  const [manuallyOpen, setManuallyOpen] = useState(false);
+
+  // ✅ DEFAULT BEHAVIOR: Latest is open, others collapsed
+  // If user manually toggles, respect their choice
+  const isOpen = isManuallyControlled ? manuallyOpen : isLatest;
+
+  const handleOpenChange = useCallback((open: boolean) => {
+    setIsManuallyControlled(true);
+    setManuallyOpen(open);
+  }, []);
+
+  // ✅ RESET manual control when isLatest changes
+  // This ensures older analyses collapse when new rounds are added
+  useEffect(() => {
+    if (!isLatest && isManuallyControlled) {
+      // Reset manual control when this is no longer the latest
+      setIsManuallyControlled(false);
+      setManuallyOpen(false);
+    }
+  }, [isLatest, isManuallyControlled]);
+
+  // ✅ AUTO-SCROLL: Scroll to completed analysis if user is not actively interacting
+  const containerRef = useRef<HTMLDivElement>(null);
+  const previousStatusRef = useRef(analysis.status);
+
+  useEffect(() => {
+    // Only scroll if:
+    // 1. Analysis just completed (status changed from pending/streaming to completed)
+    // 2. This is the latest analysis
+    // 3. Analysis is open
+    const justCompleted = (previousStatusRef.current === 'pending' || previousStatusRef.current === 'streaming')
+      && effectiveStatus === 'completed';
+
+    // Update previous status before any early returns
+    const cleanup = (() => {
+      if (justCompleted && isLatest && isOpen && containerRef.current) {
+        // Delay scroll slightly to let animations settle
+        const scrollTimeout = setTimeout(() => {
+          containerRef.current?.scrollIntoView({
+            behavior: 'smooth',
+            block: 'nearest',
+            inline: 'nearest',
+          });
+        }, 300); // Wait for animations to complete
+
+        return () => clearTimeout(scrollTimeout);
+      }
+      return undefined;
+    })();
+
+    // Update previous status
+    previousStatusRef.current = analysis.status;
+
+    return cleanup;
+  }, [analysis.status, effectiveStatus, isLatest, isOpen]);
 
   console.warn('[RoundAnalysisCard] Rendering:', {
     roundNumber: analysis.roundNumber,
@@ -109,53 +167,56 @@ export function RoundAnalysisCard({
     isStuck,
     ageMs,
     isLatest,
-    shouldDefaultOpen,
+    isOpen,
+    isManuallyControlled,
     participantMessageIds: analysis.participantMessageIds.length,
   });
 
   return (
-    <div className={cn('py-2', className)}>
-      <ChainOfThought defaultOpen={shouldDefaultOpen}>
+    <div ref={containerRef} className={cn('py-1.5', className)}>
+      <ChainOfThought open={isOpen} onOpenChange={handleOpenChange}>
         <ChainOfThoughtHeader>
           <div className="flex items-center gap-2 w-full">
-            <Clock className="size-4 text-muted-foreground flex-shrink-0" />
-            <span className="text-sm font-medium">
+            <Clock className="size-3.5 text-muted-foreground flex-shrink-0" />
+            <span className="text-xs font-medium">
               {t('roundAnalysis', { number: analysis.roundNumber })}
             </span>
 
             {/* Status Badge */}
             <Badge
               variant="outline"
-              className={cn('text-xs', config.color)}
+              className={cn('text-[10px] h-5', config.color)}
             >
-              <StatusIcon className={cn('size-3 mr-1', config.iconClass)} />
+              <StatusIcon className={cn('size-2.5 mr-1', config.iconClass)} />
               {config.label}
             </Badge>
 
             {/* Mode Badge */}
             <span className="hidden md:inline text-xs text-muted-foreground">•</span>
-            <span className="hidden md:inline text-xs text-muted-foreground capitalize">
+            <span className="hidden md:inline text-[10px] text-muted-foreground capitalize">
               {t(`mode.${analysis.mode}`)}
             </span>
           </div>
         </ChainOfThoughtHeader>
 
         <ChainOfThoughtContent>
-          <div className="space-y-4">
+          <div className="space-y-3">
             {/* Question Context */}
             {analysis.userQuestion && analysis.userQuestion !== 'N/A' && (
-              <div className="space-y-1">
-                <p className="text-xs font-semibold text-muted-foreground">Question:</p>
-                <p className="text-sm text-foreground/80">
+              <div className="space-y-0.5">
+                <p className="text-[10px] font-semibold text-muted-foreground">Question:</p>
+                <p className="text-xs text-foreground/80 leading-relaxed">
                   {analysis.userQuestion}
                 </p>
               </div>
             )}
 
             {/* Analysis Content */}
-            {effectiveStatus === 'pending'
+            {(effectiveStatus === 'pending' || effectiveStatus === 'streaming')
               ? (
-                  // ✅ PENDING: Trigger streaming from the backend
+                  // ✅ PENDING/STREAMING: Use streaming component for real-time partial object rendering
+                  // The ModeratorAnalysisStream component handles both initial trigger and progressive rendering
+                  // It will display partial objects as they arrive from the AI SDK streamObject() endpoint
                   <ModeratorAnalysisStream
                     threadId={threadId}
                     analysis={analysis}
@@ -165,70 +226,61 @@ export function RoundAnalysisCard({
                     }}
                   />
                 )
-              : effectiveStatus === 'streaming'
+              : effectiveStatus === 'completed' && analysis.analysisData
                 ? (
-                    // ✅ STREAMING: Show loading state - another request is generating the analysis
-                    // Don't try to re-stream - just wait for polling to fetch the completed result
-                    <div className="flex items-center gap-2 py-2 text-sm text-muted-foreground">
-                      <span className="size-1.5 rounded-full bg-primary/60 animate-pulse" />
-                      <span>Analysis is being generated. Waiting for completion...</span>
+                    // ✅ COMPLETED: Show completed analysis from database
+                    <div className="space-y-3">
+                      {/* Leaderboard */}
+                      {analysis.analysisData.leaderboard && analysis.analysisData.leaderboard.length > 0 && (
+                        <LeaderboardCard leaderboard={analysis.analysisData.leaderboard} />
+                      )}
+
+                      {/* Skills Comparison Chart */}
+                      {analysis.analysisData.participantAnalyses && analysis.analysisData.participantAnalyses.length > 0 && (
+                        <SkillsComparisonChart participants={analysis.analysisData.participantAnalyses} />
+                      )}
+
+                      {/* Participant Analysis Cards */}
+                      {analysis.analysisData.participantAnalyses && analysis.analysisData.participantAnalyses.length > 0 && (
+                        <div className="space-y-2">
+                          {analysis.analysisData.participantAnalyses.map(participant => (
+                            <ParticipantAnalysisCard
+                              key={`${analysis.id}-participant-${participant.participantIndex}`}
+                              analysis={participant}
+                            />
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Overall Summary */}
+                      {analysis.analysisData.overallSummary && (
+                        <div className="space-y-1 pt-1">
+                          <h3 className="text-xs font-semibold">{t('summary')}</h3>
+                          <p className="text-xs text-muted-foreground leading-relaxed">
+                            {analysis.analysisData.overallSummary}
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Conclusion */}
+                      {analysis.analysisData.conclusion && (
+                        <div className="space-y-1 pt-1">
+                          <h3 className="text-xs font-semibold text-primary">{t('conclusion')}</h3>
+                          <p className="text-xs leading-relaxed">
+                            {analysis.analysisData.conclusion}
+                          </p>
+                        </div>
+                      )}
                     </div>
                   )
-                : effectiveStatus === 'completed' && analysis.analysisData
+                : effectiveStatus === 'failed'
                   ? (
-                    // ✅ COMPLETED: Show completed analysis from database
-                      <div className="space-y-4">
-                        {/* Leaderboard */}
-                        {analysis.analysisData.leaderboard && analysis.analysisData.leaderboard.length > 0 && (
-                          <LeaderboardCard leaderboard={analysis.analysisData.leaderboard} />
-                        )}
-
-                        {/* Skills Comparison Chart */}
-                        {analysis.analysisData.participantAnalyses && analysis.analysisData.participantAnalyses.length > 0 && (
-                          <SkillsComparisonChart participants={analysis.analysisData.participantAnalyses} />
-                        )}
-
-                        {/* Participant Analysis Cards */}
-                        {analysis.analysisData.participantAnalyses && analysis.analysisData.participantAnalyses.length > 0 && (
-                          <div className="space-y-3">
-                            {analysis.analysisData.participantAnalyses.map(participant => (
-                              <ParticipantAnalysisCard
-                                key={`${analysis.id}-participant-${participant.participantIndex}`}
-                                analysis={participant}
-                              />
-                            ))}
-                          </div>
-                        )}
-
-                        {/* Overall Summary */}
-                        {analysis.analysisData.overallSummary && (
-                          <div className="space-y-2 pt-2">
-                            <h3 className="text-sm font-semibold">{t('summary')}</h3>
-                            <p className="text-sm text-muted-foreground leading-relaxed">
-                              {analysis.analysisData.overallSummary}
-                            </p>
-                          </div>
-                        )}
-
-                        {/* Conclusion */}
-                        {analysis.analysisData.conclusion && (
-                          <div className="space-y-2 pt-2">
-                            <h3 className="text-sm font-semibold text-primary">{t('conclusion')}</h3>
-                            <p className="text-sm leading-relaxed">
-                              {analysis.analysisData.conclusion}
-                            </p>
-                          </div>
-                        )}
+                      <div className="flex items-center gap-2 py-1.5 text-xs text-destructive">
+                        <span className="size-1.5 rounded-full bg-destructive/80" />
+                        <span>{effectiveErrorMessage || t('errorAnalyzing')}</span>
                       </div>
                     )
-                  : effectiveStatus === 'failed'
-                    ? (
-                        <div className="flex items-center gap-2 py-2 text-sm text-destructive">
-                          <span className="size-1.5 rounded-full bg-destructive/80" />
-                          <span>{effectiveErrorMessage || t('errorAnalyzing')}</span>
-                        </div>
-                      )
-                    : null}
+                  : null}
           </div>
         </ChainOfThoughtContent>
       </ChainOfThought>

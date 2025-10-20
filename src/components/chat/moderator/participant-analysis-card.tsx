@@ -51,20 +51,20 @@ export function ParticipantAnalysisCard({ analysis, rank }: ParticipantAnalysisC
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
+      initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3 }}
+      transition={{ duration: 0.2 }}
       className="relative w-full"
     >
       {/* Minimal container - NO borders */}
-      <div className="relative flex flex-col gap-3 p-3 rounded-lg bg-background/5">
+      <div className="relative flex flex-col gap-2 p-2.5 rounded-lg bg-background/5">
         {/* Header: Avatar + Model Info + Rating */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5">
           {/* Model Avatar with rank badge */}
           <div className="relative flex-shrink-0">
-            <Avatar className="size-10 ring-1 ring-white/10">
+            <Avatar className="size-8 ring-1 ring-white/10">
               <AvatarImage src={avatarProps.src} alt={avatarProps.name} />
-              <AvatarFallback className="text-xs font-semibold">
+              <AvatarFallback className="text-[10px] font-semibold">
                 {avatarProps.name.slice(0, 2).toUpperCase()}
               </AvatarFallback>
             </Avatar>
@@ -72,9 +72,9 @@ export function ParticipantAnalysisCard({ analysis, rank }: ParticipantAnalysisC
               <motion.div
                 initial={{ scale: 0 }}
                 animate={{ scale: 1 }}
-                transition={{ delay: 0.2, type: 'spring' }}
+                transition={{ delay: 0.1, type: 'spring' }}
                 className={cn(
-                  'absolute -top-1 -right-1 size-5 rounded-full flex items-center justify-center text-[10px] font-bold',
+                  'absolute -top-0.5 -right-0.5 size-4 rounded-full flex items-center justify-center text-[9px] font-bold',
                   rank === 1 && 'bg-yellow-500 text-black',
                   rank === 2 && 'bg-gray-400 text-black',
                   rank === 3 && 'bg-orange-600 text-white',
@@ -87,12 +87,12 @@ export function ParticipantAnalysisCard({ analysis, rank }: ParticipantAnalysisC
 
           {/* Model Info */}
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <h3 className="text-sm font-semibold text-foreground">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <h3 className="text-xs font-semibold text-foreground">
                 {avatarProps.name}
               </h3>
               {analysis.participantRole && (
-                <span className="text-xs text-foreground/60">
+                <span className="text-[10px] text-foreground/60">
                   •
                   {' '}
                   {analysis.participantRole}
@@ -103,35 +103,35 @@ export function ParticipantAnalysisCard({ analysis, rank }: ParticipantAnalysisC
 
           {/* Rating Badge - Compact */}
           <div className="flex-shrink-0">
-            <div className="flex items-center gap-1 px-2 py-1 rounded-md bg-background/20">
-              <span className={cn('text-lg font-bold', ratingColor)}>
+            <div className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-background/20">
+              <span className={cn('text-base font-bold', ratingColor)}>
                 {ratingDisplay}
               </span>
-              <span className="text-[10px] text-foreground/60">/10</span>
+              <span className="text-[9px] text-foreground/60">/10</span>
             </div>
           </div>
         </div>
 
         {/* Pros & Cons Grid - Compact */}
-        <div className="grid grid-cols-2 gap-3 text-xs">
+        <div className="grid grid-cols-2 gap-2.5 text-xs">
           {/* Pros */}
-          <div className="space-y-1.5">
-            <div className="flex items-center gap-1.5">
-              <CheckCircle2 className="size-3 text-green-500 flex-shrink-0" />
-              <h4 className="text-xs font-semibold text-foreground">{t('strengths')}</h4>
+          <div className="space-y-1">
+            <div className="flex items-center gap-1">
+              <CheckCircle2 className="size-2.5 text-green-500 flex-shrink-0" />
+              <h4 className="text-[10px] font-semibold text-foreground">{t('strengths')}</h4>
             </div>
-            <ul className="space-y-1 text-foreground/80">
+            <ul className="space-y-0.5 text-foreground/80">
               {(analysis.pros ?? []).slice(0, 3).map((pro, idx) => (
                 <li
                   key={`pro-${analysis.participantIndex ?? 'unknown'}-${idx}`}
-                  className="flex items-start gap-1.5"
+                  className="flex items-start gap-1"
                 >
-                  <span className="text-green-500 flex-shrink-0 text-[10px]">✓</span>
-                  <span className="flex-1 leading-tight">{pro}</span>
+                  <span className="text-green-500 flex-shrink-0 text-[9px]">✓</span>
+                  <span className="flex-1 leading-tight text-[10px]">{pro}</span>
                 </li>
               ))}
               {(analysis.pros?.length ?? 0) > 3 && (
-                <li className="text-foreground/50 text-[10px]">
+                <li className="text-foreground/50 text-[9px]">
                   +
                   {(analysis.pros?.length ?? 0) - 3}
                   {' '}
@@ -142,23 +142,23 @@ export function ParticipantAnalysisCard({ analysis, rank }: ParticipantAnalysisC
           </div>
 
           {/* Cons */}
-          <div className="space-y-1.5">
-            <div className="flex items-center gap-1.5">
-              <XCircle className="size-3 text-orange-500 flex-shrink-0" />
-              <h4 className="text-xs font-semibold text-foreground">{t('areasForImprovement')}</h4>
+          <div className="space-y-1">
+            <div className="flex items-center gap-1">
+              <XCircle className="size-2.5 text-orange-500 flex-shrink-0" />
+              <h4 className="text-[10px] font-semibold text-foreground">{t('areasForImprovement')}</h4>
             </div>
-            <ul className="space-y-1 text-foreground/80">
+            <ul className="space-y-0.5 text-foreground/80">
               {(analysis.cons ?? []).slice(0, 3).map((con, idx) => (
                 <li
                   key={`con-${analysis.participantIndex ?? 'unknown'}-${idx}`}
-                  className="flex items-start gap-1.5"
+                  className="flex items-start gap-1"
                 >
-                  <span className="text-orange-500 flex-shrink-0 text-[10px]">!</span>
-                  <span className="flex-1 leading-tight">{con}</span>
+                  <span className="text-orange-500 flex-shrink-0 text-[9px]">!</span>
+                  <span className="flex-1 leading-tight text-[10px]">{con}</span>
                 </li>
               ))}
               {(analysis.cons?.length ?? 0) > 3 && (
-                <li className="text-foreground/50 text-[10px]">
+                <li className="text-foreground/50 text-[9px]">
                   +
                   {(analysis.cons?.length ?? 0) - 3}
                   {' '}
@@ -171,9 +171,9 @@ export function ParticipantAnalysisCard({ analysis, rank }: ParticipantAnalysisC
 
         {/* Summary - Compact */}
         {analysis.summary && (
-          <div className="space-y-1">
-            <h4 className="text-xs font-semibold text-foreground">{t('summary')}</h4>
-            <p className="text-xs text-foreground/80 leading-relaxed">
+          <div className="space-y-0.5">
+            <h4 className="text-[10px] font-semibold text-foreground">{t('summary')}</h4>
+            <p className="text-[10px] text-foreground/80 leading-relaxed">
               {analysis.summary}
             </p>
           </div>

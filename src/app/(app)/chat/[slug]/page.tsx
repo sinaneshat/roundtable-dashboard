@@ -6,8 +6,8 @@ import { BRAND } from '@/constants';
 import { ChatThreadScreen } from '@/containers/screens/chat';
 import { getQueryClient } from '@/lib/data/query-client';
 import { queryKeys } from '@/lib/data/query-keys';
-import { STALE_TIMES } from '@/lib/data/stale-times';
-import { getThreadAnalysesService, getThreadBySlugService, getThreadChangelogService, listModelsService } from '@/services/api';
+import { STALE_TIME_PRESETS, STALE_TIMES } from '@/lib/data/stale-times';
+import { getThreadAnalysesService, getThreadBySlugService, getThreadChangelogService, getThreadFeedbackService } from '@/services/api';
 import { createMetadata } from '@/utils/metadata';
 
 // Force dynamic rendering for user-specific thread data
@@ -35,23 +35,25 @@ export async function generateMetadata({
 }
 
 /**
- * Chat Thread Page - OFFICIAL NEXT.JS APP ROUTER PATTERN + SSG Model Prefetching
+ * Chat Thread Page - OPTIMIZED SERVER-SIDE PRE-FETCHING
  *
- * SERVER COMPONENT: Fetches data directly on server
- * - Thread data fetched directly (user-specific)
- * - Models prefetched with SSG strategy (static, cached indefinitely)
+ * SERVER COMPONENT: Fetches data directly on server + pre-fetches critical data
+ * - Thread data fetched directly (user-specific) - participants, messages included
+ * - Critical data pre-fetched: changelog, analyses, feedback, thread detail
+ * - Models pre-fetched at layout level (no duplication needed)
  * - Passes raw data as props to Client Component
  * - Client Component uses useChat with initialMessages
  *
- * SSG Strategy for Models:
- * - Models are prefetched with staleTime: Infinity
- * - Cached indefinitely across all chat threads
- * - No refetching after initial load
- * - Models available immediately on client
+ * Pre-fetching Strategy:
+ * ✅ Thread data: Direct fetch (includes participants, messages)
+ * ✅ Changelog: Pre-fetched (30s stale time)
+ * ✅ Analyses: Pre-fetched (30s stale time)
+ * ✅ Feedback: Pre-fetched (2min stale time) - for like/dislike buttons
+ * ✅ Thread detail: Cache populated with thread data - for useThreadQuery
+ * ✅ Models: Pre-fetched at layout level (Infinity stale time)
  *
- * This pattern follows official Next.js + AI SDK best practices:
+ * This eliminates all client-side loading states for critical data
  * https://nextjs.org/docs/app/building-your-application/rendering/server-components
- * https://sdk.vercel.ai/docs/getting-started/nextjs-app-router
  */
 export default async function ChatThreadPage({
   params,
@@ -72,29 +74,41 @@ export default async function ChatThreadPage({
 
   const { thread, participants, messages, user } = threadResult.data;
 
-  // Prefetch changelog using proper TanStack Query pattern
-  // This populates the cache so useThreadChangelogQuery has data immediately
-  await queryClient.prefetchQuery({
-    queryKey: queryKeys.threads.changelog(thread.id),
-    queryFn: () => getThreadChangelogService({ param: { id: thread.id } }),
-    staleTime: STALE_TIMES.changelog, // 30 seconds - matches client-side query
-  });
+  // ✅ OPTIMIZATION: Pre-fetch all critical data in parallel for zero loading states
+  await Promise.all([
+    // 1. Prefetch changelog - configuration changes shown in UI
+    queryClient.prefetchQuery({
+      queryKey: queryKeys.threads.changelog(thread.id),
+      queryFn: () => getThreadChangelogService({ param: { id: thread.id } }),
+      staleTime: STALE_TIMES.changelog, // 30 seconds - matches client-side query
+    }),
 
-  // Prefetch moderator analyses for the thread
-  // This ensures analyses are available immediately without extra client-side requests
-  await queryClient.prefetchQuery({
-    queryKey: queryKeys.threads.analyses(thread.id),
-    queryFn: () => getThreadAnalysesService({ param: { id: thread.id } }),
-    staleTime: STALE_TIMES.changelog, // 30 seconds - same as changelog
-  });
+    // 2. Prefetch moderator analyses - round analysis cards
+    queryClient.prefetchQuery({
+      queryKey: queryKeys.threads.analyses(thread.id),
+      queryFn: () => getThreadAnalysesService({ param: { id: thread.id } }),
+      staleTime: STALE_TIMES.analyses, // 30 seconds - matches client-side query
+    }),
 
-  // ✅ SSG STRATEGY: Prefetch all OpenRouter models (cached indefinitely)
-  // All models are fetched and available immediately
-  await queryClient.prefetchQuery({
-    queryKey: queryKeys.models.list(),
-    queryFn: () => listModelsService(),
-    staleTime: STALE_TIMES.models, // Infinity - cached indefinitely
-  });
+    // 3. ✅ NEW: Prefetch thread feedback - like/dislike button states
+    // This eliminates loading state for feedback buttons
+    queryClient.prefetchQuery({
+      queryKey: queryKeys.threads.feedback(thread.id),
+      queryFn: () => getThreadFeedbackService({ param: { id: thread.id } }),
+      staleTime: STALE_TIME_PRESETS.medium, // 2 minutes - matches client-side query
+    }),
+  ]);
+
+  // 4. ✅ NEW: Populate thread detail cache with data we already have
+  // useThreadQuery expects this cache key, so we pre-populate it to avoid extra fetch
+  // This is more efficient than calling prefetchQuery since we already have the data
+  queryClient.setQueryData(
+    queryKeys.threads.detail(thread.id),
+    threadResult,
+  );
+
+  // ✅ MODELS: Already pre-fetched at layout level (chat-layout.tsx)
+  // No need to duplicate the pre-fetch here
 
   // OFFICIAL PATTERN: Pass raw data as props to Client Component
   // Client Component will use useChat with initialMessages

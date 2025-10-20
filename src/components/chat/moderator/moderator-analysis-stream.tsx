@@ -61,15 +61,15 @@ export function ModeratorAnalysisStream({
   const initialStatusRef = useRef(analysis.status);
 
   // ✅ AUTO-TRIGGER: Start streaming immediately when component mounts
-  // CRITICAL: Only trigger ONCE using stable dependencies AND only if not already streaming
+  // CRITICAL: Only trigger ONCE using stable dependencies
   // Following AI SDK v5 best practice: avoid multiple stream initiations
   useEffect(() => {
-    // ✅ Prevent trigger if analysis was already streaming/completed when mounted
-    // This prevents duplicate requests when navigating to a page with existing analysis
-    if (initialStatusRef.current === 'streaming' || initialStatusRef.current === 'completed') {
-      console.warn('[ModeratorAnalysisStream] ⏭️ Skipping trigger - analysis already in progress', {
+    // ✅ Skip if analysis is already completed with data
+    if (initialStatusRef.current === 'completed' && analysis.analysisData) {
+      console.warn('[ModeratorAnalysisStream] ⏭️ Skipping trigger - analysis already completed', {
         analysisId: analysis.id,
         initialStatus: initialStatusRef.current,
+        hasData: !!analysis.analysisData,
       });
       return;
     }
@@ -91,6 +91,7 @@ export function ModeratorAnalysisStream({
         analysisId: analysis.id,
         roundNumber: analysis.roundNumber,
         participantMessageCount: analysis.participantMessageIds.length,
+        status: analysis.status,
       });
 
       // ✅ Mark as triggered BEFORE calling submit to prevent race conditions
@@ -100,6 +101,15 @@ export function ModeratorAnalysisStream({
       submit({
         participantMessageIds: analysis.participantMessageIds,
       });
+    } else if (analysis.status === 'streaming' && !hasTriggeredRef.current && !partialAnalysis) {
+      // ✅ STREAMING STATUS: Mark as triggered to prevent future attempts
+      // This analysis is being streamed by another request/instance
+      // We'll wait for the polling to fetch the completed result
+      console.warn('[ModeratorAnalysisStream] ⏸️ Analysis already streaming, will poll for result', {
+        analysisId: analysis.id,
+        roundNumber: analysis.roundNumber,
+      });
+      hasTriggeredRef.current = true; // Prevent future trigger attempts
     }
   }, [
     // ✅ CRITICAL: STABLE DEPENDENCIES ONLY
@@ -109,15 +119,17 @@ export function ModeratorAnalysisStream({
     // - isLoading: Boolean from useObject hook, stable
     // - partialAnalysis: Object reference from useObject, stable
     // - error: Error object from useObject, stable
+    // - submit: Function from useObject hook, should be stable
     //
     // ❌ EXCLUDED (unstable references that cause unnecessary re-renders):
     // - analysis.participantMessageIds: Array reference changes on every render
-    // - submit: Function reference may change
+    // - analysis.analysisData: Object reference changes
     analysis.id,
     analysis.status,
     isLoading,
     partialAnalysis,
     error,
+    submit,
   ]);
 
   // ✅ STREAM COMPLETE CALLBACK: Notify parent when streaming finishes
@@ -168,8 +180,112 @@ export function ModeratorAnalysisStream({
     );
   }
 
-  // ✅ STREAMING/COMPLETED STATE: Display partial object as it arrives
-  // Progressive rendering: show each section as it becomes available
+  // ⏳ WAITING FOR STREAM: Show waiting state if analysis is streaming but no data yet
+  // This happens when another request is streaming the analysis
+  if (analysis.status === 'streaming' && !isLoading && !partialAnalysis && !error) {
+    return (
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        className="space-y-3"
+      >
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <span className="size-1.5 rounded-full bg-primary/60 animate-pulse" />
+          <span>Analysis is being generated. Waiting for updates...</span>
+        </div>
+      </motion.div>
+    );
+  }
+
+  // ✅ COMPLETED STATE: Display cached analysis data from database
+  // If analysis is completed and has data, display it directly without streaming
+  if (analysis.status === 'completed' && analysis.analysisData && !partialAnalysis) {
+    const { leaderboard, participantAnalyses, overallSummary, conclusion } = analysis.analysisData;
+
+    return (
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        className="space-y-4"
+      >
+        {/* Leaderboard */}
+        {leaderboard && leaderboard.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3 }}
+          >
+            <LeaderboardCard leaderboard={leaderboard} />
+          </motion.div>
+        )}
+
+        {/* Skills Comparison Chart */}
+        {participantAnalyses && participantAnalyses.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, delay: 0.1 }}
+          >
+            <SkillsComparisonChart participants={participantAnalyses} />
+          </motion.div>
+        )}
+
+        {/* Participant Analysis Cards */}
+        {participantAnalyses && participantAnalyses.length > 0 && (
+          <motion.div
+            className="space-y-3"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.3, delay: 0.2 }}
+          >
+            {participantAnalyses.map((participant, index) => (
+              <motion.div
+                key={`${analysis.id}-participant-${participant.participantIndex ?? index}`}
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.3, delay: 0.1 * index }}
+              >
+                <ParticipantAnalysisCard analysis={participant} />
+              </motion.div>
+            ))}
+          </motion.div>
+        )}
+
+        {/* Overall Summary */}
+        {overallSummary && (
+          <motion.div
+            className="space-y-2 pt-2"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, delay: 0.3 }}
+          >
+            <h3 className="text-sm font-semibold">Summary</h3>
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              {overallSummary}
+            </p>
+          </motion.div>
+        )}
+
+        {/* Conclusion */}
+        {conclusion && (
+          <motion.div
+            className="space-y-2 pt-2"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, delay: 0.4 }}
+          >
+            <h3 className="text-sm font-semibold text-primary">Conclusion</h3>
+            <p className="text-sm leading-relaxed">
+              {conclusion}
+            </p>
+          </motion.div>
+        )}
+      </motion.div>
+    );
+  }
+
+  // ✅ STREAMING/PARTIAL STATE: Display partial object as it arrives in real-time
+  // Progressive rendering: show each section as it becomes available during streaming
   if (partialAnalysis) {
     // ✅ TYPE SAFETY: Filter out undefined partial objects
     // experimental_useObject returns PartialObject types which can have undefined values

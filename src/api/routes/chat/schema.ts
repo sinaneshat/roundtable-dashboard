@@ -665,6 +665,7 @@ export const SkillRatingSchema = z.object({
 /**
  * Complete analysis for a single participant's response
  * ✅ SINGLE SOURCE OF TRUTH: Used by both AI SDK streamObject() and OpenAPI docs
+ * ✅ ENHANCED: Includes detailed quantitative metrics and deeper insights
  */
 export const ParticipantAnalysisSchema = z.object({
   participantIndex: z.number().int().min(0).describe('Index of the participant in the conversation (0-based)').openapi({
@@ -708,11 +709,119 @@ export const ParticipantAnalysisSchema = z.object({
     description: 'Brief summary of this participant\'s contribution',
     example: 'Provided innovative solutions with strong creative direction.',
   }),
+
+  // ============================================================================
+  // ✅ ENHANCED ANALYSIS: Quantitative metrics and deeper insights
+  // ============================================================================
+
+  /**
+   * Quantitative response metrics for objective comparison
+   * Helps users understand content characteristics beyond subjective ratings
+   */
+  responseMetrics: z.object({
+    wordCount: z.number().int().nonnegative().describe('Total word count of the response').openapi({ example: 342 }),
+
+    sentenceCount: z.number().int().nonnegative().describe('Number of sentences in the response').openapi({ example: 18 }),
+
+    uniqueIdeas: z.number().int().nonnegative().describe('Count of distinct ideas or concepts presented').openapi({ example: 5 }),
+
+    examplesProvided: z.number().int().nonnegative().describe('Number of concrete examples given to support points').openapi({ example: 3 }),
+
+    questionsRaised: z.number().int().nonnegative().describe('Number of thought-provoking questions asked').openapi({ example: 2 }),
+
+    referencesToOthers: z.number().int().nonnegative().describe('Number of times this response built upon or referenced other participants').openapi({ example: 2 }),
+  })
+    .partial()
+    .optional()
+    .describe('Quantitative metrics extracted from the response content')
+    .openapi({
+      description: 'Quantitative content metrics',
+    }),
+
+  /**
+   * Key strength and weakness categories (normalized/categorized versions of pros/cons)
+   * Enables better filtering and grouping in UI
+   */
+  strengthCategories: z.array(z.string())
+    .optional()
+    .describe('Categorized strengths for easier analysis (e.g., "Creativity", "Practicality", "Detail")')
+    .openapi({
+      description: 'Strength categories',
+      example: ['Creativity', 'Collaboration', 'Actionability'],
+    }),
+
+  weaknessCategories: z.array(z.string())
+    .optional()
+    .describe('Categorized weaknesses for easier analysis (e.g., "Depth", "Examples", "Clarity")')
+    .openapi({
+      description: 'Weakness categories',
+      example: ['Technical Depth', 'Concrete Examples'],
+    }),
+
+  /**
+   * Detailed breakdown - what made this response stand out or fall short
+   */
+  detailedInsights: z.object({
+    keyStrengths: z.array(z.string())
+      .optional()
+      .describe('Most notable strengths with specific examples')
+      .openapi({
+        example: [
+          'Introduced the concept of "reverse brainstorming" with clear explanation',
+          'Provided 3 actionable steps for immediate implementation',
+        ],
+      }),
+
+    missedOpportunities: z.array(z.string())
+      .optional()
+      .describe('Opportunities that could have strengthened the response')
+      .openapi({
+        example: [
+          'Could have addressed the budget constraint mentioned in the question',
+          'Missed opportunity to build on Participant 1\'s sustainability angle',
+        ],
+      }),
+
+    uniqueContributions: z.array(z.string())
+      .optional()
+      .describe('What this participant uniquely brought to the discussion')
+      .openapi({
+        example: [
+          'Only participant to address long-term scalability',
+          'Introduced data-driven decision framework not mentioned by others',
+        ],
+      }),
+  })
+    .optional()
+    .describe('Deeper insights into response quality and contribution')
+    .openapi({
+      description: 'Detailed performance insights',
+    }),
+
+  /**
+   * Comparative context within this round
+   */
+  comparativeInsights: z.object({
+    rankInRound: z.number().int().min(1).optional().describe('Rank among participants in this round').openapi({ example: 2 }),
+
+    scoreRelativeToAverage: z.number()
+      .optional()
+      .describe('How much above/below the round average (positive = above)')
+      .openapi({ example: 1.2 }),
+
+    percentileScore: z.number().min(0).max(100).optional().describe('Percentile ranking (0-100, where 100 is best)').openapi({ example: 75 }),
+  })
+    .optional()
+    .describe('Performance relative to other participants in this round')
+    .openapi({
+      description: 'Comparative performance metrics',
+    }),
 }).openapi('ParticipantAnalysis');
 
 /**
  * Leaderboard entry for ranking participants
  * ✅ SINGLE SOURCE OF TRUTH: Used by both AI SDK streamObject() and OpenAPI docs
+ * ✅ ENHANCED: Includes detailed metrics, score breakdowns, and comparative analysis
  */
 export const LeaderboardEntrySchema = z.object({
   rank: z.number().int().min(1).describe('Rank position (1 = best)').openapi({
@@ -747,6 +856,118 @@ export const LeaderboardEntrySchema = z.object({
     description: 'Optional badge/award',
     example: 'Most Creative',
   }),
+
+  // ============================================================================
+  // ✅ ENHANCED METRICS: Detailed score breakdowns and analysis
+  // ============================================================================
+
+  /**
+   * Detailed score breakdown by evaluation criteria
+   * Keys match the skills from skillsMatrix for consistency
+   */
+  scoreBreakdown: z.record(z.string(), z.number().min(1).max(10))
+    .optional()
+    .describe('Detailed breakdown of scores by skill/criteria (e.g., {"creativity": 9, "accuracy": 8})')
+    .openapi({
+      description: 'Detailed breakdown of scores by skill/criteria',
+      example: {
+        creativity: 9,
+        diversity: 8,
+        practicality: 7,
+        buildingOnOthers: 8,
+        inspiration: 9,
+      },
+    }),
+
+  /**
+   * Response characteristics and metrics
+   * Quantitative measures of the response quality
+   */
+  responseMetrics: z.object({
+    wordCount: z.number().int().nonnegative().optional().describe('Number of words in the response').openapi({ example: 342 }),
+
+    responseTime: z.number().nonnegative().optional().describe('Response time in seconds (if available)').openapi({ example: 4.2 }),
+
+    uniqueIdeas: z.number().int().nonnegative().optional().describe('Number of unique/distinct ideas presented').openapi({ example: 5 }),
+
+    examplesProvided: z.number().int().nonnegative().optional().describe('Number of concrete examples given').openapi({ example: 3 }),
+
+    questionsRaised: z.number().int().nonnegative().optional().describe('Number of thought-provoking questions asked').openapi({ example: 2 }),
+  })
+    .optional()
+    .describe('Quantitative metrics about the response characteristics')
+    .openapi({
+      description: 'Quantitative metrics about the response',
+    }),
+
+  /**
+   * Comparative metrics showing performance relative to other participants
+   */
+  comparative: z.object({
+    percentile: z.number().min(0).max(100).optional().describe('Percentile rank among all participants (0-100)').openapi({ example: 85 }),
+
+    aboveAverage: z.boolean()
+      .optional()
+      .describe('Whether this participant scored above the round average')
+      .openapi({ example: true }),
+
+    scoreDifference: z.number()
+      .optional()
+      .describe('Difference from average score (positive = above average)')
+      .openapi({ example: 1.2 }),
+
+    improvement: z.number()
+      .optional()
+      .describe('Rating improvement vs previous round (if applicable)')
+      .openapi({ example: 0.5 }),
+
+    rankChange: z.number().int().optional().describe('Change in rank vs previous round (positive = improved, negative = dropped)').openapi({ example: 2 }),
+  })
+    .optional()
+    .describe('Comparative metrics relative to other participants and previous rounds')
+    .openapi({
+      description: 'Comparative analysis metrics',
+    }),
+
+  /**
+   * Key strength categories identified in this response
+   * Should align with pros but categorized for easier visualization
+   */
+  strengths: z.array(z.string())
+    .optional()
+    .describe('List of key strength categories (e.g., "Creative thinking", "Practical solutions")')
+    .openapi({
+      description: 'Key strength categories',
+      example: ['Creative thinking', 'Diverse perspectives', 'Actionable ideas'],
+    }),
+
+  /**
+   * Key weakness/improvement categories
+   * Should align with cons but categorized for easier visualization
+   */
+  weaknesses: z.array(z.string())
+    .optional()
+    .describe('List of areas for improvement (e.g., "Depth of analysis", "Concrete examples")')
+    .openapi({
+      description: 'Areas for improvement',
+      example: ['Could provide more concrete examples', 'Depth of technical analysis'],
+    }),
+
+  /**
+   * Performance highlights - standout achievements in this response
+   * More specific than the badge field
+   */
+  highlights: z.array(z.string())
+    .optional()
+    .describe('Specific standout achievements or notable contributions in this response')
+    .openapi({
+      description: 'Performance highlights',
+      example: [
+        'Introduced 3 highly innovative concepts',
+        'Built effectively on previous ideas',
+        'Provided actionable next steps',
+      ],
+    }),
 }).openapi('LeaderboardEntry');
 
 /**
