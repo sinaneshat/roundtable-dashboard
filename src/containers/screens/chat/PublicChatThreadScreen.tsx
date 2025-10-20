@@ -227,7 +227,7 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
                             return (
                               <Message from="user" key={message.id}>
                                 <MessageContent>
-                                  { }
+                                  {/* eslint-disable react/no-array-index-key -- Parts array is stable, order is meaningful, and scoped by message.id */}
                                   {message.parts.map((part, partIndex) => {
                                     if (part.type === 'text') {
                                       return (
@@ -238,6 +238,7 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
                                     }
                                     return null;
                                   })}
+                                  {/* eslint-enable react/no-array-index-key */}
                                 </MessageContent>
                                 <MessageAvatar
                                   src={user?.image || ''}

@@ -126,6 +126,7 @@ export function ChatMessageList({
 
                   return null;
                 })}
+                {/* eslint-enable react/no-array-index-key */}
               </MessageContent>
               <MessageAvatar
                 src={userAvatarSrc}

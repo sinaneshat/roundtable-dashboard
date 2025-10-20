@@ -400,8 +400,10 @@ export default function ChatThreadScreen({
       });
 
       // Create pending analysis object to trigger streaming
+      // ✅ UNIQUE ID: Include timestamp to ensure uniqueness for retries
+      // When a round is retried, we need a different ID than the previous attempt
       const pendingAnalysis = {
-        id: `pending-${currentThreadId}-${roundNumber}`, // Temporary ID
+        id: `pending-${currentThreadId}-${roundNumber}-${Date.now()}`, // Temporary ID with timestamp
         threadId: currentThreadId,
         roundNumber,
         mode: currentThreadMode,
