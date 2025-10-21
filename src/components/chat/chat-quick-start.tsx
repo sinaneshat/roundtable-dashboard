@@ -6,7 +6,6 @@ import { useCallback, useMemo } from 'react';
 
 import type { SubscriptionTier } from '@/api/services/product-logic.service';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useModelsQuery } from '@/hooks/queries/models';
 import { useUsageStatsQuery } from '@/hooks/queries/usage';
 import type { ChatModeId } from '@/lib/config/chat-modes';
@@ -41,9 +40,9 @@ type ChatQuickStartProps = {
 /**
  * ChatQuickStart Component
  *
- * Compact, mobile-friendly quick start suggestions
+ * Compact quick start suggestions for all screen sizes
  * Filters suggestions based on user's subscription tier
- * ✅ ENSURES UNIQUE PROVIDERS: Each card uses models from different providers
+ * ✅ ENSURES UNIQUE PROVIDERS: Each suggestion uses models from different providers
  */
 export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartProps) {
   // Get user's subscription tier
@@ -324,7 +323,7 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
   };
 
   // Helper to render participant item
-  const renderParticipant = (participant: ParticipantConfig, variant: 'desktop' | 'mobile') => {
+  const renderParticipant = (participant: ParticipantConfig) => {
     const model = allModels.find(m => m.id === participant.modelId);
     if (!model)
       return null;
@@ -332,29 +331,6 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
     const isAccessible = model.is_accessible_to_user ?? true;
     const provider = model.provider || model.id.split('/')[0] || 'unknown';
 
-    if (variant === 'desktop') {
-      return (
-        <div
-          key={participant.id}
-          className={cn(
-            'flex items-center gap-2 text-left',
-            !isAccessible && 'opacity-50',
-          )}
-        >
-          <Avatar className="size-5 shrink-0">
-            <AvatarImage src={getProviderIcon(provider)} alt={model.name} />
-            <AvatarFallback className="text-[9px] bg-white/10">
-              {model.name.slice(0, 2).toUpperCase()}
-            </AvatarFallback>
-          </Avatar>
-          <div className="text-sm text-white/80 truncate text-left">
-            {participant.role}
-          </div>
-        </div>
-      );
-    }
-
-    // Mobile variant
     return (
       <div
         key={participant.id}
@@ -378,68 +354,8 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
 
   return (
     <div className={cn('w-full relative z-20', className)}>
-      {/* Desktop: Card Grid Layout */}
-      <div className="hidden lg:grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-        {suggestions.map((suggestion, index) => {
-          const modeConfig = getModeConfig(suggestion.mode);
-          const ModeIcon = modeConfig.icon;
-
-          return (
-            <motion.div
-              key={suggestion.title}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{
-                duration: 0.4,
-                delay: index * 0.1,
-                ease: [0.25, 0.46, 0.45, 0.94],
-              }}
-              className="flex min-w-0 h-full"
-            >
-              <Card
-                variant="glass"
-                className="cursor-pointer hover:bg-white/10 transition-all duration-200 group w-full h-full focus-visible:ring-2 focus-visible:ring-white/20 focus-visible:outline-none flex flex-col"
-                onClick={() => onSuggestionClick(suggestion.prompt, suggestion.mode, suggestion.participants)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    onSuggestionClick(suggestion.prompt, suggestion.mode, suggestion.participants);
-                  }
-                }}
-                tabIndex={0}
-                role="button"
-                aria-label={suggestion.title}
-              >
-                <CardHeader>
-                  <CardTitle className="text-base font-medium text-left text-white/95 group-hover:text-white transition-colors leading-tight">
-                    {suggestion.title}
-                  </CardTitle>
-                </CardHeader>
-
-                <CardContent className="flex flex-col flex-1 justify-between gap-6">
-                  <div className="flex flex-col space-y-2">
-                    {suggestion.participants
-                      .sort((a, b) => a.order - b.order)
-                      .map(participant => renderParticipant(participant, 'desktop'))}
-                  </div>
-
-                  <div className={cn(
-                    'flex items-center justify-center gap-1.5 text-xs pt-2',
-                    modeConfig.color,
-                  )}
-                  >
-                    <ModeIcon className="size-3" />
-                    <span>{modeConfig.label}</span>
-                  </div>
-                </CardContent>
-              </Card>
-            </motion.div>
-          );
-        })}
-      </div>
-
-      {/* Mobile: Compact List Layout */}
-      <div className="lg:hidden flex flex-col gap-3">
+      {/* Unified: Compact List Layout for all screen sizes */}
+      <div className="flex flex-col gap-3">
         {suggestions.map((suggestion, index) => {
           const modeConfig = getModeConfig(suggestion.mode);
           const ModeIcon = modeConfig.icon;
@@ -474,7 +390,7 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
               <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide">
                 {suggestion.participants
                   .sort((a, b) => a.order - b.order)
-                  .map(participant => renderParticipant(participant, 'mobile'))}
+                  .map(participant => renderParticipant(participant))}
               </div>
             </motion.button>
           );

@@ -1075,8 +1075,8 @@ export default function ChatThreadScreen({
     <>
       {/* ✅ WINDOW-LEVEL SCROLLING: Content flows naturally, sticky elements stay in view */}
       <div className="flex flex-col min-h-svh">
-        {/* ✅ Content container with virtualization - pt-16 for header */}
-        <div ref={listRef} className="container max-w-3xl mx-auto px-4 sm:px-6 pb-8">
+        {/* ✅ Content container with virtualization - pt-16 for header, pb-32 for sticky input */}
+        <div ref={listRef} className="container max-w-3xl mx-auto px-4 sm:px-6 pt-0 pb-32">
           {/* ✅ WINDOW VIRTUALIZER: Wrapper with total size for proper scrollbar */}
           <div
             style={{
@@ -1251,7 +1251,7 @@ export default function ChatThreadScreen({
             </div>
           </div>
 
-          {/* Streaming participants loader */}
+          {/* Streaming participants loader - shown during participant streaming */}
           {isStreaming && selectedParticipants.length > 1 && (
             <StreamingParticipantsLoader
               className="mt-8"
@@ -1259,10 +1259,24 @@ export default function ChatThreadScreen({
               currentParticipantIndex={currentParticipantIndex}
             />
           )}
+
+          {/* Analysis streaming loader - shown when analysis is being generated */}
+          {!isStreaming && analyses.some(a => a.status === 'pending' || a.status === 'streaming') && (
+            <div className="mt-8 flex justify-center">
+              <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                <div className="flex space-x-1">
+                  <div className="h-2 w-2 rounded-full bg-primary animate-bounce [animation-delay:-0.3s]" />
+                  <div className="h-2 w-2 rounded-full bg-primary animate-bounce [animation-delay:-0.15s]" />
+                  <div className="h-2 w-2 rounded-full bg-primary animate-bounce" />
+                </div>
+                <span>{t('moderator.generating')}</span>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* ✅ BOTTOM SPACER: Creates scrollable empty space below content, allows scrolling content higher above input */}
-        <div className="h-64" aria-hidden="true" />
+        <div className="h-32" aria-hidden="true" />
 
         {/* ✅ INPUT CONTAINER: Sticky to bottom, constrained to content area */}
         <div ref={inputContainerRef} className="sticky bottom-0 z-50 bg-gradient-to-t from-background via-background to-transparent pt-6 pb-4 mt-auto">

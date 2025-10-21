@@ -16,7 +16,7 @@ import { useBoolean } from '@/hooks/utils';
  * Header Scroll Button
  *
  * A scroll-to-bottom button that can be placed in the header.
- * Independent of AI Elements StickToBottom context - manually finds and scrolls the conversation.
+ * Uses window-level scrolling for proper integration with page scroll.
  *
  * Design:
  * - Glass design matching header aesthetics
@@ -29,16 +29,10 @@ export function HeaderScrollButton({ ariaLabel = 'Scroll to bottom' }: { ariaLab
 
   // Check scroll position and update visibility
   const checkScrollPosition = useCallback(() => {
-    // Find the scroll container (chat-scroll-container for page-level scrolling)
-    const scrollContainer = document.getElementById('chat-scroll-container');
-
-    if (!scrollContainer) {
-      isVisible.onFalse();
-      return;
-    }
+    // Use window/document scrolling (not a nested scroll container)
+    const { scrollTop, scrollHeight, clientHeight } = document.documentElement;
 
     // Check if scrolled away from bottom (threshold: 100px)
-    const { scrollHeight, scrollTop, clientHeight } = scrollContainer;
     const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
     const shouldShow = distanceFromBottom > 100;
 
@@ -47,35 +41,25 @@ export function HeaderScrollButton({ ariaLabel = 'Scroll to bottom' }: { ariaLab
 
   // Scroll to bottom handler
   const scrollToBottom = useCallback(() => {
-    const scrollContainer = document.getElementById('chat-scroll-container');
-
-    if (!scrollContainer)
-      return;
-
-    scrollContainer.scrollTo({
-      top: scrollContainer.scrollHeight,
+    window.scrollTo({
+      top: document.documentElement.scrollHeight,
       behavior: 'smooth',
     });
   }, []);
 
   // Set up scroll listener
   useEffect(() => {
-    const scrollContainer = document.getElementById('chat-scroll-container');
-
-    if (!scrollContainer)
-      return;
-
     // Check initial position
     checkScrollPosition();
 
-    // Listen to scroll events
-    scrollContainer.addEventListener('scroll', checkScrollPosition, { passive: true });
+    // Listen to window scroll events
+    window.addEventListener('scroll', checkScrollPosition, { passive: true });
 
     // Also check on window resize
     window.addEventListener('resize', checkScrollPosition, { passive: true });
 
     return () => {
-      scrollContainer.removeEventListener('scroll', checkScrollPosition);
+      window.removeEventListener('scroll', checkScrollPosition);
       window.removeEventListener('resize', checkScrollPosition);
     };
   }, [checkScrollPosition]);

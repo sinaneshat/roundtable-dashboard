@@ -75,26 +75,12 @@ export function ChatScrollButton({ variant = 'floating', className }: ChatScroll
   }, []);
 
   const scrollToBottom = () => {
-    // ✅ Scroll to content bottom, accounting for bottom padding
-    const contentContainer = document.getElementById('chat-scroll-container');
-    if (contentContainer) {
-      // Calculate the bottom of the content (not the full document height)
-      const contentBottom = contentContainer.offsetTop + contentContainer.scrollHeight;
-
-      // Scroll to show the content bottom, accounting for viewport height
-      const targetScroll = contentBottom - window.innerHeight;
-
-      window.scrollTo({
-        top: Math.max(0, targetScroll),
-        behavior: 'smooth',
-      });
-    } else {
-      // Fallback: scroll to document height
-      window.scrollTo({
-        top: document.documentElement.scrollHeight,
-        behavior: 'smooth',
-      });
-    }
+    // ✅ WINDOW-LEVEL SCROLLING: Scroll to absolute bottom of document
+    // This ensures we scroll past all content including bottom padding
+    window.scrollTo({
+      top: document.documentElement.scrollHeight,
+      behavior: 'smooth',
+    });
   };
 
   if (!showButton)

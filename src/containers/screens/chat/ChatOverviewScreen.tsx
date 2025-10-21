@@ -390,8 +390,8 @@ export default function ChatOverviewScreen() {
         <WavyBackground containerClassName="h-full w-full" />
       </div>
 
-      {/* Main content - flows naturally with window scrolling - pt-16 for header */}
-      <div className="container max-w-3xl mx-auto px-4 sm:px-6 pb-8">
+      {/* Main content - flows naturally with window scrolling - pt-16 for header, pb-32 for sticky input */}
+      <div className="container max-w-3xl mx-auto px-4 sm:px-6 pt-0 pb-32">
         {/* ✅ ANIMATED: Initial UI (logo, suggestions) - fades out when streaming starts */}
         <AnimatePresence>
           {showInitialUI && (
@@ -597,13 +597,27 @@ export default function ChatOverviewScreen() {
                   currentParticipantIndex={currentParticipantIndex}
                 />
               )}
+
+              {/* Analysis streaming loader - shown when analysis is being generated */}
+              {!isStreaming && analysesResponse?.success && analysesResponse.data.items.some(a => a.status === 'pending' || a.status === 'streaming') && (
+                <div className="mt-4 flex justify-center">
+                  <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                    <div className="flex space-x-1">
+                      <div className="h-2 w-2 rounded-full bg-primary animate-bounce [animation-delay:-0.3s]" />
+                      <div className="h-2 w-2 rounded-full bg-primary animate-bounce [animation-delay:-0.15s]" />
+                      <div className="h-2 w-2 rounded-full bg-primary animate-bounce" />
+                    </div>
+                    <span>{t('moderator.generating')}</span>
+                  </div>
+                </div>
+              )}
             </motion.div>
           )}
         </AnimatePresence>
       </div>
 
       {/* ✅ BOTTOM SPACER: Creates scrollable empty space below content, allows scrolling content higher above input */}
-      <div className="h-64" aria-hidden="true" />
+      <div className="h-32" aria-hidden="true" />
 
       {/* Input container - sticky to bottom, constrained to content area */}
       <div ref={inputContainerRef} className="sticky bottom-0 z-50 bg-gradient-to-t from-background via-background to-transparent pt-6 pb-4 mt-auto">

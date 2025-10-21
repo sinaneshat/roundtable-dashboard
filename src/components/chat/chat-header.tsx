@@ -170,19 +170,17 @@ function NavigationHeaderComponent({
 export const NavigationHeader = React.memo(NavigationHeaderComponent);
 
 // Minimal Header - for overview/introduction pages (no breadcrumbs, just sidebar toggle)
+// Transparent design without background blur or borders - only holds the sidebar toggle
 function MinimalHeaderComponent({ className }: { className?: string } = {}) {
   return (
     <header
       className={cn(
         'sticky top-0 left-0 right-0 z-50 flex h-16 shrink-0 items-center',
-        'border-b border-border/40 backdrop-blur-xl bg-background/60 supports-[backdrop-filter]:bg-background/60',
         className,
       )}
     >
-      <div className="flex items-center justify-between gap-2 px-4 md:px-6 lg:px-8 h-16 w-full">
+      <div className="flex items-center gap-2 px-4 md:px-6 lg:px-8 h-16">
         <SidebarTrigger className="-ms-1" />
-        {/* Scroll to bottom button - appears when scrolled away from bottom */}
-        <ChatScrollButton variant="header" />
       </div>
     </header>
   );

@@ -70,7 +70,7 @@ function ChartSkeleton({ className, ...props }: React.ComponentProps<"div">) {
         </div>
         <Skeleton className="h-8 w-24" />
       </div>
-      <div className="h-64 w-full bg-accent animate-pulse rounded" />
+      <div className="h-32 w-full bg-accent animate-pulse rounded" />
     </div>
   )
 }

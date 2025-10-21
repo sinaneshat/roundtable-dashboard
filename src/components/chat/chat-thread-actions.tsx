@@ -4,7 +4,6 @@ import { Loader2, Lock, Share2, Star, Trash2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
 import type { ChatThread } from '@/api/routes/chat/schema';
-import { HeaderScrollButton } from '@/components/chat/header-scroll-button';
 import { SocialShareButton } from '@/components/chat/social-share-button';
 import { Button } from '@/components/ui/button';
 import {
@@ -63,9 +62,6 @@ export function ChatThreadActions({ thread, slug, onDeleteClick, isPublicMode = 
 
   return (
     <TooltipProvider>
-      {/* Header Scroll Button - shown for both public and private modes */}
-      <HeaderScrollButton ariaLabel={t('actions.scrollToBottom')} />
-
       {/* Favorite/Unfavorite Button - hidden in public mode */}
       {!isPublicMode && (
         <Tooltip delayDuration={300}>

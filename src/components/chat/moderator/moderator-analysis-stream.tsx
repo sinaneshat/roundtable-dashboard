@@ -15,7 +15,6 @@
 
 import { experimental_useObject as useObject } from '@ai-sdk/react';
 import { motion } from 'framer-motion';
-import { Loader2 } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 
 import type { ModeratorAnalysisPayload, StoredModeratorAnalysis } from '@/api/routes/chat/schema';
@@ -133,17 +132,6 @@ export function ModeratorAnalysisStream({
       animate={{ opacity: 1 }}
       className="space-y-4"
     >
-      {/* ⏳ STREAMING INDICATOR: Show while data is being generated */}
-      {isCurrentlyStreaming && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="flex items-center gap-2 text-sm text-muted-foreground pb-2"
-        >
-          <Loader2 className="size-4 animate-spin" />
-          <span>Generating analysis...</span>
-        </motion.div>
-      )}
       {/* Leaderboard */}
       {leaderboard && leaderboard.length > 0 && (
         <motion.div
@@ -214,6 +202,17 @@ export function ModeratorAnalysisStream({
           <p className="text-sm leading-relaxed">
             {conclusion}
           </p>
+        </motion.div>
+      )}
+
+      {/* ⏳ STREAMING INDICATOR: Show at bottom while data is being generated (matches participant message pattern) */}
+      {isCurrentlyStreaming && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="flex items-center gap-2 py-2"
+        >
+          <span className="size-1.5 rounded-full bg-primary/60 animate-pulse" />
         </motion.div>
       )}
     </motion.div>
