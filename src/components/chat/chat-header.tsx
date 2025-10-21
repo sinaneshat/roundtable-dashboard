@@ -20,6 +20,7 @@ import { SidebarTrigger } from '@/components/ui/sidebar';
 import { BRAND } from '@/constants/brand';
 import { cn } from '@/lib/ui/cn';
 
+import { ChatScrollButton } from './chat-scroll-button';
 import { ChatSection } from './chat-states';
 import { useThreadHeaderOptional } from './thread-header-context';
 
@@ -156,6 +157,8 @@ function NavigationHeaderComponent({
 
         {/* Action buttons at the right end - passed from server as props */}
         <div className="flex items-center gap-2 flex-shrink-0">
+          {/* Scroll to bottom button - appears when scrolled away from bottom */}
+          <ChatScrollButton variant="header" />
           {threadActions}
         </div>
       </div>
@@ -176,8 +179,10 @@ function MinimalHeaderComponent({ className }: { className?: string } = {}) {
         className,
       )}
     >
-      <div className="flex items-center gap-2 px-4 md:px-6 lg:px-8 h-16">
+      <div className="flex items-center justify-between gap-2 px-4 md:px-6 lg:px-8 h-16 w-full">
         <SidebarTrigger className="-ms-1" />
+        {/* Scroll to bottom button - appears when scrolled away from bottom */}
+        <ChatScrollButton variant="header" />
       </div>
     </header>
   );

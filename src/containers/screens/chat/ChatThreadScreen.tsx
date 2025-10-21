@@ -1055,6 +1055,7 @@ export default function ChatThreadScreen({
       }
 
       // ✅ WINDOW VIRTUALIZER: Scroll to index using window scrolling
+      // Account for bottom padding by using 'end' alignment
       requestAnimationFrame(() => {
         rowVirtualizer.scrollToIndex(targetIndex, {
           align: 'end',

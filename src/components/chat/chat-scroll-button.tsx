@@ -6,32 +6,31 @@ import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/ui/cn';
 
+type ChatScrollButtonProps = {
+  variant?: 'floating' | 'header';
+  className?: string;
+};
+
 /**
  * Custom Scroll-to-Bottom Button
  *
- * Detects scroll position on the page-level scroll container (#chat-scroll-container)
- * and shows/hides the button accordingly. This is designed for page-level scrolling
- * where the main content area scrolls, not an inner div.
+ * Detects scroll position on window-level scrolling and shows/hides the button accordingly.
  *
  * Features:
- * - Appears when scrolled up from bottom (>100px from bottom)
+ * - Appears when scrolled up from bottom (>200px from bottom)
  * - Smooth scroll to bottom on click
- * - Positioned fixed at bottom-right of content area
+ * - Two variants: floating (bottom-right) or header (inline in header)
  * - Uses scroll event throttling for performance
+ * - Accounts for bottom padding to scroll to content, not excessive padding
  *
  * Architecture:
- * - Monitors scroll on #chat-scroll-container (the layout's content area)
- * - This is NOT using the AI Elements Conversation component's scroll detection
- * - This is for page-level scrolling as required by the design
+ * - Monitors scroll on window (document.documentElement)
+ * - Scrolls to content bottom, not document bottom (accounts for padding)
  */
-export function ChatScrollButton() {
+export function ChatScrollButton({ variant = 'floating', className }: ChatScrollButtonProps = {}) {
   const [showButton, setShowButton] = useState(false);
 
   useEffect(() => {
-    const scrollContainer = document.getElementById('chat-scroll-container');
-    if (!scrollContainer)
-      return;
-
     let rafId: number | null = null;
     let lastScrollTime = 0;
     const throttleMs = 100; // Throttle to once per 100ms for performance
@@ -46,11 +45,11 @@ export function ChatScrollButton() {
 
       lastScrollTime = now;
 
-      const { scrollTop, scrollHeight, clientHeight } = scrollContainer;
+      const { scrollTop, scrollHeight, clientHeight } = document.documentElement;
       const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
 
-      // Show button when more than 100px from bottom
-      setShowButton(distanceFromBottom > 100);
+      // Show button when more than 200px from bottom
+      setShowButton(distanceFromBottom > 200);
 
       rafId = null;
     };
@@ -64,11 +63,11 @@ export function ChatScrollButton() {
     // Initial check
     checkScrollPosition();
 
-    // Listen to scroll events
-    scrollContainer.addEventListener('scroll', handleScroll, { passive: true });
+    // Listen to scroll events on window
+    window.addEventListener('scroll', handleScroll, { passive: true });
 
     return () => {
-      scrollContainer.removeEventListener('scroll', handleScroll);
+      window.removeEventListener('scroll', handleScroll);
       if (rafId !== null) {
         cancelAnimationFrame(rafId);
       }
@@ -76,18 +75,49 @@ export function ChatScrollButton() {
   }, []);
 
   const scrollToBottom = () => {
-    const scrollContainer = document.getElementById('chat-scroll-container');
-    if (!scrollContainer)
-      return;
+    // ✅ Scroll to content bottom, accounting for bottom padding
+    const contentContainer = document.getElementById('chat-scroll-container');
+    if (contentContainer) {
+      // Calculate the bottom of the content (not the full document height)
+      const contentBottom = contentContainer.offsetTop + contentContainer.scrollHeight;
 
-    scrollContainer.scrollTo({
-      top: scrollContainer.scrollHeight,
-      behavior: 'smooth',
-    });
+      // Scroll to show the content bottom, accounting for viewport height
+      const targetScroll = contentBottom - window.innerHeight;
+
+      window.scrollTo({
+        top: Math.max(0, targetScroll),
+        behavior: 'smooth',
+      });
+    } else {
+      // Fallback: scroll to document height
+      window.scrollTo({
+        top: document.documentElement.scrollHeight,
+        behavior: 'smooth',
+      });
+    }
   };
 
   if (!showButton)
     return null;
+
+  if (variant === 'header') {
+    return (
+      <Button
+        variant="ghost"
+        size="icon"
+        className={cn(
+          'size-9',
+          'hover:bg-accent hover:text-accent-foreground',
+          'transition-all duration-200',
+          className,
+        )}
+        onClick={scrollToBottom}
+        aria-label="Scroll to bottom"
+      >
+        <ArrowDown className="size-4" />
+      </Button>
+    );
+  }
 
   return (
     <Button
@@ -101,6 +131,7 @@ export function ChatScrollButton() {
         'hover:bg-accent hover:text-accent-foreground',
         'transition-all duration-200',
         'md:right-6 lg:right-8',
+        className,
       )}
       onClick={scrollToBottom}
       aria-label="Scroll to bottom"

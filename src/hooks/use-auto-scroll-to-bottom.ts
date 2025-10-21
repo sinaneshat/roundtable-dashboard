@@ -48,11 +48,28 @@ export function useAutoScrollToBottom(dependency: unknown, enabled = true) {
     // This ensures smooth streaming experience while respecting user's manual scrolling
     if (isStreamingActive || isNearBottom) {
       requestAnimationFrame(() => {
-        // ✅ WINDOW SCROLLING: Scroll to document height (bottom of page)
-        window.scrollTo({
-          top: document.documentElement.scrollHeight,
-          behavior: 'smooth',
-        });
+        // ✅ WINDOW SCROLLING: Scroll to show content, accounting for bottom padding
+        // Get the actual content height by checking the chat-scroll-container
+        const contentContainer = document.getElementById('chat-scroll-container');
+        if (contentContainer) {
+          // Calculate the bottom of the content (not the full document height)
+          const contentBottom = contentContainer.offsetTop + contentContainer.scrollHeight;
+
+          // Scroll to show the content bottom, accounting for viewport height
+          // This prevents scrolling past the content into excessive bottom padding
+          const targetScroll = contentBottom - window.innerHeight;
+
+          window.scrollTo({
+            top: Math.max(0, targetScroll),
+            behavior: 'smooth',
+          });
+        } else {
+          // Fallback: scroll to document height if container not found
+          window.scrollTo({
+            top: document.documentElement.scrollHeight,
+            behavior: 'smooth',
+          });
+        }
       });
     }
   }, [dependency, enabled]);
