@@ -574,19 +574,6 @@ export default function ChatOverviewScreen() {
                   currentParticipantIndex={currentParticipantIndex}
                 />
               )}
-
-              {/* Analysis streaming loader - shown when analysis is being generated */}
-              {!isStreaming && analysesResponse?.success && analysesResponse.data.items.some(a => a.status === 'pending' || a.status === 'streaming') && (
-                <div className="mt-4 flex justify-center">
-                  <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                    <div className="flex space-x-1">
-                      <div className="h-2 w-2 rounded-full bg-primary animate-bounce [animation-delay:-0.3s]" />
-                      <div className="h-2 w-2 rounded-full bg-primary animate-bounce [animation-delay:-0.15s]" />
-                      <div className="h-2 w-2 rounded-full bg-primary animate-bounce" />
-                    </div>
-                  </div>
-                </div>
-              )}
             </motion.div>
           )}
         </AnimatePresence>

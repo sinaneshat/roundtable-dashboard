@@ -124,6 +124,17 @@ export function ModeratorAnalysisStream({
   // Show partial data AS IT ARRIVES (loading state shown in header, not here)
   const { leaderboard = [], participantAnalyses = [], overallSummary, conclusion } = displayData || {};
 
+  // ✅ NO PLACEHOLDER: If no data yet, return null to avoid showing empty space
+  // The header already shows "Analyzing..." status, no need for additional loading indicators
+  const hasAnyData = (leaderboard && leaderboard.length > 0)
+    || (participantAnalyses && participantAnalyses.length > 0)
+    || overallSummary
+    || conclusion;
+
+  if (!hasAnyData) {
+    return null;
+  }
+
   return (
     <motion.div
       initial={{ opacity: 0 }}

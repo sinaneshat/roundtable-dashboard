@@ -2,7 +2,7 @@ import type { RouteHandler } from '@hono/zod-openapi';
 import type { UIMessage } from 'ai';
 import { convertToModelMessages, createIdGenerator, streamObject, streamText, validateUIMessages } from 'ai';
 import type { SQL } from 'drizzle-orm';
-import { and, asc, desc, eq, inArray, ne } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, lte, ne } from 'drizzle-orm';
 import Fuse from 'fuse.js';
 import { ulid } from 'ulid';
 
@@ -338,6 +338,194 @@ async function verifyThreadOwnership(
   }
 
   return thread;
+}
+
+/**
+ * ✅ DEFERRED CHANGELOG PATTERN: Create changelog entries when starting a new round
+ *
+ * This function compares the current thread state with the state from the previous round
+ * to detect any changes (mode, participants, roles, order) and creates changelog entries
+ * for those changes. Changelog entries are associated with the current round number.
+ *
+ * This ensures changelog only appears when a message is submitted, not when changes
+ * are made in the UI.
+ */
+async function createChangelogForRound(
+  db: Awaited<ReturnType<typeof getDbAsync>>,
+  thread: typeof tables.chatThread.$inferSelect & { participants: Array<typeof tables.chatParticipant.$inferSelect> },
+  currentRoundNumber: number,
+): Promise<void> {
+  const now = new Date();
+  const changelogEntries: Array<typeof tables.chatThreadChangelog.$inferInsert> = [];
+
+  // Get the previous round number to compare state
+  const previousRoundNumber = currentRoundNumber - 1;
+
+  if (previousRoundNumber < 1) {
+    // First round - no previous state to compare
+    return;
+  }
+
+  // Get the thread state as it was in the previous round
+  // We can infer this from the messages and changelog from that round
+  const previousRoundMessages = await db.query.chatMessage.findMany({
+    where: and(
+      eq(tables.chatMessage.threadId, thread.id),
+      eq(tables.chatMessage.roundNumber, previousRoundNumber),
+    ),
+    orderBy: [asc(tables.chatMessage.createdAt)],
+  });
+
+  // Get previous changelog to see what the mode was
+  const previousChangelog = await db.query.chatThreadChangelog.findMany({
+    where: and(
+      eq(tables.chatThreadChangelog.threadId, thread.id),
+      lte(tables.chatThreadChangelog.roundNumber, previousRoundNumber),
+    ),
+    orderBy: [desc(tables.chatThreadChangelog.roundNumber), desc(tables.chatThreadChangelog.createdAt)],
+  });
+
+  // Determine previous mode (from last mode_change in changelog, or thread.mode if no changes)
+  const lastModeChange = previousChangelog.find(c => c.changeType === 'mode_change');
+  const previousMode = lastModeChange?.changeData?.newMode as ChatModeId | undefined || thread.mode;
+
+  // Check for mode changes
+  if (thread.mode !== previousMode) {
+    changelogEntries.push({
+      id: ulid(),
+      threadId: thread.id,
+      roundNumber: currentRoundNumber,
+      changeType: 'mode_change',
+      changeSummary: `Changed conversation mode from ${previousMode} to ${thread.mode}`,
+      changeData: {
+        oldMode: previousMode,
+        newMode: thread.mode,
+      },
+      createdAt: now,
+    });
+  }
+
+  // Get participant IDs from previous round messages
+  const previousParticipantIds = new Set(
+    previousRoundMessages
+      .filter(m => m.role === 'assistant' && m.participantId)
+      .map(m => m.participantId!),
+  );
+
+  // Get current participant IDs
+  const currentParticipantIds = new Set(thread.participants.map(p => p.id));
+  const currentParticipantsMap = new Map(thread.participants.map(p => [p.id, p]));
+
+  // Detect participant removals
+  for (const prevId of previousParticipantIds) {
+    if (!currentParticipantIds.has(prevId)) {
+      // Participant was removed - try to get info from previous messages
+      const prevMessage = previousRoundMessages.find(m => m.participantId === prevId);
+      if (prevMessage?.metadata) {
+        const metadata = prevMessage.metadata as { model?: string; participantRole?: string };
+        const modelName = extractModeratorModelName(metadata.model || 'unknown');
+        changelogEntries.push({
+          id: ulid(),
+          threadId: thread.id,
+          roundNumber: currentRoundNumber,
+          changeType: 'participant_removed',
+          changeSummary: `Removed ${modelName}${metadata.participantRole ? ` ("${metadata.participantRole}")` : ''}`,
+          changeData: {
+            participantId: prevId,
+            modelId: metadata.model || 'unknown',
+            role: metadata.participantRole || null,
+          },
+          createdAt: now,
+        });
+      }
+    }
+  }
+
+  // Detect participant additions
+  for (const participant of thread.participants) {
+    if (!previousParticipantIds.has(participant.id)) {
+      const modelName = extractModeratorModelName(participant.modelId);
+      changelogEntries.push({
+        id: ulid(),
+        threadId: thread.id,
+        roundNumber: currentRoundNumber,
+        changeType: 'participant_added',
+        changeSummary: `Added ${modelName}${participant.role ? ` as "${participant.role}"` : ''}`,
+        changeData: {
+          participantId: participant.id,
+          modelId: participant.modelId,
+          role: participant.role,
+        },
+        createdAt: now,
+      });
+    }
+  }
+
+  // Detect role and priority changes for existing participants
+  for (const prevMessage of previousRoundMessages) {
+    if (prevMessage.role !== 'assistant' || !prevMessage.participantId)
+      continue;
+
+    const participantId = prevMessage.participantId;
+    const currentParticipant = currentParticipantsMap.get(participantId);
+
+    if (!currentParticipant)
+      continue; // Already handled in removals
+
+    const prevMetadata = prevMessage.metadata as { participantRole?: string; participantIndex?: number };
+    const prevRole = prevMetadata?.participantRole || null;
+    const prevIndex = prevMetadata?.participantIndex ?? 0;
+
+    // Check for role changes
+    if (currentParticipant.role !== prevRole) {
+      const modelName = extractModeratorModelName(currentParticipant.modelId);
+      changelogEntries.push({
+        id: ulid(),
+        threadId: thread.id,
+        roundNumber: currentRoundNumber,
+        changeType: 'participant_updated',
+        changeSummary: `Updated ${modelName} role from ${prevRole || 'none'} to ${currentParticipant.role || 'none'}`,
+        changeData: {
+          participantId,
+          modelId: currentParticipant.modelId,
+          oldRole: prevRole,
+          newRole: currentParticipant.role,
+        },
+        createdAt: now,
+      });
+    }
+
+    // Check for priority/order changes
+    if (currentParticipant.priority !== prevIndex) {
+      const modelName = extractModeratorModelName(currentParticipant.modelId);
+      changelogEntries.push({
+        id: ulid(),
+        threadId: thread.id,
+        roundNumber: currentRoundNumber,
+        changeType: 'participants_reordered',
+        changeSummary: `Reordered ${modelName}`,
+        changeData: {
+          participantId,
+          modelId: currentParticipant.modelId,
+          oldPriority: prevIndex,
+          newPriority: currentParticipant.priority,
+        },
+        createdAt: now,
+      });
+    }
+  }
+
+  // Insert all changelog entries if any changes detected
+  if (changelogEntries.length > 0) {
+    await db.insert(tables.chatThreadChangelog).values(changelogEntries);
+
+    console.warn('[createChangelogForRound] ✅ Created changelog entries for round', {
+      threadId: thread.id,
+      roundNumber: currentRoundNumber,
+      entryCount: changelogEntries.length,
+      changes: changelogEntries.map(e => e.changeType),
+    });
+  }
 }
 
 // Removed verifyMemoryOwnership() and verifyCustomRoleOwnership()
@@ -802,40 +990,13 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
 
     const now = new Date();
 
-    // ✅ CRITICAL: Calculate the round number for changelog entries
-    // Changelog should be associated with the NEXT round that will happen
-    // This ensures changelog appears BEFORE the messages of the new round
-    const latestMessage = await db.query.chatMessage.findFirst({
-      where: eq(tables.chatMessage.threadId, id),
-      orderBy: [desc(tables.chatMessage.roundNumber)],
-      columns: { roundNumber: true },
-    });
-    const nextRoundNumber = latestMessage ? latestMessage.roundNumber + 1 : 1;
+    // ✅ DEFERRED CHANGELOG PATTERN: Don't create changelog entries here
+    // Changes are persisted immediately to database for data integrity
+    // Changelog entries will be created when the next message is submitted
+    // This ensures changelog only appears when starting a new round
 
-    console.warn('[updateThreadHandler] 📊 Calculated round number for changelog', {
-      threadId: id,
-      latestRoundNumber: latestMessage?.roundNumber,
-      nextRoundNumber,
-    });
-
-    // ✅ Track changelog entries for all changes
-    const changelogEntries: Array<typeof tables.chatThreadChangelog.$inferInsert> = [];
-
-    // ✅ Handle mode change
-    if (body.mode !== undefined && body.mode !== thread.mode) {
-      changelogEntries.push({
-        id: ulid(),
-        threadId: id,
-        roundNumber: nextRoundNumber, // ✅ Associate with next round
-        changeType: 'mode_change',
-        changeSummary: `Changed conversation mode from ${thread.mode} to ${body.mode}`,
-        changeData: {
-          oldMode: thread.mode,
-          newMode: body.mode,
-        },
-        createdAt: now,
-      });
-    }
+    // ✅ Mode change will be tracked in changelog when next message is submitted
+    // No immediate changelog creation
 
     // ✅ Handle participant changes (if provided)
     if (body.participants !== undefined) {
@@ -848,25 +1009,8 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
       const currentMap = new Map(currentParticipants.map(p => [p.id, p]));
       const newMap = new Map(body.participants.filter(p => p.id).map(p => [p.id!, p]));
 
-      // Detect removals
-      for (const current of currentParticipants) {
-        if (!newMap.has(current.id)) {
-          const modelName = extractModeratorModelName(current.modelId);
-          changelogEntries.push({
-            id: ulid(),
-            threadId: id,
-            roundNumber: nextRoundNumber, // ✅ Associate with next round
-            changeType: 'participant_removed',
-            changeSummary: `Removed ${modelName}${current.role ? ` ("${current.role}")` : ''}`,
-            changeData: {
-              participantId: current.id,
-              modelId: current.modelId,
-              role: current.role,
-            },
-            createdAt: now,
-          });
-        }
-      }
+      // Detect removals (changelog will be created on next message submission)
+      // No immediate changelog creation
 
       // Detect additions and updates
       const participantsToInsert: Array<typeof tables.chatParticipant.$inferInsert> = [];
@@ -876,7 +1020,6 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
         if (!newP.id) {
           // New participant
           const participantId = ulid();
-          const modelName = extractModeratorModelName(newP.modelId);
 
           participantsToInsert.push({
             id: participantId,
@@ -891,19 +1034,7 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
             updatedAt: now,
           });
 
-          changelogEntries.push({
-            id: ulid(),
-            threadId: id,
-            roundNumber: nextRoundNumber, // ✅ Associate with next round
-            changeType: 'participant_added',
-            changeSummary: `Added ${modelName}${newP.role ? ` as "${newP.role}"` : ''}`,
-            changeData: {
-              participantId,
-              modelId: newP.modelId,
-              role: newP.role || null,
-            },
-            createdAt: now,
-          });
+          // ✅ Changelog will be created on next message submission
         } else {
           // Existing participant - check for changes
           const current = currentMap.get(newP.id);
@@ -928,43 +1059,8 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
               },
             });
 
-            // Create changelog for role changes
-            if (current.role !== (newP.role || null)) {
-              const modelName = extractModeratorModelName(current.modelId);
-              changelogEntries.push({
-                id: ulid(),
-                threadId: id,
-                roundNumber: nextRoundNumber, // ✅ Associate with next round
-                changeType: 'participant_updated',
-                changeSummary: `Updated ${modelName} role from ${current.role || 'none'} to ${newP.role || 'none'}`,
-                changeData: {
-                  participantId: newP.id,
-                  modelId: current.modelId,
-                  oldRole: current.role,
-                  newRole: newP.role || null,
-                },
-                createdAt: now,
-              });
-            }
-
-            // Create changelog for priority changes (reordering)
-            if (current.priority !== newP.priority) {
-              const modelName = extractModeratorModelName(current.modelId);
-              changelogEntries.push({
-                id: ulid(),
-                threadId: id,
-                roundNumber: nextRoundNumber, // ✅ Associate with next round
-                changeType: 'participants_reordered',
-                changeSummary: `Reordered ${modelName}`,
-                changeData: {
-                  participantId: newP.id,
-                  modelId: current.modelId,
-                  oldPriority: current.priority,
-                  newPriority: newP.priority,
-                },
-                createdAt: now,
-              });
-            }
+            // ✅ Changelog for role changes and reordering will be created on next message submission
+            // No immediate changelog creation
           }
         }
       }
@@ -1030,22 +1126,10 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
     if (body.metadata !== undefined)
       updateData.metadata = body.metadata ?? undefined;
 
-    // ✅ BATCH OPERATIONS: Execute thread update and changelog insertion atomically
-    // Following Cloudflare D1 best practices - batch operations provide atomicity
-    const batchOps: Array<unknown> = [
-      db.update(tables.chatThread)
-        .set(updateData)
-        .where(eq(tables.chatThread.id, id)),
-    ];
-
-    // Insert changelog entries
-    if (changelogEntries.length > 0) {
-      batchOps.push(
-        db.insert(tables.chatThreadChangelog).values(changelogEntries),
-      );
-    }
-
-    await executeAtomic(db, batchOps);
+    // ✅ Execute thread update (no changelog here - deferred to message submission)
+    await db.update(tables.chatThread)
+      .set(updateData)
+      .where(eq(tables.chatThread.id, id));
 
     // Fetch updated thread WITH participants
     const updatedThreadWithParticipants = await db.query.chatThread.findFirst({
@@ -1260,18 +1344,19 @@ export const getThreadBySlugHandler: RouteHandler<typeof getThreadBySlugRoute, A
 // ============================================================================
 // Note: listParticipantsHandler removed - use getThreadHandler instead
 
-export const addParticipantHandler: RouteHandler<typeof addParticipantRoute, ApiEnv> = createHandler(
+export const addParticipantHandler: RouteHandler<typeof addParticipantRoute, ApiEnv> = createHandlerWithBatch(
   {
     auth: 'session',
     validateParams: IdParamSchema,
     validateBody: AddParticipantRequestSchema,
     operationName: 'addParticipant',
   },
-  async (c) => {
+  async (c, batch) => {
     const { user } = c.auth();
     const { id } = c.validated.params;
     const body = c.validated.body;
-    const db = await getDbAsync();
+    // ✅ BATCH PATTERN: Access database through batch.db for atomic operations
+    const db = batch.db;
 
     // Verify thread ownership
     await verifyThreadOwnership(id, user.id, db);
@@ -2147,6 +2232,10 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
                 createdAt: new Date(),
               });
               await incrementMessageUsage(user.id, 1);
+
+              // ✅ DEFERRED CHANGELOG PATTERN: Create changelog entries when starting new round
+              // This ensures changelog only appears when a message is submitted
+              await createChangelogForRound(db, thread, currentRoundNumber);
             }
           }
         }

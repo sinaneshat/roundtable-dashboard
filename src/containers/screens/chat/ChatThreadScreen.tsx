@@ -229,36 +229,26 @@ export default function ChatThreadScreen({
   // This ensures the callback always reads the latest round number, not a stale closure value
   const currentRoundNumberRef = useRef<number | null>(null);
 
+  // ✅ FIX: Track last synced participant IDs to prevent infinite loops
+  // This ensures we only update context when participants actually change
+  const lastSyncedParticipantIdsRef = useRef<string>('');
+
   // Chat state
   const [selectedMode, setSelectedMode] = useState<ChatModeId>(thread.mode as ChatModeId);
   const [inputValue, setInputValue] = useState('');
 
-  // ✅ PERSIST IMMEDIATELY: Mode changes are persisted to database right away
+  // ✅ DEFERRED PERSISTENCE: Mode changes stored locally until message submission
   const handleModeChange = useCallback(async (newMode: ChatModeId) => {
-    // Update local state immediately for responsive UI
+    // Update local state only - no API call
+    // Changes will be persisted when message is submitted in handlePromptSubmit
     setSelectedMode(newMode);
 
-    // Persist to backend to ensure changes survive page refresh
-    try {
-      await updateThreadMutation.mutateAsync({
-        param: { id: thread.id },
-        json: {
-          mode: newMode,
-        },
-      });
-
-      console.warn('[ChatThreadScreen] ✅ Mode persisted', {
-        threadId: thread.id,
-        mode: newMode,
-      });
-
-      // Invalidate changelog query to fetch fresh changelog entries
-      queryClient.invalidateQueries({ queryKey: queryKeys.threads.changelog(thread.id) });
-    } catch (error) {
-      console.error('[ChatThreadScreen] ❌ Failed to persist mode change:', error);
-      // Keep local state updated even if persistence fails
-    }
-  }, [thread.id, updateThreadMutation, queryClient]);
+    console.warn('[ChatThreadScreen] 📝 Mode changed locally (will persist on next message)', {
+      threadId: thread.id,
+      oldMode: selectedMode,
+      newMode,
+    });
+  }, [thread.id, selectedMode]);
   const [selectedParticipants, setSelectedParticipants] = useState<ParticipantConfig[]>(() => {
     return participants
       .filter(p => p.isEnabled)
@@ -288,52 +278,16 @@ export default function ChatThreadScreen({
   // ✅ PERSIST IMMEDIATELY: Participant changes are persisted to database right away
   // This ensures settings are preserved across page refreshes
   const handleParticipantsChange = useCallback(async (newParticipants: ParticipantConfig[]) => {
-    // Update local state immediately for responsive UI
+    // ✅ DEFERRED PERSISTENCE: Only update local state
+    // Changes will be persisted when message is submitted in handlePromptSubmit
     setSelectedParticipants(newParticipants);
 
-    // Persist to backend to ensure changes survive page refresh
-    try {
-      // Convert to API format
-      const participantsForUpdate = newParticipants.map(p => ({
-        id: p.id.startsWith('participant-') ? undefined : p.id, // Omit temp IDs for new participants
-        modelId: p.modelId,
-        role: p.role || null,
-        customRoleId: p.customRoleId || null,
-        priority: p.order,
-        isEnabled: true,
-      }));
-
-      const result = await updateThreadMutation.mutateAsync({
-        param: { id: thread.id },
-        json: {
-          participants: participantsForUpdate,
-        },
-      });
-
-      // Update context with fresh participants from mutation response
-      if (result.success && result.data.participants) {
-        const participantsWithDates = result.data.participants.map(p => ({
-          ...p,
-          createdAt: new Date(p.createdAt),
-          updatedAt: new Date(p.updatedAt),
-        }));
-
-        updateParticipants(participantsWithDates);
-
-        console.warn('[ChatThreadScreen] ✅ Participants persisted and context updated', {
-          threadId: thread.id,
-          participantCount: participantsWithDates.length,
-        });
-
-        // Invalidate changelog query to fetch fresh changelog entries
-        queryClient.invalidateQueries({ queryKey: queryKeys.threads.changelog(thread.id) });
-      }
-    } catch (error) {
-      console.error('[ChatThreadScreen] ❌ Failed to persist participant changes:', error);
-      // Keep local state updated even if persistence fails
-      // User will see their changes but they won't survive refresh
-    }
-  }, [thread.id, updateThreadMutation, updateParticipants, queryClient]);
+    console.warn('[ChatThreadScreen] 📝 Participants changed locally (will persist on next message)', {
+      threadId: thread.id,
+      participantCount: newParticipants.length,
+      modelIds: newParticipants.map(p => p.modelId),
+    });
+  }, [thread.id]);
 
   // ✅ Initialize context when component mounts or thread/messages change
   // ✅ REASONING FIX: Compute stable hash of messages to detect content changes (not just length)
@@ -562,15 +516,16 @@ export default function ChatThreadScreen({
   useEffect(() => {
     if (threadQueryData?.success && threadQueryData.data?.participants) {
       const freshParticipants = threadQueryData.data.participants;
+      const freshIds = freshParticipants.map(p => p.id).join(',');
 
-      // Only update if participants actually changed (avoid unnecessary updates)
-      const hasChanged = JSON.stringify(contextParticipants.map(p => p.id).sort())
-        !== JSON.stringify(freshParticipants.map(p => p.id).sort());
-
-      if (hasChanged) {
+      // Only update if participants actually changed from what we last synced
+      // Use ref to track last synced state - prevents infinite loops
+      if (freshIds !== lastSyncedParticipantIdsRef.current) {
         console.warn('[ChatThreadScreen] 🔄 Syncing context with fresh participants from query', {
           threadId: thread.id,
           participantCount: freshParticipants.length,
+          lastSyncedIds: lastSyncedParticipantIdsRef.current,
+          freshIds,
         });
 
         // Transform date strings to Date objects (query returns ISO strings)
@@ -581,9 +536,12 @@ export default function ChatThreadScreen({
         }));
 
         updateParticipants(participantsWithDates);
+
+        // ✅ CRITICAL: Update ref to prevent re-triggering on same data
+        lastSyncedParticipantIdsRef.current = freshIds;
       }
     }
-  }, [threadQueryData, thread.id, contextParticipants, updateParticipants]);
+  }, [threadQueryData, thread.id, updateParticipants]);
 
   // ✅ CRITICAL FIX: Send pending message ONLY when context has the RIGHT participants
   // This prevents sending messages with stale participant data
@@ -593,8 +551,9 @@ export default function ChatThreadScreen({
     }
 
     // ✅ WAIT for context participants to match the expected IDs from mutation
-    const currentIds = contextParticipants.map(p => p.id).sort().join(',');
-    const expectedIds = expectedParticipantIds.sort().join(',');
+    // Compare IDs in order - order matters for participant display!
+    const currentIds = contextParticipants.map(p => p.id).join(',');
+    const expectedIds = expectedParticipantIds.join(',');
 
     if (currentIds === expectedIds) {
       console.warn('[ChatThreadScreen] ✅ Context participants match expected - sending message', {
@@ -658,11 +617,12 @@ export default function ChatThreadScreen({
         }));
 
         // ✅ PROPER PATTERN: Mutation returns fresh participants
-        // No manual refetching needed - use the mutation response directly
+        // Persist both participants AND mode changes before streaming
         const result = await updateThreadMutation.mutateAsync({
           param: { id: thread.id },
           json: {
             participants: participantsForUpdate,
+            mode: selectedMode, // ✅ Also persist mode changes
           },
         });
 
@@ -710,7 +670,7 @@ export default function ChatThreadScreen({
 
       setInputValue('');
     },
-    [inputValue, sendMessage, thread.id, selectedParticipants, updateThreadMutation, updateParticipants, queryClient],
+    [inputValue, sendMessage, thread.id, selectedParticipants, selectedMode, updateThreadMutation, updateParticipants, queryClient],
   );
 
   // ✅ Derive active participants from context
@@ -742,6 +702,17 @@ export default function ChatThreadScreen({
         messagesByRound.set(roundNumber, []);
       }
       messagesByRound.get(roundNumber)!.push(message);
+    });
+
+    // ✅ DEBUG: Log message grouping to diagnose analysis positioning issues
+    console.warn('[ChatThreadScreen] 📊 Message grouping:', {
+      totalMessages: messages.length,
+      messagesByRound: Array.from(messagesByRound.entries()).map(([round, msgs]) => ({
+        round,
+        messageCount: msgs.length,
+        messageRoles: msgs.map(m => m.role),
+      })),
+      analyses: analyses.map(a => ({ roundNumber: a.roundNumber, status: a.status })),
     });
 
     // Group changelog by roundNumber
@@ -1126,9 +1097,11 @@ export default function ChatThreadScreen({
 
                 // ✅ DYNAMIC PATTERN: Item is naturally laid out (NO absolute positioning)
                 // measureElement ref allows virtualizer to measure actual height
+                // ✅ STABLE KEY FIX: Use item.key (round-based) instead of virtualItem.key (index-based)
+                // This prevents analyses/changelog from jumping during streaming when array reorders
                 return (
                   <div
-                    key={virtualItem.key}
+                    key={item.key}
                     data-index={virtualItem.index}
                     ref={rowVirtualizer.measureElement}
                   >
@@ -1272,18 +1245,6 @@ export default function ChatThreadScreen({
             />
           )}
 
-          {/* Analysis streaming loader - shown when analysis is being generated */}
-          {!isStreaming && analyses.some(a => a.status === 'pending' || a.status === 'streaming') && (
-            <div className="mt-8 flex justify-center">
-              <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                <div className="flex space-x-1">
-                  <div className="h-2 w-2 rounded-full bg-primary animate-bounce [animation-delay:-0.3s]" />
-                  <div className="h-2 w-2 rounded-full bg-primary animate-bounce [animation-delay:-0.15s]" />
-                  <div className="h-2 w-2 rounded-full bg-primary animate-bounce" />
-                </div>
-              </div>
-            </div>
-          )}
         </div>
 
         {/* ✅ BOTTOM SPACER: Creates scrollable empty space below content, allows scrolling content higher above input */}

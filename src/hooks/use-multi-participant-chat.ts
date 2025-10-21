@@ -84,6 +84,7 @@ import { DefaultChatTransport } from 'ai';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 import type { ChatParticipant } from '@/api/routes/chat/schema';
+import type { UIMessageErrorType } from '@/lib/utils/message-transforms';
 import { createErrorUIMessage, mergeParticipantMetadata } from '@/lib/utils/message-transforms';
 
 type UseMultiParticipantChatOptions = {
@@ -353,7 +354,7 @@ export function useMultiParticipantChat({
             currentParticipant,
             roundStateRef.current.currentIndex,
             errorMessage,
-            (errorMetadata?.errorCategory as any) || 'error',
+            (errorMetadata?.errorCategory as UIMessageErrorType) || 'error',
             errorMetadata || undefined,
           );
 

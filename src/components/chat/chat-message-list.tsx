@@ -138,18 +138,31 @@ export function ChatMessageList({
 
         // Assistant message
         const metadata = getMessageMetadata(message.metadata);
-        const participantId = metadata?.participantId;
-        const participantIndex = metadata?.participantIndex ?? currentParticipantIndex;
 
-        // ✅ FIX: Match by participantIndex first (position in round), not participantId
-        // participantIndex is stable across participant reordering, participantId is not
-        // When participants are reordered, participantIndex still refers to the correct position
-        const participant = (participantIndex !== undefined && participants[participantIndex])
-          ? participants[participantIndex]
-          : (participantId ? participants.find(p => p.id === participantId) : currentStreamingParticipant);
+        // ✅ CRITICAL FIX: Always use metadata for saved messages, participant only for streaming
+        // Saved messages have metadata.model set - this is the source of truth
+        // Streaming messages don't have metadata yet - use current participant from index
 
-        const storedModelId = participant?.modelId || metadata?.model;
-        const storedRole = participant?.role;
+        const hasSavedMetadata = !!metadata?.model;
+
+        // ✅ CRITICAL FIX: For participantIndex, NEVER fallback to currentParticipantIndex for saved messages
+        // This prevents historical messages from being re-attributed to current participants
+        const participantIndex = hasSavedMetadata
+          ? (metadata?.participantIndex ?? 0) // Saved message - use metadata only (fallback to 0 if missing)
+          : (metadata?.participantIndex ?? currentParticipantIndex); // Streaming message - can use current index
+
+        // Only lookup participant for streaming messages (no saved metadata yet)
+        const participant = !hasSavedMetadata
+          ? (participantIndex !== undefined && participants[participantIndex])
+              ? participants[participantIndex]
+              : currentStreamingParticipant
+          : undefined; // Saved message - don't use participant at all
+
+        // ✅ CRITICAL FIX: For saved messages, use ONLY metadata (never look at current participants)
+        // For streaming messages: Use participant (metadata not set yet)
+        // This ensures historical messages maintain their original model/role attribution
+        const storedModelId = hasSavedMetadata ? metadata.model : (participant?.modelId || metadata?.model);
+        const storedRole = hasSavedMetadata ? (metadata.participantRole || null) : (participant?.role || metadata?.participantRole || null);
 
         const avatarProps = getAvatarPropsFromModelId(
           message.role === 'system' ? 'assistant' : message.role,
