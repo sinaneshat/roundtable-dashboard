@@ -1075,8 +1075,8 @@ export default function ChatThreadScreen({
     <>
       {/* ✅ WINDOW-LEVEL SCROLLING: Content flows naturally, sticky elements stay in view */}
       <div className="flex flex-col min-h-svh">
-        {/* ✅ Content container with virtualization - pt-16 creates space for sticky header */}
-        <div ref={listRef} className="container max-w-3xl mx-auto px-4 sm:px-6 pt-16 pb-8">
+        {/* ✅ Content container with virtualization - pt-16 for header */}
+        <div ref={listRef} className="container max-w-3xl mx-auto px-4 sm:px-6 pb-8">
           {/* ✅ WINDOW VIRTUALIZER: Wrapper with total size for proper scrollbar */}
           <div
             style={{
@@ -1260,6 +1260,9 @@ export default function ChatThreadScreen({
             />
           )}
         </div>
+
+        {/* ✅ BOTTOM SPACER: Creates scrollable empty space below content, allows scrolling content higher above input */}
+        <div className="h-64" aria-hidden="true" />
 
         {/* ✅ INPUT CONTAINER: Sticky to bottom, constrained to content area */}
         <div ref={inputContainerRef} className="sticky bottom-0 z-50 bg-gradient-to-t from-background via-background to-transparent pt-6 pb-4 mt-auto">
