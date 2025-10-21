@@ -4,12 +4,12 @@ import { useEffect, useRef } from 'react';
  * Custom hook for auto-scrolling to bottom when content changes
  *
  * This hook monitors a dependency (like messages array) and automatically scrolls
- * the page-level scroll container to the bottom when the dependency changes.
+ * the window to the bottom when the dependency changes.
  *
  * Features:
- * - Smooth scrolling to bottom
+ * - Smooth scrolling to bottom at window level
  * - Only scrolls if already near bottom (within 200px)
- * - Works with page-level scroll container (#chat-scroll-container)
+ * - Works with window-level scrolling (not nested scroll containers)
  * - Supports both primitive and object dependencies via JSON comparison
  *
  * @param dependency - Value to watch for changes (e.g., messages.length, { length, content, isStreaming })
@@ -31,9 +31,9 @@ export function useAutoScrollToBottom(dependency: unknown, enabled = true) {
       return;
     prevDependencyRef.current = currentDependency;
 
-    const scrollContainer = document.getElementById('chat-scroll-container');
-    if (!scrollContainer)
-      return;
+    // ✅ WINDOW-LEVEL SCROLLING: Use document.documentElement for window scroll measurements
+    // This is the standard way to measure and control window scrolling
+    const { scrollTop, scrollHeight, clientHeight } = document.documentElement;
 
     // ✅ CRITICAL FIX: Always scroll when streaming, otherwise check if near bottom
     // This ensures continuous scrolling during streaming updates
@@ -41,7 +41,6 @@ export function useAutoScrollToBottom(dependency: unknown, enabled = true) {
     const isStreamingActive = parsed?.isStreaming === true;
 
     // Check if we're near the bottom (within 200px)
-    const { scrollTop, scrollHeight, clientHeight } = scrollContainer;
     const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
     const isNearBottom = distanceFromBottom < 200;
 
@@ -49,15 +48,9 @@ export function useAutoScrollToBottom(dependency: unknown, enabled = true) {
     // This ensures smooth streaming experience while respecting user's manual scrolling
     if (isStreamingActive || isNearBottom) {
       requestAnimationFrame(() => {
-        // ✅ CRITICAL FIX: Account for scroll-padding-bottom when scrolling to bottom
-        // Get the scroll-padding-bottom value from computed styles
-        const computedStyle = window.getComputedStyle(scrollContainer);
-        const scrollPaddingBottom = Number.parseFloat(computedStyle.scrollPaddingBottom) || 0;
-
-        // Scroll to the bottom, accounting for scroll-padding-bottom
-        // This ensures content is visible above the fixed input
-        scrollContainer.scrollTo({
-          top: scrollContainer.scrollHeight - scrollPaddingBottom,
+        // ✅ WINDOW SCROLLING: Scroll to document height (bottom of page)
+        window.scrollTo({
+          top: document.documentElement.scrollHeight,
           behavior: 'smooth',
         });
       });

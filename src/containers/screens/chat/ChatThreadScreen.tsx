@@ -1,7 +1,7 @@
 'use client';
 
 import { useQueryClient } from '@tanstack/react-query';
-import { useVirtualizer } from '@tanstack/react-virtual';
+import { useWindowVirtualizer } from '@tanstack/react-virtual';
 import { RefreshCcwIcon } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
@@ -916,56 +916,16 @@ export default function ChatThreadScreen({
     });
   }, [messagesWithAnalysesAndChangelog, analyses, changelog]);
 
-  // ✅ VIRTUALIZATION: TanStack Virtual v3 - Use layout's scroll container
-  // The layout provides #chat-scroll-container, we use that instead of creating a nested scroll container
-  // Reference: https://tanstack.com/virtual/latest/docs/framework/react/examples/dynamic
-  const parentRef = useRef<HTMLElement | null>(null);
-  const scrollingRef = useRef<number | undefined>(undefined);
+  // ✅ VIRTUALIZATION: TanStack Virtual v3 - Window-level virtualizer
+  // Uses window scrolling instead of nested scroll container for better UX
+  // Reference: https://tanstack.com/virtual/latest/docs/framework/react/examples/window
+  const listRef = useRef<HTMLDivElement | null>(null);
 
-  // Get the layout's scroll container on mount
-  useEffect(() => {
-    parentRef.current = document.getElementById('chat-scroll-container');
-  }, []);
-
-  // ✅ SMOOTH SCROLL: Custom scrollToFn with easing animation for TanStack Virtual v3
-  const easeInOutQuint = useCallback((t: number) => {
-    return t < 0.5 ? 16 * t * t * t * t * t : 1 + 16 * --t * t * t * t * t;
-  }, []);
-
-  const scrollToFn = useCallback(
-    (offset: number, _options: { adjustments?: number; behavior?: ScrollBehavior }) => {
-      const duration = 500;
-      const start = parentRef.current?.scrollTop || 0;
-      const startTime = (scrollingRef.current = Date.now());
-
-      const run = () => {
-        if (scrollingRef.current !== startTime)
-          return;
-
-        const now = Date.now();
-        const elapsed = now - startTime;
-        const progress = easeInOutQuint(Math.min(elapsed / duration, 1));
-        const interpolated = start + (offset - start) * progress;
-
-        if (elapsed < duration && parentRef.current) {
-          parentRef.current.scrollTop = interpolated;
-          requestAnimationFrame(run);
-        } else if (parentRef.current) {
-          parentRef.current.scrollTop = interpolated;
-        }
-      };
-
-      requestAnimationFrame(run);
-    },
-    [easeInOutQuint],
-  );
-
-  const rowVirtualizer = useVirtualizer({
+  const rowVirtualizer = useWindowVirtualizer({
     count: messagesWithAnalysesAndChangelog.length,
-    getScrollElement: () => parentRef.current,
     estimateSize: () => 200, // Estimate for dynamic content
     overscan: 5,
-    scrollToFn, // ✅ Smooth scrolling for better UX
+    scrollMargin: listRef.current?.offsetTop ?? 0, // Account for header offset
   });
 
   const virtualItems = rowVirtualizer.getVirtualItems();
@@ -996,20 +956,15 @@ export default function ChatThreadScreen({
 
   // Track scroll position to determine if user is near bottom
   useEffect(() => {
-    if (!parentRef.current)
-      return;
-
-    const scrollContainer = parentRef.current;
-
     const handleScroll = () => {
-      const { scrollTop, scrollHeight, clientHeight } = scrollContainer;
+      const { scrollTop, scrollHeight, clientHeight } = document.documentElement;
       const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
       // Consider "near bottom" if within 200px of bottom
       isNearBottomRef.current = distanceFromBottom < 200;
     };
 
-    scrollContainer.addEventListener('scroll', handleScroll);
-    return () => scrollContainer.removeEventListener('scroll', handleScroll);
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
   // ✅ CRITICAL FIX: Track MESSAGE items separately to prevent auto-scroll on changelog/analysis insertions
@@ -1036,47 +991,19 @@ export default function ChatThreadScreen({
     return messagesWithAnalysesAndChangelog.length - 1;
   }, [messagesWithAnalysesAndChangelog]);
 
-  // ✅ NEW: Reference to fixed input container for height measurement
+  // ✅ WINDOW VIRTUALIZER: Reference for scroll margin calculation
   const inputContainerRef = useRef<HTMLDivElement | null>(null);
-
-  // ✅ CRITICAL FIX: Set scroll-padding-bottom on scroll container to account for fixed input
-  // This ensures scrollToIndex properly accounts for the fixed input at the bottom
-  useEffect(() => {
-    const updateScrollPadding = () => {
-      if (parentRef.current && inputContainerRef.current) {
-        const inputHeight = inputContainerRef.current.offsetHeight;
-        // ✅ FIX: Add BOTH the input container height AND the content padding (pb-8 = 32px)
-        // This ensures content is fully visible when scrolled to bottom
-        const contentBottomPadding = 32; // pb-8 from content container (8 * 4px = 32px)
-        const totalPadding = inputHeight + contentBottomPadding;
-
-        // Add scroll-padding-bottom to reserve space for fixed input + content padding
-        // This works natively with scrollToIndex to ensure content is visible
-        parentRef.current.style.scrollPaddingBottom = `${totalPadding}px`;
-      }
-    };
-
-    // Set initial padding (wait for refs to be ready)
-    const timer = setTimeout(updateScrollPadding, 0);
-
-    // Update padding on window resize (input height might change)
-    window.addEventListener('resize', updateScrollPadding);
-    return () => {
-      clearTimeout(timer);
-      window.removeEventListener('resize', updateScrollPadding);
-    };
-  }, []);
 
   // ✅ INITIAL SCROLL: Scroll to bottom on page load/refresh
   // This ensures the page starts at the bottom with all content visible
   useEffect(() => {
-    if (!parentRef.current || messagesWithAnalysesAndChangelog.length === 0) {
+    if (messagesWithAnalysesAndChangelog.length === 0) {
       return;
     }
 
-    // Wait for content to render and scroll padding to be set
+    // Wait for content to render
     const timer = setTimeout(() => {
-      if (parentRef.current && messagesWithAnalysesAndChangelog.length > 0) {
+      if (messagesWithAnalysesAndChangelog.length > 0) {
         // Scroll to the last item on initial load
         rowVirtualizer.scrollToIndex(messagesWithAnalysesAndChangelog.length - 1, {
           align: 'end',
@@ -1091,7 +1018,7 @@ export default function ChatThreadScreen({
   }, [thread.id]);
 
   useEffect(() => {
-    if (!parentRef.current || messagesWithAnalysesAndChangelog.length === 0) {
+    if (messagesWithAnalysesAndChangelog.length === 0) {
       return;
     }
 
@@ -1127,8 +1054,7 @@ export default function ChatThreadScreen({
         });
       }
 
-      // ✅ FIX: Use virtualizer scrollToIndex with scroll-padding-bottom handling the offset
-      // The scroll-padding-bottom CSS property ensures content appears above the fixed input
+      // ✅ WINDOW VIRTUALIZER: Scroll to index using window scrolling
       requestAnimationFrame(() => {
         rowVirtualizer.scrollToIndex(targetIndex, {
           align: 'end',
@@ -1146,12 +1072,11 @@ export default function ChatThreadScreen({
 
   return (
     <>
-      {/* ✅ FLEX LAYOUT: Wrapper to maximize spacing between content and input */}
-      <div className="flex flex-col min-h-full justify-between h-full">
-        {/* ✅ Use layout's scroll container - no nested scroll container needed */}
-        {/* Content container with virtualization - flex-1 to take available space */}
-        <div className="flex-1 container max-w-3xl mx-auto px-4 sm:px-6 pt-16 pb-8">
-          {/* ✅ VIRTUALIZATION: Inner container with calculated total height */}
+      {/* ✅ WINDOW-LEVEL SCROLLING: Content flows naturally, fixed elements use sticky/fixed positioning */}
+      <div className="flex flex-col min-h-svh">
+        {/* ✅ Content container with virtualization */}
+        <div ref={listRef} className="container max-w-3xl mx-auto px-4 sm:px-6 pt-16 pb-8">
+          {/* ✅ WINDOW VIRTUALIZER: Wrapper with total size for proper scrollbar */}
           <div
             style={{
               height: `${rowVirtualizer.getTotalSize()}px`,
@@ -1159,9 +1084,7 @@ export default function ChatThreadScreen({
               position: 'relative',
             }}
           >
-            {/* ✅ DYNAMIC PATTERN: Wrapper div translated by first item's start position
-               Reference: TanStack Virtual dynamic example
-               Items inside are NOT absolutely positioned - naturally laid out */}
+            {/* ✅ WINDOW VIRTUALIZER PATTERN: Items positioned absolutely with offset from first item */}
             <div
               style={{
                 position: 'absolute',
@@ -1337,8 +1260,8 @@ export default function ChatThreadScreen({
           )}
         </div>
 
-        {/* ✅ INPUT CONTAINER: mt-auto pushes to bottom, maximizing distance from content */}
-        <div ref={inputContainerRef} className="mt-auto sticky bottom-0 z-50 bg-gradient-to-t from-background via-background to-transparent pt-6 pb-4">
+        {/* ✅ INPUT CONTAINER: Sticky to bottom, constrained to content area */}
+        <div ref={inputContainerRef} className="sticky bottom-0 z-50 bg-gradient-to-t from-background via-background to-transparent pt-6 pb-4 mt-auto">
           <div className="container max-w-3xl mx-auto px-4 sm:px-6">
             <ChatInput
               value={inputValue}

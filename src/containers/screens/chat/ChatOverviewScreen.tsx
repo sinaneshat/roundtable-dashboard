@@ -380,43 +380,18 @@ export default function ChatOverviewScreen() {
     !showInitialUI,
   );
 
-  // ✅ NEW: Reference to fixed input container for height measurement
+  // ✅ WINDOW-LEVEL SCROLLING: Reference for input container (no scroll padding needed)
   const inputContainerRef = useRef<HTMLDivElement | null>(null);
 
-  // ✅ CRITICAL FIX: Set scroll-padding-bottom on scroll container to account for fixed input
-  // This ensures auto-scroll properly accounts for the fixed input at the bottom
-  useEffect(() => {
-    const scrollContainer = document.getElementById('chat-scroll-container');
-
-    const updateScrollPadding = () => {
-      if (scrollContainer && inputContainerRef.current) {
-        const inputHeight = inputContainerRef.current.offsetHeight;
-        // Add scroll-padding-bottom to reserve space for fixed input
-        // This works with the auto-scroll hook to ensure content is visible
-        scrollContainer.style.scrollPaddingBottom = `${inputHeight}px`;
-      }
-    };
-
-    // Set initial padding (wait for refs to be ready)
-    const timer = setTimeout(updateScrollPadding, 0);
-
-    // Update padding on window resize (input height might change)
-    window.addEventListener('resize', updateScrollPadding);
-    return () => {
-      clearTimeout(timer);
-      window.removeEventListener('resize', updateScrollPadding);
-    };
-  }, []);
-
   return (
-    <div className="h-full flex flex-col">
+    <div className="min-h-svh flex flex-col">
       {/* Background - fixed behind all content */}
       <div className="fixed inset-0 -z-10 overflow-hidden">
         <WavyBackground containerClassName="h-full w-full" />
       </div>
 
-      {/* Main content - natural size, stays at top */}
-      <div className="container max-w-3xl mx-auto px-4 sm:px-6 pt-16">
+      {/* Main content - flows naturally with window scrolling */}
+      <div className="container max-w-3xl mx-auto px-4 sm:px-6 pt-16 pb-32">
         {/* ✅ ANIMATED: Initial UI (logo, suggestions) - fades out when streaming starts */}
         <AnimatePresence>
           {showInitialUI && (
@@ -627,8 +602,8 @@ export default function ChatOverviewScreen() {
         </AnimatePresence>
       </div>
 
-      {/* Input container - pushed to bottom with mt-auto, creating space between content and input */}
-      <div ref={inputContainerRef} className="sticky bottom-0 z-50 mt-auto bg-gradient-to-t from-background via-background to-transparent pt-6 pb-4">
+      {/* Input container - sticky to bottom, constrained to content area */}
+      <div ref={inputContainerRef} className="sticky bottom-0 z-50 bg-gradient-to-t from-background via-background to-transparent pt-6 pb-4 mt-auto">
         <div className="container max-w-3xl mx-auto px-4 sm:px-6">
           <ChatInput
             value={inputValue}

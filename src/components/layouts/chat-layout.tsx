@@ -125,19 +125,13 @@ export default async function ChatLayout({ children, modal }: ChatLayoutProps) {
             <AppSidebar />
           </Suspense>
 
-          <SidebarInset className="h-svh relative">
+          <SidebarInset className="min-h-svh relative">
             <ChatHeaderSwitch />
 
-            {/* ✅ OPTIMIZATION: Suspense boundary for main content streaming */}
-            {/* Content fills viewport below fixed header - THIS IS THE PRIMARY SCROLL CONTAINER */}
-            {/* Page-level scrolling happens here, not in inner divs */}
-            {/* top-16 (64px) for header clearance, no bottom offset - content padding handles spacing */}
-            {/* contain: 'strict' for better virtualization performance (TanStack Virtual best practice) */}
-            <div
-              id="chat-scroll-container"
-              className="absolute inset-0 top-16 overflow-y-auto overflow-x-hidden"
-              style={{ contain: 'strict' }}
-            >
+            {/* ✅ WINDOW-LEVEL SCROLLING: Content scrolls at window level, not in a nested div */}
+            {/* Header is fixed via absolute positioning, content flows naturally below it */}
+            {/* This enables proper window virtualizer and auto-scroll behavior */}
+            <div id="chat-scroll-container">
               <Suspense fallback={<ContentLoadingFallback />}>
                 {children}
               </Suspense>
