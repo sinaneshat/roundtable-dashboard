@@ -677,6 +677,20 @@ export default function ChatThreadScreen({
   // Context manages the participant state, we just display it
   const activeParticipants = contextParticipants;
 
+  // ✅ CALCULATE MAX ROUND NUMBER: Find the highest round number in the conversation
+  // This is used to determine if the retry button should be shown (only on last round)
+  const maxRoundNumber = useMemo(() => {
+    let max = 0;
+    messages.forEach((message) => {
+      const metadata = message.metadata as Record<string, unknown> | undefined;
+      const roundNumber = (metadata?.roundNumber as number) || 1;
+      if (roundNumber > max) {
+        max = roundNumber;
+      }
+    });
+    return max;
+  }, [messages]);
+
   // ✅ EVENT-BASED ROUND TRACKING: Simple grouping by roundNumber
   // Messages, changelog, and analysis all grouped by roundNumber field
   // No complex date/time calculations - just group by roundNumber!
@@ -1140,6 +1154,10 @@ export default function ChatThreadScreen({
                             return parseResult.success && messageHasError(parseResult.data);
                           });
 
+                          // ✅ CRITICAL FIX: Only show retry button on the LAST round of the entire conversation
+                          // Not just the last round in a chat thread - the absolute last round
+                          const isLastRound = roundNumber === maxRoundNumber;
+
                           return (
                             <Actions className="mt-3">
                               {/* ✅ Round Feedback: Like/Dislike buttons - only show if round succeeded */}
@@ -1162,14 +1180,16 @@ export default function ChatThreadScreen({
                                 />
                               )}
 
-                              {/* ✅ Round Actions: Retry - always shown */}
-                              <Action
-                                onClick={retryRound}
-                                label={t('errors.retry')}
-                                tooltip={t('errors.retryRound')}
-                              >
-                                <RefreshCcwIcon className="size-3" />
-                              </Action>
+                              {/* ✅ Round Actions: Retry - ONLY shown on the last round of the conversation */}
+                              {isLastRound && (
+                                <Action
+                                  onClick={retryRound}
+                                  label={t('errors.retry')}
+                                  tooltip={t('errors.retryRound')}
+                                >
+                                  <RefreshCcwIcon className="size-3" />
+                                </Action>
+                              )}
                             </Actions>
                           );
                         })()}

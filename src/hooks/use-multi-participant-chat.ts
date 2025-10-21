@@ -121,6 +121,8 @@ type RoundState = {
   queue: number[];
   erroredParticipants: Set<string>;
   queueAdvancedForParticipant: Set<string>;
+  /** ✅ FIX: Snapshot of participants at round start time (prevents stale metadata during participant changes) */
+  roundParticipants: ChatParticipant[];
 };
 
 /**
@@ -164,6 +166,7 @@ export function useMultiParticipantChat({
     queue: [],
     erroredParticipants: new Set(),
     queueAdvancedForParticipant: new Set(),
+    roundParticipants: [], // ✅ FIX: Initialize with empty array (set at round start)
   });
 
   // ✅ Keep participantsRef separate (used in transport callback)
@@ -292,7 +295,9 @@ export function useMultiParticipantChat({
     messages: initialMessages,
 
     onError: (error) => {
-      const currentParticipant = participants[roundStateRef.current.currentIndex];
+      // ✅ FIX: Use roundParticipants snapshot (from round start) instead of current participants
+      // This ensures error messages show correct model info even if user changed participants mid-stream
+      const currentParticipant = roundStateRef.current.roundParticipants[roundStateRef.current.currentIndex];
 
       // ✅ AI SDK v5 ERROR HANDLING PATTERN: Parse structured error metadata from backend
       // The backend returns JSON-stringified error metadata with comprehensive details
@@ -379,7 +384,9 @@ export function useMultiParticipantChat({
     onFinish: async (data) => {
       // ✅ CRITICAL: Update message metadata with participant info
       // This ensures the frontend can display the correct model name/icon
-      const currentParticipant = participants[roundStateRef.current.currentIndex];
+      // ✅ FIX: Use roundParticipants snapshot (from round start) instead of current participants
+      // This ensures messages show correct model info even if user changed participants mid-stream
+      const currentParticipant = roundStateRef.current.roundParticipants[roundStateRef.current.currentIndex];
 
       // ✅ CRITICAL BUG FIX: Validate data.message exists before continuing
       // Silent failures occur when AI SDK doesn't create a message (empty response, error, etc.)
@@ -562,6 +569,9 @@ export function useMultiParticipantChat({
     // ✅ CRITICAL FIX: Clear all tracking for new round
     roundStateRef.current.erroredParticipants.clear();
     roundStateRef.current.queueAdvancedForParticipant.clear();
+    // ✅ FIX: Snapshot current participants at round start time
+    // This prevents stale model metadata if user changes participants mid-round
+    roundStateRef.current.roundParticipants = [...participants];
 
     // ✅ CRITICAL FIX: Find the last user message to re-trigger streaming
     // Instead of sending an empty message, we send the actual last user message
@@ -622,6 +632,9 @@ export function useMultiParticipantChat({
       // ✅ CRITICAL FIX: Clear all tracking for new round
       roundStateRef.current.erroredParticipants.clear();
       roundStateRef.current.queueAdvancedForParticipant.clear();
+      // ✅ FIX: Snapshot current participants at round start time
+      // This prevents stale model metadata if user changes participants mid-round
+      roundStateRef.current.roundParticipants = [...participants];
 
       // Send user message (first participant responds automatically)
       aiSendMessage({ text: trimmed });
