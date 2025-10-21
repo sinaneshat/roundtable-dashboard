@@ -16,6 +16,7 @@ import { z } from '@hono/zod-openapi';
 import { eq } from 'drizzle-orm';
 import { ulid } from 'ulid';
 
+import { executeBatch } from '@/api/common/batch-operations';
 import { createError } from '@/api/common/error-handling';
 import { ModeratorAnalysisPayloadSchema } from '@/api/routes/chat/schema';
 import { initializeOpenRouter, openRouterService } from '@/api/services/openrouter.service';
@@ -441,15 +442,7 @@ export async function restartStaleAnalysis(
   });
 
   try {
-    // ✅ STEP 1: Mark old analysis as failed
-    await db.update(tables.chatModeratorAnalysis)
-      .set({
-        status: 'failed',
-        errorMessage: 'Analysis timed out (watchdog detected), restarting automatically',
-      })
-      .where(eq(tables.chatModeratorAnalysis.id, staleAnalysis.id));
-
-    // ✅ STEP 2: Fetch participant messages for reprocessing
+    // ✅ STEP 1: Fetch participant messages for reprocessing (before batch operation)
     const participantMessages = await db.query.chatMessage.findMany({
       where: (fields, { inArray, eq: eqOp, and: andOp }) =>
         andOp(
@@ -480,20 +473,29 @@ export async function restartStaleAnalysis(
       };
     });
 
-    // ✅ STEP 4: Create new analysis record
+    // ✅ STEP 2: Atomic batch - mark old as failed + create new analysis
+    // Following backend-patterns.md:1007-1043 - Batch-First Architecture
     const newAnalysisId = ulid();
-    await db.insert(tables.chatModeratorAnalysis).values({
-      id: newAnalysisId,
-      threadId: staleAnalysis.threadId,
-      roundNumber: staleAnalysis.roundNumber,
-      mode: staleAnalysis.mode as ChatModeId,
-      userQuestion: staleAnalysis.userQuestion,
-      status: 'streaming',
-      participantMessageIds,
-      createdAt: new Date(),
-    });
+    await executeBatch(db, [
+      db.update(tables.chatModeratorAnalysis)
+        .set({
+          status: 'failed',
+          errorMessage: 'Analysis timed out (watchdog detected), restarting automatically',
+        })
+        .where(eq(tables.chatModeratorAnalysis.id, staleAnalysis.id)),
+      db.insert(tables.chatModeratorAnalysis).values({
+        id: newAnalysisId,
+        threadId: staleAnalysis.threadId,
+        roundNumber: staleAnalysis.roundNumber,
+        mode: staleAnalysis.mode as ChatModeId,
+        userQuestion: staleAnalysis.userQuestion,
+        status: 'streaming',
+        participantMessageIds,
+        createdAt: new Date(),
+      }),
+    ]);
 
-    // ✅ STEP 5: Trigger background processing directly (don't use service binding)
+    // ✅ STEP 3: Trigger background processing directly (don't use service binding)
     // Process immediately instead of trying to use WORKER_SELF_REFERENCE which may not be configured
     console.warn('[restartStaleAnalysis] 🔥 Starting background processing directly', {
       newAnalysisId,

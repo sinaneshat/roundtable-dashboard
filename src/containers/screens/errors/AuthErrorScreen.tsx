@@ -109,7 +109,7 @@ export default function AuthErrorScreen() {
             {t('auth.errors.tryAgain')}
           </Button>
           <Button asChild variant="outline" className="w-full">
-            <Link href="/auth/sign-in">
+            <Link href="/auth/sign-in" className="flex items-center justify-center">
               <ArrowLeft className="me-2 h-4 w-4" />
               {t('auth.errors.backToSignIn')}
             </Link>

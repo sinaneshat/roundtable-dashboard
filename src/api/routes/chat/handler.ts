@@ -2,16 +2,18 @@ import type { RouteHandler } from '@hono/zod-openapi';
 import type { UIMessage } from 'ai';
 import { convertToModelMessages, createIdGenerator, streamObject, streamText, validateUIMessages } from 'ai';
 import type { SQL } from 'drizzle-orm';
-import { and, asc, desc, eq, ne } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, ne } from 'drizzle-orm';
 import Fuse from 'fuse.js';
 import { ulid } from 'ulid';
 
+import { executeBatch } from '@/api/common/batch-operations';
 import { ErrorContextBuilders } from '@/api/common/error-contexts';
-import { createError } from '@/api/common/error-handling';
+import { createError, structureAIProviderError } from '@/api/common/error-handling';
 import {
   applyCursorPagination,
   buildCursorWhereWithFilters,
   createHandler,
+  createHandlerWithBatch,
   createTimestampCursor,
   CursorPaginationQuerySchema,
   getCursorOrderBy,
@@ -101,240 +103,9 @@ import {
 // Internal Helper Functions (Following 3-file pattern: handler, route, schema)
 // ============================================================================
 
-/**
- * ✅ OPENROUTER PROVIDER ERROR HANDLING: Extract comprehensive error details
- * Reference: https://openrouter.ai/docs#errors
- *
- * OpenRouter returns errors in multiple formats:
- * 1. Standard HTTP errors with JSON body: { error: { message, code, metadata } }
- * 2. AI SDK errors with responseBody containing OpenRouter JSON
- * 3. Model-specific errors from underlying providers
- *
- * @param error - Error from AI SDK (unknown type for safety)
- * @param participant - Participant information for context
- * @param participant.id - Unique identifier for the participant
- * @param participant.modelId - Model ID being used (e.g., "anthropic/claude-3.5-sonnet")
- * @param participant.role - Role description of the participant (nullable)
- * @returns Comprehensive structured error metadata
- */
-function structureErrorMetadata(error: unknown, participant: { id: string; modelId: string; role: string | null }) {
-  // ✅ STEP 1: Extract base error fields from AI SDK error object
-  const err = error as Error & {
-    cause?: unknown;
-    statusCode?: number;
-    responseBody?: string;
-    responseHeaders?: Record<string, string>;
-    code?: string;
-    data?: unknown;
-  };
-
-  const errorName = err?.name || 'UnknownError';
-  let errorMessage = err?.message || 'An unexpected error occurred';
-  const errorType = err?.constructor?.name || 'Error';
-  const statusCode = err?.statusCode;
-  const responseBody = err?.responseBody;
-  const responseHeaders = err?.responseHeaders;
-  const cause = err?.cause;
-
-  // ✅ STEP 2: Parse OpenRouter-specific error from response body (JSON format)
-  let openRouterError: {
-    message?: string;
-    code?: string;
-    type?: string;
-    metadata?: Record<string, unknown>;
-  } | null = null;
-
-  if (responseBody) {
-    try {
-      const parsed = JSON.parse(responseBody);
-      // OpenRouter standard error format: { error: { message, code, metadata } }
-      if (parsed.error) {
-        openRouterError = {
-          message: parsed.error.message || parsed.error,
-          code: parsed.error.code,
-          type: parsed.error.type,
-          metadata: parsed.error.metadata,
-        };
-        // Override error message with OpenRouter's detailed message
-        if (openRouterError.message) {
-          errorMessage = String(openRouterError.message);
-        }
-      } else if (parsed.message) {
-        // Alternative format: { message, error }
-        openRouterError = {
-          message: parsed.message,
-          code: parsed.code,
-        };
-        errorMessage = parsed.message;
-      }
-    } catch {
-      // responseBody is not JSON - may be plain text error
-      if (responseBody.length > 0 && responseBody.length < 500) {
-        errorMessage = responseBody;
-      }
-    }
-  }
-
-  // ✅ STEP 3: Categorize error and determine retry strategy
-  //
-  // RETRY STRATEGY:
-  // - Provider errors (rate_limit, network, service_unavailable): INFINITE_RETRY_CONFIG (aggressive)
-  // - Model errors (content_filter, model_not_found, validation): NO RETRY or very limited (fail fast)
-  // - Authentication errors: NO RETRY (permanent - requires user action)
-  //
-  let errorCategory: 'provider_rate_limit' | 'provider_network' | 'provider_service' | 'model_not_found' | 'model_content_filter' | 'authentication' | 'validation' | 'unknown' = 'unknown';
-  let userFriendlyMessage: string;
-  let errorIsTransient: boolean;
-  let shouldRetry: boolean; // Explicitly control retry behavior
-
-  const errorLower = errorMessage.toLowerCase();
-  const openRouterCode = openRouterError?.code ? String(openRouterError.code).toLowerCase() : undefined;
-
-  // ========================================
-  // PROVIDER-LEVEL ERRORS (retry aggressively with INFINITE_RETRY_CONFIG)
-  // ========================================
-
-  // ✅ PROVIDER: RATE LIMITING (transient - retry indefinitely)
-  if (
-    statusCode === 429
-    || openRouterCode === 'rate_limit_exceeded'
-    || errorLower.includes('rate limit')
-    || errorLower.includes('quota')
-    || errorLower.includes('too many requests')
-  ) {
-    errorCategory = 'provider_rate_limit';
-    errorIsTransient = true;
-    shouldRetry = true; // Use INFINITE_RETRY_CONFIG
-    userFriendlyMessage = errorMessage; // ✅ RAW ERROR: Show exact OpenRouter error message
-  } else if (
-    // ✅ PROVIDER: NETWORK/CONNECTIVITY (transient - retry indefinitely)
-    statusCode === 502
-    || statusCode === 503
-    || statusCode === 504
-    || openRouterCode === 'service_unavailable'
-    || openRouterCode === 'timeout'
-    || errorLower.includes('timeout')
-    || errorLower.includes('connection')
-    || errorLower.includes('network')
-    || errorLower.includes('econnrefused')
-    || errorLower.includes('dns')
-    || errorLower.includes('service unavailable')
-    || errorLower.includes('gateway')
-  ) {
-    errorCategory = 'provider_network';
-    errorIsTransient = true;
-    shouldRetry = true; // Use INFINITE_RETRY_CONFIG
-    userFriendlyMessage = errorMessage; // ✅ RAW ERROR: Show exact OpenRouter error message
-  } else if (
-    // ========================================
-    // MODEL-LEVEL ERRORS (fail fast - don't retry or very limited)
-    // ========================================
-    // ✅ MODEL: NOT FOUND / NO ENDPOINTS (permanent - don't retry)
-    statusCode === 404
-    || openRouterCode === 'model_not_found'
-    || openRouterCode === 'no_endpoints'
-    || errorLower.includes('model not found')
-    || errorLower.includes('does not exist')
-    || errorLower.includes('no endpoints found')
-    || errorLower.includes('model is not available')
-    || errorLower.includes('model does not support')
-  ) {
-    errorCategory = 'model_not_found';
-    errorIsTransient = false;
-    shouldRetry = false; // Don't retry - model permanently unavailable
-    userFriendlyMessage = errorMessage; // ✅ RAW ERROR: Show exact OpenRouter error message
-  } else if (
-    // ✅ MODEL: CONTENT FILTERING / SAFETY (permanent - don't retry)
-    errorLower.includes('content')
-    || errorLower.includes('filter')
-    || errorLower.includes('safety')
-    || errorLower.includes('moderation')
-    || errorLower.includes('policy')
-    || errorLower.includes('inappropriate')
-  ) {
-    errorCategory = 'model_content_filter';
-    errorIsTransient = false;
-    shouldRetry = false; // Don't retry - content violates guidelines
-    userFriendlyMessage = errorMessage; // ✅ RAW ERROR: Show exact OpenRouter error message
-  } else if (
-    // ========================================
-    // AUTHENTICATION & VALIDATION ERRORS (permanent - don't retry)
-    // ========================================
-    // ✅ AUTHENTICATION ERRORS (permanent - requires user action)
-    statusCode === 401
-    || statusCode === 403
-    || openRouterCode === 'unauthorized'
-    || openRouterCode === 'forbidden'
-    || errorLower.includes('invalid api key')
-    || errorLower.includes('unauthorized')
-    || errorLower.includes('api key')
-    || errorLower.includes('authentication')
-  ) {
-    errorCategory = 'authentication';
-    errorIsTransient = false;
-    shouldRetry = false; // Don't retry - requires API key fix
-    userFriendlyMessage = errorMessage; // ✅ RAW ERROR: Show exact OpenRouter error message
-  } else if (
-    // ✅ VALIDATION ERRORS (permanent - bad request)
-    statusCode === 400
-    || openRouterCode === 'invalid_request'
-    || errorLower.includes('invalid')
-    || errorLower.includes('malformed')
-    || errorLower.includes('bad request')
-  ) {
-    errorCategory = 'validation';
-    errorIsTransient = false;
-    shouldRetry = false; // Don't retry - request is malformed
-    userFriendlyMessage = errorMessage; // ✅ RAW ERROR: Show exact OpenRouter error message
-  } else {
-    // ========================================
-    // UNKNOWN ERRORS (cautious retry)
-    // ========================================
-    // ✅ UNKNOWN ERRORS (assume transient but log for investigation)
-    errorCategory = 'unknown';
-    errorIsTransient = true;
-    shouldRetry = true; // Retry but monitor
-    userFriendlyMessage = errorMessage; // ✅ RAW ERROR: Show exact OpenRouter error message
-  }
-
-  // ✅ STEP 4: Extract OpenRouter request/response IDs for debugging
-  const requestId = responseHeaders?.['x-request-id'] || responseHeaders?.['x-trace-id'];
-
-  // ✅ STEP 5: Return comprehensive metadata
-  return {
-    // Error identification
-    errorName,
-    errorType,
-    errorCategory,
-
-    // User-facing message
-    errorMessage: userFriendlyMessage,
-
-    // OpenRouter-specific details
-    openRouterError: openRouterError?.message,
-    openRouterCode: openRouterError?.code,
-    openRouterType: openRouterError?.type,
-    openRouterMetadata: openRouterError?.metadata,
-
-    // HTTP details
-    statusCode,
-    requestId,
-
-    // Technical details for debugging
-    rawErrorMessage: errorMessage,
-    responseBody: responseBody?.substring(0, 1000), // Limit to 1000 chars
-    cause: cause ? String(cause) : undefined,
-
-    // Retry decision
-    isTransient: errorIsTransient,
-    shouldRetry, // ✅ EXPLICIT: Whether to retry (uses INFINITE_RETRY_CONFIG for provider errors)
-
-    // Participant context
-    participantId: participant.id,
-    participantRole: participant.role,
-    modelId: participant.modelId,
-  };
-}
+// ✅ CODE REDUCTION: structureErrorMetadata() moved to /src/api/common/error-handling.ts
+// Now using shared structureAIProviderError() utility for consistent error handling
+// REFERENCE: backend-patterns.md:1415-1437 (Shared utility pattern)
 
 /**
  * ✅ BATCH/TRANSACTION HELPER: Execute atomic operations
@@ -640,13 +411,13 @@ export const listThreadsHandler: RouteHandler<typeof listThreadsRoute, ApiEnv> =
   },
 );
 
-export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv> = createHandler(
+export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv> = createHandlerWithBatch(
   {
     auth: 'session',
     validateBody: CreateThreadRequestSchema,
     operationName: 'createThread',
   },
-  async (c) => {
+  async (c, batch) => {
     const { user } = c.auth();
 
     // Enforce thread quota BEFORE creating anything
@@ -654,7 +425,8 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
     await enforceThreadQuota(user.id);
 
     const body = c.validated.body;
-    const db = await getDbAsync();
+    // ✅ BATCH PATTERN: Access database through batch.db for atomic operations
+    const db = batch.db;
 
     // Get user's subscription tier to validate model access
     // ✅ DRY: Using centralized getUserTier utility with 5-minute caching
@@ -716,61 +488,83 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
       })
       .returning();
 
-    // Create participants with priority based on array order (immutable)
-    // Load custom roles if specified
-    const participants = await Promise.all(
-      body.participants.map(async (p, index) => {
-        let systemPrompt = p.systemPrompt; // Request systemPrompt takes precedence
+    // ✅ BATCH OPTIMIZATION: Pre-load all custom roles in single query instead of N queries
+    // This reduces database round-trips from N to 1 when custom roles are used
+    const customRoleIds = body.participants
+      .map(p => p.customRoleId)
+      .filter((id): id is string => !!id);
 
-        // If customRoleId is provided and no systemPrompt override, load custom role
-        if (p.customRoleId && !systemPrompt) {
-          const customRole = await db.query.chatCustomRole.findFirst({
-            where: eq(tables.chatCustomRole.id, p.customRoleId),
-          });
+    const customRolesMap = new Map<string, typeof tables.chatCustomRole.$inferSelect>();
+    if (customRoleIds.length > 0) {
+      // ✅ BATCH PATTERN: Single query to load all custom roles using inArray
+      const customRoles = await db.query.chatCustomRole.findMany({
+        where: and(
+          eq(tables.chatCustomRole.userId, user.id),
+          inArray(tables.chatCustomRole.id, customRoleIds),
+        ),
+      });
 
-          if (customRole) {
-            // Verify ownership
-            if (customRole.userId !== user.id) {
-              throw createError.unauthorized(
-                'Not authorized to use this custom role',
-                ErrorContextBuilders.authorization('custom_role', p.customRoleId),
-              );
-            }
-            systemPrompt = customRole.systemPrompt;
-          }
+      // Build map for O(1) lookup
+      for (const role of customRoles) {
+        customRolesMap.set(role.id, role);
+      }
+
+      // Verify all requested custom roles exist and belong to user
+      for (const roleId of customRoleIds) {
+        if (!customRolesMap.has(roleId)) {
+          throw createError.unauthorized(
+            'Not authorized to use this custom role',
+            ErrorContextBuilders.authorization('custom_role', roleId),
+          );
         }
+      }
+    }
 
-        const participantId = ulid();
+    // ✅ BATCH PATTERN: Prepare all participant values, then insert atomically
+    // This ensures thread + participants are created in single atomic batch
+    const participantValues = body.participants.map((p, index) => {
+      let systemPrompt = p.systemPrompt; // Request systemPrompt takes precedence
 
-        // Only create settings object if at least one value is provided
-        // Use undefined to omit the field entirely when no settings exist
-        const hasSettings = systemPrompt || p.temperature !== undefined || p.maxTokens !== undefined;
-        const settingsValue = hasSettings
-          ? {
-              systemPrompt,
-              temperature: p.temperature,
-              maxTokens: p.maxTokens,
-            }
-          : undefined;
+      // Load system prompt from pre-fetched custom roles (no additional query)
+      if (p.customRoleId && !systemPrompt) {
+        const customRole = customRolesMap.get(p.customRoleId);
+        if (customRole) {
+          systemPrompt = customRole.systemPrompt;
+        }
+      }
 
-        const [participant] = await db
-          .insert(tables.chatParticipant)
-          .values({
-            id: participantId,
-            threadId,
-            modelId: p.modelId,
-            customRoleId: p.customRoleId,
-            role: p.role,
-            priority: index, // Array order determines priority
-            isEnabled: true,
-            ...(settingsValue !== undefined && { settings: settingsValue }),
-            createdAt: now,
-            updatedAt: now,
-          })
-          .returning();
-        return participant;
-      }),
-    );
+      const participantId = ulid();
+
+      // Only create settings object if at least one value is provided
+      const hasSettings = systemPrompt || p.temperature !== undefined || p.maxTokens !== undefined;
+      const settingsValue = hasSettings
+        ? {
+            systemPrompt,
+            temperature: p.temperature,
+            maxTokens: p.maxTokens,
+          }
+        : undefined;
+
+      return {
+        id: participantId,
+        threadId,
+        modelId: p.modelId,
+        customRoleId: p.customRoleId,
+        role: p.role,
+        priority: index, // Array order determines priority
+        isEnabled: true,
+        ...(settingsValue !== undefined && { settings: settingsValue }),
+        createdAt: now,
+        updatedAt: now,
+      };
+    });
+
+    // ✅ BATCH PATTERN: Insert all participants in batch operation
+    // batch.db operations are automatically collected and executed atomically
+    const participants = await db
+      .insert(tables.chatParticipant)
+      .values(participantValues)
+      .returning();
 
     // VALIDATION: Ensure at least one participant was successfully created
     if (participants.length === 0) {
@@ -1666,23 +1460,26 @@ export const deleteParticipantHandler: RouteHandler<typeof deleteParticipantRout
       throw createError.unauthorized('Not authorized to delete this participant', ErrorContextBuilders.authorization('participant', id));
     }
 
-    // ✅ CREATE CHANGELOG ENTRY: Track participant removal (BEFORE deletion)
+    // ✅ ATOMIC BATCH: Track changelog + delete participant atomically
+    // Following backend-patterns.md:1007-1043 - Batch-First Architecture
     const modelName = extractModeratorModelName(participant.modelId);
     const changelogId = ulid();
-    await db.insert(tables.chatThreadChangelog).values({
-      id: changelogId,
-      threadId: participant.threadId,
-      changeType: 'participant_removed',
-      changeSummary: `Removed ${modelName}${participant.role ? ` ("${participant.role}")` : ''}`,
-      changeData: {
-        participantId: id,
-        modelId: participant.modelId,
-        role: participant.role,
-      },
-      createdAt: new Date(),
-    });
 
-    await db.delete(tables.chatParticipant).where(eq(tables.chatParticipant.id, id));
+    await executeBatch(db, [
+      db.insert(tables.chatThreadChangelog).values({
+        id: changelogId,
+        threadId: participant.threadId,
+        changeType: 'participant_removed',
+        changeSummary: `Removed ${modelName}${participant.role ? ` ("${participant.role}")` : ''}`,
+        changeData: {
+          participantId: id,
+          modelId: participant.modelId,
+          role: participant.role,
+        },
+        createdAt: new Date(),
+      }),
+      db.delete(tables.chatParticipant).where(eq(tables.chatParticipant.id, id)),
+    ]);
 
     return Responses.ok(c, {
       deleted: true,
@@ -3000,7 +2797,12 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
           error,
         });
 
-        const errorMetadata = structureErrorMetadata(error, participant);
+        // ✅ REFACTORED: Use shared error utility from /src/api/common/error-handling.ts
+        const errorMetadata = structureAIProviderError(error, {
+          id: participant.id,
+          modelId: participant.modelId,
+          role: participant.role,
+        });
 
         return JSON.stringify(errorMetadata);
       },

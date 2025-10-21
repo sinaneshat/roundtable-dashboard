@@ -24,7 +24,7 @@
  */
 
 import type { UIMessage } from 'ai';
-import { createContext, use, useCallback, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useMemo, useState } from 'react';
 
 import type { ChatParticipant, ChatThread } from '@/api/routes/chat/schema';
 import { useMultiParticipantChat } from '@/hooks/use-multi-participant-chat';
@@ -198,8 +198,9 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
  * Hook to access shared chat context
  * Must be used within ChatProvider
  *
- * IMPORTANT: Uses useContext (not React 19's 'use' hook) to match AI SDK v5 documentation
- * pattern and ensure SSR compatibility with Next.js 15.
+ * ✅ REFACTORED: Uses useContext() for SSR compatibility (frontend-patterns.md:395-433)
+ * Official AI SDK v5 pattern uses useContext() to ensure Next.js 15 SSR compatibility.
+ * Reference: https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot#share-useChat-state-across-components
  *
  * @example
  * ```tsx
@@ -207,7 +208,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
  * ```
  */
 export function useSharedChatContext() {
-  const context = use(ChatContext);
+  const context = useContext(ChatContext);
   if (!context) {
     throw new Error('useSharedChatContext must be used within a ChatProvider');
   }

@@ -200,3 +200,191 @@ export function deduplicateConsecutiveUserMessages(messages: UIMessage[]): UIMes
 
   return result;
 }
+
+// ============================================================================
+// ERROR MESSAGE CREATION (Multi-Participant Chat Support)
+// ============================================================================
+
+/**
+ * Error type for UI message errors
+ * Maps to backend AI provider error categories
+ */
+export type UIMessageErrorType
+  = | 'provider_rate_limit'
+    | 'provider_network'
+    | 'model_not_found'
+    | 'model_content_filter'
+    | 'authentication'
+    | 'validation'
+    | 'silent_failure'
+    | 'empty_response'
+    | 'error'
+    | 'unknown';
+
+/**
+ * ✅ ERROR MESSAGE CREATION: Create error UIMessage for failed AI responses
+ *
+ * PATTERN: Shared utility for consistent error message creation across the codebase
+ * REFERENCE: frontend-patterns.md:1458-1524 (Utility Libraries & Helpers)
+ *
+ * This utility consolidates error message creation logic that was duplicated
+ * 3 times in use-multi-participant-chat.ts (onError, onFinish no-message, onFinish validation).
+ *
+ * Used in:
+ * - use-multi-participant-chat.ts: Create error messages for failed AI streaming
+ * - Future: Any component that needs to display AI provider errors
+ *
+ * @param participant - Participant that encountered the error
+ * @param participant.id - Participant ID
+ * @param participant.modelId - Model ID being used
+ * @param participant.role - Role description (nullable)
+ * @param currentIndex - Current participant index in the round
+ * @param errorMessage - User-facing error message
+ * @param errorType - Category of error (provider, model, validation, etc.)
+ * @param errorMetadata - Optional structured error metadata from backend
+ * @returns UIMessage with error metadata for display
+ *
+ * @example
+ * ```typescript
+ * const errorMsg = createErrorUIMessage(
+ *   { id: 'p1', modelId: 'claude-3', role: 'Developer' },
+ *   0,
+ *   'Rate limit exceeded',
+ *   'provider_rate_limit',
+ *   { statusCode: 429, openRouterCode: 'rate_limit_exceeded' }
+ * );
+ * setMessages(prev => [...prev, errorMsg]);
+ * ```
+ */
+export function createErrorUIMessage(
+  participant: {
+    id: string;
+    modelId: string;
+    role: string | null;
+  },
+  currentIndex: number,
+  errorMessage: string,
+  errorType: UIMessageErrorType = 'error',
+  errorMetadata?: {
+    errorCategory?: string;
+    statusCode?: number;
+    rawErrorMessage?: string;
+    openRouterError?: string;
+    openRouterCode?: string;
+    providerMessage?: string;
+  },
+): UIMessage {
+  // Generate unique error message ID
+  const errorMessageId = `error-${crypto.randomUUID()}-${currentIndex}`;
+
+  // Build error UIMessage with comprehensive metadata
+  return {
+    id: errorMessageId,
+    role: 'assistant',
+    // ✅ Empty text part ensures message card renders
+    // The MessageErrorDetails component displays error from metadata
+    parts: [{ type: 'text', text: '' }],
+    metadata: {
+      participantId: participant.id,
+      participantIndex: currentIndex,
+      participantRole: participant.role,
+      model: participant.modelId,
+      hasError: true,
+      errorType,
+      errorMessage,
+      errorCategory: errorMetadata?.errorCategory || errorType,
+      statusCode: errorMetadata?.statusCode,
+      rawErrorMessage: errorMetadata?.rawErrorMessage,
+      providerMessage: errorMetadata?.providerMessage || errorMetadata?.rawErrorMessage || errorMessage,
+      openRouterError: errorMetadata?.openRouterError,
+      openRouterCode: errorMetadata?.openRouterCode,
+    },
+  };
+}
+
+// ============================================================================
+// METADATA MERGING (Multi-Participant Chat Support)
+// ============================================================================
+
+/**
+ * ✅ METADATA MERGE UTILITY: Merge participant info with message metadata
+ *
+ * PATTERN: Shared utility for consistent metadata merging across codebase
+ * REFERENCE: frontend-patterns.md:1458-1524 (Utility Libraries & Helpers)
+ *
+ * This utility consolidates metadata merging logic that was inline in
+ * use-multi-participant-chat.ts onFinish callback (~70 lines).
+ *
+ * Features:
+ * - Merges participant identification (id, role, model)
+ * - Detects empty responses and backend errors
+ * - Builds comprehensive error metadata
+ * - Preserves existing metadata from backend
+ *
+ * @param message - UIMessage from AI SDK with potential metadata
+ * @param participant - Participant info (id, modelId, role)
+ * @param currentIndex - Current participant index in round
+ * @returns Merged metadata object ready for UIMessage
+ *
+ * @example
+ * ```typescript
+ * const updatedMetadata = mergeParticipantMetadata(
+ *   data.message,
+ *   { id: 'p1', modelId: 'claude-3', role: 'Developer' },
+ *   0
+ * );
+ * setMessages(prev => [...prev, { ...data.message, metadata: updatedMetadata }]);
+ * ```
+ */
+export function mergeParticipantMetadata(
+  message: UIMessage,
+  participant: {
+    id: string;
+    modelId: string;
+    role: string | null;
+  },
+  currentIndex: number,
+): Record<string, unknown> {
+  // ✅ Extract existing metadata from message
+  const messageMetadata = message.metadata as Record<string, unknown> | undefined;
+  const hasBackendError = messageMetadata?.hasError === true
+    || !!messageMetadata?.error
+    || !!messageMetadata?.errorMessage;
+
+  // ✅ Detect empty responses (no text content)
+  const textParts = message.parts?.filter(p => p.type === 'text') || [];
+  const hasTextContent = textParts.some((part) => {
+    if ('text' in part && typeof part.text === 'string') {
+      return part.text.trim().length > 0;
+    }
+    return false;
+  });
+
+  const isEmptyResponse = textParts.length === 0 || !hasTextContent;
+  const hasError = hasBackendError || isEmptyResponse;
+
+  // Build error message for empty responses
+  let errorMessage = messageMetadata?.errorMessage as string | undefined;
+  if (isEmptyResponse && !errorMessage) {
+    errorMessage = `The model (${participant.modelId}) did not generate a response. This can happen due to content filtering, model limitations, or API issues.`;
+  }
+
+  // ✅ Merge participant metadata with existing backend metadata
+  return {
+    // Preserve existing metadata from backend
+    ...(typeof message.metadata === 'object' && message.metadata !== null ? message.metadata : {}),
+    // Add participant identification
+    participantId: participant.id,
+    participantIndex: currentIndex,
+    participantRole: participant.role,
+    model: participant.modelId,
+    // Add error fields if error detected
+    ...(hasError && {
+      hasError: true,
+      errorType: messageMetadata?.errorType || (isEmptyResponse ? 'empty_response' : 'unknown'),
+      errorMessage,
+      providerMessage: messageMetadata?.providerMessage || messageMetadata?.openRouterError || errorMessage,
+      openRouterError: messageMetadata?.openRouterError,
+    }),
+  };
+}
