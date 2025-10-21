@@ -1072,9 +1072,9 @@ export default function ChatThreadScreen({
 
   return (
     <>
-      {/* ✅ WINDOW-LEVEL SCROLLING: Content flows naturally, fixed elements use sticky/fixed positioning */}
+      {/* ✅ WINDOW-LEVEL SCROLLING: Content flows naturally, sticky elements stay in view */}
       <div className="flex flex-col min-h-svh">
-        {/* ✅ Content container with virtualization */}
+        {/* ✅ Content container with virtualization - pt-16 creates space for sticky header */}
         <div ref={listRef} className="container max-w-3xl mx-auto px-4 sm:px-6 pt-16 pb-8">
           {/* ✅ WINDOW VIRTUALIZER: Wrapper with total size for proper scrollbar */}
           <div

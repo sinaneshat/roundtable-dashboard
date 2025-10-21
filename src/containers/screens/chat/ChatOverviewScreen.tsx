@@ -390,7 +390,7 @@ export default function ChatOverviewScreen() {
         <WavyBackground containerClassName="h-full w-full" />
       </div>
 
-      {/* Main content - flows naturally with window scrolling */}
+      {/* Main content - flows naturally with window scrolling - pt-16 creates space for sticky header */}
       <div className="container max-w-3xl mx-auto px-4 sm:px-6 pt-16 pb-32">
         {/* ✅ ANIMATED: Initial UI (logo, suggestions) - fades out when streaming starts */}
         <AnimatePresence>
