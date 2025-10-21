@@ -339,10 +339,10 @@ export default function ChatThreadScreen({
   // ✅ REASONING FIX: Compute stable hash of messages to detect content changes (not just length)
   // This ensures reasoning fields and other message content updates trigger re-initialization
   const messagesHash = useMemo(() => {
-    // Create a hash from message IDs + content + reasoning to detect any content changes
-    // This is more efficient than JSON.stringify and catches reasoning field updates
+    // Create a hash from message IDs + parts content to detect any content changes
+    // This is more efficient than JSON.stringify and catches all part updates
     return initialMessages
-      .map(m => `${m.id}:${m.content}:${m.reasoning || ''}`)
+      .map(m => `${m.id}:${JSON.stringify(m.parts)}`)
       .join('|');
   }, [initialMessages]);
 
@@ -403,6 +403,18 @@ export default function ChatThreadScreen({
       const participantCount = contextParticipants.length;
       const recentAssistantMessages = assistantMessages.slice(-participantCount);
       const participantMessageIds = recentAssistantMessages.map(m => m.id);
+
+      // ✅ VALIDATION: Ensure we have participant messages before creating analysis
+      // If participants are still responding (incomplete round), skip analysis
+      if (participantMessageIds.length === 0 || participantMessageIds.length < participantCount) {
+        console.warn('[ChatThreadScreen] ⏭️ Skipping analysis - not all participants have responded yet', {
+          threadId: currentThreadId,
+          roundNumber,
+          participantMessageIds: participantMessageIds.length,
+          expectedParticipants: participantCount,
+        });
+        return;
+      }
 
       // Get user question for this round (last user message)
       const lastUserMessage = userMessages[userMessages.length - 1];
@@ -1254,7 +1266,7 @@ export default function ChatThreadScreen({
           {/* Streaming participants loader - shown during participant streaming */}
           {isStreaming && selectedParticipants.length > 1 && (
             <StreamingParticipantsLoader
-              className="mt-8"
+              className="mt-12"
               participants={selectedParticipants}
               currentParticipantIndex={currentParticipantIndex}
             />
@@ -1269,7 +1281,6 @@ export default function ChatThreadScreen({
                   <div className="h-2 w-2 rounded-full bg-primary animate-bounce [animation-delay:-0.15s]" />
                   <div className="h-2 w-2 rounded-full bg-primary animate-bounce" />
                 </div>
-                <span>{t('moderator.generating')}</span>
               </div>
             </div>
           )}

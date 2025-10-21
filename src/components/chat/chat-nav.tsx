@@ -18,7 +18,6 @@ import { SidebarSection } from '@/components/chat/sidebar-section';
 import { Button } from '@/components/ui/button';
 import {
   Empty,
-  EmptyContent,
   EmptyDescription,
   EmptyHeader,
   EmptyMedia,
@@ -347,12 +346,6 @@ function AppSidebarComponent({ ...props }: React.ComponentProps<typeof Sidebar>)
                           {t('chat.noChatsDescription')}
                         </EmptyDescription>
                       </EmptyHeader>
-                      <EmptyContent>
-                        <Button onClick={handleNewChat} size="sm">
-                          <Plus className="mr-2 size-4" />
-                          {t('navigation.newChat')}
-                        </Button>
-                      </EmptyContent>
                     </Empty>
                   </div>
                 )}

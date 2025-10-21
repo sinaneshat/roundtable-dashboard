@@ -473,7 +473,10 @@ export async function restartStaleAnalysis(
         participantRole: participant.role,
         modelId: participant.modelId,
         modelName,
-        responseContent: msg.content,
+        responseContent: msg.parts
+          .filter(part => part.type === 'text' && 'text' in part)
+          .map(part => (part as { type: 'text'; text: string }).text)
+          .join(' '),
       };
     });
 

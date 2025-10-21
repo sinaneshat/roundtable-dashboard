@@ -1,6 +1,6 @@
 import type { RouteHandler } from '@hono/zod-openapi';
 import type { UIMessage } from 'ai';
-import { consumeStream, convertToModelMessages, streamObject, streamText, validateUIMessages } from 'ai';
+import { convertToModelMessages, createIdGenerator, streamObject, streamText, validateUIMessages } from 'ai';
 import type { SQL } from 'drizzle-orm';
 import { and, asc, desc, eq, ne } from 'drizzle-orm';
 import Fuse from 'fuse.js';
@@ -51,7 +51,7 @@ import type { ApiEnv } from '@/api/types';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db/schema';
 import type { ChatModeId, ThreadStatus } from '@/lib/config/chat-modes';
-import { filterNonEmptyMessages } from '@/lib/utils/message-transforms';
+import { extractTextFromParts, filterNonEmptyMessages } from '@/lib/utils/message-transforms';
 
 import type {
   addParticipantRoute,
@@ -444,9 +444,10 @@ async function triggerRoundAnalysisAsync(params: {
     });
 
     const earliestRoundMessageTime = Math.min(...roundMessages.map(m => m.createdAt.getTime()));
-    const userQuestion = userMessages.find(
+    const userMessage = userMessages.find(
       m => m.createdAt.getTime() < earliestRoundMessageTime,
-    )?.content || 'N/A';
+    );
+    const userQuestion = userMessage ? extractTextFromParts(userMessage.parts) : 'N/A';
 
     // ✅ CREATE PENDING ANALYSIS RECORD: Frontend will stream from /analyze endpoint
     // This prevents duplicate generation and signals frontend to start real-time streaming
@@ -473,6 +474,25 @@ async function triggerRoundAnalysisAsync(params: {
     console.error('[triggerRoundAnalysisAsync] ❌ Failed to trigger round analysis:', error);
     // Don't throw - this is a background operation
   }
+}
+
+/**
+ * ✅ AI SDK V5 HELPER: Convert database messages to UIMessage format
+ * Reference: https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot-message-persistence
+ *
+ * Used by "send only last message" pattern to load previous messages from DB.
+ * Converts database chat_message table rows to AI SDK UIMessage format.
+ */
+function chatMessagesToUIMessages(
+  dbMessages: Array<typeof tables.chatMessage.$inferSelect>,
+): UIMessage[] {
+  return dbMessages.map(msg => ({
+    id: msg.id,
+    role: msg.role as 'user' | 'assistant',
+    parts: msg.parts as unknown as Array<{ type: 'text'; text: string } | { type: 'reasoning'; text: string }>,
+    ...(msg.metadata && { metadata: msg.metadata }),
+    createdAt: msg.createdAt,
+  })) as UIMessage[];
 }
 
 /**
@@ -805,31 +825,28 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
           previousTitle: tempTitle,
         });
 
-        // ✅ CRITICAL FIX: Update both title AND slug
-        // Generate new slug from AI title for better SEO and user experience
-        const newSlug = await generateUniqueSlug(aiTitle);
-
-        console.warn('[createThreadHandler] 📝 Updating thread with AI title and new slug', {
+        // ✅ STABLE URL FIX: Only update title, NOT slug
+        // Slug remains permanent to prevent 404 errors when client is using the original slug
+        // Changing the slug after creation causes race conditions where the client still uses old slug
+        console.warn('[createThreadHandler] 📝 Updating thread with AI title (keeping slug stable)', {
           threadId,
           aiTitle,
-          newSlug,
-          previousSlug: tempSlug,
+          slug: tempSlug, // Keep original slug
         });
 
-        // Update thread with AI-generated title and slug
+        // Update thread with AI-generated title only (slug stays the same)
         await db
           .update(tables.chatThread)
           .set({
             title: aiTitle,
-            slug: newSlug,
             updatedAt: new Date(),
           })
           .where(eq(tables.chatThread.id, threadId));
 
-        console.warn('[createThreadHandler] ✅ Thread updated with AI title and slug', {
+        console.warn('[createThreadHandler] ✅ Thread updated with AI title', {
           threadId,
           aiTitle,
-          newSlug,
+          slug: tempSlug, // Slug unchanged - stable URL
         });
 
         // ✅ CRITICAL FIX: Invalidate cache after title update
@@ -849,7 +866,7 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
         console.warn('[createThreadHandler] 🎉 AI title generation complete', {
           threadId,
           aiTitle,
-          newSlug,
+          slug: tempSlug, // Slug unchanged
         });
       } catch (error) {
         // Log error but don't fail the request since thread is already created
@@ -1754,26 +1771,16 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
   },
   async (c) => {
     const { user } = c.auth();
-    const { messages, id: threadId, participantIndex, participants: providedParticipants, regenerateRound } = c.validated.body;
+    const { message, id: threadId, participantIndex, participants: providedParticipants, regenerateRound, mode: providedMode } = c.validated.body;
 
-    console.warn('[streamChatHandler] 🚀 REQUEST START', {
-      threadId,
-      participantIndex,
-      userId: user.id,
-      messageCount: messages?.length || 0,
-      hasProvidedParticipants: !!providedParticipants,
-      regenerateRound,
-    });
-
-    // Validate messages array exists and is not empty
-    if (!messages || !Array.isArray(messages) || messages.length === 0) {
-      console.error('[streamChatHandler] ❌ VALIDATION ERROR: Messages array invalid', {
+    // ✅ AI SDK V5 OFFICIAL PATTERN: Validate single message exists
+    // Reference: https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot-message-persistence#sending-only-the-last-message
+    if (!message) {
+      console.error('[streamChatHandler] ❌ VALIDATION ERROR: Message is required', {
         threadId,
         participantIndex,
-        messagesProvided: !!messages,
-        isArray: Array.isArray(messages),
       });
-      throw createError.badRequest('Messages array is required and cannot be empty');
+      throw createError.badRequest('Message is required');
     }
 
     const db = await getDbAsync();
@@ -1874,13 +1881,6 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
               eq(tables.chatRoundFeedback.roundNumber, regenerateRound),
             ),
           );
-
-        console.warn('[streamChatHandler] ♻️ Round regeneration complete', {
-          threadId,
-          regenerateRound,
-          messagesDeleted: deletedMessages.length,
-          analysesDeleted: deletedAnalyses.length,
-        });
       } catch (error) {
         console.error('[streamChatHandler] ❌ REGENERATION ERROR: Failed to delete old round data', {
           threadId,
@@ -1905,13 +1905,6 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
       // ✅ REGENERATION: Reuse the exact round number being regenerated
       // This ensures the new messages replace the old round instead of creating a new round
       currentRoundNumber = regenerateRound;
-
-      console.warn('[streamChatHandler] ♻️ Using round number from regeneration', {
-        threadId,
-        participantIndex,
-        regenerateRound,
-        currentRoundNumber,
-      });
     } else if (participantIndex === 0) {
       // First participant: Calculate round number
       const existingUserMessages = await db.query.chatMessage.findMany({
@@ -1923,13 +1916,6 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
       });
 
       currentRoundNumber = existingUserMessages.length + 1;
-
-      console.warn('[streamChatHandler] 🔢 Round number calculated (first participant)', {
-        threadId,
-        participantIndex,
-        existingUserMessages: existingUserMessages.length,
-        currentRoundNumber,
-      });
     } else {
       // Subsequent participants: Get round number from the user message
       const userMessages = await db.query.chatMessage.findMany({
@@ -1943,12 +1929,46 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
       });
 
       currentRoundNumber = userMessages[0]?.roundNumber || 1;
+    }
 
-      console.warn('[streamChatHandler] 🔢 Round number from saved user message', {
+    // =========================================================================
+    // STEP 1.4A: ✅ HANDLE MODE CHANGE (If Provided)
+    // =========================================================================
+    // Check if mode was changed and persist immediately (not staged like participants)
+    // Only first participant (index 0) should handle mode changes to avoid duplicates
+
+    if (providedMode && providedMode !== thread.mode && participantIndex === 0) {
+      console.warn('[streamChatHandler] 🔄 MODE CHANGE DETECTED', {
         threadId,
-        participantIndex,
-        currentRoundNumber,
+        oldMode: thread.mode,
+        newMode: providedMode,
       });
+
+      // Update thread mode
+      await db
+        .update(tables.chatThread)
+        .set({
+          mode: providedMode,
+          updatedAt: new Date(),
+        })
+        .where(eq(tables.chatThread.id, threadId));
+
+      // Create mode change changelog entry
+      await db.insert(tables.chatThreadChangelog).values({
+        id: ulid(),
+        threadId,
+        roundNumber: currentRoundNumber,
+        changeType: 'mode_change',
+        changeSummary: `Changed mode from ${thread.mode} to ${providedMode}`,
+        changeData: {
+          oldMode: thread.mode,
+          newMode: providedMode,
+        },
+        createdAt: new Date(),
+      });
+
+      // Update local thread object for subsequent logic
+      thread.mode = providedMode;
     }
 
     // =========================================================================
@@ -1963,16 +1983,10 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
     // are only persisted when user submits a new message, not when they change the UI.
 
     if (providedParticipants && participantIndex === 0) {
-      console.warn('[streamChatHandler] 📝 Persisting participant changes from request', {
-        threadId,
-        providedCount: providedParticipants.length,
-        dbCount: thread.participants.length,
-      });
-
       // ✅ DETAILED CHANGE DETECTION: Track specific types of changes
       const changelogEntries: Array<{
         id: string;
-        changeType: 'participant_added' | 'participant_removed' | 'participant_updated' | 'participants_reordered';
+        changeType: 'participant_added' | 'participant_removed' | 'participant_updated' | 'participants_reordered' | 'mode_change';
         changeSummary: string;
         changeData: Record<string, unknown>;
       }> = [];
@@ -1981,31 +1995,37 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
       const enabledDbParticipants = thread.participants.filter(p => p.isEnabled);
       const providedEnabledParticipants = providedParticipants.filter(p => p.isEnabled !== false);
 
-      // Detect removed participants (in DB but not in provided)
+      // ✅ FIXED: Match participants by modelId+role combination, not by ID
+      // Frontend sends temporary IDs like "participant-1" for new participants
+      // We need to match by content (modelId + role) to detect actual changes
+      const matchParticipant = (p1: { modelId: string; role?: string | null }, p2: { modelId: string; role?: string | null }) =>
+        p1.modelId === p2.modelId && (p1.role || null) === (p2.role || null);
+
+      // Detect removed participants (in DB but not in provided list)
       const removedParticipants = enabledDbParticipants.filter(
-        dbP => !providedEnabledParticipants.find(p => p.id === dbP.id),
+        dbP => !providedEnabledParticipants.find(p => matchParticipant(p, dbP)),
       );
 
-      // Detect added participants (in provided but not in DB enabled)
-      // ✅ CRITICAL: Also check if ID is temporary (starts with "participant-")
+      // Detect added participants (in provided but not in DB)
+      // Match by modelId+role to avoid treating reordered participants as "new"
       const addedParticipants = providedEnabledParticipants.filter(
-        provided => !enabledDbParticipants.find(dbP => dbP.id === provided.id) || provided.id.startsWith('participant-'),
+        provided => !enabledDbParticipants.find(dbP => matchParticipant(provided, dbP)),
       );
 
-      // Detect updated participants (role, model, or customRole changed)
+      // Detect updated participants (customRole changed for same modelId+role)
       const updatedParticipants = providedEnabledParticipants.filter((provided) => {
-        const dbP = enabledDbParticipants.find(db => db.id === provided.id);
+        const dbP = enabledDbParticipants.find(db => matchParticipant(provided, db));
         if (!dbP) {
           return false; // This is an added participant, not updated
         }
-        return dbP.modelId !== provided.modelId
-          || dbP.role !== provided.role
-          || dbP.customRoleId !== provided.customRoleId;
+        // Only consider it updated if customRoleId changed
+        return dbP.customRoleId !== provided.customRoleId;
       });
 
-      // Detect reordering (priority changes)
+      // Detect reordering (priority changes for existing participants)
+      // Match by modelId+role to get the correct DB participant
       const wasReordered = providedEnabledParticipants.some((provided, index) => {
-        const dbP = enabledDbParticipants.find(db => db.id === provided.id);
+        const dbP = enabledDbParticipants.find(db => matchParticipant(provided, db));
         return dbP && dbP.priority !== index;
       });
 
@@ -2026,22 +2046,27 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
         });
       });
 
-      // ✅ BUILD UPDATE OPERATIONS FOR EXISTING PARTICIPANTS ONLY
-      const updateOps = providedParticipants
-        .filter(provided => !provided.id.startsWith('participant-')) // Skip temporary IDs
-        .filter(provided => enabledDbParticipants.find(dbP => dbP.id === provided.id)) // Only update existing
-        .map(provided =>
-          db.update(tables.chatParticipant)
+      // ✅ FIXED: UPDATE OPERATIONS - Match by modelId+role instead of ID
+      // Build update operations for existing participants (matched by content, not ID)
+      const updateOps = providedEnabledParticipants
+        .map((provided) => {
+          // Find matching DB participant by modelId+role
+          const dbP = enabledDbParticipants.find(db => matchParticipant(provided, db));
+          if (!dbP) {
+            return null; // Not an existing participant, skip
+          }
+
+          // Update with new priority, customRoleId, and isEnabled status
+          return db.update(tables.chatParticipant)
             .set({
-              modelId: provided.modelId,
-              role: provided.role ?? null,
               customRoleId: provided.customRoleId ?? null,
               priority: provided.priority,
               isEnabled: provided.isEnabled ?? true,
               updatedAt: new Date(),
             })
-            .where(eq(tables.chatParticipant.id, provided.id)),
-        );
+            .where(eq(tables.chatParticipant.id, dbP.id)); // Use DB ID for update
+        })
+        .filter((op): op is NonNullable<typeof op> => op !== null);
 
       // Also disable participants that were removed (not in provided list)
       const disableOps = removedParticipants.map(removed =>
@@ -2053,13 +2078,22 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
           .where(eq(tables.chatParticipant.id, removed.id)),
       );
 
-      // Create specific changelog entries
+      // ✅ FIXED: Helper to extract model name from modelId
+      const extractModelName = (modelId: string) => {
+        // Extract last part after "/" for better readability
+        const parts = modelId.split('/');
+        return parts[parts.length - 1] || modelId;
+      };
+
+      // Create specific changelog entries with improved summaries
       if (removedParticipants.length > 0) {
         removedParticipants.forEach((removed) => {
+          const modelName = extractModelName(removed.modelId);
+          const displayName = removed.role || modelName;
           changelogEntries.push({
             id: ulid(),
             changeType: 'participant_removed',
-            changeSummary: `Removed ${removed.role || removed.modelId}`,
+            changeSummary: `Removed ${displayName}`,
             changeData: {
               participantId: removed.id,
               modelId: removed.modelId,
@@ -2071,10 +2105,12 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
 
       if (addedParticipants.length > 0) {
         addedParticipants.forEach((added) => {
+          const modelName = extractModelName(added.modelId);
+          const displayName = added.role || modelName;
           changelogEntries.push({
             id: ulid(),
             changeType: 'participant_added',
-            changeSummary: `Added ${added.role || added.modelId}`,
+            changeSummary: `Added ${displayName}`,
             changeData: {
               participantId: added.id,
               modelId: added.modelId,
@@ -2086,31 +2122,33 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
 
       if (updatedParticipants.length > 0) {
         updatedParticipants.forEach((updated) => {
-          const dbP = enabledDbParticipants.find(db => db.id === updated.id);
+          // ✅ FIXED: Match by modelId+role instead of ID
+          const dbP = enabledDbParticipants.find(db => matchParticipant(updated, db));
           if (!dbP) {
             return;
           }
 
           const changes: string[] = [];
-          if (dbP.modelId !== updated.modelId) {
-            changes.push(`model changed to ${updated.modelId}`);
-          }
-          if (dbP.role !== updated.role) {
-            changes.push(`role changed to ${updated.role || 'none'}`);
+          if (dbP.customRoleId !== updated.customRoleId) {
+            changes.push(`custom role changed`);
           }
 
-          changelogEntries.push({
-            id: ulid(),
-            changeType: 'participant_updated',
-            changeSummary: `Updated ${updated.role || updated.modelId}: ${changes.join(', ')}`,
-            changeData: {
-              participantId: updated.id,
-              modelId: updated.modelId,
-              role: updated.role,
-              oldModelId: dbP.modelId,
-              oldRole: dbP.role,
-            },
-          });
+          if (changes.length > 0) {
+            const modelName = extractModelName(updated.modelId);
+            const displayName = updated.role || modelName;
+            changelogEntries.push({
+              id: ulid(),
+              changeType: 'participant_updated',
+              changeSummary: `Updated ${displayName}: ${changes.join(', ')}`,
+              changeData: {
+                participantId: dbP.id,
+                modelId: updated.modelId,
+                role: updated.role,
+                oldCustomRoleId: dbP.customRoleId,
+                newCustomRoleId: updated.customRoleId,
+              },
+            });
+          }
         });
       }
 
@@ -2120,27 +2158,21 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
           changeType: 'participants_reordered',
           changeSummary: `Reordered ${providedEnabledParticipants.length} participant(s)`,
           changeData: {
-            participants: providedEnabledParticipants.map((p, index) => ({
-              id: p.id,
-              modelId: p.modelId,
-              role: p.role,
-              order: index,
-            })),
+            participants: providedEnabledParticipants.map((p, index) => {
+              const dbP = enabledDbParticipants.find(db => matchParticipant(p, db));
+              return {
+                id: dbP?.id || p.id,
+                modelId: p.modelId,
+                role: p.role,
+                order: index,
+              };
+            }),
           },
         });
       }
 
       // Only persist if there are actual changes
       if (changelogEntries.length > 0 || insertOps.length > 0 || updateOps.length > 0 || disableOps.length > 0) {
-        console.warn('[streamChatHandler] 🔄 Participant changes detected', {
-          threadId,
-          added: addedParticipants.length,
-          removed: removedParticipants.length,
-          updated: updatedParticipants.length,
-          reordered: wasReordered,
-          changelogEntries: changelogEntries.length,
-        });
-
         // Build changelog insert operations
         const changelogOps = changelogEntries.map(entry =>
           db.insert(tables.chatThreadChangelog)
@@ -2158,18 +2190,6 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
 
         // ✅ Execute all operations atomically (INSERT new, UPDATE existing, DISABLE removed)
         await executeAtomic(db, [...insertOps, ...updateOps, ...disableOps, ...changelogOps]);
-
-        console.warn('[streamChatHandler] ✅ Participant changes persisted', {
-          threadId,
-          insertCount: insertOps.length,
-          updateCount: updateOps.length,
-          disableCount: disableOps.length,
-          changelogCount: changelogOps.length,
-        });
-      } else {
-        console.warn('[streamChatHandler] ℹ️  No participant changes detected', {
-          threadId,
-        });
       }
     }
 
@@ -2189,11 +2209,6 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
     if (providedParticipants) {
       // ✅ PROVIDED PARTICIPANTS: Always reload from database to get latest persisted state
       // This applies to ALL participants (0, 1, 2, 3...) when frontend sends config
-      console.warn('[streamChatHandler] 🔄 Reloading participants from database (provided config)', {
-        threadId,
-        participantIndex,
-        providedCount: providedParticipants.length,
-      });
 
       const reloadedThread = await db.query.chatThread.findFirst({
         where: eq(tables.chatThread.id, threadId),
@@ -2211,24 +2226,9 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
       }
 
       participants = reloadedThread.participants;
-
-      console.warn('[streamChatHandler] ✅ Participants reloaded from database', {
-        threadId,
-        participantIndex,
-        participantCount: participants.length,
-        participantIds: participants.map(p => p.id),
-        participantRoles: participants.map(p => p.role),
-        participantPriorities: participants.map(p => p.priority),
-      });
     } else {
       // ✅ NO PROVIDED PARTICIPANTS: Use database state from initial query
       participants = thread.participants;
-
-      console.warn('[streamChatHandler] ✅ Using database participants from initial query', {
-        threadId,
-        participantIndex,
-        participantCount: participants.length,
-      });
     }
 
     if (participants.length === 0) {
@@ -2250,52 +2250,49 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
       throw createError.badRequest(`Participant at index ${participantIndex} not found`);
     }
 
-    console.warn('[streamChatHandler] 🤖 Selected participant', {
-      threadId,
-      participantIndex,
-      participantId: participant.id,
-      modelId: participant.modelId,
-      role: participant.role,
-      priority: participant.priority,
+    // =========================================================================
+    // STEP 3: ✅ AI SDK V5 OFFICIAL PATTERN - Load Previous Messages from DB
+    // Reference: https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot-message-persistence#sending-only-the-last-message
+    // =========================================================================
+    // OPTIMIZATION: Instead of sending entire message history from frontend,
+    // load previous messages from database and append new message.
+    //
+    // Benefits:
+    // - Reduced bandwidth (important for long conversations)
+    // - Faster requests as conversation grows
+    // - Single source of truth (database)
+
+    // Load all previous messages from database
+    const previousDbMessages = await db.query.chatMessage.findMany({
+      where: eq(tables.chatMessage.threadId, threadId),
+      orderBy: [asc(tables.chatMessage.createdAt)],
     });
 
-    // =========================================================================
-    // STEP 3: ✅ OFFICIAL PATTERN - Type and Validate Messages
-    // Reference: https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot#validating-messages-from-database
-    // =========================================================================
+    // Convert database messages to UIMessage format
+    const previousMessages = chatMessagesToUIMessages(previousDbMessages);
 
-    console.warn('[streamChatHandler] 📋 Validating messages', {
-      threadId,
-      participantIndex,
-      messageCount: messages.length,
-    });
+    // Combine previous messages + new message
+    const allMessages = [...previousMessages, message as UIMessage];
 
+    // ✅ AI SDK v5 OFFICIAL PATTERN: Validate ALL messages (previous + new)
+    // Reference: https://sdk.vercel.ai/docs/ai-sdk-core/validate-ui-messages
+    // This ensures both stored messages and new message are valid
     let typedMessages: UIMessage[] = [];
 
     try {
-      if (!Array.isArray(messages)) {
-        throw new TypeError('Messages must be an array');
-      }
-
-      typedMessages = messages as UIMessage[];
-      // ✅ AI SDK v5 OFFICIAL PATTERN: Validate messages with metadata schema
-      // Reference: https://sdk.vercel.ai/docs/ai-sdk-core/validate-ui-messages
+      // ✅ Validate combined message history
       validateUIMessages({
-        messages: typedMessages,
+        messages: allMessages,
         metadataSchema: UIMessageMetadataSchema,
       });
-
-      console.warn('[streamChatHandler] ✅ Messages validated', {
-        threadId,
-        participantIndex,
-        messageCount: typedMessages.length,
-      });
+      typedMessages = allMessages;
     } catch (error) {
       console.error('[streamChatHandler] ❌ MESSAGE VALIDATION ERROR', {
         threadId,
         participantIndex,
         error: error instanceof Error ? error.message : String(error),
-        messageCount: messages.length,
+        previousMessageCount: previousMessages.length,
+        totalMessageCount: allMessages.length,
       });
       throw createError.badRequest(`Invalid message format: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
@@ -2308,14 +2305,6 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
 
     const lastMessage = typedMessages[typedMessages.length - 1];
     if (lastMessage && lastMessage.role === 'user' && participantIndex === 0) {
-      console.warn('[streamChatHandler] 💾 Checking user message (first participant)', {
-        threadId,
-        participantIndex,
-        messageId: lastMessage.id,
-        roundNumber: currentRoundNumber,
-        hasPartsArray: !!lastMessage.parts,
-      });
-
       const existsInDb = await db.query.chatMessage.findFirst({
         where: eq(tables.chatMessage.id, lastMessage.id),
       });
@@ -2334,73 +2323,42 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
             .trim();
 
           if (content.length > 0) {
-            // ✅ DUPLICATE PREVENTION: Check if a user message with the same content already exists in this round
-            // This prevents duplicate messages when startRound() is called (which creates a new message ID)
-            const duplicateCheck = await db.query.chatMessage.findFirst({
+            // ✅ DUPLICATE PREVENTION: Check if a user message exists in this round
+            // Since we can't filter by JSON content in SQL, check all messages in the round
+            const roundMessages = await db.query.chatMessage.findMany({
               where: and(
                 eq(tables.chatMessage.threadId, threadId),
                 eq(tables.chatMessage.role, 'user'),
                 eq(tables.chatMessage.roundNumber, currentRoundNumber),
-                eq(tables.chatMessage.content, content),
               ),
+              columns: { id: true, parts: true },
             });
 
-            if (duplicateCheck) {
-              console.warn('[streamChatHandler] ⏭️  Duplicate user message detected (same content in same round) - skipping save', {
-                threadId,
-                participantIndex,
-                messageId: lastMessage.id,
-                existingMessageId: duplicateCheck.id,
-                roundNumber: currentRoundNumber,
-                contentPreview: content.substring(0, 50),
-              });
-            } else {
-              console.warn('[streamChatHandler] 💾 Saving user message', {
-                threadId,
-                participantIndex,
-                messageId: lastMessage.id,
-                roundNumber: currentRoundNumber,
-                contentLength: content.length,
-              });
+            // Check if any existing message has the same content
+            const isDuplicate = roundMessages.some(msg =>
+              extractTextFromParts(msg.parts).trim() === content,
+            );
 
+            if (!isDuplicate) {
               await enforceMessageQuota(user.id);
               await db.insert(tables.chatMessage).values({
                 id: lastMessage.id,
                 threadId,
                 role: 'user',
-                content,
+                parts: [{ type: 'text', text: content }],
                 roundNumber: currentRoundNumber,
                 createdAt: new Date(),
               });
               await incrementMessageUsage(user.id, 1);
-
-              console.warn('[streamChatHandler] ✅ User message saved', {
-                threadId,
-                participantIndex,
-                messageId: lastMessage.id,
-                roundNumber: currentRoundNumber,
-              });
             }
           }
         }
-      } else {
-        console.warn('[streamChatHandler] ⏭️  User message already exists', {
-          threadId,
-          participantIndex,
-          messageId: lastMessage.id,
-        });
       }
     }
 
     // =========================================================================
     // STEP 5: Initialize OpenRouter and Setup
     // =========================================================================
-
-    console.warn('[streamChatHandler] 🔧 Initializing OpenRouter', {
-      threadId,
-      participantIndex,
-      modelId: participant.modelId,
-    });
 
     initializeOpenRouter(c.env);
     const client = openRouterService.getClient();
@@ -2425,25 +2383,10 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
       userTier,
     );
 
-    console.warn('[streamChatHandler] ✅ OpenRouter initialized', {
-      threadId,
-      participantIndex,
-      userTier,
-      modelContextLength,
-      estimatedInputTokens,
-      maxOutputTokens,
-    });
-
     // =========================================================================
     // STEP 6: ✅ OFFICIAL AI SDK v5 PATTERN - Direct streamText()
     // Reference: https://sdk.vercel.ai/docs/ai-sdk-core/generating-text#stream-text
     // =========================================================================
-
-    console.warn('[streamChatHandler] 🔄 Preparing messages for model', {
-      threadId,
-      participantIndex,
-      totalMessages: typedMessages.length,
-    });
 
     // Prepare system prompt for this participant
     // ✅ OPTIMIZED SYSTEM PROMPT: 2025 best practices for natural conversation
@@ -2456,23 +2399,9 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
         ? `You're ${participant.role}. Engage naturally in this discussion, sharing your perspective and insights. Be direct, thoughtful, and conversational.`
         : `Engage naturally in this discussion. Share your thoughts, ask questions, and build on others' ideas. Be direct and conversational.`);
 
-    console.warn('[streamChatHandler] 📝 System prompt prepared', {
-      threadId,
-      participantIndex,
-      hasCustomPrompt: !!participant.settings?.systemPrompt,
-      promptLength: systemPrompt.length,
-    });
-
     // Convert UI messages to model messages
     // ✅ SHARED UTILITY: Filter out empty messages (caused by subsequent participant triggers)
     const nonEmptyMessages = filterNonEmptyMessages(typedMessages);
-
-    console.warn('[streamChatHandler] 🔍 Filtered messages', {
-      threadId,
-      participantIndex,
-      originalCount: typedMessages.length,
-      nonEmptyCount: nonEmptyMessages.length,
-    });
 
     if (nonEmptyMessages.length === 0) {
       console.error('[streamChatHandler] ❌ NO VALID MESSAGES', {
@@ -2483,21 +2412,47 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
       throw createError.badRequest('No valid messages to send to AI model');
     }
 
-    let modelMessages;
-    try {
-      modelMessages = convertToModelMessages(nonEmptyMessages);
+    // =========================================================================
+    // STEP 6.4: ✅ VALIDATE MESSAGES WITH AI SDK validateUIMessages()
+    // =========================================================================
+    // OFFICIAL AI SDK PATTERN: Validate messages before conversion
+    // Reference: https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot#validating-messages-from-database
+    //
+    // Ensures:
+    // - Message format compliance (UIMessage structure)
+    // - Tool call structure validation (when tools are used)
+    // - Data parts integrity (when custom data parts exist)
+    //
+    // This is CRITICAL for message persistence - prevents malformed messages
+    // from corrupting the database or causing silent failures downstream.
 
-      console.warn('[streamChatHandler] ✅ Messages converted to model format', {
+    let validatedMessages: UIMessage[];
+    try {
+      validatedMessages = await validateUIMessages({
+        messages: nonEmptyMessages,
+        // tools: undefined, // Add when tool support is implemented
+        // dataPartsSchema: undefined, // Add when custom data parts are used
+        // metadataSchema: undefined, // Optional: Add for strict metadata validation
+      });
+    } catch (validationError) {
+      console.error('[streamChatHandler] ❌ MESSAGE VALIDATION ERROR', {
         threadId,
         participantIndex,
-        modelMessageCount: modelMessages.length,
+        error: validationError instanceof Error ? validationError.message : String(validationError),
+        nonEmptyMessageCount: nonEmptyMessages.length,
       });
+      throw createError.badRequest('Invalid message format. Please refresh and try again.');
+    }
+
+    let modelMessages;
+    try {
+      modelMessages = convertToModelMessages(validatedMessages);
     } catch (conversionError) {
       console.error('[streamChatHandler] ❌ MESSAGE CONVERSION ERROR', {
         threadId,
         participantIndex,
         error: conversionError instanceof Error ? conversionError.message : String(conversionError),
-        nonEmptyMessageCount: nonEmptyMessages.length,
+        validatedMessageCount: validatedMessages.length,
       });
       throw createError.badRequest('Failed to convert messages for model');
     }
@@ -2549,21 +2504,13 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
       // Re-convert with the last user message duplicated at the end
       // This ensures the conversation structure is: [user, assistant, user, assistant, ..., user]
       modelMessages = convertToModelMessages([
-        ...nonEmptyMessages,
+        ...validatedMessages,
         {
           id: `user-continuation-${ulid()}`,
           role: 'user',
           parts: [{ type: 'text', text: lastUserText.text }],
         },
       ]);
-
-      console.warn('[streamChatHandler] ✅ Fixed message history by duplicating last user message', {
-        threadId,
-        participantIndex,
-        originalMessageCount: modelMessages.length - 1,
-        newMessageCount: modelMessages.length,
-        userMessageText: lastUserText.text.substring(0, 50),
-      });
     }
 
     // =========================================================================
@@ -2593,14 +2540,6 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
     // - onFinish callback handles response-level errors (empty responses, content filters)
     // - No double API calls, no validation overhead, faster response times
     //
-    console.warn('[streamChatHandler] 🚀 Starting stream', {
-      threadId,
-      participantIndex,
-      participantId: participant.id,
-      modelId: participant.modelId,
-      modelRole: participant.role,
-    });
-
     // Parameters for streamText
     const streamParams = {
       model: client(participant.modelId),
@@ -2620,17 +2559,46 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
       // ✅ CONDITIONAL RETRY: Don't retry validation errors (400), authentication errors (401, 403)
       // These are permanent errors that won't be fixed by retrying
       shouldRetry: ({ error }: { error: unknown }) => {
-        // Extract status code from error
-        const err = error as Error & { statusCode?: number; responseBody?: string };
+        // Extract status code and error name from error
+        const err = error as Error & { statusCode?: number; responseBody?: string; name?: string };
         const statusCode = err?.statusCode;
+        const errorName = err?.name || '';
+
+        // Don't retry AI SDK type validation errors - these are provider response format issues
+        // that won't be fixed by retrying. The stream already partially succeeded.
+        if (errorName === 'AI_TypeValidationError') {
+          console.warn('[streamChatHandler] ⏭️ Skipping retry for AI SDK type validation error', {
+            threadId,
+            participantIndex,
+            errorName,
+            errorMessage: err?.message?.substring(0, 200), // Log first 200 chars
+          });
+          return false;
+        }
 
         // Don't retry validation errors (400) - malformed requests
         if (statusCode === 400) {
+          // Check for specific non-retryable error messages
+          const errorMessage = err?.message || '';
+          const responseBody = err?.responseBody || '';
+
+          // Don't retry "Multi-turn conversations are not supported" errors
+          if (errorMessage.includes('Multi-turn conversations are not supported')
+            || responseBody.includes('Multi-turn conversations are not supported')) {
+            console.warn('[streamChatHandler] ⏭️ Model does not support multi-turn conversations', {
+              threadId,
+              participantIndex,
+              modelId: participant.modelId,
+              errorMessage,
+            });
+            return false;
+          }
+
           console.warn('[streamChatHandler] ⏭️ Skipping retry for validation error (400)', {
             threadId,
             participantIndex,
             statusCode,
-            errorMessage: err?.message,
+            errorMessage,
           });
           return false;
         }
@@ -2668,163 +2636,37 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
     const reasoningDeltas: string[] = [];
 
     // =========================================================================
-    // ✅ EMPTY RESPONSE RETRY LOGIC
+    // ✅ AI SDK V5 BUILT-IN RETRY LOGIC
     // =========================================================================
-    // Some models return 0 tokens even with finishReason='stop', which indicates
-    // possible content filtering or model instability. We retry these cases.
+    // Use AI SDK's built-in retry mechanism instead of custom retry loop
+    // Benefits:
+    // 1. No duplicate messages on frontend (retries happen internally)
+    // 2. Exponential backoff for transient errors
+    // 3. Single stream to frontend (cleaner UX)
+    // 4. Follows official AI SDK v5 patterns
     //
-    // STRATEGY: Single loop with inline retry logic
-    // - Make up to MAX_EMPTY_RESPONSE_RETRIES attempts
-    // - Each attempt consumes stream to check if empty
-    // - On success OR final attempt, make one more call with onFinish for persistence
-    const MAX_EMPTY_RESPONSE_RETRIES = AI_RETRY_CONFIG.maxAttempts;
-    let totalRetryAttempts = 0;
-    let lastAttemptWasEmpty = false;
-
-    for (let attempt = 1; attempt <= MAX_EMPTY_RESPONSE_RETRIES; attempt++) {
-      totalRetryAttempts = attempt;
-
-      console.warn('[streamChatHandler] 🔄 Attempting stream', {
-        threadId,
-        participantIndex,
-        modelId: participant.modelId,
-        attempt,
-        maxAttempts: MAX_EMPTY_RESPONSE_RETRIES,
-      });
-
-      // Clear reasoning deltas for this attempt
-      reasoningDeltas.length = 0;
-
-      try {
-        // ✅ STREAM RESPONSE: Call model
-        const result = streamText({
-          ...streamParams,
-
-          onChunk: async ({ chunk }) => {
-            if (chunk.type === 'reasoning-delta') {
-              reasoningDeltas.push(chunk.text);
-            }
-          },
-        });
-
-        // ✅ CONSUME STREAM: Wait for completion to check output tokens
-        const text = await result.text;
-        const usage = await result.usage;
-        const finishReason = await result.finishReason;
-
-        const outputTokens = usage?.outputTokens || 0;
-        const isEmptyResponse = outputTokens === 0;
-
-        console.warn('[streamChatHandler] 📊 Stream completed', {
-          threadId,
-          participantIndex,
-          modelId: participant.modelId,
-          attempt,
-          outputTokens,
-          finishReason,
-          textLength: text?.length || 0,
-          isEmptyResponse,
-        });
-
-        lastAttemptWasEmpty = isEmptyResponse;
-
-        // ✅ SUCCESS: Got valid response (> 0 tokens)
-        if (!isEmptyResponse) {
-          console.warn('[streamChatHandler] ✅ Valid response received', {
-            threadId,
-            participantIndex,
-            modelId: participant.modelId,
-            attempt,
-            outputTokens,
-          });
-          break; // Exit retry loop - will make final call for persistence
-        }
-
-        // ✅ RETRY: Empty response, try again (if not last attempt)
-        if (attempt < MAX_EMPTY_RESPONSE_RETRIES) {
-          console.warn('[streamChatHandler] ⚠️ Empty response detected, retrying', {
-            threadId,
-            participantIndex,
-            modelId: participant.modelId,
-            attempt,
-            remainingAttempts: MAX_EMPTY_RESPONSE_RETRIES - attempt,
-            finishReason,
-          });
-          continue; // Try again
-        } else {
-          // ✅ EXHAUSTED: All retries failed
-          console.error('[streamChatHandler] ❌ Empty response after all retries', {
-            threadId,
-            participantIndex,
-            modelId: participant.modelId,
-            totalAttempts: attempt,
-            finishReason,
-          });
-          break; // Exit - will make final call to persist the error
-        }
-      } catch (streamError) {
-        // Check if this error should be retried using the same logic as shouldRetry
-        const err = streamError as Error & { statusCode?: number; responseBody?: string };
-        const statusCode = err?.statusCode;
-
-        // Check if error is non-retryable (validation, auth, not found, data policy errors)
-        const isNonRetryable = (
-          statusCode === 400 // Validation error
-          || statusCode === 401 // Authentication error
-          || statusCode === 403 // Forbidden/authentication error
-          || statusCode === 404 // Not found (including data policy errors)
-        );
-
-        console.error('[streamChatHandler] ❌ Stream error during attempt', {
-          threadId,
-          participantIndex,
-          modelId: participant.modelId,
-          attempt,
-          statusCode,
-          error: streamError instanceof Error ? streamError.message : String(streamError),
-          remainingAttempts: MAX_EMPTY_RESPONSE_RETRIES - attempt,
-          isNonRetryable,
-        });
-
-        // Don't retry non-retryable errors - throw immediately
-        if (isNonRetryable) {
-          console.warn('[streamChatHandler] ⏭️ Non-retryable error detected - stopping retry loop', {
-            threadId,
-            participantIndex,
-            statusCode,
-            errorType: statusCode === 404 ? 'Data policy or model not found' : 'Validation or authentication',
-          });
-          throw streamError;
-        }
-
-        // If last attempt, throw error
-        if (attempt >= MAX_EMPTY_RESPONSE_RETRIES) {
-          throw streamError;
-        }
-
-        // Otherwise, retry (for transient errors like rate limits, network issues)
-        continue;
-      }
-    }
-
+    // The AI SDK automatically retries:
+    // - Network errors
+    // - Rate limit errors (429)
+    // - Server errors (500, 502, 503)
+    //
+    // It does NOT retry:
+    // - Validation errors (400)
+    // - Authentication errors (401, 403)
+    // - Not found errors (404)
+    // - Content policy violations
+    //
+    // Reference: https://ai-sdk.dev/docs/reference/ai-sdk-core/stream-text
     // =========================================================================
-    // ✅ FINAL STREAM: Make one final call with onFinish for DB persistence
-    // =========================================================================
-    // This call will be streamed to the frontend and saved to database
-    console.warn('[streamChatHandler] 🚀 Final stream with persistence', {
-      threadId,
-      participantIndex,
-      modelId: participant.modelId,
-      totalAttempts: totalRetryAttempts,
-      lastAttemptWasEmpty,
-    });
 
-    // Clear reasoning deltas before final attempt
-    reasoningDeltas.length = 0;
-
-    // ✅ STREAM RESPONSE: Final attempt with persistence
+    // ✅ STREAM RESPONSE: Single stream with built-in AI SDK retry logic
     const finalResult = streamText({
       ...streamParams,
+
+      // ✅ AI SDK V5 BUILT-IN RETRY: Configure retry behavior
+      // maxRetries: Maximum number of automatic retries for transient errors
+      // Default is 2, which gives us 3 total attempts (1 initial + 2 retries)
+      maxRetries: AI_RETRY_CONFIG.maxAttempts - 1, // -1 because maxRetries doesn't count initial attempt
 
       onChunk: async ({ chunk }) => {
         if (chunk.type === 'reasoning-delta') {
@@ -2835,16 +2677,6 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
       // ✅ PERSIST MESSAGE: Save to database after streaming completes
       onFinish: async (finishResult) => {
         const { text, usage, finishReason, providerMetadata, response } = finishResult;
-
-        // ✅ ADD RETRY METADATA: Track how many attempts were made
-        console.warn('[streamChatHandler] 💾 Saving message with retry metadata', {
-          threadId,
-          participantIndex,
-          modelId: participant.modelId,
-          totalRetryAttempts,
-          outputTokens: usage?.outputTokens || 0,
-          finishReason,
-        });
 
         // ✅ CRITICAL FIX: Extract reasoning from accumulated deltas first
         // Priority 1: Use accumulated reasoning deltas from stream chunks
@@ -2905,24 +2737,6 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
 
           reasoningText = extractReasoning(providerMetadata);
         }
-
-        // Determine source of reasoning for logging
-        const reasoningSource = reasoningDeltas.length > 0
-          ? 'stream-chunks'
-          : finishResultWithReasoning?.reasoning
-            ? 'finishResult'
-            : reasoningText
-              ? 'providerMetadata'
-              : 'none';
-
-        console.warn('[streamChatHandler] 🧠 Reasoning extracted', {
-          threadId,
-          participantIndex,
-          modelId: participant.modelId,
-          reasoningLength: reasoningText?.length || 0,
-          reasoningDeltaCount: reasoningDeltas.length,
-          source: reasoningSource,
-        });
 
         // ✅ CRITICAL ERROR HANDLING: Wrap DB operations in try-catch
         // This ensures that errors don't break the round - next participant can still respond
@@ -3049,14 +2863,29 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
             || (errorCategory === 'empty_response' && finishReason !== 'stop')
           );
 
+          // ✅ AI SDK v5 PATTERN: Build parts[] array with text and reasoning
+          const parts: Array<{ type: 'text'; text: string } | { type: 'reasoning'; text: string }> = [];
+
+          if (contentToSave) {
+            parts.push({ type: 'text', text: contentToSave });
+          }
+
+          if (reasoningText) {
+            parts.push({ type: 'reasoning', text: reasoningText });
+          }
+
+          // Ensure at least one part exists (empty text for error messages)
+          if (parts.length === 0) {
+            parts.push({ type: 'text', text: '' });
+          }
+
           const [savedMessage] = await db.insert(tables.chatMessage)
             .values({
               id: ulid(),
               threadId,
               participantId: participant.id,
               role: 'assistant' as const,
-              content: contentToSave,
-              reasoning: reasoningText,
+              parts,
               roundNumber: currentRoundNumber,
               metadata: {
                 model: participant.modelId,
@@ -3071,26 +2900,20 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
                 providerMessage,
                 openRouterError,
                 isTransient: isTransientError,
-                retryAttempts: totalRetryAttempts > 1 ? totalRetryAttempts : undefined, // Only include if retried
+                // ⚠️ retryAttempts removed - AI SDK handles retries internally, we don't track attempts
               },
               createdAt: new Date(),
             })
             .onConflictDoNothing()
             .returning();
 
-          console.warn('[streamChatHandler] ✅ Assistant message saved', {
-            threadId,
-            participantIndex,
-            participantId: participant.id,
-            messageId: savedMessage?.id,
-            isLastParticipant: participantIndex === participants.length - 1,
-          });
-
           await incrementMessageUsage(user.id, 1);
 
           // ✅ TRIGGER ANALYSIS: When last participant finishes AND all participants succeeded
           if (participantIndex === participants.length - 1 && savedMessage) {
-            const currentRoundNumber = Math.ceil((participantIndex + 1) / participants.length);
+            // ✅ CRITICAL FIX: Use the currentRoundNumber from outer scope (lines 1904-1950)
+            // DO NOT recalculate it here - that would give wrong results for rounds > 1
+            // The currentRoundNumber is already calculated based on user message count
 
             // ✅ VALIDATE ROUND: Check if all participants in this round succeeded
             // Query all messages for the current round to ensure none have errors
@@ -3119,13 +2942,6 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
                 errorCount: messagesWithErrors.length,
               });
             } else {
-              console.warn('[streamChatHandler] 🎯 Last participant finished - triggering analysis', {
-                threadId,
-                participantIndex,
-                roundNumber: currentRoundNumber,
-                totalParticipants: participants.length,
-              });
-
               triggerRoundAnalysisAsync({
                 threadId,
                 thread: { ...thread, participants },
@@ -3154,8 +2970,13 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
       },
     });
 
-    // Return stream response
+    // ✅ AI SDK V5 OFFICIAL PATTERN: Handle client disconnects
+    // Reference: https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot-message-persistence#handling-client-disconnects
+    // This ensures the stream runs to completion even if client disconnects (e.g., tab closed, network issue)
+    // The onFinish callback will still save the message to the database
+    finalResult.consumeStream(); // no await - runs in background
 
+    // Return stream response
     return finalResult.toUIMessageStreamResponse({
       sendReasoning: true, // Stream reasoning for o1/o3/DeepSeek models
 
@@ -3163,10 +2984,13 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
       // Reference: https://sdk.vercel.ai/docs/ai-sdk-ui/25-message-metadata
       originalMessages: typedMessages,
 
-      // ✅ OFFICIAL PATTERN: Required for proper abort handling
-      // Reference: https://sdk.vercel.ai/docs/09-troubleshooting/14-stream-abort-handling
-      // Without this, onFinish callback may not fire when stream is aborted
-      consumeSseStream: consumeStream,
+      // ✅ AI SDK V5 OFFICIAL PATTERN: Server-side message ID generation
+      // Reference: https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot-message-persistence#message-ids
+      // Ensures consistent IDs for database-backed persistence across client refreshes
+      generateMessageId: createIdGenerator({
+        prefix: 'msg',
+        size: 16,
+      }),
 
       onError: (error) => {
         console.error('[streamChatHandler] STREAM_ERROR', {
@@ -3792,7 +3616,7 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
       m => m.createdAt.getTime() < earliestParticipantTime,
     );
 
-    const userQuestion = relevantUserMessage?.content || 'N/A';
+    const userQuestion = relevantUserMessage ? extractTextFromParts(relevantUserMessage.parts) : 'N/A';
 
     // Build participant response data for the moderator
     const participantResponses = participantMessages.map((msg, index) => {
@@ -3804,7 +3628,7 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
         participantRole: participant.role,
         modelId: participant.modelId,
         modelName,
-        responseContent: msg.content,
+        responseContent: extractTextFromParts(msg.parts),
       };
     });
 

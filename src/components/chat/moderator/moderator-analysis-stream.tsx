@@ -49,7 +49,7 @@ export function ModeratorAnalysisStream({
 
   // ✅ AI SDK v5: experimental_useObject hook for streaming structured objects
   // Uses the same Zod schema as the server for type safety and validation
-  const { object: partialAnalysis, isLoading, error, submit } = useObject({
+  const { object: partialAnalysis, error, submit } = useObject({
     api: `/api/v1/chat/threads/${threadId}/rounds/${analysis.roundNumber}/analyze`,
     schema: ModeratorAnalysisPayloadSchema,
     onFinish: ({ object: finalObject, error: streamError }) => {
@@ -118,12 +118,10 @@ export function ModeratorAnalysisStream({
 
   // ✅ STREAMING STATE: Display partial analysis as it streams in
   // partialAnalysis will progressively populate with more fields
-  // ⏳ Show loading indicator ALONGSIDE streaming content for better UX
   const displayData = (partialAnalysis || analysis.analysisData) as ModeratorAnalysisPayload | undefined;
-  const isCurrentlyStreaming = analysis.status === 'pending' || isLoading || !displayData;
 
   // ✅ RENDER: Display streaming or completed analysis data
-  // Show partial data AS IT ARRIVES with loading indicator at the top
+  // Show partial data AS IT ARRIVES (loading state shown in header, not here)
   const { leaderboard = [], participantAnalyses = [], overallSummary, conclusion } = displayData || {};
 
   return (
@@ -202,17 +200,6 @@ export function ModeratorAnalysisStream({
           <p className="text-sm leading-relaxed">
             {conclusion}
           </p>
-        </motion.div>
-      )}
-
-      {/* ⏳ STREAMING INDICATOR: Show at bottom while data is being generated (matches participant message pattern) */}
-      {isCurrentlyStreaming && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="flex items-center gap-2 py-2"
-        >
-          <span className="size-1.5 rounded-full bg-primary/60 animate-pulse" />
         </motion.div>
       )}
     </motion.div>

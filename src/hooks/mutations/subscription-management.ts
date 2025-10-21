@@ -75,6 +75,13 @@ export function useSwitchSubscriptionMutation() {
         queryKey: queryKeys.usage.all,
         refetchType: 'active',
       });
+
+      // ✅ FIX: Invalidate models query since model access is tier-based
+      // This ensures model availability updates immediately after subscription changes
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.models.all,
+        refetchType: 'active',
+      });
     },
     retry: false,
     throwOnError: false,
@@ -133,6 +140,13 @@ export function useCancelSubscriptionMutation() {
       // When subscription is cancelled, user may revert to free tier limits
       void queryClient.invalidateQueries({
         queryKey: queryKeys.usage.all,
+        refetchType: 'active',
+      });
+
+      // ✅ FIX: Invalidate models query since model access is tier-based
+      // When cancelled, user may lose access to premium models
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.models.all,
         refetchType: 'active',
       });
     },

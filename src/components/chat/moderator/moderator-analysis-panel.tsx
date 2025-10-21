@@ -10,7 +10,7 @@
  *
  * ✅ FOLLOWS ESTABLISHED PATTERNS:
  * - No nested cards - just renders content directly
- * - Simple loading indicator (animated dot like ModelMessageCard)
+ * - NO component-level loading indicators (page-level loading.tsx handles it)
  * - Reuses existing translation keys
  * - Minimal wrapper divs
  */
@@ -43,14 +43,10 @@ export function ModeratorAnalysisPanel({
 }: ModeratorAnalysisPanelProps) {
   const t = useTranslations('moderator');
 
-  // ✅ PENDING or STREAMING: Show simple loading indicator
+  // ✅ PENDING or STREAMING: Header already shows loading state, so just return null
+  // The header displays "Analyzing responses..." with loading indicator
   if (analysis.status === 'pending' || analysis.status === 'streaming') {
-    return (
-      <div className="flex items-center gap-2 py-2 text-sm text-muted-foreground">
-        <span className="size-1.5 rounded-full bg-primary/60 animate-pulse" />
-        <span>{t('analyzing')}</span>
-      </div>
-    );
+    return null;
   }
 
   // ✅ FAILED: Show simple error message

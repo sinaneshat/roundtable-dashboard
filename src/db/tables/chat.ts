@@ -200,7 +200,13 @@ export const chatThreadChangelog = sqliteTable('chat_thread_changelog', {
 /**
  * Chat Messages
  * Individual messages in threads (user input + model responses)
- * Supports message variants for regeneration and branching conversations
+ *
+ * ✅ AI SDK v5 ALIGNMENT: Schema matches UIMessage format from @ai-sdk/react
+ * - parts[] array stores message content (text, reasoning, tool-result, etc.)
+ * - Direct mapping to/from UIMessage without transformation overhead
+ * - Supports multi-part messages (text + reasoning in single message)
+ *
+ * Reference: https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot#message-format
  */
 export const chatMessage = sqliteTable('chat_message', {
   id: text('id').primaryKey(),
@@ -212,14 +218,24 @@ export const chatMessage = sqliteTable('chat_message', {
   role: text('role', { enum: ['user', 'assistant'] })
     .notNull()
     .default('assistant'),
-  content: text('content').notNull(),
-  reasoning: text('reasoning'), // For Claude extended thinking, GPT reasoning tokens
+
+  // ✅ AI SDK v5 PATTERN: Store parts[] array matching UIMessage.parts structure
+  // Eliminates transformation overhead - direct pass-through to/from frontend
+  // Supports: text parts, reasoning parts (Claude extended thinking)
+  // Note: Tool parts use AI SDK's native structure (tool-call, tool-result with specific state)
+  parts: text('parts', { mode: 'json' }).notNull().$type<Array<
+    | { type: 'text'; text: string }
+    | { type: 'reasoning'; text: string }
+  >>(),
+
   // ✅ ROUND TRACKING: Event-based round number for reliable analysis placement
   // Round = User message + all participant responses
   // Eliminates fragile date/time calculations on frontend
   roundNumber: integer('round_number')
     .notNull()
     .default(1), // 1-indexed to match moderatorAnalysis.roundNumber
+
+  // ✅ TOOL SUPPORT: Store tool calls made by the model (separate from tool results in parts[])
   toolCalls: text('tool_calls', { mode: 'json' }).$type<Array<{
     id: string;
     type: string;
@@ -228,6 +244,7 @@ export const chatMessage = sqliteTable('chat_message', {
       arguments: string;
     };
   }>>(),
+
   metadata: text('metadata', { mode: 'json' }).$type<{
     model?: string;
     finishReason?: string;
@@ -238,6 +255,7 @@ export const chatMessage = sqliteTable('chat_message', {
     };
     [key: string]: unknown;
   }>(),
+
   createdAt: integer('created_at', { mode: 'timestamp_ms' })
     .defaultNow()
     .notNull(),

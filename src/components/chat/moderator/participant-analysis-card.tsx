@@ -40,7 +40,8 @@ export function ParticipantAnalysisCard({ analysis, rank }: ParticipantAnalysisC
   const avatarProps = getAvatarPropsFromModelId('assistant', analysis.modelId ?? '');
 
   // Format rating for display with safe access
-  const ratingDisplay = analysis.overallRating?.toFixed(1) ?? '...';
+  // Use '–' (en dash) instead of '...' to avoid looking like a loading indicator
+  const ratingDisplay = analysis.overallRating?.toFixed(1) ?? '–';
   const ratingColor = analysis.overallRating
     ? analysis.overallRating >= 8
       ? 'text-green-500'

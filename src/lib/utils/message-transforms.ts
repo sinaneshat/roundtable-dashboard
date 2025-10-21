@@ -52,24 +52,18 @@ export function getMessageMetadata(
 /**
  * Convert backend ChatMessage to AI SDK UIMessage format
  *
+ * ✅ AI SDK v5 ALIGNMENT: Direct pass-through of parts[] array
+ * - Database schema now stores parts[] in UIMessage format
+ * - No transformation overhead - direct mapping
+ * - Supports text, reasoning, and tool-result parts natively
+ *
  * @param message - ChatMessage from RPC response (dates can be ISO strings or Date objects)
  * @returns UIMessage in AI SDK format with properly typed metadata
  */
 export function chatMessageToUIMessage(message: ChatMessage | (Omit<ChatMessage, 'createdAt'> & { createdAt: string | Date })): UIMessage {
-  const parts: UIMessage['parts'] = [];
-
-  // ✅ CRITICAL FIX: Always add text part, even if empty
-  // This ensures messages with errors (empty content) still render their message cards
-  // The MessageErrorDetails component will display error information from metadata
-  // Previously, empty content would result in parts: [], causing the message to not render
-  parts.push({ type: 'text', text: message.content || '' });
-
-  // ✅ CRITICAL FIX: Only add reasoning part if it has non-empty content
-  // This prevents empty reasoning boxes from showing for non-reasoning models
-  // ✅ TYPE SAFETY: Check if reasoning is a string before calling .trim()
-  if (message.reasoning && typeof message.reasoning === 'string' && message.reasoning.trim().length > 0) {
-    parts.push({ type: 'reasoning', text: message.reasoning });
-  }
+  // ✅ AI SDK v5 PATTERN: Direct pass-through of parts[] from database
+  // Database now stores parts in UIMessage format - no transformation needed
+  const parts = message.parts || [];
 
   // Build properly typed metadata
   // ✅ Include createdAt from message
@@ -104,6 +98,34 @@ export function chatMessageToUIMessage(message: ChatMessage | (Omit<ChatMessage,
  */
 export function chatMessagesToUIMessages(messages: (ChatMessage | (Omit<ChatMessage, 'createdAt'> & { createdAt: string | Date }))[]): UIMessage[] {
   return messages.map(chatMessageToUIMessage);
+}
+
+// ============================================================================
+// HELPER UTILITIES
+// ============================================================================
+
+/**
+ * ✅ AI SDK v5 HELPER: Extract text content from message parts
+ *
+ * Concatenates all text parts from a UIMessage or ChatMessage.
+ * Useful for:
+ * - Displaying message preview/summaries
+ * - Extracting content for analysis
+ * - Title generation
+ *
+ * @param parts - Array of message parts (text, reasoning)
+ * @returns Concatenated text content, or empty string if no text parts
+ */
+export function extractTextFromParts(
+  parts: Array<
+    | { type: 'text'; text: string }
+    | { type: 'reasoning'; text: string }
+  >,
+): string {
+  return parts
+    .filter(part => part.type === 'text' && 'text' in part)
+    .map(part => (part as { type: 'text'; text: string }).text)
+    .join(' ');
 }
 
 // ============================================================================

@@ -81,6 +81,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     threadId: thread?.id || '',
     participants,
     messages: initialMessages,
+    mode: thread?.mode, // ✅ Pass mode for changelog tracking
     onComplete: () => {
       // Call the completion callback if set
       if (onStreamComplete) {

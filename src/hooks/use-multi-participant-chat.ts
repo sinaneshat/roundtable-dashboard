@@ -93,6 +93,8 @@ type UseMultiParticipantChatOptions = {
   onRoundComplete?: () => void; // ✅ NEW: Triggered when all participants finish responding (round complete)
   onRetry?: (roundNumber: number) => void; // ✅ NEW: Triggered when retry is called (to invalidate old analyses)
   onError?: (error: Error) => void;
+  mode?: string; // ✅ CONVERSATION MODE: Track mode changes in changelog
+  regenerateRoundNumber?: number; // ✅ REGENERATE: Round number to regenerate (delete old and replace)
 };
 
 type UseMultiParticipantChatReturn = {
@@ -130,13 +132,16 @@ export function useMultiParticipantChat({
   onRoundComplete,
   onRetry,
   onError,
+  mode,
+  regenerateRoundNumber: regenerateRoundNumberParam,
 }: UseMultiParticipantChatOptions): UseMultiParticipantChatReturn {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [pendingNextParticipant, setPendingNextParticipant] = useState(false);
 
   // ✅ REGENERATION STATE: Track when we're regenerating a round (for retry)
   // When set, the transport will send this to the backend to delete old round data
-  const [regenerateRoundNumber, setRegenerateRoundNumber] = useState<number | null>(null);
+  // Use parameter value if provided, otherwise use internal state
+  const [regenerateRoundNumber, setRegenerateRoundNumber] = useState<number | null>(regenerateRoundNumberParam || null);
 
   // ✅ FIX: Use refs to track current index AND queue for immediate access
   // State updates don't happen immediately, so we need refs for the callbacks to read
@@ -152,17 +157,26 @@ export function useMultiParticipantChat({
   // Prevents both onError and onFinish from advancing the queue multiple times for the same participant
   const queueAdvancedForParticipantRef = useRef<Set<string>>(new Set());
 
-  // ✅ Define request preparation callback outside useMemo to allow ref access
-  // Refs are accessed in the callback (at request time), not during render
+  // ✅ AI SDK V5 OFFICIAL PATTERN: Send only last message
+  // Reference: https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot-message-persistence#sending-only-the-last-message
+  //
+  // OPTIMIZATION: Send only the last message instead of entire history.
+  // Backend loads previous messages from database for context.
+  //
+  // Benefits:
+  // - Reduced bandwidth (especially important for long conversations)
+  // - Faster requests as conversation grows
+  // - Less data transferred on every streaming request
   const prepareSendMessagesRequest = useCallback(({ id, messages }: { id: string; messages: unknown[] }) => ({
     body: {
       id,
-      messages,
+      message: messages[messages.length - 1], // ✅ OFFICIAL PATTERN: Send only last message
       participantIndex: currentIndexRef.current, // ✅ FIX: Use ref for immediate value (accessed in callback, not render)
       participants: participantsRef.current, // ✅ FIX: Send current participant configuration (accessed in callback, not render)
       ...(regenerateRoundNumber && { regenerateRound: regenerateRoundNumber }), // ✅ REGENERATION: Send round number to replace
+      ...(mode && { mode }), // ✅ CONVERSATION MODE: Send mode for changelog tracking
     },
-  }), [regenerateRoundNumber]);
+  }), [regenerateRoundNumber, mode]);
 
   // ✅ Memoize transport to prevent creating new instances on every render
   // Valid pattern: prepareSendMessagesRequest accesses refs in callback (at request time), not during render.

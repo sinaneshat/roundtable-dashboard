@@ -12,7 +12,7 @@
  * - Polling automatically detects when analysis completes
  */
 
-import { Award, Clock, Loader2 } from 'lucide-react';
+import { Clock } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
@@ -75,36 +75,27 @@ export function RoundAnalysisCard({
     ? 'Analysis timed out after 2 minutes. This may happen if the page was refreshed during analysis. Try refreshing the page or retrying the round.'
     : analysis.errorMessage;
 
-  // Status configuration
+  // Status configuration - icons removed to reduce visual clutter (header already shows loading state)
   const statusConfig = {
     pending: {
       label: t('analyzing'),
       color: 'bg-blue-500/10 text-blue-500 border-blue-500/20',
-      icon: Loader2,
-      iconClass: 'animate-spin',
     },
     streaming: {
       label: t('analyzing'),
       color: 'bg-blue-500/10 text-blue-500 border-blue-500/20',
-      icon: Loader2,
-      iconClass: 'animate-spin',
     },
     completed: {
       label: t('completed'),
       color: 'bg-green-500/10 text-green-500 border-green-500/20',
-      icon: Award,
-      iconClass: '',
     },
     failed: {
       label: t('failed'),
       color: 'bg-red-500/10 text-red-500 border-red-500/20',
-      icon: Award,
-      iconClass: '',
     },
   } as const;
 
   const config = statusConfig[effectiveStatus];
-  const StatusIcon = config.icon;
 
   // ✅ CONTROLLED STATE: Smart accordion behavior
   // - Latest analysis stays open by default
@@ -197,12 +188,11 @@ export function RoundAnalysisCard({
               {t('roundAnalysis', { number: analysis.roundNumber })}
             </span>
 
-            {/* Status Badge */}
+            {/* Status Badge - no icon to reduce visual clutter */}
             <Badge
               variant="outline"
               className={cn('text-xs h-6', config.color)}
             >
-              <StatusIcon className={cn('size-3 mr-1', config.iconClass)} />
               {config.label}
             </Badge>
 

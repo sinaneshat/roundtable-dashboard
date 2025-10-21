@@ -411,11 +411,22 @@ export const ParticipantDetailResponseSchema = createApiResponseSchema(Participa
  */
 export const StreamChatRequestSchema = z.object({
   /**
-   * ✅ AI SDK v5 OFFICIAL PATTERN: Send ALL accumulated messages
-   * Reference: https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot-message-persistence
+   * ✅ AI SDK v5 OFFICIAL PATTERN: Send ONLY last message
+   * Reference: https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot-message-persistence#sending-only-the-last-message
    *
-   * Frontend sends complete message array. Backend uses these messages directly
-   * for AI context (no DB dependency), then persists new assistant response.
+   * OPTIMIZATION: Frontend sends only the last message instead of entire history.
+   * Backend loads previous messages from database and appends the new message.
+   *
+   * Benefits:
+   * - Reduced bandwidth (especially important for long conversations)
+   * - Faster requests as conversation grows
+   * - Less data transferred on every streaming request
+   *
+   * Multi-Participant Flow:
+   * - User sends new message → Participant 0 streams (message saved to DB)
+   * - Participant 1 triggers → Backend loads ALL previous messages from DB (including Participant 0's response)
+   * - Participant 2 triggers → Backend loads ALL previous messages from DB (including 0 & 1's responses)
+   * - This works because each participant's response is persisted before the next one starts
    *
    * Runtime validated with validateUIMessages() in handler.
    *
@@ -423,20 +434,13 @@ export const StreamChatRequestSchema = z.object({
    * type that Zod cannot accurately represent. Official AI SDK docs recommend
    * z.unknown() + runtime validation.
    */
-  messages: z.array(z.unknown()).openapi({
-    description: 'Complete message history in AI SDK UIMessage[] format',
-    example: [
-      {
-        id: 'msg_user1',
-        role: 'user',
-        parts: [{ type: 'text', text: 'Hello!' }],
-      },
-      {
-        id: 'msg_assistant1',
-        role: 'assistant',
-        parts: [{ type: 'text', text: 'Hi there!' }],
-      },
-    ],
+  message: z.unknown().openapi({
+    description: 'Last message in AI SDK UIMessage format (backend loads previous messages from DB)',
+    example: {
+      id: 'msg_user1',
+      role: 'user',
+      parts: [{ type: 'text', text: 'Hello!' }],
+    },
   }),
 
   /**
@@ -499,6 +503,16 @@ export const StreamChatRequestSchema = z.object({
   regenerateRound: z.number().int().positive().optional().openapi({
     description: 'Round number to regenerate (replace). If provided, deletes old messages and analysis for that round first.',
     example: 2,
+  }),
+
+  /**
+   * ✅ CONVERSATION MODE: Track mode changes (OPTIONAL)
+   * When provided and different from current thread mode, generates changelog entry.
+   * Mode change is persisted immediately (not staged like participant changes).
+   */
+  mode: ThreadModeSchema.optional().openapi({
+    description: 'Conversation mode for this thread. If changed, generates changelog entry.',
+    example: 'collaborate',
   }),
 
 }).openapi('StreamChatRequest');
@@ -996,6 +1010,12 @@ export const UIMessageMetadataSchema = z.object({
 }).passthrough().nullable().optional();
 
 export type UIMessageMetadata = z.infer<typeof UIMessageMetadataSchema>;
+
+// ✅ STREAM RESUMPTION: No response schema needed
+// The resume endpoint returns either:
+// - 200 OK with SSE stream (text/event-stream)
+// - 204 No Content (no active stream)
+// Neither requires a JSON schema
 
 // ============================================================================
 // Round Feedback Schemas

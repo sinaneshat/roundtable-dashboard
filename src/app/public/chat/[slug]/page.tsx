@@ -48,8 +48,12 @@ export async function generateMetadata({
 
     // Generate description from first user message or thread title
     const firstUserMessage = messages?.find(m => m.role === 'user');
-    const description = firstUserMessage?.content
-      ? `${firstUserMessage.content.slice(0, 150)}${firstUserMessage.content.length > 150 ? '...' : ''}`
+    const firstUserText = firstUserMessage?.parts
+      .filter(p => p.type === 'text' && 'text' in p)
+      .map(p => (p as { type: 'text'; text: string }).text)
+      .join(' ');
+    const description = firstUserText
+      ? `${firstUserText.slice(0, 150)}${firstUserText.length > 150 ? '...' : ''}`
       : `A ${thread.mode} conversation with ${participants.length} AI ${participants.length === 1 ? 'participant' : 'participants'}.`;
 
     // Extract keywords from thread title, mode, and participant roles

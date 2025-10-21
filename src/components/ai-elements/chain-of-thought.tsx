@@ -75,7 +75,7 @@ export function ChainOfThought({
       <Collapsible open={open} onOpenChange={handleOpenChange}>
         <div
           className={cn(
-            'rounded-lg border border-border/50 bg-muted/30 overflow-hidden',
+            'rounded-lg border border-border/50 bg-muted/30',
             className,
           )}
           {...props}
@@ -137,7 +137,7 @@ export function ChainOfThoughtContent({
   return (
     <CollapsibleContent
       className={cn(
-        'px-4 pb-4 space-y-3',
+        'px-4 pb-4 space-y-3 overflow-x-auto',
         'animate-in fade-in-50 slide-in-from-top-2',
         className,
       )}

@@ -25,7 +25,6 @@ import {
   ChartTooltip,
   ChartTooltipContent,
 } from '@/components/ui/chart';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { useModelsQuery } from '@/hooks/queries/models';
 import { getAvatarPropsFromModelId } from '@/lib/utils/ai-display';
 
@@ -104,7 +103,7 @@ export function SkillsComparisonChart({ participants }: SkillsComparisonChartPro
     return dataPoint;
   });
 
-  // Configure chart colors and labels
+  // Configure chart colors and labels - using hsl() format like shadcn examples
   const chartConfig = participants.reduce(
     (config, participant, index) => {
       const key = `participant${participant?.participantIndex ?? index}`;
@@ -112,21 +111,13 @@ export function SkillsComparisonChart({ participants }: SkillsComparisonChartPro
 
       config[key] = {
         label: participant?.modelName ?? 'Unknown',
-        color,
+        color, // Already in hex format, will work with var()
       };
 
       return config;
     },
     {} as Record<string, { label: string; color: string }>,
   ) satisfies ChartConfig;
-
-  // ✅ DYNAMIC HEIGHT CALCULATION: Similar to LeaderboardCard
-  const participantCount = participants.length;
-  const itemHeight = 32; // Height per participant item
-  const containerPadding = 40;
-  const calculatedHeight = Math.max(280, participantCount * itemHeight + containerPadding);
-  const shouldUseScroll = calculatedHeight > 400;
-  const finalHeight = shouldUseScroll ? 400 : calculatedHeight;
 
   // Prepare participant data for legend
   const participantData = participants.map((participant, index) => {
@@ -144,100 +135,83 @@ export function SkillsComparisonChart({ participants }: SkillsComparisonChartPro
     };
   });
 
+  // ✅ DEBUG: Log chart data to verify structure
+  console.log('[SkillsComparisonChart] Rendering with data:', {
+    participants: participants.length,
+    skillNames,
+    chartData,
+    chartConfig,
+    participantData,
+    chartConfigKeys: Object.keys(chartConfig),
+  });
+
   return (
-    <div className="space-y-3">
+    <motion.div
+      initial={{ opacity: 0, y: 4 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3, ease: 'easeOut' }}
+      className="space-y-3"
+    >
       {/* Header */}
       <h3 className="text-sm font-semibold px-1">{t('skillsComparison')}</h3>
 
-      {/* Horizontal Layout: Participant List (left) + Radar Chart (right) */}
-      <motion.div
-        initial={{ opacity: 0, y: 4 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3, ease: 'easeOut' }}
-        className="flex gap-4 w-full"
-      >
-        {/* Left: Participant List with Color Legend */}
-        <ScrollArea
-          className="w-full max-w-[240px]"
-          style={{ height: `${finalHeight}px` }}
-        >
-          <div className="space-y-1.5 pr-4">
-            {participantData.map((entry) => {
-              return (
-                <div
-                  key={`legend-${entry.participantIndex}`}
-                  className="flex items-center gap-2 p-1.5 rounded hover:bg-muted/30 transition-colors"
-                >
-                  {/* Color Indicator */}
-                  <div
-                    className="size-3 rounded-full flex-shrink-0"
-                    style={{ backgroundColor: entry.color }}
-                  />
-
-                  {/* Avatar */}
-                  <img
-                    src={entry.avatarSrc}
-                    alt={entry.avatarName}
-                    className="size-5 flex-shrink-0 object-contain"
-                  />
-
-                  {/* Model Info */}
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[10px] font-medium text-foreground/90 truncate leading-tight">
-                      {entry.modelName}
-                    </p>
-                    {entry.provider && (
-                      <p className="text-[8px] text-muted-foreground truncate">
-                        {entry.provider}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </ScrollArea>
-
-        {/* Right: Radar Chart */}
-        <div className="flex-1 flex items-center justify-center">
-          <ChartContainer
-            config={chartConfig}
-            className="mx-auto aspect-square max-h-[280px] w-full max-w-[280px]"
-          >
-            <RadarChart
-              data={chartData}
-              margin={{
-                top: -40,
-                right: 0,
-                bottom: -10,
-                left: 0,
-              }}
+      {/* Participant Legend - Centered and responsive */}
+      <div className="flex flex-wrap justify-center gap-2 px-1">
+        {participantData.map((entry) => {
+          return (
+            <div
+              key={`legend-${entry.participantIndex}`}
+              className="flex items-center gap-2 px-2 py-1 rounded-full bg-muted/30 hover:bg-muted/50 transition-colors"
             >
-              <ChartTooltip
-                cursor={false}
-                content={<ChartTooltipContent indicator="line" />}
+              {/* Color Indicator */}
+              <div
+                className="size-2.5 rounded-full flex-shrink-0"
+                style={{ backgroundColor: entry.color }}
               />
-              <PolarAngleAxis dataKey="skill" />
-              <PolarGrid />
-              {participants.map((participant, index) => {
-                const key = `participant${participant?.participantIndex ?? index}`;
-                const color = vibrantColors[index] ?? vibrantColors[0]!;
 
-                return (
-                  <Radar
-                    key={key}
-                    dataKey={key}
-                    fill={color}
-                    fillOpacity={0.6}
-                    stroke={color}
-                    strokeWidth={2}
-                  />
-                );
-              })}
-            </RadarChart>
-          </ChartContainer>
-        </div>
-      </motion.div>
-    </div>
+              {/* Avatar */}
+              <img
+                src={entry.avatarSrc}
+                alt={entry.avatarName}
+                className="size-4 flex-shrink-0 object-contain"
+              />
+
+              {/* Model Name */}
+              <p className="text-[10px] font-medium text-foreground/90 whitespace-nowrap">
+                {entry.modelName}
+              </p>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Radar Chart - Following exact shadcn pattern */}
+      <ChartContainer
+        config={chartConfig}
+        className="mx-auto aspect-square max-h-[250px]"
+      >
+        <RadarChart data={chartData}>
+          <ChartTooltip
+            cursor={false}
+            content={<ChartTooltipContent indicator="line" />}
+          />
+          <PolarAngleAxis dataKey="skill" />
+          <PolarGrid />
+          {participants.map((participant, index) => {
+            const key = `participant${participant?.participantIndex ?? index}`;
+            const fillOpacity = index === 0 ? 0.6 : 0.3;
+
+            return (
+              <Radar
+                key={key}
+                dataKey={key}
+                fill={`var(--color-${key})`}
+                fillOpacity={fillOpacity}
+              />
+            );
+          })}
+        </RadarChart>
+      </ChartContainer>
+    </motion.div>
   );
 }

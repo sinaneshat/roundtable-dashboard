@@ -51,14 +51,15 @@ export const chatParticipantUpdateSchema = createUpdateSchema(chatParticipant, {
 
 /**
  * Chat Message Schemas
+ * ✅ AI SDK v5 ALIGNMENT: parts[] array replaces content/reasoning fields
  */
 export const chatMessageSelectSchema = createSelectSchema(chatMessage);
 export const chatMessageInsertSchema = createInsertSchema(chatMessage, {
-  content: Refinements.content(),
   role: () => z.enum(['user', 'assistant']),
+  // parts array is validated by database schema type
 });
 export const chatMessageUpdateSchema = createUpdateSchema(chatMessage, {
-  content: Refinements.contentOptional(),
+  // parts array is validated by database schema type
 });
 
 /**

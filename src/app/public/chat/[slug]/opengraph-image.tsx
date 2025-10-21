@@ -131,8 +131,12 @@ export default async function Image({
 
     // Get first user message preview
     const firstUserMessage = messages?.find(m => m.role === 'user');
-    const messagePreview = firstUserMessage?.content
-      ? truncateText(firstUserMessage.content, 120)
+    const firstUserText = firstUserMessage?.parts
+      .filter(p => p.type === 'text' && 'text' in p)
+      .map(p => (p as { type: 'text'; text: string }).text)
+      .join(' ');
+    const messagePreview = firstUserText
+      ? truncateText(firstUserText, 120)
       : 'View this AI conversation';
 
     // Load mode icon

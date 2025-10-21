@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "aa7032dd-19cd-42be-9ab6-a15be611c0e7",
+  "id": "c567429e-e9de-4b30-a14e-2132f9202a23",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "account": {
@@ -1588,18 +1588,11 @@
           "autoincrement": false,
           "default": "'assistant'"
         },
-        "content": {
-          "name": "content",
+        "parts": {
+          "name": "parts",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false
-        },
-        "reasoning": {
-          "name": "reasoning",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
           "autoincrement": false
         },
         "round_number": {

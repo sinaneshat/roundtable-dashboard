@@ -50,7 +50,6 @@ import {
   ChartTooltip,
   ChartTooltipContent,
 } from '@/components/ui/chart';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { useModelsQuery } from '@/hooks/queries/models';
 import { cn } from '@/lib/ui/cn';
 import { getAvatarPropsFromModelId } from '@/lib/utils/ai-display';
@@ -86,13 +85,6 @@ export function LeaderboardCard({ leaderboard }: LeaderboardCardProps) {
   const allModels = modelsData?.data?.items || [];
 
   // ✅ DYNAMIC HEIGHT CALCULATION: Scale based on participant count
-  // Following shadcn pattern: ~40-50px per bar + padding
-  const participantCount = leaderboard.length;
-  const barHeight = 32; // Height per bar in pixels
-  const containerPadding = 40; // Top + bottom padding
-  const calculatedHeight = Math.max(180, participantCount * barHeight + containerPadding);
-  const shouldUseScroll = calculatedHeight > 400; // Use scroll for very tall charts
-  const finalHeight = shouldUseScroll ? 400 : calculatedHeight;
 
   // ✅ BRAND COLORS: Use design system colors
   const vibrantColors = useMemo(() => {
@@ -165,7 +157,12 @@ export function LeaderboardCard({ leaderboard }: LeaderboardCardProps) {
   ) satisfies ChartConfig;
 
   return (
-    <div className="space-y-3">
+    <motion.div
+      initial={{ opacity: 0, y: 4 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3, ease: 'easeOut' }}
+      className="space-y-3"
+    >
       {/* Header Section */}
       <div className="flex items-center gap-2 px-1">
         <Trophy className="size-4 text-primary" />
@@ -177,118 +174,104 @@ export function LeaderboardCard({ leaderboard }: LeaderboardCardProps) {
         </Badge>
       </div>
 
-      {/* Horizontal Layout: Model List (left) + Bar Chart (right) */}
-      <motion.div
-        initial={{ opacity: 0, y: 4 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3, ease: 'easeOut' }}
-        className="flex gap-4 w-full"
-      >
-        {/* Left: Compact Model List with ScrollArea */}
-        <ScrollArea
-          className="w-full max-w-[240px]"
-          style={{ height: `${finalHeight}px` }}
-        >
-          <div className="space-y-1.5 pr-4">
-            {chartData.map((entry) => {
-              const rankIcon = getRankIcon(entry.rank);
+      {/* Compact model list */}
+      <div className="space-y-1.5 px-1">
+        {chartData.map((entry) => {
+          const rankIcon = getRankIcon(entry.rank);
 
-              return (
-                <div
-                  key={`legend-${entry.participantIndex}`}
-                  className="flex items-center gap-2 p-1.5 rounded hover:bg-muted/30 transition-colors"
-                >
-                  {/* Rank Badge/Icon */}
-                  <div className="flex items-center justify-center w-5 flex-shrink-0">
-                    {rankIcon
-                      ? (
-                          <div className={cn('flex items-center justify-center size-5 rounded-full', rankIcon.bgColor)}>
-                            <rankIcon.Icon className={cn('size-3', rankIcon.color)} />
-                          </div>
-                        )
-                      : (
-                          <div className="flex items-center justify-center size-5 rounded-full bg-muted/30">
-                            <span className="text-[8px] font-bold text-muted-foreground">
-                              {entry.rank}
-                            </span>
-                          </div>
-                        )}
-                  </div>
-
-                  {/* Avatar */}
-                  <img
-                    src={entry.avatarSrc}
-                    alt={entry.avatarName}
-                    className="size-5 flex-shrink-0 object-contain"
-                  />
-
-                  {/* Model Info */}
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[10px] font-medium text-foreground/90 truncate leading-tight">
-                      {entry.modelName}
-                    </p>
-                    <span className="text-[8px] font-bold text-foreground/70 tabular-nums">
-                      {entry.rating.toFixed(1)}
-                      /10
-                    </span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </ScrollArea>
-
-        {/* Right: Horizontal Bar Chart */}
-        <div className="flex-1">
-          <ChartContainer
-            config={chartConfig}
-            style={{ height: `${finalHeight}px` }}
-          >
-            <BarChart
-              data={chartData}
-              layout="vertical"
-              margin={{ left: 0, right: 60, top: 10, bottom: 10 }}
+          return (
+            <div
+              key={`legend-${entry.participantIndex}`}
+              className="flex items-center gap-2 p-1.5 rounded hover:bg-muted/30 transition-colors"
             >
-              <XAxis
-                type="number"
-                domain={[0, 10]}
-                tickLine={false}
-                axisLine={false}
-                tick={{ fontSize: 10 }}
-                tickFormatter={value => `${value}`}
+              {/* Rank Badge/Icon */}
+              <div className="flex items-center justify-center w-5 flex-shrink-0">
+                {rankIcon
+                  ? (
+                      <div className={cn('flex items-center justify-center size-5 rounded-full', rankIcon.bgColor)}>
+                        <rankIcon.Icon className={cn('size-3', rankIcon.color)} />
+                      </div>
+                    )
+                  : (
+                      <div className="flex items-center justify-center size-5 rounded-full bg-muted/30">
+                        <span className="text-[8px] font-bold text-muted-foreground">
+                          {entry.rank}
+                        </span>
+                      </div>
+                    )}
+              </div>
+
+              {/* Avatar */}
+              <img
+                src={entry.avatarSrc}
+                alt={entry.avatarName}
+                className="size-5 flex-shrink-0 object-contain"
               />
-              <YAxis
-                dataKey="modelName"
-                type="category"
-                hide
-              />
-              <ChartTooltip
-                cursor={false}
-                content={<ChartTooltipContent hideLabel />}
-              />
-              <Bar
-                dataKey="rating"
-                radius={4}
-                maxBarSize={20}
-              >
-                {chartData.map(entry => (
-                  <Cell
-                    key={`cell-${entry.participantIndex}`}
-                    fill={entry.fill}
-                  />
-                ))}
-                <LabelList
-                  dataKey="rating"
-                  position="right"
-                  offset={8}
-                  className="fill-foreground text-[10px] font-semibold"
-                  formatter={(value: unknown) => `${Number(value).toFixed(1)}/10`}
+
+              {/* Model Info */}
+              <div className="flex-1 min-w-0">
+                <p className="text-[10px] font-medium text-foreground/90 truncate leading-tight">
+                  {entry.modelName}
+                </p>
+                <span className="text-[8px] font-bold text-foreground/70 tabular-nums">
+                  {entry.rating.toFixed(1)}
+                  /10
+                </span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Horizontal Bar Chart - Fully responsive with proper containment */}
+      <div className="w-full min-w-0">
+        <ChartContainer config={chartConfig} className="w-full h-auto min-h-0">
+          <BarChart
+            data={chartData}
+            layout="vertical"
+            margin={{ left: 0, right: 60, top: 10, bottom: 10 }}
+            width={undefined}
+            height={chartData.length * 40 + 40}
+          >
+            <XAxis
+              type="number"
+              domain={[0, 10]}
+              tickLine={false}
+              axisLine={false}
+              tick={{ fontSize: 10 }}
+              tickFormatter={value => `${value}`}
+            />
+            <YAxis
+              dataKey="modelName"
+              type="category"
+              hide
+            />
+            <ChartTooltip
+              cursor={false}
+              content={<ChartTooltipContent hideLabel />}
+            />
+            <Bar
+              dataKey="rating"
+              radius={4}
+              maxBarSize={20}
+            >
+              {chartData.map(entry => (
+                <Cell
+                  key={`cell-${entry.participantIndex}`}
+                  fill={entry.fill}
                 />
-              </Bar>
-            </BarChart>
-          </ChartContainer>
-        </div>
-      </motion.div>
-    </div>
+              ))}
+              <LabelList
+                dataKey="rating"
+                position="right"
+                offset={8}
+                className="fill-foreground text-[10px] font-semibold"
+                formatter={(value: unknown) => `${Number(value).toFixed(1)}/10`}
+              />
+            </Bar>
+          </BarChart>
+        </ChartContainer>
+      </div>
+    </motion.div>
   );
 }

@@ -31,7 +31,6 @@ import { showApiErrorToast } from '@/lib/toast';
 import type { ParticipantConfig } from '@/lib/types/participant-config';
 import { toCreateThreadRequest } from '@/lib/types/participant-config';
 import { chatMessagesToUIMessages } from '@/lib/utils/message-transforms';
-import { getThreadService } from '@/services/api/chat-threads';
 
 /**
  * ✅ AI SDK v5 PATTERN: ChatGPT-Style Overview Screen with Shared Context
@@ -213,7 +212,18 @@ export default function ChatOverviewScreen() {
         // ✅ CRITICAL: Backend returns empty messages array - user message will be created by sendMessage()
         initializeThread(threadWithDates, participantsWithDates, uiMessages);
 
-        // Step 4: Store prompt for sending after context is ready
+        // ✅ CRITICAL FIX: Replace URL immediately to navigate from overview to chat
+        // Update URL to thread detail view without triggering a full page navigation
+        // Using window.history.replaceState (not router.replace) to avoid triggering navigation
+        const threadUrl = `/chat/${thread.slug}`;
+        console.warn('[ChatOverviewScreen] 🔄 Replacing URL to navigate to thread view', {
+          threadId: thread.id,
+          slug: thread.slug,
+          url: threadUrl,
+        });
+        window.history.replaceState(null, '', threadUrl);
+
+        // Step 5: Store prompt for sending after context is ready
         hasSentInitialPromptRef.current = false; // Reset flag for new thread
         setInitialPrompt(prompt);
 
@@ -307,7 +317,6 @@ export default function ChatOverviewScreen() {
       initializeThread,
       setOnRoundComplete,
       queryClient,
-      router,
     ],
   );
 
@@ -522,55 +531,23 @@ export default function ChatOverviewScreen() {
                         },
                       );
 
-                      // ✅ NAVIGATION: After analysis completes, wait for title and navigate
-                      console.warn('[ChatOverviewScreen] 🔍 Waiting for AI title generation before navigation');
-
-                      // Poll for title generation (slug update)
-                      const originalSlug = currentThread?.slug;
-                      let updatedThreadSlug = originalSlug;
-                      let slugAttempts = 0;
-                      const maxSlugAttempts = 15; // 15 seconds max
-
-                      // Only poll if we have an original slug to compare against
-                      if (originalSlug) {
-                        while (slugAttempts < maxSlugAttempts) {
-                          await new Promise(resolve => setTimeout(resolve, 1000));
-                          slugAttempts++;
-
-                          try {
-                            const threadResponse = await getThreadService({ param: { id: createdThreadId } });
-
-                            if (threadResponse.success) {
-                              updatedThreadSlug = threadResponse.data.thread.slug;
-
-                              if (updatedThreadSlug !== originalSlug) {
-                                console.warn('[ChatOverviewScreen] ✅ Title generated, navigating', {
-                                  originalSlug,
-                                  newSlug: updatedThreadSlug,
-                                  attempts: slugAttempts,
-                                });
-                                break;
-                              }
-                            }
-                          } catch (error) {
-                            console.error('[ChatOverviewScreen] Error fetching thread for slug:', error);
-                          }
-                        }
-                      }
-
-                      // Navigate to thread (use updated slug or fallback to original)
-                      const targetSlug = updatedThreadSlug || originalSlug || createdThreadId;
-
-                      console.warn('[ChatOverviewScreen] 🎯 Navigating to thread', {
-                        targetSlug,
+                      // ✅ SIMPLIFIED NAVIGATION: URL already replaced, just refresh to show thread page
+                      // The URL was replaced immediately after thread creation (line 225)
+                      // Now we just need to trigger a full page load to render ChatThreadScreen
+                      console.warn('[ChatOverviewScreen] 🎯 Round complete - triggering page refresh', {
                         threadId: createdThreadId,
+                        currentUrl: window.location.pathname,
                       });
 
-                      // Invalidate sidebar cache
+                      // Invalidate sidebar cache before refresh
                       await queryClient.invalidateQueries({ queryKey: queryKeys.threads.lists() });
 
-                      // Navigate
-                      router.push(`/chat/${targetSlug}`);
+                      // Trigger full page refresh to render ChatThreadScreen with all data
+                      // This is acceptable because:
+                      // 1. Round 1 is complete (all messages persisted)
+                      // 2. Analysis is complete or streaming
+                      // 3. User expects to see the full thread page now
+                      router.refresh();
                     }}
                   />
                 </div>
@@ -607,7 +584,6 @@ export default function ChatOverviewScreen() {
                       <div className="h-2 w-2 rounded-full bg-primary animate-bounce [animation-delay:-0.15s]" />
                       <div className="h-2 w-2 rounded-full bg-primary animate-bounce" />
                     </div>
-                    <span>{t('moderator.generating')}</span>
                   </div>
                 </div>
               )}
