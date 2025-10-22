@@ -531,23 +531,23 @@ export default function ChatOverviewScreen() {
                         },
                       );
 
-                      // ✅ SIMPLIFIED NAVIGATION: URL already replaced, just refresh to show thread page
-                      // The URL was replaced immediately after thread creation (line 225)
-                      // Now we just need to trigger a full page load to render ChatThreadScreen
-                      console.warn('[ChatOverviewScreen] 🎯 Round complete - triggering page refresh', {
+                      // ✅ NAVIGATION: Navigate to thread page without page refresh
+                      // URL was already replaced after thread creation (line 224)
+                      // Now use router.push to navigate to the thread page
+                      console.warn('[ChatOverviewScreen] 🎯 Round complete - navigating to thread page', {
                         threadId: createdThreadId,
                         currentUrl: window.location.pathname,
                       });
 
-                      // Invalidate sidebar cache before refresh
+                      // Invalidate sidebar cache before navigation
                       await queryClient.invalidateQueries({ queryKey: queryKeys.threads.lists() });
 
-                      // Trigger full page refresh to render ChatThreadScreen with all data
-                      // This is acceptable because:
+                      // Navigate to thread page using router.push (no page refresh)
+                      // This provides a smooth transition from overview to thread page
                       // 1. Round 1 is complete (all messages persisted)
                       // 2. Analysis is complete or streaming
                       // 3. User expects to see the full thread page now
-                      router.refresh();
+                      router.push(`/chat/${currentThread?.slug}`);
                     }}
                   />
                 </div>

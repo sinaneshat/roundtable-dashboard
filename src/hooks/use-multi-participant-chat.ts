@@ -445,22 +445,36 @@ export function useMultiParticipantChat({
           roundStateRef.current.currentIndex,
         );
 
+        // ✅ CRITICAL FIX: Calculate roundNumber on frontend during streaming
+        // The backend saves roundNumber to database but doesn't stream it back in real-time
+        // We calculate it here so messages are sorted correctly DURING streaming, not just after refresh
+
         // ✅ Backend now handles all retries - frontend just displays the final result
         // Empty responses are retried up to 5 times on the backend before streaming to frontend
 
         setMessages((prev) => {
+          // Calculate roundNumber from current messages (inside setMessages to access current state)
+          const userMessages = prev.filter((m: UIMessage) => m.role === 'user');
+          const currentRoundNumber = userMessages.length || 1; // Current round = number of user messages submitted
+
+          // Add roundNumber to metadata for immediate correct sorting during streaming
+          const metadataWithRoundNumber = {
+            ...updatedMetadata,
+            roundNumber: currentRoundNumber,
+          };
+
           // ✅ CRITICAL FIX: Check if message exists in array before trying to update
-          const messageExists = prev.some(msg => msg.id === data.message.id);
+          const messageExists = prev.some((msg: UIMessage) => msg.id === data.message.id);
 
           if (!messageExists) {
             // Message doesn't exist in array - ADD it
-            return [...prev, { ...data.message, metadata: updatedMetadata }];
+            return [...prev, { ...data.message, metadata: metadataWithRoundNumber }];
           }
 
           // Message exists - UPDATE it
-          return prev.map((msg) => {
+          return prev.map((msg: UIMessage) => {
             if (msg.id === data.message.id && msg.role === 'assistant') {
-              return { ...msg, metadata: updatedMetadata };
+              return { ...msg, metadata: metadataWithRoundNumber };
             }
             return msg;
           });
@@ -636,10 +650,18 @@ export function useMultiParticipantChat({
       // This prevents stale model metadata if user changes participants mid-round
       roundStateRef.current.roundParticipants = [...participants];
 
-      // Send user message (first participant responds automatically)
-      aiSendMessage({ text: trimmed });
+      // ✅ CRITICAL FIX: Calculate roundNumber for this new user message
+      // The new round number is the current number of user messages + 1
+      const userMessages = messages.filter((m: UIMessage) => m.role === 'user');
+      const newRoundNumber = userMessages.length + 1;
+
+      // Send user message with roundNumber metadata (first participant responds automatically)
+      aiSendMessage({
+        text: trimmed,
+        metadata: { roundNumber: newRoundNumber },
+      });
     },
-    [participants, status, aiSendMessage],
+    [participants, status, aiSendMessage, messages],
   );
 
   /**
