@@ -393,14 +393,14 @@ export default function ChatOverviewScreen() {
   const inputContainerRef = useRef<HTMLDivElement | null>(null);
 
   return (
-    <div className="min-h-svh flex flex-col">
+    <div className="min-h-screen flex flex-col">
       {/* Background - fixed behind all content */}
       <div className="fixed inset-0 -z-10 overflow-hidden">
         <WavyBackground containerClassName="h-full w-full" />
       </div>
 
-      {/* Main content - flows naturally with window scrolling - pt-16 for header, pb-32 for sticky input */}
-      <div className="container max-w-3xl mx-auto px-4 sm:px-6 pt-0 pb-32">
+      {/* Main content - flows naturally with window scrolling - pb-32 ensures messages have space above sticky input */}
+      <div id="chat-scroll-container" className="container max-w-3xl mx-auto px-4 sm:px-6 pt-0 pb-32 flex-1">
         {/* ✅ ANIMATED: Initial UI (logo, suggestions) - fades out when streaming starts */}
         <AnimatePresence>
           {showInitialUI && (
@@ -579,11 +579,11 @@ export default function ChatOverviewScreen() {
         </AnimatePresence>
       </div>
 
-      {/* ✅ BOTTOM SPACER: Creates scrollable empty space below content, allows scrolling content higher above input */}
-      <div className="h-32" aria-hidden="true" />
-
-      {/* Input container - sticky to bottom, constrained to content area */}
-      <div ref={inputContainerRef} className="sticky bottom-0 z-50 bg-gradient-to-t from-background via-background to-transparent pt-6 pb-4 mt-auto">
+      {/* ✅ INPUT CONTAINER: Sticky to bottom - stays at bottom while scrolling */}
+      <div
+        ref={inputContainerRef}
+        className="sticky bottom-0 z-50 bg-gradient-to-t from-background via-background to-transparent pt-6 pb-4 mt-auto"
+      >
         <div className="container max-w-3xl mx-auto px-4 sm:px-6">
           <ChatInput
             value={inputValue}

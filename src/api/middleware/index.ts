@@ -8,6 +8,7 @@ export {
   validateServiceEnvironment,
 } from './environment-validation';
 export { ensureOpenRouterInitialized } from './openrouter';
+export { ensureRAGInitialized } from './rag';
 export { RateLimiterFactory as createRateLimitMiddleware } from './rate-limiter-factory';
 export {
   createApiSizeLimitMiddleware,

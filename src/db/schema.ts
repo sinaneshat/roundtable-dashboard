@@ -12,5 +12,8 @@ export * from './tables/billing';
 // Chat tables (Multi-model AI chat)
 export * from './tables/chat';
 
+// RAG tables (Retrieval Augmented Generation - Vector embeddings)
+export * from './tables/rag';
+
 // Usage tracking tables (Chat quotas and limits)
 export * from './tables/usage';

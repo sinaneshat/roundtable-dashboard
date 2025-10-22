@@ -30,6 +30,18 @@ const ParticipantResponseSchema = z.object({
 });
 
 /**
+ * Changelog entry schema
+ * Tracks changes that occurred before the current round
+ * (participant additions/removals, role changes, mode changes, etc.)
+ */
+const ChangelogEntrySchema = z.object({
+  changeType: z.string(),
+  description: z.string(),
+  metadata: z.record(z.string(), z.unknown()).nullable(),
+  createdAt: z.date(),
+});
+
+/**
  * Moderator prompt configuration schema
  * Used for building prompts for AI SDK streamObject()
  */
@@ -38,10 +50,12 @@ export const ModeratorPromptConfigSchema = z.object({
   mode: z.enum(CHAT_MODES),
   /** Round number (1-indexed) */
   roundNumber: z.number().int().positive(),
-  /** User's original question */
+  /** User's original question for THIS round */
   userQuestion: z.string().min(1),
-  /** All participants with their messages */
+  /** Participant responses for THIS round ONLY (round-specific analysis) */
   participantResponses: z.array(ParticipantResponseSchema).min(1),
+  /** Changelog entries before this round (participant/mode/role changes) */
+  changelogEntries: z.array(ChangelogEntrySchema).optional(),
 });
 
 export type ModeratorPromptConfig = z.infer<typeof ModeratorPromptConfigSchema>;
@@ -304,22 +318,62 @@ export function buildModeratorUserPrompt(config: ModeratorPromptConfig): string 
     mode,
     userQuestion,
     participantResponses,
+    changelogEntries,
   } = config;
 
   const sections: string[] = [];
 
   // 1. CONTEXT
   sections.push(
-    `# Round ${roundNumber} of ${mode.charAt(0).toUpperCase() + mode.slice(1)} Discussion`,
+    `# Round ${roundNumber} Analysis - ${mode.charAt(0).toUpperCase() + mode.slice(1)} Discussion`,
     '',
-    '## User Question',
+    '⚠️ CRITICAL: You are analyzing ONLY this round\'s participant responses.',
+    'Focus your analysis, ratings, and feedback on what happened in THIS round specifically.',
+    '',
+    '## User Question for This Round',
     userQuestion,
     '',
   );
 
-  // 2. PARTICIPANT RESPONSES
+  // ✅ Changelog Context: Show what changed before this round
+  if (changelogEntries && changelogEntries.length > 0) {
+    sections.push(
+      '## Recent Changes Before This Round',
+      '',
+      '⚠️ CONTEXT: The following changes occurred before this round started.',
+      'Be aware that participants, their roles, or the conversation mode may have changed.',
+      'Consider these changes when analyzing participant performance in this round.',
+      '',
+    );
+
+    changelogEntries.forEach((entry, idx) => {
+      const timestamp = entry.createdAt.toLocaleString();
+      sections.push(
+        `### Change ${idx + 1}: ${entry.changeType}`,
+        `**When**: ${timestamp}`,
+        `**What Changed**: ${entry.description}`,
+        '',
+      );
+
+      // Add metadata if available
+      if (entry.metadata && Object.keys(entry.metadata).length > 0) {
+        sections.push(
+          '**Details**:',
+          JSON.stringify(entry.metadata, null, 2),
+          '',
+        );
+      }
+    });
+
+    sections.push('---', '');
+  }
+
+  // 2. PARTICIPANT RESPONSES FOR CURRENT ROUND ONLY
   sections.push(
-    '## Participant Responses',
+    `## Round ${roundNumber} Participant Responses`,
+    '',
+    '⚠️ ANALYZE ONLY THESE RESPONSES: Rate and evaluate each participant based ONLY on their performance in this round.',
+    'Do not consider performance from previous rounds - focus exclusively on what happened in this round.',
     '',
   );
 

@@ -57,6 +57,10 @@ export function useSyncAfterCheckoutMutation() {
 
       // Invalidate usage queries to reflect new quota limits from subscription
       queryClient.invalidateQueries({ queryKey: queryKeys.usage.all });
+
+      // ✅ FIX: Invalidate models query to refresh tier-based model access after plan upgrade
+      // Without this, users must hard refresh to see newly unlocked models in participant selector
+      queryClient.invalidateQueries({ queryKey: queryKeys.models.all });
     },
     retry: false,
     throwOnError: false,

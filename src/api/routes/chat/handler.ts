@@ -37,6 +37,7 @@ import {
   getSafeMaxOutputTokens,
   SUBSCRIPTION_TIER_NAMES,
 } from '@/api/services/product-logic.service';
+import { ragService } from '@/api/services/rag.service';
 import { generateUniqueSlug } from '@/api/services/slug-generator.service';
 import { generateTitleFromMessage } from '@/api/services/title-generator.service';
 import {
@@ -1184,6 +1185,28 @@ export const deleteThreadHandler: RouteHandler<typeof deleteThreadRoute, ApiEnv>
       })
       .where(eq(tables.chatThread.id, id));
 
+    // ✅ RAG CLEANUP: Delete all embeddings for the thread
+    // Even though this is a soft delete, we clean up RAG embeddings to free vector storage
+    // If thread is restored in the future, embeddings can be regenerated
+    try {
+      await ragService.deleteThreadEmbeddings({
+        threadId: id,
+        db,
+      });
+
+      console.log('[deleteThreadHandler] 🔍 RAG embeddings deleted', {
+        threadId: id,
+        userId: user.id,
+      });
+    } catch (error) {
+      // Log but don't fail the deletion
+      console.error('[deleteThreadHandler] ⚠️ Failed to delete RAG embeddings', {
+        threadId: id,
+        userId: user.id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+
     // ✅ CRITICAL: Invalidate backend cache for thread lists
     // This ensures deleted threads immediately disappear from the sidebar
     // Without this, the listThreadsHandler cache returns stale data
@@ -1737,6 +1760,26 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
           deletedCount: deletedMessages.length,
         });
 
+        // ✅ RAG CLEANUP: Delete embeddings for deleted messages
+        // CASCADE foreign key will handle D1 cleanup, but we need to clean Vectorize
+        if (deletedMessages.length > 0) {
+          for (const deletedMessage of deletedMessages) {
+            try {
+              await ragService.deleteMessageEmbeddings({
+                messageId: deletedMessage.id,
+                db,
+              });
+            } catch (error) {
+              // Log but don't fail the regeneration
+              console.error('[streamChatHandler] ⚠️ Failed to delete RAG embeddings for message', {
+                threadId,
+                messageId: deletedMessage.id,
+                error: error instanceof Error ? error.message : String(error),
+              });
+            }
+          }
+        }
+
         // Delete analysis for the specified round (if exists)
         const deletedAnalyses = await db
           .delete(tables.chatModeratorAnalysis)
@@ -2280,10 +2323,80 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
     // - Uses persona-based framing for natural engagement
     // - Direct, clear instructions without "AI" terminology
     // - Prevents fourth-wall breaking and self-referential behavior
-    const systemPrompt = participant.settings?.systemPrompt
+    const baseSystemPrompt = participant.settings?.systemPrompt
       || (participant.role
         ? `You're ${participant.role}. Engage naturally in this discussion, sharing your perspective and insights. Be direct, thoughtful, and conversational.`
         : `Engage naturally in this discussion. Share your thoughts, ask questions, and build on others' ideas. Be direct and conversational.`);
+
+    // =========================================================================
+    // STEP 5.5: ✅ RAG CONTEXT RETRIEVAL - Semantic search for relevant context
+    // =========================================================================
+    // Retrieve relevant context from previous messages using semantic search
+    // This enhances AI responses with relevant information from conversation history
+    let systemPrompt = baseSystemPrompt;
+    const startRetrievalTime = performance.now();
+
+    try {
+      // Extract query from last user message
+      const lastUserMessage = typedMessages.findLast(m => m.role === 'user');
+      const userQuery = lastUserMessage
+        ? extractTextFromParts(lastUserMessage.parts as Array<{ type: 'text'; text: string } | { type: 'reasoning'; text: string }>)
+        : '';
+
+      // Only retrieve context if we have a valid query
+      if (userQuery.trim()) {
+        const ragContexts = await ragService.retrieveContext({
+          query: userQuery,
+          threadId,
+          userId: user.id,
+          topK: 5,
+          minSimilarity: 0.7,
+          db,
+        });
+
+        const retrievalTimeMs = performance.now() - startRetrievalTime;
+
+        // If we found relevant context, inject it into the system prompt
+        if (ragContexts.length > 0) {
+          const contextPrompt = ragService.formatContextForPrompt(ragContexts);
+          systemPrompt = `${baseSystemPrompt}\n\n${contextPrompt}`;
+
+          console.log('[streamChatHandler] 🔍 RAG context retrieved', {
+            threadId,
+            participantIndex,
+            contextCount: ragContexts.length,
+            topSimilarity: ragContexts[0]?.similarity,
+            retrievalTimeMs,
+          });
+
+          // Track RAG usage for analytics (non-blocking)
+          ragService.trackContextRetrieval({
+            threadId,
+            userId: user.id,
+            query: userQuery,
+            contexts: ragContexts,
+            queryTimeMs: retrievalTimeMs,
+            db,
+          }).catch((error) => {
+            console.error('[streamChatHandler] ⚠️ Failed to track RAG analytics', error);
+          });
+        } else {
+          console.log('[streamChatHandler] 🔍 No RAG context found', {
+            threadId,
+            participantIndex,
+            retrievalTimeMs,
+          });
+        }
+      }
+    } catch (error) {
+      // RAG failures should not break the chat flow
+      console.error('[streamChatHandler] ⚠️ RAG context retrieval failed', {
+        threadId,
+        participantIndex,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      // Continue with base system prompt without RAG context
+    }
 
     // Convert UI messages to model messages
     // ✅ SHARED UTILITY: Filter out empty messages (caused by subsequent participant triggers)
@@ -2793,6 +2906,33 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
             .onConflictDoNothing()
             .returning();
 
+          // ✅ RAG EMBEDDING STORAGE: Store message embedding for semantic search
+          // Only store embeddings for successful messages (non-empty, no errors)
+          if (savedMessage && !hasError && contentToSave.trim()) {
+            try {
+              await ragService.storeMessageEmbedding({
+                message: savedMessage,
+                threadId,
+                userId: user.id,
+                db,
+              });
+
+              console.log('[streamChatHandler] 🔍 RAG embedding stored', {
+                threadId,
+                messageId: savedMessage.id,
+                participantIndex,
+              });
+            } catch (error) {
+              // Embedding storage failures should not break the chat flow
+              console.error('[streamChatHandler] ⚠️ Failed to store RAG embedding', {
+                threadId,
+                messageId: savedMessage.id,
+                participantIndex,
+                error: error instanceof Error ? error.message : String(error),
+              });
+            }
+          }
+
           await incrementMessageUsage(user.id, 1);
 
           // ✅ TRIGGER ANALYSIS: When last participant finishes AND all participants succeeded
@@ -2879,6 +3019,22 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
       }),
 
       onError: (error) => {
+        // ✅ DEEPSEEK R1 WORKAROUND: Suppress logprobs validation errors
+        // These are non-fatal errors from DeepSeek R1's non-conforming logprobs structure
+        // Reference: https://github.com/vercel/ai/issues/9087
+        const err = error as Error & { name?: string };
+        if (err?.name === 'AI_TypeValidationError' && err?.message?.includes('logprobs')) {
+          console.warn('[streamChatHandler] ⏭️ Suppressing non-fatal logprobs validation error', {
+            threadId,
+            participantIndex,
+            modelId: participant.modelId,
+            errorType: 'AI_TypeValidationError',
+            isLogprobsError: true,
+          });
+          // Return empty string to indicate error was handled and stream should continue
+          return '';
+        }
+
         console.error('[streamChatHandler] STREAM_ERROR', {
           threadId,
           participantIndex,
@@ -3104,7 +3260,7 @@ function generateModeratorAnalysis(
     threadId: string;
   },
 ) {
-  const { roundNumber, mode, userQuestion, participantResponses, env, analysisId, threadId } = config;
+  const { roundNumber, mode, userQuestion, participantResponses, changelogEntries, env, analysisId, threadId } = config;
 
   // ✅ ESTABLISHED PATTERN: Initialize OpenRouter and get client
   // Reference: src/api/services/analysis-background.service.ts:144-145
@@ -3120,6 +3276,7 @@ function generateModeratorAnalysis(
     mode,
     userQuestion,
     participantResponses,
+    changelogEntries,
   });
 
   const userPrompt = buildModeratorUserPrompt({
@@ -3127,6 +3284,7 @@ function generateModeratorAnalysis(
     mode,
     userQuestion,
     participantResponses,
+    changelogEntries, // ✅ Pass changelog to understand what changed before this round
   });
 
   // ✅ AI SDK streamObject(): Stream structured analysis
@@ -3311,29 +3469,29 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
         });
       }
 
-      // ✅ STREAMING: Return 409 Conflict (another request is already streaming)
-      // This should rarely happen now since we cleaned up duplicates above
+      // ✅ STREAMING: Return 409 Conflict (analysis already in progress)
+      // Frontend should use GET /analyses to poll for status, NOT retry POST
       if (existingAnalysis.status === 'streaming') {
         const ageMs = Date.now() - existingAnalysis.createdAt.getTime();
-        const TEN_SECONDS_MS = 10 * 1000;
 
-        // ✅ REGENERATION FIX: If streaming analysis is stale, delete it
-        if (ageMs > TEN_SECONDS_MS) {
-          console.warn('[analyzeRoundHandler] ⏱️ Streaming analysis stuck (> 10 sec), deleting', existingAnalysis.id);
-          await db.delete(tables.chatModeratorAnalysis)
-            .where(eq(tables.chatModeratorAnalysis.id, existingAnalysis.id));
-          // Fall through to create new analysis
-        } else {
-          console.warn('[analyzeRoundHandler] 🔄 Analysis already streaming, returning 409 Conflict', existingAnalysis.id);
-          throw createError.conflict(
-            'Analysis is already being generated. Please wait for it to complete.',
-            {
-              errorType: 'resource',
-              resource: 'moderator_analysis',
-              resourceId: existingAnalysis.id,
-            },
-          );
-        }
+        console.warn('[analyzeRoundHandler] 🔄 Analysis already streaming, returning 409 Conflict', {
+          analysisId: existingAnalysis.id,
+          ageMs,
+          threadId,
+          roundNumber: roundNum,
+        });
+
+        // ✅ CRITICAL: Do NOT delete streaming analyses
+        // The backend continues streaming in background even if client disconnects
+        // Frontend should poll GET /analyses to check completion status
+        throw createError.conflict(
+          `Analysis is already being generated (age: ${Math.round(ageMs / 1000)}s). Please wait for it to complete.`,
+          {
+            errorType: 'resource',
+            resource: 'moderator_analysis',
+            resourceId: existingAnalysis.id,
+          },
+        );
       }
 
       // ✅ FAILED: Delete failed analysis to allow retry
@@ -3393,7 +3551,7 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
     // ✅ OPTION 2: Auto-calculate messages (no IDs provided OR provided IDs were invalid)
     if (!participantMessages) {
       try {
-        console.warn('[analyzeRoundHandler] 🔍 Auto-calculating participant messages', {
+        console.warn('[analyzeRoundHandler] 🔍 Auto-calculating participant messages for round', {
           threadId,
           roundNumber: roundNum,
         });
@@ -3426,9 +3584,9 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
           );
         }
 
-        // Query for the most recent N assistant messages (where N = participant count)
-        // These should be the messages from the round we want to analyze
-        const recentMessages = await db.query.chatMessage.findMany({
+        // ✅ CRITICAL FIX: Get messages for the SPECIFIC round, not just recent messages
+        // Calculate which messages belong to this round based on chronological order
+        const allAssistantMessages = await db.query.chatMessage.findMany({
           where: (fields, { and: andOp, eq: eqOp }) =>
             andOp(
               eqOp(fields.threadId, threadId),
@@ -3437,20 +3595,56 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
           with: {
             participant: true,
           },
-          orderBy: [desc(tables.chatMessage.createdAt)],
-          limit: participantCount,
+          orderBy: [asc(tables.chatMessage.createdAt)], // Oldest first for round calculation
         });
 
-        console.warn('[analyzeRoundHandler] 📝 Queried recent messages', {
+        console.warn('[analyzeRoundHandler] 📝 Queried all assistant messages', {
           threadId,
-          foundCount: recentMessages.length,
-          requestedLimit: participantCount,
+          totalMessages: allAssistantMessages.length,
+          participantCount,
+          requestedRound: roundNum,
         });
 
-        // Reverse to get chronological order (oldest first)
-        participantMessages = recentMessages.reverse() as MessageWithParticipant[];
+        // ✅ Extract messages for the requested round
+        // Round 1: messages 0 to (participantCount - 1)
+        // Round 2: messages participantCount to (2 * participantCount - 1)
+        // Round N: messages (N-1)*participantCount to (N * participantCount - 1)
+        const roundStartIndex = (roundNum - 1) * participantCount;
+        const roundEndIndex = roundNum * participantCount;
+        const roundMessages = allAssistantMessages.slice(roundStartIndex, roundEndIndex);
 
-        console.warn('[analyzeRoundHandler] ✅ Auto-calculated participant messages', {
+        console.warn('[analyzeRoundHandler] 🎯 Extracted messages for specific round', {
+          threadId,
+          roundNumber: roundNum,
+          roundStartIndex,
+          roundEndIndex,
+          extractedCount: roundMessages.length,
+          expectedCount: participantCount,
+          messageIds: roundMessages.map(m => m.id),
+        });
+
+        if (roundMessages.length === 0) {
+          throw createError.badRequest(
+            `No messages found for round ${roundNum}. This round may not exist yet.`,
+            {
+              errorType: 'validation',
+              field: 'roundNumber',
+            },
+          );
+        }
+
+        if (roundMessages.length < participantCount) {
+          console.warn('[analyzeRoundHandler] ⚠️ Incomplete round - fewer messages than participants', {
+            threadId,
+            roundNumber: roundNum,
+            found: roundMessages.length,
+            expected: participantCount,
+          });
+        }
+
+        participantMessages = roundMessages as MessageWithParticipant[];
+
+        console.warn('[analyzeRoundHandler] ✅ Auto-calculated participant messages for round', {
           threadId,
           roundNumber: roundNum,
           participantCount,
@@ -3491,7 +3685,7 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
       );
     }
 
-    // Find the user's question
+    // Find the user's question for THIS specific round
     const userMessages = await db.query.chatMessage.findMany({
       where: (fields, { and: andOp, eq: eqOp }) =>
         andOp(
@@ -3509,7 +3703,30 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
 
     const userQuestion = relevantUserMessage ? extractTextFromParts(relevantUserMessage.parts) : 'N/A';
 
-    // Build participant response data for the moderator
+    // ✅ Get changelog entries that occurred BEFORE this round started
+    // This shows what changed between previous round and current round (participant changes, mode changes, role changes)
+    const changelogEntries = await db.query.chatThreadChangelog.findMany({
+      where: (fields, { and: andOp, eq: eqOp, lte: lteOp }) =>
+        andOp(
+          eqOp(fields.threadId, threadId),
+          lteOp(fields.createdAt, new Date(earliestParticipantTime)),
+        ),
+      orderBy: [desc(tables.chatThreadChangelog.createdAt)],
+      limit: 20, // Get recent changelog entries before this round
+    });
+
+    console.warn('[analyzeRoundHandler] 📋 Fetched changelog entries before round', {
+      threadId,
+      roundNumber: roundNum,
+      changelogCount: changelogEntries.length,
+      changes: changelogEntries.map(c => ({
+        type: c.changeType,
+        summary: c.changeSummary,
+        createdAt: c.createdAt,
+      })),
+    });
+
+    // Build participant response data for THIS round only
     const participantResponses = participantMessages.map((msg, index) => {
       const participant = msg.participant!;
       const modelName = extractModeratorModelName(participant.modelId);
@@ -3545,12 +3762,19 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
 
     // ✅ AI SDK streamObject(): Stream structured analysis in real-time
     // ✅ CRITICAL FIX: Persistence handled by onFinish callback in generateModeratorAnalysis
+    // ✅ ROUND-SPECIFIC ANALYSIS: Only analyzes current round with changelog context
     // This ensures the stream is NOT consumed separately, allowing smooth progressive updates to the frontend
     const result = generateModeratorAnalysis({
       roundNumber: roundNum,
       mode: thread.mode,
       userQuestion,
       participantResponses,
+      changelogEntries: changelogEntries.map(c => ({
+        changeType: c.changeType,
+        description: c.changeSummary,
+        metadata: c.changeData as Record<string, unknown> | null,
+        createdAt: c.createdAt,
+      })), // ✅ Pass changelog to understand what changed before this round
       analysisId, // Pass ID for onFinish callback persistence
       threadId, // Pass for logging
       env: c.env,
@@ -3564,7 +3788,9 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
 
     // ✅ Return streaming response (Content-Type: text/plain; charset=utf-8)
     // The stream will flow directly to the frontend for progressive rendering
-    // Persistence happens automatically via the onFinish callback
+    // ✅ CRITICAL: streamObject() onFinish callback persists to database even if client disconnects
+    // Unlike streamText(), streamObject() doesn't have consumeStream() but the onFinish callback
+    // will still execute when the stream completes, ensuring analysis is persisted
     return result.toTextStreamResponse();
   },
 );

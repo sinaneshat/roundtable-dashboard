@@ -60,6 +60,15 @@
       "preview_bucket_name": "roundtable-dashboard-r2-uploads-local"
     }
   ],
+  "vectorize": [
+    {
+      "binding": "VECTORIZE",
+      "index_name": "roundtable-context-index-local"
+    }
+  ],
+  "ai": {
+    "binding": "AI"
+  },
   "services": [
     {
       "binding": "WORKER_SELF_REFERENCE",
@@ -152,6 +161,15 @@
           "preview_bucket_name": "roundtable-dashboard-r2-uploads-preview"
         }
       ],
+      "vectorize": [
+        {
+          "binding": "VECTORIZE",
+          "index_name": "roundtable-context-index-preview"
+        }
+      ],
+      "ai": {
+        "binding": "AI"
+      },
       "services": [
         {
           "binding": "WORKER_SELF_REFERENCE",
@@ -238,6 +256,15 @@
           "preview_bucket_name": "roundtable-dashboard-r2-uploads-prod"
         }
       ],
+      "vectorize": [
+        {
+          "binding": "VECTORIZE",
+          "index_name": "roundtable-context-index-prod"
+        }
+      ],
+      "ai": {
+        "binding": "AI"
+      },
       "services": [
         {
           "binding": "WORKER_SELF_REFERENCE",

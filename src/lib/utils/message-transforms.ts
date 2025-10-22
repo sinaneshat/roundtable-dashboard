@@ -273,6 +273,7 @@ export function createErrorUIMessage(
     openRouterCode?: string;
     providerMessage?: string;
   },
+  roundNumber?: number, // ✅ CRITICAL FIX: Add round number to error messages for proper grouping
 ): UIMessage {
   // Generate unique error message ID
   const errorMessageId = `error-${crypto.randomUUID()}-${currentIndex}`;
@@ -298,6 +299,7 @@ export function createErrorUIMessage(
       providerMessage: errorMetadata?.providerMessage || errorMetadata?.rawErrorMessage || errorMessage,
       openRouterError: errorMetadata?.openRouterError,
       openRouterCode: errorMetadata?.openRouterCode,
+      roundNumber, // ✅ CRITICAL FIX: Include round number for proper message grouping
     },
   };
 }

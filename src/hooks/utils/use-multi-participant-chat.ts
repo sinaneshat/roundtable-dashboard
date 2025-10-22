@@ -123,6 +123,8 @@ type RoundState = {
   queueAdvancedForParticipant: Set<string>;
   /** ✅ FIX: Snapshot of participants at round start time (prevents stale metadata during participant changes) */
   roundParticipants: ChatParticipant[];
+  /** ✅ CRITICAL FIX: Current round number set when user sends message (prevents timing issues in onFinish) */
+  currentRoundNumber: number | null;
 };
 
 /**
@@ -167,6 +169,7 @@ export function useMultiParticipantChat({
     erroredParticipants: new Set(),
     queueAdvancedForParticipant: new Set(),
     roundParticipants: [], // ✅ FIX: Initialize with empty array (set at round start)
+    currentRoundNumber: null, // ✅ CRITICAL FIX: Initialize as null (set when user sends message)
   });
 
   // ✅ Keep participantsRef separate (used in transport callback)
@@ -179,6 +182,7 @@ export function useMultiParticipantChat({
     roundStateRef.current.queue = [];
     roundStateRef.current.erroredParticipants.clear();
     roundStateRef.current.queueAdvancedForParticipant.clear();
+    roundStateRef.current.currentRoundNumber = null; // ✅ CRITICAL FIX: Reset round number when round completes
     setCurrentIndex(0);
   }, []);
 
@@ -355,12 +359,14 @@ export function useMultiParticipantChat({
           roundStateRef.current.erroredParticipants.add(errorKey);
 
           // ✅ REFACTORED: Use shared error utility from /src/lib/utils/message-transforms.ts
+          // ✅ CRITICAL FIX: Pass current round number to ensure error appears in correct round
           const errorUIMessage = createErrorUIMessage(
             currentParticipant,
             roundStateRef.current.currentIndex,
             errorMessage,
             (errorMetadata?.errorCategory as UIMessageErrorType) || 'error',
             errorMetadata || undefined,
+            roundStateRef.current.currentRoundNumber || undefined, // ✅ Include round number
           );
 
           setMessages(prev => [...prev, errorUIMessage]);
@@ -453,16 +459,17 @@ export function useMultiParticipantChat({
         // Empty responses are retried up to 5 times on the backend before streaming to frontend
 
         setMessages((prev) => {
-          // ✅ CRITICAL FIX: Find the last user message to get the current round number
-          // The user message was already added by AI SDK before this callback fires
-          // We need to find it and use its roundNumber for this assistant response
-          const lastUserMessage = [...prev].reverse().find((m: UIMessage) => m.role === 'user');
-          const userMetadata = lastUserMessage?.metadata as Record<string, unknown> | undefined;
-
-          // Use roundNumber from user message if available, otherwise calculate from count
-          const currentRoundNumber = (userMetadata?.roundNumber as number)
-            || prev.filter((m: UIMessage) => m.role === 'user').length
-            || 1;
+          // ✅ CRITICAL FIX: Use roundNumber from ref (set when user sent message)
+          // This prevents timing issues where onFinish fires before user message is in messages array
+          // Fallback to calculating from messages if ref is null (shouldn't happen)
+          const currentRoundNumber = roundStateRef.current.currentRoundNumber
+            ?? (() => {
+              const lastUserMessage = [...prev].reverse().find((m: UIMessage) => m.role === 'user');
+              const userMetadata = lastUserMessage?.metadata as Record<string, unknown> | undefined;
+              return (userMetadata?.roundNumber as number)
+                || prev.filter((m: UIMessage) => m.role === 'user').length
+                || 1;
+            })();
 
           // Add roundNumber to metadata for immediate correct sorting during streaming
           const metadataWithRoundNumber = {
@@ -661,6 +668,10 @@ export function useMultiParticipantChat({
       // The new round number is the current number of user messages + 1
       const userMessages = messages.filter((m: UIMessage) => m.role === 'user');
       const newRoundNumber = userMessages.length + 1;
+
+      // ✅ CRITICAL FIX: Store round number in ref so onFinish callback can access it immediately
+      // This prevents timing issues where onFinish fires before user message is in messages array
+      roundStateRef.current.currentRoundNumber = newRoundNumber;
 
       // Send user message with roundNumber metadata (first participant responds automatically)
       aiSendMessage({

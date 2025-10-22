@@ -21,8 +21,13 @@ import { chatGlass } from '@/lib/ui/glassmorphism';
 export default function ChatThreadLoading() {
   return (
     <div className="relative min-h-full">
-      {/* Main content - window-level scrolling, matches ChatThreadScreen.tsx:1091 */}
-      <div className="container max-w-3xl mx-auto px-4 sm:px-6 pt-0 pb-32">
+      {/* Main content - window-level scrolling with dynamic padding for fixed input */}
+      <div
+        className="container max-w-3xl mx-auto px-4 sm:px-6 pt-0 pb-[calc(var(--input-height,200px)+8rem)]"
+        style={{
+          '--input-height': '200px', // Approximate input height for loading state
+        } as React.CSSProperties}
+      >
         <div className="space-y-6">
           {/* Round 1 */}
           <div className="space-y-3">
@@ -107,9 +112,14 @@ export default function ChatThreadLoading() {
         </div>
       </div>
 
-      {/* Fixed input container - matches ChatThreadScreen.tsx:1294 */}
-      <div className="fixed inset-x-0 bottom-0 z-20 pointer-events-none">
-        <div className="container max-w-3xl mx-auto px-4 sm:px-6 pb-6 md:pb-8 pointer-events-auto">
+      {/* Sticky input container - stays at bottom within content flow */}
+      <div
+        className="sticky bottom-0 z-50 bg-gradient-to-t from-background via-background to-transparent pt-6 pb-4 mt-auto"
+        style={{
+          '--input-height': '200px', // Approximate input height for loading state
+        } as React.CSSProperties}
+      >
+        <div className="container max-w-3xl mx-auto px-4 sm:px-6">
           <div className={cn(chatGlass.inputBox, 'rounded-lg shadow-2xl p-4')}>
             <Skeleton className="h-20 w-full bg-white/10" />
           </div>

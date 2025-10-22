@@ -326,121 +326,34 @@ export default function ChatThreadScreen({
   useEffect(() => {
     // Set up round completion callback for analysis triggers
     const currentThreadId = thread.id; // Capture thread.id in closure
-    const currentThreadMode = thread.mode; // Capture mode in closure
 
     setOnRoundComplete(async () => {
-      // ✅ CRITICAL: Wait for messages to be persisted to database
-      // Messages are created during streaming but might not be committed immediately
-      // This ensures POST /analyze can find the participant messages
-      console.warn('[ChatThreadScreen] 🎯 Round completed - waiting for messages to persist', {
+      // ✅ BACKEND CREATES PENDING ANALYSIS: Backend automatically creates pending analysis
+      // when last participant finishes (src/api/routes/chat/handler.ts:2971-2981)
+      // Frontend just needs to fetch it and start streaming
+      console.warn('[ChatThreadScreen] 🎯 Round completed - backend should have created pending analysis', {
         threadId: currentThreadId,
       });
 
-      await new Promise(resolve => setTimeout(resolve, 2000));
-
-      console.warn('[ChatThreadScreen] ✅ Messages should be persisted - triggering analysis', {
-        threadId: currentThreadId,
-      });
-
-      // ✅ ACTIVE SESSION OPTIMIZATION: Add pending analysis directly to cache
-      // This skips unnecessary GET request and triggers streaming immediately
-      // Only after page refresh should GET /analyses be used to fetch existing pending analyses
+      // ✅ BACKEND ALREADY CREATED PENDING ANALYSIS: Just refetch to get it
+      // Backend creates pending analysis when last participant finishes (src/api/routes/chat/handler.ts:2228-2239)
+      // We just need to invalidate the query to fetch the backend-created pending analysis
 
       // ✅ FIX: Use the round number from the ref that was set when the message was sent
-      // This avoids closure issues with stale messages array
-      // If ref is null (shouldn't happen), fall back to calculating from messages
-      const userMessages = messages.filter(m => m.role === 'user');
-      const roundNumber = currentRoundNumberRef.current ?? (userMessages.length || 1);
+      const roundNumber = currentRoundNumberRef.current ?? 1;
 
-      // Get participant message IDs from the messages that were just created
-      const assistantMessages = messages.filter(m => m.role === 'assistant');
-      const participantCount = contextParticipants.length;
-      const recentAssistantMessages = assistantMessages.slice(-participantCount);
-      const participantMessageIds = recentAssistantMessages.map(m => m.id);
-
-      // ✅ VALIDATION: Ensure we have participant messages before creating analysis
-      // If participants are still responding (incomplete round), skip analysis
-      if (participantMessageIds.length === 0 || participantMessageIds.length < participantCount) {
-        console.warn('[ChatThreadScreen] ⏭️ Skipping analysis - not all participants have responded yet', {
-          threadId: currentThreadId,
-          roundNumber,
-          participantMessageIds: participantMessageIds.length,
-          expectedParticipants: participantCount,
-        });
-        return;
-      }
-
-      // Get user question for this round (last user message)
-      const lastUserMessage = userMessages[userMessages.length - 1];
-      const userQuestion = lastUserMessage?.parts
-        ?.filter((p): p is Extract<typeof p, { type: 'text' }> => p.type === 'text')
-        .map(p => p.text)
-        .join('')
-        .trim() || 'N/A';
-
-      // Create pending analysis object to trigger streaming
-      // ✅ UNIQUE ID: Include timestamp to ensure uniqueness for retries
-      // When a round is retried, we need a different ID than the previous attempt
-      const pendingAnalysis = {
-        id: `pending-${currentThreadId}-${roundNumber}-${Date.now()}`, // Temporary ID with timestamp
+      console.warn('[ChatThreadScreen] 🔄 Round complete - refetching analyses to get backend pending analysis', {
         threadId: currentThreadId,
         roundNumber,
-        mode: currentThreadMode,
-        userQuestion,
-        status: 'pending' as const,
-        participantMessageIds,
-        analysisData: null,
-        createdAt: new Date(),
-        completedAt: null,
-        errorMessage: null,
-      };
-
-      console.warn('[ChatThreadScreen] 🎯 Round complete - adding pending analysis to cache', {
-        threadId: currentThreadId,
-        roundNumber,
-        participantMessageIds,
-        pendingAnalysisId: pendingAnalysis.id,
-        isRetry: regeneratingRounds.threadId === currentThreadId && regeneratingRounds.rounds.has(roundNumber),
       });
 
-      // Add pending analysis directly to cache (no GET request)
-      queryClient.setQueryData(
-        queryKeys.threads.analyses(currentThreadId),
-        (oldData: unknown) => {
-          const typedData = oldData as typeof analysesResponse;
-
-          if (!typedData?.success) {
-            // If no existing data, create new response structure
-            return {
-              success: true,
-              data: {
-                items: [pendingAnalysis],
-              },
-            };
-          }
-
-          // Add pending analysis to existing items
-          const updatedData = {
-            ...typedData,
-            data: {
-              ...typedData.data,
-              items: [...(typedData.data.items || []), pendingAnalysis],
-            },
-          };
-
-          console.warn('[ChatThreadScreen] ✅ Pending analysis added to cache', {
-            threadId: currentThreadId,
-            roundNumber,
-            pendingAnalysisId: pendingAnalysis.id,
-            totalAnalyses: updatedData.data.items.length,
-          });
-
-          return updatedData;
-        },
-      );
+      // ✅ INVALIDATE AND REFETCH: Get the backend-created pending analysis
+      // This triggers the ModeratorAnalysisStream component to start streaming
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.threads.analyses(currentThreadId),
+      });
 
       // ✅ CLEAR REGENERATING STATE: Round is complete, new analysis will be created
-      // Clear all regenerating rounds since the participants have finished speaking
       setRegeneratingRounds({ threadId: currentThreadId, rounds: new Set() });
 
       // ✅ CLEAR STREAMING ROUND: Round completed, reset to allow new round
@@ -679,11 +592,34 @@ export default function ChatThreadScreen({
 
   // ✅ CALCULATE MAX ROUND NUMBER: Find the highest round number in the conversation
   // This is used to determine if the retry button should be shown (only on last round)
+  // ✅ CRITICAL FIX: Use same inference logic as messagesWithAnalysesAndChangelog
+  // During streaming, messages may not have roundNumber in metadata yet, so we infer it
   const maxRoundNumber = useMemo(() => {
     let max = 0;
+    let inferredRoundNumber = 1;
+    let lastUserMessageRound = 0;
+
     messages.forEach((message) => {
       const metadata = message.metadata as Record<string, unknown> | undefined;
-      const roundNumber = (metadata?.roundNumber as number) || 1;
+      let roundNumber = metadata?.roundNumber as number | undefined;
+
+      // ✅ STREAMING FIX: If message doesn't have roundNumber, infer it from context
+      if (!roundNumber) {
+        if (message.role === 'user') {
+          // User messages increment the round
+          inferredRoundNumber = lastUserMessageRound + 1;
+          lastUserMessageRound = inferredRoundNumber;
+          roundNumber = inferredRoundNumber;
+        } else {
+          // Assistant messages belong to the current round (after last user message)
+          roundNumber = inferredRoundNumber || 1;
+        }
+      } else if (message.role === 'user') {
+        // Track user message rounds even when they have explicit roundNumber
+        lastUserMessageRound = roundNumber;
+        inferredRoundNumber = roundNumber;
+      }
+
       if (roundNumber > max) {
         max = roundNumber;
       }
@@ -707,10 +643,33 @@ export default function ChatThreadScreen({
     > = [];
 
     // Group messages by roundNumber
+    // ✅ FIX: Infer round number for streaming messages that don't have metadata yet
     const messagesByRound = new Map<number, typeof messages>();
+    let inferredRoundNumber = 1; // Track inferred round for messages without explicit roundNumber
+    let lastUserMessageRound = 0; // Track the last user message's round
+
     messages.forEach((message) => {
       const metadata = message.metadata as Record<string, unknown> | undefined;
-      const roundNumber = (metadata?.roundNumber as number) || 1;
+      let roundNumber = metadata?.roundNumber as number | undefined;
+
+      // ✅ STREAMING FIX: If message doesn't have roundNumber, infer it from context
+      if (!roundNumber) {
+        if (message.role === 'user') {
+          // User messages increment the round
+          inferredRoundNumber = lastUserMessageRound + 1;
+          lastUserMessageRound = inferredRoundNumber;
+          roundNumber = inferredRoundNumber;
+        } else {
+          // Assistant messages belong to the current round (after last user message)
+          roundNumber = inferredRoundNumber || 1;
+        }
+      } else {
+        // Update tracking for explicit round numbers
+        if (message.role === 'user') {
+          lastUserMessageRound = roundNumber;
+          inferredRoundNumber = roundNumber;
+        }
+      }
 
       if (!messagesByRound.has(roundNumber)) {
         messagesByRound.set(roundNumber, []);
@@ -992,20 +951,26 @@ export default function ChatThreadScreen({
   const inputContainerRef = useRef<HTMLDivElement | null>(null);
 
   // ✅ INITIAL SCROLL: Scroll to bottom on page load/refresh
-  // This ensures the page starts at the bottom with all content visible
+  // This ensures the page starts at the bottom with all content visible above the input
   useEffect(() => {
     if (messagesWithAnalysesAndChangelog.length === 0) {
       return;
     }
 
-    // Wait for content to render
+    // Wait for content to render and stabilize
     const timer = setTimeout(() => {
       if (messagesWithAnalysesAndChangelog.length > 0) {
-        // Scroll to the last item on initial load
-        rowVirtualizer.scrollToIndex(messagesWithAnalysesAndChangelog.length - 1, {
-          align: 'end',
-          behavior: 'auto', // Instant scroll on initial load
-        });
+        // Use content container for accurate scroll positioning
+        const contentContainer = document.getElementById('chat-scroll-container');
+        if (contentContainer) {
+          const contentBottom = contentContainer.offsetTop + contentContainer.scrollHeight;
+          const targetScroll = contentBottom - window.innerHeight;
+
+          window.scrollTo({
+            top: Math.max(0, targetScroll),
+            behavior: 'auto',
+          });
+        }
       }
     }, 100);
 
@@ -1024,11 +989,6 @@ export default function ChatThreadScreen({
     // This prevents forcing users back when analysis updates
     const newAnalyses = analyses.filter(a => !scrolledToAnalysesRef.current.has(a.id));
     const hasNewAnalysis = newAnalyses.length > 0;
-
-    // ✅ CRITICAL FIX: During streaming, scroll to last MESSAGE item, not last item overall
-    // This prevents analyses/changelog from being dragged down during streaming
-    // When NOT streaming, use normal behavior (scroll to actual bottom if user is near bottom)
-    const targetIndex = isStreaming ? lastMessageItemIndex : messagesWithAnalysesAndChangelog.length - 1;
 
     // ✅ ENHANCED SCROLL LOGIC:
     // 1. Always scroll during message streaming (to show new messages)
@@ -1051,13 +1011,30 @@ export default function ChatThreadScreen({
         });
       }
 
-      // ✅ WINDOW VIRTUALIZER: Scroll to index using window scrolling
-      // Account for bottom padding by using 'end' alignment
+      // ✅ WINDOW SCROLLING: Scroll to show content, accounting for sticky input
       requestAnimationFrame(() => {
-        rowVirtualizer.scrollToIndex(targetIndex, {
-          align: 'end',
-          behavior: 'smooth',
-        });
+        // Get the content container to calculate proper scroll position
+        const contentContainer = document.getElementById('chat-scroll-container');
+        if (contentContainer) {
+          // Calculate the bottom of the content (not the full document height)
+          const contentBottom = contentContainer.offsetTop + contentContainer.scrollHeight;
+
+          // Scroll to show the content bottom, accounting for viewport height
+          // This ensures messages stay visible above the sticky input
+          const targetScroll = contentBottom - window.innerHeight;
+
+          window.scrollTo({
+            top: Math.max(0, targetScroll),
+            behavior: isStreaming ? 'smooth' : 'auto',
+          });
+        } else {
+          // Fallback: scroll to document height if container not found
+          const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
+          window.scrollTo({
+            top: maxScroll,
+            behavior: isStreaming ? 'smooth' : 'auto',
+          });
+        }
       });
     }
     // ✅ INTENTIONAL: messagesWithAnalysesAndChangelog.length is NOT in dependencies
@@ -1071,13 +1048,13 @@ export default function ChatThreadScreen({
   return (
     <>
       {/* ✅ WINDOW-LEVEL SCROLLING: Content flows naturally, sticky elements stay in view */}
-      <div className="flex flex-col min-h-svh">
-        {/* ✅ Content container with virtualization - pt-16 for header, pb-32 for sticky input */}
-        <div ref={listRef} className="container max-w-3xl mx-auto px-4 sm:px-6 pt-0 pb-32">
+      <div className="flex flex-col min-h-screen relative">
+        {/* ✅ Content container with virtualization - pb-32 ensures messages have space above sticky input */}
+        <div id="chat-scroll-container" ref={listRef} className="container max-w-3xl mx-auto px-4 sm:px-6 pt-0 pb-32 flex-1">
           {/* ✅ WINDOW VIRTUALIZER: Wrapper with total size for proper scrollbar */}
           <div
             style={{
-              height: `${rowVirtualizer.getTotalSize()}px`,
+              minHeight: `${rowVirtualizer.getTotalSize()}px`,
               width: '100%',
               position: 'relative',
             }}
@@ -1121,18 +1098,19 @@ export default function ChatThreadScreen({
                   >
                     {item.type === 'changelog' && item.data.length > 0 && (
                     // ✅ Changelog before round - ALL changes for this round in ONE accordion
-                      <ConfigurationChangesGroup
-                        className="mb-6"
-                        group={{
-                          timestamp: new Date(item.data[0]!.createdAt),
-                          changes: item.data, // ✅ Pass ALL changes - component groups by action
-                        }}
-                      />
+                      <div className="mb-6">
+                        <ConfigurationChangesGroup
+                          group={{
+                            timestamp: new Date(item.data[0]!.createdAt),
+                            changes: item.data, // ✅ Pass ALL changes - component groups by action
+                          }}
+                        />
+                      </div>
                     )}
 
                     {item.type === 'messages' && (
                     // Messages for this round + Actions + Feedback (AI Elements pattern)
-                      <div className="space-y-3">
+                      <div className="space-y-3 pb-2">
                         <ChatMessageList
                           messages={item.data}
                           user={user}
@@ -1159,10 +1137,11 @@ export default function ChatThreadScreen({
                           const isLastRound = roundNumber === maxRoundNumber;
 
                           return (
-                            <Actions className="mt-3">
+                            <Actions className="mt-3 mb-2">
                               {/* ✅ Round Feedback: Like/Dislike buttons - only show if round succeeded */}
                               {!hasRoundError && feedbackHandlersMap.has(roundNumber) && (
                                 <RoundFeedback
+                                  key={`feedback-${thread.id}-${roundNumber}`}
                                   threadId={thread.id}
                                   roundNumber={roundNumber}
                                   currentFeedback={feedbackByRound.get(roundNumber) ?? null}
@@ -1183,6 +1162,7 @@ export default function ChatThreadScreen({
                               {/* ✅ Round Actions: Retry - ONLY shown on the last round of the conversation */}
                               {isLastRound && (
                                 <Action
+                                  key={`retry-${thread.id}-${roundNumber}`}
                                   onClick={retryRound}
                                   label={t('errors.retry')}
                                   tooltip={t('errors.retryRound')}
@@ -1198,80 +1178,89 @@ export default function ChatThreadScreen({
 
                     {item.type === 'analysis' && (
                     // Analysis after round (shows results)
-                      <RoundAnalysisCard
-                        className="mt-6"
-                        analysis={item.data}
-                        threadId={thread.id}
-                        isLatest={itemIndex === messagesWithAnalysesAndChangelog.length - 1}
-                        streamingRoundNumber={streamingRoundNumber}
-                        onStreamComplete={(completedData) => {
+                      <div className="mt-6 mb-4">
+                        <RoundAnalysisCard
+                          analysis={item.data}
+                          threadId={thread.id}
+                          isLatest={itemIndex === messagesWithAnalysesAndChangelog.length - 1}
+                          streamingRoundNumber={streamingRoundNumber}
+                          onStreamComplete={(completedData) => {
                           // ✅ ACTIVE SESSION OPTIMIZATION: Update cache directly with completed analysis
                           // This skips unnecessary GET request after streaming completes
-                          console.warn('[ChatThreadScreen] Analysis stream completed, updating cache directly');
+                            console.warn('[ChatThreadScreen] Analysis stream completed, updating cache directly');
 
-                          queryClient.setQueryData(
-                            queryKeys.threads.analyses(thread.id),
-                            (oldData: unknown) => {
-                              const typedData = oldData as typeof analysesResponse;
+                            queryClient.setQueryData(
+                              queryKeys.threads.analyses(thread.id),
+                              (oldData: unknown) => {
+                                const typedData = oldData as typeof analysesResponse;
 
-                              if (!typedData?.success) {
-                                return typedData;
-                              }
-
-                              // Replace the pending analysis with completed analysis
-                              const updatedItems = (typedData.data.items || []).map((analysis) => {
-                                // Match by round number (pending analysis has temporary ID)
-                                if (analysis.roundNumber === item.data.roundNumber) {
-                                  return {
-                                    ...analysis,
-                                    status: 'completed' as const,
-                                    analysisData: completedData,
-                                    completedAt: new Date(),
-                                  };
+                                if (!typedData?.success) {
+                                  return typedData;
                                 }
-                                return analysis;
-                              });
 
-                              console.warn('[ChatThreadScreen] ✅ Updated analysis in cache', {
-                                threadId: thread.id,
-                                roundNumber: item.data.roundNumber,
-                                itemCount: updatedItems.length,
-                              });
+                                // Replace the pending analysis with completed analysis
+                                const updatedItems = (typedData.data.items || []).map((analysis) => {
+                                // Match by round number (pending analysis has temporary ID)
+                                  if (analysis.roundNumber === item.data.roundNumber) {
+                                    return {
+                                      ...analysis,
+                                      status: 'completed' as const,
+                                      analysisData: completedData,
+                                      completedAt: new Date(),
+                                    };
+                                  }
+                                  return analysis;
+                                });
 
-                              return {
-                                ...typedData,
-                                data: {
-                                  ...typedData.data,
-                                  items: updatedItems,
-                                },
-                              };
-                            },
-                          );
-                        }}
-                      />
+                                console.warn('[ChatThreadScreen] ✅ Updated analysis in cache', {
+                                  threadId: thread.id,
+                                  roundNumber: item.data.roundNumber,
+                                  itemCount: updatedItems.length,
+                                });
+
+                                return {
+                                  ...typedData,
+                                  data: {
+                                    ...typedData.data,
+                                    items: updatedItems,
+                                  },
+                                };
+                              },
+                            );
+                          }}
+                        />
+                      </div>
                     )}
                   </div>
                 );
               })}
+
+              {/* ✅ Streaming participants loader - shown during participant streaming */}
+              {/* Place INSIDE virtualized container so scroll calculations include it */}
+              {isStreaming && selectedParticipants.length > 1 && (
+                <div
+                  key="streaming-loader"
+                  style={{
+                    position: 'relative', // Natural layout within virtualized container
+                  }}
+                >
+                  <StreamingParticipantsLoader
+                    className="mt-12"
+                    participants={selectedParticipants}
+                    currentParticipantIndex={currentParticipantIndex}
+                  />
+                </div>
+              )}
             </div>
           </div>
 
-          {/* Streaming participants loader - shown during participant streaming */}
-          {isStreaming && selectedParticipants.length > 1 && (
-            <StreamingParticipantsLoader
-              className="mt-12"
-              participants={selectedParticipants}
-              currentParticipantIndex={currentParticipantIndex}
-            />
-          )}
-
         </div>
 
-        {/* ✅ BOTTOM SPACER: Creates scrollable empty space below content, allows scrolling content higher above input */}
-        <div className="h-32" aria-hidden="true" />
-
-        {/* ✅ INPUT CONTAINER: Sticky to bottom, constrained to content area */}
-        <div ref={inputContainerRef} className="sticky bottom-0 z-50 bg-gradient-to-t from-background via-background to-transparent pt-6 pb-4 mt-auto">
+        {/* ✅ INPUT CONTAINER: Sticky to bottom - stays at bottom while scrolling */}
+        <div
+          ref={inputContainerRef}
+          className="sticky bottom-0 z-50 bg-gradient-to-t from-background via-background to-transparent pt-6 pb-4 mt-auto"
+        >
           <div className="container max-w-3xl mx-auto px-4 sm:px-6">
             <ChatInput
               value={inputValue}
@@ -1282,7 +1271,7 @@ export default function ChatThreadScreen({
               placeholder={t('input.placeholder')}
               participants={selectedParticipants}
               onRemoveParticipant={(participantId) => {
-              // Filter out the removed participant and reindex
+                // Filter out the removed participant and reindex
                 const filtered = selectedParticipants.filter(p => p.id !== participantId);
                 // Prevent removing the last participant
                 if (filtered.length === 0)

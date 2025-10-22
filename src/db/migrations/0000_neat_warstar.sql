@@ -335,6 +335,46 @@ CREATE INDEX `chat_thread_changelog_thread_idx` ON `chat_thread_changelog` (`thr
 CREATE INDEX `chat_thread_changelog_type_idx` ON `chat_thread_changelog` (`change_type`);--> statement-breakpoint
 CREATE INDEX `chat_thread_changelog_created_idx` ON `chat_thread_changelog` (`created_at`);--> statement-breakpoint
 CREATE INDEX `chat_thread_changelog_thread_round_idx` ON `chat_thread_changelog` (`thread_id`,`round_number`);--> statement-breakpoint
+CREATE TABLE `rag_context_stats` (
+	`id` text PRIMARY KEY NOT NULL,
+	`thread_id` text NOT NULL,
+	`user_id` text NOT NULL,
+	`query` text NOT NULL,
+	`results_count` integer NOT NULL,
+	`top_similarity` real,
+	`retrieved_embedding_ids` text NOT NULL,
+	`query_time_ms` integer,
+	`created_at` integer DEFAULT (cast((julianday('now') - 2440587.5)*86400000 as integer)) NOT NULL,
+	FOREIGN KEY (`thread_id`) REFERENCES `chat_thread`(`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`user_id`) REFERENCES `user`(`id`) ON UPDATE no action ON DELETE cascade
+);
+--> statement-breakpoint
+CREATE INDEX `rag_context_stats_thread_idx` ON `rag_context_stats` (`thread_id`);--> statement-breakpoint
+CREATE INDEX `rag_context_stats_user_idx` ON `rag_context_stats` (`user_id`);--> statement-breakpoint
+CREATE INDEX `rag_context_stats_created_idx` ON `rag_context_stats` (`created_at`);--> statement-breakpoint
+CREATE TABLE `rag_embedding` (
+	`id` text PRIMARY KEY NOT NULL,
+	`message_id` text NOT NULL,
+	`thread_id` text NOT NULL,
+	`user_id` text NOT NULL,
+	`content` text NOT NULL,
+	`vector_id` text NOT NULL,
+	`metadata` text,
+	`embedding_model` text DEFAULT '@cf/baai/bge-base-en-v1.5' NOT NULL,
+	`dimensions` integer DEFAULT 768 NOT NULL,
+	`created_at` integer DEFAULT (cast((julianday('now') - 2440587.5)*86400000 as integer)) NOT NULL,
+	FOREIGN KEY (`message_id`) REFERENCES `chat_message`(`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`thread_id`) REFERENCES `chat_thread`(`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`user_id`) REFERENCES `user`(`id`) ON UPDATE no action ON DELETE cascade
+);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `rag_embedding_vector_id_unique` ON `rag_embedding` (`vector_id`);--> statement-breakpoint
+CREATE INDEX `rag_embedding_message_idx` ON `rag_embedding` (`message_id`);--> statement-breakpoint
+CREATE INDEX `rag_embedding_thread_idx` ON `rag_embedding` (`thread_id`);--> statement-breakpoint
+CREATE INDEX `rag_embedding_user_idx` ON `rag_embedding` (`user_id`);--> statement-breakpoint
+CREATE INDEX `rag_embedding_vector_idx` ON `rag_embedding` (`vector_id`);--> statement-breakpoint
+CREATE INDEX `rag_embedding_created_idx` ON `rag_embedding` (`created_at`);--> statement-breakpoint
+CREATE INDEX `rag_embedding_thread_created_idx` ON `rag_embedding` (`thread_id`,`created_at`);--> statement-breakpoint
 CREATE TABLE `user_chat_usage` (
 	`id` text PRIMARY KEY NOT NULL,
 	`user_id` text NOT NULL,

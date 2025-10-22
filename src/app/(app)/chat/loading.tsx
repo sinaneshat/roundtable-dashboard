@@ -29,9 +29,13 @@ export default function ChatOverviewLoading() {
       </div>
 
       {/* Main content - flows naturally, page scrolls */}
-      {/* Top padding: pt-12 (48px) prevents header overlap */}
-      {/* Bottom padding: pb-64 (256px) prevents input overlap */}
-      <div className="container max-w-3xl mx-auto px-4 sm:px-6 pt-12 pb-64">
+      {/* Dynamic padding for fixed input - matches actual screen pattern */}
+      <div
+        className="container max-w-3xl mx-auto px-4 sm:px-6 pt-12 pb-[calc(var(--input-height,200px)+8rem)]"
+        style={{
+          '--input-height': '200px', // Approximate input height for loading state
+        } as React.CSSProperties}
+      >
         {/* Hero Section */}
         <div className="py-6 sm:py-8">
           <div className="flex flex-col items-center gap-4 sm:gap-5 md:gap-6 text-center">
@@ -83,9 +87,14 @@ export default function ChatOverviewLoading() {
         </div>
       </div>
 
-      {/* Fixed input container - matches content width */}
-      <div className="fixed inset-x-0 bottom-0 z-20 pointer-events-none">
-        <div className="container max-w-3xl mx-auto px-4 sm:px-6 pb-6 md:pb-8 pointer-events-auto">
+      {/* Sticky input container - stays at bottom within content flow */}
+      <div
+        className="sticky bottom-0 z-50 bg-gradient-to-t from-background via-background to-transparent pt-6 pb-4 mt-auto"
+        style={{
+          '--input-height': '200px', // Approximate input height for loading state
+        } as React.CSSProperties}
+      >
+        <div className="container max-w-3xl mx-auto px-4 sm:px-6">
           <div className={cn(chatGlass.inputBox, 'rounded-lg shadow-2xl p-4')}>
             <Skeleton className="h-20 w-full bg-white/10" />
           </div>

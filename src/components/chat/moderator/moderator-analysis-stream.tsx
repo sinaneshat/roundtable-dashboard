@@ -19,6 +19,7 @@ import { useEffect, useRef } from 'react';
 
 import type { ModeratorAnalysisPayload, StoredModeratorAnalysis } from '@/api/routes/chat/schema';
 import { ModeratorAnalysisPayloadSchema } from '@/api/routes/chat/schema';
+import { useBoolean } from '@/hooks/utils';
 
 import { LeaderboardCard } from './leaderboard-card';
 import { ParticipantAnalysisCard } from './participant-analysis-card';
@@ -38,14 +39,24 @@ type ModeratorAnalysisStreamProps = {
  * - Progressive rendering as partial objects arrive
  * - Calls onStreamComplete when streaming completes
  * - Falls back to completed data from database on page refresh
+ *
+ * ✅ POLLING STRATEGY:
+ * - Status 'pending' → Triggers POST /analyze to start streaming
+ * - Status 'streaming' → Backend already processing, useThreadAnalysesQuery polls for completion
+ * - 409 Conflict → Silently handled, query polling takes over
+ * - No manual polling intervals - all handled by useThreadAnalysesQuery refetchInterval
  */
 export function ModeratorAnalysisStream({
   threadId,
   analysis,
   onStreamComplete,
 }: ModeratorAnalysisStreamProps) {
-  // ✅ CRITICAL: Track if we've already triggered streaming
+  // ✅ Track if we've already triggered streaming (prevents duplicate POST requests)
   const hasTriggeredRef = useRef(false);
+
+  // ✅ Track if we got 409 Conflict (backend already streaming)
+  // When true, suppress error display and let query polling handle completion
+  const is409Conflict = useBoolean(false);
 
   // ✅ AI SDK v5: experimental_useObject hook for streaming structured objects
   // Uses the same Zod schema as the server for type safety and validation
@@ -55,6 +66,18 @@ export function ModeratorAnalysisStream({
     onFinish: ({ object: finalObject, error: streamError }) => {
       if (streamError) {
         console.error('[ModeratorAnalysisStream] ❌ Stream error:', streamError);
+
+        // ✅ CRITICAL: Check if error is 409 Conflict (analysis already streaming in background)
+        // Set flag to suppress error display - useThreadAnalysesQuery will poll for completion
+        const errorMessage = streamError.message || String(streamError);
+        if (errorMessage.includes('409') || errorMessage.includes('Conflict') || errorMessage.includes('already being generated')) {
+          console.warn('[ModeratorAnalysisStream] 🔄 Got 409 Conflict - backend already streaming', {
+            roundNumber: analysis.roundNumber,
+            analysisId: analysis.id,
+            message: 'useThreadAnalysesQuery polling will detect completion',
+          });
+          is409Conflict.onTrue();
+        }
         return;
       }
 
@@ -66,27 +89,33 @@ export function ModeratorAnalysisStream({
     },
   });
 
-  // ✅ AUTO-TRIGGER: Start streaming when component mounts for pending/streaming status
-  // ✅ FIX: Also handle 'streaming' status to recover from interrupted streams (page refresh)
+  // ✅ AUTO-TRIGGER: Start streaming ONLY for 'pending' status
+  // ✅ STREAMING STATUS: Don't trigger POST - backend already processing
+  // useThreadAnalysesQuery polls every 5-10s to detect completion
   useEffect(() => {
-    // Only trigger if analysis is pending/streaming and we haven't triggered yet
-    // 'streaming' status can occur if page was refreshed mid-stream
-    const shouldTrigger = (analysis.status === 'pending' || analysis.status === 'streaming')
-      && !hasTriggeredRef.current;
+    // Only trigger if analysis is 'pending' (newly created) and we haven't triggered yet
+    // Do NOT trigger for 'streaming' - backend already processing, query polls for completion
+    const shouldTrigger = analysis.status === 'pending' && !hasTriggeredRef.current;
 
     if (shouldTrigger) {
       hasTriggeredRef.current = true;
-      console.warn('[ModeratorAnalysisStream] 🌊 Starting stream', {
-        status: analysis.status,
+      console.warn('[ModeratorAnalysisStream] 🌊 Triggering POST /analyze for PENDING analysis', {
         roundNumber: analysis.roundNumber,
-        isRecovery: analysis.status === 'streaming',
+        analysisId: analysis.id,
       });
       submit({ participantMessageIds: analysis.participantMessageIds });
+    } else if (analysis.status === 'streaming' && !hasTriggeredRef.current) {
+      // Backend already processing - don't POST, let query poll
+      hasTriggeredRef.current = true;
+      console.warn('[ModeratorAnalysisStream] ⏭️ Skipping POST - backend already STREAMING', {
+        roundNumber: analysis.roundNumber,
+        analysisId: analysis.id,
+        message: 'useThreadAnalysesQuery will poll for completion',
+      });
     }
-  }, [analysis.status, analysis.participantMessageIds, submit, analysis.roundNumber]);
+  }, [analysis.status, analysis.participantMessageIds, submit, analysis.roundNumber, analysis.id]);
 
   // ✅ DEBUG: Log when partial data updates (helps verify streaming is working)
-  // ✅ MUST BE BEFORE EARLY RETURNS: React hooks must be called in same order every render
   useEffect(() => {
     if (partialAnalysis) {
       console.warn('[ModeratorAnalysisStream] 🔄 Partial data update:', {
@@ -100,8 +129,9 @@ export function ModeratorAnalysisStream({
     }
   }, [partialAnalysis]);
 
-  // ❌ ERROR STATE: Show error if streaming fails
-  if (error) {
+  // ❌ ERROR STATE: Show error if streaming fails (unless 409 Conflict)
+  // If 409 Conflict, suppress error - useThreadAnalysesQuery polls for completion
+  if (error && !is409Conflict.value) {
     return (
       <div className="flex flex-col gap-2 py-2">
         <div className="flex items-center gap-2 text-sm text-destructive">
