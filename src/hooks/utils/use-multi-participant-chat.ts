@@ -453,9 +453,16 @@ export function useMultiParticipantChat({
         // Empty responses are retried up to 5 times on the backend before streaming to frontend
 
         setMessages((prev) => {
-          // Calculate roundNumber from current messages (inside setMessages to access current state)
-          const userMessages = prev.filter((m: UIMessage) => m.role === 'user');
-          const currentRoundNumber = userMessages.length || 1; // Current round = number of user messages submitted
+          // ✅ CRITICAL FIX: Find the last user message to get the current round number
+          // The user message was already added by AI SDK before this callback fires
+          // We need to find it and use its roundNumber for this assistant response
+          const lastUserMessage = [...prev].reverse().find((m: UIMessage) => m.role === 'user');
+          const userMetadata = lastUserMessage?.metadata as Record<string, unknown> | undefined;
+
+          // Use roundNumber from user message if available, otherwise calculate from count
+          const currentRoundNumber = (userMetadata?.roundNumber as number)
+            || prev.filter((m: UIMessage) => m.role === 'user').length
+            || 1;
 
           // Add roundNumber to metadata for immediate correct sorting during streaming
           const metadataWithRoundNumber = {

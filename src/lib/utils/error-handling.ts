@@ -266,7 +266,7 @@ export function formatValidationErrors(
  *
  * @example
  * ```typescript
- * import { toast } from '@/components/ui/use-toast';
+ * import { toast } from '@/hooks/utils';
  * import { showErrorToast } from '@/lib/utils/error-handling';
  *
  * try {

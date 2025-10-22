@@ -27,7 +27,7 @@ import type { UIMessage } from 'ai';
 import { createContext, use, useCallback, useMemo, useState } from 'react';
 
 import type { ChatParticipant, ChatThread } from '@/api/routes/chat/schema';
-import { useMultiParticipantChat } from '@/hooks/use-multi-participant-chat';
+import { useMultiParticipantChat } from '@/hooks/utils';
 
 type ChatContextValue = {
   // Thread state

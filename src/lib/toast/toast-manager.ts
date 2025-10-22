@@ -8,7 +8,7 @@ import React from 'react';
 
 import type { ToastActionElement } from '@/components/ui/toast';
 import { ToastAction } from '@/components/ui/toast';
-import { toast as baseToast } from '@/components/ui/use-toast';
+import { toast as baseToast } from '@/hooks/utils';
 
 // Global toast tracking and management
 const activeToasts = new Set<string>();

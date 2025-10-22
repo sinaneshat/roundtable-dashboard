@@ -22,7 +22,7 @@ import { useSharedChatContext } from '@/contexts/chat-context';
 import { useCreateThreadMutation } from '@/hooks/mutations/chat-mutations';
 import { useThreadAnalysesQuery } from '@/hooks/queries/chat-threads';
 import { useModelsQuery } from '@/hooks/queries/models';
-import { useAutoScrollToBottom } from '@/hooks/use-auto-scroll-to-bottom';
+import { useAutoScrollToBottom } from '@/hooks/utils';
 import { useSession } from '@/lib/auth/client';
 import type { ChatModeId } from '@/lib/config/chat-modes';
 import { getDefaultChatMode } from '@/lib/config/chat-modes';
