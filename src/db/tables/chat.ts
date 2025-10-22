@@ -1,7 +1,14 @@
 import { relations, sql } from 'drizzle-orm';
 import { check, index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 
-import { CHAT_MODE_ENUM_VALUES, THREAD_STATUS_ENUM_VALUES } from '@/lib/config/chat-modes';
+import {
+  ANALYSIS_STATUSES_ENUM_VALUES,
+  CHANGELOG_TYPES_ENUM_VALUES,
+  CHAT_MODE_ENUM_VALUES,
+  FEEDBACK_TYPES_ENUM_VALUES,
+  MESSAGE_ROLES_ENUM_VALUES,
+  THREAD_STATUS_ENUM_VALUES,
+} from '@/api/core/enums';
 
 import { user } from './auth';
 
@@ -157,15 +164,7 @@ export const chatThreadChangelog = sqliteTable('chat_thread_changelog', {
   roundNumber: integer('round_number')
     .notNull()
     .default(1), // 1-indexed to match messages and analysis
-  changeType: text('change_type', {
-    enum: [
-      'mode_change',
-      'participant_added',
-      'participant_removed',
-      'participant_updated',
-      'participants_reordered',
-    ],
-  }).notNull(),
+  changeType: text('change_type', { enum: CHANGELOG_TYPES_ENUM_VALUES }).notNull(),
   changeSummary: text('change_summary').notNull(), // Human-readable summary
   changeData: text('change_data', { mode: 'json' }).$type<{
     // For mode_change
@@ -215,7 +214,7 @@ export const chatMessage = sqliteTable('chat_message', {
     .references(() => chatThread.id, { onDelete: 'cascade' }),
   participantId: text('participant_id')
     .references(() => chatParticipant.id, { onDelete: 'set null' }), // null for user messages
-  role: text('role', { enum: ['user', 'assistant'] })
+  role: text('role', { enum: MESSAGE_ROLES_ENUM_VALUES })
     .notNull()
     .default('assistant'),
 
@@ -286,7 +285,7 @@ export const chatModeratorAnalysis = sqliteTable('chat_moderator_analysis', {
   userQuestion: text('user_question').notNull(), // The user's question/prompt for this round
   // ✅ CRITICAL: Status field for idempotency and state tracking
   // Prevents duplicate analysis generation on page refresh
-  status: text('status', { enum: ['pending', 'streaming', 'completed', 'failed'] as const })
+  status: text('status', { enum: ANALYSIS_STATUSES_ENUM_VALUES })
     .notNull()
     .default('pending'), // pending -> streaming -> completed/failed
   // Store the full analysis as JSON (leaderboard, participant analyses, summary, conclusion)
@@ -347,7 +346,7 @@ export const chatRoundFeedback = sqliteTable('chat_round_feedback', {
     .notNull()
     .references(() => user.id, { onDelete: 'cascade' }),
   roundNumber: integer('round_number').notNull(), // 1-indexed round number
-  feedbackType: text('feedback_type', { enum: ['like', 'dislike'] as const }), // null = no feedback
+  feedbackType: text('feedback_type', { enum: FEEDBACK_TYPES_ENUM_VALUES }), // null = no feedback
   createdAt: integer('created_at', { mode: 'timestamp' })
     .defaultNow()
     .notNull(),

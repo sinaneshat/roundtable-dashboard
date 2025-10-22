@@ -54,7 +54,6 @@ export function StructuredData(props: StructuredDataProps) {
   return (
     <script
       type="application/ld+json"
-      // eslint-disable-next-line react-dom/no-dangerously-set-innerhtml
       dangerouslySetInnerHTML={{
         __html: JSON.stringify(structuredData).replace(/</g, '\u003C'),
       }}

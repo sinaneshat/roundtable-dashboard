@@ -1,8 +1,12 @@
 import { createRoute, z } from '@hono/zod-openapi';
 import * as HttpStatusCodes from 'stoker/http-status-codes';
-import * as HttpStatusPhrases from 'stoker/http-status-phrases';
 
-import { ApiErrorResponseSchema, createApiResponseSchema, CursorPaginationQuerySchema, IdParamSchema } from '@/api/core/schemas';
+import {
+  createMutationRouteResponses,
+  createProtectedRouteResponses,
+  createPublicRouteResponses,
+} from '@/api/core/response-schemas';
+import { ApiErrorResponseSchema, createApiResponseSchema, CursorPaginationQuerySchema, IdParamSchema, ThreadRoundParamSchema, ThreadSlugParamSchema } from '@/api/core/schemas';
 
 import {
   AddParticipantRequestSchema,
@@ -18,7 +22,6 @@ import {
   ModeratorAnalysisPayloadSchema,
   ModeratorAnalysisRequestSchema,
   ParticipantDetailResponseSchema,
-  RoundAnalysisParamSchema,
   RoundFeedbackParamSchema,
   RoundFeedbackRequestSchema,
   SetRoundFeedbackResponseSchema,
@@ -26,7 +29,6 @@ import {
   ThreadDetailResponseSchema,
   ThreadListQuerySchema,
   ThreadListResponseSchema,
-  ThreadSlugParamSchema,
   UpdateCustomRoleRequestSchema,
   UpdateParticipantRequestSchema,
   UpdateThreadRequestSchema,
@@ -52,22 +54,7 @@ export const listThreadsRoute = createRoute({
         'application/json': { schema: ThreadListResponseSchema },
       },
     },
-    [HttpStatusCodes.UNAUTHORIZED]: {
-      description: HttpStatusPhrases.UNAUTHORIZED,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
-    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: {
-      description: HttpStatusPhrases.INTERNAL_SERVER_ERROR,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
+    ...createProtectedRouteResponses(),
   },
 });
 
@@ -94,30 +81,7 @@ export const createThreadRoute = createRoute({
         'application/json': { schema: ThreadDetailResponseSchema },
       },
     },
-    [HttpStatusCodes.UNAUTHORIZED]: {
-      description: HttpStatusPhrases.UNAUTHORIZED,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
-    [HttpStatusCodes.BAD_REQUEST]: {
-      description: HttpStatusPhrases.BAD_REQUEST,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
-    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: {
-      description: HttpStatusPhrases.INTERNAL_SERVER_ERROR,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
+    ...createMutationRouteResponses(),
   },
 });
 
@@ -137,30 +101,7 @@ export const getThreadRoute = createRoute({
         'application/json': { schema: ThreadDetailResponseSchema },
       },
     },
-    [HttpStatusCodes.UNAUTHORIZED]: {
-      description: HttpStatusPhrases.UNAUTHORIZED,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
-    [HttpStatusCodes.NOT_FOUND]: {
-      description: HttpStatusPhrases.NOT_FOUND,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
-    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: {
-      description: HttpStatusPhrases.INTERNAL_SERVER_ERROR,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
+    ...createProtectedRouteResponses(),
   },
 });
 
@@ -188,38 +129,7 @@ export const updateThreadRoute = createRoute({
         'application/json': { schema: ThreadDetailResponseSchema },
       },
     },
-    [HttpStatusCodes.UNAUTHORIZED]: {
-      description: HttpStatusPhrases.UNAUTHORIZED,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
-    [HttpStatusCodes.NOT_FOUND]: {
-      description: HttpStatusPhrases.NOT_FOUND,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
-    [HttpStatusCodes.BAD_REQUEST]: {
-      description: HttpStatusPhrases.BAD_REQUEST,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
-    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: {
-      description: HttpStatusPhrases.INTERNAL_SERVER_ERROR,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
+    ...createMutationRouteResponses(),
   },
 });
 
@@ -241,30 +151,7 @@ export const deleteThreadRoute = createRoute({
         },
       },
     },
-    [HttpStatusCodes.UNAUTHORIZED]: {
-      description: HttpStatusPhrases.UNAUTHORIZED,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
-    [HttpStatusCodes.NOT_FOUND]: {
-      description: HttpStatusPhrases.NOT_FOUND,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
-    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: {
-      description: HttpStatusPhrases.INTERNAL_SERVER_ERROR,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
+    ...createProtectedRouteResponses(),
   },
 });
 
@@ -284,22 +171,7 @@ export const getPublicThreadRoute = createRoute({
         'application/json': { schema: ThreadDetailResponseSchema },
       },
     },
-    [HttpStatusCodes.NOT_FOUND]: {
-      description: HttpStatusPhrases.NOT_FOUND,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
-    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: {
-      description: HttpStatusPhrases.INTERNAL_SERVER_ERROR,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
+    ...createPublicRouteResponses(),
   },
 });
 
@@ -319,30 +191,7 @@ export const getThreadBySlugRoute = createRoute({
         'application/json': { schema: ThreadDetailResponseSchema },
       },
     },
-    [HttpStatusCodes.UNAUTHORIZED]: {
-      description: HttpStatusPhrases.UNAUTHORIZED,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
-    [HttpStatusCodes.NOT_FOUND]: {
-      description: HttpStatusPhrases.NOT_FOUND,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
-    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: {
-      description: HttpStatusPhrases.INTERNAL_SERVER_ERROR,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
+    ...createProtectedRouteResponses(),
   },
 });
 
@@ -375,38 +224,7 @@ export const addParticipantRoute = createRoute({
         'application/json': { schema: ParticipantDetailResponseSchema },
       },
     },
-    [HttpStatusCodes.UNAUTHORIZED]: {
-      description: HttpStatusPhrases.UNAUTHORIZED,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
-    [HttpStatusCodes.NOT_FOUND]: {
-      description: HttpStatusPhrases.NOT_FOUND,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
-    [HttpStatusCodes.BAD_REQUEST]: {
-      description: HttpStatusPhrases.BAD_REQUEST,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
-    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: {
-      description: HttpStatusPhrases.INTERNAL_SERVER_ERROR,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
+    ...createMutationRouteResponses(),
   },
 });
 
@@ -434,38 +252,7 @@ export const updateParticipantRoute = createRoute({
         'application/json': { schema: ParticipantDetailResponseSchema },
       },
     },
-    [HttpStatusCodes.UNAUTHORIZED]: {
-      description: HttpStatusPhrases.UNAUTHORIZED,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
-    [HttpStatusCodes.NOT_FOUND]: {
-      description: HttpStatusPhrases.NOT_FOUND,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
-    [HttpStatusCodes.BAD_REQUEST]: {
-      description: HttpStatusPhrases.BAD_REQUEST,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
-    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: {
-      description: HttpStatusPhrases.INTERNAL_SERVER_ERROR,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
+    ...createMutationRouteResponses(),
   },
 });
 
@@ -489,30 +276,7 @@ export const deleteParticipantRoute = createRoute({
         },
       },
     },
-    [HttpStatusCodes.UNAUTHORIZED]: {
-      description: HttpStatusPhrases.UNAUTHORIZED,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
-    [HttpStatusCodes.NOT_FOUND]: {
-      description: HttpStatusPhrases.NOT_FOUND,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
-    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: {
-      description: HttpStatusPhrases.INTERNAL_SERVER_ERROR,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
+    ...createProtectedRouteResponses(),
   },
 });
 
@@ -540,30 +304,7 @@ export const getThreadMessagesRoute = createRoute({
         'application/json': { schema: MessagesListResponseSchema },
       },
     },
-    [HttpStatusCodes.UNAUTHORIZED]: {
-      description: HttpStatusPhrases.UNAUTHORIZED,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
-    [HttpStatusCodes.NOT_FOUND]: {
-      description: HttpStatusPhrases.NOT_FOUND,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
-    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: {
-      description: HttpStatusPhrases.INTERNAL_SERVER_ERROR,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
+    ...createProtectedRouteResponses(),
   },
 });
 
@@ -587,30 +328,7 @@ export const getThreadChangelogRoute = createRoute({
         'application/json': { schema: ChangelogListResponseSchema },
       },
     },
-    [HttpStatusCodes.UNAUTHORIZED]: {
-      description: HttpStatusPhrases.UNAUTHORIZED,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
-    [HttpStatusCodes.NOT_FOUND]: {
-      description: HttpStatusPhrases.NOT_FOUND,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
-    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: {
-      description: HttpStatusPhrases.INTERNAL_SERVER_ERROR,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
+    ...createProtectedRouteResponses(),
   },
 });
 
@@ -798,30 +516,7 @@ See [API Streaming Guide](/docs/api-streaming-guide.md) for complete implementat
         },
       },
     },
-    [HttpStatusCodes.UNAUTHORIZED]: {
-      description: HttpStatusPhrases.UNAUTHORIZED,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
-    [HttpStatusCodes.BAD_REQUEST]: {
-      description: HttpStatusPhrases.BAD_REQUEST,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
-    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: {
-      description: HttpStatusPhrases.INTERNAL_SERVER_ERROR,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
+    ...createMutationRouteResponses(),
   },
 });
 
@@ -845,22 +540,7 @@ export const listCustomRolesRoute = createRoute({
         'application/json': { schema: CustomRoleListResponseSchema },
       },
     },
-    [HttpStatusCodes.UNAUTHORIZED]: {
-      description: HttpStatusPhrases.UNAUTHORIZED,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
-    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: {
-      description: HttpStatusPhrases.INTERNAL_SERVER_ERROR,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
+    ...createProtectedRouteResponses(),
   },
 });
 
@@ -887,30 +567,7 @@ export const createCustomRoleRoute = createRoute({
         'application/json': { schema: CustomRoleDetailResponseSchema },
       },
     },
-    [HttpStatusCodes.UNAUTHORIZED]: {
-      description: HttpStatusPhrases.UNAUTHORIZED,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
-    [HttpStatusCodes.BAD_REQUEST]: {
-      description: HttpStatusPhrases.BAD_REQUEST,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
-    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: {
-      description: HttpStatusPhrases.INTERNAL_SERVER_ERROR,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
+    ...createMutationRouteResponses(),
   },
 });
 
@@ -930,30 +587,7 @@ export const getCustomRoleRoute = createRoute({
         'application/json': { schema: CustomRoleDetailResponseSchema },
       },
     },
-    [HttpStatusCodes.UNAUTHORIZED]: {
-      description: HttpStatusPhrases.UNAUTHORIZED,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
-    [HttpStatusCodes.NOT_FOUND]: {
-      description: HttpStatusPhrases.NOT_FOUND,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
-    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: {
-      description: HttpStatusPhrases.INTERNAL_SERVER_ERROR,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
+    ...createProtectedRouteResponses(),
   },
 });
 
@@ -981,38 +615,7 @@ export const updateCustomRoleRoute = createRoute({
         'application/json': { schema: CustomRoleDetailResponseSchema },
       },
     },
-    [HttpStatusCodes.UNAUTHORIZED]: {
-      description: HttpStatusPhrases.UNAUTHORIZED,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
-    [HttpStatusCodes.NOT_FOUND]: {
-      description: HttpStatusPhrases.NOT_FOUND,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
-    [HttpStatusCodes.BAD_REQUEST]: {
-      description: HttpStatusPhrases.BAD_REQUEST,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
-    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: {
-      description: HttpStatusPhrases.INTERNAL_SERVER_ERROR,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
+    ...createMutationRouteResponses(),
   },
 });
 
@@ -1036,30 +639,7 @@ export const deleteCustomRoleRoute = createRoute({
         },
       },
     },
-    [HttpStatusCodes.UNAUTHORIZED]: {
-      description: HttpStatusPhrases.UNAUTHORIZED,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
-    [HttpStatusCodes.NOT_FOUND]: {
-      description: HttpStatusPhrases.NOT_FOUND,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
-    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: {
-      description: HttpStatusPhrases.INTERNAL_SERVER_ERROR,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
+    ...createProtectedRouteResponses(),
   },
 });
 
@@ -1095,7 +675,7 @@ export const analyzeRoundRoute = createRoute({
   summary: 'Analyze conversation round with AI moderator (streaming)',
   description: 'Generate AI-powered analysis, ratings, and insights for all participant responses in a conversation round. Streams structured analysis object in real-time using AI SDK streamObject(). Use experimental_useObject hook on frontend for progressive rendering. Returns completed analysis immediately if already exists.',
   request: {
-    params: RoundAnalysisParamSchema,
+    params: ThreadRoundParamSchema,
     body: {
       required: true,
       content: {
@@ -1125,38 +705,7 @@ export const analyzeRoundRoute = createRoute({
         },
       },
     },
-    [HttpStatusCodes.UNAUTHORIZED]: {
-      description: HttpStatusPhrases.UNAUTHORIZED,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
-    [HttpStatusCodes.NOT_FOUND]: {
-      description: HttpStatusPhrases.NOT_FOUND,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
-    [HttpStatusCodes.BAD_REQUEST]: {
-      description: HttpStatusPhrases.BAD_REQUEST,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
-    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: {
-      description: HttpStatusPhrases.INTERNAL_SERVER_ERROR,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
+    ...createMutationRouteResponses(),
   },
 });
 
@@ -1180,30 +729,7 @@ export const getThreadAnalysesRoute = createRoute({
         'application/json': { schema: ModeratorAnalysisListResponseSchema },
       },
     },
-    [HttpStatusCodes.UNAUTHORIZED]: {
-      description: HttpStatusPhrases.UNAUTHORIZED,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
-    [HttpStatusCodes.NOT_FOUND]: {
-      description: HttpStatusPhrases.NOT_FOUND,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
-    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: {
-      description: HttpStatusPhrases.INTERNAL_SERVER_ERROR,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
+    ...createProtectedRouteResponses(),
   },
 });
 
@@ -1239,38 +765,7 @@ export const setRoundFeedbackRoute = createRoute({
         'application/json': { schema: SetRoundFeedbackResponseSchema },
       },
     },
-    [HttpStatusCodes.UNAUTHORIZED]: {
-      description: HttpStatusPhrases.UNAUTHORIZED,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
-    [HttpStatusCodes.NOT_FOUND]: {
-      description: HttpStatusPhrases.NOT_FOUND,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
-    [HttpStatusCodes.BAD_REQUEST]: {
-      description: HttpStatusPhrases.BAD_REQUEST,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
-    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: {
-      description: HttpStatusPhrases.INTERNAL_SERVER_ERROR,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
+    ...createMutationRouteResponses(),
   },
 });
 
@@ -1294,29 +789,6 @@ export const getThreadFeedbackRoute = createRoute({
         'application/json': { schema: GetThreadFeedbackResponseSchema },
       },
     },
-    [HttpStatusCodes.UNAUTHORIZED]: {
-      description: HttpStatusPhrases.UNAUTHORIZED,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
-    [HttpStatusCodes.NOT_FOUND]: {
-      description: HttpStatusPhrases.NOT_FOUND,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
-    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: {
-      description: HttpStatusPhrases.INTERNAL_SERVER_ERROR,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
+    ...createProtectedRouteResponses(),
   },
 });

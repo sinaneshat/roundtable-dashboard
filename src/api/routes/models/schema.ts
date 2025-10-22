@@ -6,6 +6,7 @@
 
 import { z } from '@hono/zod-openapi';
 
+import { ModelCategorySchema } from '@/api/core/enums';
 import { createApiResponseSchema } from '@/api/core/schemas';
 import { subscriptionTierSchemaOpenAPI } from '@/api/services/product-logic.service';
 
@@ -114,7 +115,7 @@ export type OpenRouterModelsResponse = z.infer<typeof OpenRouterModelsResponseSc
 export const BaseModelSchema = RawOpenRouterModelSchema.extend({
   // ✅ COMPUTED ENHANCEMENT FIELDS: Added by openrouter-models.service.ts enhanceModel()
   provider: z.string(),
-  category: z.enum(['reasoning', 'general', 'creative', 'research']),
+  category: ModelCategorySchema,
   capabilities: z.object({
     vision: z.boolean(),
     reasoning: z.boolean(),

@@ -6,6 +6,7 @@ import { desc, eq } from 'drizzle-orm';
 import { ulid } from 'ulid';
 
 import { executeBatch } from '@/api/common/batch-operations';
+import { ChangelogTypes } from '@/api/core/enums';
 import type { CreateChangelogParams } from '@/api/routes/chat/schema';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db/schema';
@@ -89,7 +90,7 @@ export async function logModeChange(
 ): Promise<string> {
   return createChangelogEntry({
     threadId,
-    changeType: 'mode_change',
+    changeType: ChangelogTypes.MODE_CHANGE,
     changeSummary: `Changed conversation mode from ${oldMode} to ${newMode}`,
     changeData: {
       oldMode,
@@ -114,7 +115,7 @@ export async function logParticipantAdded(
 
   return createChangelogEntry({
     threadId,
-    changeType: 'participant_added',
+    changeType: ChangelogTypes.PARTICIPANT_ADDED,
     changeSummary: summary,
     changeData: {
       participantId,
@@ -140,7 +141,7 @@ export async function logParticipantRemoved(
 
   return createChangelogEntry({
     threadId,
-    changeType: 'participant_removed',
+    changeType: ChangelogTypes.PARTICIPANT_REMOVED,
     changeSummary: summary,
     changeData: {
       participantId,
@@ -165,7 +166,7 @@ export async function logParticipantUpdated(
 
   return createChangelogEntry({
     threadId,
-    changeType: 'participant_updated',
+    changeType: ChangelogTypes.PARTICIPANT_UPDATED,
     changeSummary: summary,
     changeData: {
       participantId,
@@ -194,7 +195,7 @@ export async function logParticipantsReordered(
 
   return createChangelogEntry({
     threadId,
-    changeType: 'participants_reordered',
+    changeType: ChangelogTypes.PARTICIPANTS_REORDERED,
     changeSummary: `Reordered participants: ${participantNames}`,
     changeData: {
       participants,

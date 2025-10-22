@@ -17,6 +17,7 @@
 
 import { useTranslations } from 'next-intl';
 
+import { AnalysisStatuses } from '@/api/core/enums';
 import type { ParticipantAnalysis, StoredModeratorAnalysis } from '@/api/routes/chat/schema';
 
 import { LeaderboardCard } from './leaderboard-card';
@@ -45,12 +46,12 @@ export function ModeratorAnalysisPanel({
 
   // ✅ PENDING or STREAMING: Header already shows loading state, so just return null
   // The header displays "Analyzing responses..." with loading indicator
-  if (analysis.status === 'pending' || analysis.status === 'streaming') {
+  if (analysis.status === AnalysisStatuses.PENDING || analysis.status === AnalysisStatuses.STREAMING) {
     return null;
   }
 
   // ✅ FAILED: Show simple error message
-  if (analysis.status === 'failed') {
+  if (analysis.status === AnalysisStatuses.FAILED) {
     return (
       <div className="flex items-center gap-2 py-2 text-sm text-destructive">
         <span className="size-1.5 rounded-full bg-destructive/80" />

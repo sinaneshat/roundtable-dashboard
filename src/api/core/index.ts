@@ -48,6 +48,30 @@ export { createOpenApiApp } from './app';
 // ============================================================================
 
 export {
+  type AIProviderErrorCategory,
+  type AIProviderErrorMetadata,
+  // Consolidated API error factory
+  ApiErrors,
+  // Re-exported from common/error-handling.ts
+  AppError,
+  type AppErrorConfig,
+  createError,
+  ERROR_CODES,
+  ERROR_SEVERITY,
+  type ErrorCode,
+  ErrorCodeSchema,
+  ErrorContextBuilders,
+  // Error context shortcuts
+  ErrorContexts,
+  type ErrorSeverity,
+  ErrorSeveritySchema,
+  ExternalServiceError,
+  formatErrorResponse,
+  isAppError,
+  normalizeError,
+  structureAIProviderError,
+} from './errors';
+export {
   // Type exports
   type BatchContext,
   type BatchHandler,
@@ -72,6 +96,36 @@ export {
   mapStatusCode,
   STOKER_TO_HONO_STATUS_MAP,
 } from './http-exceptions';
+export {
+  // Cursor-based pagination
+  applyCursorPagination,
+  // Page-based pagination
+  applyPagePagination,
+  buildCursorWhere,
+  buildCursorWhereWithFilters,
+  calculatePageMetadata,
+  createTimestampCursor,
+  type CursorDirection,
+  type CursorFieldConfig,
+  type CursorPaginationMetadata,
+  type CursorPaginationQuery,
+  CursorPaginationQuerySchema,
+  DEFAULT_PAGE_SIZE,
+  getCursorOrderBy,
+  MAX_PAGE_SIZE,
+  type OffsetPaginationQuery,
+  OffsetPaginationQuerySchema,
+  type PagePaginationMetadata,
+  type PagePaginationParams,
+  validatePageParams,
+  // Drizzle ORM official patterns
+  withPagination,
+} from './pagination';
+
+// ============================================================================
+// RESPONSES
+// ============================================================================
+
 export {
   accepted,
   authenticationError,
@@ -103,6 +157,15 @@ export {
   // Error responses
   validationError,
 } from './responses';
+
+// ============================================================================
+// HANDLERS
+// ============================================================================
+
+// ============================================================================
+// ERROR HANDLING
+// ============================================================================
+
 export {
   type ApiErrorResponse,
   ApiErrorResponseSchema,
@@ -114,8 +177,6 @@ export {
   createCursorPaginatedResponseSchema,
   createPaginatedResponseSchema,
   type CursorPaginatedResponse,
-  type CursorPaginationQuery,
-  CursorPaginationQuerySchema,
   type ErrorContext,
   ErrorContextSchema,
   type IdParam,
@@ -131,48 +192,6 @@ export {
   type SortingQuery,
   SortingQuerySchema,
 } from './schemas';
-
-// ============================================================================
-// RESPONSES
-// ============================================================================
-
-export {
-  // Conditional validators
-  createConditionalValidator,
-  // File upload validators
-  createFileUploadValidator,
-  createMultiFormatValidator,
-  // Schema composition
-  createPartialSchema,
-  createPickSchema,
-  createSearchSchema,
-  createUpdateSchema,
-  createValidationErrorContext,
-  createValidator,
-  // Validation hook (for createOpenApiApp)
-  customValidationHook,
-  documentUploadValidator,
-  formatValidationErrors,
-  validateErrorContext,
-  validatePathParams,
-  validateQueryParams,
-  // Request validation helpers
-  validateRequestBody,
-  // Validation utilities
-  validateWithSchema,
-  type ValidationError,
-  type ValidationFailure,
-  type ValidationResult,
-  // Type exports
-  type ValidationSuccess,
-  ValidationUtils,
-  // Specialized validators
-  Validators,
-} from './validation';
-
-// ============================================================================
-// HANDLERS
-// ============================================================================
 
 // ============================================================================
 // CONVENIENCE BUNDLES
@@ -220,27 +239,42 @@ export const CommonResponses = {
 } as const;
 
 // ============================================================================
-// COMMON UTILITIES
+// PAGINATION UTILITIES
 // ============================================================================
 
-// Export pagination utilities from common
 export {
-  // Cursor-based pagination
-  applyCursorPagination,
-  // Page-based pagination
-  applyPagePagination,
-  buildCursorWhere,
-  buildCursorWhereWithFilters,
-  calculatePageMetadata,
-  createTimestampCursor,
-  type CursorPaginationMetadata,
-  getCursorOrderBy,
-  type PagePaginationMetadata,
-  type PagePaginationParams,
-  validatePageParams,
-  // Drizzle ORM official patterns
-  withPagination, // Recommended: uses .$dynamic()
-} from '@/api/common';
+  // Conditional validators
+  createConditionalValidator,
+  // File upload validators
+  createFileUploadValidator,
+  createMultiFormatValidator,
+  // Schema composition
+  createPartialSchema,
+  createPickSchema,
+  createSearchSchema,
+  createUpdateSchema,
+  createValidationErrorContext,
+  createValidator,
+  // Validation hook (for createOpenApiApp)
+  customValidationHook,
+  documentUploadValidator,
+  formatValidationErrors,
+  validateErrorContext,
+  validatePathParams,
+  validateQueryParams,
+  // Request validation helpers
+  validateRequestBody,
+  // Validation utilities
+  validateWithSchema,
+  type ValidationError,
+  type ValidationFailure,
+  type ValidationResult,
+  // Type exports
+  type ValidationSuccess,
+  ValidationUtils,
+  // Specialized validators
+  Validators,
+} from './validation';
 
 // Export auth types from types module
 export type { AuthenticatedContext, AuthMode } from '@/api/types';

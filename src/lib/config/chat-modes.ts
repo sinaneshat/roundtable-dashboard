@@ -1,68 +1,36 @@
 /**
- * ✅ SINGLE SOURCE OF TRUTH: Chat Modes Configuration
+ * Chat Modes UI Configuration
  *
- * All conversation modes defined in ONE place using Zod-first pattern.
- * Shared between backend API, database, and frontend.
+ * Frontend-specific UI configuration for chat modes including icons, colors, and descriptions.
+ * Imports enum definitions from centralized backend source.
  *
- * ✅ ZOD INFERENCE PATTERN: All types inferred from schemas (no hardcoded types)
- * ✅ RUNTIME VALIDATION: Zod provides runtime type safety
- * ✅ COMPILE-TIME SAFETY: TypeScript types derived from Zod schemas
+ * ✅ ENUM SOURCE: /src/api/core/enums.ts - Single source of truth for enum values
+ * ✅ UI METADATA: This file adds UI-specific metadata (icons, colors, placeholders)
+ * ✅ HELPER FUNCTIONS: UI utility functions for chat mode selection and display
  *
- * Following the same pattern as message-metadata.ts and subscription-tiers.ts
+ * Reference: /docs/BACKEND_REFACTORING_ANALYSIS.md:40-88
  */
 
 import type { LucideIcon } from 'lucide-react';
 import { Lightbulb, Scale, Search, Target } from 'lucide-react';
-import { z } from 'zod';
+
+import type { ChatMode, ThreadStatus } from '@/api/core/enums';
+import {
+  CHAT_MODE_ENUM_VALUES,
+  CHAT_MODES,
+  ChatModeSchema as chatModeSchema,
+  THREAD_STATUS_ENUM_VALUES,
+  THREAD_STATUSES,
+  ThreadStatusSchema as threadStatusSchema,
+} from '@/api/core/enums';
 
 // ============================================================================
-// Chat Mode Schema & Type (Zod-First Pattern)
+// Re-export Enum Definitions (for backward compatibility)
 // ============================================================================
 
-/**
- * Chat modes tuple - matches database enum
- * ✅ SINGLE SOURCE: This is the ONLY place where mode IDs are defined
- */
-export const CHAT_MODES = ['analyzing', 'brainstorming', 'debating', 'solving'] as const;
-
-/**
- * Chat mode Zod schema - validates mode values
- * ✅ ZOD VALIDATION: Runtime type safety for API requests and database operations
- */
-export const chatModeSchema = z.enum(CHAT_MODES);
-
-/**
- * Chat mode TypeScript type
- * ✅ ZOD INFERENCE: Type automatically derived from schema (no hardcoded types)
- */
-export type ChatModeId = z.infer<typeof chatModeSchema>;
-
-/**
- * Tuple of chat modes for database enum definition
- * This is used in Drizzle schema to ensure database and TypeScript types match
- */
-export const CHAT_MODE_ENUM_VALUES = CHAT_MODES as unknown as [ChatModeId, ...ChatModeId[]];
-
-/**
- * Thread status tuple - matches database enum
- */
-const THREAD_STATUSES = ['active', 'archived', 'deleted'] as const;
-
-/**
- * Thread status Zod schema
- */
-export const threadStatusSchema = z.enum(THREAD_STATUSES);
-
-/**
- * Thread status TypeScript type
- * ✅ ZOD INFERENCE: Type automatically derived from schema
- */
-export type ThreadStatus = z.infer<typeof threadStatusSchema>;
-
-/**
- * Tuple for database enum definition
- */
-export const THREAD_STATUS_ENUM_VALUES = THREAD_STATUSES as unknown as [ThreadStatus, ...ThreadStatus[]];
+export { CHAT_MODE_ENUM_VALUES, CHAT_MODES, chatModeSchema, THREAD_STATUS_ENUM_VALUES, THREAD_STATUSES, threadStatusSchema };
+export type ChatModeId = ChatMode;
+export type { ThreadStatus };
 
 // ============================================================================
 // Chat Mode Configuration Types

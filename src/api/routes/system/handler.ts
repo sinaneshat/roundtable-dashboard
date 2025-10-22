@@ -154,19 +154,17 @@ export const clearCacheHandler: RouteHandler<typeof clearCacheRoute, ApiEnv> = c
         clearedTags.push('no-cache-configured');
       }
 
-      return c.json({
+      return Responses.ok(c, {
         ok: true,
         message: 'All backend caches cleared successfully. Note: User-specific caches will be cleared on next mutation.',
         timestamp: new Date().toISOString(),
         clearedTags,
       });
     } catch (error) {
-      return c.json({
-        ok: false,
-        message: `Failed to clear caches: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        timestamp: new Date().toISOString(),
-        clearedTags: [],
-      }, 500);
+      return Responses.internalServerError(
+        c,
+        `Failed to clear caches: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      );
     }
   },
 );

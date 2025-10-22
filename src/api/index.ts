@@ -27,7 +27,7 @@ import { createOpenApiApp } from './core/app';
 import { attachSession, csrfProtection, protectMutations, requireSession } from './middleware';
 import { errorLoggerMiddleware, honoLoggerMiddleware } from './middleware/hono-logger';
 import { ensureOpenRouterInitialized } from './middleware/openrouter';
-// import { ensureRAGInitialized } from './middleware/rag';
+import { ensureRAGInitialized } from './middleware/rag';
 import { RateLimiterFactory } from './middleware/rate-limiter-factory';
 import { ensureStripeInitialized } from './middleware/stripe';
 // API Keys routes
@@ -276,9 +276,7 @@ app.use('/chat/*', ensureOpenRouterInitialized);
 app.use('/mcp/*', ensureOpenRouterInitialized);
 
 // RAG initialization for all chat routes
-// Using wildcard pattern to apply middleware to all /chat/* routes
-// TODO: Re-enable once RAG vectorize index is properly initialized
-// app.use('/chat/*', ensureRAGInitialized);
+app.use('/chat/*', ensureRAGInitialized);
 
 // Global rate limiting
 app.use('*', RateLimiterFactory.create('api'));

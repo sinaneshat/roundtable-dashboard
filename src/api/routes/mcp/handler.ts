@@ -8,7 +8,7 @@
  */
 
 import type { RouteHandler } from '@hono/zod-openapi';
-import { desc, eq } from 'drizzle-orm';
+import { and, desc, eq } from 'drizzle-orm';
 import { ulid } from 'ulid';
 
 import { ErrorContextBuilders } from '@/api/common/error-contexts';
@@ -469,6 +469,17 @@ export const sendMessageToolHandler: RouteHandler<typeof sendMessageToolRoute, A
       );
     }
 
+    // Calculate round number based on existing user messages
+    const existingUserMessages = await db.query.chatMessage.findMany({
+      where: and(
+        eq(tables.chatMessage.threadId, input.threadId),
+        eq(tables.chatMessage.role, 'user'),
+      ),
+      columns: { id: true, roundNumber: true },
+    });
+
+    const currentRoundNumber = existingUserMessages.length + 1;
+
     // Create user message with parts array (AI SDK v5 pattern)
     const messageId = ulid();
     await batch.db.insert(tables.chatMessage).values({
@@ -477,7 +488,7 @@ export const sendMessageToolHandler: RouteHandler<typeof sendMessageToolRoute, A
       role: 'user',
       parts: [{ type: 'text', text: input.content }],
       participantId: null,
-      roundNumber: 1, // TODO: Calculate correct round number
+      roundNumber: currentRoundNumber,
       createdAt: new Date(),
     });
 

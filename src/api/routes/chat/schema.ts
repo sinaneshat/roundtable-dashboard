@@ -1,6 +1,10 @@
 import { z } from '@hono/zod-openapi';
 
 import {
+  ChangelogTypeSchema,
+  ChatModeSchema,
+} from '@/api/core/enums';
+import {
   CoreSchemas,
   createApiResponseSchema,
   createCursorPaginatedResponseSchema,
@@ -23,7 +27,8 @@ import {
   chatThreadSelectSchema,
   chatThreadUpdateSchema,
 } from '@/db/validation/chat';
-import { CHAT_MODES } from '@/lib/config/chat-modes';
+import { ParticipantSettingsSchema } from '@/lib/config/participant-settings';
+import { MessageMetadataSchema } from '@/lib/schemas/message-metadata';
 
 // ============================================================================
 // Shared Validation Schemas - Used by Frontend and Backend
@@ -42,55 +47,13 @@ export const MessageContentSchema = z.string()
   .min(1, 'Message is required')
   .max(5000, 'Message is too long (max 5000 characters)');
 
-/**
- * Thread mode enum validation
- * Matches chatThread.mode column in database
- *
- * Shared with frontend to ensure consistent validation rules
- * Uses centralized CHAT_MODES for type safety
- */
-export const ThreadModeSchema = z.enum(CHAT_MODES);
-export type ThreadMode = z.infer<typeof ThreadModeSchema>;
-
-// ============================================================================
-// Path Parameter Schemas
-// ============================================================================
-
-export const ThreadSlugParamSchema = z.object({
-  slug: z.string().openapi({
-    description: 'Thread slug for public access',
-    example: 'product-strategy-brainstorm-abc123',
-  }),
-});
-
-export const RoundAnalysisParamSchema = z.object({
-  threadId: z.string().openapi({
-    description: 'Thread ID',
-    example: 'thread_abc123',
-  }),
-  roundNumber: z.string().openapi({
-    description: 'Round number (1-indexed)',
-    example: '1',
-  }),
-});
-
 // ============================================================================
 // Entity Schemas for OpenAPI (Reusing Database Validation Schemas)
 // ============================================================================
 
 /**
- * ✅ SHARED: Participant settings schema
- * Reusable schema for AI model configuration settings
- */
-export const ParticipantSettingsSchema = z.object({
-  temperature: z.number().min(0).max(2).optional(),
-  maxTokens: z.number().int().positive().optional(),
-  systemPrompt: z.string().optional(),
-}).passthrough().nullable().optional();
-
-/**
  * ✅ REUSE: Chat participant schema from database validation
- * Extended with OpenAPI metadata
+ * Extended with OpenAPI metadata and shared ParticipantSettingsSchema
  * NO TRANSFORMS: Handler serializes dates, schema only validates
  */
 const ChatParticipantSchema = chatParticipantSelectSchema
@@ -98,70 +61,6 @@ const ChatParticipantSchema = chatParticipantSelectSchema
     settings: ParticipantSettingsSchema,
   })
   .openapi('ChatParticipant');
-
-/**
- * ✅ SHARED: Message metadata schema
- * Extracted as a shared schema to avoid duplication
- * Includes all fields that may be saved by the backend during message creation
- */
-export const MessageMetadataSchema = z.object({
-  // ✅ Core AI SDK fields
-  model: z.string().optional(),
-  finishReason: z.string().optional(),
-  usage: z.object({
-    promptTokens: z.number().optional(),
-    completionTokens: z.number().optional(),
-    totalTokens: z.number().optional(),
-  }).optional(),
-
-  // ✅ Participant context fields
-  participantId: z.string().optional(),
-  participantIndex: z.number().optional(),
-  participantRole: z.string().optional(),
-  roundNumber: z.number().optional(),
-
-  // ✅ Error handling fields
-  hasError: z.boolean().optional(),
-  errorType: z.string().optional(),
-  errorMessage: z.string().optional(),
-  errorCategory: z.string().optional(),
-  providerMessage: z.string().optional(),
-  openRouterError: z.record(z.string(), z.unknown()).optional(),
-  isTransient: z.boolean().optional(),
-  retryAttempts: z.number().optional(),
-
-  // ✅ Response state flags
-  isEmptyResponse: z.boolean().optional(),
-}).passthrough().nullable();
-
-export type MessageMetadata = z.infer<typeof MessageMetadataSchema>;
-
-/**
- * ✅ TYPE GUARD: Check if a message has an error
- * Safe utility function to check message error status without type assertions
- */
-export function messageHasError(metadata: MessageMetadata): boolean {
-  return metadata?.hasError === true;
-}
-
-/**
- * ✅ SHARED: Message part schema for AI SDK message parts
- * Used for rendering different types of content in messages
- */
-export const MessagePartSchema = z.discriminatedUnion('type', [
-  z.object({ type: z.literal('text'), text: z.string() }),
-  z.object({ type: z.literal('reasoning'), text: z.string() }),
-]).openapi('MessagePart');
-
-export type MessagePart = z.infer<typeof MessagePartSchema>;
-
-/**
- * ✅ SHARED: Message status schema for UI rendering states
- * Represents the current state of a message during streaming
- */
-export const MessageStatusSchema = z.enum(['thinking', 'streaming', 'completed', 'error']).openapi('MessageStatus');
-
-export type MessageStatus = z.infer<typeof MessageStatusSchema>;
 
 /**
  * ✅ REUSE: Chat message schema from database validation
@@ -236,7 +135,7 @@ export const CreateThreadRequestSchema = chatThreadInsertSchema
       description: 'Thread title (auto-generated from first message if "New Chat")',
       example: 'Product strategy brainstorm',
     }),
-    mode: ThreadModeSchema.optional().default('brainstorming').openapi({
+    mode: ChatModeSchema.optional().default('brainstorming').openapi({
       description: 'Conversation mode',
       example: 'brainstorming',
     }),
@@ -548,9 +447,9 @@ export const StreamChatRequestSchema = z.object({
    * When provided and different from current thread mode, generates changelog entry.
    * Mode change is persisted immediately (not staged like participant changes).
    */
-  mode: ThreadModeSchema.optional().openapi({
+  mode: ChatModeSchema.optional().openapi({
     description: 'Conversation mode for this thread. If changed, generates changelog entry.',
-    example: 'collaborate',
+    example: 'brainstorming',
   }),
 
 }).openapi('StreamChatRequest');
@@ -613,22 +512,8 @@ export const ChangelogListResponseSchema = createApiResponseSchema(ChangelogList
 // ============================================================================
 
 /**
- * Changelog type enum
- * ✅ SINGLE SOURCE: Used across changelog operations
- */
-export const ChangelogTypeSchema = z.enum([
-  'mode_change',
-  'participant_added',
-  'participant_removed',
-  'participant_updated',
-  'participants_reordered',
-]);
-
-export type ChangelogType = z.infer<typeof ChangelogTypeSchema>;
-
-/**
  * Create changelog entry parameters
- * ✅ SINGLE SOURCE: Used by thread-changelog.service.ts
+ * Uses ChangelogTypeSchema from @/api/core/enums
  */
 export const CreateChangelogParamsSchema = z.object({
   threadId: CoreSchemas.id(),
@@ -1001,53 +886,6 @@ export type LeaderboardEntry = z.infer<typeof LeaderboardEntrySchema>;
 export type ModeratorAnalysisRequest = z.infer<typeof ModeratorAnalysisRequestSchema>;
 export type ModeratorAnalysisPayload = z.infer<typeof ModeratorAnalysisPayloadSchema>;
 export type StoredModeratorAnalysis = z.infer<typeof StoredModeratorAnalysisSchema>;
-
-/**
- * ✅ AI SDK v5 OFFICIAL PATTERN: Metadata schema for UI messages
- * Used with validateUIMessages() to handle message metadata
- * Reference: https://sdk.vercel.ai/docs/ai-sdk-core/validate-ui-messages
- *
- * Extended with UI-specific fields for frontend rendering:
- * - participantId, participantIndex, role (for rendering participant info)
- * - createdAt (for timeline sorting)
- * - hasError, error, errorType, errorMessage (for error handling)
- * - mode, aborted, partialResponse (for streaming state)
- */
-export const UIMessageMetadataSchema = z.object({
-  // ✅ Core metadata fields (from AI SDK)
-  participantId: z.string().optional(),
-  createdAt: z.string().datetime().optional(),
-  model: z.string().optional(),
-  finishReason: z.string().optional(),
-  usage: z.object({
-    promptTokens: z.number().optional(),
-    completionTokens: z.number().optional(),
-    totalTokens: z.number().optional(),
-  }).optional(),
-
-  // ✅ UI-specific fields for rendering
-  participantIndex: z.number().optional(),
-  role: z.string().nullable().optional(),
-  roundNumber: z.number().optional(), // ✅ EVENT-BASED ROUND TRACKING: Group messages by round
-
-  // ✅ Streaming state fields
-  mode: z.string().optional(),
-  aborted: z.boolean().optional(),
-  partialResponse: z.boolean().optional(),
-
-  // ✅ Error handling fields (AI SDK error handling pattern)
-  hasError: z.boolean().optional(),
-  error: z.string().optional(),
-  errorType: z.string().optional(),
-  errorMessage: z.string().optional(),
-  isTransient: z.boolean().optional(),
-  statusCode: z.number().optional(),
-  responseBody: z.string().optional(),
-  errorDetails: z.string().optional(),
-  isEmptyResponse: z.boolean().optional(), // Flag for models that returned no content
-}).passthrough().nullable().optional();
-
-export type UIMessageMetadata = z.infer<typeof UIMessageMetadataSchema>;
 
 // ✅ STREAM RESUMPTION: No response schema needed
 // The resume endpoint returns either:

@@ -304,10 +304,6 @@ export const APP_CONFIG = {
   API_BASE_PATH: '/api',
   API_VERSION: 'v1',
 
-  // Pagination defaults
-  DEFAULT_PAGE_SIZE: 20,
-  MAX_PAGE_SIZE: 100,
-
   // File upload limits
   DEFAULT_FILE_SIZE_LIMIT: 10 * 1024 * 1024, // 10MB
   DEFAULT_IMAGE_SIZE_LIMIT: 5 * 1024 * 1024, // 5MB

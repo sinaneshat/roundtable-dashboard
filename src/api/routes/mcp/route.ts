@@ -10,7 +10,7 @@
 import { createRoute } from '@hono/zod-openapi';
 import * as HttpStatusCodes from 'stoker/http-status-codes';
 
-import { ApiErrorResponseSchema } from '@/api/core/schemas';
+import { StandardApiResponses } from '@/api/core/response-schemas';
 
 import {
   AddParticipantInputSchema,
@@ -52,14 +52,7 @@ export const listToolsRoute = createRoute({
         },
       },
     },
-    [HttpStatusCodes.UNAUTHORIZED]: {
-      description: 'Missing or invalid API key',
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
+    ...StandardApiResponses.UNAUTHORIZED,
   },
 });
 
@@ -88,14 +81,7 @@ export const listResourcesRoute = createRoute({
         },
       },
     },
-    [HttpStatusCodes.UNAUTHORIZED]: {
-      description: 'Missing or invalid API key',
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
+    ...StandardApiResponses.UNAUTHORIZED,
   },
 });
 
@@ -139,22 +125,8 @@ export const createThreadToolRoute = createRoute({
         },
       },
     },
-    [HttpStatusCodes.BAD_REQUEST]: {
-      description: 'Invalid input parameters',
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
-    [HttpStatusCodes.UNAUTHORIZED]: {
-      description: 'Missing or invalid API key',
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
+    ...StandardApiResponses.BAD_REQUEST,
+    ...StandardApiResponses.UNAUTHORIZED,
   },
 });
 
@@ -194,30 +166,9 @@ export const sendMessageToolRoute = createRoute({
         },
       },
     },
-    [HttpStatusCodes.BAD_REQUEST]: {
-      description: 'Invalid input parameters',
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
-    [HttpStatusCodes.NOT_FOUND]: {
-      description: 'Thread not found',
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
-    [HttpStatusCodes.UNAUTHORIZED]: {
-      description: 'Missing or invalid API key',
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
+    ...StandardApiResponses.BAD_REQUEST,
+    ...StandardApiResponses.NOT_FOUND,
+    ...StandardApiResponses.UNAUTHORIZED,
   },
 });
 
@@ -257,22 +208,8 @@ export const getThreadToolRoute = createRoute({
         },
       },
     },
-    [HttpStatusCodes.NOT_FOUND]: {
-      description: 'Thread not found',
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
-    [HttpStatusCodes.UNAUTHORIZED]: {
-      description: 'Missing or invalid API key',
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
+    ...StandardApiResponses.NOT_FOUND,
+    ...StandardApiResponses.UNAUTHORIZED,
   },
 });
 
@@ -312,14 +249,7 @@ export const listModelsToolRoute = createRoute({
         },
       },
     },
-    [HttpStatusCodes.UNAUTHORIZED]: {
-      description: 'Missing or invalid API key',
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
+    ...StandardApiResponses.UNAUTHORIZED,
   },
 });
 
@@ -359,29 +289,8 @@ export const addParticipantToolRoute = createRoute({
         },
       },
     },
-    [HttpStatusCodes.BAD_REQUEST]: {
-      description: 'Invalid input parameters or max participants reached',
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
-    [HttpStatusCodes.NOT_FOUND]: {
-      description: 'Thread not found',
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
-    [HttpStatusCodes.UNAUTHORIZED]: {
-      description: 'Missing or invalid API key',
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
+    ...StandardApiResponses.BAD_REQUEST,
+    ...StandardApiResponses.NOT_FOUND,
+    ...StandardApiResponses.UNAUTHORIZED,
   },
 });

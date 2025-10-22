@@ -282,10 +282,10 @@ export default async function Image({
               >
                 AI Models:
               </div>
-              {participantIcons.map((p: { modelId: string; role: string | null; icon: string }, idx: number) => (
+              {participantIcons.map((p: { modelId: string; role: string | null; icon: string }) => (
                 p.icon && (
                   <div
-                    key={idx}
+                    key={p.modelId}
                     style={{
                       display: 'flex',
                       alignItems: 'center',

@@ -18,13 +18,14 @@ import { ulid } from 'ulid';
 
 import { executeBatch } from '@/api/common/batch-operations';
 import { createError } from '@/api/common/error-handling';
+import type { ChatMode } from '@/api/core/enums';
+import { AnalysisStatuses } from '@/api/core/enums';
 import { ModeratorAnalysisPayloadSchema } from '@/api/routes/chat/schema';
 import { initializeOpenRouter, openRouterService } from '@/api/services/openrouter.service';
 import { AI_TIMEOUT_CONFIG } from '@/api/services/product-logic.service';
 import type { ApiEnv } from '@/api/types';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db/schema';
-import type { ChatModeId } from '@/lib/config/chat-modes';
 
 import { buildModeratorSystemPrompt, buildModeratorUserPrompt } from './moderator-analysis.service';
 import { extractModeratorModelName } from './openrouter-models.service';
@@ -143,7 +144,7 @@ export async function processAnalysisInBackground(
   try {
     const db = await getDbAsync();
     await db.update(tables.chatModeratorAnalysis)
-      .set({ status: 'streaming' })
+      .set({ status: AnalysisStatuses.STREAMING })
       .where(eq(tables.chatModeratorAnalysis.id, analysisId));
 
     console.warn('[processAnalysisInBackground] ✅ Updated status to streaming', {
@@ -163,7 +164,7 @@ export async function processAnalysisInBackground(
 
   // Build moderator prompts
   const moderatorConfig = {
-    mode: mode as ChatModeId,
+    mode: mode as ChatMode,
     roundNumber: roundNum,
     userQuestion,
     participantResponses,
@@ -210,7 +211,7 @@ export async function processAnalysisInBackground(
             console.warn('[processAnalysisInBackground] ❌ Marking analysis as failed', analysisId);
             await db.update(tables.chatModeratorAnalysis)
               .set({
-                status: 'failed',
+                status: AnalysisStatuses.FAILED,
                 errorMessage: error instanceof Error ? error.message : String(error),
               })
               .where(eq(tables.chatModeratorAnalysis.id, analysisId));
@@ -227,7 +228,7 @@ export async function processAnalysisInBackground(
             console.warn('[processAnalysisInBackground] ❌ No object generated, marking as failed', analysisId);
             await db.update(tables.chatModeratorAnalysis)
               .set({
-                status: 'failed',
+                status: AnalysisStatuses.FAILED,
                 errorMessage: 'Analysis completed but no object was generated',
               })
               .where(eq(tables.chatModeratorAnalysis.id, analysisId));
@@ -251,7 +252,7 @@ export async function processAnalysisInBackground(
             console.warn('[processAnalysisInBackground] ❌ Invalid structure, marking as failed', analysisId);
             await db.update(tables.chatModeratorAnalysis)
               .set({
-                status: 'failed',
+                status: AnalysisStatuses.FAILED,
                 errorMessage: 'Analysis generated but structure is invalid',
               })
               .where(eq(tables.chatModeratorAnalysis.id, analysisId));
@@ -267,7 +268,7 @@ export async function processAnalysisInBackground(
           console.warn('[processAnalysisInBackground] ✅ Marking analysis as completed', analysisId);
           await db.update(tables.chatModeratorAnalysis)
             .set({
-              status: 'completed',
+              status: AnalysisStatuses.COMPLETED,
               analysisData: {
                 leaderboard: finalObject.leaderboard,
                 participantAnalyses: finalObject.participantAnalyses,
@@ -309,7 +310,7 @@ export async function processAnalysisInBackground(
       const db = await getDbAsync();
       await db.update(tables.chatModeratorAnalysis)
         .set({
-          status: 'failed',
+          status: AnalysisStatuses.FAILED,
           errorMessage: error instanceof Error ? error.message : String(error),
         })
         .where(eq(tables.chatModeratorAnalysis.id, analysisId));
@@ -479,7 +480,7 @@ export async function restartStaleAnalysis(
     await executeBatch(db, [
       db.update(tables.chatModeratorAnalysis)
         .set({
-          status: 'failed',
+          status: AnalysisStatuses.FAILED,
           errorMessage: 'Analysis timed out (watchdog detected), restarting automatically',
         })
         .where(eq(tables.chatModeratorAnalysis.id, staleAnalysis.id)),
@@ -487,9 +488,9 @@ export async function restartStaleAnalysis(
         id: newAnalysisId,
         threadId: staleAnalysis.threadId,
         roundNumber: staleAnalysis.roundNumber,
-        mode: staleAnalysis.mode as ChatModeId,
+        mode: staleAnalysis.mode as ChatMode,
         userQuestion: staleAnalysis.userQuestion,
-        status: 'streaming',
+        status: AnalysisStatuses.STREAMING,
         participantMessageIds,
         createdAt: new Date(),
       }),

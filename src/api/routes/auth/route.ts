@@ -1,8 +1,8 @@
 import { createRoute } from '@hono/zod-openapi';
 import * as HttpStatusCodes from 'stoker/http-status-codes';
-import * as HttpStatusPhrases from 'stoker/http-status-phrases';
 
-import { ApiErrorResponseSchema, createApiResponseSchema } from '@/api/core/schemas';
+import { createProtectedRouteResponses } from '@/api/core/response-schemas';
+import { createApiResponseSchema } from '@/api/core/schemas';
 
 import { SecureMePayloadSchema } from './schema';
 
@@ -21,21 +21,6 @@ export const secureMeRoute = createRoute({
         },
       },
     },
-    [HttpStatusCodes.UNAUTHORIZED]: {
-      description: HttpStatusPhrases.UNAUTHORIZED,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
-    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: {
-      description: HttpStatusPhrases.INTERNAL_SERVER_ERROR,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
+    ...createProtectedRouteResponses(),
   },
 });

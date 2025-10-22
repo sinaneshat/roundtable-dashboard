@@ -9,8 +9,9 @@
 
 import { z } from 'zod';
 
+import { ChatModeSchema } from '@/api/core/enums';
 import type { CreateThreadRequestSchema } from '@/api/routes/chat/schema';
-import { MessageContentSchema, ThreadModeSchema } from '@/api/routes/chat/schema';
+import { MessageContentSchema } from '@/api/routes/chat/schema';
 
 // ============================================================================
 // Participant Configuration (Frontend UI State)
@@ -43,11 +44,11 @@ export type ParticipantConfig = z.infer<typeof ParticipantConfigSchema>;
 
 /**
  * ✅ SIMPLIFIED: Chat input form schema
- * Reuses backend MessageContentSchema and ThreadModeSchema directly
+ * Reuses backend MessageContentSchema and ChatModeSchema directly
  */
 export const ChatInputFormSchema = z.object({
   message: MessageContentSchema,
-  mode: ThreadModeSchema,
+  mode: ChatModeSchema,
   participants: z.array(ParticipantConfigSchema).min(1, 'At least one participant is required'),
 });
 

@@ -8,7 +8,6 @@ import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { ChatMessage, ChatParticipant, ChatThread } from '@/api/routes/chat/schema';
-import { messageHasError, MessageMetadataSchema } from '@/api/routes/chat/schema';
 import { Action, Actions } from '@/components/ai-elements/actions';
 import { ChatDeleteDialog } from '@/components/chat/chat-delete-dialog';
 import { ChatInput } from '@/components/chat/chat-input';
@@ -28,6 +27,7 @@ import { useThreadAnalysesQuery, useThreadChangelogQuery, useThreadQuery } from 
 import { useBoolean } from '@/hooks/utils';
 import type { ChatModeId } from '@/lib/config/chat-modes';
 import { queryKeys } from '@/lib/data/query-keys';
+import { messageHasError, MessageMetadataSchema } from '@/lib/schemas/message-metadata';
 import type { ParticipantConfig } from '@/lib/types/participant-config';
 import { chatMessagesToUIMessages } from '@/lib/utils/message-transforms';
 

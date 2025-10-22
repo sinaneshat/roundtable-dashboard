@@ -32,6 +32,7 @@
 
 import { motion } from 'framer-motion';
 import { Award, Medal, Trophy } from 'lucide-react';
+import Image from 'next/image';
 import { useTranslations } from 'next-intl';
 
 import type { LeaderboardEntry } from '@/api/routes/chat/schema';
@@ -179,10 +180,13 @@ export function LeaderboardCard({ leaderboard }: LeaderboardCardProps) {
               </div>
 
               {/* Avatar */}
-              <img
+              <Image
                 src={participant.avatarSrc}
                 alt={participant.avatarName}
                 className="size-7 flex-shrink-0 object-contain"
+                width={28}
+                height={28}
+                unoptimized
               />
 
               {/* Model Name */}

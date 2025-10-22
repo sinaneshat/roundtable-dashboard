@@ -12,8 +12,9 @@
 
 import type { UIMessage } from 'ai';
 
-import type { ChatMessage, UIMessageMetadata } from '@/api/routes/chat/schema';
-import { UIMessageMetadataSchema } from '@/api/routes/chat/schema';
+import type { ChatMessage } from '@/api/routes/chat/schema';
+import type { UIMessageMetadata } from '@/lib/schemas/message-metadata';
+import { UIMessageMetadataSchema } from '@/lib/schemas/message-metadata';
 
 // ============================================================================
 // METADATA VALIDATION (AI SDK v5 Official Pattern)
@@ -242,6 +243,12 @@ export type UIMessageErrorType
  * @param errorMessage - User-facing error message
  * @param errorType - Category of error (provider, model, validation, etc.)
  * @param errorMetadata - Optional structured error metadata from backend
+ * @param errorMetadata.errorCategory - Category of the error
+ * @param errorMetadata.statusCode - HTTP status code
+ * @param errorMetadata.rawErrorMessage - Raw error message from provider
+ * @param errorMetadata.openRouterError - OpenRouter error type
+ * @param errorMetadata.openRouterCode - OpenRouter error code
+ * @param errorMetadata.providerMessage - Provider-specific error message
  * @returns UIMessage with error metadata for display
  *
  * @example
@@ -324,7 +331,10 @@ export function createErrorUIMessage(
  * - Preserves existing metadata from backend
  *
  * @param message - UIMessage from AI SDK with potential metadata
- * @param participant - Participant info (id, modelId, role)
+ * @param participant - Participant info
+ * @param participant.id - Participant ID
+ * @param participant.modelId - Model ID being used
+ * @param participant.role - Role description (nullable)
  * @param currentIndex - Current participant index in round
  * @returns Merged metadata object ready for UIMessage
  *

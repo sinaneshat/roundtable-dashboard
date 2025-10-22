@@ -8,8 +8,8 @@
 
 import { z } from '@hono/zod-openapi';
 
+import { CHAT_MODES } from '@/api/core/enums';
 import type { ModeratorAnalysisPayload } from '@/api/routes/chat/schema';
-import { CHAT_MODES } from '@/lib/config/chat-modes';
 import { extractModelName } from '@/lib/utils/ai-display';
 
 export type ModeratorAnalysis = ModeratorAnalysisPayload;

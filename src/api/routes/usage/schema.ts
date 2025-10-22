@@ -1,17 +1,12 @@
 import { z } from '@hono/zod-openapi';
 
+import { UsageStatusSchema } from '@/api/core/enums';
 import { createApiResponseSchema } from '@/api/core/schemas';
 import { SUBSCRIPTION_TIERS, subscriptionTierSchemaOpenAPI } from '@/api/services/product-logic.service';
 
 // ============================================================================
 // Usage Statistics API Schemas
 // ============================================================================
-
-/**
- * Usage status for visual indicators
- * ✅ SERVER-COMPUTED: Calculated based on usage thresholds
- */
-const usageStatusSchema = z.enum(['default', 'warning', 'critical']);
 
 /**
  * Usage stats API response schema
@@ -38,7 +33,7 @@ export const UsageStatsPayloadSchema = z.object({
       description: 'Percentage of limit used',
       example: 20,
     }),
-    status: usageStatusSchema.openapi({
+    status: UsageStatusSchema.openapi({
       description: 'Visual status indicator (default/warning/critical)',
       example: 'default',
     }),
@@ -62,7 +57,7 @@ export const UsageStatsPayloadSchema = z.object({
       description: 'Percentage of limit used',
       example: 10,
     }),
-    status: usageStatusSchema.openapi({
+    status: UsageStatusSchema.openapi({
       description: 'Visual status indicator (default/warning/critical)',
       example: 'default',
     }),
@@ -86,7 +81,7 @@ export const UsageStatsPayloadSchema = z.object({
       description: 'Percentage of limit used',
       example: 0,
     }),
-    status: usageStatusSchema.openapi({
+    status: UsageStatusSchema.openapi({
       description: 'Visual status indicator (default/warning/critical)',
       example: 'default',
     }),
@@ -110,7 +105,7 @@ export const UsageStatsPayloadSchema = z.object({
       description: 'Percentage of limit used',
       example: 0,
     }),
-    status: usageStatusSchema.openapi({
+    status: UsageStatusSchema.openapi({
       description: 'Visual status indicator (default/warning/critical)',
       example: 'default',
     }),
@@ -214,4 +209,4 @@ export type QuotaCheckPayload = z.infer<typeof QuotaCheckPayloadSchema>;
  */
 export type UsageStats = UsageStatsPayload;
 export type QuotaCheck = QuotaCheckPayload;
-export type UsageStatus = z.infer<typeof usageStatusSchema>;
+export type UsageStatus = z.infer<typeof UsageStatusSchema>;

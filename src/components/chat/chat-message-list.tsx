@@ -1,15 +1,17 @@
 'use client';
 
 import type { UIMessage } from 'ai';
+import Image from 'next/image';
 import { useTranslations } from 'next-intl';
 
-import type { ChatParticipant, MessageStatus } from '@/api/routes/chat/schema';
+import type { ChatParticipant } from '@/api/routes/chat/schema';
 import { canAccessModelByPricing } from '@/api/services/product-logic.service';
 import { Message, MessageAvatar, MessageContent } from '@/components/ai-elements/message';
 import { Response } from '@/components/ai-elements/response';
 import { ModelMessageCard } from '@/components/chat/model-message-card';
 import { useModelsQuery } from '@/hooks/queries/models';
 import { useUsageStatsQuery } from '@/hooks/queries/usage';
+import type { MessageStatus } from '@/lib/schemas/message-schemas';
 import { getAvatarPropsFromModelId } from '@/lib/utils/ai-display';
 import { deduplicateConsecutiveUserMessages, filterNonEmptyMessages, getMessageMetadata } from '@/lib/utils/message-transforms';
 
@@ -89,11 +91,14 @@ export function ChatMessageList({
                   if (part.type === 'file' && part.mediaType?.startsWith('image/')) {
                     return (
                       <div key={`${message.id}-${partIndex}`} className="my-2">
-                        <img
+                        <Image
                           src={part.url}
                           alt={part.filename || 'Attachment'}
                           className="max-w-full rounded-lg border border-border"
                           style={{ maxHeight: '400px' }}
+                          width={800}
+                          height={400}
+                          unoptimized
                         />
                         {part.filename && (
                           <p className="mt-1 text-xs text-muted-foreground">{part.filename}</p>

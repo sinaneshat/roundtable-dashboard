@@ -1,8 +1,13 @@
 import { createRoute } from '@hono/zod-openapi';
 import * as HttpStatusCodes from 'stoker/http-status-codes';
-import * as HttpStatusPhrases from 'stoker/http-status-phrases';
 
-import { ApiErrorResponseSchema, IdParamSchema } from '@/api/core/schemas';
+import {
+  createMutationRouteResponses,
+  createProtectedRouteResponses,
+  createPublicRouteResponses,
+  StandardApiResponses,
+} from '@/api/core/response-schemas';
+import { IdParamSchema } from '@/api/core/schemas';
 
 import {
   CancelSubscriptionRequestSchema,
@@ -38,22 +43,8 @@ export const listProductsRoute = createRoute({
         'application/json': { schema: ProductListResponseSchema },
       },
     },
-    [HttpStatusCodes.BAD_REQUEST]: {
-      description: HttpStatusPhrases.BAD_REQUEST,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
-    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: {
-      description: HttpStatusPhrases.INTERNAL_SERVER_ERROR,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
+    ...StandardApiResponses.BAD_REQUEST,
+    ...createPublicRouteResponses(),
   },
 });
 
@@ -73,30 +64,8 @@ export const getProductRoute = createRoute({
         'application/json': { schema: ProductDetailResponseSchema },
       },
     },
-    [HttpStatusCodes.NOT_FOUND]: {
-      description: HttpStatusPhrases.NOT_FOUND,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
-    [HttpStatusCodes.BAD_REQUEST]: {
-      description: HttpStatusPhrases.BAD_REQUEST,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
-    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: {
-      description: HttpStatusPhrases.INTERNAL_SERVER_ERROR,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
+    ...StandardApiResponses.BAD_REQUEST,
+    ...createPublicRouteResponses(),
   },
 });
 
@@ -127,30 +96,7 @@ export const createCheckoutSessionRoute = createRoute({
         'application/json': { schema: CheckoutResponseSchema },
       },
     },
-    [HttpStatusCodes.UNAUTHORIZED]: {
-      description: HttpStatusPhrases.UNAUTHORIZED,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
-    [HttpStatusCodes.BAD_REQUEST]: {
-      description: HttpStatusPhrases.BAD_REQUEST,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
-    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: {
-      description: HttpStatusPhrases.INTERNAL_SERVER_ERROR,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
+    ...createMutationRouteResponses(),
   },
 });
 
@@ -181,30 +127,7 @@ export const createCustomerPortalSessionRoute = createRoute({
         'application/json': { schema: CustomerPortalResponseSchema },
       },
     },
-    [HttpStatusCodes.UNAUTHORIZED]: {
-      description: HttpStatusPhrases.UNAUTHORIZED,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
-    [HttpStatusCodes.BAD_REQUEST]: {
-      description: HttpStatusPhrases.BAD_REQUEST,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
-    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: {
-      description: HttpStatusPhrases.INTERNAL_SERVER_ERROR,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
+    ...createMutationRouteResponses(),
   },
 });
 
@@ -225,30 +148,8 @@ export const listSubscriptionsRoute = createRoute({
         'application/json': { schema: SubscriptionListResponseSchema },
       },
     },
-    [HttpStatusCodes.UNAUTHORIZED]: {
-      description: HttpStatusPhrases.UNAUTHORIZED,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
-    [HttpStatusCodes.BAD_REQUEST]: {
-      description: HttpStatusPhrases.BAD_REQUEST,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
-    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: {
-      description: HttpStatusPhrases.INTERNAL_SERVER_ERROR,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
+    ...StandardApiResponses.BAD_REQUEST,
+    ...createProtectedRouteResponses(),
   },
 });
 
@@ -268,46 +169,9 @@ export const getSubscriptionRoute = createRoute({
         'application/json': { schema: SubscriptionDetailResponseSchema },
       },
     },
-    [HttpStatusCodes.UNAUTHORIZED]: {
-      description: HttpStatusPhrases.UNAUTHORIZED,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
-    [HttpStatusCodes.NOT_FOUND]: {
-      description: HttpStatusPhrases.NOT_FOUND,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
-    [HttpStatusCodes.FORBIDDEN]: {
-      description: HttpStatusPhrases.FORBIDDEN,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
-    [HttpStatusCodes.BAD_REQUEST]: {
-      description: HttpStatusPhrases.BAD_REQUEST,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
-    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: {
-      description: HttpStatusPhrases.INTERNAL_SERVER_ERROR,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
+    ...StandardApiResponses.BAD_REQUEST,
+    ...StandardApiResponses.FORBIDDEN,
+    ...createProtectedRouteResponses(),
   },
 });
 
@@ -339,46 +203,8 @@ export const switchSubscriptionRoute = createRoute({
         'application/json': { schema: SubscriptionChangeResponseSchema },
       },
     },
-    [HttpStatusCodes.UNAUTHORIZED]: {
-      description: HttpStatusPhrases.UNAUTHORIZED,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
-    [HttpStatusCodes.NOT_FOUND]: {
-      description: HttpStatusPhrases.NOT_FOUND,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
-    [HttpStatusCodes.FORBIDDEN]: {
-      description: HttpStatusPhrases.FORBIDDEN,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
-    [HttpStatusCodes.BAD_REQUEST]: {
-      description: HttpStatusPhrases.BAD_REQUEST,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
-    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: {
-      description: HttpStatusPhrases.INTERNAL_SERVER_ERROR,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
+    ...StandardApiResponses.FORBIDDEN,
+    ...createMutationRouteResponses(),
   },
 });
 
@@ -406,46 +232,8 @@ export const cancelSubscriptionRoute = createRoute({
         'application/json': { schema: SubscriptionChangeResponseSchema },
       },
     },
-    [HttpStatusCodes.UNAUTHORIZED]: {
-      description: HttpStatusPhrases.UNAUTHORIZED,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
-    [HttpStatusCodes.NOT_FOUND]: {
-      description: HttpStatusPhrases.NOT_FOUND,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
-    [HttpStatusCodes.FORBIDDEN]: {
-      description: HttpStatusPhrases.FORBIDDEN,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
-    [HttpStatusCodes.BAD_REQUEST]: {
-      description: HttpStatusPhrases.BAD_REQUEST,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
-    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: {
-      description: HttpStatusPhrases.INTERNAL_SERVER_ERROR,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
+    ...StandardApiResponses.FORBIDDEN,
+    ...createMutationRouteResponses(),
   },
 });
 
@@ -468,30 +256,7 @@ export const syncAfterCheckoutRoute = createRoute({
         },
       },
     },
-    [HttpStatusCodes.UNAUTHORIZED]: {
-      description: HttpStatusPhrases.UNAUTHORIZED,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
-    [HttpStatusCodes.NOT_FOUND]: {
-      description: HttpStatusPhrases.NOT_FOUND,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
-    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: {
-      description: HttpStatusPhrases.INTERNAL_SERVER_ERROR,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
+    ...createMutationRouteResponses(),
   },
 });
 
@@ -524,21 +289,7 @@ export const handleWebhookRoute = createRoute({
         'application/json': { schema: WebhookResponseSchema },
       },
     },
-    [HttpStatusCodes.BAD_REQUEST]: {
-      description: HttpStatusPhrases.BAD_REQUEST,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
-    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: {
-      description: HttpStatusPhrases.INTERNAL_SERVER_ERROR,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
+    ...StandardApiResponses.BAD_REQUEST,
+    ...createPublicRouteResponses(),
   },
 });

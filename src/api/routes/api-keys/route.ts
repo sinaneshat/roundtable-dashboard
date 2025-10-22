@@ -7,9 +7,11 @@
 
 import { createRoute } from '@hono/zod-openapi';
 import * as HttpStatusCodes from 'stoker/http-status-codes';
-import * as HttpStatusPhrases from 'stoker/http-status-phrases';
 
-import { ApiErrorResponseSchema } from '@/api/core/schemas';
+import {
+  createMutationRouteResponses,
+  createProtectedRouteResponses,
+} from '@/api/core/response-schemas';
 
 import {
   ApiKeyIdParamSchema,
@@ -43,22 +45,7 @@ export const listApiKeysRoute = createRoute({
         'application/json': { schema: ListApiKeysResponseSchema },
       },
     },
-    [HttpStatusCodes.UNAUTHORIZED]: {
-      description: HttpStatusPhrases.UNAUTHORIZED,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
-    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: {
-      description: HttpStatusPhrases.INTERNAL_SERVER_ERROR,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
+    ...createProtectedRouteResponses(),
   },
 });
 
@@ -82,38 +69,7 @@ export const getApiKeyRoute = createRoute({
         'application/json': { schema: GetApiKeyResponseSchema },
       },
     },
-    [HttpStatusCodes.UNAUTHORIZED]: {
-      description: HttpStatusPhrases.UNAUTHORIZED,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
-    [HttpStatusCodes.NOT_FOUND]: {
-      description: HttpStatusPhrases.NOT_FOUND,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
-    [HttpStatusCodes.FORBIDDEN]: {
-      description: HttpStatusPhrases.FORBIDDEN,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
-    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: {
-      description: HttpStatusPhrases.INTERNAL_SERVER_ERROR,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
+    ...createProtectedRouteResponses(),
   },
 });
 
@@ -144,30 +100,7 @@ export const createApiKeyRoute = createRoute({
         'application/json': { schema: CreateApiKeyResponseSchema },
       },
     },
-    [HttpStatusCodes.UNAUTHORIZED]: {
-      description: HttpStatusPhrases.UNAUTHORIZED,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
-    [HttpStatusCodes.BAD_REQUEST]: {
-      description: HttpStatusPhrases.BAD_REQUEST,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
-    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: {
-      description: HttpStatusPhrases.INTERNAL_SERVER_ERROR,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
+    ...createMutationRouteResponses(),
   },
 });
 
@@ -199,46 +132,7 @@ export const updateApiKeyRoute = createRoute({
         'application/json': { schema: UpdateApiKeyResponseSchema },
       },
     },
-    [HttpStatusCodes.UNAUTHORIZED]: {
-      description: HttpStatusPhrases.UNAUTHORIZED,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
-    [HttpStatusCodes.NOT_FOUND]: {
-      description: HttpStatusPhrases.NOT_FOUND,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
-    [HttpStatusCodes.FORBIDDEN]: {
-      description: HttpStatusPhrases.FORBIDDEN,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
-    [HttpStatusCodes.BAD_REQUEST]: {
-      description: HttpStatusPhrases.BAD_REQUEST,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
-    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: {
-      description: HttpStatusPhrases.INTERNAL_SERVER_ERROR,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
+    ...createMutationRouteResponses(),
   },
 });
 
@@ -262,37 +156,6 @@ export const deleteApiKeyRoute = createRoute({
         'application/json': { schema: DeleteApiKeyResponseSchema },
       },
     },
-    [HttpStatusCodes.UNAUTHORIZED]: {
-      description: HttpStatusPhrases.UNAUTHORIZED,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
-    [HttpStatusCodes.NOT_FOUND]: {
-      description: HttpStatusPhrases.NOT_FOUND,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
-    [HttpStatusCodes.FORBIDDEN]: {
-      description: HttpStatusPhrases.FORBIDDEN,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
-    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: {
-      description: HttpStatusPhrases.INTERNAL_SERVER_ERROR,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
+    ...createProtectedRouteResponses(),
   },
 });

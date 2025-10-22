@@ -20,10 +20,11 @@ type PostHogProviderProps = {
  *
  * Pattern: src/components/providers/posthog-provider.tsx
  *
- * @param children - Child components to wrap
- * @param apiKey - PostHog project API key (from NEXT_PUBLIC_POSTHOG_API_KEY)
- * @param apiHost - PostHog API host (from NEXT_PUBLIC_POSTHOG_HOST)
- * @param environment - Current environment (from NEXT_PUBLIC_WEBAPP_ENV)
+ * @param props - Component props
+ * @param props.children - Child components to wrap
+ * @param props.apiKey - PostHog project API key (from NEXT_PUBLIC_POSTHOG_API_KEY)
+ * @param props.apiHost - PostHog API host (from NEXT_PUBLIC_POSTHOG_HOST)
+ * @param props.environment - Current environment (from NEXT_PUBLIC_WEBAPP_ENV)
  */
 function PostHogProvider({
   children,

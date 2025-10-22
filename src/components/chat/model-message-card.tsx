@@ -1,12 +1,13 @@
 'use client';
 
-// ✅ ZERO HARDCODING: Import all types from RPC schemas
-import type { MessagePart, MessageStatus, UIMessageMetadata } from '@/api/routes/chat/schema';
+// ✅ ZERO HARDCODING: Import all types from proper schema locations
 import type { EnhancedModelResponse } from '@/api/routes/models/schema';
 import { Message, MessageAvatar, MessageContent } from '@/components/ai-elements/message';
 import { Reasoning, ReasoningContent, ReasoningTrigger } from '@/components/ai-elements/reasoning';
 import { Response } from '@/components/ai-elements/response';
 import { MessageErrorDetails } from '@/components/chat/message-error-details';
+import type { UIMessageMetadata } from '@/lib/schemas/message-metadata';
+import type { MessagePart, MessageStatus } from '@/lib/schemas/message-schemas';
 
 /**
  * ✅ ZOD-INFERRED TYPES: All types imported from RPC schemas

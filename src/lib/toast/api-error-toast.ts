@@ -48,6 +48,10 @@ import { toastManager } from './toast-manager';
  * @param title - The title of the error toast (e.g., "Failed to create thread")
  * @param error - The error object from the API call
  * @param options - Optional toast options
+ * @param options.duration - Duration in milliseconds for the toast to display
+ * @param options.action - Optional action button configuration
+ * @param options.action.label - Label for the action button
+ * @param options.action.onClick - Click handler for the action button
  *
  * @example
  * ```typescript
@@ -127,6 +131,10 @@ export function showApiErrorToast(
  * @param title - The title of the success toast
  * @param description - Optional description
  * @param options - Optional toast options
+ * @param options.duration - Duration in milliseconds for the toast to display
+ * @param options.action - Optional action button configuration
+ * @param options.action.label - Label for the action button
+ * @param options.action.onClick - Click handler for the action button
  *
  * @example
  * ```typescript
@@ -163,6 +171,10 @@ export function showApiSuccessToast(
  * @param title - The title of the warning toast
  * @param description - Optional description
  * @param options - Optional toast options
+ * @param options.duration - Duration in milliseconds for the toast to display
+ * @param options.action - Optional action button configuration
+ * @param options.action.label - Label for the action button
+ * @param options.action.onClick - Click handler for the action button
  */
 export function showApiWarningToast(
   title: string,
@@ -189,6 +201,10 @@ export function showApiWarningToast(
  * @param title - The title of the info toast
  * @param description - Optional description
  * @param options - Optional toast options
+ * @param options.duration - Duration in milliseconds for the toast to display
+ * @param options.action - Optional action button configuration
+ * @param options.action.label - Label for the action button
+ * @param options.action.onClick - Click handler for the action button
  */
 export function showApiInfoToast(
   title: string,
@@ -243,6 +259,7 @@ export function showApiLoadingToast(title: string, description?: string): string
  * @param error - The error object from the API call
  * @param onRetry - Callback function to retry the operation
  * @param options - Optional toast options
+ * @param options.duration - Duration in milliseconds for the toast to display
  *
  * @example
  * ```typescript

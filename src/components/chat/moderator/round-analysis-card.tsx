@@ -16,6 +16,7 @@ import { Clock } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { AnalysisStatuses } from '@/api/core/enums';
 import type { StoredModeratorAnalysis } from '@/api/routes/chat/schema';
 import {
   ChainOfThought,
@@ -67,10 +68,10 @@ export function RoundAnalysisCard({
   const TWO_MINUTES_MS = 2 * 60 * 1000;
   // eslint-disable-next-line react-hooks/purity -- Valid use case: timeout check requires current time. Date.now() is intentionally impure here to detect stuck analyses on each render.
   const ageMs = Date.now() - new Date(analysis.createdAt).getTime();
-  const isStuck = ageMs > TWO_MINUTES_MS && (analysis.status === 'pending' || analysis.status === 'streaming');
+  const isStuck = ageMs > TWO_MINUTES_MS && (analysis.status === AnalysisStatuses.PENDING || analysis.status === AnalysisStatuses.STREAMING);
 
   // Override status if stuck
-  const effectiveStatus = isStuck ? 'failed' : analysis.status;
+  const effectiveStatus = isStuck ? AnalysisStatuses.FAILED : analysis.status;
   const effectiveErrorMessage = isStuck
     ? 'Analysis timed out after 2 minutes. This may happen if the page was refreshed during analysis. Try refreshing the page or retrying the round.'
     : analysis.errorMessage;
@@ -140,8 +141,8 @@ export function RoundAnalysisCard({
     // 1. Analysis just completed (status changed from pending/streaming to completed)
     // 2. This is the latest analysis
     // 3. Analysis is open
-    const justCompleted = (previousStatusRef.current === 'pending' || previousStatusRef.current === 'streaming')
-      && effectiveStatus === 'completed';
+    const justCompleted = (previousStatusRef.current === AnalysisStatuses.PENDING || previousStatusRef.current === AnalysisStatuses.STREAMING)
+      && effectiveStatus === AnalysisStatuses.COMPLETED;
 
     // Update previous status before any early returns
     const cleanup = (() => {
@@ -217,7 +218,7 @@ export function RoundAnalysisCard({
             )}
 
             {/* Analysis Content */}
-            {(effectiveStatus === 'pending' || effectiveStatus === 'streaming')
+            {(effectiveStatus === AnalysisStatuses.PENDING || effectiveStatus === AnalysisStatuses.STREAMING)
               ? (
                   // ✅ PENDING/STREAMING: Use streaming component for real-time partial object rendering
                   // The ModeratorAnalysisStream component handles both initial trigger and progressive rendering
@@ -232,7 +233,7 @@ export function RoundAnalysisCard({
                     }}
                   />
                 )
-              : effectiveStatus === 'completed' && analysis.analysisData
+              : effectiveStatus === AnalysisStatuses.COMPLETED && analysis.analysisData
                 ? (
                     // ✅ COMPLETED: Show completed analysis from database
                     <div className="space-y-4">
@@ -244,7 +245,7 @@ export function RoundAnalysisCard({
                       {/* Skills Comparison Chart */}
                       {(() => {
                         const shouldRender = analysis.analysisData.participantAnalyses && analysis.analysisData.participantAnalyses.length > 0;
-                        console.log('[RoundAnalysisCard] Skills Comparison check:', {
+                        console.warn('[RoundAnalysisCard] Skills Comparison check:', {
                           hasParticipantAnalyses: Boolean(analysis.analysisData.participantAnalyses),
                           participantAnalysesLength: analysis.analysisData.participantAnalyses?.length,
                           shouldRender,
@@ -288,7 +289,7 @@ export function RoundAnalysisCard({
                       )}
                     </div>
                   )
-                : effectiveStatus === 'failed'
+                : effectiveStatus === AnalysisStatuses.FAILED
                   ? (
                       <div className="flex items-center gap-2 py-1.5 text-xs text-destructive">
                         <span className="size-1.5 rounded-full bg-destructive/80" />

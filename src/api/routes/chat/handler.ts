@@ -19,7 +19,9 @@ import {
   getCursorOrderBy,
   Responses,
 } from '@/api/core';
-import { IdParamSchema } from '@/api/core/schemas';
+import type { ChangelogType, ChatMode, ThreadStatus } from '@/api/core/enums';
+import { AnalysisStatuses, ChangelogTypes } from '@/api/core/enums';
+import { IdParamSchema, ThreadRoundParamSchema, ThreadSlugParamSchema } from '@/api/core/schemas';
 // ✅ Background analysis service removed - using streaming with onFinish callback only
 // import { processAnalysisInBackground, restartStaleAnalysis } from '@/api/services/analysis-background.service';
 import type { ModeratorPromptConfig } from '@/api/services/moderator-analysis.service';
@@ -53,7 +55,7 @@ import {
 import type { ApiEnv } from '@/api/types';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db/schema';
-import type { ChatModeId, ThreadStatus } from '@/lib/config/chat-modes';
+import { messageHasError, MessageMetadataSchema, UIMessageMetadataSchema } from '@/lib/schemas/message-metadata';
 import { extractTextFromParts, filterNonEmptyMessages } from '@/lib/utils/message-transforms';
 
 import type {
@@ -84,17 +86,12 @@ import {
   AddParticipantRequestSchema,
   CreateCustomRoleRequestSchema,
   CreateThreadRequestSchema,
-  messageHasError,
-  MessageMetadataSchema,
   ModeratorAnalysisPayloadSchema,
   ModeratorAnalysisRequestSchema,
-  RoundAnalysisParamSchema,
   RoundFeedbackParamSchema,
   RoundFeedbackRequestSchema,
   StreamChatRequestSchema,
   ThreadListQuerySchema,
-  ThreadSlugParamSchema,
-  UIMessageMetadataSchema,
   UpdateCustomRoleRequestSchema,
   UpdateParticipantRequestSchema,
   UpdateThreadRequestSchema,
@@ -231,7 +228,7 @@ async function triggerRoundAnalysisAsync(params: {
       roundNumber,
       mode: thread.mode,
       userQuestion,
-      status: 'pending', // Frontend will detect and stream from /analyze endpoint
+      status: AnalysisStatuses.PENDING, // Frontend will detect and stream from /analyze endpoint
       participantMessageIds,
       createdAt: new Date(),
     });
@@ -388,7 +385,7 @@ async function createChangelogForRound(
 
   // Determine previous mode (from last mode_change in changelog, or thread.mode if no changes)
   const lastModeChange = previousChangelog.find(c => c.changeType === 'mode_change');
-  const previousMode = lastModeChange?.changeData?.newMode as ChatModeId | undefined || thread.mode;
+  const previousMode = lastModeChange?.changeData?.newMode as ChatMode | undefined || thread.mode;
 
   // Check for mode changes
   if (thread.mode !== previousMode) {
@@ -396,7 +393,7 @@ async function createChangelogForRound(
       id: ulid(),
       threadId: thread.id,
       roundNumber: currentRoundNumber,
-      changeType: 'mode_change',
+      changeType: ChangelogTypes.MODE_CHANGE,
       changeSummary: `Changed conversation mode from ${previousMode} to ${thread.mode}`,
       changeData: {
         oldMode: previousMode,
@@ -429,7 +426,7 @@ async function createChangelogForRound(
           id: ulid(),
           threadId: thread.id,
           roundNumber: currentRoundNumber,
-          changeType: 'participant_removed',
+          changeType: ChangelogTypes.PARTICIPANT_REMOVED,
           changeSummary: `Removed ${modelName}${metadata.participantRole ? ` ("${metadata.participantRole}")` : ''}`,
           changeData: {
             participantId: prevId,
@@ -450,7 +447,7 @@ async function createChangelogForRound(
         id: ulid(),
         threadId: thread.id,
         roundNumber: currentRoundNumber,
-        changeType: 'participant_added',
+        changeType: ChangelogTypes.PARTICIPANT_ADDED,
         changeSummary: `Added ${modelName}${participant.role ? ` as "${participant.role}"` : ''}`,
         changeData: {
           participantId: participant.id,
@@ -484,7 +481,7 @@ async function createChangelogForRound(
         id: ulid(),
         threadId: thread.id,
         roundNumber: currentRoundNumber,
-        changeType: 'participant_updated',
+        changeType: ChangelogTypes.PARTICIPANT_UPDATED,
         changeSummary: `Updated ${modelName} role from ${prevRole || 'none'} to ${currentParticipant.role || 'none'}`,
         changeData: {
           participantId,
@@ -503,7 +500,7 @@ async function createChangelogForRound(
         id: ulid(),
         threadId: thread.id,
         roundNumber: currentRoundNumber,
-        changeType: 'participants_reordered',
+        changeType: ChangelogTypes.PARTICIPANTS_REORDERED,
         changeSummary: `Reordered ${modelName}`,
         changeData: {
           participantId,
@@ -666,7 +663,7 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
         userId: user.id,
         title: tempTitle,
         slug: tempSlug,
-        mode: (body.mode || 'brainstorming') as ChatModeId,
+        mode: (body.mode || 'brainstorming') as ChatMode,
         status: 'active',
         isFavorite: false,
         isPublic: false,
@@ -1104,7 +1101,7 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
     // Build thread update object
     const updateData: {
       title?: string;
-      mode?: ChatModeId;
+      mode?: ChatMode;
       status?: ThreadStatus;
       isFavorite?: boolean;
       isPublic?: boolean;
@@ -1117,7 +1114,7 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
     if (body.title !== undefined && body.title !== null)
       updateData.title = body.title as string;
     if (body.mode !== undefined)
-      updateData.mode = body.mode as ChatModeId;
+      updateData.mode = body.mode as ChatMode;
     if (body.status !== undefined)
       updateData.status = body.status as ThreadStatus;
     if (body.isFavorite !== undefined)
@@ -1194,7 +1191,7 @@ export const deleteThreadHandler: RouteHandler<typeof deleteThreadRoute, ApiEnv>
         db,
       });
 
-      console.log('[deleteThreadHandler] 🔍 RAG embeddings deleted', {
+      console.warn('[deleteThreadHandler] 🔍 RAG embeddings deleted', {
         threadId: id,
         userId: user.id,
       });
@@ -1523,7 +1520,7 @@ export const updateParticipantHandler: RouteHandler<typeof updateParticipantRout
       await db.insert(tables.chatThreadChangelog).values({
         id: changelogId,
         threadId: participant.threadId,
-        changeType: 'participant_updated',
+        changeType: ChangelogTypes.PARTICIPANT_UPDATED,
         changeSummary: `Updated ${modelName} role from "${participant.role || 'none'}" to "${body.role || 'none'}"`,
         changeData: {
           participantId: id,
@@ -1577,7 +1574,7 @@ export const deleteParticipantHandler: RouteHandler<typeof deleteParticipantRout
       db.insert(tables.chatThreadChangelog).values({
         id: changelogId,
         threadId: participant.threadId,
-        changeType: 'participant_removed',
+        changeType: ChangelogTypes.PARTICIPANT_REMOVED,
         changeSummary: `Removed ${modelName}${participant.role ? ` ("${participant.role}")` : ''}`,
         changeData: {
           participantId: id,
@@ -1883,7 +1880,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
         id: ulid(),
         threadId,
         roundNumber: currentRoundNumber,
-        changeType: 'mode_change',
+        changeType: ChangelogTypes.MODE_CHANGE,
         changeSummary: `Changed mode from ${thread.mode} to ${providedMode}`,
         changeData: {
           oldMode: thread.mode,
@@ -1911,7 +1908,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
       // ✅ DETAILED CHANGE DETECTION: Track specific types of changes
       const changelogEntries: Array<{
         id: string;
-        changeType: 'participant_added' | 'participant_removed' | 'participant_updated' | 'participants_reordered' | 'mode_change';
+        changeType: ChangelogType;
         changeSummary: string;
         changeData: Record<string, unknown>;
       }> = [];
@@ -2017,7 +2014,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
           const displayName = removed.role || modelName;
           changelogEntries.push({
             id: ulid(),
-            changeType: 'participant_removed',
+            changeType: ChangelogTypes.PARTICIPANT_REMOVED,
             changeSummary: `Removed ${displayName}`,
             changeData: {
               participantId: removed.id,
@@ -2034,7 +2031,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
           const displayName = added.role || modelName;
           changelogEntries.push({
             id: ulid(),
-            changeType: 'participant_added',
+            changeType: ChangelogTypes.PARTICIPANT_ADDED,
             changeSummary: `Added ${displayName}`,
             changeData: {
               participantId: added.id,
@@ -2063,7 +2060,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
             const displayName = updated.role || modelName;
             changelogEntries.push({
               id: ulid(),
-              changeType: 'participant_updated',
+              changeType: ChangelogTypes.PARTICIPANT_UPDATED,
               changeSummary: `Updated ${displayName}: ${changes.join(', ')}`,
               changeData: {
                 participantId: dbP.id,
@@ -2080,7 +2077,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
       if (wasReordered) {
         changelogEntries.push({
           id: ulid(),
-          changeType: 'participants_reordered',
+          changeType: ChangelogTypes.PARTICIPANTS_REORDERED,
           changeSummary: `Reordered ${providedEnabledParticipants.length} participant(s)`,
           changeData: {
             participants: providedEnabledParticipants.map((p, index) => {
@@ -2361,7 +2358,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
           const contextPrompt = ragService.formatContextForPrompt(ragContexts);
           systemPrompt = `${baseSystemPrompt}\n\n${contextPrompt}`;
 
-          console.log('[streamChatHandler] 🔍 RAG context retrieved', {
+          console.warn('[streamChatHandler] 🔍 RAG context retrieved', {
             threadId,
             participantIndex,
             contextCount: ragContexts.length,
@@ -2381,7 +2378,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
             console.error('[streamChatHandler] ⚠️ Failed to track RAG analytics', error);
           });
         } else {
-          console.log('[streamChatHandler] 🔍 No RAG context found', {
+          console.warn('[streamChatHandler] 🔍 No RAG context found', {
             threadId,
             participantIndex,
             retrievalTimeMs,
@@ -2917,7 +2914,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
                 db,
               });
 
-              console.log('[streamChatHandler] 🔍 RAG embedding stored', {
+              console.warn('[streamChatHandler] 🔍 RAG embedding stored', {
                 threadId,
                 messageId: savedMessage.id,
                 participantIndex,
@@ -3314,7 +3311,7 @@ function generateModeratorAnalysis(
           const db = await getDbAsync();
           await db.update(tables.chatModeratorAnalysis)
             .set({
-              status: 'failed',
+              status: AnalysisStatuses.FAILED,
               errorMessage: finishError instanceof Error ? finishError.message : 'Unknown error',
             })
             .where(eq(tables.chatModeratorAnalysis.id, analysisId));
@@ -3334,7 +3331,7 @@ function generateModeratorAnalysis(
           const db = await getDbAsync();
           await db.update(tables.chatModeratorAnalysis)
             .set({
-              status: 'completed',
+              status: AnalysisStatuses.COMPLETED,
               analysisData: finalObject,
               completedAt: new Date(),
             })
@@ -3377,7 +3374,7 @@ function generateModeratorAnalysis(
 export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
-    validateParams: RoundAnalysisParamSchema,
+    validateParams: ThreadRoundParamSchema,
     validateBody: ModeratorAnalysisRequestSchema,
     operationName: 'analyzeRound',
   },
@@ -3423,7 +3420,7 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
       });
 
       // Find the most recent completed analysis (if any)
-      const completedAnalysis = existingAnalyses.find(a => a.status === 'completed');
+      const completedAnalysis = existingAnalyses.find(a => a.status === AnalysisStatuses.COMPLETED);
 
       // Delete all except the most recent completed
       const analysesToDelete = existingAnalyses.filter(a =>
@@ -3446,7 +3443,7 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
     // Get the remaining analysis (if any)
     const existingAnalysis = existingAnalyses.length === 1
       ? existingAnalyses[0]
-      : existingAnalyses.find(a => a.status === 'completed');
+      : existingAnalyses.find(a => a.status === AnalysisStatuses.COMPLETED);
 
     if (existingAnalysis) {
       console.warn('[analyzeRoundHandler] 🔍 Existing analysis found', {
@@ -3457,7 +3454,7 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
       });
 
       // ✅ COMPLETED: Return existing analysis data (no streaming needed)
-      if (existingAnalysis.status === 'completed' && existingAnalysis.analysisData) {
+      if (existingAnalysis.status === AnalysisStatuses.COMPLETED && existingAnalysis.analysisData) {
         console.warn('[analyzeRoundHandler] ✅ Returning completed analysis', existingAnalysis.id);
         return Responses.ok(c, {
           object: {
@@ -3471,7 +3468,7 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
 
       // ✅ STREAMING: Return 409 Conflict (analysis already in progress)
       // Frontend should use GET /analyses to poll for status, NOT retry POST
-      if (existingAnalysis.status === 'streaming') {
+      if (existingAnalysis.status === AnalysisStatuses.STREAMING) {
         const ageMs = Date.now() - existingAnalysis.createdAt.getTime();
 
         console.warn('[analyzeRoundHandler] 🔄 Analysis already streaming, returning 409 Conflict', {
@@ -3495,7 +3492,7 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
       }
 
       // ✅ FAILED: Delete failed analysis to allow retry
-      if (existingAnalysis.status === 'failed') {
+      if (existingAnalysis.status === AnalysisStatuses.FAILED) {
         console.warn('[analyzeRoundHandler] 🔄 Deleting failed analysis to allow retry', existingAnalysis.id);
         await db.delete(tables.chatModeratorAnalysis)
           .where(eq(tables.chatModeratorAnalysis.id, existingAnalysis.id));
@@ -3503,7 +3500,7 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
 
       // ✅ PENDING: Delete immediately instead of trying to claim
       // This is safer during regeneration to prevent race conditions
-      if (existingAnalysis.status === 'pending') {
+      if (existingAnalysis.status === AnalysisStatuses.PENDING) {
         console.warn('[analyzeRoundHandler] ♻️ Deleting pending analysis to create fresh one', existingAnalysis.id);
         await db.delete(tables.chatModeratorAnalysis)
           .where(eq(tables.chatModeratorAnalysis.id, existingAnalysis.id));
@@ -3755,7 +3752,7 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
       roundNumber: roundNum,
       mode: thread.mode,
       userQuestion,
-      status: 'streaming',
+      status: AnalysisStatuses.STREAMING,
       participantMessageIds: participantMessages.map(m => m.id),
       createdAt: new Date(),
     });
@@ -3798,19 +3795,22 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
 /**
  * Background Analysis Processing Handler (Internal Only)
  *
- * ✅ DEPRECATED: No longer used - using streaming with onFinish callback instead
- * ✅ Background analysis service removed - all analysis now done via real-time streaming
- * ✅ This handler is kept for backward compatibility but should not be called
+ * DEPRECATED: No longer used - using streaming with onFinish callback instead
+ * Background analysis service removed - all analysis now done via real-time streaming
  *
  * POST /chat/analyze-background (internal)
  */
 // eslint-disable-next-line ts/no-explicit-any -- Generic Hono context type for internal handler
 export async function analyzeBackgroundHandler(c: any): Promise<Response> {
   console.warn('[analyzeBackgroundHandler] ⚠️ DEPRECATED: This handler should not be called. Using streaming with onFinish callback instead.');
-  return c.json({
-    success: false,
-    error: 'This endpoint is deprecated. Analysis is now done via real-time streaming.',
-  }, 410); // 410 Gone - resource no longer available
+  return Responses.customResponse(
+    c,
+    {
+      success: false,
+      error: 'This endpoint is deprecated. Analysis is now done via real-time streaming.',
+    },
+    410, // 410 Gone - resource no longer available
+  );
 }
 
 /**
@@ -3852,7 +3852,7 @@ export const getThreadAnalysesHandler: RouteHandler<typeof getThreadAnalysesRout
     const TWO_MINUTES_MS = 2 * 60 * 1000;
     const now = Date.now();
     const orphanedAnalyses = allAnalyses.filter((analysis) => {
-      if (analysis.status !== 'streaming' && analysis.status !== 'pending')
+      if (analysis.status !== AnalysisStatuses.STREAMING && analysis.status !== AnalysisStatuses.PENDING)
         return false;
 
       const ageMs = now - analysis.createdAt.getTime();
@@ -3875,7 +3875,7 @@ export const getThreadAnalysesHandler: RouteHandler<typeof getThreadAnalysesRout
       for (const analysis of orphanedAnalyses) {
         await db.update(tables.chatModeratorAnalysis)
           .set({
-            status: 'failed',
+            status: AnalysisStatuses.FAILED,
             errorMessage: 'Analysis timed out after 2 minutes. This may have been caused by a page refresh or connection issue during streaming.',
           })
           .where(eq(tables.chatModeratorAnalysis.id, analysis.id));

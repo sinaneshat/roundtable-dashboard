@@ -1,8 +1,7 @@
 import { createRoute } from '@hono/zod-openapi';
 import * as HttpStatusCodes from 'stoker/http-status-codes';
-import * as HttpStatusPhrases from 'stoker/http-status-phrases';
 
-import { ApiErrorResponseSchema } from '@/api/core/schemas';
+import { createProtectedRouteResponses } from '@/api/core/response-schemas';
 
 import {
   QuotaCheckResponseSchema,
@@ -21,29 +20,12 @@ export const getUserUsageStatsRoute = createRoute({
   description: 'Retrieve current usage statistics for threads and messages with quota limits',
   responses: {
     [HttpStatusCodes.OK]: {
-      description: HttpStatusPhrases.OK,
+      description: 'Usage statistics retrieved successfully',
       content: {
-        'application/json': {
-          schema: UsageStatsResponseSchema,
-        },
+        'application/json': { schema: UsageStatsResponseSchema },
       },
     },
-    [HttpStatusCodes.UNAUTHORIZED]: {
-      description: HttpStatusPhrases.UNAUTHORIZED,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
-    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: {
-      description: HttpStatusPhrases.INTERNAL_SERVER_ERROR,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
+    ...createProtectedRouteResponses(),
   },
 });
 
@@ -59,29 +41,12 @@ export const checkThreadQuotaRoute = createRoute({
   description: 'Check if user can create more chat threads based on their subscription tier',
   responses: {
     [HttpStatusCodes.OK]: {
-      description: HttpStatusPhrases.OK,
+      description: 'Thread quota check completed',
       content: {
-        'application/json': {
-          schema: QuotaCheckResponseSchema,
-        },
+        'application/json': { schema: QuotaCheckResponseSchema },
       },
     },
-    [HttpStatusCodes.UNAUTHORIZED]: {
-      description: HttpStatusPhrases.UNAUTHORIZED,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
-    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: {
-      description: HttpStatusPhrases.INTERNAL_SERVER_ERROR,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
+    ...createProtectedRouteResponses(),
   },
 });
 
@@ -97,29 +62,12 @@ export const checkMessageQuotaRoute = createRoute({
   description: 'Check if user can send more messages based on their subscription tier',
   responses: {
     [HttpStatusCodes.OK]: {
-      description: HttpStatusPhrases.OK,
+      description: 'Message quota check completed',
       content: {
-        'application/json': {
-          schema: QuotaCheckResponseSchema,
-        },
+        'application/json': { schema: QuotaCheckResponseSchema },
       },
     },
-    [HttpStatusCodes.UNAUTHORIZED]: {
-      description: HttpStatusPhrases.UNAUTHORIZED,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
-    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: {
-      description: HttpStatusPhrases.INTERNAL_SERVER_ERROR,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
+    ...createProtectedRouteResponses(),
   },
 });
 
@@ -135,28 +83,11 @@ export const checkCustomRoleQuotaRoute = createRoute({
   description: 'Check if user can create more custom role templates based on their subscription tier',
   responses: {
     [HttpStatusCodes.OK]: {
-      description: HttpStatusPhrases.OK,
+      description: 'Custom role quota check completed',
       content: {
-        'application/json': {
-          schema: QuotaCheckResponseSchema,
-        },
+        'application/json': { schema: QuotaCheckResponseSchema },
       },
     },
-    [HttpStatusCodes.UNAUTHORIZED]: {
-      description: HttpStatusPhrases.UNAUTHORIZED,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
-    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: {
-      description: HttpStatusPhrases.INTERNAL_SERVER_ERROR,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
+    ...createProtectedRouteResponses(),
   },
 });

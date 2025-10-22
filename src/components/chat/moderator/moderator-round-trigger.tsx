@@ -16,6 +16,7 @@
 
 import { useTranslations } from 'next-intl';
 
+import { AnalysisStatuses } from '@/api/core/enums';
 import type { StoredModeratorAnalysis } from '@/api/routes/chat/schema';
 import { ChainOfThought, ChainOfThoughtContent, ChainOfThoughtHeader } from '@/components/ai-elements/chain-of-thought';
 
@@ -42,7 +43,7 @@ export function ModeratorRoundTrigger({
 
   // ✅ Derive open state directly from analysis status - no useEffect needed
   // Auto-expand for pending/streaming to show progress, otherwise respect startExpanded
-  const defaultOpen = startExpanded ?? (analysis.status === 'pending' || analysis.status === 'streaming');
+  const defaultOpen = startExpanded ?? (analysis.status === AnalysisStatuses.PENDING || analysis.status === AnalysisStatuses.STREAMING);
 
   return (
     <ChainOfThought defaultOpen={defaultOpen}>

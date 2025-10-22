@@ -14,6 +14,7 @@
 
 import chroma from 'chroma-js';
 import { motion } from 'framer-motion';
+import Image from 'next/image';
 import { useTranslations } from 'next-intl';
 import { useMemo } from 'react';
 import { PolarAngleAxis, PolarGrid, Radar, RadarChart } from 'recharts';
@@ -136,7 +137,7 @@ export function SkillsComparisonChart({ participants }: SkillsComparisonChartPro
   });
 
   // ✅ DEBUG: Log chart data to verify structure
-  console.log('[SkillsComparisonChart] Rendering with data:', {
+  console.warn('[SkillsComparisonChart] Rendering with data:', {
     participants: participants.length,
     skillNames,
     chartData,
@@ -170,10 +171,13 @@ export function SkillsComparisonChart({ participants }: SkillsComparisonChartPro
               />
 
               {/* Avatar */}
-              <img
+              <Image
                 src={entry.avatarSrc}
                 alt={entry.avatarName}
                 className="size-4 flex-shrink-0 object-contain"
+                width={16}
+                height={16}
+                unoptimized
               />
 
               {/* Model Name */}

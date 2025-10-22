@@ -883,8 +883,8 @@ export function ChatParticipantsList({
   };
 
   // ✅ BACKEND DATA: Single source of truth
-  const tierGroups = modelsData?.data?.tier_groups || [];
-  const flagshipModels = modelsData?.data?.flagship_models || [];
+  const tierGroups = useMemo(() => modelsData?.data?.tier_groups || [], [modelsData?.data?.tier_groups]);
+  const flagshipModels = useMemo(() => modelsData?.data?.flagship_models || [], [modelsData?.data?.flagship_models]);
   const selectedModelIds = useMemo(
     () => new Set(participants.map(p => p.modelId)),
     [participants],

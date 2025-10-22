@@ -17,6 +17,7 @@ import { experimental_useObject as useObject } from '@ai-sdk/react';
 import { motion } from 'framer-motion';
 import { useEffect, useRef } from 'react';
 
+import { AnalysisStatuses } from '@/api/core/enums';
 import type { ModeratorAnalysisPayload, StoredModeratorAnalysis } from '@/api/routes/chat/schema';
 import { ModeratorAnalysisPayloadSchema } from '@/api/routes/chat/schema';
 import { useBoolean } from '@/hooks/utils';
@@ -95,7 +96,7 @@ export function ModeratorAnalysisStream({
   useEffect(() => {
     // Only trigger if analysis is 'pending' (newly created) and we haven't triggered yet
     // Do NOT trigger for 'streaming' - backend already processing, query polls for completion
-    const shouldTrigger = analysis.status === 'pending' && !hasTriggeredRef.current;
+    const shouldTrigger = analysis.status === AnalysisStatuses.PENDING && !hasTriggeredRef.current;
 
     if (shouldTrigger) {
       hasTriggeredRef.current = true;
@@ -104,7 +105,7 @@ export function ModeratorAnalysisStream({
         analysisId: analysis.id,
       });
       submit({ participantMessageIds: analysis.participantMessageIds });
-    } else if (analysis.status === 'streaming' && !hasTriggeredRef.current) {
+    } else if (analysis.status === AnalysisStatuses.STREAMING && !hasTriggeredRef.current) {
       // Backend already processing - don't POST, let query poll
       hasTriggeredRef.current = true;
       console.warn('[ModeratorAnalysisStream] ⏭️ Skipping POST - backend already STREAMING', {

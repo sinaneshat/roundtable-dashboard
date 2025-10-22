@@ -1,20 +1,20 @@
 /**
- * Pagination Utilities for Drizzle ORM
+ * Unified Pagination System
  *
- * This module provides pagination helpers that work with Drizzle ORM's built-in capabilities.
+ * Single source of truth for all pagination logic in the API layer.
+ * Consolidates cursor-based and offset-based pagination patterns.
  *
- * ## Philosophy
- * - **Leverage Drizzle First**: Use Drizzle's `.limit()`, `.offset()`, `.orderBy()` methods directly
- * - **Convenience Wrappers**: Helpers here provide convenience for common patterns (e.g., timestamp cursors)
- * - **Official Patterns**: `withPagination()` follows Drizzle's recommended `.$dynamic()` approach
+ * Features:
+ * - Cursor-based pagination (for infinite scroll)
+ * - Page-based pagination (for traditional pagination)
+ * - Drizzle ORM integration
+ * - Type-safe Zod schemas
+ * - Consistent response formats
  *
- * ## Drizzle ORM Built-in Features
- * Drizzle provides these pagination primitives out-of-the-box:
- * - `.limit(n)` - Limit number of results
- * - `.offset(n)` - Skip first n results
- * - `.orderBy(column)` - Order results
- * - `.$dynamic()` - Enable method chaining for reusable queries
- * - `gt()`, `lt()`, `gte()`, `lte()` - Comparison operators for cursors
+ * Philosophy:
+ * - Leverage Drizzle First: Use Drizzle's .limit(), .offset(), .orderBy() methods directly
+ * - Convenience Wrappers: Helpers here provide convenience for common patterns (e.g., timestamp cursors)
+ * - Official Patterns: withPagination() follows Drizzle's recommended .$dynamic() approach
  *
  * @see https://orm.drizzle.team/docs/guides/limit-offset-pagination
  * @see https://orm.drizzle.team/docs/guides/cursor-based-pagination
@@ -23,6 +23,58 @@
 
 import type { AnyColumn, SQL } from 'drizzle-orm';
 import { and, asc, desc, gt, lt } from 'drizzle-orm';
+import { z } from 'zod';
+
+import { API } from '@/constants/application';
+
+// ============================================================================
+// PAGINATION CONSTANTS
+// ============================================================================
+
+/**
+ * Default number of items per page
+ * @constant
+ */
+export const DEFAULT_PAGE_SIZE = API.DEFAULT_PAGE_SIZE;
+
+/**
+ * Maximum number of items allowed per page
+ * @constant
+ */
+export const MAX_PAGE_SIZE = API.MAX_PAGE_SIZE;
+
+// ============================================================================
+// PAGINATION SCHEMAS
+// ============================================================================
+
+/**
+ * Cursor-based pagination query parameters
+ * Optimized for infinite scroll and React Query
+ */
+export const CursorPaginationQuerySchema = z.object({
+  cursor: z.string().optional().openapi({
+    description: 'Cursor for pagination (ISO timestamp or ID)',
+    example: '2024-01-15T10:30:00Z',
+  }),
+  limit: z.coerce.number().int().min(1).max(MAX_PAGE_SIZE).default(DEFAULT_PAGE_SIZE).openapi({
+    description: `Maximum number of items to return (max ${MAX_PAGE_SIZE})`,
+    example: DEFAULT_PAGE_SIZE,
+  }),
+}).openapi('CursorPaginationQuery');
+
+/**
+ * Page-based pagination query parameters
+ */
+export const OffsetPaginationQuerySchema = z.object({
+  page: z.coerce.number().int().positive().default(1).openapi({
+    example: 1,
+    description: 'Page number (1-based)',
+  }),
+  limit: z.coerce.number().int().positive().max(MAX_PAGE_SIZE).default(DEFAULT_PAGE_SIZE).openapi({
+    example: DEFAULT_PAGE_SIZE,
+    description: `Results per page (max ${MAX_PAGE_SIZE})`,
+  }),
+}).openapi('OffsetPaginationQuery');
 
 // ============================================================================
 // TYPE DEFINITIONS
@@ -95,7 +147,7 @@ export type CursorPaginationMetadata = {
  * const threads = await db.query.chatThread.findMany({
  *   where: buildCursorWhere(chatThread.createdAt, cursor, 'desc'),
  *   orderBy: desc(chatThread.createdAt),
- *   limit: limit + 1, // Fetch one extra to check hasMore
+ *   limit: limit + 1,
  * });
  *
  * return applyCursorPagination(
@@ -110,13 +162,8 @@ export function applyCursorPagination<T>(
   limit: number,
   getCursor: (item: T) => string,
 ) {
-  // Check if there are more items beyond the requested limit
   const hasMore = items.length > limit;
-
-  // Take only the requested number of items
   const paginatedItems = hasMore ? items.slice(0, limit) : items;
-
-  // Extract next cursor from the last item (if exists)
   const nextCursor = hasMore && paginatedItems.length > 0 ? getCursor(paginatedItems[paginatedItems.length - 1]!) : null;
 
   return {
@@ -132,7 +179,7 @@ export function applyCursorPagination<T>(
 /**
  * Build Drizzle ORM where clause for cursor-based pagination
  *
- * Convenience wrapper around Drizzle's `gt`/`lt` operators for cursor pagination.
+ * Convenience wrapper around Drizzle's gt/lt operators for cursor pagination.
  * Handles timestamp parsing and direction logic.
  *
  * NOTE: You can also use Drizzle's operators directly for more control:
@@ -150,14 +197,14 @@ export function applyCursorPagination<T>(
  *
  * @example
  * ```typescript
- * // ✅ Using this helper (good for timestamps)
+ * // Using this helper (good for timestamps)
  * const whereClause = buildCursorWhere(
  *   chatThread.createdAt,
- *   query.cursor, // "2025-10-06T19:43:09.000Z"
+ *   query.cursor,
  *   'desc'
  * );
  *
- * // ✅ Using Drizzle directly (recommended for IDs)
+ * // Using Drizzle directly (recommended for IDs)
  * import { gt } from 'drizzle-orm';
  * .where(cursor ? gt(users.id, cursor) : undefined)
  * ```
@@ -173,12 +220,7 @@ export function buildCursorWhere(
     return undefined;
   }
 
-  // Parse cursor string into Date for timestamp columns
-  // Cursor is ISO timestamp string like "2025-10-06T19:43:09.000Z"
   const cursorDate = new Date(cursor);
-
-  // For descending order: get items less than cursor (older items)
-  // For ascending order: get items greater than cursor (newer items)
   return direction === 'desc' ? lt(cursorColumn, cursorDate) : gt(cursorColumn, cursorDate);
 }
 
@@ -321,7 +363,7 @@ export function calculatePageMetadata(
  * ```typescript
  * // In a route handler
  * const { page, limit } = c.validated.query;
- * const offset = calculateOffset(page, limit);
+ * const offset = (page - 1) * limit;
  *
  * // Get total count
  * const [{ count }] = await db
@@ -358,12 +400,12 @@ export function applyPagePagination<T>(
  *
  * @param page - Page number to validate
  * @param limit - Limit to validate
- * @param maxLimit - Maximum allowed limit (default: 100)
+ * @param maxLimit - Maximum allowed limit (default: MAX_PAGE_SIZE)
  * @returns Validation result with sanitized values
  *
  * @example
  * ```typescript
- * const validation = validatePageParams(0, 1000, 100);
+ * const validation = validatePageParams(0, 1000, MAX_PAGE_SIZE);
  * if (!validation.valid) {
  *   return Responses.badRequest(c, validation.error);
  * }
@@ -373,9 +415,8 @@ export function applyPagePagination<T>(
 export function validatePageParams(
   page: number,
   limit: number,
-  maxLimit = 100,
+  maxLimit = MAX_PAGE_SIZE,
 ): { valid: true; page: number; limit: number } | { valid: false; error: string } {
-  // Validate page
   if (!Number.isInteger(page) || page < 1) {
     return {
       valid: false,
@@ -383,7 +424,6 @@ export function validatePageParams(
     };
   }
 
-  // Validate limit
   if (!Number.isInteger(limit) || limit < 1) {
     return {
       valid: false,
@@ -412,7 +452,7 @@ export function validatePageParams(
 /**
  * Drizzle's official $dynamic() pattern for reusable pagination
  *
- * This helper follows Drizzle ORM's recommended approach using `.$dynamic()`
+ * This helper follows Drizzle ORM's recommended approach using .$dynamic()
  * to create type-safe, reusable pagination functions.
  *
  * @template T - Drizzle query builder type
@@ -425,14 +465,14 @@ export function validatePageParams(
  * @example
  * ```typescript
  * import { asc } from 'drizzle-orm';
- * import { withPagination } from '@/api/core';
+ * import { withPagination } from '@/api/core/pagination';
  *
- * // ✅ Recommended: Use Drizzle's $dynamic() pattern
+ * // Recommended: Use Drizzle's $dynamic() pattern
  * const query = db.select().from(users).$dynamic();
  * const paginatedQuery = withPagination(query, asc(users.id), 2, 20);
  * const results = await paginatedQuery;
  *
- * // ✅ Also works with relational queries
+ * // Also works with relational queries
  * const relationalQuery = db.query.users.findMany().$dynamic();
  * const paginated = withPagination(relationalQuery, asc(users.createdAt), 1, 10);
  * ```
@@ -444,10 +484,17 @@ export function withPagination<T extends { limit: (limit: number) => T; offset: 
   qb: T,
   orderByColumn: AnyColumn | SQL,
   page = 1,
-  pageSize = 10,
+  pageSize = DEFAULT_PAGE_SIZE,
 ): T {
   return qb
     .orderBy(orderByColumn)
     .limit(pageSize)
     .offset((page - 1) * pageSize);
 }
+
+// ============================================================================
+// TYPE EXPORTS
+// ============================================================================
+
+export type CursorPaginationQuery = z.infer<typeof CursorPaginationQuerySchema>;
+export type OffsetPaginationQuery = z.infer<typeof OffsetPaginationQuerySchema>;

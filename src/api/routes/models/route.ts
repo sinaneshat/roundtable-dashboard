@@ -6,9 +6,8 @@
 
 import { createRoute } from '@hono/zod-openapi';
 import * as HttpStatusCodes from 'stoker/http-status-codes';
-import * as HttpStatusPhrases from 'stoker/http-status-phrases';
 
-import { ApiErrorResponseSchema } from '@/api/core/schemas';
+import { createPublicRouteResponses } from '@/api/core/response-schemas';
 
 import { ListModelsResponseSchema } from './schema';
 
@@ -33,13 +32,6 @@ export const listModelsRoute = createRoute({
         },
       },
     },
-    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: {
-      description: HttpStatusPhrases.INTERNAL_SERVER_ERROR,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
+    ...createPublicRouteResponses(),
   },
 });

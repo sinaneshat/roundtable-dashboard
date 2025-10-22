@@ -23,6 +23,14 @@ import { z } from '@hono/zod-openapi';
 
 import { API } from '@/constants/application';
 
+import {
+  AuthFailureReasonSchema,
+  DatabaseOperationSchema,
+  HttpMethodSchema,
+  ResourceUnavailableReasonSchema,
+  SortOrderSchema,
+} from './enums';
+
 // ============================================================================
 // CORE PRIMITIVE SCHEMAS (Context7 Pattern)
 // ============================================================================
@@ -83,7 +91,7 @@ export const CoreSchemas = {
   }),
 
   // Common enums
-  sortOrder: () => z.enum(['asc', 'desc']).default('desc').openapi({
+  sortOrder: () => SortOrderSchema.openapi({
     example: 'desc',
     description: 'Sort order',
   }),
@@ -133,14 +141,14 @@ export const LoggerDataSchema = z.discriminatedUnion('logType', [
   }),
   z.object({
     logType: z.literal('database'),
-    operation: z.enum(['select', 'insert', 'update', 'delete', 'batch']),
+    operation: DatabaseOperationSchema,
     table: z.string().optional(),
     affected: z.number().optional(),
     transactionId: z.string().optional(),
   }),
   z.object({
     logType: z.literal('api'),
-    method: z.enum(['GET', 'POST', 'PUT', 'DELETE', 'PATCH']),
+    method: HttpMethodSchema,
     path: z.string(),
     statusCode: z.number().optional(),
     responseTime: z.number().optional(),
@@ -229,7 +237,7 @@ export const ErrorContextSchema = z.discriminatedUnion('errorType', [
   z.object({
     errorType: z.literal('authentication'),
     attemptedEmail: z.string().email().optional(),
-    failureReason: z.enum(['invalid_credentials', 'account_locked', 'token_expired', 'missing_token', 'session_required', 'session_expired']).optional(),
+    failureReason: AuthFailureReasonSchema.optional(),
     operation: z.string().optional(),
     ipAddress: z.string().regex(/^(?:(?:25[0-5]|2[0-4]\d|[01]?\d{1,2})\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d{1,2})$|^(?:[\da-f]{1,4}:){7}[\da-f]{1,4}$/i, 'Invalid IP address').optional(),
     userAgent: z.string().optional(),
@@ -245,7 +253,7 @@ export const ErrorContextSchema = z.discriminatedUnion('errorType', [
   }),
   z.object({
     errorType: z.literal('database'),
-    operation: z.enum(['select', 'insert', 'update', 'delete', 'batch']),
+    operation: DatabaseOperationSchema,
     table: z.string().optional(),
     constraint: z.string().optional(),
     sqlState: z.string().optional(),
@@ -277,7 +285,7 @@ export const ErrorContextSchema = z.discriminatedUnion('errorType', [
     resourceId: z.string().optional(),
     resourceStatus: z.string().optional(),
     wasPublic: z.boolean().optional(),
-    unavailabilityReason: z.enum(['deleted', 'archived', 'private', 'expired']).optional(),
+    unavailabilityReason: ResourceUnavailableReasonSchema.optional(),
   }),
   z.object({
     errorType: z.literal('configuration'),
@@ -419,18 +427,9 @@ export const PaginationQuerySchema = z.object({
 
 /**
  * Cursor-based pagination query parameters
- * Optimized for infinite scroll and React Query
+ * Re-exported from pagination.ts for backwards compatibility
  */
-export const CursorPaginationQuerySchema = z.object({
-  cursor: z.string().optional().openapi({
-    description: 'Cursor for pagination (ISO timestamp or ID)',
-    example: '2024-01-15T10:30:00Z',
-  }),
-  limit: z.coerce.number().int().min(1).max(100).default(20).openapi({
-    description: 'Maximum number of items to return',
-    example: 20,
-  }),
-}).openapi('CursorPaginationQuery');
+export { type CursorPaginationQuery, CursorPaginationQuerySchema } from './pagination';
 
 /**
  * Sorting parameters
@@ -480,6 +479,145 @@ export const UuidParamSchema = z.object({
     description: 'UUID resource identifier',
   }),
 }).openapi('UuidParam');
+
+// ============================================================================
+// COMMON FIELD SCHEMAS (Reusable Building Blocks)
+// ============================================================================
+
+/**
+ * Common field schemas used across multiple domains
+ * ✅ CONSOLIDATED: Single source of truth for common validation patterns
+ * ✅ REUSABLE: Use these instead of duplicating field definitions
+ */
+export const CommonFieldSchemas = {
+  /**
+   * Standard boolean field
+   */
+  boolean: () => z.boolean().openapi({
+    description: 'Boolean flag',
+    example: true,
+  }),
+
+  /**
+   * Nullable string field (common for optional text)
+   */
+  nullableString: () => z.string().nullable().optional().openapi({
+    description: 'Optional text field',
+  }),
+
+  /**
+   * Record/metadata field (JSON objects)
+   */
+  metadata: () => z.record(z.string(), z.unknown()).nullable().optional().openapi({
+    description: 'Custom metadata object',
+    example: { key: 'value' },
+  }),
+
+  /**
+   * Array of strings (tags, features, etc.)
+   */
+  stringArray: () => z.array(z.string()).openapi({
+    description: 'Array of strings',
+    example: ['tag1', 'tag2'],
+  }),
+
+  /**
+   * Positive integer field
+   */
+  count: () => z.number().int().nonnegative().openapi({
+    description: 'Non-negative integer count',
+    example: 0,
+  }),
+
+  /**
+   * Priority/order field (0-indexed)
+   */
+  priority: () => z.number().int().min(0).openapi({
+    description: 'Priority/order (0-indexed)',
+    example: 0,
+  }),
+} as const;
+
+// ============================================================================
+// COMMON PATH PARAMETER SCHEMAS (Consolidated)
+// ============================================================================
+
+/**
+ * Thread ID path parameter
+ * ✅ REUSABLE: Used across all chat thread endpoints
+ */
+export const ThreadIdParamSchema = z.object({
+  id: CoreSchemas.id().openapi({
+    param: { name: 'id', in: 'path' },
+    description: 'Thread identifier',
+    example: 'thread_abc123',
+  }),
+}).openapi('ThreadIdParam');
+
+/**
+ * Thread slug path parameter (for public access)
+ * ✅ REUSABLE: Used for public thread sharing
+ */
+export const ThreadSlugParamSchema = z.object({
+  slug: z.string().openapi({
+    param: { name: 'slug', in: 'path' },
+    description: 'Thread slug for public access',
+    example: 'product-strategy-brainstorm-abc123',
+  }),
+}).openapi('ThreadSlugParam');
+
+/**
+ * Participant ID path parameter
+ * ✅ REUSABLE: Used across participant endpoints
+ */
+export const ParticipantIdParamSchema = z.object({
+  participantId: CoreSchemas.id().openapi({
+    param: { name: 'participantId', in: 'path' },
+    description: 'Participant identifier',
+    example: 'participant_abc123',
+  }),
+}).openapi('ParticipantIdParam');
+
+/**
+ * Custom role ID path parameter
+ * ✅ REUSABLE: Used across custom role endpoints
+ */
+export const CustomRoleIdParamSchema = z.object({
+  roleId: CoreSchemas.id().openapi({
+    param: { name: 'roleId', in: 'path' },
+    description: 'Custom role identifier',
+    example: 'role_abc123',
+  }),
+}).openapi('CustomRoleIdParam');
+
+/**
+ * Round number path parameter
+ * ✅ REUSABLE: Used for round-specific operations
+ */
+export const RoundNumberParamSchema = z.object({
+  roundNumber: z.string().openapi({
+    param: { name: 'roundNumber', in: 'path' },
+    description: 'Round number (1-indexed)',
+    example: '1',
+  }),
+}).openapi('RoundNumberParam');
+
+/**
+ * Thread + Round path parameters (combined)
+ * ✅ REUSABLE: Used for round analysis endpoints
+ */
+export const ThreadRoundParamSchema = z.object({
+  threadId: CoreSchemas.id().openapi({
+    param: { name: 'threadId', in: 'path' },
+    description: 'Thread identifier',
+    example: 'thread_abc123',
+  }),
+  roundNumber: z.string().openapi({
+    param: { name: 'roundNumber', in: 'path' },
+    description: 'Round number (1-indexed)',
+    example: '1',
+  }),
+}).openapi('ThreadRoundParam');
 
 // ============================================================================
 // TYPE INFERENCE AND EXPORTS
@@ -556,7 +694,6 @@ export type ResponseMetadata = z.infer<typeof ResponseMetadataSchema>;
 export type ErrorContext = z.infer<typeof ErrorContextSchema>;
 export type ApiErrorResponse = z.infer<typeof ApiErrorResponseSchema>;
 export type PaginationQuery = z.infer<typeof PaginationQuerySchema>;
-export type CursorPaginationQuery = z.infer<typeof CursorPaginationQuerySchema>;
 export type SortingQuery = z.infer<typeof SortingQuerySchema>;
 export type SearchQuery = z.infer<typeof SearchQuerySchema>;
 export type ListQuery = z.infer<typeof ListQuerySchema>;

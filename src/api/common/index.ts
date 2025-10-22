@@ -60,9 +60,22 @@ export {
   type TypedMetadata,
 } from './metadata-utils';
 export {
-  // Cursor-based pagination
+  type StoragePurpose,
+  storagePurposeSchema,
+} from './storage-keys';
+export {
+  getNumberFromMetadata,
+  parseErrorObject,
+} from './type-utils';
+
+// ============================================================================
+// RE-EXPORTS FROM CORE (for convenience)
+// ============================================================================
+
+// Pagination utilities now live in @/api/core/pagination
+// Re-exported here for backward compatibility and convenience
+export {
   applyCursorPagination,
-  // Page-based pagination
   applyPagePagination,
   buildCursorWhere,
   buildCursorWhereWithFilters,
@@ -75,14 +88,5 @@ export {
   type PagePaginationMetadata,
   type PagePaginationParams,
   validatePageParams,
-  // Drizzle ORM official patterns
   withPagination,
-} from './pagination';
-export {
-  type StoragePurpose,
-  storagePurposeSchema,
-} from './storage-keys';
-export {
-  getNumberFromMetadata,
-  parseErrorObject,
-} from './type-utils';
+} from '@/api/core/pagination';
