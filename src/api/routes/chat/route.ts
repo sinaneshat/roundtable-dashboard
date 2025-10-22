@@ -637,7 +637,118 @@ export const streamChatRoute = createRoute({
   path: '/chat',
   tags: ['chat'],
   summary: 'Stream AI chat responses (AI SDK v5)',
-  description: 'Official AI SDK v5 streaming endpoint with multi-participant support. Streams AI responses using toUIMessageStreamResponse() format. Supports text, reasoning, and file parts.',
+  description: `**Real-time AI streaming endpoint using Server-Sent Events (SSE)**
+
+## Overview
+
+Official AI SDK v5 streaming endpoint with multi-participant orchestration support. Streams AI responses token-by-token using the \`toUIMessageStreamResponse()\` format from Vercel AI SDK.
+
+**Key Features:**
+- Real-time token streaming (characters appear as generated)
+- Multi-participant support (sequential model responses)
+- Automatic message persistence to database
+- Send only last message (backend loads history)
+- Reasoning and text parts support
+- Error recovery with structured metadata
+
+## Request Pattern
+
+**Send Only Last Message (Official AI SDK v5 Pattern):**
+\`\`\`typescript
+// ✅ Correct: Send only new message (backend loads previous from DB)
+POST /chat {
+  "message": { id: "msg_1", role: "user", parts: [...] },
+  "id": "thread_abc123",
+  "participantIndex": 0
+}
+
+// ❌ Wrong: Don't send entire history (inefficient)
+POST /chat {
+  "messages": [msg1, msg2, ..., msg50], // Large payload
+  "id": "thread_abc123"
+}
+\`\`\`
+
+## Multi-Participant Orchestration
+
+Stream multiple AI models sequentially for "roundtable discussion" effect:
+
+\`\`\`typescript
+// Step 1: User asks question → Participant 0 responds
+POST /chat { message: userMsg, id: "thread_1", participantIndex: 0 }
+
+// Step 2: Same question → Participant 1 responds
+POST /chat { message: userMsg, id: "thread_1", participantIndex: 1 }
+
+// Step 3: Same question → Participant 2 responds
+POST /chat { message: userMsg, id: "thread_1", participantIndex: 2 }
+// → All 3 AI models have now provided perspectives
+\`\`\`
+
+**Important:** Stream participants **sequentially** (not concurrently) to avoid race conditions.
+
+## SSE Stream Format
+
+**Content-Type:** \`text/event-stream; charset=utf-8\`
+
+**Event Protocol:** AI SDK custom streaming format with type prefixes:
+- \`0:\` - Text chunks (append to message content)
+- \`1:\` - Function call chunks (tool usage)
+- \`2:\` - Metadata chunks (usage, finish reason)
+- \`3:\` - Error chunks
+- \`e:\` - End of stream marker
+
+**Example Stream:**
+\`\`\`
+data: 0:"The"
+data: 0:" answer"
+data: 0:" is"
+data: 0:"..."
+data: 2:[{"finishReason":"stop","usage":{"promptTokens":150,"completionTokens":45}}]
+data: e:{"finishReason":"stop"}
+
+\`\`\`
+
+## Message Persistence
+
+**Automatic Backend Handling:**
+1. **User message:** Saved by participant 0 only (deduplication)
+2. **Assistant messages:** Saved via \`onFinish\` callback after stream completes
+3. **Metadata:** Includes round number, participant context, error state, token usage
+
+**Round Number Tracking:**
+- Automatically calculated: \`Math.ceil(assistantMessageCount / participantCount)\`
+- Example: 3 participants, 9 messages → Round 3
+
+## Error Handling
+
+**HTTP Errors (before stream starts):**
+- \`400\`: Invalid message format
+- \`401\`: Authentication required
+- \`403\`: Insufficient subscription tier
+- \`429\`: Rate limit exceeded
+
+**Stream Errors (during streaming):**
+\`\`\`
+data: 3:{"error":"Model unavailable","code":"model_unavailable","isTransient":true}
+\`\`\`
+
+**Transient errors** (retry recommended):
+- \`rate_limit_exceeded\`, \`model_unavailable\`, \`timeout\`
+
+**Permanent errors** (don't retry):
+- \`content_filter\`, \`invalid_request\`, \`insufficient_quota\`
+
+## Complete Guide
+
+For detailed implementation examples, error handling, and best practices, see:
+**📖 [API Streaming Guide](/docs/api-streaming-guide.md)**
+
+Includes:
+- Python and TypeScript examples
+- SSE parsing implementations
+- Retry strategies
+- Common pitfalls and solutions`,
   request: {
     body: {
       required: true,
@@ -650,11 +761,39 @@ export const streamChatRoute = createRoute({
   },
   responses: {
     [HttpStatusCodes.OK]: {
-      description: 'AI SDK UI Message Stream Response - streamed as Server-Sent Events with content-type: text/event-stream; charset=utf-8',
+      description: `**Server-Sent Events (SSE) stream with AI SDK v5 protocol**
+
+Stream returns real-time tokens using AI SDK's custom protocol:
+
+**Event Types:**
+- \`data: 0:"text"\` - Text chunk (append to message)
+- \`data: 2:[metadata]\` - Completion metadata (usage, finish reason)
+- \`data: e:{"finishReason":"stop"}\` - End of stream
+- \`data: 3:{error}\` - Error chunk
+
+**Parsing Example:**
+\`\`\`typescript
+const reader = response.body.getReader();
+const decoder = new TextDecoder();
+
+while (true) {
+  const { done, value } = await reader.read();
+  if (done) break;
+
+  const line = decoder.decode(value);
+  if (line.startsWith('data: 0:')) {
+    const chunk = JSON.parse(line.slice(8));
+    console.log('Text:', chunk);
+  }
+}
+\`\`\`
+
+See [API Streaming Guide](/docs/api-streaming-guide.md) for complete implementation.`,
       content: {
         'text/event-stream; charset=utf-8': {
           schema: z.any().openapi({
-            description: 'AI SDK UI Message Stream format returned by toUIMessageStreamResponse(). Consumed by useChat hook on client. Includes text parts, file parts, tool calls, and message metadata.',
+            description: 'AI SDK UI Message Stream format. Includes text chunks, metadata (token usage, finish reason), and error information. Use AI SDK client libraries for automatic parsing or implement manual SSE parsing.',
+            example: 'data: 0:"Hello"\ndata: 0:" World"\ndata: 2:[{"finishReason":"stop","usage":{"promptTokens":150,"completionTokens":45}}]\ndata: e:{"finishReason":"stop"}\n\n',
           }),
         },
       },

@@ -428,6 +428,25 @@ export const StreamChatRequestSchema = z.object({
    * - Participant 2 triggers → Backend loads ALL previous messages from DB (including 0 & 1's responses)
    * - This works because each participant's response is persisted before the next one starts
    *
+   * UIMessage Format:
+   * {
+   *   id: string,              // Unique message ID (ulid/uuid)
+   *   role: 'user' | 'assistant',
+   *   parts: [                 // Array of message parts
+   *     { type: 'text', text: string },       // Regular text content
+   *     { type: 'reasoning', text: string }   // Model reasoning (optional)
+   *   ],
+   *   metadata?: {             // Optional metadata
+   *     participantId?: string,
+   *     participantIndex?: number,
+   *     role?: string,
+   *     roundNumber?: number,
+   *     hasError?: boolean,
+   *     errorMessage?: string
+   *   },
+   *   createdAt?: string | Date  // ISO timestamp
+   * }
+   *
    * Runtime validated with validateUIMessages() in handler.
    *
    * Why z.unknown()? UIMessage<METADATA, DATA, TOOLS> is a complex generic
@@ -435,11 +454,30 @@ export const StreamChatRequestSchema = z.object({
    * z.unknown() + runtime validation.
    */
   message: z.unknown().openapi({
-    description: 'Last message in AI SDK UIMessage format (backend loads previous messages from DB)',
+    description: `**Last message in AI SDK UIMessage format** (backend loads previous messages from DB)
+
+**Format:**
+\`\`\`json
+{
+  "id": "msg_user1",
+  "role": "user",
+  "parts": [
+    { "type": "text", "text": "What are the best practices for API design?" }
+  ],
+  "createdAt": "2025-01-15T10:30:00.000Z"
+}
+\`\`\`
+
+**Part Types:**
+- \`text\`: Regular message content
+- \`reasoning\`: Model internal reasoning (e.g., Claude extended thinking)
+
+**Important:** Send only the **new** message. Backend loads full conversation history from database automatically.`,
     example: {
       id: 'msg_user1',
       role: 'user',
-      parts: [{ type: 'text', text: 'Hello!' }],
+      parts: [{ type: 'text', text: 'What are the best practices for API design?' }],
+      createdAt: '2025-01-15T10:30:00.000Z',
     },
   }),
 

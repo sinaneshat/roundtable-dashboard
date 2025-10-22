@@ -123,6 +123,25 @@ import {
   updateParticipantRoute,
   updateThreadRoute,
 } from './routes/chat/route';
+// MCP (Model Context Protocol) routes
+import {
+  addParticipantToolHandler,
+  createThreadToolHandler,
+  getThreadToolHandler,
+  listModelsToolHandler,
+  listResourcesHandler,
+  listToolsHandler,
+  sendMessageToolHandler,
+} from './routes/mcp/handler';
+import {
+  addParticipantToolRoute,
+  createThreadToolRoute,
+  getThreadToolRoute,
+  listModelsToolRoute,
+  listResourcesRoute,
+  listToolsRoute,
+  sendMessageToolRoute,
+} from './routes/mcp/route';
 // Models routes (dynamic OpenRouter models)
 import { listModelsHandler } from './routes/models/handler';
 import { listModelsRoute } from './routes/models/route';
@@ -252,6 +271,9 @@ app.use('/webhooks/stripe', ensureStripeInitialized);
 // OpenRouter initialization for all chat routes
 // Using wildcard pattern to apply middleware to all /chat/* routes
 app.use('/chat/*', ensureOpenRouterInitialized);
+
+// OpenRouter initialization for MCP routes (uses models and chat functionality)
+app.use('/mcp/*', ensureOpenRouterInitialized);
 
 // RAG initialization for all chat routes
 // Using wildcard pattern to apply middleware to all /chat/* routes
@@ -408,6 +430,19 @@ const appRoutes = app
   // Models Routes - Simplified OpenRouter models endpoint (public)
   // ============================================================================
   .openapi(listModelsRoute, listModelsHandler) // List all available OpenRouter models
+
+  // ============================================================================
+  // MCP Routes - Model Context Protocol server implementation (API key auth)
+  // ============================================================================
+  // MCP Discovery
+  .openapi(listToolsRoute, listToolsHandler) // List available MCP tools
+  .openapi(listResourcesRoute, listResourcesHandler) // List accessible MCP resources
+  // MCP Tool Execution
+  .openapi(createThreadToolRoute, createThreadToolHandler) // Tool: Create chat thread
+  .openapi(sendMessageToolRoute, sendMessageToolHandler) // Tool: Send message to thread
+  .openapi(getThreadToolRoute, getThreadToolHandler) // Tool: Get thread details
+  .openapi(listModelsToolRoute, listModelsToolHandler) // Tool: List models
+  .openapi(addParticipantToolRoute, addParticipantToolHandler) // Tool: Add participant to thread
 ;
 
 // ============================================================================
@@ -449,6 +484,8 @@ appRoutes.doc('/doc', c => ({
     { name: 'chat', description: 'Multi-model AI chat threads and messages' },
     { name: 'usage', description: 'Usage tracking and quota management' },
     { name: 'models', description: 'Dynamic OpenRouter AI models discovery and management' },
+    { name: 'mcp', description: 'Model Context Protocol server implementation' },
+    { name: 'tools', description: 'MCP tool execution endpoints' },
   ],
   servers: [
     {
