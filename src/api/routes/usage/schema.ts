@@ -88,6 +88,30 @@ export const UsageStatsPayloadSchema = z.object({
   }).openapi({
     description: 'Custom role usage statistics',
   }),
+  analysis: z.object({
+    used: z.number().openapi({
+      description: 'Number of analyses generated this period',
+      example: 2,
+    }),
+    limit: z.number().openapi({
+      description: 'Maximum analyses allowed this period',
+      example: 10,
+    }),
+    remaining: z.number().openapi({
+      description: 'Number of analyses remaining',
+      example: 8,
+    }),
+    percentage: z.number().openapi({
+      description: 'Percentage of limit used',
+      example: 20,
+    }),
+    status: UsageStatusSchema.openapi({
+      description: 'Visual status indicator (default/warning/critical)',
+      example: 'default',
+    }),
+  }).openapi({
+    description: 'Analysis generation usage statistics (only for multi-participant conversations)',
+  }),
   memories: z.object({
     used: z.number().openapi({
       description: 'Number of memories created this period',

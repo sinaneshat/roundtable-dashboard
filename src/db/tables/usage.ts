@@ -42,6 +42,7 @@ export const userChatUsage = sqliteTable(
     threadsCreated: integer('threads_created').notNull().default(0),
     messagesCreated: integer('messages_created').notNull().default(0),
     customRolesCreated: integer('custom_roles_created').notNull().default(0),
+    analysisGenerated: integer('analysis_generated').notNull().default(0),
 
     // ============================================================================
     // SUBSCRIPTION IDENTIFICATION
@@ -96,6 +97,7 @@ export const userChatUsage = sqliteTable(
     check('check_threads_non_negative', sql`${table.threadsCreated} >= 0`),
     check('check_messages_non_negative', sql`${table.messagesCreated} >= 0`),
     check('check_custom_roles_non_negative', sql`${table.customRolesCreated} >= 0`),
+    check('check_analysis_non_negative', sql`${table.analysisGenerated} >= 0`),
 
     // ✅ VERSION CONSTRAINT: Ensure optimistic locking version is positive
     // Rationale: Version starts at 1 and increments, should never be 0 or negative
@@ -137,6 +139,7 @@ export const userChatUsageHistory = sqliteTable(
     threadsCreated: integer('threads_created').notNull().default(0),
     messagesCreated: integer('messages_created').notNull().default(0),
     customRolesCreated: integer('custom_roles_created').notNull().default(0),
+    analysisGenerated: integer('analysis_generated').notNull().default(0),
 
     // Subscription info at time of period (IDENTIFIER ONLY, not limits)
     // Use this tier to look up historical limits from TIER_QUOTAS in code
@@ -162,6 +165,7 @@ export const userChatUsageHistory = sqliteTable(
     check('check_history_threads_non_negative', sql`${table.threadsCreated} >= 0`),
     check('check_history_messages_non_negative', sql`${table.messagesCreated} >= 0`),
     check('check_history_custom_roles_non_negative', sql`${table.customRolesCreated} >= 0`),
+    check('check_history_analysis_non_negative', sql`${table.analysisGenerated} >= 0`),
 
     // ✅ PERIOD CONSTRAINT: Ensure historical period end is after start
     // Rationale: Logical date ordering for archived billing periods

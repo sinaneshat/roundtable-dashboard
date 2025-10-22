@@ -382,8 +382,9 @@ export default function ChatOverviewScreen() {
 
   // ✅ AUTO-SCROLL: Scroll to bottom when new messages arrive or during streaming (page-level scrolling)
   // Track both messages.length AND last message content to trigger on streaming updates
+  // ✅ CRITICAL FIX: Track BOTH text and reasoning parts to ensure auto-scroll during reasoning generation
   const lastMessage = messages[messages.length - 1];
-  const lastMessageContent = lastMessage?.parts?.map(p => p.type === 'text' ? p.text : '').join('') || '';
+  const lastMessageContent = lastMessage?.parts?.map(p => (p.type === 'text' || p.type === 'reasoning') ? p.text : '').join('') || '';
   useAutoScrollToBottom(
     { length: messages.length, content: lastMessageContent, isStreaming },
     !showInitialUI,

@@ -105,6 +105,7 @@ export async function ensureUserUsageRecord(userId: string): Promise<typeof tabl
         threadsCreated: 0,
         messagesCreated: 0,
         customRolesCreated: 0,
+        analysisGenerated: 0,
         subscriptionTier: 'free',
         isAnnual: false,
         createdAt: now,
@@ -258,6 +259,7 @@ async function rolloverBillingPeriod(
     threadsCreated: currentUsage.threadsCreated,
     messagesCreated: currentUsage.messagesCreated,
     customRolesCreated: currentUsage.customRolesCreated,
+    analysisGenerated: currentUsage.analysisGenerated,
     // Tier identifier (look up limits from TIER_QUOTAS in code)
     subscriptionTier: currentUsage.subscriptionTier,
     isAnnual: currentUsage.isAnnual,
@@ -278,6 +280,7 @@ async function rolloverBillingPeriod(
         threadsCreated: 0,
         messagesCreated: 0,
         customRolesCreated: 0,
+        analysisGenerated: 0,
         // Clear pending tier change fields
         pendingTierChange: null,
         pendingTierIsAnnual: null,
@@ -303,6 +306,7 @@ async function rolloverBillingPeriod(
         threadsCreated: 0,
         messagesCreated: 0,
         customRolesCreated: 0,
+        analysisGenerated: 0,
         // Clear any pending tier change fields
         pendingTierChange: null,
         pendingTierIsAnnual: null,
@@ -325,6 +329,7 @@ async function rolloverBillingPeriod(
         threadsCreated: 0,
         messagesCreated: 0,
         customRolesCreated: 0,
+        analysisGenerated: 0,
         version: sql`${tables.userChatUsage.version} + 1`,
         updatedAt: now,
       })
@@ -426,6 +431,33 @@ export async function checkCustomRoleQuota(userId: string): Promise<QuotaCheck> 
 }
 
 /**
+ * Check analysis generation quota
+ * Returns whether user can generate a new analysis and current usage stats
+ *
+ * Analysis is only generated for multi-participant conversations (2+ participants)
+ * Single participant conversations do not trigger analysis
+ */
+export async function checkAnalysisQuota(userId: string): Promise<QuotaCheck> {
+  const usage = await ensureUserUsageRecord(userId);
+
+  // ✅ Get limit from CODE, not database
+  const quotas = getTierQuotas(usage.subscriptionTier);
+  const limit = quotas.analysisPerMonth;
+
+  const canCreate = usage.analysisGenerated < limit;
+  const remaining = Math.max(0, limit - usage.analysisGenerated);
+
+  return {
+    canCreate,
+    current: usage.analysisGenerated,
+    limit,
+    remaining,
+    resetDate: usage.currentPeriodEnd,
+    tier: usage.subscriptionTier,
+  };
+}
+
+/**
  * Increment thread creation counter
  * Must be called AFTER successfully creating a thread
  * Does NOT decrement when threads are deleted
@@ -510,6 +542,36 @@ export async function incrementCustomRoleUsage(userId: string, count = 1): Promi
 }
 
 /**
+ * Increment analysis generation counter
+ * Must be called AFTER successfully generating an analysis
+ * Does NOT decrement when analysis is deleted
+ *
+ * ✅ ATOMIC OPERATION: Uses SQL-level increment to prevent race conditions
+ * ✅ OPTIMISTIC LOCKING: Version column prevents lost updates
+ * Following Drizzle ORM best practices for concurrent updates
+ *
+ * Note: Analysis is only generated for multi-participant conversations (2+ participants)
+ */
+export async function incrementAnalysisUsage(userId: string, count = 1): Promise<void> {
+  const db = await getDbAsync();
+
+  // Ensure user record exists first
+  await ensureUserUsageRecord(userId);
+
+  // ✅ ATOMIC: SQL-level increment prevents race conditions
+  // ✅ VERSION: Optimistic locking with version column
+  // Multiple concurrent requests will queue safely at database level
+  await db
+    .update(tables.userChatUsage)
+    .set({
+      analysisGenerated: sql`${tables.userChatUsage.analysisGenerated} + ${count}`,
+      version: sql`${tables.userChatUsage.version} + 1`,
+      updatedAt: new Date(),
+    })
+    .where(eq(tables.userChatUsage.userId, userId));
+}
+
+/**
  * Get comprehensive usage statistics for a user
  * Used for displaying usage in the UI
  */
@@ -523,6 +585,7 @@ export async function getUserUsageStats(userId: string): Promise<UsageStats> {
   const threadsRemaining = Math.max(0, quotas.threadsPerMonth - usage.threadsCreated);
   const messagesRemaining = Math.max(0, quotas.messagesPerMonth - usage.messagesCreated);
   const customRolesRemaining = Math.max(0, quotas.customRolesPerMonth - usage.customRolesCreated);
+  const analysisRemaining = Math.max(0, quotas.analysisPerMonth - usage.analysisGenerated);
 
   const threadsPercentage = quotas.threadsPerMonth > 0
     ? Math.round((usage.threadsCreated / quotas.threadsPerMonth) * 100)
@@ -536,10 +599,15 @@ export async function getUserUsageStats(userId: string): Promise<UsageStats> {
     ? Math.round((usage.customRolesCreated / quotas.customRolesPerMonth) * 100)
     : 0;
 
+  const analysisPercentage = quotas.analysisPerMonth > 0
+    ? Math.round((usage.analysisGenerated / quotas.analysisPerMonth) * 100)
+    : 0;
+
   // ✅ COMPUTE STATUS: Business logic for warning thresholds (single source of truth)
   const threadsStatus = computeUsageStatus(threadsPercentage);
   const messagesStatus = computeUsageStatus(messagesPercentage);
   const customRolesStatus = computeUsageStatus(customRolesPercentage);
+  const analysisStatus = computeUsageStatus(analysisPercentage);
 
   const daysRemaining = Math.ceil(
     (usage.currentPeriodEnd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24),
@@ -566,6 +634,13 @@ export async function getUserUsageStats(userId: string): Promise<UsageStats> {
       remaining: customRolesRemaining,
       percentage: customRolesPercentage,
       status: customRolesStatus, // ✅ NEW: Backend-computed status
+    },
+    analysis: {
+      used: usage.analysisGenerated,
+      limit: quotas.analysisPerMonth,
+      remaining: analysisRemaining,
+      percentage: analysisPercentage,
+      status: analysisStatus, // ✅ NEW: Backend-computed status
     },
     period: {
       start: usage.currentPeriodStart,
@@ -636,6 +711,29 @@ export async function enforceCustomRoleQuota(userId: string): Promise<void> {
     };
     throw createError.badRequest(
       `Custom role creation limit reached. You have used ${quota.current} of ${quota.limit} custom roles this month. Upgrade your plan for more custom roles.`,
+      context,
+    );
+  }
+}
+
+/**
+ * Enforce analysis generation quota before creation
+ * Throws error if user has exceeded quota
+ *
+ * Note: Analysis is only generated for multi-participant conversations (2+ participants)
+ * This check should only be called when generating analysis for such conversations
+ */
+export async function enforceAnalysisQuota(userId: string): Promise<void> {
+  const quota = await checkAnalysisQuota(userId);
+
+  if (!quota.canCreate) {
+    const context: ErrorContext = {
+      errorType: 'resource',
+      resource: 'chat_moderator_analysis',
+      userId,
+    };
+    throw createError.badRequest(
+      `Analysis generation limit reached. You have used ${quota.current} of ${quota.limit} analyses this month. Upgrade your plan for more analysis capacity.`,
       context,
     );
   }
@@ -741,6 +839,7 @@ export async function syncUserQuotaFromSubscription(
       threadsCreated: 0,
       messagesCreated: 0,
       customRolesCreated: 0,
+      analysisGenerated: 0,
     };
   }
 

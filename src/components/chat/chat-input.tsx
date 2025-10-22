@@ -200,12 +200,8 @@ export function ChatInput({
                               key={participant.id}
                               className={cn(
                                 'inline-flex items-center gap-1.5',
-                                'h-7 px-2.5 py-1',
-                                'rounded-md',
-                                'bg-white/5 backdrop-blur-sm',
+                                'px-1 py-1',
                                 'text-sm font-normal text-white/70',
-                                'transition-all duration-200',
-                                'hover:bg-white/10',
                                 'whitespace-nowrap',
                                 'flex-shrink-0',
                               )}
@@ -224,7 +220,7 @@ export function ChatInput({
                                     'shrink-0',
                                     'rounded-sm',
                                     'p-0.5',
-                                    'hover:bg-white/20',
+                                    'hover:bg-white/10',
                                     'transition-colors',
                                   )}
                                   aria-label={`Remove ${model.name}`}

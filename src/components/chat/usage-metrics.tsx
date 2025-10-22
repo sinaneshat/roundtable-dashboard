@@ -2,6 +2,7 @@
 
 import {
   ArrowUpCircle,
+  BarChart3,
   Clock,
   MessageSquare,
   MessagesSquare,
@@ -35,9 +36,10 @@ export function UsageMetrics() {
   // ✅ BACKEND-COMPUTED STATUS: Use status field from backend (no threshold logic here)
   const threadsStatus = usageData?.success ? usageData.data.threads.status : 'default';
   const messagesStatus = usageData?.success ? usageData.data.messages.status : 'default';
+  const analysisStatus = usageData?.success ? usageData.data.analysis.status : 'default';
 
-  const isMaxedOut = threadsStatus === 'critical' || messagesStatus === 'critical';
-  const hasWarning = threadsStatus === 'warning' || messagesStatus === 'warning' || isMaxedOut;
+  const isMaxedOut = threadsStatus === 'critical' || messagesStatus === 'critical' || analysisStatus === 'critical';
+  const hasWarning = threadsStatus === 'warning' || messagesStatus === 'warning' || analysisStatus === 'warning' || isMaxedOut;
 
   // Loading state - improved skeleton
   if (isLoading) {
@@ -60,6 +62,7 @@ export function UsageMetrics() {
   // Extract percentage values from backend response
   const threadsPercentage = usage.threads.percentage;
   const messagesPercentage = usage.messages.percentage;
+  const analysisPercentage = usage.analysis.percentage;
 
   const handleUpgrade = () => {
     router.push('/chat/pricing');
@@ -191,6 +194,49 @@ export function UsageMetrics() {
             )}
             >
               {usage.messages.remaining.toLocaleString()}
+              {' '}
+              {t('usage.remaining')}
+            </span>
+          </div>
+        </div>
+
+        {/* Analysis Usage */}
+        <div className="space-y-1">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1">
+              <BarChart3 className="size-3 text-muted-foreground" />
+              <span className="text-[11px] font-medium">{t('usage.analysis')}</span>
+            </div>
+            <span className={cn(
+              'font-mono text-[11px] font-semibold tabular-nums',
+              analysisStatus === 'critical' && 'text-destructive',
+              analysisStatus === 'warning' && 'text-orange-600 dark:text-orange-500',
+            )}
+            >
+              {analysisPercentage.toFixed(0)}
+              %
+            </span>
+          </div>
+          <Progress
+            value={analysisPercentage}
+            className={cn('h-1.5', getProgressColor(analysisStatus))}
+            aria-label={`${t('usage.analysis')}: ${usage.analysis.used} ${t('usage.of')} ${usage.analysis.limit} ${t('usage.used')}`}
+          />
+          <div className="flex items-center justify-between text-[9px] text-muted-foreground">
+            <span>
+              {usage.analysis.used.toLocaleString()}
+              {' '}
+              {t('usage.of')}
+              {' '}
+              {usage.analysis.limit.toLocaleString()}
+            </span>
+            <span className={cn(
+              'font-medium',
+              analysisStatus === 'warning' && 'text-orange-600 dark:text-orange-500',
+              analysisStatus === 'critical' && 'text-destructive',
+            )}
+            >
+              {usage.analysis.remaining.toLocaleString()}
               {' '}
               {t('usage.remaining')}
             </span>

@@ -22,8 +22,6 @@ import {
 import type { ChangelogType, ChatMode, ThreadStatus } from '@/api/core/enums';
 import { AnalysisStatuses, ChangelogTypes } from '@/api/core/enums';
 import { IdParamSchema, ThreadRoundParamSchema, ThreadSlugParamSchema } from '@/api/core/schemas';
-// ✅ Background analysis service removed - using streaming with onFinish callback only
-// import { processAnalysisInBackground, restartStaleAnalysis } from '@/api/services/analysis-background.service';
 import type { ModeratorPromptConfig } from '@/api/services/moderator-analysis.service';
 import {
   buildModeratorSystemPrompt,
@@ -43,11 +41,13 @@ import { ragService } from '@/api/services/rag.service';
 import { generateUniqueSlug } from '@/api/services/slug-generator.service';
 import { generateTitleFromMessage } from '@/api/services/title-generator.service';
 import {
+  enforceAnalysisQuota,
   enforceCustomRoleQuota,
   enforceMessageQuota,
   enforceThreadQuota,
   getMaxModels,
   getUserTier,
+  incrementAnalysisUsage,
   incrementCustomRoleUsage,
   incrementMessageUsage,
   incrementThreadUsage,
@@ -140,14 +140,16 @@ async function executeAtomic<T extends Awaited<ReturnType<typeof getDbAsync>>>(
 }
 
 /**
- * ✅ AI SDK V5 PATTERN: Automatically generate analysis in background after round completes
+ * ✅ CLOUDFLARE WORKFLOWS: Trigger durable background analysis
  *
- * This function is called asynchronously after the last participant finishes responding.
- * It immediately starts analysis generation using the official AI SDK V5 streamObject pattern.
- * No frontend trigger needed - fully automatic background generation.
+ * This function triggers a Cloudflare Workflow to process moderator analysis.
+ * The workflow runs to completion even if the user navigates away.
  *
- * Following the official AI SDK V5 documentation:
- * "Record Final Object after Streaming Object" - uses streamObject + onFinish callback
+ * Key Features:
+ * - Durable execution survives worker evictions
+ * - Automatic retries with exponential backoff
+ * - State persistence across steps
+ * - No HTTP timeout limitations
  *
  * @param params - Round completion parameters
  * @param params.threadId - The chat thread ID
@@ -156,7 +158,7 @@ async function executeAtomic<T extends Awaited<ReturnType<typeof getDbAsync>>>(
  * @param params.savedMessageId - The saved message ID
  * @param params.db - Database instance
  * @param params.env - Cloudflare environment bindings
- * @returns Promise<void> - Resolves when analysis generation starts (non-blocking)
+ * @returns Promise<void> - Resolves when workflow is triggered (non-blocking)
  */
 async function triggerRoundAnalysisAsync(params: {
   threadId: string;
@@ -168,9 +170,20 @@ async function triggerRoundAnalysisAsync(params: {
   db: Awaited<ReturnType<typeof getDbAsync>>;
   env: CloudflareEnv;
 }): Promise<void> {
-  const { threadId, thread, db } = params;
+  const { threadId, thread, db, env } = params;
 
   try {
+    // ✅ PARTICIPANT COUNT VALIDATION: Analysis only makes financial sense with 2+ participants
+    // Single participant conversations don't need analysis
+    const participantCount = thread.participants.length;
+    if (participantCount < 2) {
+      console.warn('[triggerRoundAnalysisAsync] ⏭️  Skipping analysis for single-participant thread', {
+        threadId,
+        participantCount,
+      });
+      return;
+    }
+
     // Get all assistant messages for this thread to determine round number
     const assistantMessages = await db.query.chatMessage.findMany({
       where: and(
@@ -181,7 +194,6 @@ async function triggerRoundAnalysisAsync(params: {
     });
 
     // Calculate round number: each round has N assistant messages (one per participant)
-    const participantCount = thread.participants.length;
     const roundNumber = Math.ceil(assistantMessages.length / participantCount);
 
     // Check if analysis already exists for this round (idempotency)
@@ -197,10 +209,25 @@ async function triggerRoundAnalysisAsync(params: {
       return;
     }
 
+    // ✅ QUOTA ENFORCEMENT: Check if user can generate analysis
+    // Analysis counts against user's monthly quota as it consumes AI resources
+    await enforceAnalysisQuota(thread.userId);
+
     // Get the participant message IDs for this round
     const roundStartIndex = (roundNumber - 1) * participantCount;
     const roundMessages = assistantMessages.slice(roundStartIndex, roundStartIndex + participantCount);
     const participantMessageIds = roundMessages.map(m => m.id);
+
+    // ✅ VALIDATE ALL PARTICIPANTS RESPONDED: Skip analysis if round is incomplete
+    if (roundMessages.length < participantCount) {
+      console.warn('[triggerRoundAnalysisAsync] ⏭️  Round incomplete - skipping analysis', {
+        threadId,
+        roundNumber,
+        expectedParticipants: participantCount,
+        actualParticipants: roundMessages.length,
+      });
+      return;
+    }
 
     // Get the user question for this round (last user message before round messages)
     const userMessages = await db.query.chatMessage.findMany({
@@ -218,8 +245,24 @@ async function triggerRoundAnalysisAsync(params: {
     );
     const userQuestion = userMessage ? extractTextFromParts(userMessage.parts) : 'N/A';
 
-    // ✅ CREATE PENDING ANALYSIS RECORD: Frontend will stream from /analyze endpoint
-    // This prevents duplicate generation and signals frontend to start real-time streaming
+    // ✅ Build participant responses for workflow
+    const participantResponses = roundMessages.map((msg, index) => {
+      const participant = thread.participants.find(p => p.id === msg.participantId);
+      if (!participant) {
+        throw new Error(`Participant not found for message ${msg.id}`);
+      }
+
+      const modelName = extractModeratorModelName(participant.modelId);
+      return {
+        participantIndex: index,
+        participantRole: participant.role,
+        modelId: participant.modelId,
+        modelName,
+        responseContent: extractTextFromParts(msg.parts),
+      };
+    });
+
+    // ✅ CREATE PENDING ANALYSIS & TRIGGER WORKFLOW
     const analysisId = ulid();
 
     await db.insert(tables.chatModeratorAnalysis).values({
@@ -228,12 +271,35 @@ async function triggerRoundAnalysisAsync(params: {
       roundNumber,
       mode: thread.mode,
       userQuestion,
-      status: AnalysisStatuses.PENDING, // Frontend will detect and stream from /analyze endpoint
+      status: AnalysisStatuses.PENDING, // Will be updated to STREAMING by workflow
       participantMessageIds,
       createdAt: new Date(),
     });
 
-    console.warn('[triggerRoundAnalysisAsync] ✅ Created pending analysis - frontend will stream', {
+    // ✅ INCREMENT USAGE COUNTER: Track analysis generation for quota management
+    // This must be called AFTER successful analysis creation to ensure accurate tracking
+    await incrementAnalysisUsage(thread.userId);
+
+    // ✅ TRIGGER WORKFLOW: Fire-and-forget, runs to completion
+    env.ANALYSIS_WORKFLOW.create({
+      id: analysisId,
+      params: {
+        analysisId,
+        threadId,
+        roundNum: roundNumber,
+        userQuestion,
+        mode: thread.mode,
+        participantResponses,
+      },
+    }).catch((error) => {
+      // Log workflow creation error but don't block
+      console.error('[triggerRoundAnalysisAsync] ❌ Failed to create workflow:', {
+        analysisId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    });
+
+    console.warn('[triggerRoundAnalysisAsync] ✅ Workflow triggered', {
       threadId,
       roundNumber,
       analysisId,
@@ -2948,33 +3014,48 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
               orderBy: [tables.chatMessage.createdAt],
             });
 
-            // ✅ TYPE-SAFE ERROR CHECK: Use validated MessageMetadata type
-            const messagesWithErrors = roundMessages.filter(msg =>
-              MessageMetadataSchema.safeParse(msg.metadata).success
-              && messageHasError(MessageMetadataSchema.parse(msg.metadata)),
-            );
-            const hasAnyError = messagesWithErrors.length > 0;
+            // ✅ CHECK ALL PARTICIPANTS RESPONDED: Analysis only happens if round is complete
+            const expectedParticipantCount = participants.length;
+            const actualParticipantCount = roundMessages.filter(msg => msg.role === 'assistant').length;
 
-            if (hasAnyError) {
-              console.warn('[streamChatHandler] ⚠️ Round has errors - skipping analysis', {
+            if (actualParticipantCount < expectedParticipantCount) {
+              console.warn('[streamChatHandler] ⏭️  Round incomplete - skipping analysis', {
                 threadId,
                 participantIndex,
                 roundNumber: currentRoundNumber,
-                totalParticipants: participants.length,
+                expectedParticipants: expectedParticipantCount,
+                actualParticipants: actualParticipantCount,
                 messagesInRound: roundMessages.length,
-                errorCount: messagesWithErrors.length,
               });
             } else {
-              triggerRoundAnalysisAsync({
-                threadId,
-                thread: { ...thread, participants },
-                allParticipants: participants,
-                savedMessageId: savedMessage.id,
-                db,
-                env: c.env, // ✅ ADDED: Pass env for background analysis generation
-              }).catch((error) => {
-                console.error('[streamChatHandler] ❌ Failed to trigger analysis (non-blocking):', error);
-              });
+              // ✅ TYPE-SAFE ERROR CHECK: Use validated MessageMetadata type
+              const messagesWithErrors = roundMessages.filter(msg =>
+                MessageMetadataSchema.safeParse(msg.metadata).success
+                && messageHasError(MessageMetadataSchema.parse(msg.metadata)),
+              );
+              const hasAnyError = messagesWithErrors.length > 0;
+
+              if (hasAnyError) {
+                console.warn('[streamChatHandler] ⚠️ Round has errors - skipping analysis', {
+                  threadId,
+                  participantIndex,
+                  roundNumber: currentRoundNumber,
+                  totalParticipants: participants.length,
+                  messagesInRound: roundMessages.length,
+                  errorCount: messagesWithErrors.length,
+                });
+              } else {
+                triggerRoundAnalysisAsync({
+                  threadId,
+                  thread: { ...thread, participants },
+                  allParticipants: participants,
+                  savedMessageId: savedMessage.id,
+                  db,
+                  env: c.env, // ✅ ADDED: Pass env for background analysis generation
+                }).catch((error) => {
+                  console.error('[streamChatHandler] ❌ Failed to trigger analysis (non-blocking):', error);
+                });
+              }
             }
           }
         } catch (dbError) {

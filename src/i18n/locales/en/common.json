@@ -1070,6 +1070,8 @@
     "errorLoading": "Unable to load usage data",
     "messages": "Messages",
     "messagesRemaining": "messages remaining",
+    "analysis": "Analysis",
+    "analysisRemaining": "analyses remaining",
     "plan": "Plan",
     "planUsage": "Plan & Usage",
     "threads": "Threads",
@@ -1080,6 +1082,8 @@
     "onPeriodEnd": "at period end",
     "keepAccessUntil": "Keep current access until",
     "remaining": "left",
+    "of": "of",
+    "used": "used",
     "currentPeriod": "Current Period",
     "resetsOn": "Resets on {date}",
     "status": {
@@ -1089,9 +1093,7 @@
       "nearLimit": "Getting close to limit"
     },
     "viewDetails": "View usage details",
-    "managePlan": "Manage Plan",
-    "of": "of",
-    "used": "used"
+    "managePlan": "Manage Plan"
   },
   "user": {
     "defaultName": "User"

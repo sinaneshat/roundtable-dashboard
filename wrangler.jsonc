@@ -69,10 +69,11 @@
   "ai": {
     "binding": "AI"
   },
-  "services": [
+  "workflows": [
     {
-      "binding": "WORKER_SELF_REFERENCE",
-      "service": "roundtable-dashboard"
+      "name": "analysis-workflow",
+      "binding": "ANALYSIS_WORKFLOW",
+      "class_name": "AnalysisWorkflow"
     }
   ],
   "durable_objects": {
@@ -170,10 +171,11 @@
       "ai": {
         "binding": "AI"
       },
-      "services": [
+      "workflows": [
         {
-          "binding": "WORKER_SELF_REFERENCE",
-          "service": "roundtable-dashboard-preview"
+          "name": "analysis-workflow",
+          "binding": "ANALYSIS_WORKFLOW",
+          "class_name": "AnalysisWorkflow"
         }
       ],
       "durable_objects": {
@@ -265,10 +267,11 @@
       "ai": {
         "binding": "AI"
       },
-      "services": [
+      "workflows": [
         {
-          "binding": "WORKER_SELF_REFERENCE",
-          "service": "roundtable-dashboard-production"
+          "name": "analysis-workflow",
+          "binding": "ANALYSIS_WORKFLOW",
+          "class_name": "AnalysisWorkflow"
         }
       ],
       "durable_objects": {

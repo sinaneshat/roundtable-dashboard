@@ -131,33 +131,43 @@ export const MAX_MODELS_BY_TIER: Record<SubscriptionTier, number> = {
 
 /**
  * ✅ SINGLE SOURCE OF TRUTH: Tier quotas for subscription limits
- * These are monthly quotas for threads, messages, and custom roles
+ * These are monthly quotas for threads, messages, custom roles, and analysis
  * All quota logic comes from this constant - database only stores usage counters
+ *
+ * Analysis Quota Logic:
+ * - Analysis is only generated when there are 2+ participants (multi-participant conversations)
+ * - Single participant conversations do not trigger analysis (no financial sense)
+ * - Each analysis generation counts as a message equivalent in terms of cost
  */
 export const TIER_QUOTAS: Record<SubscriptionTier, {
   threadsPerMonth: number;
   messagesPerMonth: number;
   customRolesPerMonth: number;
+  analysisPerMonth: number;
 }> = {
   free: {
     threadsPerMonth: 5,
     messagesPerMonth: 100,
     customRolesPerMonth: 0,
+    analysisPerMonth: 10, // Limited analysis for free tier
   },
   starter: {
     threadsPerMonth: 20,
     messagesPerMonth: 500,
     customRolesPerMonth: 3,
+    analysisPerMonth: 50, // More analysis for starter
   },
   pro: {
     threadsPerMonth: 100,
     messagesPerMonth: 2000,
     customRolesPerMonth: 10,
+    analysisPerMonth: 200, // Generous analysis for pro
   },
   power: {
     threadsPerMonth: 500,
     messagesPerMonth: 10000,
     customRolesPerMonth: 25,
+    analysisPerMonth: 1000, // High analysis limit for power users
   },
 };
 

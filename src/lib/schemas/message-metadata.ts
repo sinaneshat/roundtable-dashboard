@@ -26,6 +26,7 @@ import { z } from 'zod';
  * - AI SDK core fields (model, finishReason, usage)
  * - Participant context (participantId, participantIndex, participantRole, roundNumber)
  * - Error state (hasError, errorType, errorMessage, errorCategory, isTransient)
+ * - Streaming state (streamingStartedAt, streamingCompletedAt, isIncomplete)
  */
 const BaseMessageMetadataFields = {
   // ✅ Core AI SDK fields

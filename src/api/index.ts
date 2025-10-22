@@ -544,3 +544,12 @@ appRoutes.get('/llms.txt', async (c) => {
 export default {
   fetch: appRoutes.fetch,
 };
+
+// ============================================================================
+// Cloudflare Workflows
+// ============================================================================
+
+// ✅ WORKFLOWS: Accessed via Cloudflare Workers bindings (env.ANALYSIS_WORKFLOW)
+// No export needed - workflows are invoked through env bindings defined in wrangler.jsonc
+// The workflow implementation is in ./workflows/analysis-workflow.ts
+// See: src/api/routes/chat/handler.ts for usage via env.ANALYSIS_WORKFLOW.create()

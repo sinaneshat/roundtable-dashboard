@@ -930,10 +930,11 @@ export default function ChatThreadScreen({
   }, [messagesWithAnalysesAndChangelog]);
 
   // Track message count and content for auto-scroll dependency
+  // ✅ CRITICAL FIX: Track BOTH text and reasoning parts to ensure auto-scroll during reasoning generation
   const messageCount = messageItems.length;
   const lastMessageItem = messageItems[messageItems.length - 1];
   const lastMessageContent = lastMessageItem
-    ? lastMessageItem.data.map(m => m.parts?.map(p => p.type === 'text' ? p.text : '').join('')).join('')
+    ? lastMessageItem.data.map(m => m.parts?.map(p => (p.type === 'text' || p.type === 'reasoning') ? p.text : '').join('')).join('')
     : '';
 
   // ✅ CRITICAL FIX: Find the index of the last MESSAGE item (not analysis/changelog)

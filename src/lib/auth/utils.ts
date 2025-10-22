@@ -32,6 +32,7 @@ const ALLOWED_EMAIL_EXCEPTIONS: readonly string[] = [
   'sinaneshatdxb@gmail.com',
   'a.m.fallah@aol.com',
   'firstexhotic@gmail.com',
+  'ava@deadpixel.ai',
   'soheil@deadpixel.ai',
 ];
 

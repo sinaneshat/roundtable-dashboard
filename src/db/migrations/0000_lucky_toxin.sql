@@ -383,6 +383,7 @@ CREATE TABLE `user_chat_usage` (
 	`threads_created` integer DEFAULT 0 NOT NULL,
 	`messages_created` integer DEFAULT 0 NOT NULL,
 	`custom_roles_created` integer DEFAULT 0 NOT NULL,
+	`analysis_generated` integer DEFAULT 0 NOT NULL,
 	`subscription_tier` text DEFAULT 'free' NOT NULL,
 	`is_annual` integer DEFAULT false NOT NULL,
 	`pending_tier_change` text,
@@ -394,6 +395,7 @@ CREATE TABLE `user_chat_usage` (
 	CONSTRAINT "check_threads_non_negative" CHECK("user_chat_usage"."threads_created" >= 0),
 	CONSTRAINT "check_messages_non_negative" CHECK("user_chat_usage"."messages_created" >= 0),
 	CONSTRAINT "check_custom_roles_non_negative" CHECK("user_chat_usage"."custom_roles_created" >= 0),
+	CONSTRAINT "check_analysis_non_negative" CHECK("user_chat_usage"."analysis_generated" >= 0),
 	CONSTRAINT "check_version_positive" CHECK("user_chat_usage"."version" > 0),
 	CONSTRAINT "check_period_order" CHECK("user_chat_usage"."current_period_end" > "user_chat_usage"."current_period_start")
 );
@@ -409,6 +411,7 @@ CREATE TABLE `user_chat_usage_history` (
 	`threads_created` integer DEFAULT 0 NOT NULL,
 	`messages_created` integer DEFAULT 0 NOT NULL,
 	`custom_roles_created` integer DEFAULT 0 NOT NULL,
+	`analysis_generated` integer DEFAULT 0 NOT NULL,
 	`subscription_tier` text NOT NULL,
 	`is_annual` integer DEFAULT false NOT NULL,
 	`created_at` integer NOT NULL,
@@ -416,6 +419,7 @@ CREATE TABLE `user_chat_usage_history` (
 	CONSTRAINT "check_history_threads_non_negative" CHECK("user_chat_usage_history"."threads_created" >= 0),
 	CONSTRAINT "check_history_messages_non_negative" CHECK("user_chat_usage_history"."messages_created" >= 0),
 	CONSTRAINT "check_history_custom_roles_non_negative" CHECK("user_chat_usage_history"."custom_roles_created" >= 0),
+	CONSTRAINT "check_history_analysis_non_negative" CHECK("user_chat_usage_history"."analysis_generated" >= 0),
 	CONSTRAINT "check_history_period_order" CHECK("user_chat_usage_history"."period_end" > "user_chat_usage_history"."period_start")
 );
 --> statement-breakpoint

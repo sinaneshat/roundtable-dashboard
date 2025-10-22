@@ -19,15 +19,29 @@ import type { ApiEnv } from '@/api/types';
 /**
  * Middleware to ensure RAG service is initialized before chat route handlers
  *
+ * Gracefully skips initialization if Cloudflare bindings (AI, VECTORIZE) are not available.
+ * This allows the application to run in local development without RAG features.
+ *
  * Usage:
  * ```typescript
  * app.use('/chat/*', ensureRAGInitialized);
  * ```
  */
 export const ensureRAGInitialized = createMiddleware<ApiEnv>(async (c, next) => {
+  // Skip RAG initialization if bindings are not available (local development)
+  if (!c.env.AI || !c.env.VECTORIZE) {
+    // RAG features will not be available, but the app continues to work
+    return next();
+  }
+
   // Initialize RAG service with environment configuration
   // This is idempotent - safe to call multiple times
-  initializeRAG(c.env);
+  try {
+    initializeRAG(c.env);
+  } catch (error) {
+    // Log error but don't block the request
+    console.warn('[RAG Middleware] Failed to initialize RAG service:', error);
+  }
 
   return next();
 });
