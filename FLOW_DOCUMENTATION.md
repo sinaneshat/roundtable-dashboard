@@ -55,6 +55,32 @@ Roundtable is a collaborative AI brainstorming platform where multiple AI models
    ├─ Thread created (if not exists)
    ├─ Question saved with roundNumber: 1
    └─ Navigate to thread page OR stay on overview
+
+### Phase 1b: Thread Page Initial Load (Server-Side Rendering)
+
+Server Components fetch and prefetch data:
+   ├─ Thread metadata (mode, participants, title)
+   ├─ Initial messages (all rounds)
+   ├─ Participants configuration
+   └─ Server-side props passed to client components
+
+Client-Side Queries (enabled ONCE on mount):
+   ├─ Changelog query (useThreadChangelogQuery)
+   │  └─ Loads participant/mode change history
+   ├─ Feedback query (useThreadFeedbackQuery)
+   │  └─ Loads like/dislike for each round
+   └─ Analyses query (useThreadAnalysesQuery)
+      └─ Loads completed/pending analyses for all rounds
+
+Initial State Hydration:
+   ├─ clientChangelog ← changelog data (once)
+   ├─ clientFeedback ← Map<roundNumber, 'like'|'dislike'|null> (once)
+   └─ analyses ← all analyses from cache (once)
+
+After data loads:
+   └─ hasInitiallyLoaded = true
+      └─ ALL queries now disabled (enabled: false)
+         └─ Client state is source of truth from this point forward
 ```
 
 ### Phase 2: Round Execution
@@ -158,49 +184,85 @@ Note: Regeneration REPLACES the entire round, not just one message!
 
 ## State Management Architecture
 
-### Unified Hook: `useChatRoundManager`
+### ONE-WAY DATA FLOW Pattern (ChatThreadScreen)
 
-**Purpose**: Single source of truth for round and analysis management
+**Purpose**: Load data ONCE on initial page load, then ALL state is client-side only
 
-**Responsibilities**:
-1. Track round completion state
-2. Create pending analyses when rounds complete
-3. Sync analyses from React Query cache
-4. Provide notification callbacks for analysis lifecycle
-
-**Key Methods**:
+**State Tracking Flag**:
 ```typescript
-const roundManager = useChatRoundManager({
-  threadId,
-  mode,
-  enableQuery
-});
-
-// When round completes
-await roundManager.handleRoundComplete(
-  roundNumber,
-  messages,
-  participants,
-  userQuestion
-);
-
-// Analysis lifecycle (not currently used but available)
-roundManager.notifyAnalysisStarted(roundNumber);
-roundManager.notifyAnalysisCompleted(roundNumber);
-roundManager.notifyAnalysisFailed(roundNumber, error);
-
-// Current state
-const {
-  isWaitingForAnalysis,
-  analyzingRoundNumber,
-  analyses // All analyses including pending
-} = roundManager.state;
+const [hasInitiallyLoaded, setHasInitiallyLoaded] = useState(false);
 ```
 
-**Critical Fix**:
-- Uses ref flag `isAddingPendingRef` to prevent sync conflicts
-- Directly updates state when adding pending analysis (no query invalidation)
-- Prevents infinite loops from React Query cache updates
+**Query Pattern** (All queries follow this pattern):
+```typescript
+// ✅ Query enabled ONLY before initial load
+const { data: changelogResponse } = useThreadChangelogQuery(
+  thread.id,
+  !hasInitiallyLoaded // disabled after first load
+);
+
+const { data: feedbackData } = useThreadFeedbackQuery(
+  thread.id,
+  !hasInitiallyLoaded // disabled after first load
+);
+
+const { analyses } = useChatAnalysis({
+  threadId: thread.id,
+  mode: thread.mode,
+  enabled: !hasInitiallyLoaded, // disabled after first load
+});
+```
+
+**Client-Side State** (Source of truth after initial load):
+```typescript
+// Changelog state
+const [clientChangelog, setClientChangelog] = useState<ChangelogItem[]>([]);
+
+// Feedback state (Map for O(1) lookups by round number)
+const [clientFeedback, setClientFeedback] = useState<
+  Map<number, 'like' | 'dislike' | null>
+>(new Map());
+
+// Analyses managed via React Query cache manipulation
+// (no separate state - cache IS the state)
+```
+
+**Initial Load Hydration**:
+```typescript
+// Changelog hydration
+useEffect(() => {
+  if (!hasInitiallyLoaded && changelogResponse?.success) {
+    setClientChangelog(changelogResponse.data.items);
+  }
+}, [changelogResponse, hasInitiallyLoaded]);
+
+// Feedback hydration
+useEffect(() => {
+  if (!hasInitiallyLoaded && feedbackData && Array.isArray(feedbackData)) {
+    const initialFeedback = new Map(
+      feedbackData.map(f => [f.roundNumber, f.feedbackType] as const)
+    );
+    setClientFeedback(initialFeedback);
+  }
+}, [feedbackData, hasInitiallyLoaded]);
+
+// Analyses hydration (automatic via React Query)
+// No manual hydration needed - query returns analyses directly
+
+// Mark as loaded (disables all queries permanently)
+useEffect(() => {
+  if (!hasInitiallyLoaded && changelogResponse && feedbackData !== undefined) {
+    setHasInitiallyLoaded(true); // ← Queries now disabled forever
+  }
+}, [changelogResponse, feedbackData, hasInitiallyLoaded]);
+```
+
+**Critical Principles**:
+- Queries fetch data ONCE on mount
+- After `hasInitiallyLoaded = true`, queries are disabled
+- ALL subsequent state changes are client-side only
+- NO query invalidations (would trigger refetches)
+- Full page refresh is ONLY way to sync with server again
 
 ### Shared Context: `ChatContext`
 
@@ -536,11 +598,20 @@ messages.forEach(message => {
 ### ✅ Scenario 5: Round Feedback
 1. Complete Round 1
 2. Click "like" button
-3. Refresh page
 
-**Expected**:
-- Like button highlighted
-- Feedback persisted
+**Expected During Session**:
+- Like button immediately highlighted (optimistic update)
+- clientFeedback Map updated: `Map.set(1, 'like')`
+- Mutation fires (fire-and-forget)
+- NO query invalidation
+- NO GET request
+- Feedback persists for remainder of session
+
+**Expected After Page Refresh**:
+- Thread page loads
+- Feedback query fetches all feedback
+- clientFeedback Map hydrated with server data
+- Like button shows highlighted state
 - Applies to entire round (not individual messages)
 
 ### ✅ Scenario 6: Page Refresh During Analysis

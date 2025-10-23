@@ -19,6 +19,11 @@ import { queryKeys } from '@/lib/data/query-keys';
 type UseChatAnalysisOptions = {
   threadId: string;
   mode: ChatModeId;
+  /**
+   * ✅ STREAMING PROTECTION: Disable query during active streaming
+   * This prevents refetches from disrupting the streaming state
+   */
+  enabled?: boolean;
 };
 
 type UseChatAnalysisReturn = {
@@ -37,10 +42,13 @@ type UseChatAnalysisReturn = {
 export function useChatAnalysis({
   threadId,
   mode,
+  enabled = true,
 }: UseChatAnalysisOptions): UseChatAnalysisReturn {
   const queryClient = useQueryClient();
 
-  const { data: analysesResponse, isLoading } = useThreadAnalysesQuery(threadId, !!threadId);
+  // ✅ STREAMING PROTECTION: Only enable query when explicitly allowed
+  // This prevents the aggressive polling and refetchOnMount from disrupting streaming
+  const { data: analysesResponse, isLoading } = useThreadAnalysesQuery(threadId, enabled && !!threadId);
 
   const analyses = useMemo(() => {
     if (!analysesResponse?.success)
@@ -153,15 +161,18 @@ export function useChatAnalysis({
         },
       );
 
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.threads.analyses(threadId),
-      });
+      // ✅ ONE-WAY DATA FLOW: NO query invalidation
+      // Cache is updated directly above - invalidation would trigger refetch and break streaming
+      // The query is disabled during streaming anyway (enabled: false in ChatThreadScreen)
     },
     [queryClient, threadId],
   );
 
   const removePendingAnalysis = useCallback(
     (roundNumber: number) => {
+      // ✅ IMMEDIATE REMOVAL: Completely remove analysis for this round from cache
+      // This ensures the UI immediately stops showing the old analysis
+      // When the round regenerates, createPendingAnalysis will add a new one
       queryClient.setQueryData(
         queryKeys.threads.analyses(threadId),
         (oldData: unknown) => {
@@ -173,6 +184,7 @@ export function useChatAnalysis({
           if (!typedData?.success)
             return typedData;
 
+          // Filter out ALL analyses for this round (including completed, pending, streaming)
           const filtered = typedData.data.items.filter(
             a => a.roundNumber !== roundNumber,
           );

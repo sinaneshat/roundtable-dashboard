@@ -1,6 +1,5 @@
 'use client';
 
-import { useQueryClient } from '@tanstack/react-query';
 import { AnimatePresence, motion } from 'motion/react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
@@ -24,16 +23,30 @@ import { useAutoScrollToBottom, useChatAnalysis, useSelectedParticipants } from 
 import { useSession } from '@/lib/auth/client';
 import type { ChatModeId } from '@/lib/config/chat-modes';
 import { getDefaultChatMode } from '@/lib/config/chat-modes';
-import { queryKeys } from '@/lib/data/query-keys';
 import { showApiErrorToast } from '@/lib/toast';
 import type { ParticipantConfig } from '@/lib/types/participant-config';
 import { toCreateThreadRequest } from '@/lib/types/participant-config';
 import { chatMessagesToUIMessages } from '@/lib/utils/message-transforms';
 
+/**
+ * ✅ ONE-WAY DATA FLOW: Chat Overview Screen
+ *
+ * This is a TEMPORARY screen for new thread creation:
+ * 1. User submits prompt → Create thread
+ * 2. Initialize context → Stream first round
+ * 3. Round completes → Create analysis (client-side)
+ * 4. Analysis streams → Display analysis card
+ * 5. Analysis completes → Navigate to thread detail page
+ *
+ * Key principles:
+ * - No query invalidations (navigating away immediately)
+ * - Analysis created in client cache (one-time flow)
+ * - Navigation happens after analysis completes
+ * - Thread detail page loads fresh data from server (RSC)
+ */
 export default function ChatOverviewScreen() {
   const router = useRouter();
   const t = useTranslations();
-  const queryClient = useQueryClient();
   const { data: session } = useSession();
   const sessionUser = session?.user;
 
@@ -84,16 +97,27 @@ export default function ChatOverviewScreen() {
   const hasSentInitialPromptRef = useRef(false);
   const [createdThreadId, setCreatedThreadId] = useState<string | null>(null);
 
+  // ✅ ONE-WAY DATA FLOW: Track initial load for overview screen
+  // Overview screen is temporary - after analysis completes, we navigate to thread detail
+  // No need for complex client state since we're navigating away
+  const [hasLoadedAnalysis, setHasLoadedAnalysis] = useState(false);
+
+  // ✅ Analysis query for first round only
+  // Disabled during streaming to prevent disruption
+  // Enabled after streaming to get the pending analysis we created
   const {
     analyses,
     createPendingAnalysis,
   } = useChatAnalysis({
     threadId: createdThreadId || '',
     mode: selectedMode,
+    enabled: !isStreaming && !!createdThreadId && !hasLoadedAnalysis,
   });
 
   const createThreadMutation = useCreateThreadMutation();
 
+  // ✅ ONE-WAY DATA FLOW: Setup round completion callback for analysis
+  // After participants finish streaming, create pending analysis in client state
   useEffect(() => {
     if (!createdThreadId)
       return;
@@ -109,8 +133,8 @@ export default function ChatOverviewScreen() {
       const textPart = lastUserMessage?.parts?.find(p => p.type === 'text');
       const userQuestion = (textPart && 'text' in textPart ? textPart.text : '') || '';
 
-      await new Promise(resolve => setTimeout(resolve, 2000));
-
+      // ✅ CLIENT-SIDE: Create pending analysis in cache
+      // This will trigger the analysis streaming
       createPendingAnalysis(
         roundNumber,
         currentMessages,
@@ -318,7 +342,16 @@ export default function ChatOverviewScreen() {
                     threadId={createdThreadId}
                     isLatest={true}
                     onStreamComplete={async () => {
-                      await queryClient.invalidateQueries({ queryKey: queryKeys.threads.lists() });
+                      // ✅ ONE-WAY DATA FLOW: Mark analysis as loaded
+                      // This disables the query to prevent refetches
+                      setHasLoadedAnalysis(true);
+
+                      // ✅ NO QUERY INVALIDATION: Don't invalidate thread lists
+                      // The detail page will load fresh data from server on navigation
+                      // No need to refetch here - wastes API calls and causes race conditions
+
+                      // ✅ NAVIGATE: Go to thread detail page with AI-generated slug
+                      // The detail page will load all data fresh from server (RSC)
                       router.push(`/chat/${currentThread?.slug}`);
                     }}
                   />

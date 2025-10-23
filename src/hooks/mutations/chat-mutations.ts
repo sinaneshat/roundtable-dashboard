@@ -110,21 +110,21 @@ export function useCreateThreadMutation() {
  * Hook to update thread details
  * Protected endpoint - requires authentication
  *
- * After successful update, invalidates specific thread and lists
+ * ✅ ONE-WAY DATA FLOW: NO query invalidation
+ * ChatThreadScreen manages its own state and doesn't need server refetches.
+ * This is a FIRE-AND-FORGET mutation - persist to server, client handles UI.
  */
 export function useUpdateThreadMutation() {
-  const queryClient = useQueryClient();
-
   return useMutation({
     mutationFn: updateThreadService,
-    onSuccess: (_data, data) => {
-      // Invalidate specific thread and lists
-      invalidationPatterns.threadDetail(data.param.id).forEach((key) => {
-        queryClient.invalidateQueries({ queryKey: key });
-      });
+    onSuccess: () => {
+      // ✅ ONE-WAY DATA FLOW: NO invalidation
+      // ChatThreadScreen uses client-side state as source of truth
+      // The mutation response is ignored - client state already updated optimistically
     },
     onError: () => {
       // Error is handled by throwOnError: false
+      // Client state remains unchanged (optimistic update not rolled back)
     },
     retry: false,
     throwOnError: false,
@@ -602,37 +602,21 @@ export function useDeleteCustomRoleMutation() {
  * Hook to set round feedback (like/dislike)
  * Protected endpoint - requires authentication
  *
- * Optimistically updates the feedback list for instant UI feedback
+ * ✅ ONE-WAY DATA FLOW: NO query invalidation
+ * ChatThreadScreen manages feedback in client-side state (clientFeedback Map).
+ * This is a FIRE-AND-FORGET mutation - persist to server, client handles UI.
  */
 export function useSetRoundFeedbackMutation() {
-  const queryClient = useQueryClient();
-
   return useMutation({
     mutationFn: setRoundFeedbackService,
-    // ✅ OPTIMISTIC UPDATE: Immediately update feedback for instant UI
-    onMutate: async ({ param }) => {
-      const { threadId } = param;
-
-      // Cancel outgoing refetches
-      await queryClient.cancelQueries({ queryKey: queryKeys.threads.feedback(threadId) });
-
-      // Snapshot previous value
-      const previousFeedback = queryClient.getQueryData(queryKeys.threads.feedback(threadId));
-
-      return { previousFeedback, threadId };
+    onSuccess: () => {
+      // ✅ ONE-WAY DATA FLOW: NO invalidation
+      // ChatThreadScreen uses clientFeedback Map as source of truth
+      // Feedback already updated optimistically in ChatThreadScreen.tsx:519-523
     },
-    // On error, rollback
-    onError: (_error, _variables, context) => {
-      if (context?.previousFeedback && context?.threadId) {
-        queryClient.setQueryData(
-          queryKeys.threads.feedback(context.threadId),
-          context.previousFeedback,
-        );
-      }
-    },
-    // On success or error (settled), invalidate to get fresh data
-    onSettled: (_data, _error, { param }) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.threads.feedback(param.threadId) });
+    onError: () => {
+      // Error is handled by throwOnError: false
+      // Client state remains unchanged (optimistic update not rolled back)
     },
     retry: false,
     throwOnError: false,

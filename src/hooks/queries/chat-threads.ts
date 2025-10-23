@@ -165,11 +165,8 @@ export function useThreadChangelogQuery(threadId: string, enabled?: boolean) {
     queryKey: queryKeys.threads.changelog(threadId),
     queryFn: () => getThreadChangelogService({ param: { id: threadId } }),
     staleTime: STALE_TIMES.threadChangelog, // 30 seconds
-    // ✅ FIX: Disable automatic refetching - changelog is invalidated by mutations
-    // This prevents unnecessary API calls when changelog hasn't changed
-    refetchOnMount: false,
-    refetchOnWindowFocus: false,
-    refetchOnReconnect: false,
+    // ✅ STREAMING PROTECTION: All refetch settings now handled globally
+    // See query-client.ts for global defaults (all disabled)
     // ✅ CRITICAL FIX: Preserve previous data during refetches
     // This prevents changelog from disappearing when query is invalidated
     // Without this, changelog temporarily becomes empty array during refetch,
@@ -256,11 +253,11 @@ export function useThreadAnalysesQuery(threadId: string, enabled?: boolean) {
       // Faster polling ensures quicker detection and recovery
       return hasIncompleteAnalyses ? 5000 : false;
     },
-    // ✅ CRITICAL FIX: Fetch on mount to check for orphaned analyses after page refresh
-    // This ensures we detect analyses that were in progress before refresh
+    // ✅ STREAMING PROTECTION: All refetch settings now handled globally
+    // See query-client.ts for global defaults (all disabled)
+    // ✅ OVERRIDE: Enable refetchOnMount ONLY for analyses to detect orphaned analyses after page refresh
+    // This is safe because the query is disabled during active streaming
     refetchOnMount: true,
-    refetchOnWindowFocus: false, // Don't refetch on window focus
-    refetchOnReconnect: false, // Don't refetch on reconnect
     // ✅ CRITICAL FIX: Preserve previous data during refetches
     // This prevents analyses from disappearing when query refetches
     placeholderData: previousData => previousData,

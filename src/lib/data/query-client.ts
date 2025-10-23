@@ -9,6 +9,13 @@ import { isServer, QueryClient } from '@tanstack/react-query';
 /**
  * Create a new QueryClient instance with recommended defaults
  * Following official TanStack Query pattern for Next.js App Router
+ *
+ * ✅ STREAMING PROTECTION: Disabled aggressive refetch behaviors
+ * - refetchOnWindowFocus: false - Don't refetch when user switches tabs
+ * - refetchOnReconnect: false - Don't refetch when network reconnects
+ * - refetchOnMount: false - Don't refetch when component remounts
+ *
+ * Individual queries can override these defaults as needed
  */
 function makeQueryClient() {
   return new QueryClient({
@@ -17,6 +24,12 @@ function makeQueryClient() {
         // With SSR, we usually want to set some default staleTime
         // above 0 to avoid refetching immediately on the client
         staleTime: 60 * 1000, // 60 seconds - official recommended value
+
+        // ✅ STREAMING PROTECTION: Disable aggressive refetch behaviors globally
+        // These can be overridden per-query if needed
+        refetchOnWindowFocus: false, // ❌ Don't refetch on tab switch
+        refetchOnReconnect: false, // ❌ Don't refetch on network reconnect
+        refetchOnMount: false, // ❌ Don't refetch on component remount
       },
     },
   });
