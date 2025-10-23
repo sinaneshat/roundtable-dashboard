@@ -26,6 +26,7 @@ import {
   ChartTooltip,
   ChartTooltipContent,
 } from '@/components/ui/chart';
+import { BRAND } from '@/constants/brand';
 import { useModelsQuery } from '@/hooks/queries/models';
 import { getAvatarPropsFromModelId } from '@/lib/utils/ai-display';
 
@@ -50,27 +51,25 @@ export function SkillsComparisonChart({ participants }: SkillsComparisonChartPro
   const { data: modelsData } = useModelsQuery();
   const allModels = modelsData?.data?.items || [];
 
-  // Generate vibrant colors for each participant
+  // Generate high-contrast colors from logo's rainbow gradient
+  // ✅ SINGLE SOURCE OF TRUTH: Uses BRAND.logoGradient from constants
   const vibrantColors = useMemo(() => {
     const colorCount = participants.length;
     if (colorCount === 0)
       return [];
 
-    const scale = chroma
-      .scale([
-        '#2563eb', // Primary Blue
-        '#f59e0b', // Warm Amber
-        '#8b5cf6', // Soft Purple
-        '#06b6d4', // Soft Cyan
-        '#84cc16', // Soft Lime
-        '#ec4899', // Soft Rose
-        '#64748b', // Slate Gray
-        '#3b82f6', // Accent Blue
-      ])
-      .mode('lch')
-      .colors(colorCount);
+    // Use exact brand logo colors - no interpolation for maximum distinction
+    if (colorCount <= BRAND.logoGradient.length) {
+      return BRAND.logoGradient.slice(0, colorCount);
+    }
 
-    return scale;
+    // For edge case with >12 participants, use chroma with logo colors
+    // Mode 'lch' preserves perceptual uniformity of logo gradient
+    return chroma
+      .scale(BRAND.logoGradient)
+      .mode('lch')
+      .correctLightness()
+      .colors(colorCount);
   }, [participants.length]);
 
   if (participants.length === 0) {
@@ -195,7 +194,10 @@ export function SkillsComparisonChart({ participants }: SkillsComparisonChartPro
           <PolarGrid />
           {participants.map((participant, index) => {
             const key = `participant${participant?.participantIndex ?? index}`;
-            const fillOpacity = index === 0 ? 0.6 : 0.3;
+            // Adjust opacity to ensure all layers are visible with better contrast
+            // First participant gets higher opacity, others get balanced visibility
+            const fillOpacity = index === 0 ? 0.45 : 0.25;
+            const strokeWidth = index === 0 ? 2.5 : 2;
 
             return (
               <Radar
@@ -203,6 +205,8 @@ export function SkillsComparisonChart({ participants }: SkillsComparisonChartPro
                 dataKey={key}
                 fill={`var(--color-${key})`}
                 fillOpacity={fillOpacity}
+                stroke={`var(--color-${key})`}
+                strokeWidth={strokeWidth}
               />
             );
           })}

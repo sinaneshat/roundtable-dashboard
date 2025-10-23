@@ -1,24 +1,8 @@
 /**
- * Chat Analysis Management Hook
+ * Chat Analysis Hook
  *
- * SINGLE SOURCE OF TRUTH: React Query cache for all analysis state
- * Eliminates infinite loops by avoiding component state sync
- *
- * RESPONSIBILITIES:
- * - Fetch analyses from backend via React Query
- * - Create pending analyses when rounds complete
- * - Update analyses when streaming completes
- * - Remove analyses during regeneration
- *
- * ARCHITECTURE:
- * - React Query cache is the ONLY state
- * - Direct cache manipulation (no component state mirroring)
- * - No sync effects = no infinite loops
- *
- * REPLACES:
- * - use-chat-round-manager.ts (infinite loop issues)
- * - use-round-completion.ts (duplicate functionality)
- * - use-chat-screen.ts (overlapping concerns)
+ * Manages analysis state via React Query cache as single source of truth.
+ * Backend auto-creates pending analyses; hook provides cache manipulation.
  */
 
 'use client';
@@ -46,43 +30,17 @@ type UseChatAnalysisReturn = {
     participants: ChatParticipant[],
     userQuestion: string,
   ) => void;
-  updateAnalysisData: (
-    roundNumber: number,
-    data: ModeratorAnalysisPayload,
-  ) => void;
+  updateAnalysisData: (roundNumber: number, data: ModeratorAnalysisPayload) => void;
   removePendingAnalysis: (roundNumber: number) => void;
 };
 
-/**
- * Hook for managing chat analyses with React Query as single source of truth
- *
- * @example
- * const {
- *   analyses,
- *   createPendingAnalysis,
- *   updateAnalysisData,
- *   removePendingAnalysis
- * } = useChatAnalysis({ threadId, mode });
- *
- * // When round completes
- * createPendingAnalysis(roundNumber, messages, participants, userQuestion);
- *
- * // When streaming completes
- * updateAnalysisData(roundNumber, completedData);
- *
- * // When regenerating
- * removePendingAnalysis(roundNumber);
- */
 export function useChatAnalysis({
   threadId,
   mode,
 }: UseChatAnalysisOptions): UseChatAnalysisReturn {
   const queryClient = useQueryClient();
 
-  const { data: analysesResponse, isLoading } = useThreadAnalysesQuery(
-    threadId,
-    !!threadId,
-  );
+  const { data: analysesResponse, isLoading } = useThreadAnalysesQuery(threadId, !!threadId);
 
   const analyses = useMemo(() => {
     if (!analysesResponse?.success)

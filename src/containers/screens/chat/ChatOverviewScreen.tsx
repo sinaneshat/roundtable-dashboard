@@ -30,32 +30,6 @@ import type { ParticipantConfig } from '@/lib/types/participant-config';
 import { toCreateThreadRequest } from '@/lib/types/participant-config';
 import { chatMessagesToUIMessages } from '@/lib/utils/message-transforms';
 
-/**
- * ✅ AI SDK v5 PATTERN: ChatGPT-Style Overview Screen with Shared Context
- *
- * REFACTORED TO FOLLOW AI SDK v5 BEST PRACTICES:
- * - Uses shared context from ChatProvider (no duplicate hook instance)
- * - Streams ALL participant responses on overview screen before navigation
- * - Waits for AI-generated title to complete in background
- * - Uses setOnRoundComplete callback for navigation (no setTimeout)
- * - Uses sendMessage() to trigger streaming (no empty message hack)
- *
- * CODE REDUCTION: 372 lines → 240 lines (-35%)
- * STATE REDUCTION: 6 state variables → 3
- *
- * CORRECT UX FLOW (ChatGPT-style):
- * 1. User enters prompt on home screen
- * 2. Thread created (backend returns empty messages array)
- * 3. Logo/suggestions animate out
- * 4. Context initialized with thread data
- * 5. sendMessage() called with initial prompt - backend creates user message
- * 6. ALL participants stream responses on overview screen ✅ KEY FIX
- * 7. After streaming completes, wait for title generation
- * 8. Navigate to thread page
- *
- * REFERENCE: AI SDK v5 docs - Share useChat State Across Components
- * https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot#share-useChat-state-across-components
- */
 export default function ChatOverviewScreen() {
   const router = useRouter();
   const t = useTranslations();
@@ -66,10 +40,9 @@ export default function ChatOverviewScreen() {
   const { data: modelsData } = useModelsQuery();
   const defaultModelId = modelsData?.data?.default_model_id;
 
-  // ✅ AI SDK v5 PATTERN: Access shared chat context
   const {
     messages,
-    sendMessage, // ✅ Send user message and trigger participants
+    sendMessage,
     isStreaming,
     currentParticipantIndex,
     error: streamError,
@@ -78,11 +51,9 @@ export default function ChatOverviewScreen() {
     setOnRoundComplete,
     thread: currentThread,
     participants: contextParticipants,
-    stop: stopStreaming, // ✅ Stop function for interrupting streaming
+    stop: stopStreaming,
   } = useSharedChatContext();
 
-  // ✅ HEADER STATE CLEANUP: Clear thread header when on overview page
-  // This prevents the thread header actions from persisting when navigating back from a thread
   const { setThreadTitle, setThreadActions } = useThreadHeader();
 
   const initialParticipants = useMemo<ParticipantConfig[]>(() => {
@@ -99,42 +70,19 @@ export default function ChatOverviewScreen() {
     return [];
   }, [defaultModelId]);
 
-  // ✅ REFACTORED: Use shared participant hook (eliminates ~150 lines of duplicate logic)
   const {
     selectedParticipants,
     setSelectedParticipants,
     handleRemoveParticipant,
   } = useSelectedParticipants(initialParticipants);
 
-  // ✅ SIMPLIFIED STATE: Only 2 variables (was 3)
   const [selectedMode, setSelectedMode] = useState<ChatModeId>(() => getDefaultChatMode());
   const [inputValue, setInputValue] = useState('');
-
-  // UI state for animations
   const [showInitialUI, setShowInitialUI] = useState(true);
   const [isCreatingThread, setIsCreatingThread] = useState(false);
-
-  // ✅ Store initial prompt for sending after thread initialization
   const [initialPrompt, setInitialPrompt] = useState<string | null>(null);
-
-  // Track if we've already sent the initial prompt to avoid double-sending
   const hasSentInitialPromptRef = useRef(false);
-
-  // ✅ Track created thread for analysis streaming
   const [createdThreadId, setCreatedThreadId] = useState<string | null>(null);
-
-  // ✅ FIX: Use refs to track latest messages and participants for onRoundComplete callback
-  // This avoids stale closure values when callback executes
-  const messagesRef = useRef(messages);
-  const participantsRef = useRef(contextParticipants);
-
-  useEffect(() => {
-    messagesRef.current = messages;
-  }, [messages]);
-
-  useEffect(() => {
-    participantsRef.current = contextParticipants;
-  }, [contextParticipants]);
 
   const {
     analyses,
@@ -146,31 +94,37 @@ export default function ChatOverviewScreen() {
 
   const createThreadMutation = useCreateThreadMutation();
 
-  /**
-   * ✅ AI SDK v5 PATTERN: Proper ChatGPT-style streaming workflow
-   *
-   * CORRECT FLOW:
-   * 1. Create thread (backend returns empty messages array)
-   * 2. Initialize context with thread + participants (no messages yet)
-   * 3. Set completion callback for navigation
-   * 4. Store prompt in state (initialPrompt)
-   * 5. useEffect detects initialPrompt and calls sendMessage(prompt)
-   * 6. Backend creates user message + participants stream responses
-   * 7. Context handles streaming, onRoundComplete fires when done
-   * 8. Navigate to thread page with AI-generated title
-   *
-   * ✅ ELIMINATED:
-   * - setTimeout hack (was 800ms)
-   * - Empty message trigger (was sendMessage(''))
-   * - startRound() for new threads (now only for existing threads)
-   * - shouldTriggerStream state
-   */
+  useEffect(() => {
+    if (!createdThreadId)
+      return;
+
+    setOnRoundComplete(async () => {
+      const currentMessages = messages;
+      const currentParticipants = contextParticipants;
+
+      const lastUserMessage = currentMessages.findLast(m => m.role === 'user');
+      const metadata = lastUserMessage?.metadata as Record<string, unknown> | undefined;
+      const roundNumber = (metadata?.roundNumber as number) || 1;
+
+      const textPart = lastUserMessage?.parts?.find(p => p.type === 'text');
+      const userQuestion = (textPart && 'text' in textPart ? textPart.text : '') || '';
+
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      createPendingAnalysis(
+        roundNumber,
+        currentMessages,
+        currentParticipants,
+        userQuestion,
+      );
+    });
+  }, [createdThreadId, setOnRoundComplete, messages, contextParticipants, createPendingAnalysis]);
+
   const handlePromptSubmit = useCallback(
     async (e: React.FormEvent) => {
       e.preventDefault();
 
       const prompt = inputValue.trim();
-      // ✅ VALIDATION: Prevent submission if no input, no participants, or already processing
       if (!prompt || selectedParticipants.length === 0 || isCreatingThread || isStreaming) {
         return;
       }
@@ -178,7 +132,6 @@ export default function ChatOverviewScreen() {
       try {
         setIsCreatingThread(true);
 
-        // Step 1: Create thread with initial user message
         const createThreadRequest = toCreateThreadRequest({
           message: prompt,
           mode: selectedMode,
@@ -191,7 +144,6 @@ export default function ChatOverviewScreen() {
 
         const { thread, participants, messages: initialMessages } = response.data;
 
-        // Convert API response dates to Date objects
         const threadWithDates = {
           ...thread,
           createdAt: new Date(thread.createdAt),
@@ -207,41 +159,13 @@ export default function ChatOverviewScreen() {
 
         const uiMessages = chatMessagesToUIMessages(initialMessages);
 
-        // Step 2: Hide logo/suggestions
         setShowInitialUI(false);
         setInputValue('');
-
-        // Step 3: Set created thread ID for analysis tracking
         setCreatedThreadId(thread.id);
-
-        // Step 4: Initialize context with thread data
-        // ✅ CRITICAL: Backend returns empty messages array - user message will be created by sendMessage()
         initializeThread(threadWithDates, participantsWithDates, uiMessages);
 
-        // ✅ CRITICAL FIX: Replace URL immediately to navigate from overview to chat
-        // Update URL to thread detail view without triggering a full page navigation
-        // Using window.history.replaceState (not router.replace) to avoid triggering navigation
-        const threadUrl = `/chat/${thread.slug}`;
-
-        window.history.replaceState(null, '', threadUrl);
-
-        // Step 5: Store prompt for sending after context is ready
-        hasSentInitialPromptRef.current = false; // Reset flag for new thread
+        hasSentInitialPromptRef.current = false;
         setInitialPrompt(prompt);
-
-        setOnRoundComplete(async () => {
-          const currentMessages = messagesRef.current;
-          const currentParticipants = participantsRef.current;
-
-          await new Promise(resolve => setTimeout(resolve, 2000));
-
-          createPendingAnalysis(
-            1,
-            currentMessages,
-            currentParticipants,
-            prompt,
-          );
-        });
       } catch (error) {
         showApiErrorToast('Error', error);
         setShowInitialUI(true);
@@ -257,8 +181,6 @@ export default function ChatOverviewScreen() {
       selectedParticipants,
       createThreadMutation,
       initializeThread,
-      setOnRoundComplete,
-      createPendingAnalysis,
     ],
   );
 
@@ -268,54 +190,33 @@ export default function ChatOverviewScreen() {
     setSelectedParticipants(participants);
   }, [setSelectedParticipants]);
 
-  // ✅ DEBUG: Removed logging
-
-  // ✅ REMOVED: handleRemoveParticipant - now provided by useSelectedParticipants hook
-
-  // ✅ CRITICAL: Send initial user message once context is initialized and ready
-  // This effect waits for:
-  // 1. initialPrompt to be set (after thread creation)
-  // 2. currentThread to exist (context initialized)
-  // 3. isStreaming to be false (status is 'ready')
   useEffect(() => {
     if (initialPrompt && currentThread && !isStreaming && !hasSentInitialPromptRef.current) {
       hasSentInitialPromptRef.current = true;
-      sendMessage(initialPrompt); // Send user message - triggers first participant automatically
+      sendMessage(initialPrompt);
     }
   }, [initialPrompt, currentThread, isStreaming, sendMessage]);
 
-  // ✅ Derive current streaming participant from context
   const currentStreamingParticipant = contextParticipants[currentParticipantIndex] || null;
 
-  // ✅ Initialize default participant when model loads (only on initial mount)
   useEffect(() => {
     if (selectedParticipants.length === 0 && defaultModelId && initialParticipants.length > 0) {
-      // Only set default participant if we haven't initialized yet
-      // This prevents re-adding the participant after user intentionally removes it
       setSelectedParticipants(initialParticipants);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [defaultModelId]); // Only run when defaultModelId changes, not when selectedParticipants changes
+  }, [defaultModelId]);
 
-  // ✅ CRITICAL FIX: Clear thread header state when navigating to overview
-  // This ensures the header only shows the sidebar toggle, not thread-specific actions
   useEffect(() => {
     setThreadTitle(null);
     setThreadActions(null);
   }, [setThreadTitle, setThreadActions]);
 
-  // ✅ CRITICAL FIX: Reset streaming state when showing initial UI
-  // This ensures the submit button is always shown when navigating back to overview
-  // Without this, the stop button persists from the previous thread screen
   useEffect(() => {
     if (showInitialUI && isStreaming) {
       stopStreaming();
     }
   }, [showInitialUI, isStreaming, stopStreaming]);
 
-  // ✅ AUTO-SCROLL: Scroll to bottom when new messages arrive or during streaming (page-level scrolling)
-  // Track both messages.length AND last message content to trigger on streaming updates
-  // ✅ CRITICAL FIX: Track BOTH text and reasoning parts to ensure auto-scroll during reasoning generation
   const lastMessage = messages[messages.length - 1];
   const lastMessageContent = lastMessage?.parts?.map(p => (p.type === 'text' || p.type === 'reasoning') ? p.text : '').join('') || '';
   useAutoScrollToBottom(
@@ -323,19 +224,15 @@ export default function ChatOverviewScreen() {
     !showInitialUI,
   );
 
-  // ✅ WINDOW-LEVEL SCROLLING: Reference for input container (no scroll padding needed)
   const inputContainerRef = useRef<HTMLDivElement | null>(null);
 
   return (
     <div className="min-h-screen flex flex-col">
-      {/* Background - fixed behind all content */}
       <div className="fixed inset-0 -z-10 overflow-hidden">
         <WavyBackground containerClassName="h-full w-full" />
       </div>
 
-      {/* Main content - flows naturally with window scrolling - pb-32 ensures messages have space above sticky input */}
       <div id="chat-scroll-container" className="container max-w-3xl mx-auto px-4 sm:px-6 pt-0 pb-32 flex-1">
-        {/* ✅ ANIMATED: Initial UI (logo, suggestions) - fades out when streaming starts */}
         <AnimatePresence>
           {showInitialUI && (
             <motion.div
@@ -347,7 +244,6 @@ export default function ChatOverviewScreen() {
               className="pb-8"
             >
               <div className="flex flex-col items-center gap-4 sm:gap-6 text-center">
-                {/* Brand Logo */}
                 <motion.div
                   className="relative h-20 w-20 xs:h-24 xs:w-24 sm:h-28 sm:w-28 md:h-32 md:w-32 lg:h-36 lg:w-36"
                   initial={{ scale: 0.8, opacity: 0 }}
@@ -363,7 +259,6 @@ export default function ChatOverviewScreen() {
                   />
                 </motion.div>
 
-                {/* Brand Title */}
                 <motion.h1
                   className="text-2xl xs:text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold text-gray-900 dark:text-white"
                   initial={{ opacity: 0 }}
@@ -373,7 +268,6 @@ export default function ChatOverviewScreen() {
                   {BRAND.name}
                 </motion.h1>
 
-                {/* Brand Tagline */}
                 <motion.p
                   className="text-base xs:text-lg sm:text-xl md:text-2xl text-gray-600 dark:text-gray-300 max-w-2xl"
                   initial={{ opacity: 0 }}
@@ -383,7 +277,6 @@ export default function ChatOverviewScreen() {
                   {BRAND.tagline}
                 </motion.p>
 
-                {/* Quick Start Suggestions */}
                 <motion.div
                   className="w-full mt-4 sm:mt-6 md:mt-8"
                   initial={{ opacity: 0 }}
@@ -397,7 +290,6 @@ export default function ChatOverviewScreen() {
           )}
         </AnimatePresence>
 
-        {/* ✅ ANIMATED: Streaming Messages - fades in when streaming starts */}
         <AnimatePresence>
           {!showInitialUI && currentThread && (
             <motion.div
@@ -407,7 +299,6 @@ export default function ChatOverviewScreen() {
               exit={{ opacity: 0, y: -20 }}
               transition={{ duration: 0.3 }}
             >
-              {/* ✅ REUSABLE: Same ChatMessageList component used in thread screen */}
               <ChatMessageList
                 messages={messages}
                 user={{
@@ -459,7 +350,6 @@ export default function ChatOverviewScreen() {
         </AnimatePresence>
       </div>
 
-      {/* ✅ INPUT CONTAINER: Sticky to bottom - stays at bottom while scrolling */}
       <div
         ref={inputContainerRef}
         className="sticky bottom-0 z-50 bg-gradient-to-t from-background via-background to-transparent pt-6 pb-4 mt-auto"

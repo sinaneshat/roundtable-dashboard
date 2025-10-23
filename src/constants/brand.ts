@@ -24,6 +24,23 @@ export const BRAND = {
     foreground: '#1e293b', // Dark text
   },
 
+  // Logo gradient colors - extracted from rainbow gradient logo
+  // Use these for data visualization to maintain brand consistency
+  logoGradient: [
+    '#FFD700', // Vibrant Gold/Yellow
+    '#FF8C00', // Deep Orange
+    '#FF1493', // Deep Pink/Magenta
+    '#9C27B0', // Purple
+    '#673AB7', // Deep Purple
+    '#3F51B5', // Indigo
+    '#2196F3', // Blue
+    '#00BCD4', // Cyan
+    '#00897B', // Teal
+    '#4CAF50', // Green
+    '#8BC34A', // Light Green
+    '#CDDC39', // Lime
+  ],
+
   // Logo paths - Proper transparent logos for different use cases
   logos: {
     light: '/static/logo.png', // Transparent background for light themes

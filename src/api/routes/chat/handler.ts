@@ -2587,6 +2587,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
               parts,
               roundNumber: currentRoundNumber,
               metadata: {
+                roundNumber: currentRoundNumber, // ✅ CRITICAL: Required by UIMessageMetadataSchema
                 model: participant.modelId,
                 participantId: participant.id,
                 participantIndex,
