@@ -12,26 +12,38 @@ export type StreamingParticipantsLoaderProps = {
   participants: ParticipantConfig[];
   /** Index of currently responding participant (0-based) */
   currentParticipantIndex: number | null;
+  /** ✅ NEW: Show analyzing state (keeps loader visible after participants finish) */
+  isAnalyzing?: boolean;
   /** Optional className */
   className?: string;
 };
 
 /**
- * Simplified streaming loader that shows:
+ * ✅ ENHANCED: Streaming loader with analysis state support
+ *
+ * Shows loader during:
+ * 1. Participant streaming (isStreaming = true)
+ * 2. Analysis preparation (isAnalyzing = true) - NEW!
+ *
+ * This ensures the loader stays visible from round completion until analysis starts streaming.
+ *
+ * Features:
  * - Funny thinking messages that cycle
  * - Smooth animations with framer-motion
- *
- * Note: Removed participant avatars to keep only the fun text animation
+ * - Context-aware messages (streaming vs analyzing)
  */
 export function StreamingParticipantsLoader({
   participants: _participants,
   currentParticipantIndex: _currentParticipantIndex,
+  isAnalyzing = false,
   className,
 }: StreamingParticipantsLoaderProps) {
   const t = useTranslations('chat.streaming');
 
-  // Get thinking messages from translations
-  const thinkingMessages = t.raw('thinkingMessages') as string[];
+  // Get messages from translations based on state
+  const thinkingMessages = isAnalyzing
+    ? (t.raw('analyzingMessages') as string[] || ['Analyzing responses...', 'Preparing analysis...'])
+    : (t.raw('thinkingMessages') as string[]);
 
   const [thinkingMessage, setThinkingMessage] = useState(thinkingMessages[0]);
 

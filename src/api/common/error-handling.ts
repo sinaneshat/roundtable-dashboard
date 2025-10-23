@@ -421,7 +421,7 @@ export const createError = {
  * ```typescript
  * try {
  *   await somethingDangerous();
- * } catch (error) {
+ * } catch {
  *   throw createError.internal('Operation failed', context);
  * }
  * ```
@@ -514,7 +514,7 @@ export type AIProviderErrorMetadata = {
  * ```typescript
  * try {
  *   await streamText({ model, prompt });
- * } catch (error) {
+ * } catch {
  *   const metadata = structureAIProviderError(error, {
  *     id: participant.id,
  *     modelId: participant.modelId,
@@ -670,6 +670,7 @@ export function structureAIProviderError(
     errorIsTransient = false;
     shouldRetry = false;
   } else {
+    // Intentionally empty
     errorCategory = 'unknown';
     errorIsTransient = true;
     shouldRetry = true;

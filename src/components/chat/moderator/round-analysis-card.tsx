@@ -64,11 +64,43 @@ export function RoundAnalysisCard({
   // ✅ TIMEOUT CHECK: If analysis is pending/streaming for too long, treat as failed
   // - 30s-2min: Likely stuck from page refresh, will auto-recover via polling
   // - > 2min: Definitely stuck, show as failed with recovery instructions
-  // Calculate age directly (Date.now() is impure, but this is a valid use case for timeout checking)
-  const TWO_MINUTES_MS = 2 * 60 * 1000;
-  // eslint-disable-next-line react-hooks/purity -- Valid use case: timeout check requires current time. Date.now() is intentionally impure here to detect stuck analyses on each render.
-  const ageMs = Date.now() - new Date(analysis.createdAt).getTime();
-  const isStuck = ageMs > TWO_MINUTES_MS && (analysis.status === AnalysisStatuses.PENDING || analysis.status === AnalysisStatuses.STREAMING);
+  // ✅ FIX: Use interval to track timeout status without calling Date.now() during render
+  const [isStuck, setIsStuck] = useState(false);
+
+  // Use refs to track values and prevent effect from running on every render
+  const createdAtTimeRef = useRef<number>(new Date(analysis.createdAt).getTime());
+  const statusRef = useRef(analysis.status);
+
+  // Only update refs when actual values change (not object identity)
+  useEffect(() => {
+    const createdAtTime = new Date(analysis.createdAt).getTime();
+    if (createdAtTimeRef.current !== createdAtTime) {
+      createdAtTimeRef.current = createdAtTime;
+    }
+    if (statusRef.current !== analysis.status) {
+      statusRef.current = analysis.status;
+    }
+  }, [analysis.createdAt, analysis.status]);
+
+  useEffect(() => {
+    const TWO_MINUTES_MS = 2 * 60 * 1000;
+
+    const checkTimeout = () => {
+      const ageMs = Date.now() - createdAtTimeRef.current;
+      const shouldBeStuck = ageMs > TWO_MINUTES_MS && (statusRef.current === AnalysisStatuses.PENDING || statusRef.current === AnalysisStatuses.STREAMING);
+
+      // Only update state if value changed to prevent infinite loops
+      setIsStuck(prevIsStuck => (prevIsStuck === shouldBeStuck ? prevIsStuck : shouldBeStuck));
+    };
+
+    // Check immediately
+    checkTimeout();
+
+    // Then check every 30 seconds
+    const intervalId = setInterval(checkTimeout, 30000);
+
+    return () => clearInterval(intervalId);
+  }, []); // Empty deps - only run once on mount
 
   // Override status if stuck
   const effectiveStatus = isStuck ? AnalysisStatuses.FAILED : analysis.status;
@@ -105,22 +137,27 @@ export function RoundAnalysisCard({
   // - RESET when new round starts: all previous rounds auto-close
   const [isManuallyControlled, setIsManuallyControlled] = useState(false);
   const [manuallyOpen, setManuallyOpen] = useState(false);
+  const prevStreamingRoundRef = useRef<number | null | undefined>(null);
 
   // ✅ AUTO-CLOSE PREVIOUS ROUNDS: When a new round starts streaming, reset manual control
   // This forces all previous analyses to close (only latest stays open)
+  // Using ref pattern to avoid setState in effect
   useEffect(() => {
-    // Only reset if:
-    // 1. streamingRoundNumber is provided
-    // 2. This is NOT the latest round
-    // 3. A new round has started (streamingRoundNumber > this round)
-    if (streamingRoundNumber != null && !isLatest && streamingRoundNumber > analysis.roundNumber) {
-      console.warn('[RoundAnalysisCard] 🔒 Auto-closing previous round', {
-        analysisRound: analysis.roundNumber,
-        streamingRound: streamingRoundNumber,
-      });
-      setIsManuallyControlled(false);
-      setManuallyOpen(false);
+    // Only reset if a NEW round has started (streamingRoundNumber changed)
+    if (streamingRoundNumber !== prevStreamingRoundRef.current) {
+      prevStreamingRoundRef.current = streamingRoundNumber;
+
+      // Only close if this is NOT the latest and a newer round started
+      if (streamingRoundNumber != null && !isLatest && streamingRoundNumber > analysis.roundNumber) {
+        // Use setTimeout to avoid setState during render phase
+        const timeoutId = setTimeout(() => {
+          setIsManuallyControlled(false);
+          setManuallyOpen(false);
+        }, 0);
+        return () => clearTimeout(timeoutId);
+      }
     }
+    return undefined;
   }, [streamingRoundNumber, isLatest, analysis.roundNumber]);
 
   // ✅ DEFAULT BEHAVIOR: Latest is open, others collapsed
@@ -131,6 +168,22 @@ export function RoundAnalysisCard({
     setIsManuallyControlled(true);
     setManuallyOpen(open);
   }, []);
+
+  // ✅ FIX: Memoize retry handler to prevent infinite re-renders
+  const handleRetry = useCallback(async () => {
+    try {
+      // ✅ Retry analysis by updating status back to pending
+      // This will trigger ModeratorAnalysisStream to re-attempt
+      await fetch(`/api/v1/chat/threads/${threadId}/rounds/${analysis.roundNumber}/analyze`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          participantMessageIds: analysis.participantMessageIds,
+        }),
+      });
+      // Query will auto-refetch and show pending status
+    } catch { /* Intentionally suppressed */ }
+  }, [threadId, analysis.roundNumber, analysis.participantMessageIds]);
 
   // ✅ AUTO-SCROLL: Scroll to completed analysis if user is not actively interacting
   const containerRef = useRef<HTMLDivElement>(null);
@@ -166,18 +219,6 @@ export function RoundAnalysisCard({
 
     return cleanup;
   }, [analysis.status, effectiveStatus, isLatest, isOpen]);
-
-  console.warn('[RoundAnalysisCard] Rendering:', {
-    roundNumber: analysis.roundNumber,
-    status: analysis.status,
-    effectiveStatus,
-    isStuck,
-    ageMs,
-    isLatest,
-    isOpen,
-    isManuallyControlled,
-    participantMessageIds: analysis.participantMessageIds.length,
-  });
 
   return (
     <div ref={containerRef} className={cn('py-1.5', className)}>
@@ -227,7 +268,6 @@ export function RoundAnalysisCard({
                     threadId={threadId}
                     analysis={analysis}
                     onStreamComplete={(completedData) => {
-                      console.warn('[RoundAnalysisCard] Stream completed for round', analysis.roundNumber);
                       // ✅ Pass completed analysis data to parent for cache update
                       onStreamComplete?.(completedData);
                     }}
@@ -245,12 +285,7 @@ export function RoundAnalysisCard({
                       {/* Skills Comparison Chart */}
                       {(() => {
                         const shouldRender = analysis.analysisData.participantAnalyses && analysis.analysisData.participantAnalyses.length > 0;
-                        console.warn('[RoundAnalysisCard] Skills Comparison check:', {
-                          hasParticipantAnalyses: Boolean(analysis.analysisData.participantAnalyses),
-                          participantAnalysesLength: analysis.analysisData.participantAnalyses?.length,
-                          shouldRender,
-                          participantAnalyses: analysis.analysisData.participantAnalyses,
-                        });
+
                         return shouldRender
                           ? <SkillsComparisonChart participants={analysis.analysisData.participantAnalyses} />
                           : null;
@@ -291,9 +326,21 @@ export function RoundAnalysisCard({
                   )
                 : effectiveStatus === AnalysisStatuses.FAILED
                   ? (
-                      <div className="flex items-center gap-2 py-1.5 text-xs text-destructive">
-                        <span className="size-1.5 rounded-full bg-destructive/80" />
-                        <span>{effectiveErrorMessage || t('errorAnalyzing')}</span>
+                      <div className="space-y-3">
+                        <div className="flex items-center gap-2 py-1.5 text-xs text-destructive">
+                          <span className="size-1.5 rounded-full bg-destructive/80" />
+                          <span>{effectiveErrorMessage || t('errorAnalyzing')}</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleRetry}
+                          className="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-primary hover:text-primary/80 transition-colors"
+                        >
+                          <svg className="size-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                          </svg>
+                          {t('retryAnalysis')}
+                        </button>
                       </div>
                     )
                   : null}

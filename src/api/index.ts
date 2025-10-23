@@ -546,10 +546,8 @@ export default {
 };
 
 // ============================================================================
-// Cloudflare Workflows
+// Cloudflare Workflows - REMOVED
 // ============================================================================
 
-// ✅ WORKFLOWS: Accessed via Cloudflare Workers bindings (env.ANALYSIS_WORKFLOW)
-// No export needed - workflows are invoked through env bindings defined in wrangler.jsonc
-// The workflow implementation is in ./workflows/analysis-workflow.ts
-// See: src/api/routes/chat/handler.ts for usage via env.ANALYSIS_WORKFLOW.create()
+// Workflows have been removed in favor of user-initiated streaming analysis
+// Analysis is now triggered exclusively via POST /chat/threads/:id/rounds/:roundNumber/analyze

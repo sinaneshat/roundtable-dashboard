@@ -64,6 +64,7 @@ export function useAutoScrollToBottom(dependency: unknown, enabled = true) {
             behavior: 'smooth',
           });
         } else {
+          // Intentionally empty
           // Fallback: scroll to document height if container not found
           window.scrollTo({
             top: document.documentElement.scrollHeight,

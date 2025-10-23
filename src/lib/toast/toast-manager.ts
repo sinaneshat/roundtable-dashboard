@@ -81,6 +81,7 @@ function processToastQueue(): void {
       processToastQueue();
     }, 100);
   } else {
+    // Intentionally empty
     isProcessingQueue = false;
   }
 }
@@ -158,6 +159,7 @@ export function toast(options: ToastOptions): string {
   if (activeToasts.size >= maxConcurrentToasts) {
     toastQueue.push(options);
   } else {
+    // Intentionally empty
     showToastInternal(options);
   }
 

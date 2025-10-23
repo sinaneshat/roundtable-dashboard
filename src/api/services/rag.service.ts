@@ -546,9 +546,9 @@ Use the above context to inform your response when relevant, but do not explicit
         queryTimeMs,
         createdAt: new Date(),
       });
-    } catch (error) {
+    } catch {
       // Log error but don't throw - analytics failure shouldn't break the flow
-      console.error('Failed to track context retrieval:', error);
+
     }
   }
 }

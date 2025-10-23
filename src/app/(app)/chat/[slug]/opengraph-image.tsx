@@ -39,9 +39,9 @@ export default async function Image({
       threadTitle = threadResult.data.thread.title || 'Chat Thread';
       threadMode = threadResult.data.thread.mode || 'solving';
     }
-  } catch (error) {
+  } catch {
     // Fallback to generic title if fetch fails
-    console.error('Failed to fetch thread for OG image:', error);
+
   }
 
   // Mode-specific colors for visual distinction

@@ -480,6 +480,7 @@ export function getFlagshipScore(model: BaseModelResponse): number {
   } else if (inputPrice > 100) {
     score += 15; // Ultra-premium (>$100/M tokens)
   } else {
+    // Intentionally empty
     score += 0; // Budget/free tier
   }
 
@@ -493,6 +494,7 @@ export function getFlagshipScore(model: BaseModelResponse): number {
   } else if (model.context_length >= 64000) {
     score += 15; // Medium-large (64K-128K)
   } else {
+    // Intentionally empty
     score += 0; // Small context
   }
 
@@ -506,9 +508,11 @@ export function getFlagshipScore(model: BaseModelResponse): number {
     } else if (ageInDays < 365) {
       score += 15; // Last year = recent
     } else {
+    // Intentionally empty
       score += 5; // Older = less likely flagship
     }
   } else {
+    // Intentionally empty
     score += 10; // No timestamp = neutral
   }
 

@@ -47,35 +47,17 @@ export async function generateTitleFromMessage(
   firstMessage: string,
   env: ApiEnv['Bindings'],
 ): Promise<string> {
-  console.warn('[generateTitleFromMessage] 🎯 Starting title generation', {
-    messagePreview: firstMessage.substring(0, 100),
-    messageLength: firstMessage.length,
-  });
-
   // Initialize OpenRouter with API key
   initializeOpenRouter(env);
 
   // ✅ FIXED MODEL: Get reliable model for title generation
   const titleModel = getTitleGenerationModel();
 
-  console.warn('[generateTitleFromMessage] 🤖 Using model for title generation', {
-    modelId: titleModel,
-  });
-
   // ✅ RETRY LOOP: Try up to 10 times before falling back
   const MAX_ATTEMPTS = 10;
-  let lastError: Error | null = null;
 
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     try {
-      console.warn(attempt === 1
-        ? '[generateTitleFromMessage] 🚀 Attempting title generation'
-        : '[generateTitleFromMessage] 🔄 Retrying title generation', {
-        attempt,
-        maxAttempts: MAX_ATTEMPTS,
-        ...(lastError && { lastError: lastError.message }),
-      });
-
       // Using AI SDK v5 UIMessage format with consolidated config
       const result = await openRouterService.generateText({
         modelId: titleModel,
@@ -96,12 +78,6 @@ export async function generateTitleFromMessage(
         maxTokens: TITLE_GENERATION_CONFIG.maxTokens,
       });
 
-      console.warn('[generateTitleFromMessage] ✅ Raw title generated from model', {
-        rawTitle: result.text,
-        rawLength: result.text.length,
-        attempt,
-      });
-
       // Clean up the generated title
       let title = result.text.trim();
 
@@ -112,45 +88,19 @@ export async function generateTitleFromMessage(
       const words = title.split(/\s+/);
       if (words.length > 5) {
         title = words.slice(0, 5).join(' ');
-        console.warn('[generateTitleFromMessage] ✂️ Truncated to 5 words', {
-          originalWords: words.length,
-          truncatedTitle: title,
-        });
       }
 
       // Limit to 50 characters max (5 words ~= 50 chars)
       if (title.length > 50) {
         title = title.substring(0, 50).trim();
-        console.warn('[generateTitleFromMessage] ✂️ Truncated to 50 characters', {
-          truncatedTitle: title,
-        });
       }
 
       // ✅ SUCCESS: Return title (no minimum length validation - accept any model response)
-      console.warn('[generateTitleFromMessage] 🎉 Final title generated', {
-        finalTitle: title,
-        finalLength: title.length,
-        wordCount: title.split(/\s+/).length,
-        attemptsNeeded: attempt,
-      });
 
       return title;
-    } catch (error) {
-      lastError = error instanceof Error ? error : new Error(String(error));
-
-      console.warn('[generateTitleFromMessage] ❌ Title generation attempt failed', {
-        attempt,
-        remainingAttempts: MAX_ATTEMPTS - attempt,
-        errorMessage: lastError.message,
-        errorType: lastError.name,
-      });
-
+    } catch {
       // If we've exhausted all attempts, break and use fallback
       if (attempt >= MAX_ATTEMPTS) {
-        console.error('[generateTitleFromMessage] ❌ All retry attempts exhausted', {
-          totalAttempts: MAX_ATTEMPTS,
-          lastError: lastError.message,
-        });
         break;
       }
 
@@ -160,20 +110,10 @@ export async function generateTitleFromMessage(
   }
 
   // ✅ FALLBACK: Only reached if ALL 10 attempts failed
-  console.error('[generateTitleFromMessage] ⚠️ Using fallback after all retries failed', {
-    totalAttempts: MAX_ATTEMPTS,
-    lastError: lastError?.message,
-    stack: lastError?.stack,
-  });
 
   // Extract first 5 words from message as fallback
   const words = firstMessage.trim().split(/\s+/).slice(0, 5).join(' ');
   const fallbackTitle = words.length > 50 ? words.substring(0, 50).trim() : words || 'Chat';
-
-  console.warn('[generateTitleFromMessage] 📝 Using fallback title from message', {
-    fallbackTitle,
-    originalMessage: firstMessage.substring(0, 100),
-  });
 
   return fallbackTitle;
 }

@@ -166,9 +166,10 @@ export async function executeBatch<
  * @example
  * ```typescript
  * if (supportsBatchOperations(db)) {
- *   console.log('Running in Cloudflare D1 environment');
+ *
  * } else {
- *   console.log('Running in local SQLite environment');
+    // Intentionally empty
+ *
  * }
  * ```
  */

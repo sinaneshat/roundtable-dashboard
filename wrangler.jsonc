@@ -69,13 +69,6 @@
   "ai": {
     "binding": "AI"
   },
-  "workflows": [
-    {
-      "name": "analysis-workflow",
-      "binding": "ANALYSIS_WORKFLOW",
-      "class_name": "AnalysisWorkflow"
-    }
-  ],
   "durable_objects": {
     "bindings": [
       {
@@ -171,13 +164,6 @@
       "ai": {
         "binding": "AI"
       },
-      "workflows": [
-        {
-          "name": "analysis-workflow",
-          "binding": "ANALYSIS_WORKFLOW",
-          "class_name": "AnalysisWorkflow"
-        }
-      ],
       "durable_objects": {
         "bindings": [
           {
@@ -267,13 +253,6 @@
       "ai": {
         "binding": "AI"
       },
-      "workflows": [
-        {
-          "name": "analysis-workflow",
-          "binding": "ANALYSIS_WORKFLOW",
-          "class_name": "AnalysisWorkflow"
-        }
-      ],
       "durable_objects": {
         "bindings": [
           {

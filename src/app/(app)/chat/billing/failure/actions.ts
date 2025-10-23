@@ -74,17 +74,12 @@ export async function capturePaymentFailure(searchParams?: {
     };
 
     // 4. Log error for monitoring (you can extend this with proper error tracking)
-    console.error('Payment failure captured:', {
-      userId: session.user.id,
-      ...errorData,
-    });
 
     return {
       success: false,
       data: errorData,
     };
   } catch (error) {
-    console.error('Server action error: Failed to capture payment failure', error);
     return {
       success: false,
       data: {

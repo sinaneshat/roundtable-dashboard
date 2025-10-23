@@ -47,7 +47,6 @@ declare namespace Cloudflare {
 		VECTORIZE: VectorizeIndex;
 		AI: Ai;
 		ASSETS: Fetcher;
-		ANALYSIS_WORKFLOW: Workflow;
 	}
 }
 interface CloudflareEnv extends Cloudflare.Env {}

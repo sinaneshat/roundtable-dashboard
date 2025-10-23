@@ -81,6 +81,7 @@ function SidebarProvider({
       if (setOpenProp) {
         setOpenProp(openState)
       } else {
+    // Intentionally empty
         _setOpen(openState)
       }
 

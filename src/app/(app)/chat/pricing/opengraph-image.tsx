@@ -29,8 +29,7 @@ export default async function Image() {
   let logoBase64: string;
   try {
     logoBase64 = await getLogoBase64();
-  } catch (error) {
-    console.error('Failed to load logo:', error);
+  } catch {
     logoBase64 = '';
   }
 

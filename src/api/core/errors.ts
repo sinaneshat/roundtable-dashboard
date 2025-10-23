@@ -305,7 +305,7 @@ export const ErrorCodes = ERROR_CODES;
  *   await operation();
  * } catch (error) {
  *   if (isAppError(error)) {
- *     console.log(error.code, error.severity);
+ *
  *   }
  * }
  */

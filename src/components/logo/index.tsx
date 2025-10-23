@@ -36,6 +36,7 @@ function Logo(props: Props) {
           return { width: 40, height: 40 };
       }
     } else {
+    // Intentionally empty
       switch (size) {
         case 'sm':
           return { width: 100, height: 100 };

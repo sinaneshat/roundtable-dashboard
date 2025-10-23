@@ -151,6 +151,7 @@ export const clearCacheHandler: RouteHandler<typeof clearCacheRoute, ApiEnv> = c
         clearedTags.push(...staticTags);
         clearedTags.push('all-static-caches-invalidated');
       } else {
+        // Intentionally empty
         clearedTags.push('no-cache-configured');
       }
 

@@ -55,7 +55,7 @@ import {
 import type { ApiEnv } from '@/api/types';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db/schema';
-import { messageHasError, MessageMetadataSchema, UIMessageMetadataSchema } from '@/lib/schemas/message-metadata';
+import { UIMessageMetadataSchema } from '@/lib/schemas/message-metadata';
 import { extractTextFromParts, filterNonEmptyMessages } from '@/lib/utils/message-transforms';
 
 import type {
@@ -132,182 +132,11 @@ async function executeAtomic<T extends Awaited<ReturnType<typeof getDbAsync>>>(
       }
     });
   } else {
+    // Intentionally empty
     // Fallback: Execute operations sequentially (not atomic)
     for (const op of operations) {
       await op;
     }
-  }
-}
-
-/**
- * ✅ CLOUDFLARE WORKFLOWS: Trigger durable background analysis
- *
- * This function triggers a Cloudflare Workflow to process moderator analysis.
- * The workflow runs to completion even if the user navigates away.
- *
- * Key Features:
- * - Durable execution survives worker evictions
- * - Automatic retries with exponential backoff
- * - State persistence across steps
- * - No HTTP timeout limitations
- *
- * @param params - Round completion parameters
- * @param params.threadId - The chat thread ID
- * @param params.thread - The chat thread with participants
- * @param params.allParticipants - All participants in the chat
- * @param params.savedMessageId - The saved message ID
- * @param params.db - Database instance
- * @param params.env - Cloudflare environment bindings
- * @returns Promise<void> - Resolves when workflow is triggered (non-blocking)
- */
-async function triggerRoundAnalysisAsync(params: {
-  threadId: string;
-  thread: typeof tables.chatThread.$inferSelect & {
-    participants: Array<typeof tables.chatParticipant.$inferSelect>;
-  };
-  allParticipants: Array<typeof tables.chatParticipant.$inferSelect>;
-  savedMessageId: string;
-  db: Awaited<ReturnType<typeof getDbAsync>>;
-  env: CloudflareEnv;
-}): Promise<void> {
-  const { threadId, thread, db, env } = params;
-
-  try {
-    // ✅ PARTICIPANT COUNT VALIDATION: Analysis only makes financial sense with 2+ participants
-    // Single participant conversations don't need analysis
-    const participantCount = thread.participants.length;
-    if (participantCount < 2) {
-      console.warn('[triggerRoundAnalysisAsync] ⏭️  Skipping analysis for single-participant thread', {
-        threadId,
-        participantCount,
-      });
-      return;
-    }
-
-    // Get all assistant messages for this thread to determine round number
-    const assistantMessages = await db.query.chatMessage.findMany({
-      where: and(
-        eq(tables.chatMessage.threadId, threadId),
-        eq(tables.chatMessage.role, 'assistant'),
-      ),
-      orderBy: [tables.chatMessage.createdAt],
-    });
-
-    // Calculate round number: each round has N assistant messages (one per participant)
-    const roundNumber = Math.ceil(assistantMessages.length / participantCount);
-
-    // Check if analysis already exists for this round (idempotency)
-    const existingAnalysis = await db.query.chatModeratorAnalysis.findFirst({
-      where: and(
-        eq(tables.chatModeratorAnalysis.threadId, threadId),
-        eq(tables.chatModeratorAnalysis.roundNumber, roundNumber),
-      ),
-    });
-
-    if (existingAnalysis) {
-      console.warn('[triggerRoundAnalysisAsync] ⏭️  Analysis already exists for round', roundNumber);
-      return;
-    }
-
-    // ✅ QUOTA ENFORCEMENT: Check if user can generate analysis
-    // Analysis counts against user's monthly quota as it consumes AI resources
-    await enforceAnalysisQuota(thread.userId);
-
-    // Get the participant message IDs for this round
-    const roundStartIndex = (roundNumber - 1) * participantCount;
-    const roundMessages = assistantMessages.slice(roundStartIndex, roundStartIndex + participantCount);
-    const participantMessageIds = roundMessages.map(m => m.id);
-
-    // ✅ VALIDATE ALL PARTICIPANTS RESPONDED: Skip analysis if round is incomplete
-    if (roundMessages.length < participantCount) {
-      console.warn('[triggerRoundAnalysisAsync] ⏭️  Round incomplete - skipping analysis', {
-        threadId,
-        roundNumber,
-        expectedParticipants: participantCount,
-        actualParticipants: roundMessages.length,
-      });
-      return;
-    }
-
-    // Get the user question for this round (last user message before round messages)
-    const userMessages = await db.query.chatMessage.findMany({
-      where: and(
-        eq(tables.chatMessage.threadId, threadId),
-        eq(tables.chatMessage.role, 'user'),
-      ),
-      orderBy: [desc(tables.chatMessage.createdAt)],
-      limit: 10,
-    });
-
-    const earliestRoundMessageTime = Math.min(...roundMessages.map(m => m.createdAt.getTime()));
-    const userMessage = userMessages.find(
-      m => m.createdAt.getTime() < earliestRoundMessageTime,
-    );
-    const userQuestion = userMessage ? extractTextFromParts(userMessage.parts) : 'N/A';
-
-    // ✅ Build participant responses for workflow
-    const participantResponses = roundMessages.map((msg, index) => {
-      const participant = thread.participants.find(p => p.id === msg.participantId);
-      if (!participant) {
-        throw new Error(`Participant not found for message ${msg.id}`);
-      }
-
-      const modelName = extractModeratorModelName(participant.modelId);
-      return {
-        participantIndex: index,
-        participantRole: participant.role,
-        modelId: participant.modelId,
-        modelName,
-        responseContent: extractTextFromParts(msg.parts),
-      };
-    });
-
-    // ✅ CREATE PENDING ANALYSIS & TRIGGER WORKFLOW
-    const analysisId = ulid();
-
-    await db.insert(tables.chatModeratorAnalysis).values({
-      id: analysisId,
-      threadId,
-      roundNumber,
-      mode: thread.mode,
-      userQuestion,
-      status: AnalysisStatuses.PENDING, // Will be updated to STREAMING by workflow
-      participantMessageIds,
-      createdAt: new Date(),
-    });
-
-    // ✅ INCREMENT USAGE COUNTER: Track analysis generation for quota management
-    // This must be called AFTER successful analysis creation to ensure accurate tracking
-    await incrementAnalysisUsage(thread.userId);
-
-    // ✅ TRIGGER WORKFLOW: Fire-and-forget, runs to completion
-    env.ANALYSIS_WORKFLOW.create({
-      id: analysisId,
-      params: {
-        analysisId,
-        threadId,
-        roundNum: roundNumber,
-        userQuestion,
-        mode: thread.mode,
-        participantResponses,
-      },
-    }).catch((error) => {
-      // Log workflow creation error but don't block
-      console.error('[triggerRoundAnalysisAsync] ❌ Failed to create workflow:', {
-        analysisId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-    });
-
-    console.warn('[triggerRoundAnalysisAsync] ✅ Workflow triggered', {
-      threadId,
-      roundNumber,
-      analysisId,
-      participantCount: participantMessageIds.length,
-    });
-  } catch (error) {
-    console.error('[triggerRoundAnalysisAsync] ❌ Failed to trigger round analysis:', error);
-    // Don't throw - this is a background operation
   }
 }
 
@@ -582,13 +411,6 @@ async function createChangelogForRound(
   // Insert all changelog entries if any changes detected
   if (changelogEntries.length > 0) {
     await db.insert(tables.chatThreadChangelog).values(changelogEntries);
-
-    console.warn('[createChangelogForRound] ✅ Created changelog entries for round', {
-      threadId: thread.id,
-      roundNumber: currentRoundNumber,
-      entryCount: changelogEntries.length,
-      changes: changelogEntries.map(e => e.changeType),
-    });
   }
 }
 
@@ -857,28 +679,12 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
     // Fire-and-forget pattern (no await) - runs in background
     (async () => {
       try {
-        console.warn('[createThreadHandler] 🎯 Starting AI title generation', {
-          threadId,
-          firstMessagePreview: body.firstMessage.substring(0, 50),
-        });
-
         // Generate AI title from first message (using fastest available model)
         const aiTitle = await generateTitleFromMessage(body.firstMessage, c.env);
-
-        console.warn('[createThreadHandler] ✅ AI title generated', {
-          threadId,
-          aiTitle,
-          previousTitle: tempTitle,
-        });
 
         // ✅ STABLE URL FIX: Only update title, NOT slug
         // Slug remains permanent to prevent 404 errors when client is using the original slug
         // Changing the slug after creation causes race conditions where the client still uses old slug
-        console.warn('[createThreadHandler] 📝 Updating thread with AI title (keeping slug stable)', {
-          threadId,
-          aiTitle,
-          slug: tempSlug, // Keep original slug
-        });
 
         // Update thread with AI-generated title only (slug stays the same)
         await db
@@ -889,12 +695,6 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
           })
           .where(eq(tables.chatThread.id, threadId));
 
-        console.warn('[createThreadHandler] ✅ Thread updated with AI title', {
-          threadId,
-          aiTitle,
-          slug: tempSlug, // Slug unchanged - stable URL
-        });
-
         // ✅ CRITICAL FIX: Invalidate cache after title update
         // This ensures the sidebar shows the updated AI-generated title immediately
         if (db.$cache?.invalidate) {
@@ -902,32 +702,13 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
           await db.$cache.invalidate({
             tags: [ThreadCacheTags.list(user.id)],
           });
-
-          console.warn('[createThreadHandler] ✅ Cache invalidated after title update', {
-            threadId,
-            userId: user.id,
-          });
         }
-
-        console.warn('[createThreadHandler] 🎉 AI title generation complete', {
-          threadId,
-          aiTitle,
-          slug: tempSlug, // Slug unchanged
-        });
-      } catch (error) {
+      } catch {
         // Log error but don't fail the request since thread is already created
-        console.error('[createThreadHandler] ❌ AI title generation failed', {
-          threadId,
-          error: error instanceof Error ? error.message : String(error),
-          stack: error instanceof Error ? error.stack : undefined,
-        });
+
       }
-    })().catch((error) => {
-      // Log unhandled rejection
-      console.error('[createThreadHandler] ❌ Unhandled rejection in title generation', {
-        threadId,
-        error: error instanceof Error ? error.message : String(error),
-      });
+    })().catch(() => {
+      // Intentionally suppressed - unhandled rejections in title generation
     });
 
     // Return thread with participants (no messages yet)
@@ -1100,6 +881,7 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
 
           // ✅ Changelog will be created on next message submission
         } else {
+          // Intentionally empty
           // Existing participant - check for changes
           const current = currentMap.get(newP.id);
           if (!current)
@@ -1256,18 +1038,9 @@ export const deleteThreadHandler: RouteHandler<typeof deleteThreadRoute, ApiEnv>
         threadId: id,
         db,
       });
-
-      console.warn('[deleteThreadHandler] 🔍 RAG embeddings deleted', {
-        threadId: id,
-        userId: user.id,
-      });
-    } catch (error) {
+    } catch {
       // Log but don't fail the deletion
-      console.error('[deleteThreadHandler] ⚠️ Failed to delete RAG embeddings', {
-        threadId: id,
-        userId: user.id,
-        error: error instanceof Error ? error.message : String(error),
-      });
+
     }
 
     // ✅ CRITICAL: Invalidate backend cache for thread lists
@@ -1744,10 +1517,6 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
     // ✅ AI SDK V5 OFFICIAL PATTERN: Validate single message exists
     // Reference: https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot-message-persistence#sending-only-the-last-message
     if (!message) {
-      console.error('[streamChatHandler] ❌ VALIDATION ERROR: Message is required', {
-        threadId,
-        participantIndex,
-      });
       throw createError.badRequest('Message is required');
     }
 
@@ -1758,7 +1527,6 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
     // =========================================================================
 
     if (!threadId) {
-      console.error('[streamChatHandler] ❌ VALIDATION ERROR: Thread ID missing');
       throw createError.badRequest('Thread ID is required for streaming');
     }
 
@@ -1775,16 +1543,10 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
     });
 
     if (!thread) {
-      console.error('[streamChatHandler] ❌ THREAD NOT FOUND', { threadId });
       throw createError.notFound('Thread not found');
     }
 
     if (thread.userId !== user.id) {
-      console.error('[streamChatHandler] ❌ UNAUTHORIZED ACCESS', {
-        threadId,
-        threadOwner: thread.userId,
-        requestUser: user.id,
-      });
       throw createError.unauthorized('Not authorized to access this thread');
     }
 
@@ -1799,12 +1561,6 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
     // where multiple participants try to delete the same messages simultaneously.
 
     if (regenerateRound && participantIndex === 0) {
-      console.warn('[streamChatHandler] ♻️ REGENERATING ROUND: Deleting old messages and analysis', {
-        threadId,
-        regenerateRound,
-        participantIndex,
-      });
-
       try {
         // Delete all messages from the specified round
         const deletedMessages = await db
@@ -1817,12 +1573,6 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
           )
           .returning();
 
-        console.warn('[streamChatHandler] ♻️ Deleted messages from round', {
-          threadId,
-          regenerateRound,
-          deletedCount: deletedMessages.length,
-        });
-
         // ✅ RAG CLEANUP: Delete embeddings for deleted messages
         // CASCADE foreign key will handle D1 cleanup, but we need to clean Vectorize
         if (deletedMessages.length > 0) {
@@ -1832,19 +1582,15 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
                 messageId: deletedMessage.id,
                 db,
               });
-            } catch (error) {
+            } catch {
               // Log but don't fail the regeneration
-              console.error('[streamChatHandler] ⚠️ Failed to delete RAG embeddings for message', {
-                threadId,
-                messageId: deletedMessage.id,
-                error: error instanceof Error ? error.message : String(error),
-              });
+
             }
           }
         }
 
         // Delete analysis for the specified round (if exists)
-        const deletedAnalyses = await db
+        await db
           .delete(tables.chatModeratorAnalysis)
           .where(
             and(
@@ -1853,12 +1599,6 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
             ),
           )
           .returning();
-
-        console.warn('[streamChatHandler] ♻️ Deleted analyses from round', {
-          threadId,
-          regenerateRound,
-          deletedCount: deletedAnalyses.length,
-        });
 
         // Delete feedback for the specified round (if exists)
         await db
@@ -1869,12 +1609,8 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
               eq(tables.chatRoundFeedback.roundNumber, regenerateRound),
             ),
           );
-      } catch (error) {
-        console.error('[streamChatHandler] ❌ REGENERATION ERROR: Failed to delete old round data', {
-          threadId,
-          regenerateRound,
-          error,
-        });
+      } catch {
+
         // Don't fail the request - continue with streaming
         // The old messages will remain but new ones will be added with a higher round number
       }
@@ -1905,6 +1641,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
 
       currentRoundNumber = existingUserMessages.length + 1;
     } else {
+    // Intentionally empty
       // Subsequent participants: Get round number from the user message
       const userMessages = await db.query.chatMessage.findMany({
         where: and(
@@ -1926,12 +1663,6 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
     // Only first participant (index 0) should handle mode changes to avoid duplicates
 
     if (providedMode && providedMode !== thread.mode && participantIndex === 0) {
-      console.warn('[streamChatHandler] 🔄 MODE CHANGE DETECTED', {
-        threadId,
-        oldMode: thread.mode,
-        newMode: providedMode,
-      });
-
       // Update thread mode
       await db
         .update(tables.chatThread)
@@ -2209,18 +1940,17 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
       });
 
       if (!reloadedThread || reloadedThread.participants.length === 0) {
-        console.error('[streamChatHandler] ❌ NO PARTICIPANTS after reload', { threadId });
         throw createError.badRequest('No enabled participants after persistence');
       }
 
       participants = reloadedThread.participants;
     } else {
+    // Intentionally empty
       // ✅ NO PROVIDED PARTICIPANTS: Use database state from initial query
       participants = thread.participants;
     }
 
     if (participants.length === 0) {
-      console.error('[streamChatHandler] ❌ NO PARTICIPANTS', { threadId });
       throw createError.badRequest('No enabled participants in this thread');
     }
 
@@ -2230,11 +1960,6 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
 
     const participant = participants[participantIndex ?? 0];
     if (!participant) {
-      console.error('[streamChatHandler] ❌ PARTICIPANT NOT FOUND', {
-        threadId,
-        participantIndex,
-        availableParticipants: participants.length,
-      });
       throw createError.badRequest(`Participant at index ${participantIndex} not found`);
     }
 
@@ -2275,13 +2000,6 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
       });
       typedMessages = allMessages;
     } catch (error) {
-      console.error('[streamChatHandler] ❌ MESSAGE VALIDATION ERROR', {
-        threadId,
-        participantIndex,
-        error: error instanceof Error ? error.message : String(error),
-        previousMessageCount: previousMessages.length,
-        totalMessageCount: allMessages.length,
-      });
       throw createError.badRequest(`Invalid message format: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
 
@@ -2424,14 +2142,6 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
           const contextPrompt = ragService.formatContextForPrompt(ragContexts);
           systemPrompt = `${baseSystemPrompt}\n\n${contextPrompt}`;
 
-          console.warn('[streamChatHandler] 🔍 RAG context retrieved', {
-            threadId,
-            participantIndex,
-            contextCount: ragContexts.length,
-            topSimilarity: ragContexts[0]?.similarity,
-            retrievalTimeMs,
-          });
-
           // Track RAG usage for analytics (non-blocking)
           ragService.trackContextRetrieval({
             threadId,
@@ -2440,24 +2150,13 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
             contexts: ragContexts,
             queryTimeMs: retrievalTimeMs,
             db,
-          }).catch((error) => {
-            console.error('[streamChatHandler] ⚠️ Failed to track RAG analytics', error);
-          });
-        } else {
-          console.warn('[streamChatHandler] 🔍 No RAG context found', {
-            threadId,
-            participantIndex,
-            retrievalTimeMs,
+          }).catch(() => {
+            // Intentionally suppressed
           });
         }
       }
-    } catch (error) {
+    } catch {
       // RAG failures should not break the chat flow
-      console.error('[streamChatHandler] ⚠️ RAG context retrieval failed', {
-        threadId,
-        participantIndex,
-        error: error instanceof Error ? error.message : String(error),
-      });
       // Continue with base system prompt without RAG context
     }
 
@@ -2466,11 +2165,6 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
     const nonEmptyMessages = filterNonEmptyMessages(typedMessages);
 
     if (nonEmptyMessages.length === 0) {
-      console.error('[streamChatHandler] ❌ NO VALID MESSAGES', {
-        threadId,
-        participantIndex,
-        originalMessageCount: typedMessages.length,
-      });
       throw createError.badRequest('No valid messages to send to AI model');
     }
 
@@ -2496,26 +2190,14 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
         // dataPartsSchema: undefined, // Add when custom data parts are used
         // metadataSchema: undefined, // Optional: Add for strict metadata validation
       });
-    } catch (validationError) {
-      console.error('[streamChatHandler] ❌ MESSAGE VALIDATION ERROR', {
-        threadId,
-        participantIndex,
-        error: validationError instanceof Error ? validationError.message : String(validationError),
-        nonEmptyMessageCount: nonEmptyMessages.length,
-      });
+    } catch {
       throw createError.badRequest('Invalid message format. Please refresh and try again.');
     }
 
     let modelMessages;
     try {
       modelMessages = convertToModelMessages(validatedMessages);
-    } catch (conversionError) {
-      console.error('[streamChatHandler] ❌ MESSAGE CONVERSION ERROR', {
-        threadId,
-        participantIndex,
-        error: conversionError instanceof Error ? conversionError.message : String(conversionError),
-        validatedMessageCount: validatedMessages.length,
-      });
+    } catch {
       throw createError.badRequest('Failed to convert messages for model');
     }
 
@@ -2534,32 +2216,15 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
     // proper conversation structure for multi-participant flows.
     const lastModelMessage = modelMessages[modelMessages.length - 1];
     if (!lastModelMessage || lastModelMessage.role !== 'user') {
-      console.warn('[streamChatHandler] ⚠️ INVALID MESSAGE HISTORY: Last message must be from user', {
-        threadId,
-        participantIndex,
-        lastMessageRole: lastModelMessage?.role,
-        messageCount: modelMessages.length,
-      });
-
       // Find the last user message to duplicate
       const lastUserMessage = nonEmptyMessages.findLast(m => m.role === 'user');
       if (!lastUserMessage) {
-        console.error('[streamChatHandler] ❌ NO USER MESSAGE FOUND', {
-          threadId,
-          participantIndex,
-          messageCount: nonEmptyMessages.length,
-        });
         throw createError.badRequest('No valid user message found in conversation history');
       }
 
       // Extract text content from last user message
       const lastUserText = lastUserMessage.parts?.find(p => p.type === 'text' && 'text' in p);
       if (!lastUserText || !('text' in lastUserText)) {
-        console.error('[streamChatHandler] ❌ USER MESSAGE HAS NO TEXT', {
-          threadId,
-          participantIndex,
-          messageId: lastUserMessage.id,
-        });
         throw createError.badRequest('Last user message has no valid text content');
       }
 
@@ -2629,12 +2294,6 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
         // Don't retry AI SDK type validation errors - these are provider response format issues
         // that won't be fixed by retrying. The stream already partially succeeded.
         if (errorName === 'AI_TypeValidationError') {
-          console.warn('[streamChatHandler] ⏭️ Skipping retry for AI SDK type validation error', {
-            threadId,
-            participantIndex,
-            errorName,
-            errorMessage: err?.message?.substring(0, 200), // Log first 200 chars
-          });
           return false;
         }
 
@@ -2647,43 +2306,19 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
           // Don't retry "Multi-turn conversations are not supported" errors
           if (errorMessage.includes('Multi-turn conversations are not supported')
             || responseBody.includes('Multi-turn conversations are not supported')) {
-            console.warn('[streamChatHandler] ⏭️ Model does not support multi-turn conversations', {
-              threadId,
-              participantIndex,
-              modelId: participant.modelId,
-              errorMessage,
-            });
             return false;
           }
 
-          console.warn('[streamChatHandler] ⏭️ Skipping retry for validation error (400)', {
-            threadId,
-            participantIndex,
-            statusCode,
-            errorMessage,
-          });
           return false;
         }
 
         // Don't retry authentication errors (401, 403) - requires API key fix
         if (statusCode === 401 || statusCode === 403) {
-          console.warn('[streamChatHandler] ⏭️ Skipping retry for authentication error', {
-            threadId,
-            participantIndex,
-            statusCode,
-            errorMessage: err?.message,
-          });
           return false;
         }
 
         // Don't retry model not found errors (404) - model doesn't exist
         if (statusCode === 404) {
-          console.warn('[streamChatHandler] ⏭️ Skipping retry for not found error (404)', {
-            threadId,
-            participantIndex,
-            statusCode,
-            errorMessage: err?.message,
-          });
           return false;
         }
 
@@ -2872,6 +2507,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
               } else if (errorLower.includes('timeout') || errorLower.includes('connection')) {
                 errorCategory = 'network';
               } else {
+                // Intentionally empty
                 errorCategory = errorCategory || 'provider_error';
               }
             } else if (outputTokens === 0) {
@@ -2900,6 +2536,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
                 errorMessage = `${participant.modelId} encountered a provider error`;
                 errorCategory = 'provider_error';
               } else {
+                // Intentionally empty
                 // Unknown/unexpected finish reason
                 providerMessage = `Model returned empty response. ${baseStats}`;
                 errorMessage = `${participant.modelId} returned empty response (reason: ${finishReason})`;
@@ -2979,20 +2616,9 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
                 userId: user.id,
                 db,
               });
-
-              console.warn('[streamChatHandler] 🔍 RAG embedding stored', {
-                threadId,
-                messageId: savedMessage.id,
-                participantIndex,
-              });
-            } catch (error) {
+            } catch {
               // Embedding storage failures should not break the chat flow
-              console.error('[streamChatHandler] ⚠️ Failed to store RAG embedding', {
-                threadId,
-                messageId: savedMessage.id,
-                participantIndex,
-                error: error instanceof Error ? error.message : String(error),
-              });
+
             }
           }
 
@@ -3019,56 +2645,72 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
             const actualParticipantCount = roundMessages.filter(msg => msg.role === 'assistant').length;
 
             if (actualParticipantCount < expectedParticipantCount) {
-              console.warn('[streamChatHandler] ⏭️  Round incomplete - skipping analysis', {
-                threadId,
-                participantIndex,
-                roundNumber: currentRoundNumber,
-                expectedParticipants: expectedParticipantCount,
-                actualParticipants: actualParticipantCount,
-                messagesInRound: roundMessages.length,
-              });
+              // Round incomplete - skip analysis
             } else {
-              // ✅ TYPE-SAFE ERROR CHECK: Use validated MessageMetadata type
-              const messagesWithErrors = roundMessages.filter(msg =>
-                MessageMetadataSchema.safeParse(msg.metadata).success
-                && messageHasError(MessageMetadataSchema.parse(msg.metadata)),
-              );
-              const hasAnyError = messagesWithErrors.length > 0;
+              // ✅ AUTO-CREATE PENDING ANALYSIS: Create pending analysis record for frontend to stream
 
-              if (hasAnyError) {
-                console.warn('[streamChatHandler] ⚠️ Round has errors - skipping analysis', {
-                  threadId,
-                  participantIndex,
-                  roundNumber: currentRoundNumber,
-                  totalParticipants: participants.length,
-                  messagesInRound: roundMessages.length,
-                  errorCount: messagesWithErrors.length,
-                });
-              } else {
-                triggerRoundAnalysisAsync({
-                  threadId,
-                  thread: { ...thread, participants },
-                  allParticipants: participants,
-                  savedMessageId: savedMessage.id,
-                  db,
-                  env: c.env, // ✅ ADDED: Pass env for background analysis generation
-                }).catch((error) => {
-                  console.error('[streamChatHandler] ❌ Failed to trigger analysis (non-blocking):', error);
-                });
-              }
+              // Capture values for async closure (used in analysis creation below)
+
+              // Create pending analysis record in background (non-blocking)
+              (async () => {
+                try {
+                  const db = await getDbAsync();
+
+                  // Check if analysis already exists for this round
+                  const existingAnalysis = await db
+                    .select()
+                    .from(tables.chatModeratorAnalysis)
+                    .where(
+                      and(
+                        eq(tables.chatModeratorAnalysis.threadId, threadId),
+                        eq(tables.chatModeratorAnalysis.roundNumber, currentRoundNumber),
+                      ),
+                    )
+                    .get();
+
+                  if (existingAnalysis) {
+                    return;
+                  }
+
+                  // Get participant message IDs from this round
+                  const participantMessageIds = roundMessages
+                    .filter(m => m.role === 'assistant')
+                    .map(m => m.id);
+
+                  // Get the user's question from this round
+                  const userMessage = roundMessages.find(m => m.role === 'user');
+                  const userQuestion = userMessage
+                    ? extractTextFromParts(userMessage.parts)
+                    : 'No user question found';
+
+                  // Create pending analysis record
+                  const analysisId = ulid();
+                  await db
+                    .insert(tables.chatModeratorAnalysis)
+                    .values({
+                      id: analysisId,
+                      threadId,
+                      roundNumber: currentRoundNumber,
+                      mode: thread.mode,
+                      userQuestion,
+                      status: 'pending',
+                      participantMessageIds, // Array of message IDs (JSON mode in schema)
+                      analysisData: null,
+                      completedAt: null,
+                      errorMessage: null,
+                    })
+                    .run();
+                } catch {
+                  // Non-blocking error - log but don't throw
+
+                }
+              })();
             }
           }
-        } catch (dbError) {
+        } catch {
           // ✅ NON-BLOCKING ERROR: Log but don't throw
           // This allows the next participant to continue even if this one failed to save
-          console.error('[streamChatHandler] ❌ FAILED TO SAVE MESSAGE (non-blocking)', {
-            threadId,
-            participantIndex,
-            participantId: participant.id,
-            modelId: participant.modelId,
-            error: dbError instanceof Error ? dbError.message : String(dbError),
-            stack: dbError instanceof Error ? dbError.stack : undefined,
-          });
+
           // Don't throw - allow round to continue
         }
       },
@@ -3102,23 +2744,9 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
         // Reference: https://github.com/vercel/ai/issues/9087
         const err = error as Error & { name?: string };
         if (err?.name === 'AI_TypeValidationError' && err?.message?.includes('logprobs')) {
-          console.warn('[streamChatHandler] ⏭️ Suppressing non-fatal logprobs validation error', {
-            threadId,
-            participantIndex,
-            modelId: participant.modelId,
-            errorType: 'AI_TypeValidationError',
-            isLogprobsError: true,
-          });
           // Return empty string to indicate error was handled and stream should continue
           return '';
         }
-
-        console.error('[streamChatHandler] STREAM_ERROR', {
-          threadId,
-          participantIndex,
-          modelId: participant.modelId,
-          error,
-        });
 
         // ✅ REFACTORED: Use shared error utility from /src/api/common/error-handling.ts
         const errorMetadata = structureAIProviderError(error, {
@@ -3336,9 +2964,10 @@ function generateModeratorAnalysis(
     env: ApiEnv['Bindings'];
     analysisId: string;
     threadId: string;
+    userId: string;
   },
 ) {
-  const { roundNumber, mode, userQuestion, participantResponses, changelogEntries, env, analysisId, threadId } = config;
+  const { roundNumber, mode, userQuestion, participantResponses, changelogEntries, env, analysisId, threadId: _threadId, userId } = config;
 
   // ✅ ESTABLISHED PATTERN: Initialize OpenRouter and get client
   // Reference: src/api/services/analysis-background.service.ts:144-145
@@ -3387,7 +3016,6 @@ function generateModeratorAnalysis(
     // The onFinish callback runs after streaming completes without interfering with the stream
     onFinish: async ({ object: finalObject, error: finishError }) => {
       if (finishError) {
-        console.error('[generateModeratorAnalysis] ❌ Stream error:', finishError);
         try {
           const db = await getDbAsync();
           await db.update(tables.chatModeratorAnalysis)
@@ -3396,18 +3024,11 @@ function generateModeratorAnalysis(
               errorMessage: finishError instanceof Error ? finishError.message : 'Unknown error',
             })
             .where(eq(tables.chatModeratorAnalysis.id, analysisId));
-        } catch (dbError) {
-          console.error('[generateModeratorAnalysis] ❌ Failed to update error status:', dbError);
-        }
+        } catch { /* Intentionally suppressed */ }
         return;
       }
 
       if (finalObject) {
-        console.warn('[generateModeratorAnalysis] ✅ Persisting completed analysis', {
-          analysisId,
-          threadId,
-          roundNumber,
-        });
         try {
           const db = await getDbAsync();
           await db.update(tables.chatModeratorAnalysis)
@@ -3417,9 +3038,11 @@ function generateModeratorAnalysis(
               completedAt: new Date(),
             })
             .where(eq(tables.chatModeratorAnalysis.id, analysisId));
-        } catch (dbError) {
-          console.error('[generateModeratorAnalysis] ❌ Failed to persist analysis:', dbError);
-        }
+
+          // ✅ QUOTA: Increment analysis usage after successful completion
+          // This ensures retries also count toward quota (enforced at start)
+          await incrementAnalysisUsage(userId);
+        } catch { /* Intentionally suppressed */ }
       }
     },
   });
@@ -3494,12 +3117,6 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
     // ✅ REGENERATION FIX: If multiple analyses exist, keep only the most recent completed one
     // Delete all others to prevent conflicts
     if (existingAnalyses.length > 1) {
-      console.warn('[analyzeRoundHandler] ⚠️ Multiple analyses found for round - cleaning up', {
-        threadId,
-        roundNumber: roundNum,
-        count: existingAnalyses.length,
-      });
-
       // Find the most recent completed analysis (if any)
       const completedAnalysis = existingAnalyses.find(a => a.status === AnalysisStatuses.COMPLETED);
 
@@ -3509,11 +3126,6 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
       );
 
       if (analysesToDelete.length > 0) {
-        console.warn('[analyzeRoundHandler] 🗑️ Deleting stale analyses', {
-          count: analysesToDelete.length,
-          ids: analysesToDelete.map(a => a.id),
-        });
-
         for (const analysis of analysesToDelete) {
           await db.delete(tables.chatModeratorAnalysis)
             .where(eq(tables.chatModeratorAnalysis.id, analysis.id));
@@ -3527,16 +3139,8 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
       : existingAnalyses.find(a => a.status === AnalysisStatuses.COMPLETED);
 
     if (existingAnalysis) {
-      console.warn('[analyzeRoundHandler] 🔍 Existing analysis found', {
-        analysisId: existingAnalysis.id,
-        status: existingAnalysis.status,
-        roundNumber: roundNum,
-        ageMs: Date.now() - existingAnalysis.createdAt.getTime(),
-      });
-
       // ✅ COMPLETED: Return existing analysis data (no streaming needed)
       if (existingAnalysis.status === AnalysisStatuses.COMPLETED && existingAnalysis.analysisData) {
-        console.warn('[analyzeRoundHandler] ✅ Returning completed analysis', existingAnalysis.id);
         return Responses.ok(c, {
           object: {
             ...existingAnalysis.analysisData,
@@ -3551,13 +3155,6 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
       // Frontend should use GET /analyses to poll for status, NOT retry POST
       if (existingAnalysis.status === AnalysisStatuses.STREAMING) {
         const ageMs = Date.now() - existingAnalysis.createdAt.getTime();
-
-        console.warn('[analyzeRoundHandler] 🔄 Analysis already streaming, returning 409 Conflict', {
-          analysisId: existingAnalysis.id,
-          ageMs,
-          threadId,
-          roundNumber: roundNum,
-        });
 
         // ✅ CRITICAL: Do NOT delete streaming analyses
         // The backend continues streaming in background even if client disconnects
@@ -3574,7 +3171,6 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
 
       // ✅ FAILED: Delete failed analysis to allow retry
       if (existingAnalysis.status === AnalysisStatuses.FAILED) {
-        console.warn('[analyzeRoundHandler] 🔄 Deleting failed analysis to allow retry', existingAnalysis.id);
         await db.delete(tables.chatModeratorAnalysis)
           .where(eq(tables.chatModeratorAnalysis.id, existingAnalysis.id));
       }
@@ -3582,7 +3178,6 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
       // ✅ PENDING: Delete immediately instead of trying to claim
       // This is safer during regeneration to prevent race conditions
       if (existingAnalysis.status === AnalysisStatuses.PENDING) {
-        console.warn('[analyzeRoundHandler] ♻️ Deleting pending analysis to create fresh one', existingAnalysis.id);
         await db.delete(tables.chatModeratorAnalysis)
           .where(eq(tables.chatModeratorAnalysis.id, existingAnalysis.id));
         // Fall through to create new analysis
@@ -3617,127 +3212,72 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
       if (foundMessages.length === messageIds.length) {
         participantMessages = foundMessages as MessageWithParticipant[];
       } else {
-        console.warn('[analyzeRoundHandler] ⚠️ Provided message IDs not found, auto-calculating', {
-          providedIds: messageIds,
-          foundCount: foundMessages.length,
-          threadId,
-          roundNumber: roundNum,
-        });
+        // Intentionally empty
+
       }
     }
 
     // ✅ OPTION 2: Auto-calculate messages (no IDs provided OR provided IDs were invalid)
     if (!participantMessages) {
-      try {
-        console.warn('[analyzeRoundHandler] 🔍 Auto-calculating participant messages for round', {
-          threadId,
-          roundNumber: roundNum,
-        });
+      // Get active participants for this thread
+      const activeParticipants = await db.query.chatParticipant.findMany({
+        where: (fields, { and: andOp, eq: eqOp }) =>
+          andOp(
+            eqOp(fields.threadId, threadId),
+            eqOp(fields.isEnabled, true),
+          ),
+        orderBy: [tables.chatParticipant.priority],
+      });
 
-        // Get active participants for this thread
-        const activeParticipants = await db.query.chatParticipant.findMany({
-          where: (fields, { and: andOp, eq: eqOp }) =>
-            andOp(
-              eqOp(fields.threadId, threadId),
-              eqOp(fields.isEnabled, true),
-            ),
-          orderBy: [tables.chatParticipant.priority],
-        });
+      const participantCount = activeParticipants.length;
 
-        const participantCount = activeParticipants.length;
-
-        console.warn('[analyzeRoundHandler] 📊 Found active participants', {
-          threadId,
-          participantCount,
-          participantIds: activeParticipants.map(p => p.id),
-        });
-
-        if (participantCount === 0) {
-          throw createError.badRequest(
-            'No active participants found for this thread',
-            {
-              errorType: 'validation',
-              field: 'participants',
-            },
-          );
-        }
-
-        // ✅ CRITICAL FIX: Get messages for the SPECIFIC round, not just recent messages
-        // Calculate which messages belong to this round based on chronological order
-        const allAssistantMessages = await db.query.chatMessage.findMany({
-          where: (fields, { and: andOp, eq: eqOp }) =>
-            andOp(
-              eqOp(fields.threadId, threadId),
-              eqOp(fields.role, 'assistant'),
-            ),
-          with: {
-            participant: true,
+      if (participantCount === 0) {
+        throw createError.badRequest(
+          'No active participants found for this thread',
+          {
+            errorType: 'validation',
+            field: 'participants',
           },
-          orderBy: [asc(tables.chatMessage.createdAt)], // Oldest first for round calculation
-        });
-
-        console.warn('[analyzeRoundHandler] 📝 Queried all assistant messages', {
-          threadId,
-          totalMessages: allAssistantMessages.length,
-          participantCount,
-          requestedRound: roundNum,
-        });
-
-        // ✅ Extract messages for the requested round
-        // Round 1: messages 0 to (participantCount - 1)
-        // Round 2: messages participantCount to (2 * participantCount - 1)
-        // Round N: messages (N-1)*participantCount to (N * participantCount - 1)
-        const roundStartIndex = (roundNum - 1) * participantCount;
-        const roundEndIndex = roundNum * participantCount;
-        const roundMessages = allAssistantMessages.slice(roundStartIndex, roundEndIndex);
-
-        console.warn('[analyzeRoundHandler] 🎯 Extracted messages for specific round', {
-          threadId,
-          roundNumber: roundNum,
-          roundStartIndex,
-          roundEndIndex,
-          extractedCount: roundMessages.length,
-          expectedCount: participantCount,
-          messageIds: roundMessages.map(m => m.id),
-        });
-
-        if (roundMessages.length === 0) {
-          throw createError.badRequest(
-            `No messages found for round ${roundNum}. This round may not exist yet.`,
-            {
-              errorType: 'validation',
-              field: 'roundNumber',
-            },
-          );
-        }
-
-        if (roundMessages.length < participantCount) {
-          console.warn('[analyzeRoundHandler] ⚠️ Incomplete round - fewer messages than participants', {
-            threadId,
-            roundNumber: roundNum,
-            found: roundMessages.length,
-            expected: participantCount,
-          });
-        }
-
-        participantMessages = roundMessages as MessageWithParticipant[];
-
-        console.warn('[analyzeRoundHandler] ✅ Auto-calculated participant messages for round', {
-          threadId,
-          roundNumber: roundNum,
-          participantCount,
-          foundMessages: participantMessages.length,
-          messageIds: participantMessages.map(m => m.id),
-        });
-      } catch (autoCalcError) {
-        console.error('[analyzeRoundHandler] ❌ Auto-calculation failed:', {
-          error: autoCalcError instanceof Error ? autoCalcError.message : String(autoCalcError),
-          stack: autoCalcError instanceof Error ? autoCalcError.stack : undefined,
-          threadId,
-          roundNumber: roundNum,
-        });
-        throw autoCalcError;
+        );
       }
+
+      // ✅ CRITICAL FIX: Get messages for the SPECIFIC round, not just recent messages
+      // Calculate which messages belong to this round based on chronological order
+      const allAssistantMessages = await db.query.chatMessage.findMany({
+        where: (fields, { and: andOp, eq: eqOp }) =>
+          andOp(
+            eqOp(fields.threadId, threadId),
+            eqOp(fields.role, 'assistant'),
+          ),
+        with: {
+          participant: true,
+        },
+        orderBy: [asc(tables.chatMessage.createdAt)], // Oldest first for round calculation
+      });
+
+      // ✅ Extract messages for the requested round
+      // Round 1: messages 0 to (participantCount - 1)
+      // Round 2: messages participantCount to (2 * participantCount - 1)
+      // Round N: messages (N-1)*participantCount to (N * participantCount - 1)
+      const roundStartIndex = (roundNum - 1) * participantCount;
+      const roundEndIndex = roundNum * participantCount;
+      const roundMessages = allAssistantMessages.slice(roundStartIndex, roundEndIndex);
+
+      if (roundMessages.length === 0) {
+        throw createError.badRequest(
+          `No messages found for round ${roundNum}. This round may not exist yet.`,
+          {
+            errorType: 'validation',
+            field: 'roundNumber',
+          },
+        );
+      }
+
+      if (roundMessages.length < participantCount) {
+        // Round incomplete - logging removed
+      }
+
+      participantMessages = roundMessages as MessageWithParticipant[];
     }
 
     // ✅ Final validation: Ensure we have messages to analyze
@@ -3793,17 +3333,6 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
       limit: 20, // Get recent changelog entries before this round
     });
 
-    console.warn('[analyzeRoundHandler] 📋 Fetched changelog entries before round', {
-      threadId,
-      roundNumber: roundNum,
-      changelogCount: changelogEntries.length,
-      changes: changelogEntries.map(c => ({
-        type: c.changeType,
-        summary: c.changeSummary,
-        createdAt: c.createdAt,
-      })),
-    });
-
     // Build participant response data for THIS round only
     const participantResponses = participantMessages.map((msg, index) => {
       const participant = msg.participant!;
@@ -3818,14 +3347,12 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
       };
     });
 
+    // ✅ QUOTA: Enforce analysis quota BEFORE starting (prevents wasted API calls)
+    // This also tracks retries - each retry counts as a new analysis
+    await enforceAnalysisQuota(user.id);
+
     // ✅ Create analysis record with 'streaming' status
     const analysisId = ulid();
-    console.warn('[analyzeRoundHandler] 🆕 Creating analysis record for streaming', {
-      analysisId,
-      threadId,
-      roundNumber: roundNum,
-      participantCount: participantMessages.length,
-    });
 
     await db.insert(tables.chatModeratorAnalysis).values({
       id: analysisId,
@@ -3855,13 +3382,8 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
       })), // ✅ Pass changelog to understand what changed before this round
       analysisId, // Pass ID for onFinish callback persistence
       threadId, // Pass for logging
+      userId: user.id, // Pass for quota tracking
       env: c.env,
-    });
-
-    console.warn('[analyzeRoundHandler] 🌊 Streaming analysis', {
-      analysisId,
-      threadId,
-      roundNumber: roundNum,
     });
 
     // ✅ Return streaming response (Content-Type: text/plain; charset=utf-8)
@@ -3883,7 +3405,6 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
  */
 // eslint-disable-next-line ts/no-explicit-any -- Generic Hono context type for internal handler
 export async function analyzeBackgroundHandler(c: any): Promise<Response> {
-  console.warn('[analyzeBackgroundHandler] ⚠️ DEPRECATED: This handler should not be called. Using streaming with onFinish callback instead.');
   return Responses.customResponse(
     c,
     {
@@ -3941,17 +3462,6 @@ export const getThreadAnalysesHandler: RouteHandler<typeof getThreadAnalysesRout
     });
 
     if (orphanedAnalyses.length > 0) {
-      console.warn('[getThreadAnalysesHandler] 🧹 Cleaning up orphaned analyses', {
-        threadId,
-        count: orphanedAnalyses.length,
-        analyses: orphanedAnalyses.map(a => ({
-          id: a.id,
-          roundNumber: a.roundNumber,
-          status: a.status,
-          ageMs: now - a.createdAt.getTime(),
-        })),
-      });
-
       // Mark all orphaned analyses as failed
       for (const analysis of orphanedAnalyses) {
         await db.update(tables.chatModeratorAnalysis)
@@ -4099,6 +3609,7 @@ export const setRoundFeedbackHandler: RouteHandler<typeof setRoundFeedbackRoute,
 
       result = updated;
     } else {
+    // Intentionally empty
       // ✅ CREATE: Insert new feedback
       const [created] = await db
         .insert(tables.chatRoundFeedback)

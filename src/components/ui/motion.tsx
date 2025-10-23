@@ -24,7 +24,6 @@ const defaultSlideIn: Variants = {
   exit: { opacity: 0, x: 8 }
 };
 
-
 const staggerItem: Variants = {
   initial: { opacity: 0, y: 8 },
   animate: { 

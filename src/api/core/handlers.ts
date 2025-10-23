@@ -191,6 +191,7 @@ async function applyAuthentication(c: Context, authMode: AuthMode): Promise<void
           c.set('session', sessionData.session);
           c.set('user', sessionData.user);
         } else {
+          // Intentionally empty
           c.set('session', null);
           c.set('user', null);
         }

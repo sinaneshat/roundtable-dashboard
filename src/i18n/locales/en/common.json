@@ -544,6 +544,18 @@
         "Loading profound insights...",
         "Generating thoughtful prose...",
         "Awakening dormant neurons..."
+      ],
+      "analyzingMessages": [
+        "Analyzing diverse perspectives...",
+        "Synthesizing collective insights...",
+        "Evaluating response quality...",
+        "Comparing different viewpoints...",
+        "Identifying key themes...",
+        "Measuring agreement levels...",
+        "Extracting valuable patterns...",
+        "Assessing response coherence...",
+        "Highlighting unique contributions...",
+        "Preparing comprehensive analysis..."
       ]
     },
     "chainOfThought": {

@@ -80,6 +80,7 @@ function RHFDatePicker({
                   if (externalOnChange) {
                     externalOnChange({ target: { value: utcTimestamp } });
                   } else {
+                    // Intentionally empty
                     field.onChange(utcTimestamp);
                   }
                 }}

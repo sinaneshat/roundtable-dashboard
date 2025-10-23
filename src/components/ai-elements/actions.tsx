@@ -72,7 +72,32 @@ export function Action({
   label,
   ...props
 }: ActionProps) {
-  const button = (
+  // If tooltip or label provided, wrap in Tooltip
+  if (tooltip || label) {
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="sm"
+            className={cn(
+              'h-7 w-7 p-0 rounded-md text-muted-foreground hover:text-foreground',
+              className,
+            )}
+            aria-label={label}
+            {...props}
+          >
+            {children}
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>
+          <p>{tooltip || label}</p>
+        </TooltipContent>
+      </Tooltip>
+    );
+  }
+
+  return (
     <Button
       variant="ghost"
       size="sm"
@@ -86,20 +111,4 @@ export function Action({
       {children}
     </Button>
   );
-
-  // If tooltip or label provided, wrap in Tooltip
-  if (tooltip || label) {
-    return (
-      <Tooltip>
-        <TooltipTrigger asChild>
-          {button}
-        </TooltipTrigger>
-        <TooltipContent>
-          <p>{tooltip || label}</p>
-        </TooltipContent>
-      </Tooltip>
-    );
-  }
-
-  return button;
 }

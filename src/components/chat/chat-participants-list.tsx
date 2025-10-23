@@ -840,6 +840,7 @@ export function ChatParticipantsList({
       const reindexed = filtered.map((p, index) => ({ ...p, order: index }));
       onParticipantsChange(reindexed);
     } else {
+    // Intentionally empty
       // Select - add to participants without role by default
       // ✅ Generate unique ID for new participant using counter ref (avoids impure Date.now())
       participantIdCounterRef.current += 1;

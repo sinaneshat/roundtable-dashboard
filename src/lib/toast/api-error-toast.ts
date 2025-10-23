@@ -102,6 +102,7 @@ export function showApiErrorToast(
       const firstError = errorDetails.validationErrors[0];
       description = firstError?.message || description;
     } else {
+    // Intentionally empty
       // Multiple validation errors - show as list
       const validationMessages = errorDetails.validationErrors
         .map(err => `• ${err.field}: ${err.message}`)

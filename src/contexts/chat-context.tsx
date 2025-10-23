@@ -116,12 +116,6 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       newParticipants: ChatParticipant[],
       newMessages?: UIMessage[],
     ) => {
-      console.warn('[ChatContext] 🔄 Initializing thread', {
-        threadId: newThread.id,
-        participantCount: newParticipants.length,
-        messageCount: newMessages?.length || 0,
-      });
-
       setThread(newThread);
       setParticipants(newParticipants);
 
@@ -131,6 +125,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         setInitialMessages(newMessages);
         chat.setMessages(newMessages); // ✅ Sync AI SDK state immediately
       } else {
+        // Intentionally empty
         setInitialMessages([]);
         chat.setMessages([]); // ✅ Clear AI SDK state
       }

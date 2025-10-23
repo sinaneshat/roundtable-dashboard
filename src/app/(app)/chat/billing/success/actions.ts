@@ -64,7 +64,6 @@ export async function syncStripeAfterCheckout(): Promise<{
       error: 'Failed to sync subscription data',
     };
   } catch (error) {
-    console.error('Server action error: Failed to sync Stripe data', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Sync failed',

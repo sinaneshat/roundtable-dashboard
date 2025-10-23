@@ -105,7 +105,7 @@ export type MessageStatus = z.infer<typeof MessageStatusSchema>;
  * @example
  * if (isMessagePart(data)) {
  *   // TypeScript knows data is MessagePart
- *   console.log(data.type, data.text);
+ *
  * }
  */
 export function isMessagePart(value: unknown): value is MessagePart {

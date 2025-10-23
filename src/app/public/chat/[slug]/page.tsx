@@ -122,8 +122,6 @@ export default async function PublicChatThreadPage({
       redirect(`/auth/sign-in?${params.toString()}`);
     }
   } catch (error: unknown) {
-    console.error('Error fetching public thread:', error);
-
     // Type-safe error handling
     const isDetailedError = error && typeof error === 'object' && 'detail' in error;
     const statusCode = isDetailedError && 'statusCode' in error ? (error as { statusCode: number }).statusCode : null;

@@ -105,7 +105,6 @@ export async function revalidatePublicThread(
 
     return { success: true };
   } catch (error) {
-    console.error('Error revalidating public thread:', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Revalidation failed',

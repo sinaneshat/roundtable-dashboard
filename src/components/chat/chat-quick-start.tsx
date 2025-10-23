@@ -285,6 +285,7 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
     } else if (userTier === 'pro') {
       tierSuggestions = proTierSuggestions;
     } else {
+    // Intentionally empty
       // power tier
       tierSuggestions = powerTierSuggestions;
     }

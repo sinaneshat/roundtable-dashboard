@@ -64,12 +64,7 @@ export function warnIfTransactionExists<T extends Record<string, unknown>>(
   db: DrizzleD1Database<T>,
 ): void {
   if ('transaction' in db && typeof db.transaction === 'function') {
-    console.warn(
-      '[D1BatchDatabase] transaction() method detected! '
-      + 'Cloudflare D1 requires batch operations. '
-      + 'Use db.batch() instead. '
-      + 'See docs/backend-patterns.md for examples.',
-    );
+    // Logging removed - was only for debugging
   }
 }
 

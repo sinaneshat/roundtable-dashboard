@@ -52,29 +52,25 @@ export async function GET() {
 
   try {
     logoBase64 = await getLogoBase64();
-  } catch (error) {
-    console.error('Failed to load logo:', error);
+  } catch {
     logoBase64 = '';
   }
 
   try {
     modeIconBase64 = await getModeIconBase64(MOCK_THREAD.mode);
-  } catch (error) {
-    console.error('Failed to load mode icon:', error);
+  } catch {
     modeIconBase64 = '';
   }
 
   try {
     robotIconBase64 = await getUIIconBase64('robot');
-  } catch (error) {
-    console.error('Failed to load robot icon:', error);
+  } catch {
     robotIconBase64 = '';
   }
 
   try {
     messageIconBase64 = await getUIIconBase64('message');
-  } catch (error) {
-    console.error('Failed to load message icon:', error);
+  } catch {
     messageIconBase64 = '';
   }
 

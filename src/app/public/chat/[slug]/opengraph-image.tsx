@@ -50,22 +50,19 @@ export default async function Image({
 
   try {
     logoBase64 = await getLogoBase64();
-  } catch (error) {
-    console.error('Failed to load logo:', error);
+  } catch {
     logoBase64 = '';
   }
 
   try {
     robotIconBase64 = await getUIIconBase64('robot');
-  } catch (error) {
-    console.error('Failed to load robot icon:', error);
+  } catch {
     robotIconBase64 = '';
   }
 
   try {
     messageIconBase64 = await getUIIconBase64('message');
-  } catch (error) {
-    console.error('Failed to load message icon:', error);
+  } catch {
     messageIconBase64 = '';
   }
 
@@ -143,8 +140,7 @@ export default async function Image({
     let modeIconBase64: string;
     try {
       modeIconBase64 = await getModeIconBase64(thread.mode);
-    } catch (error) {
-      console.error('Failed to load mode icon:', error);
+    } catch {
       modeIconBase64 = '';
     }
 
@@ -442,9 +438,7 @@ export default async function Image({
         ...config.size,
       },
     );
-  } catch (error) {
-    console.error('Error generating OG image for public thread:', error);
-
+  } catch {
     // Fallback error image
     return new ImageResponse(
       (

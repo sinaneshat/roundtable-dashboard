@@ -129,13 +129,10 @@ export const getDb = cache(() => {
       schema,
       cache: kvCache,
     });
-  } catch (error) {
+  } catch {
     // CRITICAL FIX: Fallback to createDbInstance if ExecutionContext not available
     // This handles the "This context has no ExecutionContext" production error
-    console.warn('[DB] ExecutionContext not available, using fallback database instance', {
-      error: error instanceof Error ? error.message : String(error),
-      timestamp: new Date().toISOString(),
-    });
+
     return createDbInstance();
   }
 });
@@ -174,13 +171,10 @@ export const getDbAsync = cache(async () => {
       schema,
       cache: kvCache,
     });
-  } catch (error) {
+  } catch {
     // CRITICAL FIX: Fallback to createDbInstance if ExecutionContext not available
     // This handles the "This context has no ExecutionContext" production error
-    console.warn('[DB] ExecutionContext not available (async), using fallback database instance', {
-      error: error instanceof Error ? error.message : String(error),
-      timestamp: new Date().toISOString(),
-    });
+
     return createDbInstance();
   }
 });

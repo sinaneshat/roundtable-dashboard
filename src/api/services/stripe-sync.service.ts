@@ -208,6 +208,7 @@ export async function syncStripeDataFromStripe(
     currentPeriodStart = subWithPeriod.current_period_start;
     currentPeriodEnd = subWithPeriod.current_period_end;
   } else {
+    // Intentionally empty
     // Flexible billing mode - get from subscription item
     const itemWithPeriod = firstItem as typeof firstItem & {
       current_period_start?: number;
@@ -218,6 +219,7 @@ export async function syncStripeDataFromStripe(
       currentPeriodStart = itemWithPeriod.current_period_start;
       currentPeriodEnd = itemWithPeriod.current_period_end;
     } else {
+    // Intentionally empty
       // Fallback to billing_cycle_anchor and calculate end date
       const billingCycleAnchor = (subscription as typeof subscription & { billing_cycle_anchor?: number }).billing_cycle_anchor;
       const interval = price.recurring?.interval || 'month';
@@ -227,6 +229,7 @@ export async function syncStripeDataFromStripe(
         currentPeriodStart = billingCycleAnchor;
         currentPeriodEnd = calculatePeriodEnd(billingCycleAnchor, interval, intervalCount);
       } else {
+        // Intentionally empty
         // Last resort: use subscription creation date
         currentPeriodStart = subscription.created;
         currentPeriodEnd = calculatePeriodEnd(subscription.created, interval, intervalCount);

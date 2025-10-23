@@ -228,9 +228,9 @@ export const getProductHandler: RouteHandler<typeof getProductRoute, ApiEnv> = c
           annualSavingsPercent,
         },
       });
-    } catch (_error) {
-      if (_error instanceof AppError) {
-        throw _error;
+    } catch (error) {
+      if (error instanceof AppError) {
+        throw error;
       }
       throw createError.internal('Failed to retrieve product', ErrorContextBuilders.database('select', 'stripeProduct'));
     }
@@ -320,6 +320,7 @@ export const createCheckoutSessionHandler: RouteHandler<typeof createCheckoutSes
 
         customerId = insertedCustomer.id;
       } else {
+        // Intentionally empty
         customerId = stripeCustomer.id;
       }
 
@@ -394,10 +395,10 @@ export const createCustomerPortalSessionHandler: RouteHandler<typeof createCusto
       return Responses.ok(c, {
         url: session.url,
       });
-    } catch (_error) {
+    } catch (error) {
       // Re-throw if already an AppError
-      if (_error instanceof AppError) {
-        throw _error;
+      if (error instanceof AppError) {
+        throw error;
       }
 
       throw createError.internal('Failed to create customer portal session', ErrorContextBuilders.stripe('create_portal_session'));
@@ -481,9 +482,9 @@ export const getSubscriptionHandler: RouteHandler<typeof getSubscriptionRoute, A
       }
 
       return Responses.ok(c, { subscription });
-    } catch (_error) {
-      if (_error instanceof AppError) {
-        throw _error;
+    } catch (error) {
+      if (error instanceof AppError) {
+        throw error;
       }
       throw createError.internal('Failed to retrieve subscription', ErrorContextBuilders.database('select', 'stripeSubscription'));
     }
@@ -650,6 +651,7 @@ export const switchSubscriptionHandler: RouteHandler<typeof switchSubscriptionRo
           billing_cycle_anchor: 'unchanged', // Keep same billing date
         });
       } else {
+        // Intentionally empty
         // SAME PRICE: Just update (e.g., switching between monthly/annual of same tier)
         await stripeService.updateSubscription(subscriptionId, {
           items: [
@@ -680,9 +682,9 @@ export const switchSubscriptionHandler: RouteHandler<typeof switchSubscriptionRo
           isDowngrade,
         },
       });
-    } catch (_error) {
-      if (_error instanceof AppError) {
-        throw _error;
+    } catch (error) {
+      if (error instanceof AppError) {
+        throw error;
       }
       throw createError.internal(
         'Failed to switch subscription',
@@ -758,9 +760,9 @@ export const cancelSubscriptionHandler: RouteHandler<typeof cancelSubscriptionRo
         subscription: refreshedSubscription,
         message,
       });
-    } catch (_error) {
-      if (_error instanceof AppError) {
-        throw _error;
+    } catch (error) {
+      if (error instanceof AppError) {
+        throw error;
       }
       throw createError.internal(
         'Failed to cancel subscription',
@@ -861,6 +863,7 @@ export const handleWebhookHandler: RouteHandler<typeof handleWebhookRoute, ApiEn
       if (c.executionCtx) {
         c.executionCtx.waitUntil(processAsync());
       } else {
+        // Intentionally empty
         await processAsync();
       }
 

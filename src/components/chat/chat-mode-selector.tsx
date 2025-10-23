@@ -30,6 +30,7 @@ type ChatModeSelectorProps = {
   selectedMode: ChatModeId;
   onModeChange: (mode: ChatModeId) => void;
   className?: string;
+  disabled?: boolean; // ✅ STREAMING PROTECTION: Disable during streaming to prevent mid-stream mode changes
 };
 
 /**
@@ -41,12 +42,15 @@ type ChatModeSelectorProps = {
  * - Popover interaction with Command component
  * - Tooltip showing current mode description
  *
+ * ✅ STREAMING PROTECTION: Disabled during streaming to prevent mode changes mid-conversation
+ *
  * Pattern from: /src/components/chat/chat-participants-list.tsx:772-784
  */
 export function ChatModeSelector({
   selectedMode,
   onModeChange,
   className,
+  disabled = false,
 }: ChatModeSelectorProps) {
   const t = useTranslations('chat.modes');
   const open = useBoolean(false);
@@ -65,6 +69,7 @@ export function ChatModeSelector({
                   type="button"
                   variant="outline"
                   size="sm"
+                  disabled={disabled}
                   className="h-8 sm:h-9 rounded-lg gap-1.5 sm:gap-2 text-xs relative px-3 sm:px-4"
                 >
                   {ModeIcon && <ModeIcon className="size-3.5 sm:size-4" />}

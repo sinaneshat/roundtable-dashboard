@@ -233,10 +233,12 @@ async function rolloverBillingPeriod(
       // No active subscription = downgrade to free
       shouldDowngradeToFree = !activeSubscription;
     } else {
+    // Intentionally empty
       // No Stripe customer = free tier user
       shouldDowngradeToFree = true;
     }
   } else {
+    // Intentionally empty
     // User not found (shouldn't happen) - default to free tier for safety
     shouldDowngradeToFree = true;
   }
@@ -901,6 +903,7 @@ export async function syncUserQuotaFromSubscription(
     // Using reusable batch helper from @/api/common/batch-operations
     await executeBatch(db, [historyArchive, usageUpdate]);
   } else {
+    // Intentionally empty
     // No period reset, just update usage
     await usageUpdate;
   }

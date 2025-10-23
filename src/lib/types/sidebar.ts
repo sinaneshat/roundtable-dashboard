@@ -51,6 +51,7 @@ export function groupChatsByPeriod(chats: Chat[]): ChatGroup[] {
     } else if (diffDays < 7) {
       label = `chat.daysAgo:${diffDays}`;
     } else {
+    // Intentionally empty
       const weeks = Math.floor(diffDays / 7);
       label = `chat.weeksAgo:${weeks}`;
     }

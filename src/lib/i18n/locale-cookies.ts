@@ -29,8 +29,7 @@ export async function setUserLocale(locale: Locale) {
 
     // Return success - client will handle refresh
     return { success: true, locale };
-  } catch (error) {
-    console.error('Failed to set locale cookie:', error);
+  } catch {
     throw new Error('Failed to update locale preference');
   }
 }

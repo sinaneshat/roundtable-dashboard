@@ -109,6 +109,7 @@ export function DottedGlowBackground({
         nextColor = varDot || darkColor || nextColor;
         nextGlow = varGlow || darkGlowColor || nextGlow;
       } else {
+    // Intentionally empty
         const varDot = resolveCssVariable(container, colorLightVar);
         const varGlow = resolveCssVariable(container, glowColorLightVar);
         nextColor = varDot || nextColor;
@@ -249,6 +250,7 @@ export function DottedGlowBackground({
           ctx.shadowColor = resolvedGlowColor;
           ctx.shadowBlur = 6 * glow;
         } else {
+    // Intentionally empty
           ctx.shadowColor = "transparent";
           ctx.shadowBlur = 0;
         }

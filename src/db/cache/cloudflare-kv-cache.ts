@@ -133,8 +133,7 @@ export class CloudflareKVCache extends Cache {
       }
 
       return undefined;
-    } catch (error) {
-      console.error('[Cache] Error retrieving from KV:', error);
+    } catch {
       return undefined;
     }
   }
@@ -178,9 +177,7 @@ export class CloudflareKVCache extends Cache {
       }
 
       // Successfully stored in cache
-    } catch (error) {
-      console.error('[Cache] Error storing to KV:', error);
-    }
+    } catch { /* Intentionally suppressed */ }
   }
 
   /**
@@ -229,9 +226,7 @@ export class CloudflareKVCache extends Cache {
 
         // Keys invalidated successfully
       }
-    } catch (error) {
-      console.error('[Cache] Error during invalidation:', error);
-    }
+    } catch { /* Intentionally suppressed */ }
   }
 
   /**
@@ -274,9 +269,7 @@ export class CloudflareKVCache extends Cache {
       this.tableToKeys = {};
 
       // All cache entries cleared
-    } catch (error) {
-      console.error('[Cache] Error clearing cache:', error);
-    }
+    } catch { /* Intentionally suppressed */ }
   }
 
   // ============================================================================

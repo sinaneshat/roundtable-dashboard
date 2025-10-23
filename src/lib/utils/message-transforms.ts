@@ -94,11 +94,52 @@ export function chatMessageToUIMessage(message: ChatMessage | (Omit<ChatMessage,
 /**
  * Convert array of backend ChatMessages to AI SDK UIMessage format
  *
+ * ✅ CRITICAL FIX: Ensures all messages have roundNumber metadata for consistent grouping
+ * This prevents misalignment between messages, analyses, and changelogs on initial load
+ *
  * @param messages - Array of ChatMessage from RPC response (dates can be ISO strings or Date objects)
- * @returns Array of UIMessages in AI SDK format
+ * @returns Array of UIMessages in AI SDK format with consistent roundNumber metadata
  */
 export function chatMessagesToUIMessages(messages: (ChatMessage | (Omit<ChatMessage, 'createdAt'> & { createdAt: string | Date }))[]): UIMessage[] {
-  return messages.map(chatMessageToUIMessage);
+  // First, convert all messages to UIMessage format
+  const uiMessages = messages.map(chatMessageToUIMessage);
+
+  // ✅ CRITICAL FIX: Ensure ALL messages have roundNumber in metadata
+  // This prevents grouping misalignment on initial load when messages lack roundNumber
+  let currentRound = 1;
+
+  return uiMessages.map((message) => {
+    const metadata = message.metadata as Record<string, unknown> | undefined;
+    let roundNumber = metadata?.roundNumber as number | undefined;
+
+    // If message already has roundNumber, use it and update tracker
+    if (roundNumber) {
+      if (message.role === 'user') {
+        currentRound = roundNumber;
+      }
+      return message;
+    }
+
+    // ✅ INFER roundNumber: User messages start new rounds, assistant messages belong to current round
+    if (message.role === 'user') {
+      // User message without roundNumber - assign next round
+      roundNumber = currentRound;
+      currentRound++;
+    } else {
+    // Intentionally empty
+      // Assistant message without roundNumber - belongs to current round
+      roundNumber = currentRound;
+    }
+
+    // Return message with roundNumber added to metadata
+    return {
+      ...message,
+      metadata: {
+        ...metadata,
+        roundNumber,
+      },
+    };
+  });
 }
 
 // ============================================================================
@@ -192,6 +233,7 @@ export function deduplicateConsecutiveUserMessages(messages: UIMessage[]): UIMes
 
       lastUserMessageText = text;
     } else {
+    // Intentionally empty
       // Reset on non-user messages (so we only check consecutive user messages)
       lastUserMessageText = null;
     }
@@ -295,7 +337,8 @@ export function createErrorUIMessage(
     metadata: {
       participantId: participant.id,
       participantIndex: currentIndex,
-      participantRole: participant.role,
+      // ✅ FIX: Only include participantRole if it's not null (AI SDK validation requires string, not null)
+      ...(participant.role && { participantRole: participant.role }),
       model: participant.modelId,
       hasError: true,
       errorType,
@@ -388,7 +431,8 @@ export function mergeParticipantMetadata(
     // Add participant identification
     participantId: participant.id,
     participantIndex: currentIndex,
-    participantRole: participant.role,
+    // ✅ FIX: Only include participantRole if it's not null (AI SDK validation requires string, not null)
+    ...(participant.role && { participantRole: participant.role }),
     model: participant.modelId,
     // Add error fields if error detected
     ...(hasError && {

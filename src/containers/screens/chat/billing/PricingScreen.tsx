@@ -63,11 +63,13 @@ export default function PricingScreen() {
 
             window.location.href = `/chat/billing/subscription-changed?${params.toString()}`;
           } else {
+            // Intentionally empty
             // No changeDetails - redirect without query params (page will show just new plan)
             window.location.href = '/chat/billing/subscription-changed';
           }
         }
       } else {
+        // Intentionally empty
         // New subscription - redirect to Stripe Checkout
         const result = await createCheckoutMutation.mutateAsync({
           json: { priceId },
@@ -77,9 +79,7 @@ export default function PricingScreen() {
           window.location.href = result.data.url;
         }
       }
-    } catch (err) {
-      console.error('Subscription error:', err);
-    } finally {
+    } catch { /* Intentionally suppressed */ } finally {
       setProcessingPriceId(null);
     }
   };
@@ -91,9 +91,7 @@ export default function PricingScreen() {
         param: { id: subscriptionId },
         json: { immediately: false },
       });
-    } catch (err) {
-      console.error('Cancel error:', err);
-    } finally {
+    } catch { /* Intentionally suppressed */ } finally {
       setCancelingSubscriptionId(null);
     }
   };
@@ -110,9 +108,7 @@ export default function PricingScreen() {
       if (result.success && result.data?.url) {
         window.open(result.data.url, '_blank', 'noopener,noreferrer');
       }
-    } catch (err) {
-      console.error('Customer portal error:', err);
-    } finally {
+    } catch { /* Intentionally suppressed */ } finally {
       setIsManagingBilling(false);
     }
   };

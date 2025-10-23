@@ -455,6 +455,7 @@ export function useUpdateParticipantMutation() {
           queryClient.invalidateQueries({ queryKey: key });
         });
       } else {
+        // Intentionally empty
         // Fallback: Invalidate all thread data (we don't know which thread the participant belongs to)
         queryClient.invalidateQueries({ queryKey: queryKeys.threads.all });
       }
@@ -486,6 +487,7 @@ export function useDeleteParticipantMutation() {
           queryClient.invalidateQueries({ queryKey: key });
         });
       } else {
+        // Intentionally empty
         // Fallback: Invalidate all thread data
         queryClient.invalidateQueries({ queryKey: queryKeys.threads.all });
       }

@@ -45,6 +45,7 @@ export function ErrorMessage({
               if (onRetry) {
                 onRetry();
               } else {
+    // Intentionally empty
                 router.refresh();
               }
             }}

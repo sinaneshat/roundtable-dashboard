@@ -44,8 +44,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       changeFrequency: 'weekly' as const, // More realistic than 'daily'
       priority: 0.8, // Higher priority for public content
     }));
-  } catch (error) {
-    console.error('Error fetching public threads for sitemap:', error);
+  } catch {
+
     // Continue without public threads if there's an error
   }
 

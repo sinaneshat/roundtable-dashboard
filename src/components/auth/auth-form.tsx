@@ -54,6 +54,7 @@ export function AuthForm() {
       } else if (toastType === 'info') {
         showApiInfoToast(t('auth.errors.threadUnavailable'), message);
       } else {
+        // Intentionally empty
         showApiInfoToast(t('auth.errors.notice'), message);
       }
 

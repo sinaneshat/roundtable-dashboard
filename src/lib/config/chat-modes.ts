@@ -5,32 +5,27 @@
  * Imports enum definitions from centralized backend source.
  *
  * ✅ ENUM SOURCE: /src/api/core/enums.ts - Single source of truth for enum values
- * ✅ UI METADATA: This file adds UI-specific metadata (icons, colors, placeholders)
+ * ✅ UI METADATA: This file ONLY contains UI-specific metadata (icons, colors, placeholders)
  * ✅ HELPER FUNCTIONS: UI utility functions for chat mode selection and display
+ * ✅ NO DUPLICATION: All enums imported from /src/api/core/enums.ts
  *
- * Reference: /docs/BACKEND_REFACTORING_ANALYSIS.md:40-88
+ * Reference: COMPREHENSIVE REFACTORING ANALYSIS:2.1
  */
 
 import type { LucideIcon } from 'lucide-react';
 import { Lightbulb, Scale, Search, Target } from 'lucide-react';
 
-import type { ChatMode, ThreadStatus } from '@/api/core/enums';
-import {
-  CHAT_MODE_ENUM_VALUES,
-  CHAT_MODES,
-  ChatModeSchema as chatModeSchema,
-  THREAD_STATUS_ENUM_VALUES,
-  THREAD_STATUSES,
-  ThreadStatusSchema as threadStatusSchema,
-} from '@/api/core/enums';
+import type { ChatMode } from '@/api/core/enums';
 
 // ============================================================================
-// Re-export Enum Definitions (for backward compatibility)
+// Type Alias for Chat Mode ID
 // ============================================================================
 
-export { CHAT_MODE_ENUM_VALUES, CHAT_MODES, chatModeSchema, THREAD_STATUS_ENUM_VALUES, THREAD_STATUSES, threadStatusSchema };
+/**
+ * Chat mode ID type alias
+ * ✅ Import ChatMode from /src/api/core/enums.ts instead of using this alias
+ */
 export type ChatModeId = ChatMode;
-export type { ThreadStatus };
 
 // ============================================================================
 // Chat Mode Configuration Types
@@ -186,22 +181,6 @@ export function getChatModeSystemPrompt(modeId: ChatModeId): string {
 export function getDefaultChatMode(): ChatModeId {
   const firstEnabled = getEnabledChatModes()[0];
   return firstEnabled?.id ?? 'brainstorming';
-}
-
-// ============================================================================
-// Type Exports
-// ============================================================================
-
-// ============================================================================
-// Thread Status Helpers
-// ============================================================================
-
-/**
- * Validate if a string is an allowed thread status
- * ✅ Uses Zod schema for validation
- */
-export function isValidThreadStatus(status: string): status is ThreadStatus {
-  return threadStatusSchema.safeParse(status).success;
 }
 
 // ============================================================================

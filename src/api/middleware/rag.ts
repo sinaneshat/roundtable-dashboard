@@ -38,9 +38,9 @@ export const ensureRAGInitialized = createMiddleware<ApiEnv>(async (c, next) => 
   // This is idempotent - safe to call multiple times
   try {
     initializeRAG(c.env);
-  } catch (error) {
+  } catch {
     // Log error but don't block the request
-    console.warn('[RAG Middleware] Failed to initialize RAG service:', error);
+
   }
 
   return next();

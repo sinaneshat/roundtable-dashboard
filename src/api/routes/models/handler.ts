@@ -216,7 +216,7 @@ export const listModelsHandler: RouteHandler<typeof listModelsRoute, ApiEnv> = c
     };
 
     // ============================================================================
-    // ✅ RETURN RESPONSE: Standard collection response format with cache headers
+    // ✅ RETURN RESPONSE: Standard collection response format
     // ============================================================================
     const response = Responses.collection(c, modelsWithTierInfo, {
       total: modelsWithTierInfo.length,
@@ -226,11 +226,15 @@ export const listModelsHandler: RouteHandler<typeof listModelsRoute, ApiEnv> = c
       user_tier_config: userTierConfig,
     });
 
-    // ✅ CLOUDFLARE CACHE HEADERS: Enable edge caching and provide cache tag for invalidation
-    // Cache for 1 hour with revalidation, allow stale content for 24 hours while revalidating
-    // Cache tag 'models' allows purging all model data when needed via Cloudflare API
-    response.headers.set('Cache-Control', 'public, max-age=3600, stale-while-revalidate=86400');
-    response.headers.set('Cache-Tag', 'models');
+    // ✅ NO EDGE CACHING: Models endpoint returns user-specific data (tier-based access)
+    // User A (free tier) and User B (pro tier) get different `is_accessible_to_user` values
+    // Cloudflare edge cache would serve stale data to wrong users after subscription changes
+    // Instead, rely on:
+    // - Backend Drizzle ORM caching (getUserTier cached 5 min per user)
+    // - OpenRouter service caching (24h model list cache)
+    // - Client-side TanStack Query caching (staleTime: Infinity with invalidation)
+    // Cache is invalidated via query invalidation on subscription changes (checkout.ts, subscription-management.ts)
+    response.headers.set('Cache-Control', 'private, no-cache, must-revalidate');
 
     return response;
   },

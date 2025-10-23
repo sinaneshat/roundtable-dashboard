@@ -137,14 +137,6 @@ export function SkillsComparisonChart({ participants }: SkillsComparisonChartPro
   });
 
   // ✅ DEBUG: Log chart data to verify structure
-  console.warn('[SkillsComparisonChart] Rendering with data:', {
-    participants: participants.length,
-    skillNames,
-    chartData,
-    chartConfig,
-    participantData,
-    chartConfigKeys: Object.keys(chartConfig),
-  });
 
   return (
     <motion.div

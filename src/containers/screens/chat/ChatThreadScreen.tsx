@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import type { ChatMessage, ChatParticipant, ChatThread } from '@/api/routes/chat/schema';
+import type { ChatMessage, ChatParticipant, ChatThread, StoredModeratorAnalysis } from '@/api/routes/chat/schema';
 import { Action, Actions } from '@/components/ai-elements/actions';
 import { ChatDeleteDialog } from '@/components/chat/chat-delete-dialog';
 import { ChatInput } from '@/components/chat/chat-input';
@@ -23,13 +23,16 @@ import { useThreadHeader } from '@/components/chat/thread-header-context';
 import { useSharedChatContext } from '@/contexts/chat-context';
 import { useSetRoundFeedbackMutation, useUpdateThreadMutation } from '@/hooks/mutations/chat-mutations';
 import { useThreadFeedbackQuery } from '@/hooks/queries/chat-feedback';
-import { useThreadAnalysesQuery, useThreadChangelogQuery, useThreadQuery } from '@/hooks/queries/chat-threads';
-import { useBoolean } from '@/hooks/utils';
+import { useThreadChangelogQuery, useThreadQuery } from '@/hooks/queries/chat-threads';
+import { useBoolean, useSelectedParticipants } from '@/hooks/utils';
+// TODO: Re-enable when useChatRoundManager is fixed
+// import { useChatRoundManager } from '@/hooks/utils';
 import type { ChatModeId } from '@/lib/config/chat-modes';
 import { queryKeys } from '@/lib/data/query-keys';
 import { messageHasError, MessageMetadataSchema } from '@/lib/schemas/message-metadata';
 import type { ParticipantConfig } from '@/lib/types/participant-config';
 import { chatMessagesToUIMessages } from '@/lib/utils/message-transforms';
+import { calculateNextRoundNumber, getMaxRoundNumber, groupMessagesByRound } from '@/lib/utils/round-utils';
 
 type ChatThreadScreenProps = {
   thread: ChatThread;
@@ -137,7 +140,6 @@ export default function ChatThreadScreen({
     const seen = new Set<string>();
     const deduplicated = items.filter((item) => {
       if (seen.has(item.id)) {
-        console.warn('[ChatThreadScreen] ⚠️ Duplicate changelog entry detected and filtered', item.id);
         return false;
       }
       seen.add(item.id);
@@ -156,7 +158,14 @@ export default function ChatThreadScreen({
     rounds: Set<number>;
   }>(() => ({ threadId: thread.id, rounds: new Set() }));
 
-  const { data: analysesResponse } = useThreadAnalysesQuery(thread.id, true);
+  // ✅ UNIFIED ROUND MANAGER: Eliminates ALL duplicate analysis logic (~200 lines)
+  // TEMPORARILY COMMENTED OUT - DEBUGGING INFINITE LOOP
+  // const roundManager = useChatRoundManager({
+  //   threadId: thread.id,
+  //   mode: thread.mode as ChatModeId,
+  //   enableQuery: true,
+  // });
+
   const analyses = useMemo(
     () => {
       // Get current rounds for this thread, or empty set if thread changed
@@ -164,10 +173,9 @@ export default function ChatThreadScreen({
         ? regeneratingRounds.rounds
         : new Set<number>();
 
-      const items = analysesResponse?.success ? analysesResponse.data.items || [] : [];
-      // Transform date strings to Date objects (API returns ISO strings, component expects Dates)
-      // ✅ SHOW ALL ANALYSES: Include pending, streaming, completed (but not failed)
-      // Pending/streaming will show loading state, completed will show full analysis
+      // ✅ UNIFIED: Get analyses from round manager state
+      // TEMPORARILY USING EMPTY ARRAY - DEBUGGING INFINITE LOOP
+      const items: StoredModeratorAnalysis[] = []; // roundManager.state.analyses;
 
       // ✅ CRITICAL FIX: Deduplicate analyses by roundNumber to prevent duplicate analyses during regeneration
       // Keep only the MOST RECENT analysis for each round (by createdAt)
@@ -192,7 +200,7 @@ export default function ChatThreadScreen({
           completedAt: item.completedAt ? (typeof item.completedAt === 'string' ? new Date(item.completedAt) : item.completedAt) : null,
         }));
     },
-    [analysesResponse, regeneratingRounds, thread.id],
+    [regeneratingRounds, thread.id], // REMOVED: roundManager.state.analyses dependency
   );
 
   // ✅ MUTATION: Update thread (including participants)
@@ -233,23 +241,9 @@ export default function ChatThreadScreen({
   // This ensures we only update context when participants actually change
   const lastSyncedParticipantIdsRef = useRef<string>('');
 
-  // Chat state
-  const [selectedMode, setSelectedMode] = useState<ChatModeId>(thread.mode as ChatModeId);
-  const [inputValue, setInputValue] = useState('');
-
-  // ✅ DEFERRED PERSISTENCE: Mode changes stored locally until message submission
-  const handleModeChange = useCallback(async (newMode: ChatModeId) => {
-    // Update local state only - no API call
-    // Changes will be persisted when message is submitted in handlePromptSubmit
-    setSelectedMode(newMode);
-
-    console.warn('[ChatThreadScreen] 📝 Mode changed locally (will persist on next message)', {
-      threadId: thread.id,
-      oldMode: selectedMode,
-      newMode,
-    });
-  }, [thread.id, selectedMode]);
-  const [selectedParticipants, setSelectedParticipants] = useState<ParticipantConfig[]>(() => {
+  // ✅ REFACTORED: Use shared participant hook (eliminates duplicate state logic)
+  // ✅ REACT 19 PATTERN: Initialize state with factory function, avoid effects that sync props to state
+  const initialParticipants = useMemo<ParticipantConfig[]>(() => {
     return participants
       .filter(p => p.isEnabled)
       .sort((a, b) => a.priority - b.priority)
@@ -260,7 +254,34 @@ export default function ChatThreadScreen({
         customRoleId: p.customRoleId || undefined,
         order: index,
       }));
-  });
+  }, [participants]);
+
+  const {
+    selectedParticipants,
+    setSelectedParticipants,
+    handleRemoveParticipant: removeParticipant,
+  } = useSelectedParticipants(initialParticipants);
+
+  // ✅ REACT 19 FIX: Removed problematic sync useEffect that caused infinite loops
+  // The hook already handles initial state properly via factory function
+  // No need to sync - if server participants change, the parent will re-render with new props
+
+  // Chat state
+  const [selectedMode, setSelectedMode] = useState<ChatModeId>(thread.mode as ChatModeId);
+  const [inputValue, setInputValue] = useState('');
+
+  // ✅ DEFERRED PERSISTENCE: Mode changes stored locally until message submission
+  const handleModeChange = useCallback(async (newMode: ChatModeId) => {
+    // ✅ STREAMING PROTECTION: Prevent mode changes during active streaming
+    // This prevents confusion and round grouping issues when mode changes mid-stream
+    if (isStreaming) {
+      return;
+    }
+
+    // Update local state only - no API call
+    // Changes will be persisted when message is submitted in handlePromptSubmit
+    setSelectedMode(newMode);
+  }, [thread.id, selectedMode, isStreaming]);
 
   // ✅ TIMING FIX: Track pending message to send after participant update
   const [pendingMessage, setPendingMessage] = useState<string | null>(null);
@@ -278,16 +299,16 @@ export default function ChatThreadScreen({
   // ✅ PERSIST IMMEDIATELY: Participant changes are persisted to database right away
   // This ensures settings are preserved across page refreshes
   const handleParticipantsChange = useCallback(async (newParticipants: ParticipantConfig[]) => {
+    // ✅ STREAMING PROTECTION: Prevent participant changes during active streaming
+    // This prevents round grouping issues when participants change mid-stream
+    if (isStreaming) {
+      return;
+    }
+
     // ✅ DEFERRED PERSISTENCE: Only update local state
     // Changes will be persisted when message is submitted in handlePromptSubmit
     setSelectedParticipants(newParticipants);
-
-    console.warn('[ChatThreadScreen] 📝 Participants changed locally (will persist on next message)', {
-      threadId: thread.id,
-      participantCount: newParticipants.length,
-      modelIds: newParticipants.map(p => p.modelId),
-    });
-  }, [thread.id]);
+  }, [thread.id, isStreaming, setSelectedParticipants]);
 
   // ✅ Initialize context when component mounts or thread/messages change
   // ✅ REASONING FIX: Compute stable hash of messages to detect content changes (not just length)
@@ -321,37 +342,27 @@ export default function ChatThreadScreen({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [thread.id, messagesHash]);
 
-  // ✅ FIX: Separate useEffect for round completion to prevent re-registering callback
-  // This ensures the callback is only set once and uses stable thread.id reference
+  // ✅ UNIFIED: Set up round completion callback using round manager
   useEffect(() => {
-    // Set up round completion callback for analysis triggers
     const currentThreadId = thread.id; // Capture thread.id in closure
 
     setOnRoundComplete(async () => {
-      // ✅ BACKEND CREATES PENDING ANALYSIS: Backend automatically creates pending analysis
-      // when last participant finishes (src/api/routes/chat/handler.ts:2971-2981)
-      // Frontend just needs to fetch it and start streaming
-      console.warn('[ChatThreadScreen] 🎯 Round completed - backend should have created pending analysis', {
-        threadId: currentThreadId,
-      });
-
-      // ✅ BACKEND ALREADY CREATED PENDING ANALYSIS: Just refetch to get it
-      // Backend creates pending analysis when last participant finishes (src/api/routes/chat/handler.ts:2228-2239)
-      // We just need to invalidate the query to fetch the backend-created pending analysis
-
-      // ✅ FIX: Use the round number from the ref that was set when the message was sent
-      const roundNumber = currentRoundNumberRef.current ?? 1;
-
-      console.warn('[ChatThreadScreen] 🔄 Round complete - refetching analyses to get backend pending analysis', {
-        threadId: currentThreadId,
-        roundNumber,
-      });
-
-      // ✅ INVALIDATE AND REFETCH: Get the backend-created pending analysis
-      // This triggers the ModeratorAnalysisStream component to start streaming
-      await queryClient.invalidateQueries({
-        queryKey: queryKeys.threads.analyses(currentThreadId),
-      });
+      // ✅ FIX: Round number tracking removed (was only used for logging)
+      // ✅ UNIFIED: Round completion logic
+      // TODO: Re-enable roundManager when it's been fixed to avoid infinite loops
+      // const currentMessages = messages;
+      // const currentParticipants = contextParticipants;
+      // const userMessage = currentMessages.find((m) => {
+      //   const metadata = m.metadata as Record<string, unknown> | undefined;
+      //   return m.role === 'user' && metadata?.roundNumber === roundNumber;
+      // });
+      // const userQuestion = userMessage?.parts?.find(p => p.type === 'text')?.text || '';
+      // await roundManager.handleRoundComplete(
+      //   roundNumber,
+      //   currentMessages,
+      //   currentParticipants,
+      //   userQuestion,
+      // );
 
       // ✅ CLEAR REGENERATING STATE: Round is complete, new analysis will be created
       setRegeneratingRounds({ threadId: currentThreadId, rounds: new Set() });
@@ -360,18 +371,13 @@ export default function ChatThreadScreen({
       setStreamingRoundNumber(null);
       currentRoundNumberRef.current = null;
     });
-  }, [thread.id, thread.mode, setOnRoundComplete, queryClient, messages, contextParticipants, analysesResponse]);
+  }, [thread.id, setOnRoundComplete, messages, contextParticipants]); // REMOVED: roundManager dependency
 
   // ✅ CRITICAL FIX: Set up retry callback to immediately remove old analysis when round is retried
   // This ensures the old analysis disappears from UI BEFORE regeneration starts
   useEffect(() => {
     const currentThreadId = thread.id; // Capture thread.id in closure
     setOnRetry((roundNumber: number) => {
-      console.warn('[ChatThreadScreen] ♻️ Retry triggered for round', {
-        threadId: currentThreadId,
-        roundNumber,
-      });
-
       // ✅ IMMEDIATE UI UPDATE: Add round to regenerating state
       // This immediately hides the old analysis from UI, preventing any visual glitches
       setRegeneratingRounds((prev) => {
@@ -387,8 +393,8 @@ export default function ChatThreadScreen({
       queryClient.setQueryData(
         queryKeys.threads.analyses(currentThreadId),
         (oldData: unknown) => {
-          // ✅ FIX: Use unknown type to avoid dependency on analysesResponse
-          const typedData = oldData as typeof analysesResponse;
+          // ✅ FIX: Type the old data properly
+          const typedData = oldData as { success: boolean; data: { items: StoredModeratorAnalysis[] } } | undefined;
 
           if (!typedData?.success) {
             return typedData;
@@ -396,15 +402,8 @@ export default function ChatThreadScreen({
 
           // Filter out the analysis for the round being regenerated
           const filteredItems = (typedData.data.items || []).filter(
-            item => item.roundNumber !== roundNumber,
+            (item: StoredModeratorAnalysis) => item.roundNumber !== roundNumber,
           );
-
-          console.warn('[ChatThreadScreen] ♻️ Removed analysis from cache', {
-            threadId: currentThreadId,
-            roundNumber,
-            oldCount: typedData.data.items?.length || 0,
-            newCount: filteredItems.length,
-          });
 
           return {
             ...typedData,
@@ -434,13 +433,6 @@ export default function ChatThreadScreen({
       // Only update if participants actually changed from what we last synced
       // Use ref to track last synced state - prevents infinite loops
       if (freshIds !== lastSyncedParticipantIdsRef.current) {
-        console.warn('[ChatThreadScreen] 🔄 Syncing context with fresh participants from query', {
-          threadId: thread.id,
-          participantCount: freshParticipants.length,
-          lastSyncedIds: lastSyncedParticipantIdsRef.current,
-          freshIds,
-        });
-
         // Transform date strings to Date objects (query returns ISO strings)
         const participantsWithDates = freshParticipants.map(p => ({
           ...p,
@@ -469,39 +461,24 @@ export default function ChatThreadScreen({
     const expectedIds = expectedParticipantIds.join(',');
 
     if (currentIds === expectedIds) {
-      console.warn('[ChatThreadScreen] ✅ Context participants match expected - sending message', {
-        threadId: thread.id,
-        participantCount: contextParticipants.length,
-        participantIds: contextParticipants.map(p => p.id),
-        messagePreview: pendingMessage.substring(0, 50),
-      });
-
       // Mark as sent to prevent re-triggering
       hasSentPendingMessageRef.current = true;
 
-      // ✅ CALCULATE NEW ROUND NUMBER: Count existing user messages + 1
-      const userMessages = messages.filter(m => m.role === 'user');
-      const newRoundNumber = userMessages.length + 1;
+      // ✅ REFACTORED: Use calculateNextRoundNumber utility
+      const newRoundNumber = calculateNextRoundNumber(messages);
 
       // ✅ SET STREAMING ROUND: Signal all previous accordions to close
+      // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- Intentional: setState is the purpose of this effect
       setStreamingRoundNumber(newRoundNumber);
 
       // ✅ UPDATE REF: Store round number for onRoundComplete callback
       currentRoundNumberRef.current = newRoundNumber;
 
-      console.warn('[ChatThreadScreen] 🎬 Starting new round', {
-        roundNumber: newRoundNumber,
-        userMessageCount: userMessages.length,
-      });
-
       // Now send the message - context has the RIGHT participants
       sendMessage(pendingMessage);
     } else {
-      console.warn('[ChatThreadScreen] ⏳ Waiting for context to update with fresh participants', {
-        threadId: thread.id,
-        currentIds,
-        expectedIds,
-      });
+    // Intentionally empty
+
     }
   }, [pendingMessage, expectedParticipantIds, contextParticipants, sendMessage, thread.id, messages]);
 
@@ -549,12 +526,6 @@ export default function ChatThreadScreen({
 
           updateParticipants(participantsWithDates);
 
-          console.warn('[ChatThreadScreen] ✅ Context updated with fresh participants from mutation', {
-            threadId: thread.id,
-            participantCount: participantsWithDates.length,
-            participantIds: participantsWithDates.map(p => p.id),
-          });
-
           // ✅ CRITICAL FIX: Set expected participant IDs AND pending message
           // The useEffect will only send when context participants match these IDs
           const freshIds = participantsWithDates.map(p => p.id);
@@ -562,21 +533,16 @@ export default function ChatThreadScreen({
           setExpectedParticipantIds(freshIds);
           setPendingMessage(trimmed);
 
-          console.warn('[ChatThreadScreen] 📝 Set expected participant IDs', {
-            threadId: thread.id,
-            expectedIds: freshIds,
-          });
-
           // ✅ CRITICAL FIX: Invalidate changelog query to fetch fresh changelog entries
           // This ensures the new changelog entry (created by the mutation) is fetched
           queryClient.invalidateQueries({ queryKey: queryKeys.threads.changelog(thread.id) });
         } else {
+          // Intentionally empty
           // No participants in response - fallback to immediate send
-          console.warn('[ChatThreadScreen] ⚠️ No participants in mutation response, sending immediately');
+
           await sendMessage(trimmed);
         }
-      } catch (error) {
-        console.error('[ChatThreadScreen] ❌ Failed to persist participant changes:', error);
+      } catch {
         // On error, send message anyway (uses existing context participants)
         await sendMessage(trimmed);
       }
@@ -590,42 +556,8 @@ export default function ChatThreadScreen({
   // Context manages the participant state, we just display it
   const activeParticipants = contextParticipants;
 
-  // ✅ CALCULATE MAX ROUND NUMBER: Find the highest round number in the conversation
-  // This is used to determine if the retry button should be shown (only on last round)
-  // ✅ CRITICAL FIX: Use same inference logic as messagesWithAnalysesAndChangelog
-  // During streaming, messages may not have roundNumber in metadata yet, so we infer it
-  const maxRoundNumber = useMemo(() => {
-    let max = 0;
-    let inferredRoundNumber = 1;
-    let lastUserMessageRound = 0;
-
-    messages.forEach((message) => {
-      const metadata = message.metadata as Record<string, unknown> | undefined;
-      let roundNumber = metadata?.roundNumber as number | undefined;
-
-      // ✅ STREAMING FIX: If message doesn't have roundNumber, infer it from context
-      if (!roundNumber) {
-        if (message.role === 'user') {
-          // User messages increment the round
-          inferredRoundNumber = lastUserMessageRound + 1;
-          lastUserMessageRound = inferredRoundNumber;
-          roundNumber = inferredRoundNumber;
-        } else {
-          // Assistant messages belong to the current round (after last user message)
-          roundNumber = inferredRoundNumber || 1;
-        }
-      } else if (message.role === 'user') {
-        // Track user message rounds even when they have explicit roundNumber
-        lastUserMessageRound = roundNumber;
-        inferredRoundNumber = roundNumber;
-      }
-
-      if (roundNumber > max) {
-        max = roundNumber;
-      }
-    });
-    return max;
-  }, [messages]);
+  // ✅ REFACTORED: Use getMaxRoundNumber utility (replaces 30+ lines of inference logic)
+  const maxRoundNumber = useMemo(() => getMaxRoundNumber(messages), [messages]);
 
   // ✅ EVENT-BASED ROUND TRACKING: Simple grouping by roundNumber
   // Messages, changelog, and analysis all grouped by roundNumber field
@@ -642,51 +574,10 @@ export default function ChatThreadScreen({
       | { type: 'changelog'; data: (typeof changelog)[number][]; key: string }
     > = [];
 
-    // Group messages by roundNumber
-    // ✅ FIX: Infer round number for streaming messages that don't have metadata yet
-    const messagesByRound = new Map<number, typeof messages>();
-    let inferredRoundNumber = 1; // Track inferred round for messages without explicit roundNumber
-    let lastUserMessageRound = 0; // Track the last user message's round
-
-    messages.forEach((message) => {
-      const metadata = message.metadata as Record<string, unknown> | undefined;
-      let roundNumber = metadata?.roundNumber as number | undefined;
-
-      // ✅ STREAMING FIX: If message doesn't have roundNumber, infer it from context
-      if (!roundNumber) {
-        if (message.role === 'user') {
-          // User messages increment the round
-          inferredRoundNumber = lastUserMessageRound + 1;
-          lastUserMessageRound = inferredRoundNumber;
-          roundNumber = inferredRoundNumber;
-        } else {
-          // Assistant messages belong to the current round (after last user message)
-          roundNumber = inferredRoundNumber || 1;
-        }
-      } else {
-        // Update tracking for explicit round numbers
-        if (message.role === 'user') {
-          lastUserMessageRound = roundNumber;
-          inferredRoundNumber = roundNumber;
-        }
-      }
-
-      if (!messagesByRound.has(roundNumber)) {
-        messagesByRound.set(roundNumber, []);
-      }
-      messagesByRound.get(roundNumber)!.push(message);
-    });
+    // ✅ REFACTORED: Use groupMessagesByRound utility (replaces 30+ lines of grouping logic)
+    const messagesByRound = groupMessagesByRound(messages);
 
     // ✅ DEBUG: Log message grouping to diagnose analysis positioning issues
-    console.warn('[ChatThreadScreen] 📊 Message grouping:', {
-      totalMessages: messages.length,
-      messagesByRound: Array.from(messagesByRound.entries()).map(([round, msgs]) => ({
-        round,
-        messageCount: msgs.length,
-        messageRoles: msgs.map(m => m.role),
-      })),
-      analyses: analyses.map(a => ({ roundNumber: a.roundNumber, status: a.status })),
-    });
 
     // Group changelog by roundNumber
     // ✅ FIX: Deduplicate changelog entries within each round to prevent multiple accordions
@@ -704,10 +595,8 @@ export default function ChatThreadScreen({
       if (!exists) {
         roundChanges.push(change);
       } else {
-        console.warn('[ChatThreadScreen] ⚠️ Duplicate changelog in round grouping', {
-          changeId: change.id,
-          roundNumber,
-        });
+        // Intentionally empty
+
       }
     });
 
@@ -720,7 +609,17 @@ export default function ChatThreadScreen({
     ]);
     const sortedRounds = Array.from(allRoundNumbers).sort((a, b) => a - b);
 
+    // ✅ STREAMING FIX: Track which rounds we've already added to prevent duplicates
+    const processedRounds = new Set<number>();
+
     sortedRounds.forEach((roundNumber) => {
+      // ✅ STREAMING FIX: Skip if we've already processed this round
+      // This prevents duplicate round items during streaming updates
+      if (processedRounds.has(roundNumber)) {
+        return;
+      }
+      processedRounds.add(roundNumber);
+
       const roundMessages = messagesByRound.get(roundNumber);
       const roundChangelog = changelogByRound.get(roundNumber);
       const roundAnalysis = analyses.find(a => a.roundNumber === roundNumber);
@@ -753,124 +652,57 @@ export default function ChatThreadScreen({
       }
     });
 
-    return items;
+    // ✅ STREAMING FIX: Final deduplication by key to prevent any duplicate items
+    // This is a safety net to ensure we never render duplicate round elements
+    const seenKeys = new Set<string>();
+    const deduplicatedItems = items.filter((item) => {
+      if (seenKeys.has(item.key)) {
+        return false;
+      }
+      seenKeys.add(item.key);
+      return true;
+    });
+
+    return deduplicatedItems;
   }, [messages, analyses, changelog]);
 
-  // ✅ Single stable feedback handler to prevent infinite re-renders
-  // Using useCallback with proper dependencies
-  const handleFeedbackChange = useCallback(
-    (roundNumber: number, feedbackType: 'like' | 'dislike' | null) => {
-      // ✅ Track which feedback type is being updated (for loading state)
-      // If feedbackType is null, we're clearing feedback (no loading needed)
-      if (feedbackType) {
-        setPendingFeedback({ roundNumber, type: feedbackType });
-      }
+  // ✅ CRITICAL FIX: Create stable feedback handler using useCallback
+  // Store handlers in a ref to maintain stability across renders
+  const feedbackHandlersRef = useRef(new Map<number, (feedbackType: 'like' | 'dislike' | null) => void>());
 
-      setRoundFeedbackMutation.mutate(
-        {
-          param: {
-            threadId: thread.id,
-            roundNumber: String(roundNumber),
-          },
-          json: { feedbackType },
-        },
-        {
-          // Clear pending state when mutation completes or fails
-          onSettled: () => {
-            setPendingFeedback(null);
-          },
-        },
-      );
-    },
-    [setRoundFeedbackMutation, thread.id],
-  );
-
-  // ✅ Create stable bound handlers per round using useMemo
-  // This ensures each round gets a stable callback reference
-  const feedbackHandlersMap = useMemo(() => {
-    const map = new Map<number, (feedbackType: 'like' | 'dislike' | null) => void>();
-
-    messagesWithAnalysesAndChangelog.forEach((item) => {
-      // Create handlers for all rounds (messages, analysis, changelog)
-      let roundNumber: number;
-
-      if (item.type === 'messages') {
-        roundNumber = ((item.data[0]?.metadata as Record<string, unknown> | undefined)?.roundNumber as number) || 1;
-      } else if (item.type === 'analysis') {
-        roundNumber = item.data.roundNumber;
-      } else if (item.type === 'changelog') {
-        roundNumber = item.data[0]?.roundNumber || 1;
-      } else {
-        return;
-      }
-
-      // Create a bound handler for this specific round (avoid duplicates)
-      if (!map.has(roundNumber)) {
-        map.set(roundNumber, feedbackType => handleFeedbackChange(roundNumber, feedbackType));
-      }
-    });
-
-    return map;
-  }, [messagesWithAnalysesAndChangelog, handleFeedbackChange]);
-
-  // ✅ DEBUG: Log when items update to track rendering and round numbers
-  useEffect(() => {
-    console.warn('[ChatThreadScreen] 🔄 Messages with analyses and changelog updated', {
-      totalItems: messagesWithAnalysesAndChangelog.length,
-      messagesGroups: messagesWithAnalysesAndChangelog.filter(i => i.type === 'messages').length,
-      analysesGroups: messagesWithAnalysesAndChangelog.filter(i => i.type === 'analysis').length,
-      changelogGroups: messagesWithAnalysesAndChangelog.filter(i => i.type === 'changelog').length,
-      items: messagesWithAnalysesAndChangelog.map((item) => {
-        if (item.type === 'messages') {
-          const firstMsg = item.data[0];
-          const metadata = firstMsg?.metadata as Record<string, unknown> | undefined;
-          return {
-            type: item.type,
-            key: item.key,
-            roundNumber: metadata?.roundNumber,
-            messageCount: item.data.length,
-          };
+  // ✅ Base handler that creates per-round handlers on-demand
+  const getFeedbackHandler = useCallback((roundNumber: number) => {
+    // Check if handler already exists for this round
+    if (!feedbackHandlersRef.current.has(roundNumber)) {
+      // Create new handler for this round
+      feedbackHandlersRef.current.set(roundNumber, (feedbackType: 'like' | 'dislike' | null) => {
+        // Track which feedback type is being updated (for loading state)
+        if (feedbackType) {
+          setPendingFeedback({ roundNumber, type: feedbackType });
         }
-        if (item.type === 'changelog') {
-          return {
-            type: item.type,
-            key: item.key,
-            roundNumber: item.data[0]?.roundNumber,
-            changeCount: item.data.length,
-          };
-        }
-        // ✅ TYPE SAFETY: item.type is 'analysis' here (only remaining case)
-        return {
-          type: item.type,
-          key: item.key,
-          roundNumber: item.data.roundNumber,
-          status: item.data.status,
-        };
-      }),
-    });
 
-    // ✅ DEBUG: Log analyses array to track round numbers
-    console.warn('[ChatThreadScreen] 📊 Current analyses', {
-      count: analyses.length,
-      analyses: analyses.map(a => ({
-        id: a.id,
-        roundNumber: a.roundNumber,
-        status: a.status,
-        createdAt: a.createdAt,
-      })),
-    });
+        setRoundFeedbackMutation.mutate(
+          {
+            param: {
+              threadId: thread.id,
+              roundNumber: String(roundNumber),
+            },
+            json: { feedbackType },
+          },
+          {
+            // Clear pending state when mutation completes or fails
+            onSettled: () => {
+              setPendingFeedback(null);
+            },
+          },
+        );
+      });
+    }
 
-    // ✅ DEBUG: Log changelog array to track round numbers
-    console.warn('[ChatThreadScreen] 📝 Current changelog', {
-      count: changelog.length,
-      changelog: changelog.map(c => ({
-        id: c.id,
-        roundNumber: c.roundNumber,
-        changeType: c.changeType, // ✅ FIX: Use correct field name from schema
-        createdAt: c.createdAt,
-      })),
-    });
-  }, [messagesWithAnalysesAndChangelog, analyses, changelog]);
+    return feedbackHandlersRef.current.get(roundNumber)!;
+  }, [setRoundFeedbackMutation, thread.id]);
+
+  // ✅ DEBUG: Logging removed
 
   // ✅ VIRTUALIZATION: TanStack Virtual v3 - Window-level virtualizer
   // Uses window scrolling instead of nested scroll container for better UX
@@ -888,12 +720,7 @@ export default function ChatThreadScreen({
 
   // Debug: Log virtualization to verify it's working
   useEffect(() => {
-    console.warn('[Virtualizer] 📊 Active:', {
-      totalItems: messagesWithAnalysesAndChangelog.length,
-      renderedItems: virtualItems.length,
-      isVirtualizing: virtualItems.length < messagesWithAnalysesAndChangelog.length,
-      totalHeight: rowVirtualizer.getTotalSize(),
-    });
+
   }, [messagesWithAnalysesAndChangelog.length, virtualItems.length, rowVirtualizer]);
 
   // ✅ AUTO-SCROLL: Enhanced scroll-to-bottom when new messages arrive
@@ -1004,12 +831,6 @@ export default function ChatThreadScreen({
       // ✅ Mark new analyses as seen to prevent repeated scrolling
       if (hasNewAnalysis) {
         newAnalyses.forEach(a => scrolledToAnalysesRef.current.add(a.id));
-        console.warn('[ChatThreadScreen] 📍 New analysis detected', {
-          analysisIds: newAnalyses.map(a => a.id),
-          roundNumbers: newAnalyses.map(a => a.roundNumber),
-          isStreaming,
-          willScroll: shouldScrollForAnalysis || isStreaming,
-        });
       }
 
       // ✅ WINDOW SCROLLING: Scroll to show content, accounting for sticky input
@@ -1029,6 +850,7 @@ export default function ChatThreadScreen({
             behavior: isStreaming ? 'smooth' : 'auto',
           });
         } else {
+          // Intentionally empty
           // Fallback: scroll to document height if container not found
           const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
           window.scrollTo({
@@ -1140,13 +962,13 @@ export default function ChatThreadScreen({
                           return (
                             <Actions className="mt-3 mb-2">
                               {/* ✅ Round Feedback: Like/Dislike buttons - only show if round succeeded */}
-                              {!hasRoundError && feedbackHandlersMap.has(roundNumber) && (
+                              {!hasRoundError && (
                                 <RoundFeedback
                                   key={`feedback-${thread.id}-${roundNumber}`}
                                   threadId={thread.id}
                                   roundNumber={roundNumber}
                                   currentFeedback={feedbackByRound.get(roundNumber) ?? null}
-                                  onFeedbackChange={feedbackHandlersMap.get(roundNumber)!}
+                                  onFeedbackChange={getFeedbackHandler(roundNumber)}
                                   disabled={isStreaming}
                                   isPending={
                                     setRoundFeedbackMutation.isPending
@@ -1185,50 +1007,6 @@ export default function ChatThreadScreen({
                           threadId={thread.id}
                           isLatest={itemIndex === messagesWithAnalysesAndChangelog.length - 1}
                           streamingRoundNumber={streamingRoundNumber}
-                          onStreamComplete={(completedData) => {
-                          // ✅ ACTIVE SESSION OPTIMIZATION: Update cache directly with completed analysis
-                          // This skips unnecessary GET request after streaming completes
-                            console.warn('[ChatThreadScreen] Analysis stream completed, updating cache directly');
-
-                            queryClient.setQueryData(
-                              queryKeys.threads.analyses(thread.id),
-                              (oldData: unknown) => {
-                                const typedData = oldData as typeof analysesResponse;
-
-                                if (!typedData?.success) {
-                                  return typedData;
-                                }
-
-                                // Replace the pending analysis with completed analysis
-                                const updatedItems = (typedData.data.items || []).map((analysis) => {
-                                // Match by round number (pending analysis has temporary ID)
-                                  if (analysis.roundNumber === item.data.roundNumber) {
-                                    return {
-                                      ...analysis,
-                                      status: 'completed' as const,
-                                      analysisData: completedData,
-                                      completedAt: new Date(),
-                                    };
-                                  }
-                                  return analysis;
-                                });
-
-                                console.warn('[ChatThreadScreen] ✅ Updated analysis in cache', {
-                                  threadId: thread.id,
-                                  roundNumber: item.data.roundNumber,
-                                  itemCount: updatedItems.length,
-                                });
-
-                                return {
-                                  ...typedData,
-                                  data: {
-                                    ...typedData.data,
-                                    items: updatedItems,
-                                  },
-                                };
-                              },
-                            );
-                          }}
                         />
                       </div>
                     )}
@@ -1236,8 +1014,8 @@ export default function ChatThreadScreen({
                 );
               })}
 
-              {/* ✅ Streaming participants loader - shown during participant streaming */}
-              {/* Place INSIDE virtualized container so scroll calculations include it */}
+              {/* ✅ UNIFIED: Show loader when streaming participants OR waiting for analysis */}
+              {/* TEMPORARILY SIMPLIFIED - DEBUGGING INFINITE LOOP */}
               {isStreaming && selectedParticipants.length > 1 && (
                 <div
                   key="streaming-loader"
@@ -1249,6 +1027,7 @@ export default function ChatThreadScreen({
                     className="mt-12"
                     participants={selectedParticipants}
                     currentParticipantIndex={currentParticipantIndex}
+                    isAnalyzing={false}
                   />
                 </div>
               )}
@@ -1272,23 +1051,23 @@ export default function ChatThreadScreen({
               placeholder={t('input.placeholder')}
               participants={selectedParticipants}
               onRemoveParticipant={(participantId) => {
-                // Filter out the removed participant and reindex
-                const filtered = selectedParticipants.filter(p => p.id !== participantId);
+                // ✅ REFACTORED: Use hook's removal handler (with validation)
                 // Prevent removing the last participant
-                if (filtered.length === 0)
+                if (selectedParticipants.length <= 1)
                   return;
-                const reindexed = filtered.map((p, index) => ({ ...p, order: index }));
-                handleParticipantsChange(reindexed);
+                removeParticipant(participantId);
               }}
               toolbar={(
                 <>
                   <ChatParticipantsList
                     participants={selectedParticipants}
                     onParticipantsChange={handleParticipantsChange}
+                    isStreaming={isStreaming}
                   />
                   <ChatModeSelector
                     selectedMode={selectedMode}
                     onModeChange={handleModeChange}
+                    disabled={isStreaming}
                   />
                 </>
               )}

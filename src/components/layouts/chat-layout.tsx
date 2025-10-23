@@ -8,6 +8,7 @@ import { ThreadHeaderProvider } from '@/components/chat/thread-header-context';
 import { ContentLoadingFallback, SidebarLoadingFallback } from '@/components/loading';
 import { BreadcrumbStructuredData } from '@/components/seo';
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
+import { LIMITS } from '@/constants/limits';
 import { getQueryClient } from '@/lib/data/query-client';
 import { queryKeys } from '@/lib/data/query-keys';
 import { STALE_TIMES } from '@/lib/data/stale-times';
@@ -66,12 +67,12 @@ export default async function ChatLayout({ children, modal }: ChatLayoutProps) {
   // Prefetch all critical data in parallel for optimal performance
   // This eliminates loading states and provides instant data on first load
   await Promise.all([
-    // 1. Prefetch threads list (infinite query) - First 50 items for sidebar
+    // 1. Prefetch threads list (infinite query) - First load optimized for sidebar
     queryClient.prefetchInfiniteQuery({
       queryKey: queryKeys.threads.lists(undefined), // No search query for initial load
       queryFn: async ({ pageParam }) => {
-        // First page: 50 items (matches client-side hook behavior)
-        const limit = pageParam ? 20 : 50;
+        // ✅ Use centralized limits - clean semantic names
+        const limit = pageParam ? LIMITS.STANDARD_PAGE : LIMITS.INITIAL_PAGE; // 20 : 50
         const params: { cursor?: string; limit: number } = { limit };
         if (pageParam)
           params.cursor = pageParam;

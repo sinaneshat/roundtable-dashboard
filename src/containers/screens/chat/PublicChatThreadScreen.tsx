@@ -266,11 +266,7 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
                           // ✅ IMPROVED ERROR HANDLING: Continue rendering even if model not found
                           // ModelMessageCard now handles undefined models with fallbacks
                           if (!model) {
-                            console.warn('[PublicChatThreadScreen] Rendering message with missing model:', {
-                              messageId: message.id,
-                              storedModelId,
-                              participantIndex,
-                            });
+
                             // Continue rendering with placeholder - don't skip the message
                           }
 

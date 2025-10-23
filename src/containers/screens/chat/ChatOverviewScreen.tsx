@@ -20,9 +20,8 @@ import { WavyBackground } from '@/components/ui/wavy-background';
 import { BRAND } from '@/constants/brand';
 import { useSharedChatContext } from '@/contexts/chat-context';
 import { useCreateThreadMutation } from '@/hooks/mutations/chat-mutations';
-import { useThreadAnalysesQuery } from '@/hooks/queries/chat-threads';
 import { useModelsQuery } from '@/hooks/queries/models';
-import { useAutoScrollToBottom } from '@/hooks/utils';
+import { useAutoScrollToBottom, useChatRoundManager, useSelectedParticipants } from '@/hooks/utils';
 import { useSession } from '@/lib/auth/client';
 import type { ChatModeId } from '@/lib/config/chat-modes';
 import { getDefaultChatMode } from '@/lib/config/chat-modes';
@@ -101,9 +100,15 @@ export default function ChatOverviewScreen() {
     return [];
   }, [defaultModelId]);
 
-  // ✅ SIMPLIFIED STATE: Only 3 variables (was 6)
+  // ✅ REFACTORED: Use shared participant hook (eliminates ~150 lines of duplicate logic)
+  const {
+    selectedParticipants,
+    setSelectedParticipants,
+    handleRemoveParticipant,
+  } = useSelectedParticipants(initialParticipants);
+
+  // ✅ SIMPLIFIED STATE: Only 2 variables (was 3)
   const [selectedMode, setSelectedMode] = useState<ChatModeId>(() => getDefaultChatMode());
-  const [selectedParticipants, setSelectedParticipants] = useState<ParticipantConfig[]>(initialParticipants);
   const [inputValue, setInputValue] = useState('');
 
   // UI state for animations
@@ -132,11 +137,12 @@ export default function ChatOverviewScreen() {
     participantsRef.current = contextParticipants;
   }, [contextParticipants]);
 
-  // ✅ Fetch analyses for the created thread (if exists)
-  const { data: analysesResponse } = useThreadAnalysesQuery(
-    createdThreadId || '',
-    createdThreadId != null, // Only fetch if thread created
-  );
+  // ✅ UNIFIED ROUND MANAGER: Eliminates ALL duplicate analysis logic (~200 lines)
+  const roundManager = useChatRoundManager({
+    threadId: createdThreadId || '',
+    mode: selectedMode,
+    enableQuery: createdThreadId != null, // Only fetch if thread created
+  });
 
   const createThreadMutation = useCreateThreadMutation();
 
@@ -216,92 +222,30 @@ export default function ChatOverviewScreen() {
         // Update URL to thread detail view without triggering a full page navigation
         // Using window.history.replaceState (not router.replace) to avoid triggering navigation
         const threadUrl = `/chat/${thread.slug}`;
-        console.warn('[ChatOverviewScreen] 🔄 Replacing URL to navigate to thread view', {
-          threadId: thread.id,
-          slug: thread.slug,
-          url: threadUrl,
-        });
+
         window.history.replaceState(null, '', threadUrl);
 
         // Step 5: Store prompt for sending after context is ready
         hasSentInitialPromptRef.current = false; // Reset flag for new thread
         setInitialPrompt(prompt);
 
-        // Step 5: Set round completion callback to add pending analysis to cache
+        // Step 5: Set round completion callback using unified round manager
         // ✅ This fires when ALL participants finish streaming (entire round complete)
-        // ✅ SIMPLIFIED: Just add pending analysis to cache - navigation happens via onStreamComplete
         setOnRoundComplete(async () => {
-          console.warn('[ChatOverviewScreen] 🎯 Round completed - adding pending analysis', {
-            threadId: thread.id,
-          });
-
-          // ✅ CRITICAL: Wait for messages to be persisted to database
-          await new Promise(resolve => setTimeout(resolve, 2000));
-
-          // ✅ FIX: Get participant message IDs from the latest messages (via ref)
-          // Use ref to avoid stale closure values
+          // ✅ FIX: Get latest messages and participants from refs (avoid stale closure)
           const currentMessages = messagesRef.current;
           const currentParticipants = participantsRef.current;
 
-          const assistantMessages = currentMessages.filter(m => m.role === 'assistant');
-          const participantCount = currentParticipants.length;
-          const recentAssistantMessages = assistantMessages.slice(-participantCount);
-          const participantMessageIds = recentAssistantMessages.map(m => m.id);
-
-          console.warn('[ChatOverviewScreen] 📋 Calculated participant message IDs', {
-            threadId: thread.id,
-            participantCount,
-            assistantMessagesTotal: assistantMessages.length,
-            participantMessageIds,
-          });
-
-          // ✅ Add pending analysis to cache (triggers ModeratorAnalysisStream to render and stream)
-          const roundNumber = 1; // First round on overview screen
-          const pendingAnalysis = {
-            id: `pending-${thread.id}-${roundNumber}-${Date.now()}`,
-            threadId: thread.id,
-            roundNumber,
-            mode: thread.mode,
-            userQuestion: prompt, // Use the original prompt since messages might be stale in closure
-            status: 'pending' as const,
-            participantMessageIds, // ✅ FIX: Now properly populated!
-            analysisData: null,
-            createdAt: new Date(),
-            completedAt: null,
-            errorMessage: null,
-          };
-
-          queryClient.setQueryData(
-            queryKeys.threads.analyses(thread.id),
-            (oldData: unknown) => {
-              const typedData = oldData as typeof analysesResponse;
-
-              if (!typedData?.success) {
-                return {
-                  success: true,
-                  data: {
-                    items: [pendingAnalysis],
-                  },
-                };
-              }
-
-              return {
-                ...typedData,
-                data: {
-                  ...typedData.data,
-                  items: [...(typedData.data.items || []), pendingAnalysis],
-                },
-              };
-            },
+          // ✅ UNIFIED: Single call to handle all round completion logic
+          await roundManager.handleRoundComplete(
+            1, // First round on overview screen
+            currentMessages,
+            currentParticipants,
+            prompt, // User question
           );
-
-          console.warn('[ChatOverviewScreen] ✅ Pending analysis added - RoundAnalysisCard will trigger streaming', {
-            analysisId: pendingAnalysis.id,
-          });
         });
-      } catch (err) {
-        console.error('Error creating thread:', err);
-        showApiErrorToast('Error', err);
+      } catch (error) {
+        showApiErrorToast('Error', error);
         setShowInitialUI(true);
       } finally {
         setIsCreatingThread(false);
@@ -316,7 +260,7 @@ export default function ChatOverviewScreen() {
       createThreadMutation,
       initializeThread,
       setOnRoundComplete,
-      queryClient,
+      roundManager,
     ],
   );
 
@@ -324,14 +268,11 @@ export default function ChatOverviewScreen() {
     setInputValue(prompt);
     setSelectedMode(mode);
     setSelectedParticipants(participants);
-  }, []);
+  }, [setSelectedParticipants]);
 
-  const handleRemoveParticipant = useCallback((participantId: string) => {
-    // Filter out the removed participant and reindex
-    const filtered = selectedParticipants.filter(p => p.id !== participantId);
-    const reindexed = filtered.map((p, index) => ({ ...p, order: index }));
-    setSelectedParticipants(reindexed);
-  }, [selectedParticipants]);
+  // ✅ DEBUG: Removed logging
+
+  // ✅ REMOVED: handleRemoveParticipant - now provided by useSelectedParticipants hook
 
   // ✅ CRITICAL: Send initial user message once context is initialized and ready
   // This effect waits for:
@@ -340,10 +281,6 @@ export default function ChatOverviewScreen() {
   // 3. isStreaming to be false (status is 'ready')
   useEffect(() => {
     if (initialPrompt && currentThread && !isStreaming && !hasSentInitialPromptRef.current) {
-      console.warn('[ChatOverviewScreen] 🚀 Sending initial user message to trigger participants', {
-        threadId: currentThread.id,
-        promptPreview: initialPrompt.substring(0, 50),
-      });
       hasSentInitialPromptRef.current = true;
       sendMessage(initialPrompt); // Send user message - triggers first participant automatically
     }
@@ -357,7 +294,6 @@ export default function ChatOverviewScreen() {
     if (selectedParticipants.length === 0 && defaultModelId && initialParticipants.length > 0) {
       // Only set default participant if we haven't initialized yet
       // This prevents re-adding the participant after user intentionally removes it
-      // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect
       setSelectedParticipants(initialParticipants);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -375,7 +311,6 @@ export default function ChatOverviewScreen() {
   // Without this, the stop button persists from the previous thread screen
   useEffect(() => {
     if (showInitialUI && isStreaming) {
-      console.warn('[ChatOverviewScreen] 🛑 Resetting streaming state on initial UI');
       stopStreaming();
     }
   }, [showInitialUI, isStreaming, stopStreaming]);
@@ -487,67 +422,19 @@ export default function ChatOverviewScreen() {
                 currentStreamingParticipant={currentStreamingParticipant}
               />
 
-              {/* ✅ ANALYSIS: Show first round analysis on overview screen */}
-              {createdThreadId && analysesResponse?.success && analysesResponse.data.items.length > 0 && analysesResponse.data.items[0] && (
+              {/* ✅ UNIFIED: Show first round analysis using round manager state */}
+              {createdThreadId && roundManager.state.analyses[0] && (
                 <div className="mt-6">
                   <RoundAnalysisCard
-                    analysis={analysesResponse.data.items[0] as unknown as StoredModeratorAnalysis}
+                    analysis={roundManager.state.analyses[0] as unknown as StoredModeratorAnalysis}
                     threadId={createdThreadId}
                     isLatest={true}
-                    onStreamComplete={async (completedData) => {
-                      console.warn('[ChatOverviewScreen] ✅ Analysis streaming completed', {
-                        threadId: createdThreadId,
-                        hasData: !!completedData,
-                      });
-
-                      // Update cache when stream completes
-                      queryClient.setQueryData(
-                        queryKeys.threads.analyses(createdThreadId),
-                        (oldData: unknown) => {
-                          const typedData = oldData as typeof analysesResponse;
-
-                          if (!typedData?.success) {
-                            return typedData;
-                          }
-
-                          const updatedItems = (typedData.data.items || []).map((analysis) => {
-                            if (analysis.roundNumber === 1) {
-                              return {
-                                ...analysis,
-                                status: 'completed' as const,
-                                analysisData: completedData,
-                                completedAt: new Date(),
-                              };
-                            }
-                            return analysis;
-                          });
-
-                          return {
-                            ...typedData,
-                            data: {
-                              ...typedData.data,
-                              items: updatedItems,
-                            },
-                          };
-                        },
-                      );
-
+                    onStreamComplete={async () => {
                       // ✅ NAVIGATION: Navigate to thread page without page refresh
-                      // URL was already replaced after thread creation (line 224)
-                      // Now use router.push to navigate to the thread page
-                      console.warn('[ChatOverviewScreen] 🎯 Round complete - navigating to thread page', {
-                        threadId: createdThreadId,
-                        currentUrl: window.location.pathname,
-                      });
-
                       // Invalidate sidebar cache before navigation
                       await queryClient.invalidateQueries({ queryKey: queryKeys.threads.lists() });
 
                       // Navigate to thread page using router.push (no page refresh)
-                      // This provides a smooth transition from overview to thread page
-                      // 1. Round 1 is complete (all messages persisted)
-                      // 2. Analysis is complete or streaming
-                      // 3. User expects to see the full thread page now
                       router.push(`/chat/${currentThread?.slug}`);
                     }}
                   />
@@ -567,12 +454,13 @@ export default function ChatOverviewScreen() {
                 </div>
               )}
 
-              {/* ✅ STREAMING PARTICIPANTS LOADER: Show when streaming (same as thread screen) */}
-              {isStreaming && selectedParticipants.length > 1 && (
+              {/* ✅ UNIFIED: Show loader when streaming participants OR waiting for analysis */}
+              {(isStreaming || roundManager.state.isWaitingForAnalysis) && selectedParticipants.length > 1 && (
                 <StreamingParticipantsLoader
                   className="mt-4"
                   participants={selectedParticipants}
                   currentParticipantIndex={currentParticipantIndex}
+                  isAnalyzing={roundManager.state.isWaitingForAnalysis}
                 />
               )}
             </motion.div>

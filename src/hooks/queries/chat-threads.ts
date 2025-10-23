@@ -12,6 +12,7 @@
 
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 
+import { LIMITS } from '@/constants/limits';
 import { useSession } from '@/lib/auth/client';
 import { queryKeys } from '@/lib/data/query-keys';
 import { STALE_TIMES } from '@/lib/data/stale-times';
@@ -41,9 +42,12 @@ export function useThreadsQuery(search?: string) {
   return useInfiniteQuery({
     queryKey: [...queryKeys.threads.lists(search)],
     queryFn: async ({ pageParam }) => {
-      // First page: 50 items for sidebar, 10 for search
-      // Subsequent pages: 20 items for sidebar, 10 for search
-      const limit = search ? 10 : (pageParam ? 20 : 50);
+      // ✅ Use centralized limits - clean semantic names
+      const limit = search
+        ? LIMITS.SEARCH_RESULTS // 10 for search results
+        : pageParam
+          ? LIMITS.STANDARD_PAGE // 20 for subsequent pages
+          : LIMITS.INITIAL_PAGE; // 50 for initial sidebar load
 
       const params: { cursor?: string; search?: string; limit: number } = { limit };
       if (pageParam)
@@ -244,15 +248,7 @@ export function useThreadAnalysesQuery(threadId: string, enabled?: boolean) {
         // For fresh analyses (< 30s), ModeratorAnalysisStream handles via experimental_useObject
         const isStuckOrOrphaned = ageMs > THIRTY_SECONDS;
 
-        if (isStuckOrOrphaned) {
-          console.warn('[useThreadAnalysesQuery] 🔍 Detected stuck/orphaned analysis', {
-            analysisId: analysis.id,
-            status: analysis.status,
-            ageMs,
-            roundNumber: analysis.roundNumber,
-          });
-        }
-
+        // Logging removed - was only for debugging
         return isStuckOrOrphaned;
       });
 

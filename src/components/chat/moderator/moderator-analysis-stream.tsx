@@ -66,24 +66,16 @@ export function ModeratorAnalysisStream({
     schema: ModeratorAnalysisPayloadSchema,
     onFinish: ({ object: finalObject, error: streamError }) => {
       if (streamError) {
-        console.error('[ModeratorAnalysisStream] ❌ Stream error:', streamError);
-
         // ✅ CRITICAL: Check if error is 409 Conflict (analysis already streaming in background)
         // Set flag to suppress error display - useThreadAnalysesQuery will poll for completion
         const errorMessage = streamError.message || String(streamError);
         if (errorMessage.includes('409') || errorMessage.includes('Conflict') || errorMessage.includes('already being generated')) {
-          console.warn('[ModeratorAnalysisStream] 🔄 Got 409 Conflict - backend already streaming', {
-            roundNumber: analysis.roundNumber,
-            analysisId: analysis.id,
-            message: 'useThreadAnalysesQuery polling will detect completion',
-          });
           is409Conflict.onTrue();
         }
         return;
       }
 
       if (finalObject) {
-        console.warn('[ModeratorAnalysisStream] ✅ Stream completed', finalObject);
         // ✅ Pass completed analysis data to parent for direct cache update
         onStreamComplete?.(finalObject);
       }
@@ -92,43 +84,32 @@ export function ModeratorAnalysisStream({
 
   // ✅ AUTO-TRIGGER: Start streaming ONLY for 'pending' status
   // ✅ STREAMING STATUS: Don't trigger POST - backend already processing
+  // ✅ FAILED STATUS: NEVER retry - user must manually regenerate from UI
   // useThreadAnalysesQuery polls every 5-10s to detect completion
   useEffect(() => {
+    // ❌ NEVER trigger for FAILED or COMPLETED analyses - they're done
+    if (analysis.status === AnalysisStatuses.FAILED || analysis.status === AnalysisStatuses.COMPLETED) {
+      if (!hasTriggeredRef.current) {
+        hasTriggeredRef.current = true;
+      }
+      return;
+    }
+
     // Only trigger if analysis is 'pending' (newly created) and we haven't triggered yet
     // Do NOT trigger for 'streaming' - backend already processing, query polls for completion
     const shouldTrigger = analysis.status === AnalysisStatuses.PENDING && !hasTriggeredRef.current;
 
     if (shouldTrigger) {
       hasTriggeredRef.current = true;
-      console.warn('[ModeratorAnalysisStream] 🌊 Triggering POST /analyze for PENDING analysis', {
-        roundNumber: analysis.roundNumber,
-        analysisId: analysis.id,
-      });
+
       submit({ participantMessageIds: analysis.participantMessageIds });
     } else if (analysis.status === AnalysisStatuses.STREAMING && !hasTriggeredRef.current) {
       // Backend already processing - don't POST, let query poll
       hasTriggeredRef.current = true;
-      console.warn('[ModeratorAnalysisStream] ⏭️ Skipping POST - backend already STREAMING', {
-        roundNumber: analysis.roundNumber,
-        analysisId: analysis.id,
-        message: 'useThreadAnalysesQuery will poll for completion',
-      });
     }
   }, [analysis.status, analysis.participantMessageIds, submit, analysis.roundNumber, analysis.id]);
 
-  // ✅ DEBUG: Log when partial data updates (helps verify streaming is working)
-  useEffect(() => {
-    if (partialAnalysis) {
-      console.warn('[ModeratorAnalysisStream] 🔄 Partial data update:', {
-        hasLeaderboard: !!partialAnalysis.leaderboard,
-        leaderboardCount: partialAnalysis.leaderboard?.length ?? 0,
-        hasParticipantAnalyses: !!partialAnalysis.participantAnalyses,
-        participantAnalysesCount: partialAnalysis.participantAnalyses?.length ?? 0,
-        hasOverallSummary: !!partialAnalysis.overallSummary,
-        hasConclusion: !!partialAnalysis.conclusion,
-      });
-    }
-  }, [partialAnalysis]);
+  // ✅ DEBUG: Removed logging
 
   // ❌ ERROR STATE: Show error if streaming fails (unless 409 Conflict)
   // If 409 Conflict, suppress error - useThreadAnalysesQuery polls for completion

@@ -501,7 +501,7 @@ while (true) {
   const line = decoder.decode(value);
   if (line.startsWith('data: 0:')) {
     const chunk = JSON.parse(line.slice(8));
-    console.log('Text:', chunk);
+
   }
 }
 \`\`\`

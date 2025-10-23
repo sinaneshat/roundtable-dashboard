@@ -240,12 +240,12 @@ export class RateLimiterFactory {
         if (config.skipSuccessfulRequests) {
           entry.count--;
         }
-      } catch (_error) {
+      } catch (error) {
         // Optionally skip counting failed requests
         if (config.skipFailedRequests) {
           entry.count--;
         }
-        throw _error;
+        throw error;
       }
     });
   }

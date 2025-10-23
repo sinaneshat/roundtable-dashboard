@@ -98,6 +98,7 @@ export function reducer(state: State, action: Action): State {
       if (toastId) {
         addToRemoveQueue(toastId);
       } else {
+        // Intentionally empty
         state.toasts.forEach((toast) => {
           addToRemoveQueue(toast.id);
         });

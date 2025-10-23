@@ -46,35 +46,30 @@ function getBaseUrl(): string {
  * @returns Base64 data URL string
  */
 export async function getBase64Image(relativePath: string): Promise<string> {
-  try {
-    // Remove 'public/' prefix if present, as URLs don't include it
-    const cleanPath = relativePath.replace(/^public\//, '');
+  // Remove 'public/' prefix if present, as URLs don't include it
+  const cleanPath = relativePath.replace(/^public\//, '');
 
-    // Construct the full URL to the asset
-    const baseUrl = getBaseUrl();
-    const imageUrl = `${baseUrl}/${cleanPath}`;
+  // Construct the full URL to the asset
+  const baseUrl = getBaseUrl();
+  const imageUrl = `${baseUrl}/${cleanPath}`;
 
-    // Fetch the image
-    const response = await fetch(imageUrl);
+  // Fetch the image
+  const response = await fetch(imageUrl);
 
-    if (!response.ok) {
-      throw new Error(`Failed to fetch image: ${response.status} ${response.statusText}`);
-    }
-
-    // Convert to buffer and then to base64
-    const arrayBuffer = await response.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-    const base64 = buffer.toString('base64');
-
-    // Determine MIME type from file extension
-    const ext = cleanPath.split('.').pop()?.toLowerCase();
-    const mimeType = ext === 'png' ? 'image/png' : ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : ext === 'svg' ? 'image/svg+xml' : 'image/png';
-
-    return `data:${mimeType};base64,${base64}`;
-  } catch (error) {
-    console.error(`Failed to fetch and encode image: ${relativePath}`, error);
-    throw error;
+  if (!response.ok) {
+    throw new Error(`Failed to fetch image: ${response.status} ${response.statusText}`);
   }
+
+  // Convert to buffer and then to base64
+  const arrayBuffer = await response.arrayBuffer();
+  const buffer = Buffer.from(arrayBuffer);
+  const base64 = buffer.toString('base64');
+
+  // Determine MIME type from file extension
+  const ext = cleanPath.split('.').pop()?.toLowerCase();
+  const mimeType = ext === 'png' ? 'image/png' : ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : ext === 'svg' ? 'image/svg+xml' : 'image/png';
+
+  return `data:${mimeType};base64,${base64}`;
 }
 
 /**
@@ -96,8 +91,7 @@ export async function getModelIconBase64(modelId: string): Promise<string> {
     const iconPath = icon.startsWith('/') ? `public${icon}` : `public/${icon}`;
 
     return await getBase64Image(iconPath);
-  } catch (error) {
-    console.error(`Failed to load icon for model: ${modelId}`, error);
+  } catch {
     // Fallback: try to load OpenRouter default icon
     try {
       return await getBase64Image('public/static/icons/ai-models/openrouter.png');
@@ -123,8 +117,7 @@ export async function getLogoBase64(): Promise<string> {
 export async function getModeIconBase64(mode: string): Promise<string> {
   try {
     return await getBase64Image(`public/static/icons/modes/${mode}.svg`);
-  } catch (error) {
-    console.error(`Failed to load mode icon for: ${mode}`, error);
+  } catch {
     // Fallback to analyzing icon
     return getBase64Image('public/static/icons/modes/analyzing.svg');
   }
@@ -268,6 +261,7 @@ export function generateWavePath(width: number, height: number, waveIndex: numbe
     if (x === 0) {
       path.push(`M${x},${y.toFixed(2)}`);
     } else {
+    // Intentionally empty
       path.push(`L${x},${y.toFixed(2)}`);
     }
   }

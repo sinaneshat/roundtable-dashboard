@@ -182,6 +182,7 @@ export function validateEnvironmentConfiguration(env: CloudflareEnv): {
   if (!env.DB) {
     errors.push('Missing required Cloudflare D1 database binding (DB) - Better Auth requires database access');
   } else {
+    // Intentionally empty
     // Validate D1 database binding has required methods for Better Auth transactions
     try {
       if (typeof env.DB.prepare !== 'function') {
@@ -314,6 +315,7 @@ export function createEnvironmentSummary(env: CloudflareEnv): SafeEnvironmentSum
     // D1 database binding is available
     databaseStatus = 'connected';
   } else {
+    // Intentionally empty
     databaseStatus = 'disconnected';
   }
 

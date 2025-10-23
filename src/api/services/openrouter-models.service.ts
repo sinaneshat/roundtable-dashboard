@@ -993,6 +993,7 @@ class OpenRouterModelsService {
       if (avgCostPerMillion === 0) {
         score += 100;
       } else {
+        // Intentionally empty
         // Invert cost to score (cheaper = better)
         // Models under $1/M get high scores, anything above $10/M gets low scores
         const costScore = Math.max(0, 100 - (avgCostPerMillion / 10) * 100);
@@ -1026,6 +1027,7 @@ class OpenRouterModelsService {
         } else if (ageInDays < 730) {
           score += 10; // Last 2 years
         } else {
+          // Intentionally empty
           score += 5; // Older models
         }
       }
@@ -1090,6 +1092,7 @@ class OpenRouterModelsService {
       } else if (model.context_length >= 64000 && model.context_length < 128000) {
         score += 40; // Medium (64K-128K)
       } else {
+        // Intentionally empty
         score += 20; // Slower (128K+)
       }
 
@@ -1102,6 +1105,7 @@ class OpenRouterModelsService {
       if (avgCostPerMillion === 0) {
         score += 40;
       } else {
+        // Intentionally empty
         // Invert cost to score (cheaper = better)
         // $0 = 40 points, $1/M = 0 points
         const costScore = Math.max(0, 40 - (avgCostPerMillion / 1) * 40);
@@ -1127,6 +1131,7 @@ class OpenRouterModelsService {
         } else if (ageInDays < 730) {
           score += 10; // Last 2 years
         } else {
+          // Intentionally empty
           score += 5; // Older models
         }
       }
@@ -1174,6 +1179,7 @@ class OpenRouterModelsService {
     } else if (model.context_length >= 32000) {
       score += 10; // Medium (32K-64K) - standard
     } else {
+    // Intentionally empty
       score += 0; // Small (<32K) - basic
     }
 
@@ -1191,9 +1197,11 @@ class OpenRouterModelsService {
       } else if (ageInDays < 730) {
         score += 8; // Last 2 years - older
       } else {
+        // Intentionally empty
         score += 0; // Very old - outdated
       }
     } else {
+    // Intentionally empty
       score += 10; // No timestamp - neutral
     }
 
@@ -1226,6 +1234,7 @@ class OpenRouterModelsService {
     } else if (inputPricePerMillion > 100) {
       score += 5; // Ultra-premium pricing
     } else {
+    // Intentionally empty
       score += 0; // Free tier (already filtered out)
     }
 
@@ -1389,6 +1398,7 @@ class OpenRouterModelsService {
       } else if (model.context_length >= 64000) {
         score += 15; // Large context (64K-128K)
       } else {
+        // Intentionally empty
         score += 10; // Standard context (32K-64K)
       }
 
@@ -1400,6 +1410,7 @@ class OpenRouterModelsService {
         } else if (ageInDays < 365) {
           score += 10; // Last year
         } else {
+          // Intentionally empty
           score += 5; // Older
         }
       }

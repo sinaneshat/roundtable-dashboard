@@ -127,4 +127,20 @@ function RoundFeedbackComponent({
   );
 }
 
-export const RoundFeedback = memo(RoundFeedbackComponent);
+// Custom comparison function that ignores onFeedbackChange
+// This prevents infinite re-renders when the handler function reference changes
+export const RoundFeedback = memo(
+  RoundFeedbackComponent,
+  (prevProps, nextProps) => {
+    // Compare all props EXCEPT onFeedbackChange
+    return (
+      prevProps.threadId === nextProps.threadId
+      && prevProps.roundNumber === nextProps.roundNumber
+      && prevProps.currentFeedback === nextProps.currentFeedback
+      && prevProps.disabled === nextProps.disabled
+      && prevProps.isPending === nextProps.isPending
+      && prevProps.pendingType === nextProps.pendingType
+      && prevProps.className === nextProps.className
+    );
+  },
+);
