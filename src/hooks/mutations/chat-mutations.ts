@@ -257,15 +257,8 @@ export function useToggleFavoriteMutation() {
         queryClient.setQueryData(queryKeys.threads.bySlug(context.slug), context.previousBySlug);
       }
     },
-    // On success, invalidate to ensure data is in sync
-    onSettled: (_data, _error, variables) => {
-      invalidationPatterns.threadDetail(variables.threadId).forEach((key) => {
-        queryClient.invalidateQueries({ queryKey: key });
-      });
-      if (variables.slug) {
-        queryClient.invalidateQueries({ queryKey: queryKeys.threads.bySlug(variables.slug) });
-      }
-    },
+    // ✅ NO invalidation - optimistic updates handle UI
+    // Invalidation would trigger GET requests during active chat, breaking streaming state
     retry: false,
     throwOnError: false,
   });
@@ -385,15 +378,8 @@ export function useTogglePublicMutation() {
         }
       }
 
-      // Invalidate to ensure data is in sync
-      invalidationPatterns.threadDetail(variables.threadId).forEach((key) => {
-        queryClient.invalidateQueries({ queryKey: key });
-      });
-      if (variables.slug) {
-        queryClient.invalidateQueries({ queryKey: queryKeys.threads.bySlug(variables.slug) });
-        // Invalidate public query as well
-        queryClient.invalidateQueries({ queryKey: queryKeys.threads.public(variables.slug) });
-      }
+      // ✅ NO invalidation except for public page cache
+      // ISR revalidation is sufficient for public pages
     },
     retry: false,
     throwOnError: false,
@@ -418,15 +404,11 @@ export function useTogglePublicMutation() {
  * After successful addition, invalidates specific thread
  */
 export function useAddParticipantMutation() {
-  const queryClient = useQueryClient();
-
   return useMutation({
     mutationFn: addParticipantService,
-    onSuccess: (_data, data) => {
-      // Invalidate specific thread
-      invalidationPatterns.threadDetail(data.param.id).forEach((key) => {
-        queryClient.invalidateQueries({ queryKey: key });
-      });
+    onSuccess: () => {
+      // ✅ NO invalidation - ChatThreadScreen manages participants in client state
+      // Participant changes reflected via optimistic updates
     },
     onError: () => {
       // Error is handled by throwOnError: false
@@ -443,22 +425,12 @@ export function useAddParticipantMutation() {
  * After successful update, invalidates all thread lists (we don't know which thread)
  */
 export function useUpdateParticipantMutation() {
-  const queryClient = useQueryClient();
-
   return useMutation({
     mutationFn: (data: Parameters<typeof updateParticipantService>[0] & { threadId?: string }) =>
       updateParticipantService(data),
-    onSuccess: (_data, data) => {
-      // If threadId is provided, use specific invalidation (includes changelog)
-      if (data.threadId) {
-        invalidationPatterns.threadDetail(data.threadId).forEach((key) => {
-          queryClient.invalidateQueries({ queryKey: key });
-        });
-      } else {
-        // Intentionally empty
-        // Fallback: Invalidate all thread data (we don't know which thread the participant belongs to)
-        queryClient.invalidateQueries({ queryKey: queryKeys.threads.all });
-      }
+    onSuccess: () => {
+      // ✅ NO invalidation - ChatThreadScreen manages participants in client state
+      // Participant changes reflected via optimistic updates
     },
     onError: () => {
       // Error is handled by throwOnError: false
@@ -475,22 +447,12 @@ export function useUpdateParticipantMutation() {
  * After successful deletion, invalidates all thread lists
  */
 export function useDeleteParticipantMutation() {
-  const queryClient = useQueryClient();
-
   return useMutation({
     mutationFn: (data: Parameters<typeof deleteParticipantService>[0] & { threadId?: string }) =>
       deleteParticipantService(data),
-    onSuccess: (_data, data) => {
-      // If threadId is provided, use specific invalidation (includes changelog)
-      if (data.threadId) {
-        invalidationPatterns.threadDetail(data.threadId).forEach((key) => {
-          queryClient.invalidateQueries({ queryKey: key });
-        });
-      } else {
-        // Intentionally empty
-        // Fallback: Invalidate all thread data
-        queryClient.invalidateQueries({ queryKey: queryKeys.threads.all });
-      }
+    onSuccess: () => {
+      // ✅ NO invalidation - ChatThreadScreen manages participants in client state
+      // Participant changes reflected via optimistic updates
     },
     onError: () => {
       // Error is handled by throwOnError: false

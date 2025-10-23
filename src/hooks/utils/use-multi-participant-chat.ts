@@ -26,6 +26,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import type { ChatParticipant } from '@/api/routes/chat/schema';
 import type { UIMessageErrorType } from '@/lib/utils/message-transforms';
 import { createErrorUIMessage, mergeParticipantMetadata } from '@/lib/utils/message-transforms';
+import { getCurrentRoundNumber } from '@/lib/utils/round-utils';
 
 type UseMultiParticipantChatOptions = {
   threadId: string;
@@ -121,8 +122,14 @@ export function useMultiParticipantChat({
       setCurrentIndex(0);
       respondedParticipantsRef.current.clear();
       currentRoundNumberRef.current = null;
-      onRoundComplete?.();
-      onComplete?.();
+
+      // ✅ FIX: Defer callbacks to after render completes
+      // Prevents "Cannot update a component while rendering a different component" error
+      queueMicrotask(() => {
+        onRoundComplete?.();
+        onComplete?.();
+      });
+
       return [];
     });
   }, [onRoundComplete, onComplete]);
@@ -406,9 +413,7 @@ export function useMultiParticipantChat({
       return;
     }
 
-    // ✅ ALIGNMENT FIX: Extract roundNumber from last user message to maintain consistency
-    const metadata = lastUserMessage.metadata as Record<string, unknown> | undefined;
-    const roundNumber = (metadata?.roundNumber as number) || 1;
+    const roundNumber = getCurrentRoundNumber(messages);
 
     // ✅ CRITICAL: Store round number in ref for subsequent participants
     currentRoundNumberRef.current = roundNumber;
@@ -434,8 +439,6 @@ export function useMultiParticipantChat({
         return;
       }
 
-      // ✅ CRITICAL FIX: Deduplicate participants by ID before filtering
-      // Backend may return duplicates, causing 3 distinct participants to appear as 6 messages
       const uniqueParticipants = Array.from(
         new Map(participants.map(p => [p.id, p])).values(),
       );
@@ -448,28 +451,26 @@ export function useMultiParticipantChat({
         throw new Error('No enabled participants');
       }
 
-      // Setup participant queue
-      const queue = enabled.slice(1).map((_, i) => i + 1);
-      setParticipantQueue(queue);
+      setParticipantQueue(enabled.slice(1).map((_, i) => i + 1));
       setCurrentIndex(0);
       setPendingNextParticipant(false);
       respondedParticipantsRef.current.clear();
-      // ✅ CRITICAL FIX: Store only enabled participants sorted by priority
-      // This ensures currentIndex correctly maps to the right participant
       roundParticipantsRef.current = enabled;
 
-      // ✅ CRITICAL: Calculate round number ONCE and store in ref
-      const userMessages = messages.filter((m: UIMessage) => m.role === 'user');
-      const newRoundNumber = userMessages.length + 1;
+      // ✅ FIX: Use regenerateRoundNumber if set, otherwise calculate
+      // During regeneration, round number is pre-set to avoid recalculation
+      const newRoundNumber = regenerateRoundNumber !== null
+        ? regenerateRoundNumber
+        : (messages.filter((m: UIMessage) => m.role === 'user').length + 1);
+
       currentRoundNumberRef.current = newRoundNumber;
 
-      // Send user message with roundNumber metadata
       aiSendMessage({
         text: trimmed,
         metadata: { roundNumber: newRoundNumber },
       });
     },
-    [participants, status, aiSendMessage, messages],
+    [participants, status, aiSendMessage, messages, regenerateRoundNumber],
   );
 
   /**
@@ -490,24 +491,27 @@ export function useMultiParticipantChat({
       return;
     }
 
-    const metadata = lastUserMessage.metadata as Record<string, unknown> | undefined;
-    const roundNumber = (metadata?.roundNumber as number) || 1;
+    const roundNumber = getCurrentRoundNumber(messages);
 
-    // Notify parent that retry is happening
+    // Notify parent that retry is happening (removes analysis)
     if (onRetry) {
       onRetry(roundNumber);
     }
 
-    // Set regenerate flag
+    // ✅ CRITICAL FIX: Set regenerate flag BEFORE removing messages
+    // This tells sendMessage to use this round number instead of recalculating
     setRegenerateRoundNumber(roundNumber);
 
-    // Remove entire round from UI
+    // Remove entire round from UI (all messages from last user message onward)
     const lastUserIndex = messages.findLastIndex(m => m.role === 'user');
     const messagesBeforeRound = messages.slice(0, lastUserIndex);
     setMessages(messagesBeforeRound);
 
-    // Send fresh user message
-    sendMessage(textPart.text);
+    // ✅ FIX: sendMessage will use regenerateRoundNumber instead of calculating
+    // This ensures the regenerated round has the same round number as the removed round
+    setTimeout(() => {
+      sendMessage(textPart.text);
+    }, 0);
   }, [messages, sendMessage, status, setMessages, onRetry]);
 
   // ============================================================================

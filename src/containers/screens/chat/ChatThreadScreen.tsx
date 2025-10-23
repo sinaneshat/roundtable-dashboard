@@ -1,6 +1,7 @@
 'use client';
 
 import { useWindowVirtualizer } from '@tanstack/react-virtual';
+import type { UIMessage } from 'ai';
 import { RefreshCcwIcon } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
@@ -28,7 +29,7 @@ import type { ChatModeId } from '@/lib/config/chat-modes';
 import { messageHasError, MessageMetadataSchema } from '@/lib/schemas/message-metadata';
 import type { ParticipantConfig } from '@/lib/types/participant-config';
 import { chatMessagesToUIMessages } from '@/lib/utils/message-transforms';
-import { calculateNextRoundNumber, getMaxRoundNumber, groupMessagesByRound } from '@/lib/utils/round-utils';
+import { calculateNextRoundNumber, getCurrentRoundNumber, getMaxRoundNumber, groupMessagesByRound } from '@/lib/utils/round-utils';
 
 type ChatThreadScreenProps = {
   thread: ChatThread;
@@ -273,21 +274,17 @@ export default function ChatThreadScreen({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [thread.id, messagesHash]);
 
-  // ✅ ANALYSIS TRIGGER: After all participants finish streaming, create pending analysis
-  // This triggers ModeratorAnalysisStream to detect 'pending' status and call analyze endpoint
   useEffect(() => {
     setOnRoundComplete(async () => {
       const currentMessages = messages;
       const currentParticipants = contextParticipants;
 
-      const lastUserMessage = currentMessages.findLast(m => m.role === 'user');
-      const metadata = lastUserMessage?.metadata as Record<string, unknown> | undefined;
-      const roundNumber = (metadata?.roundNumber as number) || 1;
+      const roundNumber = getCurrentRoundNumber(currentMessages);
 
+      const lastUserMessage = currentMessages.findLast(m => m.role === 'user');
       const textPart = lastUserMessage?.parts?.find(p => p.type === 'text');
       const userQuestion = (textPart && 'text' in textPart ? textPart.text : '') || '';
 
-      // ✅ Create pending analysis - RoundAnalysisCard will render and trigger streaming
       createPendingAnalysis(
         roundNumber,
         currentMessages,
@@ -300,21 +297,11 @@ export default function ChatThreadScreen({
     });
   }, [thread.id, setOnRoundComplete, messages, contextParticipants, createPendingAnalysis]);
 
-  // ✅ REGENERATION: Remove analysis when retry is triggered
-  // This ensures old analysis disappears immediately before new round starts
   useEffect(() => {
     setOnRetry((roundNumber: number) => {
-      // ✅ CRITICAL: Remove analysis synchronously BEFORE regeneration starts
-      // This prevents the old analysis from being visible during the new round
       removePendingAnalysis(roundNumber);
     });
   }, [thread.id, setOnRetry, removePendingAnalysis]);
-
-  // ✅ ONE-WAY DATA FLOW: Removed query-driven participant sync
-  // Participants updated ONLY via optimistic updates in handlePromptSubmit
-
-  // ✅ ONE-WAY DATA FLOW: Removed ALL post-streaming invalidations
-  // No server-driven state updates during the session
 
   useEffect(() => {
     const wasStreaming = isStreaming;
@@ -342,7 +329,6 @@ export default function ChatThreadScreen({
     }
   }, [pendingMessage, expectedParticipantIds, contextParticipants, sendMessage, messages]);
 
-  // ✅ ONE-WAY DATA FLOW: Submit handler with optimistic updates
   const handlePromptSubmit = useCallback(
     async (e: React.FormEvent) => {
       e.preventDefault();
@@ -350,6 +336,10 @@ export default function ChatThreadScreen({
       if (!trimmed || selectedParticipants.length === 0) {
         return;
       }
+
+      // ✅ FIX 3: Capture old state BEFORE update for changelog comparison
+      const oldParticipantIds = contextParticipants.map(p => p.id).sort().join(',');
+      const oldMode = thread.mode;
 
       try {
         const participantsForUpdate = selectedParticipants.map(p => ({
@@ -361,7 +351,6 @@ export default function ChatThreadScreen({
           isEnabled: true,
         }));
 
-        // ✅ OPTIMISTIC UPDATE: Update context BEFORE API call
         const optimisticParticipants = selectedParticipants.map((p, index) => ({
           id: p.id,
           threadId: thread.id,
@@ -376,7 +365,6 @@ export default function ChatThreadScreen({
 
         updateParticipants(optimisticParticipants);
 
-        // ✅ FIRE-AND-FORGET: Persist to server, ignore response
         updateThreadMutation.mutateAsync({
           param: { id: thread.id },
           json: {
@@ -387,40 +375,45 @@ export default function ChatThreadScreen({
           // Silently ignore errors - client state is source of truth
         });
 
-        // ✅ CLIENT-SIDE CHANGELOG: Create changelog entry locally
-        const newRoundNumber = calculateNextRoundNumber(messages);
-        const oldParticipantIds = contextParticipants.map(p => p.id).sort().join(',');
-        const newParticipantIds = selectedParticipants.map(p => p.id).sort().join(',');
+        // ✅ FIX 3: Check what changed and create client-side changelog if needed
+        // Backend creates changelog when MESSAGE is sent
+        // But we need client-side changelog for immediate feedback when settings change
+        const newParticipantIds = optimisticParticipants.map(p => p.id).sort().join(',');
         const participantsChanged = oldParticipantIds !== newParticipantIds;
-        const modeChanged = selectedMode !== thread.mode;
+        const modeChanged = oldMode !== selectedMode;
 
+        // Create client-side changelog for NEXT round (shows BEFORE user sends message)
         if (participantsChanged || modeChanged) {
-          const changelogEntry = {
+          const nextRound = calculateNextRoundNumber(messages);
+
+          const changelogEntry: ChangelogItem = {
             id: `client-${Date.now()}`,
             threadId: thread.id,
-            roundNumber: newRoundNumber,
-            changes: {
-              mode: modeChanged
-                ? {
-                    from: thread.mode,
-                    to: selectedMode,
-                  }
-                : null,
-              participants: participantsChanged
-                ? {
-                    added: [],
-                    removed: [],
-                    reordered: true,
-                  }
-                : null,
+            roundNumber: nextRound,
+            changeType: modeChanged ? 'mode_change' : 'participants_reordered',
+            changeSummary: modeChanged
+              ? `Mode changed from ${oldMode} to ${selectedMode}`
+              : 'Participants updated',
+            changeData: {
+              ...(modeChanged && {
+                oldMode,
+                newMode: selectedMode,
+              }),
+              ...(participantsChanged && {
+                participants: optimisticParticipants.map((p, index) => ({
+                  id: p.id,
+                  modelId: p.modelId,
+                  role: p.role,
+                  order: index,
+                })),
+              }),
             },
             createdAt: new Date().toISOString(),
           };
 
-          setClientChangelog(prev => [...prev, changelogEntry as unknown as ChangelogItem]);
+          setClientChangelog(prev => [...prev, changelogEntry]);
         }
 
-        // ✅ IMMEDIATE SEND: No waiting for server
         hasSentPendingMessageRef.current = false;
         setExpectedParticipantIds(optimisticParticipants.map(p => p.id));
         setPendingMessage(trimmed);
@@ -436,14 +429,47 @@ export default function ChatThreadScreen({
   const activeParticipants = contextParticipants;
   const maxRoundNumber = useMemo(() => getMaxRoundNumber(messages), [messages]);
 
+  // ✅ FIX 1: Stable item positioning - prevent re-sorting during streaming
+  // Track previous items to maintain stability when streaming
+  const previousItemsRef = useRef<Array<
+    | { type: 'messages'; data: UIMessage[]; key: string; roundNumber: number }
+    | { type: 'analysis'; data: (typeof analyses)[number]; key: string; roundNumber: number }
+    | { type: 'changelog'; data: (typeof changelog)[number][]; key: string; roundNumber: number }
+  >>([]);
+
   const messagesWithAnalysesAndChangelog = useMemo(() => {
-    const items: Array<
-      | { type: 'messages'; data: typeof messages; key: string }
-      | { type: 'analysis'; data: (typeof analyses)[number]; key: string }
-      | { type: 'changelog'; data: (typeof changelog)[number][]; key: string }
-    > = [];
+    type ItemType
+      = | { type: 'messages'; data: typeof messages; key: string; roundNumber: number }
+        | { type: 'analysis'; data: (typeof analyses)[number]; key: string; roundNumber: number }
+        | { type: 'changelog'; data: (typeof changelog)[number][]; key: string; roundNumber: number };
 
     const messagesByRound = groupMessagesByRound(messages);
+
+    // Calculate max round from current messages
+    const currentMaxRound = getMaxRoundNumber(messages);
+
+    // Get max round from previous items
+    const previousMaxRound = previousItemsRef.current.length > 0
+      ? Math.max(...previousItemsRef.current.map(item => item.roundNumber))
+      : 0;
+
+    // ✅ STREAMING OPTIMIZATION: If streaming same round, just update messages - don't rebuild entire array
+    // This prevents analyses and changelogs from shifting positions
+    if (isStreaming && currentMaxRound === previousMaxRound && previousItemsRef.current.length > 0) {
+      const updatedItems = previousItemsRef.current.map((item) => {
+        if (item.type === 'messages' && item.roundNumber === currentMaxRound) {
+          const roundMessages = messagesByRound.get(currentMaxRound);
+          if (roundMessages && roundMessages.length > 0) {
+            return { ...item, data: roundMessages };
+          }
+        }
+        return item;
+      });
+      return updatedItems;
+    }
+
+    // ✅ REBUILD ARRAY: Round completed, new round started, or not streaming
+    const items: ItemType[] = [];
 
     const changelogByRound = new Map<number, (typeof changelog)>();
     changelog.forEach((change) => {
@@ -469,6 +495,8 @@ export default function ChatThreadScreen({
 
     const processedRounds = new Set<number>();
 
+    // ✅ FIX 2: Correct order within each round
+    // Order: changelog → messages → analysis (so changelog shows BEFORE round, analysis shows AFTER round)
     sortedRounds.forEach((roundNumber) => {
       if (processedRounds.has(roundNumber)) {
         return;
@@ -479,27 +507,33 @@ export default function ChatThreadScreen({
       const roundChangelog = changelogByRound.get(roundNumber);
       const roundAnalysis = analyses.find(a => a.roundNumber === roundNumber);
 
+      // ✅ CORRECT ORDER: Changelog first (shows what changed BEFORE this round)
       if (roundChangelog && roundChangelog.length > 0) {
         items.push({
           type: 'changelog',
           data: roundChangelog,
           key: `round-${roundNumber}-changelog`,
+          roundNumber,
         });
       }
 
+      // ✅ CORRECT ORDER: Messages second (user prompt + participant responses)
       if (roundMessages && roundMessages.length > 0) {
         items.push({
           type: 'messages',
           data: roundMessages,
           key: `round-${roundNumber}-messages`,
+          roundNumber,
         });
       }
 
+      // ✅ CORRECT ORDER: Analysis last (analyzes round AFTER completion)
       if (roundAnalysis && roundAnalysis.roundNumber === roundNumber) {
         items.push({
           type: 'analysis',
           data: roundAnalysis,
           key: `round-${roundNumber}-analysis`,
+          roundNumber,
         });
       }
     });
@@ -513,8 +547,11 @@ export default function ChatThreadScreen({
       return true;
     });
 
+    // Store for next comparison
+    previousItemsRef.current = deduplicatedItems;
+
     return deduplicatedItems;
-  }, [messages, analyses, changelog]);
+  }, [messages, analyses, changelog, isStreaming]);
 
   // ✅ ONE-WAY DATA FLOW: Feedback handler with client-side updates
   const feedbackHandlersRef = useRef(new Map<number, (feedbackType: 'like' | 'dislike' | null) => void>());
@@ -696,11 +733,11 @@ export default function ChatThreadScreen({
                 const itemIndex = virtualItem.index;
 
                 const roundNumber = item.type === 'messages'
-                  ? ((item.data[0]?.metadata as Record<string, unknown> | undefined)?.roundNumber as number) || 1
+                  ? ((item.data[0]?.metadata as Record<string, unknown> | undefined)?.roundNumber as number) ?? 1
                   : item.type === 'analysis'
                     ? item.data.roundNumber
                     : item.type === 'changelog'
-                      ? item.data[0]?.roundNumber || 1
+                      ? item.data[0]?.roundNumber ?? 1
                       : 1;
 
                 return (
