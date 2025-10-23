@@ -203,6 +203,10 @@ export function groupMessagesByRound(messages: UIMessage[]): Map<number, UIMessa
   // ✅ THIRD PASS: Group all messages by their determined round number
   let currentRoundForAssistants = 1;
 
+  // ✅ STREAMING ALIGNMENT FIX: Track the round number from most recent user message
+  // This ensures streaming assistant messages are grouped correctly even without metadata
+  let lastSeenUserRound = 1;
+
   messages.forEach((message) => {
     // ✅ FIX: Skip duplicate messages (same ID already processed)
     // This prevents duplicate like/dislike buttons during streaming
@@ -217,8 +221,8 @@ export function groupMessagesByRound(messages: UIMessage[]): Map<number, UIMessa
       // ✅ STABLE: User messages always use their pre-determined round
       roundNumber = userMessageRounds.get(message.id) ?? 1;
       currentRoundForAssistants = roundNumber;
+      lastSeenUserRound = roundNumber; // ✅ Track for assistant grouping
     } else {
-    // Intentionally empty
       // ✅ PRIORITIZE EXPLICIT: Check metadata first
       const metadata = message.metadata as Record<string, unknown> | undefined;
       const explicitRound = metadata?.roundNumber as number | undefined;
@@ -229,9 +233,10 @@ export function groupMessagesByRound(messages: UIMessage[]): Map<number, UIMessa
         // ✅ FIX: Update current round tracker so subsequent messages without metadata group correctly
         currentRoundForAssistants = explicitRound;
       } else {
-        // Intentionally empty
-        // Infer: Assistant messages belong to the current round (after last user message)
-        roundNumber = currentRoundForAssistants || 1;
+        // ✅ STREAMING FIX: During streaming, assistant messages without metadata should be grouped
+        // with the most recent user message's round, not the last assistant's round
+        // This prevents misalignment when messages from different rounds are interleaved
+        roundNumber = lastSeenUserRound || currentRoundForAssistants || 1;
       }
     }
 

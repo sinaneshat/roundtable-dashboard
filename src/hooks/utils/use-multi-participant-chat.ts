@@ -95,6 +95,11 @@ export function useMultiParticipantChat({
   // ✅ Keep participants ref for transport callback
   const participantsRef = useRef<ChatParticipant[]>(participants);
 
+  // ✅ CRITICAL FIX: Use ref for currentIndex to avoid transport recreation
+  // The AI SDK's useChat doesn't react to transport changes after initialization
+  // So we need the callback to always read the latest index from a ref
+  const currentIndexRef = useRef<number>(currentIndex);
+
   // ============================================================================
   // PARTICIPANT QUEUE MANAGEMENT - Simplified
   // ============================================================================
@@ -135,17 +140,21 @@ export function useMultiParticipantChat({
    */
   /* eslint-disable react-hooks/refs */
   const prepareSendMessagesRequest = useCallback(({ id, messages }: { id: string; messages: unknown[] }) => {
+    // ✅ CRITICAL FIX: Read index from ref to get latest value
+    // This ensures each request gets the correct participant index
+    const index = currentIndexRef.current;
+
     const body = {
       id,
       message: messages[messages.length - 1],
-      participantIndex: currentIndex,
+      participantIndex: index, // ✅ Use ref value instead of stale closure
       participants: participantsRef.current,
       ...(regenerateRoundNumber && { regenerateRound: regenerateRoundNumber }),
       ...(mode && { mode }),
     };
 
     return { body };
-  }, [currentIndex, regenerateRoundNumber, mode]);
+  }, [regenerateRoundNumber, mode]); // ✅ CRITICAL: Removed currentIndex from deps
 
   const transport = useMemo(
     () => new DefaultChatTransport({
@@ -173,7 +182,10 @@ export function useMultiParticipantChat({
     messages: initialMessages,
 
     onError: (error) => {
-      const participant = roundParticipantsRef.current[currentIndex];
+      // ✅ CRITICAL FIX: Use currentIndexRef to get correct participant
+      // Using currentIndex here would be stale due to closure
+      const index = currentIndexRef.current;
+      const participant = roundParticipantsRef.current[index];
 
       // Parse error metadata from backend
       let errorMetadata: {
@@ -205,14 +217,14 @@ export function useMultiParticipantChat({
 
       // Create error message for this participant
       if (participant) {
-        const errorKey = `${participant.id}-${currentIndex}`;
+        const errorKey = `${participant.id}-${index}`;
 
         if (!respondedParticipantsRef.current.has(errorKey)) {
           respondedParticipantsRef.current.add(errorKey);
 
           const errorUIMessage = createErrorUIMessage(
             participant,
-            currentIndex,
+            index,
             errorMessage,
             (errorMetadata?.errorCategory as UIMessageErrorType) || 'error',
             errorMetadata || undefined,
@@ -229,21 +241,24 @@ export function useMultiParticipantChat({
     },
 
     onFinish: async (data) => {
-      const participant = roundParticipantsRef.current[currentIndex];
+      // ✅ CRITICAL FIX: Use currentIndexRef to get correct participant
+      // Using currentIndex here would be stale due to closure
+      const index = currentIndexRef.current;
+      const participant = roundParticipantsRef.current[index];
 
       // Validate message exists
       if (!data.message) {
         setPendingNextParticipant(false);
 
         if (participant) {
-          const errorKey = `${participant.id}-${currentIndex}`;
+          const errorKey = `${participant.id}-${index}`;
 
           if (!respondedParticipantsRef.current.has(errorKey)) {
             respondedParticipantsRef.current.add(errorKey);
 
             const errorUIMessage = createErrorUIMessage(
               participant,
-              currentIndex,
+              index,
               'This model failed to generate a response. The AI SDK did not create a message object.',
               'silent_failure',
               { providerMessage: 'No response text available' },
@@ -255,7 +270,7 @@ export function useMultiParticipantChat({
         }
 
         advanceToNextParticipant();
-        const error = new Error(`Participant ${currentIndex} failed: data.message is missing`);
+        const error = new Error(`Participant ${index} failed: data.message is missing`);
         onError?.(error);
         return;
       }
@@ -265,7 +280,7 @@ export function useMultiParticipantChat({
         const updatedMetadata = mergeParticipantMetadata(
           data.message,
           participant,
-          currentIndex,
+          index, // ✅ Use ref value
         );
 
         // ✅ Add round number to metadata (from ref set when user sent message)
@@ -311,6 +326,12 @@ export function useMultiParticipantChat({
     participantsRef.current = participants;
   }, [participants]);
 
+  // ✅ CRITICAL FIX: Update currentIndexRef whenever currentIndex changes
+  // This ensures prepareSendMessagesRequest always reads the latest index
+  useLayoutEffect(() => {
+    currentIndexRef.current = currentIndex;
+  }, [currentIndex]);
+
   useEffect(() => {
     if (!pendingNextParticipant || status !== 'ready') {
       return;
@@ -319,10 +340,16 @@ export function useMultiParticipantChat({
     const timeoutId = setTimeout(() => {
       setPendingNextParticipant(false);
 
+      // ✅ ALIGNMENT FIX: Include roundNumber in trigger message for subsequent participants
+      // This ensures the context maintains round information throughout the streaming process
       // Trigger next participant with empty user message
       aiSendMessage({
         role: 'user',
         parts: [{ type: 'text', text: '' }],
+        metadata: {
+          roundNumber: currentRoundNumberRef.current || 1,
+          isParticipantTrigger: true, // Mark as internal trigger message
+        },
       });
     }, 200);
 
@@ -379,9 +406,17 @@ export function useMultiParticipantChat({
       return;
     }
 
+    // ✅ ALIGNMENT FIX: Extract roundNumber from last user message to maintain consistency
+    const metadata = lastUserMessage.metadata as Record<string, unknown> | undefined;
+    const roundNumber = (metadata?.roundNumber as number) || 1;
+
+    // ✅ CRITICAL: Store round number in ref for subsequent participants
+    currentRoundNumberRef.current = roundNumber;
+
     aiSendMessage({
       role: 'user',
       parts: [{ type: 'text', text: userText }],
+      metadata: { roundNumber }, // ✅ Include roundNumber to maintain context
     });
   }, [participants, status, messages, aiSendMessage]);
 

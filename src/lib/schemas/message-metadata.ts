@@ -41,7 +41,7 @@ const BaseMessageMetadataFields = {
   // ✅ Participant context fields
   participantId: z.string().optional(),
   participantIndex: z.number().optional(),
-  participantRole: z.string().optional(),
+  participantRole: z.string().nullable().optional(), // ✅ CRITICAL: Allow null for participants without roles
   roundNumber: z.number().optional(),
 
   // ✅ Error handling fields (shared between backend and frontend)

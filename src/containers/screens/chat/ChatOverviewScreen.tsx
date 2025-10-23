@@ -7,7 +7,6 @@ import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import type { StoredModeratorAnalysis } from '@/api/routes/chat/schema';
 import { ChatInput } from '@/components/chat/chat-input';
 import { ChatMessageList } from '@/components/chat/chat-message-list';
 import { ChatModeSelector } from '@/components/chat/chat-mode-selector';
@@ -21,7 +20,7 @@ import { BRAND } from '@/constants/brand';
 import { useSharedChatContext } from '@/contexts/chat-context';
 import { useCreateThreadMutation } from '@/hooks/mutations/chat-mutations';
 import { useModelsQuery } from '@/hooks/queries/models';
-import { useAutoScrollToBottom, useChatRoundManager, useSelectedParticipants } from '@/hooks/utils';
+import { useAutoScrollToBottom, useChatAnalysis, useSelectedParticipants } from '@/hooks/utils';
 import { useSession } from '@/lib/auth/client';
 import type { ChatModeId } from '@/lib/config/chat-modes';
 import { getDefaultChatMode } from '@/lib/config/chat-modes';
@@ -137,11 +136,12 @@ export default function ChatOverviewScreen() {
     participantsRef.current = contextParticipants;
   }, [contextParticipants]);
 
-  // ✅ UNIFIED ROUND MANAGER: Eliminates ALL duplicate analysis logic (~200 lines)
-  const roundManager = useChatRoundManager({
+  const {
+    analyses,
+    createPendingAnalysis,
+  } = useChatAnalysis({
     threadId: createdThreadId || '',
     mode: selectedMode,
-    enableQuery: createdThreadId != null, // Only fetch if thread created
   });
 
   const createThreadMutation = useCreateThreadMutation();
@@ -229,19 +229,17 @@ export default function ChatOverviewScreen() {
         hasSentInitialPromptRef.current = false; // Reset flag for new thread
         setInitialPrompt(prompt);
 
-        // Step 5: Set round completion callback using unified round manager
-        // ✅ This fires when ALL participants finish streaming (entire round complete)
         setOnRoundComplete(async () => {
-          // ✅ FIX: Get latest messages and participants from refs (avoid stale closure)
           const currentMessages = messagesRef.current;
           const currentParticipants = participantsRef.current;
 
-          // ✅ UNIFIED: Single call to handle all round completion logic
-          await roundManager.handleRoundComplete(
-            1, // First round on overview screen
+          await new Promise(resolve => setTimeout(resolve, 2000));
+
+          createPendingAnalysis(
+            1,
             currentMessages,
             currentParticipants,
-            prompt, // User question
+            prompt,
           );
         });
       } catch (error) {
@@ -260,7 +258,7 @@ export default function ChatOverviewScreen() {
       createThreadMutation,
       initializeThread,
       setOnRoundComplete,
-      roundManager,
+      createPendingAnalysis,
     ],
   );
 
@@ -422,26 +420,20 @@ export default function ChatOverviewScreen() {
                 currentStreamingParticipant={currentStreamingParticipant}
               />
 
-              {/* ✅ UNIFIED: Show first round analysis using round manager state */}
-              {createdThreadId && roundManager.state.analyses[0] && (
+              {createdThreadId && analyses[0] && (
                 <div className="mt-6">
                   <RoundAnalysisCard
-                    analysis={roundManager.state.analyses[0] as unknown as StoredModeratorAnalysis}
+                    analysis={analyses[0]}
                     threadId={createdThreadId}
                     isLatest={true}
                     onStreamComplete={async () => {
-                      // ✅ NAVIGATION: Navigate to thread page without page refresh
-                      // Invalidate sidebar cache before navigation
                       await queryClient.invalidateQueries({ queryKey: queryKeys.threads.lists() });
-
-                      // Navigate to thread page using router.push (no page refresh)
                       router.push(`/chat/${currentThread?.slug}`);
                     }}
                   />
                 </div>
               )}
 
-              {/* ✅ RETRY BUTTON: Show after error (same as thread screen) */}
               {streamError && !isStreaming && (
                 <div className="flex justify-center mt-4">
                   <button
@@ -454,13 +446,12 @@ export default function ChatOverviewScreen() {
                 </div>
               )}
 
-              {/* ✅ UNIFIED: Show loader when streaming participants OR waiting for analysis */}
-              {(isStreaming || roundManager.state.isWaitingForAnalysis) && selectedParticipants.length > 1 && (
+              {isStreaming && selectedParticipants.length > 1 && (
                 <StreamingParticipantsLoader
                   className="mt-4"
                   participants={selectedParticipants}
                   currentParticipantIndex={currentParticipantIndex}
-                  isAnalyzing={roundManager.state.isWaitingForAnalysis}
+                  isAnalyzing={false}
                 />
               )}
             </motion.div>

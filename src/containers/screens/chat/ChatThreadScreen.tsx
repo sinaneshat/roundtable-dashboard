@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import type { ChatMessage, ChatParticipant, ChatThread, StoredModeratorAnalysis } from '@/api/routes/chat/schema';
+import type { ChatMessage, ChatParticipant, ChatThread } from '@/api/routes/chat/schema';
 import { Action, Actions } from '@/components/ai-elements/actions';
 import { ChatDeleteDialog } from '@/components/chat/chat-delete-dialog';
 import { ChatInput } from '@/components/chat/chat-input';
@@ -24,9 +24,7 @@ import { useSharedChatContext } from '@/contexts/chat-context';
 import { useSetRoundFeedbackMutation, useUpdateThreadMutation } from '@/hooks/mutations/chat-mutations';
 import { useThreadFeedbackQuery } from '@/hooks/queries/chat-feedback';
 import { useThreadChangelogQuery, useThreadQuery } from '@/hooks/queries/chat-threads';
-import { useBoolean, useSelectedParticipants } from '@/hooks/utils';
-// TODO: Re-enable when useChatRoundManager is fixed
-// import { useChatRoundManager } from '@/hooks/utils';
+import { useBoolean, useChatAnalysis, useSelectedParticipants } from '@/hooks/utils';
 import type { ChatModeId } from '@/lib/config/chat-modes';
 import { queryKeys } from '@/lib/data/query-keys';
 import { messageHasError, MessageMetadataSchema } from '@/lib/schemas/message-metadata';
@@ -149,59 +147,39 @@ export default function ChatThreadScreen({
     return deduplicated;
   }, [changelogResponse]);
 
-  // ✅ REGENERATION STATE: Track which rounds are being regenerated
-  // This ensures old analyses are immediately hidden from UI when retry is triggered
-  // Must be declared before analyses memo to avoid "used before declaration" error
-  // Thread-aware state: automatically resets when thread.id changes
   const [regeneratingRounds, setRegeneratingRounds] = useState<{
     threadId: string;
     rounds: Set<number>;
   }>(() => ({ threadId: thread.id, rounds: new Set() }));
 
-  // ✅ UNIFIED ROUND MANAGER: Eliminates ALL duplicate analysis logic (~200 lines)
-  // TEMPORARILY COMMENTED OUT - DEBUGGING INFINITE LOOP
-  // const roundManager = useChatRoundManager({
-  //   threadId: thread.id,
-  //   mode: thread.mode as ChatModeId,
-  //   enableQuery: true,
-  // });
+  const {
+    analyses: rawAnalyses,
+    createPendingAnalysis,
+    updateAnalysisData,
+    removePendingAnalysis,
+  } = useChatAnalysis({
+    threadId: thread.id,
+    mode: thread.mode as ChatModeId,
+  });
 
-  const analyses = useMemo(
-    () => {
-      // Get current rounds for this thread, or empty set if thread changed
-      const currentRegeneratingRounds = regeneratingRounds.threadId === thread.id
-        ? regeneratingRounds.rounds
-        : new Set<number>();
+  const analyses = useMemo(() => {
+    const currentRegeneratingRounds = regeneratingRounds.threadId === thread.id
+      ? regeneratingRounds.rounds
+      : new Set<number>();
 
-      // ✅ UNIFIED: Get analyses from round manager state
-      // TEMPORARILY USING EMPTY ARRAY - DEBUGGING INFINITE LOOP
-      const items: StoredModeratorAnalysis[] = []; // roundManager.state.analyses;
+    const deduplicatedItems = rawAnalyses
+      .filter(item => item.status !== 'failed')
+      .filter(item => !currentRegeneratingRounds.has(item.roundNumber))
+      .reduce((acc, item) => {
+        const existing = acc.get(item.roundNumber);
+        if (!existing || new Date(item.createdAt) > new Date(existing.createdAt)) {
+          acc.set(item.roundNumber, item);
+        }
+        return acc;
+      }, new Map<number, typeof rawAnalyses[number]>());
 
-      // ✅ CRITICAL FIX: Deduplicate analyses by roundNumber to prevent duplicate analyses during regeneration
-      // Keep only the MOST RECENT analysis for each round (by createdAt)
-      // This handles race conditions where both old and new analyses might appear briefly
-      const deduplicatedItems = items
-        .filter(item => item.status !== 'failed') // Only exclude failed
-        .filter(item => !currentRegeneratingRounds.has(item.roundNumber)) // ✅ FIX: Exclude rounds being regenerated
-        .reduce((acc, item) => {
-          const existing = acc.get(item.roundNumber);
-          if (!existing || new Date(item.createdAt) > new Date(existing.createdAt)) {
-            // Keep the newest analysis for this round
-            acc.set(item.roundNumber, item);
-          }
-          return acc;
-        }, new Map<number, typeof items[number]>());
-
-      return Array.from(deduplicatedItems.values())
-        .sort((a, b) => a.roundNumber - b.roundNumber) // Sort by round number
-        .map(item => ({
-          ...item,
-          createdAt: typeof item.createdAt === 'string' ? new Date(item.createdAt) : item.createdAt,
-          completedAt: item.completedAt ? (typeof item.completedAt === 'string' ? new Date(item.completedAt) : item.completedAt) : null,
-        }));
-    },
-    [regeneratingRounds, thread.id], // REMOVED: roundManager.state.analyses dependency
-  );
+    return Array.from(deduplicatedItems.values()).sort((a, b) => a.roundNumber - b.roundNumber);
+  }, [rawAnalyses, regeneratingRounds, thread.id]);
 
   // ✅ MUTATION: Update thread (including participants)
   const updateThreadMutation = useUpdateThreadMutation();
@@ -342,86 +320,49 @@ export default function ChatThreadScreen({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [thread.id, messagesHash]);
 
-  // ✅ UNIFIED: Set up round completion callback using round manager
   useEffect(() => {
-    const currentThreadId = thread.id; // Capture thread.id in closure
+    const currentThreadId = thread.id;
 
     setOnRoundComplete(async () => {
-      // ✅ FIX: Round number tracking removed (was only used for logging)
-      // ✅ UNIFIED: Round completion logic
-      // TODO: Re-enable roundManager when it's been fixed to avoid infinite loops
-      // const currentMessages = messages;
-      // const currentParticipants = contextParticipants;
-      // const userMessage = currentMessages.find((m) => {
-      //   const metadata = m.metadata as Record<string, unknown> | undefined;
-      //   return m.role === 'user' && metadata?.roundNumber === roundNumber;
-      // });
-      // const userQuestion = userMessage?.parts?.find(p => p.type === 'text')?.text || '';
-      // await roundManager.handleRoundComplete(
-      //   roundNumber,
-      //   currentMessages,
-      //   currentParticipants,
-      //   userQuestion,
-      // );
+      const currentMessages = messages;
+      const currentParticipants = contextParticipants;
 
-      // ✅ CLEAR REGENERATING STATE: Round is complete, new analysis will be created
+      const lastUserMessage = currentMessages.findLast(m => m.role === 'user');
+      const metadata = lastUserMessage?.metadata as Record<string, unknown> | undefined;
+      const roundNumber = (metadata?.roundNumber as number) || 1;
+
+      const textPart = lastUserMessage?.parts?.find(p => p.type === 'text');
+      const userQuestion = (textPart && 'text' in textPart ? textPart.text : '') || '';
+
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      createPendingAnalysis(
+        roundNumber,
+        currentMessages,
+        currentParticipants,
+        userQuestion,
+      );
+
       setRegeneratingRounds({ threadId: currentThreadId, rounds: new Set() });
-
-      // ✅ CLEAR STREAMING ROUND: Round completed, reset to allow new round
       setStreamingRoundNumber(null);
       currentRoundNumberRef.current = null;
     });
-  }, [thread.id, setOnRoundComplete, messages, contextParticipants]); // REMOVED: roundManager dependency
+  }, [thread.id, setOnRoundComplete, messages, contextParticipants, createPendingAnalysis]);
 
-  // ✅ CRITICAL FIX: Set up retry callback to immediately remove old analysis when round is retried
-  // This ensures the old analysis disappears from UI BEFORE regeneration starts
   useEffect(() => {
-    const currentThreadId = thread.id; // Capture thread.id in closure
+    const currentThreadId = thread.id;
+
     setOnRetry((roundNumber: number) => {
-      // ✅ IMMEDIATE UI UPDATE: Add round to regenerating state
-      // This immediately hides the old analysis from UI, preventing any visual glitches
       setRegeneratingRounds((prev) => {
-        // Only update if same thread, otherwise start fresh
         const currentRounds = prev.threadId === currentThreadId ? prev.rounds : new Set<number>();
         const newRounds = new Set(currentRounds);
         newRounds.add(roundNumber);
         return { threadId: currentThreadId, rounds: newRounds };
       });
 
-      // ✅ CRITICAL: Immediately remove the old analysis from cache
-      // Don't wait for refetch - remove it now so UI updates instantly
-      queryClient.setQueryData(
-        queryKeys.threads.analyses(currentThreadId),
-        (oldData: unknown) => {
-          // ✅ FIX: Type the old data properly
-          const typedData = oldData as { success: boolean; data: { items: StoredModeratorAnalysis[] } } | undefined;
-
-          if (!typedData?.success) {
-            return typedData;
-          }
-
-          // Filter out the analysis for the round being regenerated
-          const filteredItems = (typedData.data.items || []).filter(
-            (item: StoredModeratorAnalysis) => item.roundNumber !== roundNumber,
-          );
-
-          return {
-            ...typedData,
-            data: {
-              ...typedData.data,
-              items: filteredItems,
-            },
-          };
-        },
-      );
-
-      // ✅ CRITICAL FIX: DO NOT invalidate immediately
-      // Reason: Invalidation triggers immediate refetch BEFORE backend deletes the old analysis
-      // This causes a race condition where the old analysis gets fetched again
-      // Instead: Let onRoundComplete refetch when the new round finishes
-      // The cache removal above + deduplication logic ensures old analysis doesn't appear
+      removePendingAnalysis(roundNumber);
     });
-  }, [thread.id, setOnRetry, queryClient]); // ✅ REMOVED analysesResponse dependency to prevent stale callbacks
+  }, [thread.id, setOnRetry, removePendingAnalysis]);
 
   // ✅ SYNC CONTEXT: Update context when thread query data changes (after mutation)
   // This is the proper React Query pattern - mutation invalidates, query refetches, effect syncs
@@ -567,6 +508,11 @@ export default function ChatThreadScreen({
   // 1. Changelog (if exists) - shows what changed BEFORE this round
   // 2. Messages - user message + participant responses
   // 3. Analysis (if exists) - analysis AFTER participant responses
+  //
+  // ✅ ALIGNMENT GUARANTEE: This grouping logic works identically for:
+  // - Initial page load (all data from database with explicit roundNumbers)
+  // - During streaming (messages get roundNumbers via metadata as they complete)
+  // - After page refresh (database state restored with all roundNumbers)
   const messagesWithAnalysesAndChangelog = useMemo(() => {
     const items: Array<
       | { type: 'messages'; data: typeof messages; key: string }
@@ -624,6 +570,9 @@ export default function ChatThreadScreen({
       const roundChangelog = changelogByRound.get(roundNumber);
       const roundAnalysis = analyses.find(a => a.roundNumber === roundNumber);
 
+      // ✅ ALIGNMENT GUARANTEE: Strict ordering ensures consistent positioning
+      // during both initial load and streaming
+
       // 1. Add changelog BEFORE round messages (shows what changed for this round)
       if (roundChangelog && roundChangelog.length > 0) {
         items.push({
@@ -634,6 +583,8 @@ export default function ChatThreadScreen({
       }
 
       // 2. Add messages for this round (if they exist)
+      // ✅ DEFENSIVE: Only add messages if there are actual user/assistant messages
+      // This prevents empty rounds from affecting layout
       if (roundMessages && roundMessages.length > 0) {
         items.push({
           type: 'messages',
@@ -643,7 +594,8 @@ export default function ChatThreadScreen({
       }
 
       // 3. Add analysis AFTER round messages (shows round results)
-      if (roundAnalysis) {
+      // ✅ DEFENSIVE: Verify analysis.roundNumber matches to prevent misalignment
+      if (roundAnalysis && roundAnalysis.roundNumber === roundNumber) {
         items.push({
           type: 'analysis',
           data: roundAnalysis,
@@ -750,8 +702,10 @@ export default function ChatThreadScreen({
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  // ✅ CRITICAL FIX: Track MESSAGE items separately to prevent auto-scroll on changelog/analysis insertions
+  // ✅ ALIGNMENT FIX: Track MESSAGE items separately to prevent auto-scroll on changelog/analysis insertions
+  // This ensures auto-scroll only triggers when actual messages change, not when analyses/changelogs are inserted
   // This prevents the race condition where changelog insertion triggers scroll during streaming
+  // Key insight: Messages, analyses, and changelogs are inserted at different times but should not all trigger scrolling
   const messageItems = useMemo(() => {
     return messagesWithAnalysesAndChangelog.filter(item => item.type === 'messages');
   }, [messagesWithAnalysesAndChangelog]);
@@ -818,10 +772,17 @@ export default function ChatThreadScreen({
     const newAnalyses = analyses.filter(a => !scrolledToAnalysesRef.current.has(a.id));
     const hasNewAnalysis = newAnalyses.length > 0;
 
-    // ✅ ENHANCED SCROLL LOGIC:
-    // 1. Always scroll during message streaming (to show new messages)
-    // 2. Scroll ONCE when a NEW analysis appears (not on updates) - BUT NOT DURING STREAMING
-    // 3. Scroll when user is near bottom and content changes
+    // ✅ ALIGNMENT-AWARE SCROLL LOGIC:
+    // The scroll behavior must handle three independent events that can trigger at different times:
+    // 1. Message streaming: Always scroll to show new messages as they arrive
+    // 2. Analysis insertion: Scroll ONCE when NEW analysis appears (but NOT during message streaming)
+    // 3. Changelog insertion: Never trigger scroll (changelogs are inserted between rounds, not during streaming)
+    //
+    // This ensures:
+    // - During streaming: User sees new messages appear (scroll follows messages)
+    // - After streaming: User sees completed analysis without forced scroll
+    // - When changelogs inserted: No unexpected jumping (they appear above current viewport)
+    //
     // ✅ FIX: Don't scroll for new analyses during streaming - this prevents the bug where
     // analyses from previous rounds get scrolled past when they load during current round streaming
     const shouldScrollForAnalysis = hasNewAnalysis && !isStreaming;
@@ -1000,13 +961,20 @@ export default function ChatThreadScreen({
                     )}
 
                     {item.type === 'analysis' && (
-                    // Analysis after round (shows results)
                       <div className="mt-6 mb-4">
                         <RoundAnalysisCard
                           analysis={item.data}
                           threadId={thread.id}
                           isLatest={itemIndex === messagesWithAnalysesAndChangelog.length - 1}
                           streamingRoundNumber={streamingRoundNumber}
+                          onStreamComplete={(completedData) => {
+                            if (completedData) {
+                              updateAnalysisData(
+                                item.data.roundNumber,
+                                completedData as import('@/api/routes/chat/schema').ModeratorAnalysisPayload,
+                              );
+                            }
+                          }}
                         />
                       </div>
                     )}
