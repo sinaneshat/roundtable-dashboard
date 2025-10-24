@@ -44,8 +44,6 @@
   },
   "scripts": {
     "dev": "next dev --turbo",
-    "dev:web": "next dev --turbo",
-    "dev:mcp": "npx @agentdeskai/browser-tools-server@1.2.0",
     "dev:email": "email dev --dir src/emails --port 3001",
     "email:preview": "email dev --dir src/emails --port 3001",
     "email:build": "email build --dir src/emails --out dist/emails",
