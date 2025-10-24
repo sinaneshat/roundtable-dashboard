@@ -299,7 +299,19 @@ export default function ChatThreadScreen({
 
   useEffect(() => {
     setOnRetry((roundNumber: number) => {
+      // Remove pending analysis for the round being regenerated
       removePendingAnalysis(roundNumber);
+
+      // Remove changelog entries for the round being regenerated
+      // Changelogs appear BEFORE the round they apply to
+      setClientChangelog(prev => prev.filter(item => item.roundNumber !== roundNumber));
+
+      // Remove feedback for the round being regenerated
+      setClientFeedback((prev) => {
+        const updated = new Map(prev);
+        updated.delete(roundNumber);
+        return updated;
+      });
     });
   }, [thread.id, setOnRetry, removePendingAnalysis]);
 

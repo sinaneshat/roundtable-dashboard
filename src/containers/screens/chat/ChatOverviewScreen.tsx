@@ -67,6 +67,18 @@ export default function ChatOverviewScreen() {
     stop: stopStreaming,
   } = useSharedChatContext();
 
+  // ✅ Use refs to capture current values for the callback
+  const messagesRef = useRef(messages);
+  const participantsRef = useRef(contextParticipants);
+
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
+
+  useEffect(() => {
+    participantsRef.current = contextParticipants;
+  }, [contextParticipants]);
+
   const { setThreadTitle, setThreadActions } = useThreadHeader();
 
   const initialParticipants = useMemo<ParticipantConfig[]>(() => {
@@ -102,47 +114,24 @@ export default function ChatOverviewScreen() {
   // No need for complex client state since we're navigating away
   const [hasLoadedAnalysis, setHasLoadedAnalysis] = useState(false);
 
-  // ✅ Analysis query for first round only
-  // Disabled during streaming to prevent disruption
-  // Enabled after streaming to get the pending analysis we created
+  // ✅ NO QUERY: We don't use the analyses query here - only create pending analysis in cache
+  // This prevents the query from fetching empty data and overwriting our pending analysis
   const {
     analyses,
     createPendingAnalysis,
   } = useChatAnalysis({
-    threadId: createdThreadId || '',
+    threadId: createdThreadId || '', // Need real ID for cache operations
     mode: selectedMode,
-    enabled: !isStreaming && !!createdThreadId && !hasLoadedAnalysis,
+    enabled: false, // ✅ ALWAYS DISABLED - never fetch from server on overview screen
   });
 
-  const createThreadMutation = useCreateThreadMutation();
-
-  // ✅ ONE-WAY DATA FLOW: Setup round completion callback for analysis
-  // After participants finish streaming, create pending analysis in client state
+  // ✅ Capture createPendingAnalysis in a ref for the callback
+  const createPendingAnalysisRef = useRef(createPendingAnalysis);
   useEffect(() => {
-    if (!createdThreadId)
-      return;
+    createPendingAnalysisRef.current = createPendingAnalysis;
+  }, [createPendingAnalysis]);
 
-    setOnRoundComplete(async () => {
-      const currentMessages = messages;
-      const currentParticipants = contextParticipants;
-
-      const lastUserMessage = currentMessages.findLast(m => m.role === 'user');
-      const metadata = lastUserMessage?.metadata as Record<string, unknown> | undefined;
-      const roundNumber = (metadata?.roundNumber as number) || 1;
-
-      const textPart = lastUserMessage?.parts?.find(p => p.type === 'text');
-      const userQuestion = (textPart && 'text' in textPart ? textPart.text : '') || '';
-
-      // ✅ CLIENT-SIDE: Create pending analysis in cache
-      // This will trigger the analysis streaming
-      createPendingAnalysis(
-        roundNumber,
-        currentMessages,
-        currentParticipants,
-        userQuestion,
-      );
-    });
-  }, [createdThreadId, setOnRoundComplete, messages, contextParticipants, createPendingAnalysis]);
+  const createThreadMutation = useCreateThreadMutation();
 
   const handlePromptSubmit = useCallback(
     async (e: React.FormEvent) => {
@@ -186,6 +175,64 @@ export default function ChatOverviewScreen() {
         setShowInitialUI(false);
         setInputValue('');
         setCreatedThreadId(thread.id);
+
+        // ✅ CRITICAL FIX: Set up onRoundComplete BEFORE initializing thread
+        // This ensures the callback is ready when the round completes
+        // Capture the thread ID in closure so it's available in the callback
+        const capturedThreadId = thread.id;
+        setOnRoundComplete(() => {
+          // Use setTimeout to get the latest state values from refs
+          setTimeout(() => {
+            // Get current values from refs (not stale closure)
+            const currentMessages = messagesRef.current;
+            const currentParticipants = participantsRef.current;
+
+            const assistantMessages = currentMessages.filter(m => m.role === 'assistant');
+
+            // Only create analysis if we have messages from all participants
+            const enabledParticipants = currentParticipants.filter(p => p.isEnabled);
+            if (assistantMessages.length < enabledParticipants.length) {
+              // Retry after another delay
+              setTimeout(() => {
+                const retryMessages = messagesRef.current;
+                const retryAssistantMessages = retryMessages.filter(m => m.role === 'assistant');
+
+                if (retryAssistantMessages.length >= enabledParticipants.length) {
+                  const lastUserMessage = retryMessages.findLast(m => m.role === 'user');
+                  const metadata = lastUserMessage?.metadata as Record<string, unknown> | undefined;
+                  const roundNumber = (metadata?.roundNumber as number) || 1;
+
+                  const textPart = lastUserMessage?.parts?.find(p => p.type === 'text');
+                  const userQuestion = (textPart && 'text' in textPart ? textPart.text : '') || '';
+
+                  createPendingAnalysisRef.current(
+                    roundNumber,
+                    retryMessages,
+                    currentParticipants,
+                    userQuestion,
+                  );
+                }
+              }, 500);
+              return;
+            }
+
+            const lastUserMessage = currentMessages.findLast(m => m.role === 'user');
+            const metadata = lastUserMessage?.metadata as Record<string, unknown> | undefined;
+            const roundNumber = (metadata?.roundNumber as number) || 1;
+
+            const textPart = lastUserMessage?.parts?.find(p => p.type === 'text');
+            const userQuestion = (textPart && 'text' in textPart ? textPart.text : '') || '';
+
+            // Create pending analysis in cache
+            createPendingAnalysisRef.current(
+              roundNumber,
+              currentMessages,
+              currentParticipants,
+              userQuestion,
+            );
+          }, 500); // Delay to ensure all messages are fully added to state
+        });
+
         initializeThread(threadWithDates, participantsWithDates, uiMessages);
 
         hasSentInitialPromptRef.current = false;
@@ -240,6 +287,13 @@ export default function ChatOverviewScreen() {
       stopStreaming();
     }
   }, [showInitialUI, isStreaming, stopStreaming]);
+
+  // ✅ CLEANUP: Clear onRoundComplete callback on unmount
+  useEffect(() => {
+    return () => {
+      setOnRoundComplete(undefined);
+    };
+  }, [setOnRoundComplete]);
 
   const lastMessage = messages[messages.length - 1];
   const lastMessageContent = lastMessage?.parts?.map(p => (p.type === 'text' || p.type === 'reasoning') ? p.text : '').join('') || '';

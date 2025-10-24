@@ -1609,6 +1609,17 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
               eq(tables.chatRoundFeedback.roundNumber, regenerateRound),
             ),
           );
+
+        // Delete changelog entries for the specified round (if exists)
+        // Changelogs appear BEFORE the round they apply to, so we delete changelogs with this roundNumber
+        await db
+          .delete(tables.chatThreadChangelog)
+          .where(
+            and(
+              eq(tables.chatThreadChangelog.threadId, threadId),
+              eq(tables.chatThreadChangelog.roundNumber, regenerateRound),
+            ),
+          );
       } catch {
 
         // Don't fail the request - continue with streaming

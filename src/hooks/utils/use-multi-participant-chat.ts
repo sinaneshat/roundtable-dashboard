@@ -123,12 +123,12 @@ export function useMultiParticipantChat({
       respondedParticipantsRef.current.clear();
       currentRoundNumberRef.current = null;
 
-      // ✅ FIX: Defer callbacks to after render completes
-      // Prevents "Cannot update a component while rendering a different component" error
-      queueMicrotask(() => {
+      // ✅ FIX: Use setTimeout instead of queueMicrotask to ensure state updates are committed
+      // This ensures onRoundComplete sees all messages including the last participant's
+      setTimeout(() => {
         onRoundComplete?.();
         onComplete?.();
-      });
+      }, 0);
 
       return [];
     });

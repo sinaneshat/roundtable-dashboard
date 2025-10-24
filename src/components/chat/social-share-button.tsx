@@ -1,6 +1,6 @@
 'use client';
 
-import { Check, Mail, Share2 } from 'lucide-react';
+import { Check, Copy, Facebook, Linkedin, Mail, Share2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import {
   EmailShareButton,
@@ -12,10 +12,13 @@ import {
 
 import { Button } from '@/components/ui/button';
 import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover';
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import {
   Tooltip,
   TooltipContent,
@@ -35,9 +38,9 @@ import { cn } from '@/lib/ui/cn';
  * - Facebook
  * - Reddit
  * - Email
- * - Copy Link (fallback)
+ * - Copy Link
  *
- * Follows shadcn design patterns with glassmorphism effects
+ * Uses shadcn DropdownMenu pattern for consistent UX
  */
 type SocialShareButtonProps = {
   /** The URL to share */
@@ -80,10 +83,10 @@ export function SocialShareButton({
     }
   };
 
-  // Share button configuration
+  // Social share platforms configuration
   const shareButtons = [
     {
-      name: 'Twitter/X',
+      name: 'X (Twitter)',
       icon: (
         <svg className="size-4" viewBox="0 0 24 24" fill="currentColor">
           <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
@@ -91,29 +94,18 @@ export function SocialShareButton({
       ),
       Component: TwitterShareButton,
       props: { title: shareTitle, url },
-      className: 'hover:text-[#1DA1F2]',
     },
     {
       name: 'LinkedIn',
-      icon: (
-        <svg className="size-4" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z" />
-        </svg>
-      ),
+      icon: <Linkedin className="size-4" />,
       Component: LinkedinShareButton,
       props: { title: shareTitle, summary: shareDescription, source: BRAND.displayName, url },
-      className: 'hover:text-[#0A66C2]',
     },
     {
       name: 'Facebook',
-      icon: (
-        <svg className="size-4" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
-        </svg>
-      ),
+      icon: <Facebook className="size-4" />,
       Component: FacebookShareButton,
       props: { quote: shareTitle, url },
-      className: 'hover:text-[#1877F2]',
     },
     {
       name: 'Reddit',
@@ -124,39 +116,38 @@ export function SocialShareButton({
       ),
       Component: RedditShareButton,
       props: { title: shareTitle, url },
-      className: 'hover:text-[#FF4500]',
     },
     {
       name: 'Email',
       icon: <Mail className="size-4" />,
       Component: EmailShareButton,
       props: { subject: shareTitle, body: `${shareDescription}\n\n${url}`, url },
-      className: 'hover:text-blue-600',
     },
   ];
 
   return (
-    <TooltipProvider>
-      <Popover open={isOpen.value} onOpenChange={isOpen.setValue}>
+    <DropdownMenu open={isOpen.value} onOpenChange={isOpen.setValue}>
+      <TooltipProvider>
         <Tooltip delayDuration={300}>
           <TooltipTrigger asChild>
-            <PopoverTrigger asChild>
+            <DropdownMenuTrigger asChild>
               <Button
                 variant="ghost"
                 size={showTextOnLargeScreens ? 'sm' : 'icon'}
-                aria-label={t('copyLink')}
+                aria-label={t('shareThread')}
                 className={cn(
                   'transition-all duration-200',
                   showTextOnLargeScreens && 'gap-2',
+                  copySuccess.value && 'text-green-500',
                   className,
                 )}
               >
                 {copySuccess.value
                   ? (
-                      <Check className="size-4 text-green-500 animate-in zoom-in-75 duration-300" />
+                      <Check className="size-4 animate-in zoom-in-75 duration-300" />
                     )
                   : (
-                      <Share2 className="size-4 text-muted-foreground hover:text-foreground transition-all duration-200 hover:scale-110" />
+                      <Share2 className="size-4" />
                     )}
                 {showTextOnLargeScreens && (
                   <span className="hidden md:inline">
@@ -164,65 +155,60 @@ export function SocialShareButton({
                   </span>
                 )}
               </Button>
-            </PopoverTrigger>
+            </DropdownMenuTrigger>
           </TooltipTrigger>
           <TooltipContent side="bottom">
-            <p className="text-sm">{copySuccess.value ? t('linkCopied') : t('shareThread')}</p>
+            <p>{copySuccess.value ? t('linkCopied') : t('shareThread')}</p>
           </TooltipContent>
         </Tooltip>
+      </TooltipProvider>
 
-        <PopoverContent
-          align="end"
-          className="w-56 p-2"
-          glass={true}
-        >
-          <div className="space-y-1">
-            <div className="px-2 py-1.5">
-              <p className="text-sm font-semibold">{t('shareThread')}</p>
-              <p className="text-xs text-muted-foreground">{t('shareThreadDescription')}</p>
-            </div>
-
-            <div className="space-y-0.5">
-              {shareButtons.map(({ name, icon, Component, props, className: itemClassName }) => (
-                <Component
-                  key={name}
-                  {...props}
-                  className={cn(
-                    'flex w-full items-center gap-3 rounded-md px-2 py-2 text-sm',
-                    'hover:bg-accent/50 transition-colors duration-200',
-                    'focus:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                    'cursor-pointer',
-                    itemClassName,
-                  )}
-                  onClick={isOpen.onFalse}
-                >
-                  <span className="flex size-5 items-center justify-center shrink-0">
-                    {icon}
-                  </span>
-                  <span>{name}</span>
-                </Component>
-              ))}
-
-              {/* Copy Link as fallback */}
-              <button
-                type="button"
-                onClick={handleCopyLink}
-                className={cn(
-                  'flex w-full items-center gap-3 rounded-md px-2 py-2 text-sm',
-                  'hover:bg-accent/50 transition-colors duration-200',
-                  'focus:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                  copySuccess.value && 'text-green-500',
-                )}
-              >
-                <span className="flex size-5 items-center justify-center shrink-0">
-                  {copySuccess.value ? <Check className="size-4" /> : <Share2 className="size-4" />}
-                </span>
-                <span>{copySuccess.value ? t('linkCopied') : t('copyLink')}</span>
-              </button>
-            </div>
+      <DropdownMenuContent align="end" className="w-56">
+        <DropdownMenuLabel>
+          <div className="flex flex-col gap-1">
+            <span className="font-medium">{t('shareThread')}</span>
+            <span className="text-xs font-normal text-muted-foreground">
+              {t('shareThreadDescription')}
+            </span>
           </div>
-        </PopoverContent>
-      </Popover>
-    </TooltipProvider>
+        </DropdownMenuLabel>
+        <DropdownMenuSeparator />
+
+        {shareButtons.map(({ name, icon, Component, props }) => (
+          <Component
+            key={name}
+            {...props}
+            // Wrap in DropdownMenuItem for proper styling
+            beforeOnClick={() => {
+              isOpen.onFalse();
+            }}
+          >
+            <DropdownMenuItem
+              className="cursor-pointer"
+              onSelect={(e) => {
+                e.preventDefault();
+              }}
+            >
+              <span className="mr-2">{icon}</span>
+              <span>{name}</span>
+            </DropdownMenuItem>
+          </Component>
+        ))}
+
+        <DropdownMenuSeparator />
+
+        <DropdownMenuItem
+          className="cursor-pointer"
+          onClick={handleCopyLink}
+        >
+          <span className="mr-2">
+            {copySuccess.value ? <Check className="size-4 text-green-500" /> : <Copy className="size-4" />}
+          </span>
+          <span className={cn(copySuccess.value && 'text-green-500')}>
+            {copySuccess.value ? t('linkCopied') : t('copyLink')}
+          </span>
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
