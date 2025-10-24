@@ -16,7 +16,7 @@ import { ConfigurationChangesGroup } from '@/components/chat/configuration-chang
 import { ModelMessageCard } from '@/components/chat/model-message-card';
 import { Button } from '@/components/ui/button';
 import { BRAND } from '@/constants';
-import { usePublicThreadQuery } from '@/hooks/queries/chat-threads';
+import { usePublicThreadQuery } from '@/hooks/queries/chat';
 import { useModelsQuery } from '@/hooks/queries/models';
 import { getAvatarPropsFromModelId } from '@/lib/utils/ai-display';
 import { chatMessagesToUIMessages, getMessageMetadata } from '@/lib/utils/message-transforms';

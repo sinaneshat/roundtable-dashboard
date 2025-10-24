@@ -220,11 +220,27 @@ export const chatMessage = sqliteTable('chat_message', {
 
   // ✅ AI SDK v5 PATTERN: Store parts[] array matching UIMessage.parts structure
   // Eliminates transformation overhead - direct pass-through to/from frontend
-  // Supports: text parts, reasoning parts (Claude extended thinking)
-  // Note: Tool parts use AI SDK's native structure (tool-call, tool-result with specific state)
+  // Supports: text parts, reasoning parts (Claude extended thinking), tool parts
+  // Tool parts: tool-call (function invocation) and tool-result (execution result)
+  //
+  // ✅ ZERO-DOWNTIME MIGRATION: TypeScript-only change, existing messages still valid
+  // Existing messages without tool parts continue to work without modification
   parts: text('parts', { mode: 'json' }).notNull().$type<Array<
     | { type: 'text'; text: string }
     | { type: 'reasoning'; text: string }
+    | {
+      type: 'tool-call';
+      toolCallId: string;
+      toolName: string;
+      args: unknown;
+    }
+    | {
+      type: 'tool-result';
+      toolCallId: string;
+      toolName: string;
+      result: unknown;
+      isError?: boolean;
+    }
   >>(),
 
   // ✅ ROUND TRACKING: Event-based round number for reliable analysis placement

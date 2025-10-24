@@ -1,6 +1,6 @@
 'use client';
 
-import { Clock } from 'lucide-react';
+import { Clock, RotateCcw } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
@@ -24,6 +24,7 @@ type RoundAnalysisCardProps = {
   threadId: string;
   isLatest?: boolean;
   className?: string;
+  onStreamStart?: () => void;
   onStreamComplete?: (completedAnalysisData?: unknown) => void;
   streamingRoundNumber?: number | null;
 };
@@ -33,6 +34,7 @@ export function RoundAnalysisCard({
   threadId,
   isLatest = false,
   className,
+  onStreamStart,
   onStreamComplete,
   streamingRoundNumber,
 }: RoundAnalysisCardProps) {
@@ -61,7 +63,9 @@ export function RoundAnalysisCard({
 
   const [isManuallyControlled, setIsManuallyControlled] = useState(false);
   const [manuallyOpen, setManuallyOpen] = useState(false);
+  const [isRetrying, setIsRetrying] = useState(false);
   const prevStreamingRoundRef = useRef<number | null | undefined>(null);
+  const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     if (streamingRoundNumber !== prevStreamingRoundRef.current) {
@@ -76,7 +80,7 @@ export function RoundAnalysisCard({
       }
     }
     return undefined;
-  }, [streamingRoundNumber, isLatest, analysis.roundNumber]);
+  }, [streamingRoundNumber, isLatest, analysis.roundNumber, threadId]);
 
   const isOpen = isManuallyControlled ? manuallyOpen : isLatest;
 
@@ -86,6 +90,17 @@ export function RoundAnalysisCard({
   }, []);
 
   const handleRetry = useCallback(async () => {
+    // Debounce: prevent multiple rapid clicks
+    if (isRetrying)
+      return;
+
+    // Clear any pending retry timeout
+    if (retryTimeoutRef.current) {
+      clearTimeout(retryTimeoutRef.current);
+    }
+
+    setIsRetrying(true);
+
     try {
       await fetch(`/api/v1/chat/threads/${threadId}/rounds/${analysis.roundNumber}/analyze`, {
         method: 'POST',
@@ -94,11 +109,27 @@ export function RoundAnalysisCard({
           participantMessageIds: analysis.participantMessageIds,
         }),
       });
-    } catch { /* Intentionally suppressed */ }
-  }, [threadId, analysis.roundNumber, analysis.participantMessageIds]);
+    } catch {
+      /* Intentionally suppressed */
+    }
+
+    // Debounce timeout: re-enable after 2 seconds
+    retryTimeoutRef.current = setTimeout(() => {
+      setIsRetrying(false);
+    }, 2000);
+  }, [threadId, analysis.roundNumber, analysis.participantMessageIds, isRetrying]);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const previousStatusRef = useRef(analysis.status);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (retryTimeoutRef.current) {
+        clearTimeout(retryTimeoutRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     const justCompleted = (previousStatusRef.current === AnalysisStatuses.PENDING || previousStatusRef.current === AnalysisStatuses.STREAMING)
@@ -142,6 +173,27 @@ export function RoundAnalysisCard({
             <span className="hidden md:inline text-xs text-muted-foreground capitalize">
               {t(`mode.${analysis.mode}`)}
             </span>
+
+            {analysis.status === AnalysisStatuses.FAILED && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleRetry();
+                }}
+                disabled={isRetrying}
+                className={cn(
+                  'ml-auto flex items-center gap-1.5 px-2 py-1 text-xs font-medium rounded-md transition-colors',
+                  'text-primary hover:text-primary/80 hover:bg-primary/10',
+                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+                  'disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent',
+                )}
+                aria-label={t('retryAnalysis')}
+              >
+                <RotateCcw className={cn('size-3.5', isRetrying && 'animate-spin')} />
+                <span className="hidden sm:inline">{t('retryAnalysis')}</span>
+              </button>
+            )}
           </div>
         </ChainOfThoughtHeader>
 
@@ -159,8 +211,10 @@ export function RoundAnalysisCard({
             {(analysis.status === AnalysisStatuses.PENDING || analysis.status === AnalysisStatuses.STREAMING)
               ? (
                   <ModeratorAnalysisStream
+                    key={analysis.id}
                     threadId={threadId}
                     analysis={analysis}
+                    onStreamStart={onStreamStart}
                     onStreamComplete={onStreamComplete}
                   />
                 )

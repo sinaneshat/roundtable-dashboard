@@ -3,16 +3,23 @@
  *
  * Manages analysis state via React Query cache as single source of truth.
  * Backend auto-creates pending analyses; hook provides cache manipulation.
+ *
+ * ✅ CACHE SYNCHRONIZATION FIXES:
+ * - Functional updates for all cache operations (prevents race conditions)
+ * - Validation before cache updates (prevents corrupt data)
+ * - Status-aware updates (prevents overwriting completed with stale data)
+ * - Error recovery and reporting
  */
 
 'use client';
 
 import { useQueryClient } from '@tanstack/react-query';
 import type { UIMessage } from 'ai';
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 
 import type { ChatParticipant, ModeratorAnalysisPayload, StoredModeratorAnalysis } from '@/api/routes/chat/schema';
-import { useThreadAnalysesQuery } from '@/hooks/queries/chat-threads';
+import { ModeratorAnalysisPayloadSchema } from '@/api/routes/chat/schema';
+import { useThreadAnalysesQuery } from '@/hooks/queries/chat';
 import type { ChatModeId } from '@/lib/config/chat-modes';
 import { queryKeys } from '@/lib/data/query-keys';
 
@@ -36,7 +43,10 @@ type UseChatAnalysisReturn = {
     userQuestion: string,
   ) => void;
   updateAnalysisData: (roundNumber: number, data: ModeratorAnalysisPayload) => void;
+  updateAnalysisStatus: (roundNumber: number, status: 'pending' | 'streaming' | 'completed' | 'failed') => void;
   removePendingAnalysis: (roundNumber: number) => void;
+  markAnalysisFailed: (roundNumber: number, errorMessage: string) => void;
+  validateAnalysisData: (data: unknown) => data is ModeratorAnalysisPayload;
 };
 
 export function useChatAnalysis({
@@ -45,22 +55,24 @@ export function useChatAnalysis({
   enabled = true,
 }: UseChatAnalysisOptions): UseChatAnalysisReturn {
   const queryClient = useQueryClient();
+  const [_hookError, setHookError] = useState<Error | null>(null);
 
   // ✅ STREAMING PROTECTION: Only enable query when explicitly allowed
   // This prevents the aggressive polling and refetchOnMount from disrupting streaming
   const { data: analysesResponse, isLoading } = useThreadAnalysesQuery(threadId, enabled && !!threadId);
 
   const analyses = useMemo(() => {
-    if (!analysesResponse?.success)
+    if (!analysesResponse?.success) {
       return [];
+    }
 
     return analysesResponse.data.items.map(item => ({
       ...item,
-      createdAt: typeof item.createdAt === 'string' ? new Date(item.createdAt) : item.createdAt,
+      createdAt: typeof item.createdAt === 'string' ? new Date(item.createdAt) : item.createdAt as Date,
       completedAt: item.completedAt
-        ? (typeof item.completedAt === 'string' ? new Date(item.completedAt) : item.completedAt)
+        ? (typeof item.completedAt === 'string' ? new Date(item.completedAt) : item.completedAt as Date)
         : null,
-    }));
+    })) as StoredModeratorAnalysis[];
   }, [analysesResponse]);
 
   const createPendingAnalysis = useCallback(
@@ -70,140 +82,369 @@ export function useChatAnalysis({
       participants: ChatParticipant[],
       userQuestion: string,
     ) => {
-      const assistantMessages = messages.filter(m => m.role === 'assistant');
-      const recentMessages = assistantMessages.slice(-participants.length);
-      const participantMessageIds = recentMessages.map(m => m.id);
+      try {
+        // 🔍 DEBUG: Log all messages and their metadata
+        console.group(`[createPendingAnalysis] Round ${roundNumber} - Message Extraction`);
+        console.log('Total messages:', messages.length);
+        console.log('Expected participants:', participants.filter(p => p.isEnabled).length);
 
-      const pendingAnalysis: StoredModeratorAnalysis = {
-        id: `pending-${threadId}-${roundNumber}-${Date.now()}`,
-        threadId,
-        roundNumber,
-        mode,
-        userQuestion,
-        status: 'pending' as const,
-        participantMessageIds,
-        analysisData: null,
-        createdAt: new Date(),
-        completedAt: null,
-        errorMessage: null,
-      };
+        // Log all messages with their metadata
+        messages.forEach((m, index) => {
+          const metadata = m.metadata as Record<string, unknown> | undefined;
+          console.log(`Message ${index}:`, {
+            id: m.id,
+            role: m.role,
+            roundNumber: metadata?.roundNumber,
+            roundNumberType: typeof metadata?.roundNumber,
+            participantId: metadata?.participantId,
+          });
+        });
 
-      queryClient.setQueryData(
-        queryKeys.threads.analyses(threadId),
-        (oldData: unknown) => {
-          const typedData = oldData as {
-            success: boolean;
-            data: { items: StoredModeratorAnalysis[] };
-          } | undefined;
+        // ✅ CRITICAL FIX: Extract message IDs from the CURRENT round only
+        // Handle potential type mismatches between stored and parameter roundNumber
+        const roundMessages = messages.filter((m) => {
+          const metadata = m.metadata as Record<string, unknown> | undefined;
 
-          if (!typedData?.success) {
-            return {
-              success: true,
-              data: { items: [pendingAnalysis] },
-            };
+          // Ensure we're comparing numbers, not strings
+          const messageRoundNumber = metadata?.roundNumber;
+          const messageRound = typeof messageRoundNumber === 'number'
+            ? messageRoundNumber
+            : (typeof messageRoundNumber === 'string' ? Number(messageRoundNumber) : null);
+
+          const targetRound = typeof roundNumber === 'number'
+            ? roundNumber
+            : Number(roundNumber);
+
+          const isAssistant = m.role === 'assistant';
+          const roundMatches = messageRound === targetRound;
+
+          // Debug log for assistant messages to trace filtering
+          if (isAssistant) {
+            console.log(`[Filter] Assistant message ${m.id}:`, {
+              messageRound,
+              targetRound,
+              roundMatches,
+              willInclude: roundMatches && isAssistant,
+            });
           }
 
-          const existingIndex = typedData.data.items.findIndex(
-            a => a.roundNumber === roundNumber,
-          );
+          return roundMatches && isAssistant;
+        });
 
-          if (existingIndex >= 0) {
-            const updated = [...typedData.data.items];
-            updated[existingIndex] = pendingAnalysis;
+        // 🔍 DEBUG: Log filtered round messages
+        console.log(`Filtered messages for round ${roundNumber}:`, roundMessages.length);
+        roundMessages.forEach((m, index) => {
+          const metadata = m.metadata as Record<string, unknown> | undefined;
+          console.log(`Round message ${index}:`, {
+            id: m.id,
+            role: m.role,
+            participantId: metadata?.participantId,
+            roundNumber: metadata?.roundNumber,
+          });
+        });
+
+        const participantMessageIds = roundMessages.map(m => m.id);
+
+        // 🔍 DEBUG: Log extracted participant message IDs
+        console.log('Extracted participantMessageIds:', participantMessageIds);
+
+        // ✅ VALIDATION: Check if we have the expected number of participant messages
+        const expectedCount = participants.filter(p => p.isEnabled).length;
+        const actualCount = participantMessageIds.length;
+
+        if (actualCount < expectedCount) {
+          // ✅ RECOVERY: Round is incomplete - log warning
+          console.warn(`[useChatAnalysis] Incomplete round ${roundNumber}: Expected ${expectedCount} participant messages, but found ${actualCount}`, {
+            threadId,
+            roundNumber,
+            expectedCount,
+            actualCount,
+            participantMessageIds,
+            enabledParticipants: participants.filter(p => p.isEnabled).map(p => ({ id: p.id, modelId: p.modelId })),
+          });
+          console.groupEnd();
+
+          // ✅ FIX: During regeneration, participants might still be streaming
+          // Allow creating pending analysis even if count doesn't match yet
+          // The backend will handle validation when streaming completes
+          console.log(`[useChatAnalysis] Creating pending analysis anyway for round ${roundNumber} during regeneration/streaming`);
+          // Continue instead of returning early
+        }
+
+        if (actualCount > expectedCount) {
+          // ✅ VALIDATION: More messages than expected - this shouldn't happen but handle gracefully
+          console.warn(`[useChatAnalysis] Extra messages in round ${roundNumber}: Expected ${expectedCount} participant messages, but found ${actualCount}`, {
+            threadId,
+            roundNumber,
+            expectedCount,
+            actualCount,
+            participantMessageIds,
+          });
+        }
+
+        console.groupEnd();
+
+        const pendingAnalysis: StoredModeratorAnalysis = {
+          id: `pending-${threadId}-${roundNumber}-${Date.now()}`,
+          threadId,
+          roundNumber,
+          mode,
+          userQuestion,
+          status: 'pending' as const,
+          participantMessageIds,
+          analysisData: null,
+          createdAt: new Date(),
+          completedAt: null,
+          errorMessage: null,
+        };
+
+        queryClient.setQueryData(
+          queryKeys.threads.analyses(threadId),
+          (oldData: unknown) => {
+            const typedData = oldData as {
+              success: boolean;
+              data: { items: StoredModeratorAnalysis[] };
+            } | undefined;
+
+            // ✅ FIX: Ensure cache structure is always valid
+            if (!typedData?.success || !typedData.data?.items) {
+              return {
+                success: true,
+                data: { items: [pendingAnalysis] },
+              };
+            }
+
+            // ✅ FIX: Remove ALL existing analyses for this round before adding new pending
+            // This prevents duplicates when createPendingAnalysis is called multiple times
+            const filteredItems = typedData.data.items.filter(
+              a => a.roundNumber !== roundNumber,
+            );
+
+            // Add new pending analysis
             return {
               ...typedData,
-              data: { ...typedData.data, items: updated },
+              data: {
+                ...typedData.data,
+                items: [...filteredItems, pendingAnalysis],
+              },
             };
-          }
-
-          return {
-            ...typedData,
-            data: {
-              ...typedData.data,
-              items: [...typedData.data.items, pendingAnalysis],
-            },
-          };
-        },
-      );
+          },
+        );
+      } catch (error) {
+        // ✅ ERROR RECOVERY: If creating pending analysis fails, log and set error state
+        console.error('Failed to create pending analysis:', error);
+        setHookError(error instanceof Error ? error : new Error('Failed to create pending analysis'));
+      }
     },
     [queryClient, threadId, mode],
   );
 
   const updateAnalysisData = useCallback(
     (roundNumber: number, data: ModeratorAnalysisPayload) => {
-      queryClient.setQueryData(
-        queryKeys.threads.analyses(threadId),
-        (oldData: unknown) => {
-          const typedData = oldData as {
-            success: boolean;
-            data: { items: StoredModeratorAnalysis[] };
-          } | undefined;
+      try {
+        // ✅ VALIDATION: Validate analysis data before updating
+        const validationResult = ModeratorAnalysisPayloadSchema.safeParse(data);
+        if (!validationResult.success) {
+          console.error('Invalid analysis data:', validationResult.error);
+          setHookError(new Error('Invalid analysis data structure'));
+          return;
+        }
 
-          if (!typedData?.success)
-            return typedData;
+        queryClient.setQueryData(
+          queryKeys.threads.analyses(threadId),
+          (oldData: unknown) => {
+            const typedData = oldData as {
+              success: boolean;
+              data: { items: StoredModeratorAnalysis[] };
+            } | undefined;
 
-          const updated = typedData.data.items.map((analysis) => {
-            if (analysis.roundNumber === roundNumber) {
-              return {
-                ...analysis,
-                status: 'completed' as const,
-                analysisData: data,
-                completedAt: new Date(),
-              };
+            if (!typedData?.success) {
+              return typedData;
             }
-            return analysis;
-          });
 
-          return {
-            ...typedData,
-            data: { ...typedData.data, items: updated },
-          };
-        },
-      );
+            // ✅ CRITICAL: Find and update the specific analysis by round number
+            // Preserve all other analyses unchanged to prevent cache corruption
+            const updated = typedData.data.items.map((analysis) => {
+              if (analysis.roundNumber === roundNumber) {
+                // ✅ CRITICAL FIX: Only update if status is pending or streaming
+                // Don't overwrite already completed analyses (prevents regression)
+                if (analysis.status === 'pending' || analysis.status === 'streaming') {
+                  return {
+                    ...analysis,
+                    status: 'completed' as const,
+                    analysisData: data,
+                    completedAt: new Date(),
+                    errorMessage: null, // Clear any previous errors
+                  };
+                }
+                // ✅ If already completed, don't overwrite (prevents stale data from replacing fresh data)
+                console.warn(`[useChatAnalysis] Skipping update for round ${roundNumber} - analysis already ${analysis.status}`);
+              }
+              return analysis;
+            });
 
-      // ✅ ONE-WAY DATA FLOW: NO query invalidation
-      // Cache is updated directly above - invalidation would trigger refetch and break streaming
-      // The query is disabled during streaming anyway (enabled: false in ChatThreadScreen)
+            return {
+              ...typedData,
+              data: { ...typedData.data, items: updated },
+            };
+          },
+        );
+
+        // ✅ ONE-WAY DATA FLOW: NO query invalidation
+        // Cache is updated directly above - invalidation would trigger refetch and break streaming
+        // The query is disabled during streaming anyway (enabled: false in ChatThreadScreen)
+      } catch (error) {
+        // ✅ ERROR RECOVERY: If updating analysis fails, log and set error state
+        console.error('Failed to update analysis data:', error);
+        setHookError(error instanceof Error ? error : new Error('Failed to update analysis data'));
+      }
+    },
+    [queryClient, threadId],
+  );
+
+  const updateAnalysisStatus = useCallback(
+    (roundNumber: number, status: 'pending' | 'streaming' | 'completed' | 'failed') => {
+      try {
+        queryClient.setQueryData(
+          queryKeys.threads.analyses(threadId),
+          (oldData: unknown) => {
+            const typedData = oldData as {
+              success: boolean;
+              data: { items: StoredModeratorAnalysis[] };
+            } | undefined;
+
+            if (!typedData?.success) {
+              return typedData;
+            }
+
+            const updated = typedData.data.items.map((analysis) => {
+              if (analysis.roundNumber === roundNumber) {
+                return {
+                  ...analysis,
+                  status,
+                };
+              }
+              return analysis;
+            });
+
+            return {
+              ...typedData,
+              data: { ...typedData.data, items: updated },
+            };
+          },
+        );
+      } catch (error) {
+        console.error('Failed to update analysis status:', error);
+        setHookError(error instanceof Error ? error : new Error('Failed to update analysis status'));
+      }
     },
     [queryClient, threadId],
   );
 
   const removePendingAnalysis = useCallback(
     (roundNumber: number) => {
-      // ✅ IMMEDIATE REMOVAL: Completely remove analysis for this round from cache
-      // This ensures the UI immediately stops showing the old analysis
-      // When the round regenerates, createPendingAnalysis will add a new one
-      queryClient.setQueryData(
-        queryKeys.threads.analyses(threadId),
-        (oldData: unknown) => {
-          const typedData = oldData as {
-            success: boolean;
-            data: { items: StoredModeratorAnalysis[] };
-          } | undefined;
+      try {
+        // ✅ IMMEDIATE REMOVAL: Completely remove analysis for this round from cache
+        // This ensures the UI immediately stops showing the old analysis
+        // When the round regenerates, createPendingAnalysis will add a new one
+        queryClient.setQueryData(
+          queryKeys.threads.analyses(threadId),
+          (oldData: unknown) => {
+            const typedData = oldData as {
+              success: boolean;
+              data: { items: StoredModeratorAnalysis[] };
+            } | undefined;
 
-          if (!typedData?.success)
-            return typedData;
+            if (!typedData?.success) {
+              return typedData;
+            }
 
-          // Filter out ALL analyses for this round (including completed, pending, streaming)
-          const filtered = typedData.data.items.filter(
-            a => a.roundNumber !== roundNumber,
-          );
+            // Filter out ALL analyses for this round (including completed, pending, streaming)
+            const filtered = typedData.data.items.filter(
+              a => a.roundNumber !== roundNumber,
+            );
 
-          return {
-            ...typedData,
-            data: { ...typedData.data, items: filtered },
-          };
-        },
-      );
+            return {
+              ...typedData,
+              data: { ...typedData.data, items: filtered },
+            };
+          },
+        );
+      } catch (error) {
+        // ✅ ERROR RECOVERY: If removing analysis fails, log and set error state
+        console.error('Failed to remove pending analysis:', error);
+        setHookError(error instanceof Error ? error : new Error('Failed to remove pending analysis'));
+      }
     },
     [queryClient, threadId],
   );
+
+  /**
+   * Mark an analysis as failed with error message
+   * ✅ ERROR HANDLING: Explicit failure state for analyses
+   */
+  const markAnalysisFailed = useCallback(
+    (roundNumber: number, errorMessage: string) => {
+      try {
+        queryClient.setQueryData(
+          queryKeys.threads.analyses(threadId),
+          (oldData: unknown) => {
+            const typedData = oldData as {
+              success: boolean;
+              data: { items: StoredModeratorAnalysis[] };
+            } | undefined;
+
+            if (!typedData?.success) {
+              return typedData;
+            }
+
+            const updated = typedData.data.items.map((analysis) => {
+              if (analysis.roundNumber === roundNumber) {
+                return {
+                  ...analysis,
+                  status: 'failed' as const,
+                  errorMessage,
+                  completedAt: new Date(),
+                };
+              }
+              return analysis;
+            });
+
+            return {
+              ...typedData,
+              data: { ...typedData.data, items: updated },
+            };
+          },
+        );
+      } catch (error) {
+        console.error('Failed to mark analysis as failed:', error);
+        setHookError(error instanceof Error ? error : new Error('Failed to mark analysis as failed'));
+      }
+    },
+    [queryClient, threadId],
+  );
+
+  /**
+   * Validate analysis data structure
+   * ✅ VALIDATION: Type-safe validation using Zod schema
+   */
+  const validateAnalysisData = useCallback((data: unknown): data is ModeratorAnalysisPayload => {
+    const result = ModeratorAnalysisPayloadSchema.safeParse(data);
+    if (!result.success) {
+      console.error('Analysis data validation failed:', result.error);
+      return false;
+    }
+    return true;
+  }, []);
 
   return {
     analyses,
     isLoading,
     createPendingAnalysis,
     updateAnalysisData,
+    updateAnalysisStatus,
     removePendingAnalysis,
+    markAnalysisFailed,
+    validateAnalysisData,
   };
 }

@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * Chat Context - AI SDK v5 Shared State Pattern
+ * Chat Context - AI SDK v5 Shared State Pattern - SIMPLIFIED
  *
  * OFFICIAL AI SDK v5 PATTERN: Share chat state across components
  * Reference: https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot#share-useChat-state-across-components
@@ -10,11 +10,17 @@
  * - ChatOverviewScreen: Initial prompt and streaming before navigation
  * - ChatThreadScreen: Continued conversation on thread page
  *
+ * KEY SIMPLIFICATIONS:
+ * - Removed initialMessages state (use chat.setMessages() directly)
+ * - Merged onStreamComplete + onRoundComplete into single onComplete callback
+ * - Simplified callback wrapper functions (removed triple-wrapping)
+ *
  * KEY BENEFITS:
  * - Single source of truth for chat state
  * - No duplicate hook instances
  * - Seamless navigation between screens without state loss
  * - Eliminates setTimeout hacks and empty message triggers
+ * - ~30 lines of code removed
  *
  * PATTERN:
  * 1. Context wraps useMultiParticipantChat hook
@@ -28,6 +34,8 @@ import { createContext, use, useCallback, useMemo, useState } from 'react';
 
 import type { ChatParticipant, ChatThread } from '@/api/routes/chat/schema';
 import { useMultiParticipantChat } from '@/hooks/utils';
+import { deduplicateMessages } from '@/lib/utils/message-transforms';
+import { deduplicateParticipants } from '@/lib/utils/participant-utils';
 
 type ChatContextValue = {
   // Thread state
@@ -53,11 +61,9 @@ type ChatContextValue = {
   clearThread: () => void;
   updateParticipants: (participants: ChatParticipant[]) => void; // ✅ Update participants (local only, persisted on next message)
 
-  // Callbacks
-  onStreamComplete?: () => void;
-  setOnStreamComplete: (callback: (() => void) | undefined) => void;
-  onRoundComplete?: () => void;
-  setOnRoundComplete: (callback: (() => void) | undefined) => void;
+  // Callbacks - SIMPLIFIED (2 callbacks instead of 3)
+  onComplete?: () => void; // ✅ MERGED: Combines onStreamComplete + onRoundComplete
+  setOnComplete: (callback: (() => void) | undefined) => void;
   onRetry?: (roundNumber: number) => void;
   setOnRetry: (callback: ((roundNumber: number) => void) | undefined) => void;
 };
@@ -68,11 +74,9 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   // Thread state
   const [thread, setThread] = useState<ChatThread | null>(null);
   const [participants, setParticipants] = useState<ChatParticipant[]>([]);
-  const [initialMessages, setInitialMessages] = useState<UIMessage[]>([]);
 
-  // Completion callbacks (set by components for custom behavior)
-  const [onStreamComplete, setOnStreamComplete] = useState<(() => void) | undefined>(undefined);
-  const [onRoundComplete, setOnRoundComplete] = useState<(() => void) | undefined>(undefined);
+  // Completion callbacks (set by components for custom behavior) - SIMPLIFIED
+  const [onComplete, setOnComplete] = useState<(() => void) | undefined>(undefined);
   const [onRetry, setOnRetry] = useState<((roundNumber: number) => void) | undefined>(undefined);
 
   // Single chat instance shared across all screens
@@ -80,18 +84,11 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   const chat = useMultiParticipantChat({
     threadId: thread?.id || '',
     participants,
-    messages: initialMessages,
     mode: thread?.mode, // ✅ Pass mode for changelog tracking
     onComplete: () => {
-      // Call the completion callback if set
-      if (onStreamComplete) {
-        onStreamComplete();
-      }
-    },
-    onRoundComplete: () => {
-      // Call the round completion callback if set (for analysis triggers)
-      if (onRoundComplete) {
-        onRoundComplete();
+      // ✅ SIMPLIFIED: Single callback for both stream and round completion
+      if (onComplete) {
+        onComplete();
       }
     },
     onRetry: (roundNumber) => {
@@ -106,9 +103,13 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
    * Initialize or update thread context
    * Called when navigating to a thread or creating a new one
    *
-   * ✅ CRITICAL FIX: Must use setMessages from chat to sync AI SDK state
-   * Setting initialMessages state alone doesn't update the AI SDK's internal message state
-   * when navigating between screens. We need to explicitly call setMessages.
+   * ✅ SIMPLIFIED: Removed initialMessages state, use chat.setMessages() directly
+   * ✅ PHASE 1 DEDUPLICATION: Deduplicate both participants AND messages by ID before setting state
+   * This is the PRIMARY deduplication point for messages entering the context
+   *
+   * MIGRATION NOTE (2025-01-24):
+   * - Removed setInitialMessages() → Use chat.setMessages() directly
+   * - Eliminated intermediate state → Simpler data flow
    */
   const initializeThread = useCallback(
     (
@@ -117,16 +118,18 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       newMessages?: UIMessage[],
     ) => {
       setThread(newThread);
-      setParticipants(newParticipants);
 
-      // ✅ CRITICAL FIX: Update AI SDK's message state using setMessages
-      // This ensures retry() and other functions have access to the correct messages
+      // ✅ Use canonical deduplication function
+      // Each model should only appear once in the participant list
+      const deduplicated = deduplicateParticipants(newParticipants);
+      setParticipants(deduplicated);
+
+      // ✅ SIMPLIFIED: Set messages directly on chat (no intermediate state)
+      // This ensures AI SDK state is immediately in sync
       if (newMessages) {
-        setInitialMessages(newMessages);
-        chat.setMessages(newMessages); // ✅ Sync AI SDK state immediately
+        const deduplicatedMessages = deduplicateMessages(newMessages);
+        chat.setMessages(deduplicatedMessages);
       } else {
-        // Intentionally empty
-        setInitialMessages([]);
         chat.setMessages([]); // ✅ Clear AI SDK state
       }
     },
@@ -140,28 +143,28 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   const clearThread = useCallback(() => {
     setThread(null);
     setParticipants([]);
-    setInitialMessages([]);
-    setOnStreamComplete(undefined);
-    setOnRoundComplete(undefined);
+    setOnComplete(undefined);
     setOnRetry(undefined);
   }, []);
 
   /**
    * Update participants (staged changes - persisted on next message)
    * Called when user changes participant configuration in UI
+   *
+   * ✅ DEDUPLICATION: Deduplicate participants by both ID and modelId
+   * This prevents duplicate participants from ever entering the state,
+   * ensuring each model appears only once in the participant list.
    */
   const updateParticipants = useCallback((newParticipants: ChatParticipant[]) => {
-    setParticipants(newParticipants);
+    // Use canonical deduplication function
+    const deduplicated = deduplicateParticipants(newParticipants);
+    setParticipants(deduplicated);
   }, []);
 
-  // ✅ Wrap setters to handle function state correctly
-  // React treats function arguments as state updaters, so we need to wrap them
-  const wrappedSetOnStreamComplete = useCallback((callback: (() => void) | undefined) => {
-    setOnStreamComplete(() => callback);
-  }, []);
-
-  const wrappedSetOnRoundComplete = useCallback((callback: (() => void) | undefined) => {
-    setOnRoundComplete(() => callback);
+  // ✅ SIMPLIFIED: Direct callback setters (no triple-wrapping)
+  // React treats function arguments as state updaters, so we wrap them once
+  const wrappedSetOnComplete = useCallback((callback: (() => void) | undefined) => {
+    setOnComplete(() => callback);
   }, []);
 
   const wrappedSetOnRetry = useCallback((callback: ((roundNumber: number) => void) | undefined) => {
@@ -176,14 +179,12 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       initializeThread,
       clearThread,
       updateParticipants,
-      onStreamComplete,
-      setOnStreamComplete: wrappedSetOnStreamComplete,
-      onRoundComplete,
-      setOnRoundComplete: wrappedSetOnRoundComplete,
+      onComplete,
+      setOnComplete: wrappedSetOnComplete,
       onRetry,
       setOnRetry: wrappedSetOnRetry,
     }),
-    [thread, participants, chat, initializeThread, clearThread, updateParticipants, onStreamComplete, onRoundComplete, onRetry, wrappedSetOnStreamComplete, wrappedSetOnRoundComplete, wrappedSetOnRetry],
+    [thread, participants, chat, initializeThread, clearThread, updateParticipants, onComplete, onRetry, wrappedSetOnComplete, wrappedSetOnRetry],
   );
 
   return <ChatContext value={value}>{children}</ChatContext>;

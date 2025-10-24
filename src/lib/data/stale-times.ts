@@ -54,8 +54,8 @@ export const STALE_TIMES = {
   threads: 30 * 1000, // 30 seconds - threads list updated when new thread created
   threadDetail: 10 * 1000, // 10 seconds - thread detail refreshed on each visit
   threadMessages: 5 * 1000, // 5 seconds - messages added in real-time
-  threadChangelog: 30 * 1000, // 30 seconds - configuration changes
-  threadAnalyses: 60 * 1000, // 1 minute - moderator analyses
+  threadChangelog: Infinity, // Never stale - ONE-WAY DATA FLOW pattern (FLOW_DOCUMENTATION.md:32)
+  threadAnalyses: Infinity, // Never stale - ONE-WAY DATA FLOW pattern (FLOW_DOCUMENTATION.md:32)
   messages: 10 * 1000, // 10 seconds - messages can be added in real-time
   publicThreadDetail: 5 * 60 * 1000, // 5 minutes - public threads change less frequently
 

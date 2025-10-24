@@ -8,7 +8,7 @@ import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
-import { useThreadsQuery } from '@/hooks/queries/chat-threads';
+import { useThreadsQuery } from '@/hooks/queries/chat';
 import { useDebouncedValue } from '@/hooks/utils';
 import { cn } from '@/lib/ui/cn';
 import { glassOverlay } from '@/lib/ui/glassmorphism';

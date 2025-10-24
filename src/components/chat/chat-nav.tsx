@@ -7,7 +7,8 @@ import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import { ChatList } from '@/components/chat/chat-list';
+import type { Chat } from '@/components/chat/chat-list';
+import { ChatList, groupChatsByPeriod } from '@/components/chat/chat-list';
 import {
   ChatSidebarPaginationSkeleton,
   ChatSidebarSkeleton,
@@ -39,10 +40,8 @@ import {
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { BRAND } from '@/constants/brand';
 import { useDeleteThreadMutation } from '@/hooks/mutations/chat-mutations';
-import { useThreadsQuery } from '@/hooks/queries/chat-threads';
+import { useThreadsQuery } from '@/hooks/queries/chat';
 import { toastManager } from '@/lib/toast/toast-manager';
-import type { Chat } from '@/lib/types/sidebar';
-import { groupChatsByPeriod } from '@/lib/types/sidebar';
 
 // ✅ CRITICAL: Memoize sidebar to prevent re-renders during message streaming
 // Without this, every message update triggers sidebar re-render, causing Next.js prefetch requests

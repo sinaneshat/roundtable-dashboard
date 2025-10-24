@@ -351,6 +351,12 @@
       "currentMode": "Current Mode:",
       "chatModes": "Chat Modes"
     },
+    "messages": {
+      "tokens": "tokens",
+      "error": "Error",
+      "complete": "Complete",
+      "processing": "Processing..."
+    },
     "configuration": {
       "configurationChanged": "Configuration changed",
       "added": "Added",
@@ -797,11 +803,25 @@
     "stop": "Stop",
     "stopAnalysis": "Stop Analysis",
     "retry": "Retry",
+    "retryAnalysis": "Retry Analysis",
     "viewFullAnalysis": "View Full Analysis",
     "participantAnalysis": "Participant Analysis",
     "completed": "Completed",
     "failed": "Failed",
     "pending": "Pending",
+    "errors": {
+      "analysisError": "Analysis Error",
+      "analysisErrorDescription": "Something went wrong while displaying the analysis. The data may be corrupted or incomplete.",
+      "streamError": "Stream Error",
+      "streamErrorDescription": "Failed to stream analysis data. Please try again.",
+      "dismissError": "Dismiss",
+      "showDetails": "Show Details",
+      "hideDetails": "Hide Details",
+      "corruptedState": "The analysis state appears to be corrupted. Please retry the analysis.",
+      "invalidData": "Invalid analysis data received. Please regenerate the analysis.",
+      "networkError": "Network error occurred. Please check your connection and try again.",
+      "unknownError": "An unknown error occurred. Please try again or contact support if the issue persists."
+    },
     "thinkingMessages": [
       "Evaluating participant insights...",
       "Comparing response quality...",

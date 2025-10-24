@@ -1,8 +1,11 @@
 /**
- * Chat Custom Roles Query Hooks
+ * Thread Feedback & Custom Roles Query Hooks
  *
- * TanStack Query hooks for custom role template operations
+ * TanStack Query hooks for thread feedback and custom role template operations
  * Following patterns from TanStack Query v5 infinite query documentation
+ *
+ * Merged from chat-feedback.ts and chat-roles.ts for better organization
+ * Both are small (~50-100 lines each) and related to user interactions
  */
 
 'use client';
@@ -11,10 +14,47 @@ import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 
 import { useSession } from '@/lib/auth/client';
 import { queryKeys } from '@/lib/data/query-keys';
+import { STALE_TIME_PRESETS } from '@/lib/data/stale-times';
 import {
   getCustomRoleService,
+  getThreadFeedbackService,
   listCustomRolesService,
 } from '@/services/api';
+
+// ============================================================================
+// THREAD FEEDBACK HOOKS
+// ============================================================================
+
+/**
+ * Hook to fetch round feedback for a thread
+ * Returns feedback submitted by users for each round
+ * Protected endpoint - requires authentication
+ *
+ * @param threadId - Thread ID
+ * @param enabled - Optional control over whether to fetch (default: true)
+ */
+export function useThreadFeedbackQuery(threadId: string, enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.threads.feedback(threadId),
+    queryFn: async () => {
+      const response = await getThreadFeedbackService({
+        param: { id: threadId },
+      });
+
+      if (!response.success) {
+        throw new Error('Failed to fetch feedback');
+      }
+
+      return response.data;
+    },
+    staleTime: STALE_TIME_PRESETS.medium,
+    enabled,
+  });
+}
+
+// ============================================================================
+// CUSTOM ROLES HOOKS
+// ============================================================================
 
 /**
  * Hook to fetch user custom roles with cursor-based infinite scrolling

@@ -42,6 +42,7 @@ export async function createChangelogEntry(params: CreateChangelogParams): Promi
     db.insert(tables.chatThreadChangelog).values({
       id: changelogId,
       threadId: params.threadId,
+      roundNumber: params.roundNumber,
       changeType: params.changeType,
       changeSummary: params.changeSummary,
       changeData: params.changeData,
@@ -85,11 +86,13 @@ export async function getThreadChangelog(
  */
 export async function logModeChange(
   threadId: string,
+  roundNumber: number,
   oldMode: string,
   newMode: string,
 ): Promise<string> {
   return createChangelogEntry({
     threadId,
+    roundNumber,
     changeType: ChangelogTypes.MODE_CHANGE,
     changeSummary: `Changed conversation mode from ${oldMode} to ${newMode}`,
     changeData: {
@@ -104,6 +107,7 @@ export async function logModeChange(
  */
 export async function logParticipantAdded(
   threadId: string,
+  roundNumber: number,
   participantId: string,
   modelId: string,
   role: string | null,
@@ -115,6 +119,7 @@ export async function logParticipantAdded(
 
   return createChangelogEntry({
     threadId,
+    roundNumber,
     changeType: ChangelogTypes.PARTICIPANT_ADDED,
     changeSummary: summary,
     changeData: {
@@ -130,6 +135,7 @@ export async function logParticipantAdded(
  */
 export async function logParticipantRemoved(
   threadId: string,
+  roundNumber: number,
   participantId: string,
   modelId: string,
   role: string | null,
@@ -141,6 +147,7 @@ export async function logParticipantRemoved(
 
   return createChangelogEntry({
     threadId,
+    roundNumber,
     changeType: ChangelogTypes.PARTICIPANT_REMOVED,
     changeSummary: summary,
     changeData: {
@@ -156,6 +163,7 @@ export async function logParticipantRemoved(
  */
 export async function logParticipantUpdated(
   threadId: string,
+  roundNumber: number,
   participantId: string,
   modelId: string,
   oldRole: string | null,
@@ -166,6 +174,7 @@ export async function logParticipantUpdated(
 
   return createChangelogEntry({
     threadId,
+    roundNumber,
     changeType: ChangelogTypes.PARTICIPANT_UPDATED,
     changeSummary: summary,
     changeData: {
@@ -182,11 +191,12 @@ export async function logParticipantUpdated(
  */
 export async function logParticipantsReordered(
   threadId: string,
+  roundNumber: number,
   participants: Array<{
     id: string;
     modelId: string;
     role: string | null;
-    order: number;
+    priority: number;
   }>,
 ): Promise<string> {
   const participantNames = participants
@@ -195,6 +205,7 @@ export async function logParticipantsReordered(
 
   return createChangelogEntry({
     threadId,
+    roundNumber,
     changeType: ChangelogTypes.PARTICIPANTS_REORDERED,
     changeSummary: `Reordered participants: ${participantNames}`,
     changeData: {

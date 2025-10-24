@@ -47,6 +47,27 @@ export const MessageContentSchema = z.string()
   .min(1, 'Message is required')
   .max(5000, 'Message is too long (max 5000 characters)');
 
+/**
+ * Reusable Zod refinement to validate unique modelIds in participants array
+ * Only checks enabled participants (isEnabled !== false)
+ *
+ * @example
+ * z.array(ParticipantSchema).refine(...uniqueModelIdsRefinement)
+ */
+export const uniqueModelIdsRefinement = {
+  check: (participants: Array<{ modelId: string; isEnabled?: boolean }>) => {
+    // Filter to only enabled participants (isEnabled !== false means enabled by default)
+    const enabledParticipants = participants.filter(p => p.isEnabled !== false);
+
+    // Extract modelIds and check for duplicates
+    const modelIds = enabledParticipants.map(p => p.modelId);
+    const uniqueModelIds = new Set(modelIds);
+
+    return modelIds.length === uniqueModelIds.size;
+  },
+  message: 'Duplicate modelIds detected. Each enabled participant must have a unique model.',
+};
+
 // ============================================================================
 // Entity Schemas for OpenAPI (Reusing Database Validation Schemas)
 // ============================================================================
@@ -161,9 +182,12 @@ export const CreateThreadRequestSchema = chatThreadInsertSchema
       maxTokens: z.number().int().positive().optional().openapi({
         description: 'Max tokens setting',
       }),
-    })).min(1).openapi({
-      description: 'Participants array (order determines priority - immutable after creation)',
-    }),
+    }))
+      .min(1)
+      .refine(uniqueModelIdsRefinement.check, { message: uniqueModelIdsRefinement.message })
+      .openapi({
+        description: 'Participants array (order determines priority - immutable after creation)',
+      }),
     firstMessage: MessageContentSchema.openapi({
       description: 'Initial user message to start the conversation',
       example: 'What are innovative product ideas for sustainability?',
@@ -194,7 +218,10 @@ export const UpdateThreadRequestSchema = chatThreadUpdateSchema
         priority: z.number().int().min(0).openapi({ description: 'Display order (0-indexed)' }),
         isEnabled: z.boolean().optional().default(true).openapi({ description: 'Whether participant is enabled' }),
       }),
-    ).optional().openapi({ description: 'Complete list of participants with their updated state' }),
+    )
+      .refine(uniqueModelIdsRefinement.check, { message: uniqueModelIdsRefinement.message })
+      .optional()
+      .openapi({ description: 'Complete list of participants with their updated state' }),
   })
   .openapi('UpdateThreadRequest');
 
@@ -414,19 +441,22 @@ export const StreamChatRequestSchema = z.object({
       priority: z.number().int().min(0),
       isEnabled: z.boolean().optional().default(true),
     }),
-  ).optional().openapi({
-    description: 'Current participant configuration (optional). If provided, used instead of loading from database.',
-    example: [
-      {
-        id: 'participant_1',
-        modelId: 'anthropic/claude-sonnet-4.5',
-        role: 'The Ideator',
-        customRoleId: null,
-        priority: 0,
-        isEnabled: true,
-      },
-    ],
-  }),
+  )
+    .refine(uniqueModelIdsRefinement.check, { message: uniqueModelIdsRefinement.message })
+    .optional()
+    .openapi({
+      description: 'Current participant configuration (optional). If provided, used instead of loading from database.',
+      example: [
+        {
+          id: 'participant_1',
+          modelId: 'anthropic/claude-sonnet-4.5',
+          role: 'The Ideator',
+          customRoleId: null,
+          priority: 0,
+          isEnabled: true,
+        },
+      ],
+    }),
 
   /**
    * ✅ REGENERATE ROUND: Replace an existing round instead of creating a new one (OPTIONAL)
@@ -517,6 +547,7 @@ export const ChangelogListResponseSchema = createApiResponseSchema(ChangelogList
  */
 export const CreateChangelogParamsSchema = z.object({
   threadId: CoreSchemas.id(),
+  roundNumber: z.number().int().positive(),
   changeType: ChangelogTypeSchema,
   changeSummary: z.string().min(1).max(500),
   changeData: z.record(z.string(), z.unknown()).optional(),
@@ -791,7 +822,7 @@ export const ParticipantsReorderedDataSchema = z.object({
     id: z.string(),
     modelId: z.string(),
     role: z.string().nullable(),
-    order: z.number(),
+    priority: z.number(),
   })).optional(),
 });
 

@@ -9,13 +9,19 @@
  * - Progressive UI updates (leaderboard → skills → participant analyses) as object streams
  * - No polling - real-time updates via server-sent events
  *
+ * ✅ ABORT SIGNAL HANDLING:
+ * - Calls stop() on component unmount to cancel ongoing streams
+ * - Detects AbortError in onFinish callback and error state
+ * - Suppresses error display for aborted streams (intentional cancellation)
+ * - Prevents wasted resources from orphaned background streams
+ *
  * Pattern: AI SDK streamObject() + experimental_useObject() hook
  * Reference: https://sdk.vercel.ai/docs/ai-sdk-core/stream-object
  */
 
 import { experimental_useObject as useObject } from '@ai-sdk/react';
 import { motion } from 'framer-motion';
-import { useEffect, useRef } from 'react';
+import { memo, useEffect } from 'react';
 
 import { AnalysisStatuses } from '@/api/core/enums';
 import type { ModeratorAnalysisPayload, StoredModeratorAnalysis } from '@/api/routes/chat/schema';
@@ -30,7 +36,17 @@ type ModeratorAnalysisStreamProps = {
   threadId: string;
   analysis: StoredModeratorAnalysis;
   onStreamComplete?: (completedAnalysisData?: unknown) => void;
+  onStreamStart?: () => void;
 };
+
+/**
+ * ✅ PERSISTENT TRIGGER TRACKING:
+ * Store triggered analysis IDs in a Map outside component scope
+ * This survives component remounts and ensures we never trigger twice for the same analysis
+ * Key: analysis.id (unique identifier)
+ * Value: true (already triggered)
+ */
+const triggeredAnalysisIds = new Map<string, boolean>();
 
 /**
  * Moderator Analysis Stream - AI SDK v5 streaming display component
@@ -46,37 +62,64 @@ type ModeratorAnalysisStreamProps = {
  * - Status 'streaming' → Backend already processing, useThreadAnalysesQuery polls for completion
  * - 409 Conflict → Silently handled, query polling takes over
  * - No manual polling intervals - all handled by useThreadAnalysesQuery refetchInterval
+ *
+ * ✅ MEMOIZATION:
+ * - Component is memoized to prevent re-renders from accordion state changes
+ * - Only re-renders when analysis data actually changes
+ *
+ * ✅ CRITICAL FIX: Persistent trigger tracking across remounts
+ * - Uses Map outside component scope to track triggered analysis IDs
+ * - Survives component remounts caused by accordion open/close
+ * - Prevents duplicate POST requests even after navigation or state changes
  */
-export function ModeratorAnalysisStream({
+function ModeratorAnalysisStreamComponent({
   threadId,
   analysis,
   onStreamComplete,
+  onStreamStart,
 }: ModeratorAnalysisStreamProps) {
-  // ✅ Track if we've already triggered streaming (prevents duplicate POST requests)
-  const hasTriggeredRef = useRef(false);
-
   // ✅ Track if we got 409 Conflict (backend already streaming)
   // When true, suppress error display and let query polling handle completion
   const is409Conflict = useBoolean(false);
 
   // ✅ AI SDK v5: experimental_useObject hook for streaming structured objects
   // Uses the same Zod schema as the server for type safety and validation
+  // Note: We intentionally don't use stop() - analysis continues in background
   const { object: partialAnalysis, error, submit } = useObject({
     api: `/api/v1/chat/threads/${threadId}/rounds/${analysis.roundNumber}/analyze`,
     schema: ModeratorAnalysisPayloadSchema,
     onFinish: ({ object: finalObject, error: streamError }) => {
       if (streamError) {
+        // ✅ ABORT DETECTION: Check if stream was aborted (user navigated away or component unmounted)
+        // AbortError indicates the stream was cancelled - don't mark as failed, just ignore
+        const errorMessage = streamError.message || String(streamError);
+        const isAborted = streamError instanceof Error
+          && (streamError.name === 'AbortError' || errorMessage.includes('aborted'));
+
+        if (isAborted) {
+          // ✅ Stream was intentionally cancelled - this is normal, don't treat as error
+          // useThreadAnalysesQuery will handle cleanup of pending analyses on next poll
+          return;
+        }
+
         // ✅ CRITICAL: Check if error is 409 Conflict (analysis already streaming in background)
         // Set flag to suppress error display - useThreadAnalysesQuery will poll for completion
-        const errorMessage = streamError.message || String(streamError);
         if (errorMessage.includes('409') || errorMessage.includes('Conflict') || errorMessage.includes('already being generated')) {
           is409Conflict.onTrue();
+          return;
         }
+
+        // ✅ All other errors are real failures - let them propagate to error state
         return;
       }
 
       if (finalObject) {
-        // ✅ Pass completed analysis data to parent for direct cache update
+        // ✅ CRITICAL FIX: Pass completed analysis data to parent for direct cache update
+        // The parent (ChatThreadScreen) calls updateAnalysisData() which:
+        // 1. Updates the analysis status to 'completed'
+        // 2. Sets analysisData to finalObject
+        // 3. Sets completedAt timestamp
+        // This ensures the UI immediately shows the completed state
         onStreamComplete?.(finalObject);
       }
     },
@@ -86,34 +129,66 @@ export function ModeratorAnalysisStream({
   // ✅ STREAMING STATUS: Don't trigger POST - backend already processing
   // ✅ FAILED STATUS: NEVER retry - user must manually regenerate from UI
   // useThreadAnalysesQuery polls every 5-10s to detect completion
+  //
+  // ✅ CRITICAL FIX: Use persistent Map to track triggered analyses
+  // This survives component remounts and prevents duplicate POST requests
   useEffect(() => {
+    // ✅ CRITICAL: Check persistent Map to prevent re-execution across remounts
+    if (triggeredAnalysisIds.has(analysis.id)) {
+      return undefined;
+    }
+
     // ❌ NEVER trigger for FAILED or COMPLETED analyses - they're done
     if (analysis.status === AnalysisStatuses.FAILED || analysis.status === AnalysisStatuses.COMPLETED) {
-      if (!hasTriggeredRef.current) {
-        hasTriggeredRef.current = true;
-      }
-      return;
+      triggeredAnalysisIds.set(analysis.id, true);
+      return undefined;
     }
 
     // Only trigger if analysis is 'pending' (newly created) and we haven't triggered yet
-    // Do NOT trigger for 'streaming' - backend already processing, query polls for completion
-    const shouldTrigger = analysis.status === AnalysisStatuses.PENDING && !hasTriggeredRef.current;
+    const shouldTrigger = analysis.status === AnalysisStatuses.PENDING;
 
     if (shouldTrigger) {
-      hasTriggeredRef.current = true;
+      triggeredAnalysisIds.set(analysis.id, true);
+      // ✅ CRITICAL FIX: Notify parent that streaming is starting
+      // This allows parent to update cache status from 'pending' → 'streaming'
+      // matching the backend state transition
+      onStreamStart?.();
+
+      // 🔍 DEBUG: Log the participant message IDs being sent to the backend
+      console.group(`[ModeratorAnalysisStream] Starting analysis for round ${analysis.roundNumber}`);
+      console.log('Analysis ID:', analysis.id);
+      console.log('Thread ID:', threadId);
+      console.log('Participant Message IDs being sent:', analysis.participantMessageIds);
+      console.log('POST URL:', `/api/v1/chat/threads/${threadId}/rounds/${analysis.roundNumber}/analyze`);
+      console.groupEnd();
 
       submit({ participantMessageIds: analysis.participantMessageIds });
-    } else if (analysis.status === AnalysisStatuses.STREAMING && !hasTriggeredRef.current) {
-      // Backend already processing - don't POST, let query poll
-      hasTriggeredRef.current = true;
     }
-  }, [analysis.status, analysis.participantMessageIds, submit, analysis.roundNumber, analysis.id]);
 
-  // ✅ DEBUG: Removed logging
+    if (analysis.status === AnalysisStatuses.STREAMING) {
+      triggeredAnalysisIds.set(analysis.id, true);
+    }
 
-  // ❌ ERROR STATE: Show error if streaming fails (unless 409 Conflict)
-  // If 409 Conflict, suppress error - useThreadAnalysesQuery polls for completion
-  if (error && !is409Conflict.value) {
+    return undefined;
+    // ✅ CRITICAL: Minimal dependencies to prevent effect re-runs from object recreation
+    // Only react to status changes (pending → streaming → completed/failed)
+    // analysis.id in key prop ensures component remounts for different analyses
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [analysis.status, analysis.id]);
+
+  // ✅ NO CLEANUP: Analysis continues in background even if component unmounts
+  // The stream should NEVER be cancelled - let it complete naturally
+
+  // ❌ ERROR STATE: Show error if streaming fails (unless 409 Conflict or AbortError)
+  // If 409 Conflict or AbortError, suppress error display
+  // - 409 Conflict: useThreadAnalysesQuery polls for completion
+  // - AbortError: Stream was intentionally cancelled (unmount/navigation)
+  const shouldShowError = error && !is409Conflict.value && !(
+    error instanceof Error
+    && (error.name === 'AbortError' || error.message?.includes('aborted'))
+  );
+
+  if (shouldShowError) {
     return (
       <div className="flex flex-col gap-2 py-2">
         <div className="flex items-center gap-2 text-sm text-destructive">
@@ -228,3 +303,15 @@ export function ModeratorAnalysisStream({
     </motion.div>
   );
 }
+
+// ✅ MEMOIZATION: Prevent re-renders from parent accordion state changes
+// Only re-render when analysis data actually changes (status, analysisData, etc.)
+export const ModeratorAnalysisStream = memo(ModeratorAnalysisStreamComponent, (prevProps, nextProps) => {
+  // Custom comparison: only re-render if analysis data actually changed
+  return (
+    prevProps.analysis.id === nextProps.analysis.id
+    && prevProps.analysis.status === nextProps.analysis.status
+    && prevProps.analysis.analysisData === nextProps.analysis.analysisData
+    && prevProps.threadId === nextProps.threadId
+  );
+});

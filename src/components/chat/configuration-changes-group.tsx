@@ -269,12 +269,12 @@ function ChangeItem({ change }: { change: ChatThreadChangelog | (Omit<ChatThread
         </div>
       )}
 
-      {/* Participants Reordered - Show all participants in new order */}
+      {/* Participants Reordered - Show all participants in new priority order */}
       {change.changeType === 'participants_reordered' && participants && participants.length > 0 && (
         <>
           {participants
-            .sort((a: { order: number }, b: { order: number }) => a.order - b.order)
-            .map((p: { id: string; modelId: string; role: string | null; order: number }, index: number) => {
+            .sort((a: { priority: number }, b: { priority: number }) => a.priority - b.priority)
+            .map((p: { id: string; modelId: string; role: string | null; priority: number }, index: number) => {
               const pModel = allModels.find(m => m.id === p.modelId);
               if (!pModel)
                 return null;

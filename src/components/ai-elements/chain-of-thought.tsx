@@ -138,7 +138,6 @@ export function ChainOfThoughtContent({
     <CollapsibleContent
       className={cn(
         'px-4 pb-4 space-y-3 overflow-x-auto',
-        'animate-in fade-in-50 slide-in-from-top-2',
         className,
       )}
       {...props}

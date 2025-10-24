@@ -5,11 +5,11 @@ import { ArrowUp, Square, X } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import type { FormEvent } from 'react';
 
+import type { ParticipantConfig } from '@/components/chat/chat-form-schemas';
 import { Button } from '@/components/ui/button';
 import { GlowingEffect } from '@/components/ui/glowing-effect';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { useModelsQuery } from '@/hooks/queries/models';
-import type { ParticipantConfig } from '@/lib/types/participant-config';
 import { cn } from '@/lib/ui/cn';
 
 // ============================================================================
@@ -189,7 +189,7 @@ export function ChatInput({
                   <ScrollArea className="w-full">
                     <div className="flex items-center gap-2 pb-2">
                       {participants
-                        .sort((a, b) => a.order - b.order)
+                        .sort((a, b) => a.priority - b.priority)
                         .map((participant) => {
                           const model = allModels.find(m => m.id === participant.modelId);
                           if (!model)

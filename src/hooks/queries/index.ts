@@ -15,18 +15,29 @@ export {
   useApiKeysQuery,
 } from './api-keys';
 
-// Chat custom role queries (protected)
+// Chat analysis queries (protected)
+export { useThreadAnalysesQuery } from './chat/analysis';
+
+// Chat changelog queries (protected)
+export { useThreadChangelogQuery } from './chat/changelog';
+
+// Chat custom role and feedback queries (protected)
 export {
   useCustomRoleQuery,
   useCustomRolesQuery,
-} from './chat-roles';
+  useThreadFeedbackQuery,
+} from './chat/feedback-and-roles';
+
+// Chat message queries (protected)
+export { useThreadMessagesQuery } from './chat/messages';
 
 // Chat thread queries (protected)
 export {
   usePublicThreadQuery,
+  useThreadBySlugQuery,
   useThreadQuery,
   useThreadsQuery,
-} from './chat-threads';
+} from './chat/threads';
 
 // Product queries (public)
 export { useProductQuery, useProductsQuery } from './products';

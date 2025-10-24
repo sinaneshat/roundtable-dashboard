@@ -6,6 +6,8 @@ import { Message, MessageAvatar, MessageContent } from '@/components/ai-elements
 import { Reasoning, ReasoningContent, ReasoningTrigger } from '@/components/ai-elements/reasoning';
 import { Response } from '@/components/ai-elements/response';
 import { MessageErrorDetails } from '@/components/chat/message-error-details';
+import { ToolCallPart } from '@/components/chat/tool-call-part';
+import { ToolResultPart } from '@/components/chat/tool-result-part';
 import type { UIMessageMetadata } from '@/lib/schemas/message-metadata';
 import type { MessagePart, MessageStatus } from '@/lib/schemas/message-schemas';
 
@@ -39,7 +41,7 @@ type ModelMessageCardProps = {
  * - Completed: Show model header + all parts
  * - Error: Show model header + error styling
  *
- * Handles both text and reasoning parts as per AI SDK documentation.
+ * Handles text, reasoning, and tool parts (tool-call, tool-result) as per AI SDK documentation.
  */
 const DEFAULT_PARTS: MessagePart[] = [];
 
@@ -120,9 +122,10 @@ export function ModelMessageCard({
 
             {/* ✅ OFFICIAL AI SDK PATTERN: Just render parts directly, NO placeholder logic */}
             {parts.map((part, partIndex) => {
+              // ✅ TEXT PART: Regular message content
               if (part.type === 'text') {
-              // ✅ OFFICIAL AI SDK: Always render Response, even with empty text
-              // Use stable key combining messageId and partIndex
+                // ✅ OFFICIAL AI SDK: Always render Response, even with empty text
+                // Use stable key combining messageId and partIndex
                 return (
                   <Response key={messageId ? `${messageId}-text-${partIndex}` : `text-${partIndex}`}>
                     {part.text}
@@ -130,9 +133,10 @@ export function ModelMessageCard({
                 );
               }
 
+              // ✅ REASONING PART: Extended thinking/internal reasoning
               if (part.type === 'reasoning') {
-              // ✅ OFFICIAL AI SDK: Always render reasoning if part exists
-              // Following AI Elements pattern from chatbot example
+                // ✅ OFFICIAL AI SDK: Always render reasoning if part exists
+                // Following AI Elements pattern from chatbot example
                 return (
                   <Reasoning
                     key={messageId ? `${messageId}-reasoning-${partIndex}` : `reasoning-${partIndex}`}
@@ -142,6 +146,28 @@ export function ModelMessageCard({
                     <ReasoningTrigger />
                     <ReasoningContent>{part.text}</ReasoningContent>
                   </Reasoning>
+                );
+              }
+
+              // ✅ TOOL-CALL PART: Function invocation by the model
+              if (part.type === 'tool-call') {
+                return (
+                  <ToolCallPart
+                    key={messageId ? `${messageId}-tool-call-${partIndex}` : `tool-call-${partIndex}`}
+                    part={part}
+                    className="my-2"
+                  />
+                );
+              }
+
+              // ✅ TOOL-RESULT PART: Result from tool execution
+              if (part.type === 'tool-result') {
+                return (
+                  <ToolResultPart
+                    key={messageId ? `${messageId}-tool-result-${partIndex}` : `tool-result-${partIndex}`}
+                    part={part}
+                    className="my-2"
+                  />
                 );
               }
 

@@ -35,7 +35,9 @@ export function chatMessageToUIMessage(
   return {
     id: message.id,
     role: message.role,
-    parts: message.parts || [],
+    // ✅ TYPE ASSERTION: Database stores simplified tool parts, but they're compatible with UIMessage
+    // AI SDK v5 expects tool parts to have 'state' field, but our DB schema is a valid subset
+    parts: (message.parts || []) as UIMessage['parts'],
     metadata,
   };
 }
@@ -44,15 +46,6 @@ export function chatMessagesToUIMessages(
   messages: (ChatMessage | (Omit<ChatMessage, 'createdAt'> & { createdAt: string | Date }))[],
 ): UIMessage[] {
   return messages.map(chatMessageToUIMessage);
-}
-
-export function extractTextFromParts(
-  parts: Array<{ type: 'text'; text: string } | { type: 'reasoning'; text: string }>,
-): string {
-  return parts
-    .filter(part => part.type === 'text')
-    .map(part => (part as { type: 'text'; text: string }).text)
-    .join(' ');
 }
 
 export function filterNonEmptyMessages(messages: UIMessage[]): UIMessage[] {
@@ -71,6 +64,52 @@ export function filterNonEmptyMessages(messages: UIMessage[]): UIMessage[] {
   });
 }
 
+/**
+ * ✅ PHASE 1: Global message deduplication by ID
+ *
+ * PRIMARY DEDUPLICATION POINT - Apply this BEFORE setting messages in any context
+ *
+ * USAGE:
+ * - Remove duplicate messages by unique ID
+ * - Preserves message order (first occurrence wins)
+ * - O(n) performance using Set
+ *
+ * ARCHITECTURE:
+ * - This is Phase 1 (global deduplication at message array level)
+ * - PASS 4 in groupMessagesByRound() is Phase 2 (safety net during grouping)
+ *
+ * Apply at ALL message update points:
+ * - ChatContext.initializeThread()
+ * - useMultiParticipantChat.onFinish()
+ * - useMultiParticipantChat.onError()
+ * - useMultiParticipantChat.retry()
+ *
+ * @param messages - Messages array (may contain duplicates)
+ * @returns Deduplicated messages array (unique by ID)
+ */
+export function deduplicateMessages(messages: UIMessage[]): UIMessage[] {
+  const seen = new Set<string>();
+  return messages.filter((msg) => {
+    if (seen.has(msg.id))
+      return false;
+    seen.add(msg.id);
+    return true;
+  });
+}
+
+/**
+ * ✅ COMPLEMENTARY: Deduplicate consecutive user messages by text content
+ *
+ * This handles a DIFFERENT case than deduplicateMessages():
+ * - deduplicateMessages() removes duplicate IDs (Phase 1)
+ * - This function removes consecutive user messages with same text (edge case)
+ *
+ * Use case: When startRound() or retry creates consecutive user messages
+ * with same text but different IDs
+ *
+ * @param messages - Messages array (may have consecutive duplicate text)
+ * @returns Messages with consecutive duplicate user text removed
+ */
 export function deduplicateConsecutiveUserMessages(messages: UIMessage[]): UIMessage[] {
   const result: UIMessage[] = [];
   let lastUserMessageText: string | null = null;

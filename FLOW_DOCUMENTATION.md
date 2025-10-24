@@ -51,9 +51,9 @@ Roundtable enables users to create conversations where multiple AI models collab
 **What Happens:**
 1. Input clears immediately
 2. Welcome screen fades out
-3. **URL updates**: `/chat` → `/chat/[unique-slug]` (without page refresh)
-4. User's message appears at top
-5. First AI starts responding (text streams word-by-word)
+3. User's message appears at top
+4. First AI starts responding (text streams word-by-word)
+5. **URL updates**: `/chat` → `/chat/[unique-slug]` after moderator analysis completes (without page refresh)
 
 **Behind the Scenes:**
 - System creates conversation record in database
@@ -146,9 +146,9 @@ Roundtable enables users to create conversations where multiple AI models collab
 - Creates structured data with scores, ratings, and text
 - Saves to database linked to specific round number
 
-### Navigation After First Round
+### After First Round Completes
 
-**Automatic redirect** to thread detail page `/chat/[slug]` after analysis completes. User stays on the same URL but screen transitions to persistent thread view.
+**No navigation required** - the URL has already updated to `/chat/[slug]` after the moderator analysis completed (see Part 1). The user remains on the thread detail page and can immediately continue the conversation by typing another message.
 
 ---
 

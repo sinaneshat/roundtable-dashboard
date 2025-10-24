@@ -10,6 +10,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ChatMessage, ChatParticipant, ChatThread } from '@/api/routes/chat/schema';
 import { Action, Actions } from '@/components/ai-elements/actions';
 import { ChatDeleteDialog } from '@/components/chat/chat-delete-dialog';
+import type { ParticipantConfig } from '@/components/chat/chat-form-schemas';
 import { ChatInput } from '@/components/chat/chat-input';
 import { ChatMessageList } from '@/components/chat/chat-message-list';
 import { ChatModeSelector } from '@/components/chat/chat-mode-selector';
@@ -22,14 +23,14 @@ import { StreamingParticipantsLoader } from '@/components/chat/streaming-partici
 import { useThreadHeader } from '@/components/chat/thread-header-context';
 import { useSharedChatContext } from '@/contexts/chat-context';
 import { useSetRoundFeedbackMutation, useUpdateThreadMutation } from '@/hooks/mutations/chat-mutations';
-import { useThreadFeedbackQuery } from '@/hooks/queries/chat-feedback';
-import { useThreadChangelogQuery } from '@/hooks/queries/chat-threads';
+import { useThreadChangelogQuery, useThreadFeedbackQuery } from '@/hooks/queries/chat';
 import { useBoolean, useChatAnalysis, useSelectedParticipants } from '@/hooks/utils';
 import type { ChatModeId } from '@/lib/config/chat-modes';
 import { messageHasError, MessageMetadataSchema } from '@/lib/schemas/message-metadata';
-import type { ParticipantConfig } from '@/lib/types/participant-config';
+import { extractTextFromMessage } from '@/lib/schemas/message-schemas';
 import { chatMessagesToUIMessages } from '@/lib/utils/message-transforms';
-import { calculateNextRoundNumber, getCurrentRoundNumber, getMaxRoundNumber, groupMessagesByRound } from '@/lib/utils/round-utils';
+import { deduplicateParticipants } from '@/lib/utils/participant-utils';
+import { calculateNextRoundNumber, getCurrentRoundNumber, getMaxRoundNumber, getRoundNumberFromMetadata, groupMessagesByRound } from '@/lib/utils/round-utils';
 
 type ChatThreadScreenProps = {
   thread: ChatThread;
@@ -115,8 +116,7 @@ export default function ChatThreadScreen({
     retry: retryRound,
     stop: stopStreaming,
     initializeThread,
-    setOnStreamComplete,
-    setOnRoundComplete,
+    setOnComplete,
     setOnRetry,
     participants: contextParticipants,
     updateParticipants,
@@ -152,18 +152,20 @@ export default function ChatThreadScreen({
 
   // ✅ ONE-WAY DATA FLOW: Feedback loaded ONCE on initial page load
   // Client-side state tracks all feedback changes during the session
-  const { data: feedbackData } = useThreadFeedbackQuery(thread.id, !hasInitiallyLoaded);
+  const { data: feedbackData, isSuccess: feedbackSuccess } = useThreadFeedbackQuery(thread.id, !hasInitiallyLoaded);
   const [clientFeedback, setClientFeedback] = useState<Map<number, 'like' | 'dislike' | null>>(new Map());
+  const [hasLoadedFeedback, setHasLoadedFeedback] = useState(false);
 
-  // ✅ SIDE EFFECT: Set client state on initial load
+  // ✅ SIDE EFFECT: Set client state on initial load with proper success check
   useEffect(() => {
-    if (!hasInitiallyLoaded && feedbackData && Array.isArray(feedbackData)) {
+    if (!hasLoadedFeedback && feedbackSuccess && feedbackData && Array.isArray(feedbackData)) {
       const initialFeedback = new Map(
         feedbackData.map(f => [f.roundNumber, f.feedbackType] as const),
       );
       setClientFeedback(initialFeedback);
+      setHasLoadedFeedback(true); // Mark as loaded immediately after setting state
     }
-  }, [feedbackData, hasInitiallyLoaded]);
+  }, [feedbackData, feedbackSuccess, hasLoadedFeedback]);
 
   const feedbackByRound = clientFeedback;
 
@@ -173,37 +175,107 @@ export default function ChatThreadScreen({
     analyses: rawAnalyses,
     createPendingAnalysis,
     updateAnalysisData,
+    updateAnalysisStatus,
     removePendingAnalysis,
   } = useChatAnalysis({
     threadId: thread.id,
     mode: thread.mode as ChatModeId,
-    enabled: !hasInitiallyLoaded, // ✅ Disable after initial load
+    // ✅ Keep enabled during streaming to maintain analyses state properly
+    // Disable only when not streaming AND initial load is complete
+    enabled: isStreaming || !hasInitiallyLoaded,
   });
 
   const analyses = useMemo(() => {
-    const deduplicatedItems = rawAnalyses
-      .filter(item => item.status !== 'failed')
-      .reduce((acc, item) => {
-        const existing = acc.get(item.roundNumber);
-        if (!existing || new Date(item.createdAt) > new Date(existing.createdAt)) {
+    // ✅ STEP 1: Deduplicate by ID first (handles duplicate cache entries)
+    const seenIds = new Set<string>();
+    const uniqueById = rawAnalyses.filter((item) => {
+      if (seenIds.has(item.id)) {
+        return false;
+      }
+      seenIds.add(item.id);
+      return true;
+    });
+
+    // ✅ STEP 2: Filter out failed analyses
+    const validAnalyses = uniqueById.filter(item => item.status !== 'failed');
+
+    // ✅ STEP 3: Deduplicate by round number with proper status priority
+    // Priority: completed > streaming > pending
+    // Within same status: keep newer (by createdAt timestamp)
+    const deduplicatedByRound = validAnalyses.reduce((acc, item) => {
+      const existing = acc.get(item.roundNumber);
+
+      // No existing analysis for this round - add it
+      if (!existing) {
+        acc.set(item.roundNumber, item);
+        return acc;
+      }
+
+      // Define status priority (higher number = higher priority)
+      const getStatusPriority = (status: string) => {
+        switch (status) {
+          case 'completed': return 3;
+          case 'streaming': return 2;
+          case 'pending': return 1;
+          default: return 0;
+        }
+      };
+
+      const itemPriority = getStatusPriority(item.status);
+      const existingPriority = getStatusPriority(existing.status);
+
+      // Keep item with higher status priority
+      if (itemPriority > existingPriority) {
+        acc.set(item.roundNumber, item);
+        return acc;
+      }
+
+      // If same status priority, keep newer one (by timestamp)
+      if (itemPriority === existingPriority) {
+        const itemTime = item.createdAt instanceof Date ? item.createdAt.getTime() : new Date(item.createdAt).getTime();
+        const existingTime = existing.createdAt instanceof Date ? existing.createdAt.getTime() : new Date(existing.createdAt).getTime();
+
+        if (itemTime > existingTime) {
           acc.set(item.roundNumber, item);
         }
-        return acc;
-      }, new Map<number, typeof rawAnalyses[number]>());
+      }
 
-    return Array.from(deduplicatedItems.values()).sort((a, b) => a.roundNumber - b.roundNumber);
+      // Otherwise keep existing (it has higher priority or is newer)
+      return acc;
+    }, new Map<number, typeof rawAnalyses[number]>());
+
+    // ✅ STEP 4: Sort by round number (ascending)
+    return Array.from(deduplicatedByRound.values()).sort((a, b) => a.roundNumber - b.roundNumber);
   }, [rawAnalyses]);
 
   // ✅ FIRE-AND-FORGET MUTATIONS: Persist to server but don't update from response
   const updateThreadMutation = useUpdateThreadMutation();
   const setRoundFeedbackMutation = useSetRoundFeedbackMutation();
 
-  // ✅ Mark as loaded after initial data is fetched
+  // ✅ Mark as loaded after initial data is fetched with proper success checks
   useEffect(() => {
-    if (!hasInitiallyLoaded && changelogResponse && feedbackData !== undefined) {
+    if (!hasInitiallyLoaded && changelogResponse && feedbackSuccess) {
       setHasInitiallyLoaded(true);
     }
-  }, [changelogResponse, feedbackData, hasInitiallyLoaded]);
+  }, [changelogResponse, feedbackSuccess, hasInitiallyLoaded]);
+
+  // ✅ FIX: Refs to avoid stale closures in callbacks - declared early to be available for all effects
+  const createPendingAnalysisRef = useRef(createPendingAnalysis);
+  const messagesRef = useRef(messages);
+  const contextParticipantsRef = useRef(contextParticipants);
+
+  // Keep refs updated with latest values
+  useEffect(() => {
+    createPendingAnalysisRef.current = createPendingAnalysis;
+  }, [createPendingAnalysis]);
+
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
+
+  useEffect(() => {
+    contextParticipantsRef.current = contextParticipants;
+  }, [contextParticipants]);
 
   // Loading and feedback state
   const [pendingFeedback, setPendingFeedback] = useState<{
@@ -213,10 +285,16 @@ export default function ChatThreadScreen({
 
   const [streamingRoundNumber, setStreamingRoundNumber] = useState<number | null>(null);
   const currentRoundNumberRef = useRef<number | null>(null);
+  const regenerateRoundNumberRef = useRef<number | null>(null);
 
-  // Participant management
+  // ✅ SINGLE SOURCE OF TRUTH: Participant state comes from ChatContext ONLY during thread
+  // Participants are initialized in context via initializeThread()
+  // All reads and writes go through context - no local state drift
+  // Local hook is ONLY used for temporary UI state (adding/removing before submit)
   const initialParticipants = useMemo<ParticipantConfig[]>(() => {
-    return participants
+    // Context already handles deduplication in initializeThread and updateParticipants
+    // We just need to format the data for UI components
+    return contextParticipants
       .filter(p => p.isEnabled)
       .sort((a, b) => a.priority - b.priority)
       .map((p, index) => ({
@@ -224,10 +302,12 @@ export default function ChatThreadScreen({
         modelId: p.modelId,
         role: p.role,
         customRoleId: p.customRoleId || undefined,
-        order: index,
+        priority: index,
       }));
-  }, [participants]);
+  }, [contextParticipants]); // ✅ Derive from context, not server props
 
+  // ✅ Use local hook ONLY for temporary UI state (before persisting to context)
+  // This provides add/remove/reorder handlers for UI interactions
   const {
     selectedParticipants,
     setSelectedParticipants,
@@ -255,50 +335,193 @@ export default function ChatThreadScreen({
     setSelectedParticipants(newParticipants);
   }, [isStreaming, setSelectedParticipants]);
 
-  // Initialize context when component mounts
-  const messagesHash = useMemo(() => {
-    return initialMessages
-      .map(m => `${m.id}:${JSON.stringify(m.parts)}`)
-      .join('|');
-  }, [initialMessages]);
+  /**
+   * ✅ ONE-WAY SYNC: Context → Local State (NOT bidirectional)
+   *
+   * WHY THIS SYNC IS NEEDED:
+   * - useSelectedParticipants only initializes once on mount (factory function pattern)
+   * - When server returns real database IDs for new participants, contextParticipants updates
+   * - Without this sync, local state has temporary IDs while context has real IDs
+   * - This causes state drift where UI shows different participants than context expects
+   *
+   * HOW THIS AVOIDS RACE CONDITIONS:
+   * 1. ONE-WAY only: context → local (never write back to context from here)
+   * 2. Compare by modelId (stable): Not by ID (which changes from temp → real)
+   * 3. Only sync when IDs are real: Skip if context has temporary IDs (participant-*)
+   * 4. Skip during streaming: Prevents mid-stream configuration changes
+   * 5. Deduplicate by modelId: Ensures each model appears only once
+   *
+   * WHEN THIS RUNS:
+   * - After server updates context with real participant IDs (line 543-548)
+   * - When context participant configuration changes between rounds
+   * - NOT during initial mount (handled by factory function)
+   * - NOT during streaming (stability requirement)
+   */
+  useEffect(() => {
+    // Skip during streaming for stability
+    if (isStreaming) {
+      return;
+    }
 
+    // ✅ Check if context has real database IDs (not temporary IDs)
+    const hasTemporaryIds = contextParticipants.some(p => p.id.startsWith('participant-'));
+    if (hasTemporaryIds) {
+      // Don't sync temporary IDs - wait for real IDs from server
+      return;
+    }
+
+    // ✅ Compare by modelId to detect actual participant changes (not just ID changes)
+    // Get modelIds from both context and local state
+    const contextModelIds = contextParticipants
+      .filter(p => p.isEnabled)
+      .sort((a, b) => a.priority - b.priority)
+      .map(p => p.modelId)
+      .join(',');
+
+    const localModelIds = selectedParticipants
+      .map(p => p.modelId)
+      .join(',');
+
+    // Only sync if participants actually changed (by modelId, not ID)
+    if (contextModelIds === localModelIds) {
+      return; // No changes - skip sync
+    }
+
+    // ✅ Sync: Update local state to match context (one-way flow)
+    console.log('[ChatThreadScreen] Syncing local state with context participants', {
+      contextCount: contextParticipants.length,
+      localCount: selectedParticipants.length,
+      contextModelIds,
+      localModelIds,
+    });
+
+    // Derive fresh participant configs from context (same logic as initialParticipants)
+    const syncedParticipants = contextParticipants
+      .filter(p => p.isEnabled)
+      .sort((a, b) => a.priority - b.priority)
+      .map((p, index) => ({
+        id: p.id,
+        modelId: p.modelId,
+        role: p.role,
+        customRoleId: p.customRoleId || undefined,
+        priority: index,
+      }));
+
+    setSelectedParticipants(syncedParticipants);
+  }, [contextParticipants, selectedParticipants, isStreaming, setSelectedParticipants]);
+
+  // Initialize context when component mounts - only once per thread
   useEffect(() => {
     const uiMessages = chatMessagesToUIMessages(initialMessages);
-    initializeThread(thread, participants, uiMessages);
 
-    setOnStreamComplete(() => {
+    // ✅ CRITICAL FIX: Deduplicate participants before initializing thread
+    // Server may return duplicate participants after configuration changes
+    // Use canonical deduplication function for consistency
+    const deduplicatedParticipants = deduplicateParticipants(participants);
+
+    // Add debug logging if duplicates were removed
+    if (participants.length !== deduplicatedParticipants.length) {
+      console.warn('[ChatThreadScreen] Server returned duplicate participants:', {
+        original: participants.length,
+        deduplicated: deduplicatedParticipants.length,
+        removed: participants.length - deduplicatedParticipants.length,
+      });
+    }
+
+    initializeThread(thread, deduplicatedParticipants, uiMessages);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [thread.id]); // Only depend on thread.id, not messagesHash
+
+  // ✅ MERGED CALLBACK: Combine stream completion and round completion logic
+  // This single callback handles both:
+  // 1. Title refresh for new conversations (stream completion)
+  // 2. Analysis creation for completed rounds (round completion)
+  // ✅ CRITICAL FIX: Remove createPendingAnalysis from dependencies to prevent stale closures
+  // The ref (createPendingAnalysisRef) is updated separately in its own effect (line 269-271)
+  useEffect(() => {
+    setOnComplete(async () => {
+      // ✅ STREAM COMPLETION LOGIC: Refresh title if needed
       if (thread.title === 'New Conversation') {
         router.refresh();
       }
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [thread.id, messagesHash]);
 
-  useEffect(() => {
-    setOnRoundComplete(async () => {
-      const currentMessages = messages;
-      const currentParticipants = contextParticipants;
+      // ✅ ROUND COMPLETION LOGIC: Create analysis for completed round
+      // ✅ Use refs to get current values instead of stale closure variables
+      const currentMessages = messagesRef.current;
+      const currentParticipants = contextParticipantsRef.current;
 
       const roundNumber = getCurrentRoundNumber(currentMessages);
 
-      const lastUserMessage = currentMessages.findLast(m => m.role === 'user');
-      const textPart = lastUserMessage?.parts?.find(p => p.type === 'text');
-      const userQuestion = (textPart && 'text' in textPart ? textPart.text : '') || '';
+      // 🔍 DEBUG: Log onRoundComplete trigger details
+      console.group('[ChatThreadScreen] onRoundComplete called');
+      console.log('Round Number:', roundNumber);
+      console.log('Total Messages:', currentMessages.length);
+      console.log('Participants:', currentParticipants.length);
+      console.log('Is Regeneration:', regenerateRoundNumberRef.current !== null);
 
-      createPendingAnalysis(
-        roundNumber,
-        currentMessages,
-        currentParticipants,
-        userQuestion,
-      );
+      // Log messages with their round numbers
+      console.log('Messages by round:');
+      currentMessages.forEach((m, index) => {
+        const metadata = m.metadata as Record<string, unknown> | undefined;
+        console.log(`  Message ${index}:`, {
+          id: m.id,
+          role: m.role,
+          roundNumber: metadata?.roundNumber,
+        });
+      });
+
+      const lastUserMessage = currentMessages.findLast(m => m.role === 'user');
+      const userQuestion = extractTextFromMessage(lastUserMessage);
+
+      console.log('User Question:', userQuestion);
+      console.log('Calling createPendingAnalysis...');
+      console.groupEnd();
+
+      // ✅ FIX: Add small delay during regeneration to ensure messages are fully updated
+      // During regeneration, messages might still be updating when onRoundComplete fires
+      const isRegeneration = regenerateRoundNumberRef.current !== null;
+
+      const createAnalysis = () => {
+        // ✅ Get latest messages from ref to ensure we have the most recent state
+        const latestMessages = messagesRef.current;
+        const latestParticipants = contextParticipantsRef.current;
+        const latestUserMessage = latestMessages.findLast(m => m.role === 'user');
+        const latestUserQuestion = extractTextFromMessage(latestUserMessage);
+
+        // ✅ Use ref to access latest createPendingAnalysis function
+        createPendingAnalysisRef.current(
+          roundNumber,
+          latestMessages,
+          latestParticipants,
+          latestUserQuestion,
+        );
+      };
+
+      if (isRegeneration) {
+        console.log('[ChatThreadScreen] Delaying analysis creation for regeneration by 100ms');
+        setTimeout(createAnalysis, 100);
+      } else {
+        createAnalysis();
+      }
+
+      console.log('[ChatThreadScreen] Created client-side pending analysis for round', roundNumber);
+
+      // ✅ Clear regeneration tracking after creating analysis
+      if (regenerateRoundNumberRef.current === roundNumber) {
+        console.log('[ChatThreadScreen] Clearing regeneration flag for round', roundNumber);
+        regenerateRoundNumberRef.current = null;
+      }
 
       setStreamingRoundNumber(null);
       currentRoundNumberRef.current = null;
     });
-  }, [thread.id, setOnRoundComplete, messages, contextParticipants, createPendingAnalysis]);
+  }, [thread.id, thread.title, router, setOnComplete]); // ✅ Removed createPendingAnalysis dependency
 
   useEffect(() => {
     setOnRetry((roundNumber: number) => {
+      // ✅ Track that we're regenerating this round
+      regenerateRoundNumberRef.current = roundNumber;
+
       // Remove pending analysis for the round being regenerated
       removePendingAnalysis(roundNumber);
 
@@ -327,10 +550,12 @@ export default function ChatThreadScreen({
       return;
     }
 
-    const currentIds = contextParticipants.map(p => p.id).join(',');
-    const expectedIds = expectedParticipantIds.join(',');
+    // ✅ SEMANTIC MATCHING: Compare by modelId since backend matches by modelId
+    // This ensures message gate works correctly after participant ID changes from temp → real
+    const currentModelIds = contextParticipants.map(p => p.modelId).sort().join(',');
+    const expectedModelIds = expectedParticipantIds.sort().join(',');
 
-    if (currentIds === expectedIds) {
+    if (currentModelIds === expectedModelIds) {
       hasSentPendingMessageRef.current = true;
 
       const newRoundNumber = calculateNextRoundNumber(messages);
@@ -349,17 +574,13 @@ export default function ChatThreadScreen({
         return;
       }
 
-      // ✅ FIX 3: Capture old state BEFORE update for changelog comparison
-      const oldParticipantIds = contextParticipants.map(p => p.id).sort().join(',');
-      const oldMode = thread.mode;
-
       try {
         const participantsForUpdate = selectedParticipants.map(p => ({
           id: p.id.startsWith('participant-') ? undefined : p.id,
           modelId: p.modelId,
           role: p.role || null,
           customRoleId: p.customRoleId || null,
-          priority: p.order,
+          priority: p.priority,
           isEnabled: true,
         }));
 
@@ -375,59 +596,72 @@ export default function ChatThreadScreen({
           updatedAt: new Date(),
         }));
 
-        updateParticipants(optimisticParticipants);
+        // Check if any participants have temporary IDs (new participants being added)
+        const hasTemporaryIds = selectedParticipants.some(p => p.id.startsWith('participant-'));
 
-        updateThreadMutation.mutateAsync({
-          param: { id: thread.id },
-          json: {
-            participants: participantsForUpdate,
-            mode: selectedMode,
-          },
-        }).catch(() => {
-          // Silently ignore errors - client state is source of truth
-        });
+        if (hasTemporaryIds) {
+          // ✅ RACE CONDITION FIX: Atomic ID replacement flow
+          // 1. Apply optimistic update with temp IDs
+          updateParticipants(optimisticParticipants);
 
-        // ✅ FIX 3: Check what changed and create client-side changelog if needed
-        // Backend creates changelog when MESSAGE is sent
-        // But we need client-side changelog for immediate feedback when settings change
-        const newParticipantIds = optimisticParticipants.map(p => p.id).sort().join(',');
-        const participantsChanged = oldParticipantIds !== newParticipantIds;
-        const modeChanged = oldMode !== selectedMode;
-
-        // Create client-side changelog for NEXT round (shows BEFORE user sends message)
-        if (participantsChanged || modeChanged) {
-          const nextRound = calculateNextRoundNumber(messages);
-
-          const changelogEntry: ChangelogItem = {
-            id: `client-${Date.now()}`,
-            threadId: thread.id,
-            roundNumber: nextRound,
-            changeType: modeChanged ? 'mode_change' : 'participants_reordered',
-            changeSummary: modeChanged
-              ? `Mode changed from ${oldMode} to ${selectedMode}`
-              : 'Participants updated',
-            changeData: {
-              ...(modeChanged && {
-                oldMode,
-                newMode: selectedMode,
-              }),
-              ...(participantsChanged && {
-                participants: optimisticParticipants.map((p, index) => ({
-                  id: p.id,
-                  modelId: p.modelId,
-                  role: p.role,
-                  order: index,
-                })),
-              }),
+          // 2. Wait for server to generate real database IDs
+          const response = await updateThreadMutation.mutateAsync({
+            param: { id: thread.id },
+            json: {
+              participants: participantsForUpdate,
+              mode: selectedMode,
             },
-            createdAt: new Date().toISOString(),
-          };
+          });
 
-          setClientChangelog(prev => [...prev, changelogEntry]);
+          // 3. Atomically replace temp IDs with real IDs from server
+          if (response?.data?.participants) {
+            // ✅ CRITICAL: Remove all participants with temp IDs first
+            // This prevents brief duplication where both temp and real IDs exist
+            const currentParticipants = contextParticipants.filter(
+              p => !p.id.startsWith('participant-'),
+            );
+
+            // Convert server response to participant objects with proper dates
+            const participantsWithDates = response.data.participants.map(p => ({
+              ...p,
+              createdAt: new Date(p.createdAt),
+              updatedAt: new Date(p.updatedAt),
+            }));
+
+            // ✅ Merge: Keep existing participants (no temp IDs) + add new participants (real IDs)
+            // The updateParticipants function will handle deduplication by modelId
+            const mergedParticipants = [
+              ...currentParticipants,
+              ...participantsWithDates,
+            ];
+
+            // ✅ Apply atomic update - deduplication handled by context
+            updateParticipants(mergedParticipants);
+            // ✅ SEMANTIC MATCHING: Store modelIds (backend matches by modelId, not database ID)
+            setExpectedParticipantIds(participantsWithDates.map(p => p.modelId));
+          } else {
+            // ✅ SEMANTIC MATCHING: Store modelIds (backend matches by modelId, not database ID)
+            setExpectedParticipantIds(optimisticParticipants.map(p => p.modelId));
+          }
+        } else {
+          // No new participants - keep fire-and-forget for better performance
+          updateParticipants(optimisticParticipants);
+
+          updateThreadMutation.mutateAsync({
+            param: { id: thread.id },
+            json: {
+              participants: participantsForUpdate,
+              mode: selectedMode,
+            },
+          }).catch(() => {
+            // Silently ignore errors - client state is source of truth
+          });
+
+          // ✅ SEMANTIC MATCHING: Store modelIds (backend matches by modelId, not database ID)
+          setExpectedParticipantIds(optimisticParticipants.map(p => p.modelId));
         }
 
         hasSentPendingMessageRef.current = false;
-        setExpectedParticipantIds(optimisticParticipants.map(p => p.id));
         setPendingMessage(trimmed);
       } catch {
         await sendMessage(trimmed);
@@ -465,18 +699,36 @@ export default function ChatThreadScreen({
       ? Math.max(...previousItemsRef.current.map(item => item.roundNumber))
       : 0;
 
-    // ✅ STREAMING OPTIMIZATION: If streaming same round, just update messages - don't rebuild entire array
-    // This prevents analyses and changelogs from shifting positions
+    // ✅ STREAMING OPTIMIZATION: If streaming same round, just update messages and analyses - don't rebuild entire array
+    // This prevents changelogs from shifting positions while keeping analyses state up-to-date
     if (isStreaming && currentMaxRound === previousMaxRound && previousItemsRef.current.length > 0) {
+      // Create a map of current analyses by round number for quick lookup
+      const analysesByRound = new Map(analyses.map(a => [a.roundNumber, a]));
+
       const updatedItems = previousItemsRef.current.map((item) => {
+        // Update messages for the streaming round
         if (item.type === 'messages' && item.roundNumber === currentMaxRound) {
           const roundMessages = messagesByRound.get(currentMaxRound);
           if (roundMessages && roundMessages.length > 0) {
             return { ...item, data: roundMessages };
           }
         }
+        // ✅ FIX: Update analysis data from current analyses array to prevent stale state
+        // This ensures completed analyses stay completed and don't revert to "analyzing"
+        if (item.type === 'analysis') {
+          const currentAnalysis = analysesByRound.get(item.roundNumber);
+          if (currentAnalysis) {
+            return { ...item, data: currentAnalysis };
+          }
+        }
         return item;
       });
+
+      // ✅ CRITICAL FIX: Update previousItemsRef to prevent reverting to stale state
+      // Without this, the next render would revert to the old state from previousItemsRef
+      // This ensures analysis state changes (e.g., pending → completed) are preserved
+      previousItemsRef.current = updatedItems;
+
       return updatedItems;
     }
 
@@ -518,6 +770,12 @@ export default function ChatThreadScreen({
       const roundMessages = messagesByRound.get(roundNumber);
       const roundChangelog = changelogByRound.get(roundNumber);
       const roundAnalysis = analyses.find(a => a.roundNumber === roundNumber);
+
+      // ✅ CRITICAL: Skip rounds without messages (prevents empty rounds)
+      // Changelog and analysis are only meaningful when a round has messages
+      if (!roundMessages || roundMessages.length === 0) {
+        return;
+      }
 
       // ✅ CORRECT ORDER: Changelog first (shows what changed BEFORE this round)
       if (roundChangelog && roundChangelog.length > 0) {
@@ -601,7 +859,7 @@ export default function ChatThreadScreen({
     }
 
     return feedbackHandlersRef.current.get(roundNumber)!;
-  }, [setRoundFeedbackMutation, thread.id]);
+  }, [setRoundFeedbackMutation, thread.id, setClientFeedback, setPendingFeedback]);
 
   // Virtualization
   const listRef = useRef<HTMLDivElement | null>(null);
@@ -745,7 +1003,7 @@ export default function ChatThreadScreen({
                 const itemIndex = virtualItem.index;
 
                 const roundNumber = item.type === 'messages'
-                  ? ((item.data[0]?.metadata as Record<string, unknown> | undefined)?.roundNumber as number) ?? 1
+                  ? getRoundNumberFromMetadata(item.data[0]?.metadata, 1)
                   : item.type === 'analysis'
                     ? item.data.roundNumber
                     : item.type === 'changelog'
@@ -837,6 +1095,11 @@ export default function ChatThreadScreen({
                           threadId={thread.id}
                           isLatest={itemIndex === messagesWithAnalysesAndChangelog.length - 1}
                           streamingRoundNumber={streamingRoundNumber}
+                          onStreamStart={() => {
+                            // ✅ CRITICAL FIX: Update status to 'streaming' when POST request starts
+                            // This matches backend state transition (pending → streaming)
+                            updateAnalysisStatus(item.data.roundNumber, 'streaming');
+                          }}
                           onStreamComplete={(completedData) => {
                             if (completedData) {
                               updateAnalysisData(
@@ -852,21 +1115,27 @@ export default function ChatThreadScreen({
                 );
               })}
 
-              {isStreaming && selectedParticipants.length > 1 && (
-                <div
-                  key="streaming-loader"
-                  style={{
-                    position: 'relative',
-                  }}
-                >
-                  <StreamingParticipantsLoader
-                    className="mt-12"
-                    participants={selectedParticipants}
-                    currentParticipantIndex={currentParticipantIndex}
-                    isAnalyzing={false}
-                  />
-                </div>
-              )}
+              {(() => {
+                // Only show loader during actual streaming or active analysis
+                const isAnalyzing = analyses.some(a => a.status === 'pending' || a.status === 'streaming');
+                const showLoader = (isStreaming || isAnalyzing) && selectedParticipants.length > 1;
+
+                return showLoader && (
+                  <div
+                    key="streaming-loader"
+                    style={{
+                      position: 'relative',
+                    }}
+                  >
+                    <StreamingParticipantsLoader
+                      className="mt-12"
+                      participants={selectedParticipants}
+                      currentParticipantIndex={currentParticipantIndex}
+                      isAnalyzing={isAnalyzing}
+                    />
+                  </div>
+                );
+              })()}
             </div>
           </div>
 

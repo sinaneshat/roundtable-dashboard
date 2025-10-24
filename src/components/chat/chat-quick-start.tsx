@@ -5,11 +5,11 @@ import { motion } from 'motion/react';
 import { useCallback, useMemo } from 'react';
 
 import type { SubscriptionTier } from '@/api/services/product-logic.service';
+import type { ParticipantConfig } from '@/components/chat/chat-form-schemas';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useModelsQuery } from '@/hooks/queries/models';
 import { useUsageStatsQuery } from '@/hooks/queries/usage';
 import type { ChatModeId } from '@/lib/config/chat-modes';
-import type { ParticipantConfig } from '@/lib/types/participant-config';
 import { cn } from '@/lib/ui/cn';
 import { getProviderIcon } from '@/lib/utils/ai-display';
 
@@ -134,8 +134,8 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
             prompt: 'Should individuals sacrifice privacy for security, or is surveillance capitalism the new totalitarianism? Where do we draw the line?',
             mode: 'debating',
             participants: [
-              { id: 'p1', modelId: freeModels[0] || '', role: 'Privacy Advocate', order: 0, customRoleId: undefined },
-              { id: 'p2', modelId: freeModels[1] || '', role: 'Security Realist', order: 1, customRoleId: undefined },
+              { id: 'p1', modelId: freeModels[0] || '', role: 'Privacy Advocate', priority: 0, customRoleId: undefined },
+              { id: 'p2', modelId: freeModels[1] || '', role: 'Security Realist', priority: 1, customRoleId: undefined },
             ],
           },
           {
@@ -143,8 +143,8 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
             prompt: 'De-extinction: ecological restoration or playing god? Discuss bringing back woolly mammoths, passenger pigeons, and other lost species.',
             mode: 'analyzing',
             participants: [
-              { id: 'p1', modelId: freeModels[1] || '', role: 'Conservation Biologist', order: 0, customRoleId: undefined },
-              { id: 'p2', modelId: freeModels[0] || '', role: 'Bioethicist', order: 1, customRoleId: undefined },
+              { id: 'p1', modelId: freeModels[1] || '', role: 'Conservation Biologist', priority: 0, customRoleId: undefined },
+              { id: 'p2', modelId: freeModels[0] || '', role: 'Bioethicist', priority: 1, customRoleId: undefined },
             ],
           },
           {
@@ -152,8 +152,8 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
             prompt: 'Does hard work truly determine success, or is meritocracy just a comforting lie that masks systemic advantages and inherited privilege?',
             mode: 'debating',
             participants: [
-              { id: 'p1', modelId: freeModels[0] || '', role: 'Sociologist', order: 0, customRoleId: undefined },
-              { id: 'p2', modelId: freeModels[1] || '', role: 'Economist', order: 1, customRoleId: undefined },
+              { id: 'p1', modelId: freeModels[0] || '', role: 'Sociologist', priority: 0, customRoleId: undefined },
+              { id: 'p2', modelId: freeModels[1] || '', role: 'Economist', priority: 1, customRoleId: undefined },
             ],
           },
         ]
@@ -166,9 +166,9 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
             prompt: 'Is Mars colonization humanity\'s backup plan or escapism? Should we fix Earth first, or hedge our bets across multiple planets?',
             mode: 'debating',
             participants: [
-              { id: 'p1', modelId: starterModels[0] || '', role: 'Space Futurist', order: 0, customRoleId: undefined },
-              { id: 'p2', modelId: starterModels[1] || '', role: 'Climate Scientist', order: 1, customRoleId: undefined },
-              { id: 'p3', modelId: starterModels[2] || '', role: 'Resource Economist', order: 2, customRoleId: undefined },
+              { id: 'p1', modelId: starterModels[0] || '', role: 'Space Futurist', priority: 0, customRoleId: undefined },
+              { id: 'p2', modelId: starterModels[1] || '', role: 'Climate Scientist', priority: 1, customRoleId: undefined },
+              { id: 'p3', modelId: starterModels[2] || '', role: 'Resource Economist', priority: 2, customRoleId: undefined },
             ],
           },
           {
@@ -176,9 +176,9 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
             prompt: 'With cultured meat becoming viable, is traditional animal agriculture morally defensible? What about cultural traditions and livelihoods?',
             mode: 'analyzing',
             participants: [
-              { id: 'p1', modelId: starterModels[1] || '', role: 'Animal Ethicist', order: 0, customRoleId: undefined },
-              { id: 'p2', modelId: starterModels[0] || '', role: 'Agronomist', order: 1, customRoleId: undefined },
-              { id: 'p3', modelId: starterModels[2] || '', role: 'Cultural Anthropologist', order: 2, customRoleId: undefined },
+              { id: 'p1', modelId: starterModels[1] || '', role: 'Animal Ethicist', priority: 0, customRoleId: undefined },
+              { id: 'p2', modelId: starterModels[0] || '', role: 'Agronomist', priority: 1, customRoleId: undefined },
+              { id: 'p3', modelId: starterModels[2] || '', role: 'Cultural Anthropologist', priority: 2, customRoleId: undefined },
             ],
           },
           {
@@ -186,9 +186,9 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
             prompt: 'Nuclear power could solve climate change but carries catastrophic risks. Can we trust ourselves with this technology long-term?',
             mode: 'debating',
             participants: [
-              { id: 'p1', modelId: starterModels[0] || '', role: 'Energy Policy Expert', order: 0, customRoleId: undefined },
-              { id: 'p2', modelId: starterModels[1] || '', role: 'Nuclear Physicist', order: 1, customRoleId: undefined },
-              { id: 'p3', modelId: starterModels[2] || '', role: 'Environmental Activist', order: 2, customRoleId: undefined },
+              { id: 'p1', modelId: starterModels[0] || '', role: 'Energy Policy Expert', priority: 0, customRoleId: undefined },
+              { id: 'p2', modelId: starterModels[1] || '', role: 'Nuclear Physicist', priority: 1, customRoleId: undefined },
+              { id: 'p3', modelId: starterModels[2] || '', role: 'Environmental Activist', priority: 2, customRoleId: undefined },
             ],
           },
         ]
@@ -201,10 +201,10 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
             prompt: 'CRISPR germline editing: eliminating suffering or creating designer babies? Where is the line between treatment and enhancement?',
             mode: 'debating',
             participants: [
-              { id: 'p1', modelId: proModels[0] || '', role: 'Bioethicist', order: 0, customRoleId: undefined },
-              { id: 'p2', modelId: proModels[1] || '', role: 'Geneticist', order: 1, customRoleId: undefined },
-              { id: 'p3', modelId: proModels[2] || '', role: 'Disability Rights Advocate', order: 2, customRoleId: undefined },
-              ...(proModels[3] ? [{ id: 'p4', modelId: proModels[3] || '', role: 'Medical Ethicist', order: 3, customRoleId: undefined }] : []),
+              { id: 'p1', modelId: proModels[0] || '', role: 'Bioethicist', priority: 0, customRoleId: undefined },
+              { id: 'p2', modelId: proModels[1] || '', role: 'Geneticist', priority: 1, customRoleId: undefined },
+              { id: 'p3', modelId: proModels[2] || '', role: 'Disability Rights Advocate', priority: 2, customRoleId: undefined },
+              ...(proModels[3] ? [{ id: 'p4', modelId: proModels[3] || '', role: 'Medical Ethicist', priority: 3, customRoleId: undefined }] : []),
             ],
           },
           {
@@ -212,10 +212,10 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
             prompt: 'If we create AGI smarter than us, can we ensure it shares our values? Or is catastrophic misalignment inevitable?',
             mode: 'analyzing',
             participants: [
-              { id: 'p1', modelId: proModels[1] || '', role: 'AI Safety Researcher', order: 0, customRoleId: undefined },
-              { id: 'p2', modelId: proModels[0] || '', role: 'Machine Learning Engineer', order: 1, customRoleId: undefined },
-              { id: 'p3', modelId: proModels[2] || '', role: 'Ethics Philosopher', order: 2, customRoleId: undefined },
-              ...(proModels[3] ? [{ id: 'p4', modelId: proModels[3] || '', role: 'Systems Architect', order: 3, customRoleId: undefined }] : []),
+              { id: 'p1', modelId: proModels[1] || '', role: 'AI Safety Researcher', priority: 0, customRoleId: undefined },
+              { id: 'p2', modelId: proModels[0] || '', role: 'Machine Learning Engineer', priority: 1, customRoleId: undefined },
+              { id: 'p3', modelId: proModels[2] || '', role: 'Ethics Philosopher', priority: 2, customRoleId: undefined },
+              ...(proModels[3] ? [{ id: 'p4', modelId: proModels[3] || '', role: 'Systems Architect', priority: 3, customRoleId: undefined }] : []),
             ],
           },
           {
@@ -223,9 +223,9 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
             prompt: 'Capitalism demands perpetual growth, but Earth has limits. Must we choose between prosperity and survival, or can we transcend this paradox?',
             mode: 'debating',
             participants: [
-              { id: 'p1', modelId: proModels[2] || '', role: 'Ecological Economist', order: 0, customRoleId: undefined },
-              { id: 'p2', modelId: proModels[0] || '', role: 'Free Market Theorist', order: 1, customRoleId: undefined },
-              { id: 'p3', modelId: proModels[1] || '', role: 'Systems Thinker', order: 2, customRoleId: undefined },
+              { id: 'p1', modelId: proModels[2] || '', role: 'Ecological Economist', priority: 0, customRoleId: undefined },
+              { id: 'p2', modelId: proModels[0] || '', role: 'Free Market Theorist', priority: 1, customRoleId: undefined },
+              { id: 'p3', modelId: proModels[1] || '', role: 'Systems Thinker', priority: 2, customRoleId: undefined },
             ],
           },
         ]
@@ -238,12 +238,12 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
             prompt: 'Terraforming Mars could create a second home for humanity, but would we be destroying irreplaceable alien ecosystems before we even discover them?',
             mode: 'debating',
             participants: [
-              { id: 'p1', modelId: powerModels[0] || '', role: 'Planetary Scientist', order: 0, customRoleId: undefined },
-              { id: 'p2', modelId: powerModels[1] || '', role: 'Exobiologist', order: 1, customRoleId: undefined },
-              { id: 'p3', modelId: powerModels[2] || '', role: 'Space Ethicist', order: 2, customRoleId: undefined },
-              ...(powerModels[3] ? [{ id: 'p4', modelId: powerModels[3] || '', role: 'Space Policy Expert', order: 3, customRoleId: undefined }] : []),
-              ...(powerModels[4] ? [{ id: 'p5', modelId: powerModels[4] || '', role: 'Astrogeologist', order: 4, customRoleId: undefined }] : []),
-              ...(powerModels[5] ? [{ id: 'p6', modelId: powerModels[5] || '', role: 'Astrobiologist', order: 5, customRoleId: undefined }] : []),
+              { id: 'p1', modelId: powerModels[0] || '', role: 'Planetary Scientist', priority: 0, customRoleId: undefined },
+              { id: 'p2', modelId: powerModels[1] || '', role: 'Exobiologist', priority: 1, customRoleId: undefined },
+              { id: 'p3', modelId: powerModels[2] || '', role: 'Space Ethicist', priority: 2, customRoleId: undefined },
+              ...(powerModels[3] ? [{ id: 'p4', modelId: powerModels[3] || '', role: 'Space Policy Expert', priority: 3, customRoleId: undefined }] : []),
+              ...(powerModels[4] ? [{ id: 'p5', modelId: powerModels[4] || '', role: 'Astrogeologist', priority: 4, customRoleId: undefined }] : []),
+              ...(powerModels[5] ? [{ id: 'p6', modelId: powerModels[5] || '', role: 'Astrobiologist', priority: 5, customRoleId: undefined }] : []),
             ],
           },
           {
@@ -251,12 +251,12 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
             prompt: 'Can moral truths exist in a purely materialist universe without divine authority? Or are ethics just evolutionary programming and social contracts?',
             mode: 'analyzing',
             participants: [
-              { id: 'p1', modelId: powerModels[1] || '', role: 'Moral Philosopher', order: 0, customRoleId: undefined },
-              { id: 'p2', modelId: powerModels[0] || '', role: 'Evolutionary Psychologist', order: 1, customRoleId: undefined },
-              { id: 'p3', modelId: powerModels[2] || '', role: 'Theologian', order: 2, customRoleId: undefined },
-              ...(powerModels[3] ? [{ id: 'p4', modelId: powerModels[3] || '', role: 'Neuroscientist', order: 3, customRoleId: undefined }] : []),
-              ...(powerModels[4] ? [{ id: 'p5', modelId: powerModels[4] || '', role: 'Cognitive Scientist', order: 4, customRoleId: undefined }] : []),
-              ...(powerModels[5] ? [{ id: 'p6', modelId: powerModels[5] || '', role: 'Ethics Scholar', order: 5, customRoleId: undefined }] : []),
+              { id: 'p1', modelId: powerModels[1] || '', role: 'Moral Philosopher', priority: 0, customRoleId: undefined },
+              { id: 'p2', modelId: powerModels[0] || '', role: 'Evolutionary Psychologist', priority: 1, customRoleId: undefined },
+              { id: 'p3', modelId: powerModels[2] || '', role: 'Theologian', priority: 2, customRoleId: undefined },
+              ...(powerModels[3] ? [{ id: 'p4', modelId: powerModels[3] || '', role: 'Neuroscientist', priority: 3, customRoleId: undefined }] : []),
+              ...(powerModels[4] ? [{ id: 'p5', modelId: powerModels[4] || '', role: 'Cognitive Scientist', priority: 4, customRoleId: undefined }] : []),
+              ...(powerModels[5] ? [{ id: 'p6', modelId: powerModels[5] || '', role: 'Ethics Scholar', priority: 5, customRoleId: undefined }] : []),
             ],
           },
           {
@@ -264,12 +264,12 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
             prompt: 'If we develop sentient AI, do we have moral obligations to them? Could creating digital consciousness be the greatest crime or the greatest gift?',
             mode: 'debating',
             participants: [
-              { id: 'p1', modelId: powerModels[0] || '', role: 'AI Consciousness Researcher', order: 0, customRoleId: undefined },
-              { id: 'p2', modelId: powerModels[1] || '', role: 'Digital Rights Advocate', order: 1, customRoleId: undefined },
-              { id: 'p3', modelId: powerModels[2] || '', role: 'Bioethicist', order: 2, customRoleId: undefined },
-              ...(powerModels[3] ? [{ id: 'p4', modelId: powerModels[3] || '', role: 'Philosophy of Mind Expert', order: 3, customRoleId: undefined }] : []),
-              ...(powerModels[4] ? [{ id: 'p5', modelId: powerModels[4] || '', role: 'Computational Consciousness Expert', order: 4, customRoleId: undefined }] : []),
-              ...(powerModels[5] ? [{ id: 'p6', modelId: powerModels[5] || '', role: 'AI Ethics Researcher', order: 5, customRoleId: undefined }] : []),
+              { id: 'p1', modelId: powerModels[0] || '', role: 'AI Consciousness Researcher', priority: 0, customRoleId: undefined },
+              { id: 'p2', modelId: powerModels[1] || '', role: 'Digital Rights Advocate', priority: 1, customRoleId: undefined },
+              { id: 'p3', modelId: powerModels[2] || '', role: 'Bioethicist', priority: 2, customRoleId: undefined },
+              ...(powerModels[3] ? [{ id: 'p4', modelId: powerModels[3] || '', role: 'Philosophy of Mind Expert', priority: 3, customRoleId: undefined }] : []),
+              ...(powerModels[4] ? [{ id: 'p5', modelId: powerModels[4] || '', role: 'Computational Consciousness Expert', priority: 4, customRoleId: undefined }] : []),
+              ...(powerModels[5] ? [{ id: 'p6', modelId: powerModels[5] || '', role: 'AI Ethics Researcher', priority: 5, customRoleId: undefined }] : []),
             ],
           },
         ]
@@ -390,7 +390,7 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
 
               <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide">
                 {suggestion.participants
-                  .sort((a, b) => a.order - b.order)
+                  .sort((a, b) => a.priority - b.priority)
                   .map(participant => renderParticipant(participant))}
               </div>
             </motion.button>

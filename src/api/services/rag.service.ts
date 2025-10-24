@@ -28,7 +28,7 @@ import type { ErrorContext } from '@/api/core';
 import type { ApiEnv } from '@/api/types';
 import type { getDbAsync } from '@/db';
 import * as tables from '@/db/schema';
-import { extractTextFromParts } from '@/lib/utils/message-transforms';
+import { extractTextFromParts } from '@/lib/schemas/message-schemas';
 
 /**
  * Embedding model configuration

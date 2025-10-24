@@ -19,16 +19,16 @@
 
 import { useCallback, useState } from 'react';
 
-import type { ParticipantConfig } from '@/lib/types/participant-config';
+import type { ParticipantConfig } from '@/components/chat/chat-form-schemas';
 
 export type UseSelectedParticipantsReturn = {
   /** Current selected participants */
   selectedParticipants: ParticipantConfig[];
   /** Update selected participants */
   setSelectedParticipants: (participants: ParticipantConfig[]) => void;
-  /** Remove a participant by ID */
+  /** Remove a participant by ID or modelId (supports both for flexibility) */
   handleRemoveParticipant: (participantId: string) => void;
-  /** Add a new participant */
+  /** Add a new participant (deduplicates by modelId) */
   handleAddParticipant: (participant: ParticipantConfig) => void;
   /** Update a participant by ID */
   handleUpdateParticipant: (participantId: string, updates: Partial<ParticipantConfig>) => void;
@@ -64,16 +64,21 @@ export function useSelectedParticipants(
 
   /**
    * Remove a participant and reindex remaining participants
+   * ✅ SEMANTIC MATCHING: Supports removal by id OR modelId for consistency with add logic
+   * This ensures symmetric behavior: add checks by modelId, remove works by modelId too
+   *
+   * @param participantId - Either database ID or modelId to identify participant
    */
   const handleRemoveParticipant = useCallback((participantId: string) => {
     setSelectedParticipants((prev) => {
-      // Filter out the removed participant
-      const filtered = prev.filter(p => p.id !== participantId);
+      // ✅ FLEXIBLE MATCHING: Try id first (backward compat), then modelId (semantic match)
+      // This supports both legacy code passing id and new code passing modelId
+      const filtered = prev.filter(p => p.id !== participantId && p.modelId !== participantId);
 
-      // Reindex the remaining participants to maintain continuous order
+      // Reindex the remaining participants to maintain continuous priority
       const reindexed = filtered.map((p, index) => ({
         ...p,
-        order: index,
+        priority: index,
       }));
 
       return reindexed;
@@ -81,14 +86,22 @@ export function useSelectedParticipants(
   }, []);
 
   /**
-   * Add a new participant with proper ordering
+   * Add a new participant with proper priority ordering
+   * ✅ DEDUPLICATION: Prevents adding duplicate participants by modelId
    */
   const handleAddParticipant = useCallback((participant: ParticipantConfig) => {
     setSelectedParticipants((prev) => {
-      // Add participant with order set to the end
+      // ✅ DEDUPLICATION: Check if model is already selected by modelId
+      const exists = prev.some(p => p.modelId === participant.modelId);
+      if (exists) {
+        console.warn('[useSelectedParticipants] Prevented duplicate participant:', participant.modelId);
+        return prev; // Don't add duplicate
+      }
+
+      // Add participant with priority set to the end
       const newParticipant = {
         ...participant,
-        order: prev.length,
+        priority: prev.length,
       };
 
       return [...prev, newParticipant];
@@ -125,7 +138,7 @@ export function useSelectedParticipants(
       // Reindex all participants after reordering
       return copy.map((p, index) => ({
         ...p,
-        order: index,
+        priority: index,
       }));
     });
   }, []);

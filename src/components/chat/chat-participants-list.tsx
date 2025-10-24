@@ -1,28 +1,24 @@
 'use client';
 
 import type { UIMessage } from 'ai';
-import { Bot, Check, GripVertical, Lock, Plus, Trash2 } from 'lucide-react';
-import { motion, Reorder, useDragControls } from 'motion/react';
-import Link from 'next/link';
+import { Bot } from 'lucide-react';
+import { motion, Reorder } from 'motion/react';
 import { useTranslations } from 'next-intl';
 import { useMemo, useRef, useState } from 'react';
 
 // ✅ ZOD-INFERRED TYPE: Import from schema (no hardcoded interfaces)
 // EnhancedModelResponse includes tier access fields (is_accessible_to_user, required_tier, required_tier_name)
 import type { EnhancedModelResponse } from '@/api/routes/models/schema';
-import type { SubscriptionTier } from '@/api/services/product-logic.service';
+import type { ParticipantConfig } from '@/components/chat/chat-form-schemas';
+import { ModelItem } from '@/components/chat/model-item';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
 import {
   Command,
   CommandEmpty,
-  CommandGroup,
   CommandInput,
-  CommandItem,
   CommandList,
-  CommandSeparator,
 } from '@/components/ui/command';
 import {
   Popover,
@@ -35,15 +31,12 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import { useCreateCustomRoleMutation, useDeleteCustomRoleMutation } from '@/hooks/mutations/chat-mutations';
-import { useCustomRolesQuery } from '@/hooks/queries/chat-roles';
+import { useCustomRolesQuery } from '@/hooks/queries/chat';
 import { useModelsQuery } from '@/hooks/queries/models';
 import { useFuzzySearch } from '@/hooks/utils/use-fuzzy-search';
 import { toastManager } from '@/lib/toast/toast-manager';
-import type { ParticipantConfig } from '@/lib/types/participant-config';
 import { cn } from '@/lib/ui/cn';
-import { DEFAULT_ROLES, getProviderIcon } from '@/lib/utils/ai-display';
-import { getApiErrorMessage } from '@/lib/utils/error-handling';
+import { getProviderIcon } from '@/lib/utils/ai-display';
 // ============================================================================
 // Types - ✅ Inferred from Backend Schema (Zero Hardcoding)
 // ============================================================================
@@ -777,9 +770,9 @@ export function ChatParticipantsList({
     if (allEnabledModels.length === 0)
       return [];
 
-    // Selected models maintain their participant order
+    // Selected models maintain their participant priority order
     const selectedModels: OrderedModel[] = participants
-      .sort((a, b) => a.order - b.order)
+      .sort((a, b) => a.priority - b.priority)
       .flatMap((p, index) => {
         // ✅ BACKEND DATA ONLY: Find model from backend response
         const model = allEnabledModels.find(m => m.id === p.modelId);
@@ -837,18 +830,25 @@ export function ChatParticipantsList({
     if (orderedModel.participant) {
       // Deselect - remove from participants
       const filtered = participants.filter(p => p.id !== orderedModel.participant!.id);
-      const reindexed = filtered.map((p, index) => ({ ...p, order: index }));
+      const reindexed = filtered.map((p, index) => ({ ...p, priority: index }));
       onParticipantsChange(reindexed);
     } else {
-    // Intentionally empty
       // Select - add to participants without role by default
+
+      // ✅ DEDUPLICATION: Check if model is already selected by modelId
+      const existingParticipant = participants.find(p => p.modelId === modelId);
+      if (existingParticipant) {
+        console.warn('[ChatParticipantsList] Prevented duplicate participant:', modelId);
+        return; // Don't add duplicate
+      }
+
       // ✅ Generate unique ID for new participant using counter ref (avoids impure Date.now())
       participantIdCounterRef.current += 1;
       const newParticipant: ParticipantConfig = {
         id: `participant-${participantIdCounterRef.current}`,
         modelId,
         role: '', // No role by default
-        order: participants.length,
+        priority: participants.length,
       };
       onParticipantsChange([...participants, newParticipant]);
     }
@@ -874,10 +874,10 @@ export function ChatParticipantsList({
 
   // Handle reordering of selected models only
   const handleReorderSelected = (newOrder: OrderedModel[]) => {
-    // Update participant order based on new drag position
+    // Update participant priority based on new drag position
     const reorderedParticipants = newOrder.map((om, index) => ({
       ...om.participant!,
-      order: index,
+      priority: index,
     }));
 
     onParticipantsChange(reorderedParticipants);
@@ -917,7 +917,7 @@ export function ChatParticipantsList({
         om.participant !== null
         && (!searchFilteredIds || searchFilteredIds.has(om.model.id)),
       )
-      .sort((a, b) => a.participant!.order - b.participant!.order);
+      .sort((a, b) => a.participant!.priority - b.participant!.priority);
   }, [orderedModels, searchFilteredIds]);
 
   // ✅ FLAT UNSELECTED LIST: When searching, show all unselected models in flat list
@@ -983,7 +983,7 @@ export function ChatParticipantsList({
                 <div className="space-y-1">
                   <div className="font-semibold text-xs">{tModels('selectedModelsLabel')}</div>
                   {participants
-                    .sort((a, b) => a.order - b.order)
+                    .sort((a, b) => a.priority - b.priority)
                     .map((participant) => {
                       // ✅ SINGLE SOURCE OF TRUTH: Find model from backend data
                       const model = allEnabledModels.find(m => m.id === participant.modelId);
@@ -1302,7 +1302,7 @@ export function ParticipantsPreview({
     <div className={cn('w-full overflow-x-auto', className)}>
       <div className="flex items-center gap-2 pb-2">
         {participants
-          .sort((a, b) => a.order - b.order)
+          .sort((a, b) => a.priority - b.priority)
           .map((participant, index) => {
             // ✅ SINGLE SOURCE OF TRUTH: Find model from backend data
             const model = allModels.find(m => m.id === participant.modelId);
