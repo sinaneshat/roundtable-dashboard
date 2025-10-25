@@ -25,7 +25,6 @@ import onError from 'stoker/middlewares/on-error';
 
 import { createOpenApiApp } from './core/app';
 import { attachSession, csrfProtection, protectMutations, requireSession } from './middleware';
-import { errorLoggerMiddleware, honoLoggerMiddleware } from './middleware/hono-logger';
 import { ensureOpenRouterInitialized } from './middleware/openrouter';
 import { ensureRAGInitialized } from './middleware/rag';
 import { RateLimiterFactory } from './middleware/rate-limiter-factory';
@@ -182,10 +181,8 @@ const app = createOpenApiApp();
 // Step 2: Apply global middleware (following Hono patterns)
 // ============================================================================
 
-// Logging and formatting
+// Formatting
 app.use('*', prettyJSON());
-app.use('*', honoLoggerMiddleware);
-app.use('*', errorLoggerMiddleware);
 app.use('*', trimTrailingSlash());
 
 // Core middleware

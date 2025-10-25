@@ -3,7 +3,7 @@
 import { useChat } from '@ai-sdk/react';
 import type { UIMessage } from 'ai';
 import { DefaultChatTransport } from 'ai';
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 import type { ChatParticipant } from '@/api/routes/chat/schema';
 import type { UIMessageErrorType } from '@/lib/utils/message-transforms';
@@ -12,8 +12,6 @@ import { deduplicateParticipants } from '@/lib/utils/participant-utils';
 import { calculateNextRoundNumber, getCurrentRoundNumber } from '@/lib/utils/round-utils';
 
 import { useParticipantErrorTracking } from './use-participant-error-tracking';
-import { useParticipantQueue } from './use-participant-queue';
-import { useRoundTracking } from './use-round-tracking';
 
 /**
  * Options for configuring the multi-participant chat hook
@@ -59,87 +57,30 @@ type UseMultiParticipantChatReturn = {
   stop: () => void;
   /** Manually set messages (used for optimistic updates or message deletion) */
   setMessages: (messages: UIMessage[] | ((messages: UIMessage[]) => UIMessage[])) => void;
-  /** Reset all hook state (queue, round tracking, error tracking) */
+  /** Reset all hook state (error tracking) */
   resetHookState: () => void;
 };
 
 /**
- * Multi-Participant Chat Hook - Main Orchestration for AI Conversations
+ * Multi-Participant Chat Hook - Simplified Orchestration for AI Conversations
  *
  * Coordinates multiple AI participants responding sequentially to user messages.
- * Integrates AI SDK's `useChat` with three specialized orchestration hooks to manage
- * turn-taking, round tracking, and error handling.
+ * Simplified to trust backend for round tracking and participant management.
+ *
+ * The hook maintains minimal client state and delegates complex logic to the backend,
+ * following the FLOW_DOCUMENTATION.md principle of backend authority.
  *
  * @example
- * ```typescript
  * const chat = useMultiParticipantChat({
  *   threadId: 'thread-123',
  *   participants: [
  *     { id: '1', modelId: 'gpt-4', isEnabled: true, priority: 0 },
  *     { id: '2', modelId: 'claude-3', isEnabled: true, priority: 1 },
- *     { id: '3', modelId: 'gemini-pro', isEnabled: false, priority: 2 }
  *   ],
  *   onComplete: () => console.log('Round complete!')
  * });
  *
- * // User sends a message
  * await chat.sendMessage("What's the best way to learn React?");
- *
- * // Internally:
- * // 1. User message added to UI
- * // 2. GPT-4 responds (priority 0)
- * // 3. Claude-3 responds (priority 1)
- * // 4. Round completes (Gemini skipped - not enabled)
- * // 5. onComplete() called
- *
- * // User clicks retry
- * chat.retry(); // Regenerates round with same participants
- * ```
- *
- * **Architecture**:
- * ```
- * useMultiParticipantChat (this hook)
- *   ├─> useParticipantQueue (turn management)
- *   ├─> useRoundTracking (round context + participant snapshot)
- *   ├─> useParticipantErrorTracking (response deduplication)
- *   └─> useChat from AI SDK (streaming + API integration)
- * ```
- *
- * **Execution Flow**:
- * 1. **User sends message**: `sendMessage("How do I build a React app?")`
- * 2. **Initialize round**:
- *    - Deduplicate and filter enabled participants
- *    - Snapshot participants (prevents mid-round changes)
- *    - Set round number in metadata
- *    - Initialize queue: [1, 2] for 3 participants
- * 3. **Participant loop**:
- *    - Participant 0 responds → advance queue
- *    - Participant 1 responds → advance queue
- *    - Participant 2 responds → queue empty, round complete
- * 4. **Round completion**: Trigger callbacks, reset tracking
- *
- * **Error Handling**:
- * - Errors don't stop the round - they create error messages and continue
- * - Duplicate errors are prevented via `useParticipantErrorTracking`
- * - Each participant gets one chance to respond (error or success)
- *
- * **Round Regeneration**:
- * When user clicks retry:
- * - Rewind messages to before the round
- * - Set `regenerateRoundNumber` to maintain round numbering
- * - Re-send the user message
- * - Backend uses `regenerateRound` flag to preserve round number
- *
- * **State Management**:
- * - Uses refs for values that don't trigger re-renders (participantsRef, currentIndexRef)
- * - Uses state for UI-affecting values (isExplicitlyStreaming)
- * - Callbacks wrapped in useCallback for dependency stability
- *
- * **Integration**: This is the main orchestration hook. It coordinates all participant
- * orchestration logic. See `/src/hooks/utils/README.md` for full architecture documentation.
- *
- * @param options - Configuration options for the multi-participant chat
- * @returns Chat state and control functions
  */
 export function useMultiParticipantChat({
   threadId,
@@ -151,59 +92,63 @@ export function useMultiParticipantChat({
   mode,
   regenerateRoundNumber: regenerateRoundNumberParam,
 }: UseMultiParticipantChatOptions): UseMultiParticipantChatReturn {
-  const participantQueue = useParticipantQueue({
-    participantCount: participants.length,
-    onComplete,
-    regenerateRoundNumber: regenerateRoundNumberParam,
-  });
-
-  const roundTracking = useRoundTracking(threadId);
   const errorTracking = useParticipantErrorTracking();
 
   // Track regenerate round number for backend communication
   const regenerateRoundNumberRef = useRef<number | null>(regenerateRoundNumberParam || null);
 
+  // Simple round tracking state - backend is source of truth
+  const [currentRound, setCurrentRound] = useState(1);
+
+  // Simple participant state - index-based iteration
+  const [currentParticipantIndex, setCurrentParticipantIndex] = useState(0);
+  const [isParticipantPending, setIsParticipantPending] = useState(false);
   const [isExplicitlyStreaming, setIsExplicitlyStreaming] = useState(false);
 
+  // Participant refs for round stability
   const participantsRef = useRef<ChatParticipant[]>(participants);
-  const currentIndexRef = useRef<number>(participantQueue.currentIndex);
-  const expectedParticipantIdsRef = useRef<string[]>([]);
+  const roundParticipantsRef = useRef<ChatParticipant[]>([]);
+  const currentIndexRef = useRef<number>(currentParticipantIndex);
 
   /**
-   * Advance to the next participant and handle round completion
-   *
-   * Called after each participant finishes (success or error).
-   * If this is the last participant, clears round state and triggers callbacks.
+   * Advance to the next participant or complete the round
+   * Uses simple index incrementing instead of complex queue management
    */
   const advanceToNextParticipant = useCallback(() => {
-    const willCompleteRound = participantQueue.queue.length === 0;
+    setCurrentParticipantIndex((prevIndex) => {
+      const nextIndex = prevIndex + 1;
 
-    if (willCompleteRound) {
-      errorTracking.reset();
-      regenerateRoundNumberRef.current = null;
-      setIsExplicitlyStreaming(false);
-    }
+      // Check if we've completed the round
+      if (nextIndex >= roundParticipantsRef.current.length) {
+        // Round complete - reset state and trigger callback
+        setIsParticipantPending(false);
+        setIsExplicitlyStreaming(false);
+        errorTracking.reset();
+        regenerateRoundNumberRef.current = null;
 
-    participantQueue.advance();
-  }, [participantQueue, errorTracking]);
+        setTimeout(() => {
+          onComplete?.();
+        }, 0);
+
+        return 0; // Reset for next round
+      }
+
+      // More participants to process
+      setIsParticipantPending(true);
+      return nextIndex;
+    });
+  }, [errorTracking, onComplete]);
 
   /**
    * Prepare request body for AI SDK chat transport
-   *
-   * This function is called by the AI SDK before each API request.
-   * It augments the request with participant context and metadata.
-   *
-   * Note: Uses refs to access current values without triggering re-renders.
+   * Uses ref for current index to avoid transport recreation on every index change
    */
-
   const prepareSendMessagesRequest = useCallback(
     ({ id, messages }: { id: string; messages: unknown[] }) => {
-      const index = currentIndexRef.current;
-
       const body = {
         id,
         message: messages[messages.length - 1],
-        participantIndex: index,
+        participantIndex: currentIndexRef.current,
         participants: participantsRef.current,
         ...(regenerateRoundNumberRef.current && { regenerateRound: regenerateRoundNumberRef.current }),
         ...(mode && { mode }),
@@ -214,8 +159,11 @@ export function useMultiParticipantChat({
     [mode],
   );
 
+  // Note: prepareSendMessagesRequest uses refs, but only inside the callback (not during render)
+  // This is safe and follows React best practices for callback refs
   const transport = useMemo(
     () =>
+      // eslint-disable-next-line react-hooks/refs
       new DefaultChatTransport({
         api: '/api/v1/chat',
         prepareSendMessagesRequest,
@@ -236,14 +184,10 @@ export function useMultiParticipantChat({
     messages: initialMessages,
 
     /**
-     * Handle participant errors
-     *
-     * When a participant encounters an error, create an error message and continue
-     * to the next participant. Uses error tracking to prevent duplicate error messages.
+     * Handle participant errors - create error UI and continue to next participant
      */
     onError: (error) => {
-      const index = currentIndexRef.current;
-      const participant = roundTracking.getRoundParticipants()[index];
+      const participant = roundParticipantsRef.current[currentParticipantIndex];
 
       // Parse error metadata if present
       let errorMessage = error instanceof Error ? error.message : String(error);
@@ -260,22 +204,22 @@ export function useMultiParticipantChat({
         // Invalid JSON - use original error message
       }
 
-      participantQueue.setPending(false);
+      setIsParticipantPending(false);
 
       // Create error message UI only if not already responded
       if (participant) {
-        const errorKey = `${participant.modelId}-${index}`;
+        const errorKey = `${participant.modelId}-${currentParticipantIndex}`;
 
         if (!errorTracking.hasResponded(errorKey)) {
           errorTracking.markAsResponded(errorKey);
 
           const errorUIMessage = createErrorUIMessage(
             participant,
-            index,
+            currentParticipantIndex,
             errorMessage,
             (errorMetadata?.errorCategory as UIMessageErrorType) || 'error',
             errorMetadata,
-            roundTracking.getRoundNumber() || undefined,
+            currentRound,
           );
 
           setMessages(prev => [...prev, errorUIMessage]);
@@ -289,17 +233,13 @@ export function useMultiParticipantChat({
 
     /**
      * Handle successful participant response
-     *
-     * Called when a participant successfully generates a response.
-     * Merges participant metadata, handles round numbers, and advances to next participant.
      */
     onFinish: async (data) => {
-      const index = currentIndexRef.current;
-      const participant = roundTracking.getRoundParticipants()[index];
+      const participant = roundParticipantsRef.current[currentParticipantIndex];
 
       // Skip if this participant already responded (deduplication)
       if (participant) {
-        const responseKey = `${participant.modelId}-${index}`;
+        const responseKey = `${participant.modelId}-${currentParticipantIndex}`;
         if (errorTracking.hasResponded(responseKey)) {
           setTimeout(() => advanceToNextParticipant(), 500);
           return;
@@ -308,21 +248,21 @@ export function useMultiParticipantChat({
 
       // Handle silent failure (no message object from AI SDK)
       if (!data.message) {
-        participantQueue.setPending(false);
+        setIsParticipantPending(false);
 
         if (participant) {
-          const errorKey = `${participant.modelId}-${index}`;
+          const errorKey = `${participant.modelId}-${currentParticipantIndex}`;
 
           if (!errorTracking.hasResponded(errorKey)) {
             errorTracking.markAsResponded(errorKey);
 
             const errorUIMessage = createErrorUIMessage(
               participant,
-              index,
+              currentParticipantIndex,
               'This model failed to generate a response. The AI SDK did not create a message object.',
               'silent_failure',
               { providerMessage: 'No response text available' },
-              roundTracking.getRoundNumber() || undefined,
+              currentRound,
             );
 
             setMessages(prev => [...prev, errorUIMessage]);
@@ -330,7 +270,7 @@ export function useMultiParticipantChat({
         }
 
         setTimeout(() => advanceToNextParticipant(), 500);
-        const error = new Error(`Participant ${index} failed: data.message is missing`);
+        const error = new Error(`Participant ${currentParticipantIndex} failed: data.message is missing`);
         onError?.(error);
         return;
       }
@@ -340,13 +280,12 @@ export function useMultiParticipantChat({
         const updatedMetadata = mergeParticipantMetadata(
           data.message,
           participant,
-          index,
+          currentParticipantIndex,
         );
 
-        // Determine round number (prefer backend, fallback to tracked, then current)
+        // Prefer backend round number, fallback to current state
         const backendRoundNumber = (data.message.metadata as Record<string, unknown> | undefined)?.roundNumber as number | undefined;
-        const trackedRoundNumber = roundTracking.getRoundNumber();
-        const finalRoundNumber = backendRoundNumber || trackedRoundNumber || getCurrentRoundNumber(messages) || 1;
+        const finalRoundNumber = backendRoundNumber || currentRound;
 
         const metadataWithRoundNumber = {
           ...updatedMetadata,
@@ -375,7 +314,7 @@ export function useMultiParticipantChat({
           });
         });
 
-        errorTracking.markAsResponded(`${participant.modelId}-${index}`);
+        errorTracking.markAsResponded(`${participant.modelId}-${currentParticipantIndex}`);
       }
 
       setTimeout(() => advanceToNextParticipant(), 500);
@@ -384,56 +323,45 @@ export function useMultiParticipantChat({
 
   /**
    * Sync participants ref with latest participants
-   * Uses layoutEffect to ensure ref is updated before render
    */
   useLayoutEffect(() => {
     participantsRef.current = participants;
   }, [participants]);
 
   /**
-   * Sync current index ref with queue state
-   * Uses layoutEffect to ensure ref is updated before render
+   * Sync current index ref with state
    */
   useLayoutEffect(() => {
-    currentIndexRef.current = participantQueue.currentIndex;
-  }, [participantQueue.currentIndex]);
+    currentIndexRef.current = currentParticipantIndex;
+  }, [currentParticipantIndex]);
 
   /**
    * Automatic participant triggering
-   *
-   * When a participant is pending and the chat is ready, automatically
-   * trigger their response by sending an empty user message.
-   *
-   * This is the core loop that makes participants respond sequentially.
+   * When pending, automatically trigger the next participant's response
    */
-  useEffect(() => {
-    if (!participantQueue.pending || status !== 'ready') {
+  useLayoutEffect(() => {
+    if (!isParticipantPending || status !== 'ready') {
       return;
     }
 
     const timeoutId = setTimeout(() => {
-      participantQueue.setPending(false);
+      setIsParticipantPending(false);
 
       aiSendMessage({
         role: 'user',
         parts: [{ type: 'text', text: '' }],
         metadata: {
-          roundNumber: roundTracking.getRoundNumber() || 1,
+          roundNumber: currentRound,
           isParticipantTrigger: true,
         },
       });
     }, 200);
 
     return () => clearTimeout(timeoutId);
-  }, [participantQueue.pending, status, aiSendMessage, participantQueue, roundTracking]);
+  }, [isParticipantPending, status, aiSendMessage, currentRound]);
 
   /**
    * Start a new round with existing participants
-   *
-   * This is used for manual round triggering (e.g., clicking a "Start Round" button).
-   * It uses the last user message as context for participant responses.
-   *
-   * @returns void - No-op if chat is not ready or already streaming
    */
   const startRound = useCallback(() => {
     if (status !== 'ready' || isExplicitlyStreaming) {
@@ -448,13 +376,10 @@ export function useMultiParticipantChat({
     }
 
     setIsExplicitlyStreaming(true);
-    roundTracking.reset();
-    expectedParticipantIdsRef.current = enabled.map(p => p.id);
-
-    participantQueue.initialize(enabled.length);
-    participantQueue.setPending(false);
+    setCurrentParticipantIndex(0);
+    setIsParticipantPending(false);
     errorTracking.reset();
-    roundTracking.snapshotParticipants(enabled);
+    roundParticipantsRef.current = enabled;
 
     const lastUserMessage = messages.findLast(m => m.role === 'user');
     if (!lastUserMessage) {
@@ -471,7 +396,7 @@ export function useMultiParticipantChat({
     }
 
     const roundNumber = getCurrentRoundNumber(messages);
-    roundTracking.setRoundNumber(roundNumber);
+    setCurrentRound(roundNumber);
 
     aiSendMessage({
       role: 'user',
@@ -481,16 +406,10 @@ export function useMultiParticipantChat({
         isParticipantTrigger: true,
       },
     });
-  }, [participants, status, messages, aiSendMessage, errorTracking, participantQueue, roundTracking, isExplicitlyStreaming]);
+  }, [participants, status, messages, aiSendMessage, errorTracking, isExplicitlyStreaming]);
 
   /**
    * Send a user message and start a new round
-   *
-   * Initializes all orchestration hooks, snapshots participants, and triggers
-   * the participant response sequence.
-   *
-   * @param content - The user's message text
-   * @throws Error if no participants are enabled
    */
   const sendMessage = useCallback(
     async (content: string) => {
@@ -511,36 +430,28 @@ export function useMultiParticipantChat({
       }
 
       setIsExplicitlyStreaming(true);
-      roundTracking.reset();
-      expectedParticipantIdsRef.current = enabled.map(p => p.id);
-
-      participantQueue.initialize(enabled.length);
-      participantQueue.setPending(false);
+      setCurrentParticipantIndex(0);
+      setIsParticipantPending(false);
       errorTracking.reset();
-      roundTracking.snapshotParticipants(enabled);
+      roundParticipantsRef.current = enabled;
 
       // Use regenerate round number if retrying, otherwise calculate next
       const newRoundNumber = regenerateRoundNumberRef.current !== null
         ? regenerateRoundNumberRef.current
         : calculateNextRoundNumber(messages);
 
-      roundTracking.setRoundNumber(newRoundNumber);
+      setCurrentRound(newRoundNumber);
 
       aiSendMessage({
         text: trimmed,
         metadata: { roundNumber: newRoundNumber },
       });
     },
-    [participants, status, aiSendMessage, messages, errorTracking, participantQueue, roundTracking, isExplicitlyStreaming],
+    [participants, status, aiSendMessage, messages, errorTracking, isExplicitlyStreaming],
   );
 
   /**
    * Retry the last round (regenerate responses)
-   *
-   * Finds the last user message with content, rewinds the messages to before that round,
-   * and re-sends the message to regenerate all participant responses.
-   *
-   * The `regenerateRoundNumber` flag is set to preserve round numbering in the backend.
    */
   const retry = useCallback(() => {
     if (status !== 'ready') {
@@ -595,45 +506,39 @@ export function useMultiParticipantChat({
 
   /**
    * Stop the current streaming session
-   *
-   * Immediately stops AI SDK streaming and resets all queue state.
    */
   const stopStreaming = useCallback(() => {
     stop();
     setIsExplicitlyStreaming(false);
-    participantQueue.reset();
-    participantQueue.setPending(false);
-  }, [stop, participantQueue]);
+    setIsParticipantPending(false);
+    setCurrentParticipantIndex(0);
+  }, [stop]);
 
   /**
    * Reset all hook state
-   *
-   * Clears queue, round tracking, error tracking, and regenerate flags.
-   * If currently streaming, only clears error tracking (preserves in-flight state).
    */
   const resetHookState = useCallback(() => {
-    const currentlyStreaming = isExplicitlyStreaming || participantQueue.pending;
-
-    if (currentlyStreaming) {
+    if (isExplicitlyStreaming || isParticipantPending) {
+      // Only reset error tracking during active streaming
       errorTracking.reset();
       return;
     }
 
-    participantQueue.reset();
-    participantQueue.setPending(false);
-    roundTracking.reset();
+    setCurrentParticipantIndex(0);
+    setIsParticipantPending(false);
+    roundParticipantsRef.current = [];
+    setCurrentRound(1);
     errorTracking.reset();
     regenerateRoundNumberRef.current = null;
-    expectedParticipantIdsRef.current = [];
     setIsExplicitlyStreaming(false);
-  }, [participantQueue, roundTracking, errorTracking, isExplicitlyStreaming]);
+  }, [errorTracking, isExplicitlyStreaming, isParticipantPending]);
 
   return {
     messages,
     sendMessage,
     startRound,
     isStreaming: isExplicitlyStreaming,
-    currentParticipantIndex: participantQueue.currentIndex,
+    currentParticipantIndex,
     error: chatError || null,
     retry,
     stop: stopStreaming,

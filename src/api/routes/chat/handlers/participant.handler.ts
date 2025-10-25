@@ -3,18 +3,13 @@ import { and, desc, eq } from 'drizzle-orm';
 import { ulid } from 'ulid';
 
 import { executeBatch } from '@/api/common/batch-operations';
-import { ErrorContextBuilders } from '@/api/common/error-contexts';
-import { createError } from '@/api/common/error-handling';
+import { verifyParticipantOwnership, verifyThreadOwnership } from '@/api/common/permissions';
 import { createHandler, createHandlerWithBatch, Responses } from '@/api/core';
 import { ChangelogTypes } from '@/api/core/enums';
 import { IdParamSchema } from '@/api/core/schemas';
-import { extractModeratorModelName, openRouterModelsService } from '@/api/services/openrouter-models.service';
-import {
-  canAccessModelByPricing,
-  getRequiredTierForModel,
-  SUBSCRIPTION_TIER_NAMES,
-} from '@/api/services/product-logic.service';
-import { getMaxModels, getUserTier } from '@/api/services/usage-tracking.service';
+import { extractModeratorModelName } from '@/api/services/openrouter-models.service';
+import { validateModelAccess, validateTierLimits } from '@/api/services/participant-validation.service';
+import { getUserTier } from '@/api/services/usage-tracking.service';
 import type { ApiEnv } from '@/api/types';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db/schema';
@@ -28,7 +23,6 @@ import {
   AddParticipantRequestSchema,
   UpdateParticipantRequestSchema,
 } from '../schema';
-import { verifyThreadOwnership } from './helpers';
 
 export const addParticipantHandler: RouteHandler<typeof addParticipantRoute, ApiEnv> = createHandlerWithBatch(
   {
@@ -44,45 +38,12 @@ export const addParticipantHandler: RouteHandler<typeof addParticipantRoute, Api
     const db = batch.db;
     await verifyThreadOwnership(id, user.id, db);
     const userTier = await getUserTier(user.id);
-    const model = await openRouterModelsService.getModelById(body.modelId as string);
-    if (!model) {
-      throw createError.badRequest(
-        `Model "${body.modelId}" not found`,
-        {
-          errorType: 'validation',
-          field: 'modelId',
-        },
-      );
-    }
-    const canAccess = canAccessModelByPricing(userTier, model);
-    if (!canAccess) {
-      const requiredTier = getRequiredTierForModel(model);
-      throw createError.unauthorized(
-        `Your ${SUBSCRIPTION_TIER_NAMES[userTier]} plan does not include access to ${model.name}. Upgrade to ${SUBSCRIPTION_TIER_NAMES[requiredTier]} or higher to use this model.`,
-        {
-          errorType: 'authorization',
-          resource: 'model',
-          resourceId: body.modelId as string,
-        },
-      );
-    }
-    const existingParticipants = await db.query.chatParticipant.findMany({
-      where: and(
-        eq(tables.chatParticipant.threadId, id),
-        eq(tables.chatParticipant.isEnabled, true),
-      ),
-    });
-    const currentModelCount = existingParticipants.length;
-    const maxModels = await getMaxModels(userTier);
-    if (currentModelCount >= maxModels) {
-      throw createError.badRequest(
-        `Your ${SUBSCRIPTION_TIER_NAMES[userTier]} plan allows up to ${maxModels} AI models per conversation. You already have ${currentModelCount} models. Remove a model or upgrade your plan to add more.`,
-        {
-          errorType: 'validation',
-          field: 'modelId',
-        },
-      );
-    }
+
+    // Validate tier limits (max models per conversation)
+    await validateTierLimits(id, userTier, db);
+
+    // Validate model access (tier permissions)
+    await validateModelAccess(body.modelId as string, userTier);
     const participantId = ulid();
     const now = new Date();
     const [participant] = await db
@@ -142,18 +103,7 @@ export const updateParticipantHandler: RouteHandler<typeof updateParticipantRout
     const { id } = c.validated.params;
     const body = c.validated.body;
     const db = await getDbAsync();
-    const participant = await db.query.chatParticipant.findFirst({
-      where: eq(tables.chatParticipant.id, id),
-      with: {
-        thread: true,
-      },
-    });
-    if (!participant) {
-      throw createError.notFound('Participant not found', ErrorContextBuilders.resourceNotFound('participant', id));
-    }
-    if (participant.thread.userId !== user.id) {
-      throw createError.unauthorized('Not authorized to modify this participant', ErrorContextBuilders.authorization('participant', id));
-    }
+    const participant = await verifyParticipantOwnership(id, user.id, db);
     const [updatedParticipant] = await db
       .update(tables.chatParticipant)
       .set({
@@ -209,18 +159,7 @@ export const deleteParticipantHandler: RouteHandler<typeof deleteParticipantRout
     const { user } = c.auth();
     const { id } = c.validated.params;
     const db = await getDbAsync();
-    const participant = await db.query.chatParticipant.findFirst({
-      where: eq(tables.chatParticipant.id, id),
-      with: {
-        thread: true,
-      },
-    });
-    if (!participant) {
-      throw createError.notFound('Participant not found', ErrorContextBuilders.resourceNotFound('participant', id));
-    }
-    if (participant.thread.userId !== user.id) {
-      throw createError.unauthorized('Not authorized to delete this participant', ErrorContextBuilders.authorization('participant', id));
-    }
+    const participant = await verifyParticipantOwnership(id, user.id, db);
     const existingUserMessages = await db.query.chatMessage.findMany({
       where: and(
         eq(tables.chatMessage.threadId, participant.threadId),

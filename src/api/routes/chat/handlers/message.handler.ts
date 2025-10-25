@@ -1,6 +1,7 @@
 import type { RouteHandler } from '@hono/zod-openapi';
 import { asc, desc, eq } from 'drizzle-orm';
 
+import { verifyThreadOwnership } from '@/api/common/permissions';
 import { createHandler, Responses } from '@/api/core';
 import { IdParamSchema } from '@/api/core/schemas';
 import type { ApiEnv } from '@/api/types';
@@ -11,7 +12,6 @@ import type {
   getThreadChangelogRoute,
   getThreadMessagesRoute,
 } from '../route';
-import { verifyThreadOwnership } from './helpers';
 
 export const getThreadMessagesHandler: RouteHandler<typeof getThreadMessagesRoute, ApiEnv> = createHandler(
   {

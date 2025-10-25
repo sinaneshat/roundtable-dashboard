@@ -29,7 +29,6 @@ import type { ChatModeId } from '@/lib/config/chat-modes';
 import { messageHasError, MessageMetadataSchema } from '@/lib/schemas/message-metadata';
 import { extractTextFromMessage } from '@/lib/schemas/message-schemas';
 import { chatMessagesToUIMessages, validateMessageOrder } from '@/lib/utils/message-transforms';
-import { deduplicateParticipants } from '@/lib/utils/participant-utils';
 import { calculateNextRoundNumber, getCurrentRoundNumber, getMaxRoundNumber, getRoundNumberFromMetadata, groupMessagesByRound } from '@/lib/utils/round-utils';
 
 type ChatThreadScreenProps = {
@@ -205,6 +204,14 @@ export default function ChatThreadScreen({
     roundNumber: number;
     type: 'like' | 'dislike';
   } | null>(null);
+
+  /**
+   * SIMPLIFIED ROUND MANAGEMENT
+   * - Backend provides round numbers in message metadata
+   * - Frontend trusts backend as source of truth
+   * - Removed complex client-side round tracking
+   * - Round numbers extracted from messages using getRoundNumberFromMetadata()
+   */
   const [streamingRoundNumber, setStreamingRoundNumber] = useState<number | null>(null);
   const currentRoundNumberRef = useRef<number | null>(null);
   const regenerateRoundNumberRef = useRef<number | null>(null);
@@ -324,8 +331,8 @@ export default function ChatThreadScreen({
     });
     if (!isNavigatingFromOverview) {
       const uiMessages = chatMessagesToUIMessages(initialMessages);
-      const deduplicatedParticipants = deduplicateParticipants(participants);
-      initializeThread(thread, deduplicatedParticipants, uiMessages);
+      // Backend already provides deduplicated participants
+      initializeThread(thread, participants, uiMessages);
     }
     return () => {
       setOnComplete(undefined);
@@ -372,7 +379,7 @@ export default function ChatThreadScreen({
       }
       try {
         const participantsForUpdate = selectedParticipants.map(p => ({
-          id: p.id.startsWith('participant-') ? undefined : p.id,
+          id: p.id.startsWith('participant-') ? '' : p.id,
           modelId: p.modelId,
           role: p.role || null,
           customRoleId: p.customRoleId || null,

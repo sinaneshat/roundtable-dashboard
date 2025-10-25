@@ -4,6 +4,7 @@ import { ulid } from 'ulid';
 
 import { ErrorContextBuilders } from '@/api/common/error-contexts';
 import { createError } from '@/api/common/error-handling';
+import { verifyThreadOwnership } from '@/api/common/permissions';
 import { createHandler, Responses } from '@/api/core';
 import { IdParamSchema } from '@/api/core/schemas';
 import type { ApiEnv } from '@/api/types';
@@ -38,18 +39,7 @@ export const setRoundFeedbackHandler: RouteHandler<typeof setRoundFeedbackRoute,
         ErrorContextBuilders.auth(),
       );
     }
-    const thread = await db.query.chatThread.findFirst({
-      where: and(
-        eq(tables.chatThread.id, threadId),
-        eq(tables.chatThread.userId, user.id),
-      ),
-    });
-    if (!thread) {
-      throw createError.notFound(
-        'Thread not found',
-        ErrorContextBuilders.resourceNotFound('thread', threadId),
-      );
-    }
+    await verifyThreadOwnership(threadId, user.id, db);
     const existingFeedback = await db.query.chatRoundFeedback.findFirst({
       where: and(
         eq(tables.chatRoundFeedback.threadId, threadId),
@@ -133,18 +123,7 @@ export const getThreadFeedbackHandler: RouteHandler<typeof getThreadFeedbackRout
         ErrorContextBuilders.auth(),
       );
     }
-    const thread = await db.query.chatThread.findFirst({
-      where: and(
-        eq(tables.chatThread.id, threadId),
-        eq(tables.chatThread.userId, user.id),
-      ),
-    });
-    if (!thread) {
-      throw createError.notFound(
-        'Thread not found',
-        ErrorContextBuilders.resourceNotFound('thread', threadId),
-      );
-    }
+    await verifyThreadOwnership(threadId, user.id, db);
     const feedbackList = await db.query.chatRoundFeedback.findMany({
       where: and(
         eq(tables.chatRoundFeedback.threadId, threadId),

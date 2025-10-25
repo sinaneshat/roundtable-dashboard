@@ -51,9 +51,8 @@ export const ChatMessageList = memo(({
   const userAvatarSrc = userAvatar?.src || userInfo.image || '/avatars/user.png';
   const userAvatarName = userAvatar?.name || userInfo.name;
 
-  // ✅ NO DEDUPLICATION NEEDED: Messages are already deduplicated in ChatContext.initializeThread()
+  // ✅ NO DEDUPLICATION NEEDED: AI SDK v5's useChat handles deduplication automatically
   // This prevents redundant O(n) processing on every render
-  // See: src/contexts/chat-context.tsx:145 and src/lib/utils/message-transforms.ts:deduplicateMessages()
 
   return (
     <>

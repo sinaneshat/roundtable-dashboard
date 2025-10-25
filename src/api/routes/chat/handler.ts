@@ -8,7 +8,6 @@ export {
 } from './handlers/feedback.handler';
 export {
   chatMessagesToUIMessages,
-  verifyThreadOwnership,
 } from './handlers/helpers';
 export {
   getThreadChangelogHandler,

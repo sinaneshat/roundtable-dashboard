@@ -1,10 +1,6 @@
 import type { UIMessage } from 'ai';
-import { eq } from 'drizzle-orm';
 
-import { ErrorContextBuilders } from '@/api/common/error-contexts';
-import { createError } from '@/api/common/error-handling';
-import type { getDbAsync } from '@/db';
-import * as tables from '@/db/schema';
+import type * as tables from '@/db/schema';
 
 // ============================================================================
 // ERROR CATEGORIZATION HELPERS
@@ -134,6 +130,14 @@ export function extractOpenRouterError(
   return { openRouterError, errorCategory };
 }
 
+/**
+ * Convert database chat messages to UI Message format
+ *
+ * Transforms messages from database format to the UIMessage format expected by the AI SDK.
+ *
+ * @param dbMessages - Array of chat messages from database
+ * @returns Array of UIMessage objects for client consumption
+ */
 export function chatMessagesToUIMessages(
   dbMessages: Array<typeof tables.chatMessage.$inferSelect>,
 ): UIMessage[] {
@@ -145,55 +149,8 @@ export function chatMessagesToUIMessages(
     createdAt: msg.createdAt,
   })) as UIMessage[];
 }
-export async function verifyThreadOwnership(
-  threadId: string,
-  userId: string,
-  db: Awaited<ReturnType<typeof getDbAsync>>,
-): Promise<typeof tables.chatThread.$inferSelect>;
-export async function verifyThreadOwnership(
-  threadId: string,
-  userId: string,
-  db: Awaited<ReturnType<typeof getDbAsync>>,
-  options: { includeParticipants: true },
-): Promise<typeof tables.chatThread.$inferSelect & {
-  participants: Array<typeof tables.chatParticipant.$inferSelect>;
-}>;
-export async function verifyThreadOwnership(
-  threadId: string,
-  userId: string,
-  db: Awaited<ReturnType<typeof getDbAsync>>,
-  options?: { includeParticipants?: boolean },
-) {
-  const thread = await db.query.chatThread.findFirst({
-    where: eq(tables.chatThread.id, threadId),
-    with: options?.includeParticipants
-      ? {
-          participants: {
-            where: eq(tables.chatParticipant.isEnabled, true),
-            orderBy: [tables.chatParticipant.priority, tables.chatParticipant.id],
-          },
-        }
-      : undefined,
-  });
-  if (!thread) {
-    throw createError.notFound('Thread not found', ErrorContextBuilders.resourceNotFound('thread', threadId));
-  }
-  if (thread.userId !== userId) {
-    throw createError.unauthorized(
-      'Not authorized to access this thread',
-      ErrorContextBuilders.authorization('thread', threadId),
-    );
-  }
-  if (options?.includeParticipants) {
-    const threadWithParticipants = thread as typeof thread & {
-      participants: Array<typeof tables.chatParticipant.$inferSelect>;
-    };
-    if (threadWithParticipants.participants.length === 0) {
-      throw createError.badRequest(
-        'No enabled participants in this thread. Please add or enable at least one AI model to continue the conversation.',
-        { errorType: 'validation' },
-      );
-    }
-  }
-  return thread;
-}
+
+// ============================================================================
+// NOTE: verifyThreadOwnership has been moved to /src/api/common/permissions.ts
+// Import from there instead: import { verifyThreadOwnership } from '@/api/common/permissions'
+// ============================================================================

@@ -4,6 +4,7 @@ import { ulid } from 'ulid';
 
 import { ErrorContextBuilders } from '@/api/common/error-contexts';
 import { createError } from '@/api/common/error-handling';
+import { verifyCustomRoleOwnership } from '@/api/common/permissions';
 import {
   applyCursorPagination,
   buildCursorWhereWithFilters,
@@ -103,15 +104,7 @@ export const getCustomRoleHandler: RouteHandler<typeof getCustomRoleRoute, ApiEn
     const { user } = c.auth();
     const { id } = c.validated.params;
     const db = await getDbAsync();
-    const customRole = await db.query.chatCustomRole.findFirst({
-      where: and(
-        eq(tables.chatCustomRole.id, id),
-        eq(tables.chatCustomRole.userId, user.id),
-      ),
-    });
-    if (!customRole) {
-      throw createError.notFound('Custom role not found', ErrorContextBuilders.resourceNotFound('custom_role', id));
-    }
+    const customRole = await verifyCustomRoleOwnership(id, user.id, db);
     return Responses.ok(c, {
       customRole,
     });

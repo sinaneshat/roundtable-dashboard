@@ -6,8 +6,10 @@ import Fuse from 'fuse.js';
 import { ulid } from 'ulid';
 
 import { executeBatch } from '@/api/common/batch-operations';
+import { invalidateThreadCache } from '@/api/common/cache-utils';
 import { ErrorContextBuilders } from '@/api/common/error-contexts';
 import { createError } from '@/api/common/error-handling';
+import { verifyThreadOwnership } from '@/api/common/permissions';
 import {
   applyCursorPagination,
   buildCursorWhereWithFilters,
@@ -53,7 +55,6 @@ import {
   ThreadListQuerySchema,
   UpdateThreadRequestSchema,
 } from '../schema';
-import { verifyThreadOwnership } from './helpers';
 
 export const listThreadsHandler: RouteHandler<typeof listThreadsRoute, ApiEnv> = createHandler(
   {
@@ -242,12 +243,7 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
       .returning();
     await incrementMessageUsage(user.id, 1);
     await incrementThreadUsage(user.id);
-    if (db.$cache?.invalidate) {
-      const { ThreadCacheTags } = await import('@/db/cache/cache-tags');
-      await db.$cache.invalidate({
-        tags: [ThreadCacheTags.list(user.id)],
-      });
-    }
+    await invalidateThreadCache(db, user.id);
     (async () => {
       try {
         const aiTitle = await generateTitleFromMessage(body.firstMessage, c.env);
@@ -258,12 +254,7 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
             updatedAt: new Date(),
           })
           .where(eq(tables.chatThread.id, threadId));
-        if (db.$cache?.invalidate) {
-          const { ThreadCacheTags } = await import('@/db/cache/cache-tags');
-          await db.$cache.invalidate({
-            tags: [ThreadCacheTags.list(user.id)],
-          });
-        }
+        await invalidateThreadCache(db, user.id);
       } catch {
       }
     })().catch(() => {
@@ -481,11 +472,8 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
     if (!updatedThreadWithParticipants) {
       throw createError.notFound('Thread not found after update');
     }
-    if (body.status !== undefined && db.$cache?.invalidate) {
-      const { ThreadCacheTags } = await import('@/db/cache/cache-tags');
-      await db.$cache.invalidate({
-        tags: ThreadCacheTags.all(user.id, id, thread.slug),
-      });
+    if (body.status !== undefined) {
+      await invalidateThreadCache(db, user.id, id, thread.slug);
     }
     return Responses.ok(c, {
       thread: updatedThreadWithParticipants,
@@ -518,12 +506,7 @@ export const deleteThreadHandler: RouteHandler<typeof deleteThreadRoute, ApiEnv>
       });
     } catch {
     }
-    if (db.$cache?.invalidate) {
-      const { ThreadCacheTags } = await import('@/db/cache/cache-tags');
-      await db.$cache.invalidate({
-        tags: ThreadCacheTags.all(user.id, id, thread.slug),
-      });
-    }
+    await invalidateThreadCache(db, user.id, id, thread.slug);
     return Responses.ok(c, {
       deleted: true,
     });

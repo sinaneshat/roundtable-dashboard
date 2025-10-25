@@ -34,7 +34,6 @@ This utility layer addresses code duplication identified in Analysis Agent 1 fin
 import {
   convertUIToModelMessages,
   validateMessages,
-  deduplicateMessages,
   createErrorUIMessage
 } from '@/lib/ai';
 
@@ -47,8 +46,7 @@ if (!result.valid) {
   throw new Error('Invalid messages');
 }
 
-// Deduplicate messages by ID
-const uniqueMessages = deduplicateMessages([...prev, newMessage]);
+// Note: AI SDK v5's useChat handles deduplication automatically
 
 // Create error message
 const errorMessage = createErrorUIMessage(
@@ -194,13 +192,10 @@ Follows patterns from `/docs/backend-patterns.md`:
 
 ### Deduplication Strategy
 
-**Phase 1: Global Deduplication** (This layer)
-- `deduplicateMessages()` - Remove duplicate IDs at message array level
-- Apply BEFORE setting messages in any context
-
-**Phase 2: Round Grouping Safety Net** (Application layer)
-- Additional deduplication during message grouping
-- Handles edge cases from retry/restart operations
+**AI SDK v5 Automatic Deduplication**
+- AI SDK v5's `useChat` hook handles message deduplication automatically
+- No manual deduplication required in application code
+- Deduplication occurs at the framework level for optimal performance
 
 ## 🎓 Learning Resources
 

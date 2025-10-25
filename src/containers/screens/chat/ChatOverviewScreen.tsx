@@ -27,9 +27,7 @@ import { useSession } from '@/lib/auth/client';
 import type { ChatModeId } from '@/lib/config/chat-modes';
 import { getDefaultChatMode } from '@/lib/config/chat-modes';
 import { showApiErrorToast } from '@/lib/toast';
-import { chatAnalysisLogger, chatOverviewLogger } from '@/lib/utils/chat-error-logger';
 import { chatMessagesToUIMessages } from '@/lib/utils/message-transforms';
-import { deduplicateParticipants } from '@/lib/utils/participant-utils';
 
 export default function ChatOverviewScreen() {
   const router = useRouter();
@@ -117,21 +115,7 @@ export default function ChatOverviewScreen() {
 
       const prompt = inputValue.trim();
 
-      chatOverviewLogger.formSubmit({
-        hasPrompt: !!prompt,
-        participantCount: selectedParticipants.length,
-        isCreatingThread,
-        isStreaming,
-        mode: selectedMode,
-      });
-
       if (!prompt || selectedParticipants.length === 0 || isCreatingThread || isStreaming) {
-        chatOverviewLogger.warn('Form submit aborted - validation failed', {
-          hasPrompt: !!prompt,
-          participantCount: selectedParticipants.length,
-          isCreatingThread,
-          isStreaming,
-        });
         return;
       }
 
@@ -144,23 +128,13 @@ export default function ChatOverviewScreen() {
           participants: selectedParticipants,
         });
 
-        chatOverviewLogger.threadCreated('pending', {
-          participantCount: createThreadRequest.participants.length,
-          mode: createThreadRequest.mode,
-        });
-
         const response = await createThreadMutation.mutateAsync({
           json: createThreadRequest,
         });
 
         const { thread, participants, messages: initialMessages } = response.data;
 
-        chatOverviewLogger.threadCreated(thread.id, {
-          participantCount: participants.length,
-          messageCount: initialMessages.length,
-          mode: thread.mode,
-        });
-
+        // Backend already provides clean, deduplicated data
         const threadWithDates = {
           ...thread,
           createdAt: new Date(thread.createdAt),
@@ -173,8 +147,6 @@ export default function ChatOverviewScreen() {
           createdAt: new Date(p.createdAt),
           updatedAt: new Date(p.updatedAt),
         }));
-
-        const deduplicatedParticipants = deduplicateParticipants(participantsWithDates);
 
         const uiMessages = chatMessagesToUIMessages(initialMessages);
 
@@ -200,12 +172,6 @@ export default function ChatOverviewScreen() {
           const textPart = lastUserMessage?.parts?.find(p => p.type === 'text');
           const userQuestion = (textPart && 'text' in textPart ? textPart.text : '') || '';
 
-          chatAnalysisLogger.create(roundNumber, {
-            threadId: thread.id,
-            participantCount: currentParticipants.length,
-            messageCount: currentMessages.length,
-          });
-
           try {
             createPendingAnalysisRef.current(
               roundNumber,
@@ -213,29 +179,16 @@ export default function ChatOverviewScreen() {
               currentParticipants,
               userQuestion,
             );
-          } catch (error) {
-            chatAnalysisLogger.error(roundNumber, error, {
-              threadId: thread.id,
-            });
+          } catch {
+            // Analysis creation failed - non-critical
           }
         });
 
-        chatOverviewLogger.autoStartRound({
-          threadId: threadWithDates.id,
-          participantCount: deduplicatedParticipants.length,
-          messageCount: uiMessages.length,
-        });
-
-        initializeThread(threadWithDates, deduplicatedParticipants, uiMessages);
+        initializeThread(threadWithDates, participantsWithDates, uiMessages);
 
         hasSentInitialPromptRef.current = false;
         setInitialPrompt(prompt);
       } catch (error) {
-        chatOverviewLogger.error('THREAD_CREATE_FAILED', error, {
-          participantCount: selectedParticipants.length,
-          mode: selectedMode,
-        });
-
         showApiErrorToast('Error creating thread', error);
         setShowInitialUI(true);
       } finally {
@@ -272,22 +225,11 @@ export default function ChatOverviewScreen() {
       && hasMessages
       && hasUserMessage
     ) {
-      chatOverviewLogger.autoStartRound({
-        threadId: currentThread.id,
-        messageCount: messages.length,
-        participantCount: contextParticipants.length,
-      });
-
       hasSentInitialPromptRef.current = true;
 
       try {
         startRound();
       } catch (error) {
-        chatOverviewLogger.error('STREAM_FAILED', error, {
-          threadId: currentThread.id,
-          messageCount: messages.length,
-        });
-
         showApiErrorToast('Error starting conversation', error);
       }
     }
@@ -423,20 +365,10 @@ export default function ChatOverviewScreen() {
                       isLatest={true}
                       onStreamComplete={async () => {
                         try {
-                          chatOverviewLogger.navigate(`/chat/${currentThread?.slug}`, {
-                            threadId: createdThreadId,
-                            analysisStatus: analyses[0]?.status,
-                          });
-
                           await new Promise(resolve => setTimeout(resolve, 800));
 
                           router.push(`/chat/${currentThread?.slug}`);
                         } catch (error) {
-                          chatOverviewLogger.error('NETWORK_ERROR', error, {
-                            threadId: createdThreadId,
-                            destination: `/chat/${currentThread?.slug}`,
-                          });
-
                           showApiErrorToast('Error navigating to thread', error);
                         }
                       }}

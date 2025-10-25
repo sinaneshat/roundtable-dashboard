@@ -33,7 +33,16 @@ import { MessageMetadataSchema } from '@/lib/schemas/message-metadata';
 export const MessageContentSchema = z.string()
   .min(1, 'Message is required')
   .max(5000, 'Message is too long (max 5000 characters)');
-export const uniqueModelIdsRefinement = {
+
+// ============================================================================
+// PARTICIPANT SCHEMAS - Consolidated
+// ============================================================================
+
+/**
+ * Unique model ID validation refinement
+ * Applied once at base schema level to avoid duplicate validation
+ */
+const uniqueModelIdsRefinement = {
   check: (participants: Array<{ modelId: string; isEnabled?: boolean }>) => {
     const enabledParticipants = participants.filter(p => p.isEnabled !== false);
     const modelIds = enabledParticipants.map(p => p.modelId);
@@ -42,11 +51,88 @@ export const uniqueModelIdsRefinement = {
   },
   message: 'Duplicate modelIds detected. Each enabled participant must have a unique model.',
 };
+
+/**
+ * Base participant schema - single source of truth for participant fields
+ * All participant variants derive from this schema using pick/omit
+ */
+const BaseParticipantSchema = z.object({
+  id: CoreSchemas.id().openapi({
+    description: 'Participant ID',
+    example: 'participant_1',
+  }),
+  modelId: CoreSchemas.id().openapi({
+    description: 'Model ID (e.g., anthropic/claude-3.5-sonnet, openai/gpt-4o)',
+    example: 'anthropic/claude-3.5-sonnet',
+  }),
+  role: z.string().nullable().optional().openapi({
+    description: 'Optional assigned role for this model',
+    example: 'The Ideator',
+  }),
+  customRoleId: CoreSchemas.id().nullable().optional().openapi({
+    description: 'Optional custom role ID to load system prompt from',
+    example: '01HXYZ123ABC',
+  }),
+  systemPrompt: z.string().optional().openapi({
+    description: 'Optional system prompt override (takes precedence over customRoleId)',
+  }),
+  temperature: z.number().min(0).max(2).optional().openapi({
+    description: 'Temperature setting',
+  }),
+  maxTokens: z.number().int().positive().optional().openapi({
+    description: 'Max tokens setting',
+  }),
+  priority: z.number().int().min(0).openapi({
+    description: 'Display order (0-indexed)',
+  }),
+  isEnabled: z.boolean().optional().default(true).openapi({
+    description: 'Whether participant is enabled',
+  }),
+});
+
+/**
+ * Participant schema for create operations - omits server-generated fields
+ */
+const CreateParticipantSchema = BaseParticipantSchema.omit({
+  id: true,
+  priority: true,
+  isEnabled: true,
+});
+
+/**
+ * Participant schema for update operations - partial updates allowed
+ */
+const UpdateParticipantSchema = BaseParticipantSchema.pick({
+  id: true,
+  modelId: true,
+  role: true,
+  customRoleId: true,
+  priority: true,
+  isEnabled: true,
+});
+
+/**
+ * Participant schema for streaming requests - minimal required fields
+ */
+const StreamParticipantSchema = BaseParticipantSchema.pick({
+  id: true,
+  modelId: true,
+  role: true,
+  customRoleId: true,
+  priority: true,
+  isEnabled: true,
+});
+
+// ============================================================================
+// ENTITY SCHEMAS
+// ============================================================================
+
 const ChatParticipantSchema = chatParticipantSelectSchema
   .extend({
     settings: ParticipantSettingsSchema,
   })
   .openapi('ChatParticipant');
+
 const ChatMessageSchema = chatMessageSelectSchema
   .extend({
     toolCalls: z.array(z.object({
@@ -60,22 +146,25 @@ const ChatMessageSchema = chatMessageSelectSchema
     metadata: MessageMetadataSchema.optional(),
   })
   .openapi('ChatMessage');
+
 const ChatThreadSchema = chatThreadSelectSchema
   .extend({
     metadata: z.object({
       tags: z.array(z.string()).optional(),
       summary: z.string().optional(),
-    }).passthrough().nullable().optional(),
+    }).nullable().optional(),
   })
   .openapi('ChatThread');
+
 const ChatThreadChangelogSchema = chatThreadChangelogSelectSchema
   .openapi('ChatThreadChangelog');
+
 const ChatCustomRoleSchema = chatCustomRoleSelectSchema
   .extend({
     metadata: z.object({
       tags: z.array(z.string()).optional(),
       category: z.string().optional(),
-    }).passthrough().nullable().optional(),
+    }).nullable().optional(),
   })
   .openapi('ChatCustomRole');
 export const CreateThreadRequestSchema = chatThreadInsertSchema
@@ -93,29 +182,7 @@ export const CreateThreadRequestSchema = chatThreadInsertSchema
       description: 'Conversation mode',
       example: 'brainstorming',
     }),
-    participants: z.array(z.object({
-      modelId: CoreSchemas.id().openapi({
-        description: 'Model ID (e.g., anthropic/claude-3.5-sonnet, openai/gpt-4o)',
-        example: 'anthropic/claude-3.5-sonnet',
-      }),
-      role: z.string().nullish().openapi({
-        description: 'Optional assigned role for this model (immutable)',
-        example: 'The Ideator',
-      }),
-      customRoleId: CoreSchemas.id().nullish().openapi({
-        description: 'Optional custom role ID to load system prompt from',
-        example: '01HXYZ123ABC',
-      }),
-      systemPrompt: z.string().optional().openapi({
-        description: 'Optional system prompt override (takes precedence over customRoleId)',
-      }),
-      temperature: z.number().min(0).max(2).optional().openapi({
-        description: 'Temperature setting',
-      }),
-      maxTokens: z.number().int().positive().optional().openapi({
-        description: 'Max tokens setting',
-      }),
-    }))
+    participants: z.array(CreateParticipantSchema)
       .min(1)
       .refine(uniqueModelIdsRefinement.check, { message: uniqueModelIdsRefinement.message })
       .openapi({
@@ -137,20 +204,18 @@ export const UpdateThreadRequestSchema = chatThreadUpdateSchema
     metadata: true,
   })
   .extend({
-    participants: z.array(
-      z.object({
-        id: z.string().optional().openapi({ description: 'Participant ID (omit for new participants)' }),
-        modelId: z.string().openapi({ description: 'Model ID' }),
-        role: z.string().nullable().optional().openapi({ description: 'Role name' }),
-        customRoleId: z.string().nullable().optional().openapi({ description: 'Custom role ID' }),
-        priority: z.number().int().min(0).openapi({ description: 'Display order (0-indexed)' }),
-        isEnabled: z.boolean().optional().default(true).openapi({ description: 'Whether participant is enabled' }),
-      }),
-    )
-      .refine(uniqueModelIdsRefinement.check, { message: uniqueModelIdsRefinement.message })
+    participants: z.array(UpdateParticipantSchema)
       .optional()
       .openapi({ description: 'Complete list of participants with their updated state' }),
   })
+  .refine(
+    (data) => {
+      if (!data.participants)
+        return true;
+      return uniqueModelIdsRefinement.check(data.participants);
+    },
+    { message: uniqueModelIdsRefinement.message, path: ['participants'] },
+  )
   .openapi('UpdateThreadRequest');
 export const ThreadListQuerySchema = CursorPaginationQuerySchema.extend({
   search: z.string().optional().openapi({
@@ -200,66 +265,59 @@ const ParticipantDetailPayloadSchema = z.object({
   participant: ChatParticipantSchema,
 }).openapi('ParticipantDetailPayload');
 export const ParticipantDetailResponseSchema = createApiResponseSchema(ParticipantDetailPayloadSchema).openapi('ParticipantDetailResponse');
+/**
+ * AI SDK UIMessage schema for OpenAPI documentation
+ * This is a simplified representation - actual runtime validation uses AI SDK's validateUIMessages()
+ *
+ * Reference: https://sdk.vercel.ai/docs/reference/ai-sdk-ui/ui-message
+ */
+const UIMessageSchema = z.object({
+  id: z.string().openapi({
+    description: 'Unique message identifier',
+    example: 'msg_user1',
+  }),
+  role: z.enum(['user', 'assistant', 'system']).openapi({
+    description: 'Message role',
+    example: 'user',
+  }),
+  parts: z.array(z.union([
+    z.object({
+      type: z.literal('text'),
+      text: z.string(),
+    }),
+    z.object({
+      type: z.literal('reasoning'),
+      text: z.string(),
+    }),
+  ])).openapi({
+    description: 'Message parts array (text, reasoning, etc.)',
+    example: [{ type: 'text', text: 'What are the best practices for API design?' }],
+  }),
+  createdAt: z.string().datetime().optional().openapi({
+    description: 'Message creation timestamp',
+    example: '2025-01-15T10:30:00.000Z',
+  }),
+  metadata: z.record(z.string(), z.unknown()).optional().openapi({
+    description: 'Optional message metadata',
+  }),
+}).openapi('UIMessage');
+
 export const StreamChatRequestSchema = z.object({
-  message: z.unknown().openapi({
-    description: `**Last message in AI SDK UIMessage format** (validated at runtime via AI SDK)
-**Validation Note:**
-Schema validation occurs via AI SDK's \`validateUIMessages()\` at runtime, not at OpenAPI level.
-This is required because \`UIMessage<METADATA, DATA, TOOLS>\` uses complex generic types that Zod cannot represent.
-**Format:**
-\`\`\`json
-{
-  "id": "msg_user1",
-  "role": "user",
-  "parts": [
-    { "type": "text", "text": "What are the best practices for API design?" }
-  ],
-  "createdAt": "2025-01-15T10:30:00.000Z"
-}
-\`\`\`
-**Part Types:**
-- \`text\`: Regular message content
-- \`reasoning\`: Model internal reasoning (e.g., Claude extended thinking)
-**Important:** Send only the **new** message. Backend loads full conversation history from database automatically.`,
-    example: {
-      id: 'msg_user1',
-      role: 'user',
-      parts: [{ type: 'text', text: 'What are the best practices for API design?' }],
-      createdAt: '2025-01-15T10:30:00.000Z',
-    },
+  message: UIMessageSchema.openapi({
+    description: 'Last message in AI SDK UIMessage format (send only new message - backend loads history)',
   }),
   id: z.string().min(1).openapi({
-    description: 'Thread ID for persistence and participant loading (required)',
+    description: 'Thread ID for persistence and participant loading',
     example: 'thread_abc123',
   }),
   participantIndex: z.number().int().min(0).optional().default(0).openapi({
     description: 'Index of participant to stream (0-based). Frontend orchestrates multiple participants.',
     example: 0,
   }),
-  participants: z.array(
-    z.object({
-      id: z.string(),
-      modelId: z.string(),
-      role: z.string().nullable().optional(),
-      customRoleId: z.string().nullable().optional(),
-      priority: z.number().int().min(0),
-      isEnabled: z.boolean().optional().default(true),
-    }),
-  )
-    .refine(uniqueModelIdsRefinement.check, { message: uniqueModelIdsRefinement.message })
+  participants: z.array(StreamParticipantSchema)
     .optional()
     .openapi({
       description: 'Current participant configuration (optional). If provided, used instead of loading from database.',
-      example: [
-        {
-          id: 'participant_1',
-          modelId: 'anthropic/claude-sonnet-4.5',
-          role: 'The Ideator',
-          customRoleId: null,
-          priority: 0,
-          isEnabled: true,
-        },
-      ],
     }),
   regenerateRound: z.number().int().positive().optional().openapi({
     description: 'Round number to regenerate (replace). If provided, deletes old messages and analysis for that round first.',

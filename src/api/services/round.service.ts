@@ -1,0 +1,214 @@
+/**
+ * Round Number Service - Round calculation and validation logic
+ *
+ * Following backend-patterns.md: Service layer for business logic
+ * Extracted from streaming.handler.ts for better maintainability
+ *
+ * This service handles:
+ * - Round number calculation based on message history
+ * - Round regeneration logic
+ * - Participant trigger detection (empty messages that reuse rounds)
+ */
+
+import { and, desc, eq } from 'drizzle-orm';
+
+import type { getDbAsync } from '@/db';
+import * as tables from '@/db/schema';
+
+// ============================================================================
+// Type Definitions
+// ============================================================================
+
+export type CalculateRoundNumberParams = {
+  threadId: string;
+  participantIndex: number;
+  message: unknown; // z.unknown() from schema
+  regenerateRound?: number;
+  db: Awaited<ReturnType<typeof getDbAsync>>;
+};
+
+export type RoundNumberResult = {
+  roundNumber: number;
+  isRegeneration: boolean;
+  isTriggerMessage: boolean;
+};
+
+// ============================================================================
+// Round Number Calculation
+// ============================================================================
+
+/**
+ * Calculate round number for a streaming request
+ *
+ * CRITICAL PATTERNS:
+ * - Only participant 0 calculates round numbers (prevents race conditions)
+ * - Subsequent participants (1, 2, 3...) query from database
+ * - Regeneration reuses exact round number being regenerated
+ * - Trigger messages (empty content) reuse existing round number
+ * - Real messages with content increment to new round
+ *
+ * Reference: streaming.handler.ts lines 193-309
+ */
+export async function calculateRoundNumber(
+  params: CalculateRoundNumberParams,
+): Promise<RoundNumberResult> {
+  const { threadId, participantIndex, message, regenerateRound, db } = params;
+
+  // =========================================================================
+  // REGENERATION: Reuse exact round number
+  // =========================================================================
+  if (regenerateRound && participantIndex === 0) {
+    return {
+      roundNumber: regenerateRound,
+      isRegeneration: true,
+      isTriggerMessage: false,
+    };
+  }
+
+  // =========================================================================
+  // PARTICIPANT 0: Calculate round number from message content
+  // =========================================================================
+  if (participantIndex === 0) {
+    // Cast message to UIMessage-like structure for property access
+    const messageWithProps = message as {
+      metadata?: Record<string, unknown>;
+      parts?: Array<{ type: string; text?: string }>;
+    };
+
+    const metadata = messageWithProps.metadata;
+    const isParticipantTrigger = metadata?.isParticipantTrigger === true;
+
+    // CRITICAL FIX: Trust frontend's round number if provided
+    // Frontend calculates correctly using calculateNextRoundNumber()
+    const frontendRoundNumber = metadata?.roundNumber;
+
+    if (typeof frontendRoundNumber === 'number' && frontendRoundNumber >= 1) {
+      // Frontend provided explicit round number - trust it
+      return {
+        roundNumber: frontendRoundNumber,
+        isRegeneration: false,
+        isTriggerMessage: isParticipantTrigger,
+      };
+    }
+
+    // Fallback to backend calculation if frontend didn't provide
+    // Extract text content to check if empty
+    const textParts = messageWithProps.parts?.filter(
+      (p: { type: string }) => p.type === 'text',
+    ) as Array<{ type: 'text'; text: string }> | undefined;
+    const textContent = (textParts || [])
+      .map(p => p.text)
+      .join('')
+      .trim();
+
+    // Get existing user messages to determine round number
+    const existingUserMessages = await db.query.chatMessage.findMany({
+      where: and(
+        eq(tables.chatMessage.threadId, threadId),
+        eq(tables.chatMessage.role, 'user'),
+      ),
+      columns: { roundNumber: true },
+      orderBy: desc(tables.chatMessage.roundNumber),
+      limit: 1,
+    });
+
+    const lastRoundNumber = existingUserMessages[0]?.roundNumber || 0;
+
+    // If trigger message (empty OR flagged), reuse last round number
+    // If real message with content, increment to new round
+    if ((isParticipantTrigger || textContent.length === 0) && lastRoundNumber > 0) {
+      return {
+        roundNumber: lastRoundNumber,
+        isRegeneration: false,
+        isTriggerMessage: true,
+      };
+    }
+
+    return {
+      roundNumber: lastRoundNumber + 1,
+      isRegeneration: false,
+      isTriggerMessage: false,
+    };
+  }
+
+  // =========================================================================
+  // SUBSEQUENT PARTICIPANTS: Get round number from database
+  // =========================================================================
+  // CRITICAL FIX: Replaced time-based filtering with explicit round number matching
+  //
+  // Strategy:
+  // 1. Query the last user message to get the expected round number
+  // 2. Check if any assistant has responded in that round
+  // 3. Use that round number for subsequent participants
+  // 4. Throw clear errors if round number cannot be determined
+
+  // Step 1: Get the last user message to determine expected round number
+  const lastUserMessage = await db.query.chatMessage.findFirst({
+    where: and(
+      eq(tables.chatMessage.threadId, threadId),
+      eq(tables.chatMessage.role, 'user'),
+    ),
+    columns: { roundNumber: true, createdAt: true },
+    orderBy: desc(tables.chatMessage.createdAt),
+  });
+
+  if (!lastUserMessage) {
+    throw new Error(
+      `Cannot determine round number for participant ${participantIndex}: No user messages found in thread ${threadId}`,
+    );
+  }
+
+  const expectedRoundNumber = lastUserMessage.roundNumber;
+
+  // Step 2: Check if any assistant messages exist for this round
+  // This handles the race condition where participant 0 might not have saved yet
+  const assistantInRound = await db.query.chatMessage.findFirst({
+    where: and(
+      eq(tables.chatMessage.threadId, threadId),
+      eq(tables.chatMessage.role, 'assistant'),
+      eq(tables.chatMessage.roundNumber, expectedRoundNumber),
+    ),
+    columns: { roundNumber: true, createdAt: true },
+    orderBy: desc(tables.chatMessage.createdAt),
+  });
+
+  // Step 3: Use the round number from either the assistant or the user message
+  const roundNumber = assistantInRound
+    ? assistantInRound.roundNumber
+    : expectedRoundNumber;
+
+  return {
+    roundNumber,
+    isRegeneration: false,
+    isTriggerMessage: false,
+  };
+}
+
+// ============================================================================
+// Round Validation
+// ============================================================================
+
+/**
+ * Validate that regeneration is only for the most recent round
+ *
+ * Reference: streaming.handler.ts lines 115-129
+ */
+export async function validateRegenerateRound(
+  threadId: string,
+  regenerateRound: number,
+  db: Awaited<ReturnType<typeof getDbAsync>>,
+): Promise<void> {
+  const maxRound = await db.query.chatMessage.findFirst({
+    where: eq(tables.chatMessage.threadId, threadId),
+    orderBy: desc(tables.chatMessage.roundNumber),
+    columns: { roundNumber: true },
+  });
+
+  const maxRoundNumber = maxRound?.roundNumber || 0;
+
+  if (regenerateRound !== maxRoundNumber) {
+    throw new Error(
+      `Can only regenerate the most recent round (${maxRoundNumber}). Attempted to regenerate round ${regenerateRound}.`,
+    );
+  }
+}

@@ -2,35 +2,34 @@
  * Streaming Handler - Real-time AI response streaming with SSE
  *
  * Following backend-patterns.md: Domain-specific handler module
- * Extracted from monolithic handler.ts for better maintainability
+ * Refactored to use service layer for better maintainability
  *
  * This handler orchestrates multi-participant AI conversations with streaming responses.
- * It includes complex round management, participant orchestration, and real-time SSE delivery.
  */
 
 import type { RouteHandler } from '@hono/zod-openapi';
 import type { UIMessage } from 'ai';
 import { convertToModelMessages, generateId, RetryError, streamText, validateUIMessages } from 'ai';
-import { and, asc, desc, eq } from 'drizzle-orm';
-import { revalidateTag } from 'next/cache';
+import { and, asc, eq } from 'drizzle-orm';
 import { ulid } from 'ulid';
 
 import { executeBatch } from '@/api/common/batch-operations';
 import { createError, structureAIProviderError } from '@/api/common/error-handling';
 import { createHandler } from '@/api/core';
-import type { ChangelogType } from '@/api/core/enums';
 import { ChangelogTypes } from '@/api/core/enums';
-import { modelCache } from '@/api/services/cache/model-cache';
+import { saveStreamedMessage } from '@/api/services/message-persistence.service';
 import { initializeOpenRouter, openRouterService } from '@/api/services/openrouter.service';
 import { openRouterModelsService } from '@/api/services/openrouter-models.service';
+import { validateParticipantUniqueness } from '@/api/services/participant-validation.service';
 import {
   AI_RETRY_CONFIG,
   AI_TIMEOUT_CONFIG,
   getSafeMaxOutputTokens,
 } from '@/api/services/product-logic.service';
 import { ragService } from '@/api/services/rag.service';
+import { handleRoundRegeneration } from '@/api/services/regeneration.service';
+import { calculateRoundNumber } from '@/api/services/round.service';
 import {
-  checkAnalysisQuota,
   enforceMessageQuota,
   getUserTier,
   incrementMessageUsage,
@@ -61,29 +60,21 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
     const { message, id: threadId, participantIndex, participants: providedParticipants, regenerateRound, mode: providedMode } = c.validated.body;
 
     // =========================================================================
-    // STEP 0: ✅ AI SDK V5 VALIDATION - Validate incoming message exists
+    // STEP 1: Validate incoming message
     // =========================================================================
-    // OFFICIAL PATTERN: Validate single message exists before processing
-    // Reference: https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot-message-persistence#sending-only-the-last-message
-    //
-    // NOTE: Full message validation (format, structure, metadata) happens at STEP 3.5
-    // This early check ensures we fail fast if no message was provided
     if (!message) {
       throw createError.badRequest('Message is required', { errorType: 'validation' });
     }
-
-    const db = await getDbAsync();
-
-    // =========================================================================
-    // STEP 1: Verify Thread & Load/Use Participants
-    // =========================================================================
 
     if (!threadId) {
       throw createError.badRequest('Thread ID is required for streaming');
     }
 
-    // Load thread for verification and metadata
-    // Always load participants from DB for verification, but may override with providedParticipants
+    const db = await getDbAsync();
+
+    // =========================================================================
+    // STEP 2: Load thread and verify ownership
+    // =========================================================================
     const thread = await db.query.chatThread.findFirst({
       where: eq(tables.chatThread.id, threadId),
       with: {
@@ -103,219 +94,34 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
     }
 
     // =========================================================================
-    // STEP 1.3: ✅ REGENERATE ROUND: Delete old messages and analysis if regenerating
+    // STEP 3: Handle regeneration (delete old round data)
     // =========================================================================
-    // When regenerateRound is provided, we delete all existing messages and analysis
-    // for that round number. This allows the new streaming to reuse the same round number
-    // and effectively "replace" the old round with new content.
-    //
-    // This is only done by the first participant (index 0) to avoid race conditions
-    // where multiple participants try to delete the same messages simultaneously.
-
-    if (regenerateRound && participantIndex === 0) {
-      // ✅ VALIDATE: Only allow regeneration of most recent round
-      const maxRound = await db.query.chatMessage.findFirst({
-        where: eq(tables.chatMessage.threadId, threadId),
-        orderBy: desc(tables.chatMessage.roundNumber),
-        columns: { roundNumber: true },
+    if (regenerateRound) {
+      await handleRoundRegeneration({
+        threadId,
+        regenerateRound,
+        participantIndex: participantIndex ?? 0,
+        db,
       });
-
-      const maxRoundNumber = maxRound?.roundNumber || 0;
-
-      if (regenerateRound !== maxRoundNumber) {
-        throw createError.badRequest(
-          `Can only regenerate the most recent round (${maxRoundNumber}). Attempted to regenerate round ${regenerateRound}.`,
-        );
-      }
-
-      try {
-        // ✅ DELETE ONLY ASSISTANT MESSAGES (preserve user messages)
-        const deletedMessages = await db
-          .delete(tables.chatMessage)
-          .where(
-            and(
-              eq(tables.chatMessage.threadId, threadId),
-              eq(tables.chatMessage.roundNumber, regenerateRound),
-              eq(tables.chatMessage.role, 'assistant'), // ✅ ONLY delete assistant messages
-            ),
-          )
-          .returning();
-
-        // ✅ RAG CLEANUP: Delete embeddings for deleted messages
-        // CASCADE foreign key will handle D1 cleanup, but we need to clean Vectorize
-        if (deletedMessages.length > 0) {
-          for (const deletedMessage of deletedMessages) {
-            try {
-              await ragService.deleteMessageEmbeddings({
-                messageId: deletedMessage.id,
-                db,
-              });
-            } catch {
-              // Log but don't fail the regeneration
-
-            }
-          }
-        }
-
-        // ✅ ATOMIC CLEANUP: Delete all related round data in a single batch
-        await executeBatch(db, [
-          db.delete(tables.chatModeratorAnalysis).where(
-            and(
-              eq(tables.chatModeratorAnalysis.threadId, threadId),
-              eq(tables.chatModeratorAnalysis.roundNumber, regenerateRound),
-            ),
-          ),
-          db.delete(tables.chatRoundFeedback).where(
-            and(
-              eq(tables.chatRoundFeedback.threadId, threadId),
-              eq(tables.chatRoundFeedback.roundNumber, regenerateRound),
-            ),
-          ),
-          db.delete(tables.chatThreadChangelog).where(
-            and(
-              eq(tables.chatThreadChangelog.threadId, threadId),
-              eq(tables.chatThreadChangelog.roundNumber, regenerateRound),
-            ),
-          ),
-        ]);
-      } catch (error) {
-        // Re-throw AppError instances (like validation errors)
-        if (error instanceof Error && error.name === 'AppError') {
-          throw error;
-        }
-
-        // Don't fail the request for cleanup errors - continue with streaming
-        // The old messages will remain but new ones will be added with a higher round number
-      }
     }
 
     // =========================================================================
-    // STEP 1.4: Calculate Round Number (ONLY for first participant)
+    // STEP 4: Calculate round number
     // =========================================================================
-    // ✅ EVENT-BASED ROUND TRACKING: Calculate round number ONCE per round
-    // Only participant 0 calculates the round number to avoid race conditions
-    // Other participants will use the roundNumber from the saved user message
-    //
-    // ✅ TRIGGER MESSAGE HANDLING: Empty messages (isParticipantTrigger) reuse existing round
-    // When frontend sends empty trigger to start AI responses, don't create new round
+    const roundResult = await calculateRoundNumber({
+      threadId,
+      participantIndex: participantIndex ?? 0,
+      message,
+      regenerateRound,
+      db,
+    });
 
-    let currentRoundNumber: number;
-
-    if (regenerateRound && participantIndex === 0) {
-      // ✅ REGENERATION: Reuse the exact round number being regenerated
-      currentRoundNumber = regenerateRound;
-    } else if (participantIndex === 0) {
-      // ✅ CRITICAL FIX: Check if message is a trigger (empty content or isParticipantTrigger metadata)
-      // Cast message to UIMessage-like structure for property access (message is z.unknown() in schema)
-      const messageWithProps = message as {
-        metadata?: Record<string, unknown>;
-        parts?: Array<{ type: string; text?: string }>;
-      };
-
-      const metadata = messageWithProps.metadata;
-      const isParticipantTrigger = metadata?.isParticipantTrigger === true;
-
-      // ✅ CRITICAL FIX: Trust frontend's round number if provided
-      // Frontend calculates correctly using calculateNextRoundNumber()
-      const frontendRoundNumber = metadata?.roundNumber;
-
-      if (typeof frontendRoundNumber === 'number' && frontendRoundNumber >= 1) {
-        // Frontend provided explicit round number - trust it
-        currentRoundNumber = frontendRoundNumber;
-      } else {
-        // Fallback to backend calculation if frontend didn't provide
-        // Extract text content to check if empty
-        const textParts = messageWithProps.parts?.filter(
-          (p: { type: string }) => p.type === 'text',
-        ) as Array<{ type: 'text'; text: string }> | undefined;
-        const textContent = (textParts || [])
-          .map(p => p.text)
-          .join('')
-          .trim();
-
-        // Get existing user messages to determine round number
-        const existingUserMessages = await db.query.chatMessage.findMany({
-          where: and(
-            eq(tables.chatMessage.threadId, threadId),
-            eq(tables.chatMessage.role, 'user'),
-          ),
-          columns: { roundNumber: true },
-          orderBy: desc(tables.chatMessage.roundNumber),
-          limit: 1,
-        });
-
-        const lastRoundNumber = existingUserMessages[0]?.roundNumber || 0;
-
-        // ✅ If trigger message (empty OR flagged), reuse last round number
-        // ✅ If real message with content, increment to new round
-        if ((isParticipantTrigger || textContent.length === 0) && lastRoundNumber > 0) {
-          currentRoundNumber = lastRoundNumber; // Reuse existing round
-        } else {
-          currentRoundNumber = lastRoundNumber + 1; // New round
-        }
-      }
-    } else {
-      // ✅ SUBSEQUENT PARTICIPANTS: Get round number from the latest user message
-      // CRITICAL FIX: Replaced time-based filtering with explicit round number matching
-      //
-      // Strategy:
-      // 1. Query the last user message to get the expected round number
-      // 2. Check if any assistant has responded in that round
-      // 3. Use that round number for subsequent participants
-      // 4. Throw clear errors if round number cannot be determined
-      //
-      // This prevents race conditions where time-based filtering (30 seconds) could
-      // incorrectly identify the round number or silently fall back to round 1.
-
-      // Step 1: Get the last user message to determine expected round number
-      const lastUserMessage = await db.query.chatMessage.findFirst({
-        where: and(
-          eq(tables.chatMessage.threadId, threadId),
-          eq(tables.chatMessage.role, 'user'),
-        ),
-        columns: { roundNumber: true, createdAt: true },
-        orderBy: desc(tables.chatMessage.createdAt),
-      });
-
-      if (!lastUserMessage) {
-        throw createError.internal(
-          `Cannot determine round number for participant ${participantIndex}: No user messages found in thread ${threadId}`,
-        );
-      }
-
-      const expectedRoundNumber = lastUserMessage.roundNumber;
-
-      // Step 2: Check if any assistant messages exist for this round
-      // This handles the race condition where participant 0 might not have saved yet
-      const assistantInRound = await db.query.chatMessage.findFirst({
-        where: and(
-          eq(tables.chatMessage.threadId, threadId),
-          eq(tables.chatMessage.role, 'assistant'),
-          eq(tables.chatMessage.roundNumber, expectedRoundNumber),
-        ),
-        columns: { roundNumber: true, createdAt: true },
-        orderBy: desc(tables.chatMessage.createdAt),
-      });
-
-      // Step 3: Use the round number from either the assistant or the user message
-      if (assistantInRound) {
-        // ✅ Use roundNumber from parallel participant (same round, already saved)
-        currentRoundNumber = assistantInRound.roundNumber;
-      } else {
-        // ✅ Use round number from the last user message
-        // This is safe because participant 0 calculated this round number before starting
-        currentRoundNumber = expectedRoundNumber;
-      }
-    }
+    const currentRoundNumber = roundResult.roundNumber;
 
     // =========================================================================
-    // STEP 1.4A: ✅ HANDLE MODE CHANGE (If Provided)
+    // STEP 5: Handle mode change (if provided)
     // =========================================================================
-    // Check if mode was changed and persist immediately (not staged like participants)
-    // Only first participant (index 0) should handle mode changes to avoid duplicates
-
     if (providedMode && providedMode !== thread.mode && participantIndex === 0) {
-      // ✅ ATOMIC: Update thread mode and create changelog entry in single batch
       await executeBatch(db, [
         db.update(tables.chatThread)
           .set({
@@ -342,15 +148,8 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
     }
 
     // =========================================================================
-    // STEP 1.5: ✅ PERSIST PARTICIPANT CHANGES FIRST (Atomic Pattern)
+    // STEP 6: Persist participant changes (if provided)
     // =========================================================================
-    // CRITICAL: Persist participant changes BEFORE loading participants for streaming
-    // This ensures the participants used for streaming are always up-to-date
-    //
-    // If participants were provided in request AND this is the first participant (index 0),
-    // persist the participant changes to database and create changelog entries.
-    // This implements the "staged changes" pattern where participant config changes
-    // are only persisted when user submits a new message, not when they change the UI.
 
     if (providedParticipants && participantIndex === 0) {
       // ✅ DETAILED CHANGE DETECTION: Track specific types of changes
@@ -378,7 +177,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
 
       const changelogEntries: Array<{
         id: string;
-        changeType: ChangelogType;
+        changeType: typeof ChangelogTypes[keyof typeof ChangelogTypes];
         changeSummary: string;
         changeData: ChangeDataType;
       }> = [];
@@ -390,15 +189,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
       const providedEnabledParticipants = providedParticipants.filter(p => p.isEnabled !== false);
 
       // ✅ VALIDATION: Check for duplicate modelIds in provided participants
-      const modelIds = providedEnabledParticipants.map(p => p.modelId);
-      const duplicateModelIds = modelIds.filter((id, index) => modelIds.indexOf(id) !== index);
-      if (duplicateModelIds.length > 0) {
-        const uniqueDuplicates = [...new Set(duplicateModelIds)];
-        throw createError.badRequest(
-          `Duplicate AI models detected: ${uniqueDuplicates.join(', ')}. Each AI model can only be added once per conversation.`,
-          { errorType: 'validation' },
-        );
-      }
+      validateParticipantUniqueness(providedEnabledParticipants);
 
       // ✅ Match participants by modelId only for change detection
       // This allows role changes to be treated as updates, not add/remove
@@ -815,19 +606,8 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
     const userTier = await getUserTier(user.id);
 
     // ✅ DYNAMIC TOKEN LIMIT: Fetch model info to get context_length and calculate safe max tokens
-    // ✅ PERFORMANCE OPTIMIZATION: 1-hour cache for model metadata
-    // Reference: /docs/analysis/backend-performance-issues.md:769-809
-    // - Reduces redundant OpenRouter API calls
-    // - Saves 20-100ms per cached model lookup
-    // - Models rarely change, 1-hour TTL is safe
-    let modelInfo = modelCache.get(participant.modelId);
-    if (!modelInfo) {
-      // Cache miss - fetch from OpenRouter
-      modelInfo = await openRouterModelsService.getModelById(participant.modelId);
-      if (modelInfo) {
-        modelCache.set(participant.modelId, modelInfo);
-      }
-    }
+    // Direct API call to OpenRouter (no caching needed - browser manages context after load)
+    const modelInfo = await openRouterModelsService.getModelById(participant.modelId);
     const modelContextLength = modelInfo?.context_length || 16000; // Default fallback
 
     // Estimate input tokens: system prompt + average message content
@@ -1141,492 +921,25 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
 
       // ✅ PERSIST MESSAGE: Save to database after streaming completes
       onFinish: async (finishResult) => {
-        const { text, usage, finishReason, providerMetadata, response } = finishResult;
+        const messageId = streamMessageId || ulid();
 
-        // ✅ CRITICAL FIX: Extract reasoning from accumulated deltas first
-        // Priority 1: Use accumulated reasoning deltas from stream chunks
-        let reasoningText: string | null = reasoningDeltas.length > 0 ? reasoningDeltas.join('') : null;
-
-        // ✅ FALLBACK 1: Extract reasoning from finishResult directly (for OpenAI o1/o3)
-        // The AI SDK v5 provides reasoning in the finishResult for certain models
-        const finishResultWithReasoning = finishResult as typeof finishResult & { reasoning?: string };
-        if (!reasoningText) {
-          reasoningText = (typeof finishResultWithReasoning.reasoning === 'string' ? finishResultWithReasoning.reasoning : null) || null;
-        }
-
-        // ✅ FALLBACK 2: If reasoning not in finishResult, try extracting from providerMetadata
-        // This handles cases where providers include reasoning in metadata instead
-        if (!reasoningText) {
-          const extractReasoning = (metadata: unknown): string | null => {
-            if (!metadata || typeof metadata !== 'object')
-              return null;
-
-            const meta = metadata as Record<string, unknown>;
-
-            // Helper to safely navigate nested paths
-            const getNested = (obj: unknown, path: string[]): unknown => {
-              let current = obj;
-              for (const key of path) {
-                if (!current || typeof current !== 'object')
-                  return undefined;
-                current = (current as Record<string, unknown>)[key];
-              }
-              return current;
-            };
-
-            // Check all possible reasoning field locations
-            const fields = [
-              getNested(meta, ['openai', 'reasoning']), // OpenAI o1/o3
-              meta.reasoning,
-              meta.thinking,
-              meta.thought,
-              meta.thoughts,
-              meta.chain_of_thought,
-              meta.internal_reasoning,
-              meta.scratchpad,
-            ];
-
-            for (const field of fields) {
-              if (typeof field === 'string' && field.trim())
-                return field.trim();
-              if (field && typeof field === 'object') {
-                const obj = field as Record<string, unknown>;
-                if (typeof obj.content === 'string' && obj.content.trim())
-                  return obj.content.trim();
-                if (typeof obj.text === 'string' && obj.text.trim())
-                  return obj.text.trim();
-              }
-            }
-            return null;
-          };
-
-          reasoningText = extractReasoning(providerMetadata);
-        }
-
-        // ✅ CRITICAL ERROR HANDLING: Wrap DB operations in try-catch
-        // This ensures that errors don't break the round - next participant can still respond
-        try {
-          // ✅ EXTRACT OPENROUTER ERROR DETAILS: Check providerMetadata and response for error information
-          let openRouterError: string | undefined;
-          let errorCategory: string | undefined;
-
-          // Check providerMetadata for OpenRouter-specific errors
-          if (providerMetadata && typeof providerMetadata === 'object') {
-            const metadata = providerMetadata as Record<string, unknown>;
-            if (metadata.error) {
-              openRouterError = typeof metadata.error === 'string'
-                ? metadata.error
-                : JSON.stringify(metadata.error);
-            }
-            if (!openRouterError && metadata.errorMessage) {
-              openRouterError = String(metadata.errorMessage);
-            }
-            // Check for moderation/content filter errors
-            if (metadata.moderation || metadata.contentFilter) {
-              errorCategory = 'content_filter';
-              openRouterError = openRouterError || 'Content was filtered by safety systems';
-            }
-          }
-
-          // Check response object for errors
-          if (!openRouterError && response && typeof response === 'object') {
-            const resp = response as Record<string, unknown>;
-            if (resp.error) {
-              openRouterError = typeof resp.error === 'string'
-                ? resp.error
-                : JSON.stringify(resp.error);
-            }
-          }
-
-          // ✅ DETECT EMPTY RESPONSES: Check for provider-level empty responses
-          // Note: Empty responses should have been filtered out by the retry loop
-          // If we get here with an empty response, all retries were exhausted
-
-          // ✅ VALID RESPONSE: Accept ANY response where the model generated tokens
-          // According to AI SDK best practices: if the provider returns tokens without
-          // throwing an exception, it's a valid response. Only check for truly empty
-          // responses (0 tokens from provider).
-          // Accept responses with 1+ tokens even if text content is minimal or empty.
-          // NOTE: Refusal detection removed - optimized system prompts prevent refusals by design
-          const outputTokens = usage?.outputTokens || 0;
-          const isEmptyResponse = outputTokens === 0;
-
-          // Generate comprehensive error message
-          let errorMessage: string | undefined;
-          let providerMessage: string | undefined;
-
-          if (isEmptyResponse || openRouterError) {
-            const outputTokens = usage?.outputTokens || 0;
-            const inputTokens = usage?.inputTokens || 0;
-
-            // Use OpenRouter error if available
-            if (openRouterError) {
-              providerMessage = openRouterError;
-              errorMessage = `OpenRouter Error for ${participant.modelId}: ${openRouterError}`;
-
-              // Categorize based on error content
-              const errorLower = openRouterError.toLowerCase();
-              if (errorLower.includes('not found') || errorLower.includes('does not exist')) {
-                errorCategory = 'model_not_found';
-              } else if (errorLower.includes('filter') || errorLower.includes('safety') || errorLower.includes('moderation')) {
-                errorCategory = 'content_filter';
-              } else if (errorLower.includes('rate limit') || errorLower.includes('quota')) {
-                errorCategory = 'rate_limit';
-              } else if (errorLower.includes('timeout') || errorLower.includes('connection')) {
-                errorCategory = 'network';
-              } else {
-                // Intentionally empty
-                errorCategory = errorCategory || 'provider_error';
-              }
-            } else if (outputTokens === 0) {
-              // True provider empty response - 0 tokens generated
-              // Provide context-aware error messages based on finish reason
-              const baseStats = `Input: ${inputTokens} tokens, Output: 0 tokens, Status: ${finishReason}`;
-
-              if (finishReason === 'stop') {
-                // Model completed normally but returned no content - likely filtered or refused
-                providerMessage = `Model completed but returned no content. ${baseStats}. This may indicate content filtering, safety constraints, or the model chose not to respond.`;
-                errorMessage = `${participant.modelId} returned empty response - possible content filtering or safety block`;
-                errorCategory = 'content_filter';
-              } else if (finishReason === 'length') {
-                // Model hit token limit before generating anything
-                providerMessage = `Model hit token limit before generating content. ${baseStats}. Try reducing the conversation history or input length.`;
-                errorMessage = `${participant.modelId} exceeded token limit without generating content`;
-                errorCategory = 'provider_error';
-              } else if (finishReason === 'content-filter') {
-                // Explicit content filtering
-                providerMessage = `Content was filtered by safety systems. ${baseStats}`;
-                errorMessage = `${participant.modelId} blocked by content filter`;
-                errorCategory = 'content_filter';
-              } else if (finishReason === 'error' || finishReason === 'other') {
-                // Provider error
-                providerMessage = `Provider error prevented response generation. ${baseStats}. This may be a temporary issue with the model provider.`;
-                errorMessage = `${participant.modelId} encountered a provider error`;
-                errorCategory = 'provider_error';
-              } else {
-                // Intentionally empty
-                // Unknown/unexpected finish reason
-                providerMessage = `Model returned empty response. ${baseStats}`;
-                errorMessage = `${participant.modelId} returned empty response (reason: ${finishReason})`;
-                errorCategory = 'empty_response';
-              }
-            }
-            // Note: We no longer reject responses with tokens but minimal/empty text content.
-            // If model generated 1+ tokens, it's considered a valid response even if text is empty.
-          }
-
-          // ✅ SAVE MESSAGE: Content and metadata to database
-          const contentToSave = text || '';
-          const hasError = isEmptyResponse || !!openRouterError;
-
-          // ✅ DETECT PARTIAL RESPONSE: Distinguish between empty error and partial error
-          // A partial response occurs when:
-          // 1. There was an error during streaming (hasError is true)
-          // 2. Some content was generated before the error (text length > 0 or outputTokens > 0)
-          // This helps the frontend show appropriate UI (e.g., "Partial response due to error")
-          const isPartialResponse = hasError && (text.length > 0 || (usage?.outputTokens || 0) > 0);
-
-          // ✅ DETERMINE IF ERROR IS TRANSIENT
-          // Empty responses with finish_reason='stop' are usually NOT transient
-          // (content filtering, safety, or model refusal - retrying won't help)
-          // Only mark as transient for network/provider errors
-          const isTransientError = hasError && (
-            errorCategory === 'provider_error'
-            || errorCategory === 'network'
-            || errorCategory === 'rate_limit'
-            || (errorCategory === 'empty_response' && finishReason !== 'stop')
-          );
-
-          // ✅ AI SDK v5 PATTERN: Build parts[] array with text and reasoning
-          const parts: Array<{ type: 'text'; text: string } | { type: 'reasoning'; text: string }> = [];
-
-          if (contentToSave) {
-            parts.push({ type: 'text', text: contentToSave });
-          }
-
-          if (reasoningText) {
-            parts.push({ type: 'reasoning', text: reasoningText });
-          }
-
-          // Ensure at least one part exists (empty text for error messages)
-          if (parts.length === 0) {
-            parts.push({ type: 'text', text: '' });
-          }
-
-          // ✅ CRITICAL FIX: Use streamMessageId from generateMessageId if available
-          // This ensures frontend and backend use the same message ID, preventing duplication
-          // Fallback to ulid() only if streamMessageId wasn't set (should never happen)
-          const messageId = streamMessageId || ulid();
-
-          // =========================================================================
-          // ✅ VALIDATE ROUND NUMBER BEFORE SAVE (Fix #4 - onFinish validation)
-          // =========================================================================
-          // Final validation before persisting to database
-          // Ensures the round number we're about to save is consistent with the conversation state
-          // This catches any edge cases where round calculation might have been incorrect
-
-          // Get latest messages to validate round number at save time
-          const latestMessages = await db.query.chatMessage.findMany({
-            where: eq(tables.chatMessage.threadId, threadId),
-            orderBy: desc(tables.chatMessage.roundNumber),
-            limit: 5, // Only need recent messages for validation
-          });
-
-          const latestRoundNumber = latestMessages.length > 0
-            ? Math.max(...latestMessages.map(m => m.roundNumber))
-            : 0;
-
-          // Validate round number hasn't become invalid during streaming
-          // This can happen if:
-          // - Multiple participants are racing to save
-          // - Round regeneration happened mid-stream
-          // - Frontend sent incorrect round number
-          if (process.env.NODE_ENV === 'development') {
-            if (currentRoundNumber < latestRoundNumber - 1) {
-              console.warn('[streamChat] onFinish: Round number validation failed - too far behind:', {
-                threadId,
-                participantIndex,
-                participantId: participant.id,
-                messageId,
-                calculatedRoundNumber: currentRoundNumber,
-                latestRoundNumber,
-                difference: latestRoundNumber - currentRoundNumber,
-                action: 'Using calculated round number anyway (race condition or regeneration)',
-              });
-            } else if (currentRoundNumber > latestRoundNumber + 1) {
-              console.warn('[streamChat] onFinish: Round number validation failed - jumped forward:', {
-                threadId,
-                participantIndex,
-                participantId: participant.id,
-                messageId,
-                calculatedRoundNumber: currentRoundNumber,
-                latestRoundNumber,
-                difference: currentRoundNumber - latestRoundNumber,
-                action: 'Using calculated round number anyway (should investigate)',
-              });
-            }
-          }
-
-          const [savedMessage] = await db.insert(tables.chatMessage)
-            .values({
-              id: messageId,
-              threadId,
-              participantId: participant.id,
-              role: 'assistant' as const,
-              parts,
-              roundNumber: currentRoundNumber,
-              metadata: {
-                roundNumber: currentRoundNumber, // ✅ CRITICAL: Required by UIMessageMetadataSchema
-                model: participant.modelId,
-                participantId: participant.id,
-                participantIndex,
-                participantRole: participant.role,
-                usage,
-                finishReason,
-                hasError,
-                errorType: errorCategory || (hasError ? 'empty_response' : undefined),
-                errorMessage,
-                providerMessage,
-                openRouterError,
-                isTransient: isTransientError,
-                isPartialResponse, // ✅ NEW: Indicates partial content generated before error
-                // ⚠️ retryAttempts removed - AI SDK handles retries internally, we don't track attempts
-              },
-              createdAt: new Date(),
-            })
-            .onConflictDoNothing()
-            .returning();
-
-          // ✅ CACHE INVALIDATION: Revalidate thread messages cache tag
-          revalidateTag(`thread:${threadId}:messages`);
-
-          // ✅ RAG EMBEDDING STORAGE: Store message embedding for semantic search
-          // Only store embeddings for successful messages (non-empty, no errors)
-          if (savedMessage && !hasError && contentToSave.trim()) {
-            try {
-              await ragService.storeMessageEmbedding({
-                message: savedMessage,
-                threadId,
-                userId: user.id,
-                db,
-              });
-            } catch {
-              // Embedding storage failures should not break the chat flow
-
-            }
-          }
-
-          // ✅ QUOTA: Message quota already deducted before streaming started (line ~2307)
-          // No need to increment again here - quota charged regardless of stream completion
-
-          // ✅ TRIGGER ANALYSIS: When last participant finishes AND all participants succeeded
-          if (participantIndex === participants.length - 1 && savedMessage) {
-            // ✅ CRITICAL FIX: Use the currentRoundNumber from outer scope (lines 1904-1950)
-            // DO NOT recalculate it here - that would give wrong results for rounds > 1
-            // The currentRoundNumber is already calculated based on user message count
-
-            // ✅ VALIDATE ROUND: Check if all participants in this round succeeded
-            // Query all messages for the current round to ensure none have errors
-            const roundMessages = await db.query.chatMessage.findMany({
-              where: and(
-                eq(tables.chatMessage.threadId, threadId),
-                eq(tables.chatMessage.roundNumber, currentRoundNumber),
-              ),
-              orderBy: [
-                asc(tables.chatMessage.roundNumber),
-                asc(tables.chatMessage.createdAt),
-                asc(tables.chatMessage.id),
-              ],
-            });
-
-            // ✅ CHECK ALL PARTICIPANTS RESPONDED: Analysis only happens if round is complete
-            const expectedParticipantCount = participants.length;
-            const assistantMessages = roundMessages.filter(msg => msg.role === 'assistant');
-            const actualParticipantCount = assistantMessages.length;
-
-            // ✅ VALIDATION: Check for error messages in round
-            const messagesWithErrors = assistantMessages.filter(
-              msg => (msg.metadata as { hasError?: boolean })?.hasError === true,
-            );
-
-            if (actualParticipantCount < expectedParticipantCount || messagesWithErrors.length > 0) {
-              // ✅ RECOVERY: Round incomplete or has errors - skip analysis
-              if (process.env.NODE_ENV === 'development') {
-                if (messagesWithErrors.length > 0) {
-                  console.warn(`[streamChat] Round ${currentRoundNumber} has ${messagesWithErrors.length} error messages, skipping analysis`, {
-                    errorMessageIds: messagesWithErrors.map(m => m.id),
-                  });
-                }
-                if (actualParticipantCount < expectedParticipantCount) {
-                  console.warn(`[streamChat] Round ${currentRoundNumber} incomplete, skipping analysis`, {
-                    threadId,
-                    roundNumber: currentRoundNumber,
-                    expectedCount: expectedParticipantCount,
-                    actualCount: actualParticipantCount,
-                    missingCount: expectedParticipantCount - actualParticipantCount,
-                    participantIds: participants.map(p => p.id),
-                    receivedParticipantIds: assistantMessages.map(m => m.participantId).filter(Boolean),
-                  });
-                }
-              }
-            } else {
-              // ✅ AUTO-CREATE PENDING ANALYSIS: Create pending analysis record for frontend to stream
-              // Round complete, creating pending analysis (consider structured logging if needed)
-
-              // Capture values for async closure (used in analysis creation below)
-              const capturedThreadId = threadId;
-              const capturedRoundNumber = currentRoundNumber;
-              const capturedMode = thread.mode;
-              const capturedRoundMessages = roundMessages;
-              const capturedUserId = user.id;
-
-              // Create pending analysis record in background (non-blocking)
-              (async () => {
-                try {
-                  // ✅ QUOTA CHECK: Skip creating pending analysis if user is out of quota
-                  // This prevents wasted work and follows graceful degradation pattern
-                  const analysisQuota = await checkAnalysisQuota(capturedUserId);
-                  if (!analysisQuota.canCreate) {
-                    if (process.env.NODE_ENV === 'development') {
-                      console.warn(`[streamChat] Analysis quota exceeded for user ${capturedUserId} - skipping pending analysis creation`, {
-                        current: analysisQuota.current,
-                        limit: analysisQuota.limit,
-                        threadId: capturedThreadId,
-                        roundNumber: capturedRoundNumber,
-                      });
-                    }
-                    return; // Skip creating pending analysis
-                  }
-
-                  const db = await getDbAsync();
-
-                  // Check if analysis already exists for this round
-                  const existingAnalysis = await db
-                    .select()
-                    .from(tables.chatModeratorAnalysis)
-                    .where(
-                      and(
-                        eq(tables.chatModeratorAnalysis.threadId, capturedThreadId),
-                        eq(tables.chatModeratorAnalysis.roundNumber, capturedRoundNumber),
-                      ),
-                    )
-                    .get();
-
-                  if (existingAnalysis) {
-                    // Analysis already exists, skipping (consider structured logging if needed)
-                    return;
-                  }
-
-                  // Get participant message IDs from this round
-                  const assistantMessagesForAnalysis = capturedRoundMessages.filter(m => m.role === 'assistant');
-                  const participantMessageIds = assistantMessagesForAnalysis.map(m => m.id);
-
-                  // ✅ VALIDATION: Final check before creating analysis record
-                  if (participantMessageIds.length === 0) {
-                    if (process.env.NODE_ENV === 'development') {
-                      console.error(`[streamChat] Cannot create analysis for round ${capturedRoundNumber}: No assistant messages found`, {
-                        threadId: capturedThreadId,
-                        roundNumber: capturedRoundNumber,
-                        totalMessages: capturedRoundMessages.length,
-                      });
-                    }
-                    return;
-                  }
-
-                  // ✅ VALIDATION: Ensure participantMessageIds matches expected count
-                  if (process.env.NODE_ENV === 'development') {
-                    const expectedCountForAnalysis = participants.length;
-                    if (participantMessageIds.length !== expectedCountForAnalysis) {
-                      console.warn(`[streamChat] Participant count mismatch for analysis creation`, {
-                        threadId: capturedThreadId,
-                        roundNumber: capturedRoundNumber,
-                        expectedCount: expectedCountForAnalysis,
-                        actualCount: participantMessageIds.length,
-                        messageIds: participantMessageIds,
-                      });
-                    }
-                  }
-
-                  // Get the user's question from this round
-                  const userMessage = capturedRoundMessages.find(m => m.role === 'user');
-                  const userQuestion = userMessage
-                    ? extractTextFromParts(userMessage.parts)
-                    : 'No user question found';
-
-                  // Create pending analysis record
-                  const analysisId = ulid();
-                  await db
-                    .insert(tables.chatModeratorAnalysis)
-                    .values({
-                      id: analysisId,
-                      threadId: capturedThreadId,
-                      roundNumber: capturedRoundNumber,
-                      mode: capturedMode,
-                      userQuestion,
-                      status: 'pending',
-                      participantMessageIds, // Array of message IDs (JSON mode in schema)
-                      analysisData: null,
-                      completedAt: null,
-                      errorMessage: null,
-                    })
-                    .run();
-
-                  // Pending analysis created successfully
-                } catch (error) {
-                  // Non-blocking error - log only in development
-                  if (process.env.NODE_ENV === 'development') {
-                    console.error(`[streamChat] Failed to create analysis for round ${capturedRoundNumber}:`, error);
-                  }
-                }
-              })();
-            }
-          }
-        } catch {
-          // ✅ NON-BLOCKING ERROR: Log but don't throw
-          // This allows the next participant to continue even if this one failed to save
-
-          // Don't throw - allow round to continue
-        }
+        // Delegate to message persistence service
+        await saveStreamedMessage({
+          messageId,
+          threadId,
+          participantId: participant.id,
+          participantIndex: participantIndex ?? 0,
+          participantRole: participant.role,
+          modelId: participant.modelId,
+          roundNumber: currentRoundNumber,
+          text: finishResult.text,
+          reasoningDeltas,
+          finishResult,
+          userId: user.id,
+          participants,
+          threadMode: thread.mode,
+          db,
+        });
       },
     });
 

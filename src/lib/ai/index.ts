@@ -40,8 +40,6 @@ export {
   convertUIToModelMessages,
   // Error message creation
   createErrorUIMessage,
-  deduplicateConsecutiveUserMessages,
-  deduplicateMessages,
   extractTextFromMessage,
   // Text extraction
   extractTextFromParts,

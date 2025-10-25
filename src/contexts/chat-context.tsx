@@ -24,13 +24,10 @@
  */
 
 import type { UIMessage } from 'ai';
-import { createContext, use, useCallback, useEffect, useMemo, useState } from 'react';
+import { createContext, use, useCallback, useMemo, useState } from 'react';
 
 import type { ChatParticipant, ChatThread } from '@/api/routes/chat/schema';
 import { useMultiParticipantChat } from '@/hooks/utils';
-import { chatContextLogger } from '@/lib/utils/chat-error-logger';
-import { deduplicateMessages } from '@/lib/utils/message-transforms';
-import { deduplicateParticipants } from '@/lib/utils/participant-utils';
 
 type ChatContextValue = {
   // Thread state
@@ -95,17 +92,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     },
   });
 
-  // Log errors from AI SDK
-  useEffect(() => {
-    if (chat.error) {
-      chatContextLogger.error('STREAM_FAILED', chat.error, {
-        threadId: thread?.id,
-        participantCount: participants.length,
-        messageCount: chat.messages.length,
-        isStreaming: chat.isStreaming,
-      });
-    }
-  }, [chat.error, thread?.id, participants.length, chat.messages.length, chat.isStreaming]);
+  // Error handling is managed by AI SDK v5 error boundaries
 
   /**
    * Initialize or update thread context
@@ -113,9 +100,12 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
    *
    * AI SDK v5 PATTERN:
    * 1. Set thread state
-   * 2. Set deduplicated participants
-   * 3. Set deduplicated messages
+   * 2. Set participants (backend already deduplicates)
+   * 3. Set messages (backend already deduplicates)
    * 4. Let useChat re-initialize naturally with new threadId
+   *
+   * NOTE: Backend handles deduplication (see backend-patterns.md)
+   * Frontend trusts the backend as source of truth
    */
   const initializeThread = useCallback(
     (
@@ -123,37 +113,19 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       newParticipants: ChatParticipant[],
       newMessages?: UIMessage[],
     ) => {
-      try {
-        const isNewThread = thread?.id !== newThread.id;
+      const isNewThread = thread?.id !== newThread.id;
 
-        if (isNewThread) {
-          chat.resetHookState();
-        }
+      if (isNewThread) {
+        chat.resetHookState();
+      }
 
-        chatContextLogger.threadInit(newThread.id, {
-          participantCount: newParticipants.length,
-          messageCount: newMessages?.length || 0,
-          mode: newThread.mode,
-        });
+      setThread(newThread);
+      setParticipants(newParticipants);
 
-        setThread(newThread);
-
-        const deduplicated = deduplicateParticipants(newParticipants);
-        setParticipants(deduplicated);
-
-        if (newMessages) {
-          const deduplicatedMessages = deduplicateMessages(newMessages);
-          setMessages(deduplicatedMessages);
-        } else {
-          setMessages([]);
-        }
-      } catch (error) {
-        chatContextLogger.error('THREAD_INIT_FAILED', error, {
-          threadId: newThread.id,
-          participantCount: newParticipants.length,
-          messageCount: newMessages?.length || 0,
-        });
-        throw error;
+      if (newMessages) {
+        setMessages(newMessages);
+      } else {
+        setMessages([]);
       }
     },
     [chat, thread],
@@ -174,10 +146,12 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   /**
    * Update participants (staged changes - persisted on next message)
    * Called when user changes participant configuration in UI
+   *
+   * NOTE: No deduplication here - caller is responsible for data integrity
+   * Backend will deduplicate on save (see backend-patterns.md)
    */
   const updateParticipants = useCallback((newParticipants: ChatParticipant[]) => {
-    const deduplicated = deduplicateParticipants(newParticipants);
-    setParticipants(deduplicated);
+    setParticipants(newParticipants);
   }, []);
 
   const value = useMemo(

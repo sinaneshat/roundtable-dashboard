@@ -104,23 +104,19 @@ export async function validateMessages(messages: UIMessage[]): Promise<MessageVa
 }
 
 // ============================================================================
-// Message Filtering and Deduplication
+// Message Filtering
 // ============================================================================
 
 /**
  * Re-exported from @/lib/utils/message-transforms for backward compatibility
  * and centralized message transformation utilities.
  *
- * These functions handle:
- * - Message deduplication by ID (Phase 1)
- * - Consecutive user message deduplication by text content
- * - Empty message filtering
+ * Note: AI SDK v5's useChat handles deduplication automatically.
+ * This module focuses on message filtering and content validation.
  *
  * @see src/lib/utils/message-transforms.ts for implementations
  */
 export {
-  deduplicateConsecutiveUserMessages,
-  deduplicateMessages,
   filterNonEmptyMessages,
 } from '@/lib/utils/message-transforms';
 

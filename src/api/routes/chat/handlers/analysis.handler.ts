@@ -4,6 +4,7 @@ import { asc, desc, eq } from 'drizzle-orm';
 import { ulid } from 'ulid';
 
 import { createError } from '@/api/common/error-handling';
+import { verifyThreadOwnership } from '@/api/common/permissions';
 import type { ErrorContext } from '@/api/core';
 import { createHandler, Responses } from '@/api/core';
 import { AnalysisStatuses } from '@/api/core/enums';
@@ -32,7 +33,6 @@ import {
   ModeratorAnalysisPayloadSchema,
   ModeratorAnalysisRequestSchema,
 } from '../schema';
-import { verifyThreadOwnership } from './helpers';
 
 function generateModeratorAnalysis(
   config: ModeratorPromptConfig & {
