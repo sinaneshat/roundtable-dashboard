@@ -28,7 +28,7 @@ import { cn } from '@/lib/ui/cn';
 
 type ChatModeSelectorProps = {
   selectedMode: ChatModeId;
-  onModeChange: (mode: ChatModeId) => void;
+  onModeChange?: (mode: ChatModeId) => void;
   className?: string;
   disabled?: boolean; // ✅ STREAMING PROTECTION: Disable during streaming to prevent mid-stream mode changes
 };
@@ -106,7 +106,7 @@ export function ChatModeSelector({
                         key={option.value}
                         value={option.value}
                         onSelect={() => {
-                          onModeChange(option.value);
+                          onModeChange?.(option.value);
                           open.onFalse();
                         }}
                         className="gap-2"

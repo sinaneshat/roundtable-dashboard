@@ -339,7 +339,11 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
         with: {
           participant: true,
         },
-        orderBy: [tables.chatMessage.createdAt],
+        orderBy: [
+          asc(tables.chatMessage.roundNumber),
+          asc(tables.chatMessage.createdAt),
+          asc(tables.chatMessage.id),
+        ],
       });
 
       // ✅ FIX: If provided IDs don't match (client IDs), fall back to auto-query
@@ -365,7 +369,11 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
         with: {
           participant: true,
         },
-        orderBy: [asc(tables.chatMessage.createdAt)], // Oldest first for consistent ordering
+        orderBy: [
+          asc(tables.chatMessage.roundNumber),
+          asc(tables.chatMessage.createdAt),
+          asc(tables.chatMessage.id),
+        ],
       });
 
       if (roundMessages.length === 0) {

@@ -1,5 +1,7 @@
 'use client';
 
+import { memo } from 'react';
+
 // ✅ ZERO HARDCODING: Import all types from proper schema locations
 import type { EnhancedModelResponse } from '@/api/routes/models/schema';
 import { Message, MessageAvatar, MessageContent } from '@/components/ai-elements/message';
@@ -45,7 +47,7 @@ type ModelMessageCardProps = {
  */
 const DEFAULT_PARTS: MessagePart[] = [];
 
-export function ModelMessageCard({
+export const ModelMessageCard = memo(({
   model,
   role,
   participantIndex: _participantIndex,
@@ -57,7 +59,7 @@ export function ModelMessageCard({
   messageId,
   metadata,
   isAccessible,
-}: ModelMessageCardProps) {
+}: ModelMessageCardProps) => {
   // ✅ FALLBACK HANDLING: Handle missing model during streaming
   const modelIsAccessible = model ? (isAccessible ?? model.is_accessible_to_user) : true;
   const showStatusIndicator = status === 'thinking' || status === 'streaming';
@@ -179,4 +181,4 @@ export function ModelMessageCard({
       </Message>
     </div>
   );
-}
+});

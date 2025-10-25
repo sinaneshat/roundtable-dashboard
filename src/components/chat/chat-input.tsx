@@ -45,6 +45,8 @@ type ChatInputProps = {
   onRemoveParticipant?: (participantId: string) => void;
   /** Additional className */
   className?: string;
+  /** Current participant index during streaming */
+  currentParticipantIndex?: number;
 };
 
 /**
@@ -77,10 +79,24 @@ export function ChatInput({
   participants = EMPTY_PARTICIPANTS,
   onRemoveParticipant,
   className,
+  currentParticipantIndex,
 }: ChatInputProps) {
   const t = useTranslations();
   const { data: modelsData } = useModelsQuery();
   const allModels = modelsData?.data?.items || [];
+
+  // ✅ FIX: AI SDK v5 uses 'in_progress' for streaming, not 'submitted' or 'streaming'
+  const isStreaming = status !== 'ready';
+
+  // ✅ FIX: Calculate streaming progress for button label
+  const streamingProgress = isStreaming && currentParticipantIndex !== undefined && participants.length > 1
+    ? `${currentParticipantIndex + 1}/${participants.length}`
+    : null;
+
+  // Submit button should be disabled when explicitly disabled or when not ready AND not streaming (error state)
+  const isDisabled = disabled || status === 'error';
+  // ✅ VALIDATION: Submit should be disabled if no participants are selected or input is empty
+  const hasValidInput = value.trim().length > 0 && participants.length > 0;
 
   // OFFICIAL PATTERN: Simple keyboard handler
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -89,13 +105,6 @@ export function ChatInput({
       onSubmit(e as unknown as FormEvent);
     }
   };
-
-  // ✅ FIX: AI SDK v5 uses 'in_progress' for streaming, not 'submitted' or 'streaming'
-  const isStreaming = status !== 'ready';
-  // Submit button should be disabled when explicitly disabled or when not ready AND not streaming (error state)
-  const isDisabled = disabled || status === 'error';
-  // ✅ VALIDATION: Submit should be disabled if no participants are selected or input is empty
-  const hasValidInput = value.trim().length > 0 && participants.length > 0;
 
   return (
     <div className="w-full">
@@ -165,9 +174,14 @@ export function ChatInput({
                         size="icon"
                         onClick={onStop}
                         variant="outline"
-                        className="size-8 rounded-lg shrink-0"
+                        className="size-8 rounded-lg shrink-0 relative"
                       >
                         <Square className="size-4" />
+                        {streamingProgress && (
+                          <span className="absolute -top-1 -right-1 text-[10px] font-medium bg-primary text-primary-foreground rounded-full px-1 min-w-[20px] text-center">
+                            {streamingProgress}
+                          </span>
+                        )}
                       </Button>
                     )
                   : (

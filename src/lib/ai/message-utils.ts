@@ -19,7 +19,7 @@
 import type { CoreMessage, TypeValidationError, UIMessage } from 'ai';
 import { convertToModelMessages, validateUIMessages } from 'ai';
 
-import type { AIErrorType, MessageValidationResult, UIMessageWithMetadata } from './types';
+import type { MessageValidationResult } from './types';
 
 // ============================================================================
 // Message Format Conversion
@@ -108,120 +108,21 @@ export async function validateMessages(messages: UIMessage[]): Promise<MessageVa
 // ============================================================================
 
 /**
- * Filter out empty user messages while preserving assistant messages
+ * Re-exported from @/lib/utils/message-transforms for backward compatibility
+ * and centralized message transformation utilities.
  *
- * Used to clean message history before sending to LLMs.
- * Prevents context pollution from empty messages.
+ * These functions handle:
+ * - Message deduplication by ID (Phase 1)
+ * - Consecutive user message deduplication by text content
+ * - Empty message filtering
  *
- * Pattern from src/lib/utils/message-transforms.ts:70-84
- *
- * @param messages - Array of UIMessages
- * @returns Filtered array with non-empty messages
- *
- * @example
- * ```typescript
- * const cleanMessages = filterNonEmptyMessages(allMessages);
- * // Only messages with actual text content remain
- * ```
+ * @see src/lib/utils/message-transforms.ts for implementations
  */
-export function filterNonEmptyMessages(messages: UIMessage[]): UIMessage[] {
-  return messages.filter((message) => {
-    // Always keep assistant messages
-    if (message.role === 'assistant')
-      return true;
-
-    // For user messages, check for non-empty text parts
-    if (message.role === 'user') {
-      const textParts = message.parts?.filter(
-        part => part.type === 'text' && 'text' in part && part.text.trim().length > 0,
-      );
-      return textParts && textParts.length > 0;
-    }
-
-    return false;
-  });
-}
-
-/**
- * ✅ PHASE 1: Global message deduplication by ID
- *
- * PRIMARY DEDUPLICATION POINT - Apply this BEFORE setting messages in any context.
- * Removes duplicate messages by unique ID, preserving first occurrence.
- *
- * Architecture:
- * - Phase 1 (this function): Global deduplication at message array level
- * - Phase 2 (round grouping): Safety net during message grouping
- *
- * Apply at ALL message update points:
- * - ChatContext.initializeThread()
- * - useMultiParticipantChat.onFinish()
- * - useMultiParticipantChat.onError()
- * - useMultiParticipantChat.retry()
- *
- * Pattern from src/lib/utils/message-transforms.ts:109-117
- *
- * @param messages - Messages array (may contain duplicates)
- * @returns Deduplicated messages array (unique by ID)
- *
- * @example
- * ```typescript
- * // Apply BEFORE setting messages
- * const uniqueMessages = deduplicateMessages([...prev, newMessage]);
- * setMessages(uniqueMessages);
- * ```
- */
-export function deduplicateMessages(messages: UIMessage[]): UIMessage[] {
-  const seen = new Set<string>();
-  return messages.filter((msg) => {
-    if (seen.has(msg.id))
-      return false;
-    seen.add(msg.id);
-    return true;
-  });
-}
-
-/**
- * ✅ COMPLEMENTARY: Deduplicate consecutive user messages by text content
- *
- * This handles a DIFFERENT case than deduplicateMessages():
- * - deduplicateMessages() removes duplicate IDs (Phase 1)
- * - This function removes consecutive user messages with same text (edge case)
- *
- * Use case: When startRound() or retry creates consecutive user messages
- * with same text but different IDs.
- *
- * Pattern from src/lib/utils/message-transforms.ts:132-152
- *
- * @param messages - Messages array (may have consecutive duplicate text)
- * @returns Messages with consecutive duplicate user text removed
- *
- * @example
- * ```typescript
- * const cleaned = deduplicateConsecutiveUserMessages(messages);
- * // No consecutive user messages with identical text
- * ```
- */
-export function deduplicateConsecutiveUserMessages(messages: UIMessage[]): UIMessage[] {
-  const result: UIMessage[] = [];
-  let lastUserMessageText: string | null = null;
-
-  for (const message of messages) {
-    if (message.role === 'user') {
-      const textPart = message.parts?.find(p => p.type === 'text' && 'text' in p);
-      const text = textPart && 'text' in textPart ? textPart.text.trim() : '';
-
-      if (text && text === lastUserMessageText)
-        continue;
-      lastUserMessageText = text;
-    } else {
-      lastUserMessageText = null;
-    }
-
-    result.push(message);
-  }
-
-  return result;
-}
+export {
+  deduplicateConsecutiveUserMessages,
+  deduplicateMessages,
+  filterNonEmptyMessages,
+} from '@/lib/utils/message-transforms';
 
 // ============================================================================
 // Message Text Extraction
@@ -283,133 +184,16 @@ export function extractTextFromMessage(message: UIMessage | undefined | null): s
 // ============================================================================
 
 /**
- * Create error UIMessage with structured metadata
+ * Re-exported from @/lib/utils/message-transforms for backward compatibility
+ * and centralized message transformation utilities.
  *
- * Used to represent AI errors in the message stream.
- * Includes detailed error context for debugging and user messaging.
+ * These functions handle:
+ * - Error message creation with structured metadata
+ * - Participant metadata merging for multi-model chat
  *
- * Pattern from src/lib/utils/message-transforms.ts:166-202
- *
- * @param participant - Participant that encountered the error
- * @param currentIndex - Participant index in multi-model chat
- * @param errorMessage - Human-readable error message
- * @param errorType - Categorized error type
- * @param errorMetadata - Additional error context
- * @param roundNumber - Conversation round number
- * @returns UIMessage representing the error
- *
- * @example
- * ```typescript
- * const errorMessage = createErrorUIMessage(
- *   participant,
- *   0,
- *   'Model rate limit exceeded',
- *   'provider_rate_limit',
- *   { statusCode: 429 },
- *   1
- * );
- *
- * setMessages(prev => [...prev, errorMessage]);
- * ```
+ * @see src/lib/utils/message-transforms.ts for implementations
  */
-export function createErrorUIMessage(
-  participant: { id: string; modelId: string; role: string | null },
-  currentIndex: number,
-  errorMessage: string,
-  errorType: AIErrorType = 'error',
-  errorMetadata?: {
-    errorCategory?: string;
-    statusCode?: number;
-    rawErrorMessage?: string;
-    openRouterError?: string;
-    openRouterCode?: string;
-    providerMessage?: string;
-  },
-  roundNumber?: number,
-): UIMessageWithMetadata {
-  return {
-    id: `error-${crypto.randomUUID()}-${currentIndex}`,
-    role: 'assistant',
-    parts: [{ type: 'text', text: '' }],
-    metadata: {
-      participantId: participant.id,
-      participantIndex: currentIndex,
-      ...(participant.role && { participantRole: participant.role }),
-      model: participant.modelId,
-      hasError: true,
-      errorType,
-      errorMessage,
-      errorCategory: errorMetadata?.errorCategory || errorType,
-      statusCode: errorMetadata?.statusCode,
-      rawErrorMessage: errorMetadata?.rawErrorMessage,
-      providerMessage: errorMetadata?.providerMessage || errorMetadata?.rawErrorMessage || errorMessage,
-      openRouterError: errorMetadata?.openRouterError,
-      openRouterCode: errorMetadata?.openRouterCode,
-      roundNumber,
-    },
-  };
-}
-
-/**
- * Merge participant metadata into existing message
- *
- * Enriches messages with participant context and error detection.
- * Used when processing streamed messages from multiple AI models.
- *
- * Pattern from src/lib/utils/message-transforms.ts:204-239
- *
- * @param message - Original UIMessage
- * @param participant - Participant information
- * @param currentIndex - Participant index
- * @returns Metadata object with merged fields
- *
- * @example
- * ```typescript
- * const enrichedMetadata = mergeParticipantMetadata(
- *   streamedMessage,
- *   participant,
- *   participantIndex
- * );
- *
- * const finalMessage = {
- *   ...streamedMessage,
- *   metadata: enrichedMetadata
- * };
- * ```
- */
-export function mergeParticipantMetadata(
-  message: UIMessage,
-  participant: { id: string; modelId: string; role: string | null },
-  currentIndex: number,
-): Record<string, unknown> {
-  const metadata = message.metadata as Record<string, unknown> | undefined;
-  const hasBackendError = metadata?.hasError === true || !!metadata?.error || !!metadata?.errorMessage;
-
-  const textParts = message.parts?.filter(p => p.type === 'text') || [];
-  const hasTextContent = textParts.some(
-    part => 'text' in part && typeof part.text === 'string' && part.text.trim().length > 0,
-  );
-
-  const isEmptyResponse = textParts.length === 0 || !hasTextContent;
-  const hasError = hasBackendError || isEmptyResponse;
-
-  let errorMessage = metadata?.errorMessage as string | undefined;
-  if (isEmptyResponse && !errorMessage) {
-    errorMessage = `The model (${participant.modelId}) did not generate a response. This can happen due to content filtering, model limitations, or API issues.`;
-  }
-
-  return {
-    ...(metadata || {}),
-    participantId: participant.id,
-    participantIndex: currentIndex,
-    ...(participant.role && { participantRole: participant.role }),
-    model: participant.modelId,
-    ...(hasError && {
-      hasError: true,
-      errorType: metadata?.errorType || (isEmptyResponse ? 'empty_response' : 'unknown'),
-      errorMessage,
-      providerMessage: metadata?.providerMessage || metadata?.openRouterError || errorMessage,
-      openRouterError: metadata?.openRouterError,
-    }),
-  };
-}
+export {
+  createErrorUIMessage,
+  mergeParticipantMetadata,
+} from '@/lib/utils/message-transforms';

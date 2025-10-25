@@ -7,9 +7,10 @@ import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import type { ChatMessage, ChatParticipant, ChatThread } from '@/api/routes/chat/schema';
+import type { ChatMessage, ChatParticipant, ChatThread, StoredModeratorAnalysis } from '@/api/routes/chat/schema';
 import { Action, Actions } from '@/components/ai-elements/actions';
 import { ChatDeleteDialog } from '@/components/chat/chat-delete-dialog';
+import ChatErrorBoundary, { StreamingErrorBoundary } from '@/components/chat/chat-error-boundary';
 import type { ParticipantConfig } from '@/components/chat/chat-form-schemas';
 import { ChatInput } from '@/components/chat/chat-input';
 import { ChatMessageList } from '@/components/chat/chat-message-list';
@@ -264,6 +265,14 @@ export default function ChatThreadScreen({
   const messagesRef = useRef(messages);
   const contextParticipantsRef = useRef(contextParticipants);
 
+  // ✅ FIX: Virtual list refs - declared early to be available in initialization effect
+  const previousItemsRef = useRef<Array<
+    | { type: 'messages'; data: UIMessage[]; key: string; roundNumber: number }
+    | { type: 'analysis'; data: (typeof analyses)[number]; key: string; roundNumber: number }
+    | { type: 'changelog'; data: (typeof changelog)[number][]; key: string; roundNumber: number }
+  >>([]);
+  const scrolledToAnalysesRef = useRef<Set<string>>(new Set());
+
   // Keep refs updated with latest values
   useEffect(() => {
     createPendingAnalysisRef.current = createPendingAnalysis;
@@ -410,35 +419,27 @@ export default function ChatThreadScreen({
     setSelectedParticipants(syncedParticipants);
   }, [contextParticipants, selectedParticipants, isStreaming, setSelectedParticipants]);
 
+  // ✅ CRITICAL FIX: Set up onComplete BEFORE initializing thread
+  // This ensures the callback is registered when round completes
   // Initialize context when component mounts - only once per thread
   useEffect(() => {
-    const uiMessages = chatMessagesToUIMessages(initialMessages);
+    console.log('[ChatThreadScreen] Initializing thread effect', {
+      threadId: thread.id,
+      initialMessagesCount: initialMessages.length,
+      initialMessages: initialMessages.map(m => ({ id: m.id, role: m.role, partsCount: m.parts?.length })),
+    });
 
-    // ✅ CRITICAL FIX: Deduplicate participants before initializing thread
-    // Server may return duplicate participants after configuration changes
-    // Use canonical deduplication function for consistency
-    const deduplicatedParticipants = deduplicateParticipants(participants);
+    // ✅ STEP 0: Clear all refs to prevent stale data from previous threads
+    previousItemsRef.current = [];
+    scrolledToAnalysesRef.current.clear();
+    currentRoundNumberRef.current = null;
+    regenerateRoundNumberRef.current = null;
 
-    // Add debug logging if duplicates were removed
-    if (participants.length !== deduplicatedParticipants.length) {
-      console.warn('[ChatThreadScreen] Server returned duplicate participants:', {
-        original: participants.length,
-        deduplicated: deduplicatedParticipants.length,
-        removed: participants.length - deduplicatedParticipants.length,
-      });
-    }
+    console.log('[ChatThreadScreen] Cleared all refs for new thread', {
+      threadId: thread.id,
+    });
 
-    initializeThread(thread, deduplicatedParticipants, uiMessages);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [thread.id]); // Only depend on thread.id, not messagesHash
-
-  // ✅ MERGED CALLBACK: Combine stream completion and round completion logic
-  // This single callback handles both:
-  // 1. Title refresh for new conversations (stream completion)
-  // 2. Analysis creation for completed rounds (round completion)
-  // ✅ CRITICAL FIX: Remove createPendingAnalysis from dependencies to prevent stale closures
-  // The ref (createPendingAnalysisRef) is updated separately in its own effect (line 269-271)
-  useEffect(() => {
+    // ✅ STEP 1: Set up onComplete callback FIRST (before initializeThread)
     setOnComplete(async () => {
       // ✅ STREAM COMPLETION LOGIC: Refresh title if needed
       if (thread.title === 'New Conversation') {
@@ -515,7 +516,46 @@ export default function ChatThreadScreen({
       setStreamingRoundNumber(null);
       currentRoundNumberRef.current = null;
     });
-  }, [thread.id, thread.title, router, setOnComplete]); // ✅ Removed createPendingAnalysis dependency
+
+    // ✅ STEP 2: Convert messages and deduplicate participants
+    const uiMessages = chatMessagesToUIMessages(initialMessages);
+
+    console.log('[ChatThreadScreen] Converted to UI messages', {
+      uiMessagesCount: uiMessages.length,
+      uiMessages: uiMessages.map(m => ({ id: m.id, role: m.role, partsCount: m.parts?.length })),
+    });
+
+    // ✅ CRITICAL FIX: Deduplicate participants before initializing thread
+    // Server may return duplicate participants after configuration changes
+    // Use canonical deduplication function for consistency
+    const deduplicatedParticipants = deduplicateParticipants(participants);
+
+    // Add debug logging if duplicates were removed
+    if (participants.length !== deduplicatedParticipants.length) {
+      console.warn('[ChatThreadScreen] Server returned duplicate participants:', {
+        original: participants.length,
+        deduplicated: deduplicatedParticipants.length,
+        removed: participants.length - deduplicatedParticipants.length,
+      });
+    }
+
+    console.log('[ChatThreadScreen] Calling initializeThread with:', {
+      threadId: thread.id,
+      participantCount: deduplicatedParticipants.length,
+      messageCount: uiMessages.length,
+    });
+
+    // ✅ STEP 3: Initialize thread AFTER setting up onComplete
+    initializeThread(thread, deduplicatedParticipants, uiMessages);
+
+    // ✅ CLEANUP: Clear onComplete callback when thread changes
+    return () => {
+      setOnComplete(undefined);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [thread.id]); // Only depend on thread.id, not messagesHash
+
+  // ✅ REMOVED: Duplicate setOnComplete effect - now handled in initialization effect above (line 424)
 
   useEffect(() => {
     setOnRetry((roundNumber: number) => {
@@ -637,6 +677,11 @@ export default function ChatThreadScreen({
 
             // ✅ Apply atomic update - deduplication handled by context
             updateParticipants(mergedParticipants);
+
+            // ✅ FIX: Wait for state to settle before sending message
+            // This ensures context participants are fully updated before streaming starts
+            await new Promise(resolve => setTimeout(resolve, 10));
+
             // ✅ SEMANTIC MATCHING: Store modelIds (backend matches by modelId, not database ID)
             setExpectedParticipantIds(participantsWithDates.map(p => p.modelId));
           } else {
@@ -657,6 +702,10 @@ export default function ChatThreadScreen({
             // Silently ignore errors - client state is source of truth
           });
 
+          // ✅ FIX: Wait for state to settle before sending message
+          // This ensures context participants are fully updated before streaming starts
+          await new Promise(resolve => setTimeout(resolve, 10));
+
           // ✅ SEMANTIC MATCHING: Store modelIds (backend matches by modelId, not database ID)
           setExpectedParticipantIds(optimisticParticipants.map(p => p.modelId));
         }
@@ -676,20 +725,13 @@ export default function ChatThreadScreen({
   const maxRoundNumber = useMemo(() => getMaxRoundNumber(messages), [messages]);
 
   // ✅ FIX 1: Stable item positioning - prevent re-sorting during streaming
-  // Track previous items to maintain stability when streaming
-  const previousItemsRef = useRef<Array<
-    | { type: 'messages'; data: UIMessage[]; key: string; roundNumber: number }
-    | { type: 'analysis'; data: (typeof analyses)[number]; key: string; roundNumber: number }
-    | { type: 'changelog'; data: (typeof changelog)[number][]; key: string; roundNumber: number }
-  >>([]);
+  // previousItemsRef is declared earlier (line 269) to be available in initialization effect
 
   const messagesWithAnalysesAndChangelog = useMemo(() => {
     type ItemType
       = | { type: 'messages'; data: typeof messages; key: string; roundNumber: number }
         | { type: 'analysis'; data: (typeof analyses)[number]; key: string; roundNumber: number }
         | { type: 'changelog'; data: (typeof changelog)[number][]; key: string; roundNumber: number };
-
-    const messagesByRound = groupMessagesByRound(messages);
 
     // Calculate max round from current messages
     const currentMaxRound = getMaxRoundNumber(messages);
@@ -699,13 +741,48 @@ export default function ChatThreadScreen({
       ? Math.max(...previousItemsRef.current.map(item => item.roundNumber))
       : 0;
 
-    // ✅ STREAMING OPTIMIZATION: If streaming same round, just update messages and analyses - don't rebuild entire array
-    // This prevents changelogs from shifting positions while keeping analyses state up-to-date
-    if (isStreaming && currentMaxRound === previousMaxRound && previousItemsRef.current.length > 0) {
-      // Create a map of current analyses by round number for quick lookup
-      const analysesByRound = new Map(analyses.map(a => [a.roundNumber, a]));
+    // ✅ DETECT ROUND TRANSITIONS: Check if we're starting a new round during streaming
+    // This happens when currentMaxRound increases from previousMaxRound
+    const hasRoundTransition = currentMaxRound > previousMaxRound;
 
-      const updatedItems = previousItemsRef.current.map((item) => {
+    // ✅ STREAMING OPTIMIZATION: If streaming same round, just update messages, analyses, and changelogs - don't rebuild entire array
+    // This prevents items from shifting positions while keeping all state up-to-date
+    // Skip optimization if we detect a round transition (new round started)
+    if (isStreaming && currentMaxRound === previousMaxRound && previousItemsRef.current.length > 0 && !hasRoundTransition) {
+      // ✅ FIX: Group messages by round WITHOUT using groupMessagesByRound to preserve insertion order
+      // Build messagesByRound map manually to maintain the exact order messages appear in the array
+      const messagesByRound = new Map<number, UIMessage[]>();
+      messages.forEach((message) => {
+        const roundNumber = getRoundNumberFromMetadata(message) || 1;
+        if (!messagesByRound.has(roundNumber)) {
+          messagesByRound.set(roundNumber, []);
+        }
+        messagesByRound.get(roundNumber)!.push(message);
+      });
+
+      // Create maps for quick lookups
+      const analysesByRound = new Map(analyses.map(a => [a.roundNumber, a]));
+      const changelogByRound = new Map<number, (typeof changelog)>();
+
+      // Group changelogs by round number
+      changelog.forEach((change) => {
+        const roundNumber = change.roundNumber || 1;
+        if (!changelogByRound.has(roundNumber)) {
+          changelogByRound.set(roundNumber, []);
+        }
+        const roundChanges = changelogByRound.get(roundNumber)!;
+        const exists = roundChanges.some(existing => existing.id === change.id);
+        if (!exists) {
+          roundChanges.push(change);
+        }
+      });
+
+      // Track which items exist in previous state
+      const existingItemKeys = new Set(previousItemsRef.current.map(item => item.key));
+
+      // ✅ FIX: Create new array instead of mutating previousItemsRef
+      // Update existing items - map creates a new array, use let for later reassignments
+      let updatedItems = previousItemsRef.current.map((item) => {
         // Update messages for the streaming round
         if (item.type === 'messages' && item.roundNumber === currentMaxRound) {
           const roundMessages = messagesByRound.get(currentMaxRound);
@@ -717,22 +794,100 @@ export default function ChatThreadScreen({
         // This ensures completed analyses stay completed and don't revert to "analyzing"
         if (item.type === 'analysis') {
           const currentAnalysis = analysesByRound.get(item.roundNumber);
+          // ✅ CRITICAL: Only update if the new analysis state is more advanced or the same
+          // Don't revert completed analyses back to streaming/pending state
           if (currentAnalysis) {
+            const currentData = item.data as StoredModeratorAnalysis;
+            // If current item is completed, keep it completed (don't revert)
+            if (currentData.status === 'completed' && currentAnalysis.status !== 'completed') {
+              return item; // Keep the completed state
+            }
+            // Otherwise, update with the current analysis data
             return { ...item, data: currentAnalysis };
+          }
+        }
+        // ✅ FIX: Update changelog data from current changelog array
+        // This ensures changelogs stay current if they're updated during streaming
+        if (item.type === 'changelog') {
+          const currentChangelog = changelogByRound.get(item.roundNumber);
+          if (currentChangelog && currentChangelog.length > 0) {
+            return { ...item, data: currentChangelog };
           }
         }
         return item;
       });
 
+      // ✅ FIX: Insert new analyses that arrived for previous rounds during streaming
+      // These are analyses that completed for earlier rounds while streaming the current round
+      // Create new array for each insertion to avoid mutation
+      analyses.forEach((analysis) => {
+        const analysisKey = `round-${analysis.roundNumber}-analysis`;
+        // If this analysis doesn't exist in previous items, insert it after its round's messages
+        if (!existingItemKeys.has(analysisKey)) {
+          // Find the index of messages for this round
+          const messagesIndex = updatedItems.findIndex(
+            item => item.type === 'messages' && item.roundNumber === analysis.roundNumber,
+          );
+
+          if (messagesIndex !== -1) {
+            // ✅ FIX: Create new array instead of using splice mutation
+            const newAnalysisItem = {
+              type: 'analysis' as const,
+              data: analysis,
+              key: analysisKey,
+              roundNumber: analysis.roundNumber,
+            };
+            updatedItems = [
+              ...updatedItems.slice(0, messagesIndex + 1),
+              newAnalysisItem,
+              ...updatedItems.slice(messagesIndex + 1),
+            ];
+            existingItemKeys.add(analysisKey);
+          }
+        }
+      });
+
+      // ✅ FIX: Insert new changelogs that arrived during streaming
+      // These are changelogs that were created for upcoming rounds during streaming
+      // Create new array for each insertion to avoid mutation
+      changelogByRound.forEach((changelogItems, roundNumber) => {
+        const changelogKey = `round-${roundNumber}-changelog`;
+        // If this changelog doesn't exist in previous items, insert it before its round's messages
+        if (!existingItemKeys.has(changelogKey)) {
+          // Find the index of messages for this round
+          const messagesIndex = updatedItems.findIndex(
+            item => item.type === 'messages' && item.roundNumber === roundNumber,
+          );
+
+          if (messagesIndex !== -1) {
+            // ✅ FIX: Create new array instead of using splice mutation
+            const newChangelogItem = {
+              type: 'changelog' as const,
+              data: changelogItems,
+              key: changelogKey,
+              roundNumber,
+            };
+            updatedItems = [
+              ...updatedItems.slice(0, messagesIndex),
+              newChangelogItem,
+              ...updatedItems.slice(messagesIndex),
+            ];
+            existingItemKeys.add(changelogKey);
+          }
+        }
+      });
+
       // ✅ CRITICAL FIX: Update previousItemsRef to prevent reverting to stale state
       // Without this, the next render would revert to the old state from previousItemsRef
-      // This ensures analysis state changes (e.g., pending → completed) are preserved
+      // This ensures all state changes (messages, analyses, changelogs) are preserved
       previousItemsRef.current = updatedItems;
 
       return updatedItems;
     }
 
     // ✅ REBUILD ARRAY: Round completed, new round started, or not streaming
+    // Use groupMessagesByRound for full rebuild (when not in streaming optimization path)
+    const messagesByRound = groupMessagesByRound(messages);
     const items: ItemType[] = [];
 
     const changelogByRound = new Map<number, (typeof changelog)>();
@@ -875,7 +1030,7 @@ export default function ChatThreadScreen({
 
   // Auto-scroll logic
   const isNearBottomRef = useRef(true);
-  const scrolledToAnalysesRef = useRef<Set<string>>(new Set());
+  // scrolledToAnalysesRef is declared earlier (line 274) to be available in initialization effect
 
   useEffect(() => {
     scrolledToAnalysesRef.current.clear();
@@ -977,206 +1132,213 @@ export default function ChatThreadScreen({
 
   return (
     <>
-      <div className="flex flex-col min-h-screen relative">
-        <div id="chat-scroll-container" ref={listRef} className="container max-w-3xl mx-auto px-4 sm:px-6 pt-0 pb-32 flex-1">
-          <div
-            style={{
-              minHeight: `${rowVirtualizer.getTotalSize()}px`,
-              width: '100%',
-              position: 'relative',
-            }}
-          >
+      <ChatErrorBoundary>
+        <div className="flex flex-col min-h-screen relative">
+          <div id="chat-scroll-container" ref={listRef} className="container max-w-3xl mx-auto px-4 sm:px-6 pt-0 pb-32 flex-1">
             <div
               style={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
+                minHeight: `${rowVirtualizer.getTotalSize()}px`,
                 width: '100%',
-                transform: `translateY(${virtualItems[0]?.start ?? 0}px)`,
+                position: 'relative',
               }}
             >
-              {virtualItems.map((virtualItem) => {
-                const item = messagesWithAnalysesAndChangelog[virtualItem.index];
-                if (!item)
-                  return null;
+              <div
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  width: '100%',
+                  transform: `translateY(${virtualItems[0]?.start ?? 0}px)`,
+                }}
+              >
+                {virtualItems.map((virtualItem) => {
+                  const item = messagesWithAnalysesAndChangelog[virtualItem.index];
+                  if (!item)
+                    return null;
 
-                const itemIndex = virtualItem.index;
+                  const itemIndex = virtualItem.index;
 
-                const roundNumber = item.type === 'messages'
-                  ? getRoundNumberFromMetadata(item.data[0]?.metadata, 1)
-                  : item.type === 'analysis'
-                    ? item.data.roundNumber
-                    : item.type === 'changelog'
-                      ? item.data[0]?.roundNumber ?? 1
-                      : 1;
+                  const roundNumber = item.type === 'messages'
+                    ? getRoundNumberFromMetadata(item.data[0]?.metadata, 1)
+                    : item.type === 'analysis'
+                      ? item.data.roundNumber
+                      : item.type === 'changelog'
+                        ? item.data[0]?.roundNumber ?? 1
+                        : 1;
 
-                return (
-                  <div
-                    key={item.key}
-                    data-index={virtualItem.index}
-                    ref={rowVirtualizer.measureElement}
-                  >
-                    {item.type === 'changelog' && item.data.length > 0 && (
-                      <div className="mb-6">
-                        <ConfigurationChangesGroup
-                          group={{
-                            timestamp: new Date(item.data[0]!.createdAt),
-                            changes: item.data,
-                          }}
-                        />
-                      </div>
-                    )}
+                  return (
+                    <div
+                      key={`${item.key}-${item.type === 'messages' ? item.data.length : ''}`}
+                      data-index={virtualItem.index}
+                      ref={rowVirtualizer.measureElement}
+                    >
+                      {item.type === 'changelog' && item.data.length > 0 && (
+                        <div className="mb-6">
+                          <ConfigurationChangesGroup
+                            group={{
+                              timestamp: new Date(item.data[0]!.createdAt),
+                              changes: item.data,
+                            }}
+                          />
+                        </div>
+                      )}
 
-                    {item.type === 'messages' && (
-                      <div className="space-y-3 pb-2">
-                        <ChatMessageList
-                          messages={item.data}
-                          user={user}
-                          participants={activeParticipants}
-                          isStreaming={isStreaming}
-                          currentParticipantIndex={currentParticipantIndex}
-                          currentStreamingParticipant={
-                            isStreaming && activeParticipants[currentParticipantIndex]
-                              ? activeParticipants[currentParticipantIndex]
-                              : null
-                          }
-                        />
+                      {item.type === 'messages' && (
+                        <div className="space-y-3 pb-2">
+                          <StreamingErrorBoundary onRetry={retryRound}>
+                            <ChatMessageList
+                              messages={item.data}
+                              user={user}
+                              participants={activeParticipants}
+                              isStreaming={isStreaming}
+                              currentParticipantIndex={currentParticipantIndex}
+                              currentStreamingParticipant={
+                                isStreaming && activeParticipants[currentParticipantIndex]
+                                  ? activeParticipants[currentParticipantIndex]
+                                  : null
+                              }
+                            />
+                          </StreamingErrorBoundary>
 
-                        {!isStreaming && (() => {
-                          const hasRoundError = item.data.some((msg) => {
-                            const parseResult = MessageMetadataSchema.safeParse(msg.metadata);
-                            return parseResult.success && messageHasError(parseResult.data);
-                          });
+                          {!isStreaming && (() => {
+                            const hasRoundError = item.data.some((msg) => {
+                              const parseResult = MessageMetadataSchema.safeParse(msg.metadata);
+                              return parseResult.success && messageHasError(parseResult.data);
+                            });
 
-                          const isLastRound = roundNumber === maxRoundNumber;
+                            const isLastRound = roundNumber === maxRoundNumber;
 
-                          return (
-                            <Actions className="mt-3 mb-2">
-                              {!hasRoundError && (
-                                <RoundFeedback
-                                  key={`feedback-${thread.id}-${roundNumber}`}
-                                  threadId={thread.id}
-                                  roundNumber={roundNumber}
-                                  currentFeedback={feedbackByRound.get(roundNumber) ?? null}
-                                  onFeedbackChange={getFeedbackHandler(roundNumber)}
-                                  disabled={isStreaming}
-                                  isPending={
-                                    setRoundFeedbackMutation.isPending
-                                    && pendingFeedback?.roundNumber === roundNumber
-                                  }
-                                  pendingType={
-                                    pendingFeedback?.roundNumber === roundNumber
-                                      ? pendingFeedback?.type ?? null
-                                      : null
-                                  }
-                                />
-                              )}
+                            return (
+                              <Actions className="mt-3 mb-2">
+                                {!hasRoundError && (
+                                  <RoundFeedback
+                                    key={`feedback-${thread.id}-${roundNumber}`}
+                                    threadId={thread.id}
+                                    roundNumber={roundNumber}
+                                    currentFeedback={feedbackByRound.get(roundNumber) ?? null}
+                                    onFeedbackChange={getFeedbackHandler(roundNumber)}
+                                    disabled={isStreaming}
+                                    isPending={
+                                      setRoundFeedbackMutation.isPending
+                                      && pendingFeedback?.roundNumber === roundNumber
+                                    }
+                                    pendingType={
+                                      pendingFeedback?.roundNumber === roundNumber
+                                        ? pendingFeedback?.type ?? null
+                                        : null
+                                    }
+                                  />
+                                )}
 
-                              {isLastRound && (
-                                <Action
-                                  key={`retry-${thread.id}-${roundNumber}`}
-                                  onClick={retryRound}
-                                  label={t('errors.retry')}
-                                  tooltip={t('errors.retryRound')}
-                                >
-                                  <RefreshCcwIcon className="size-3" />
-                                </Action>
-                              )}
-                            </Actions>
-                          );
-                        })()}
-                      </div>
-                    )}
+                                {isLastRound && (
+                                  <Action
+                                    key={`retry-${thread.id}-${roundNumber}`}
+                                    onClick={retryRound}
+                                    label={t('errors.retry')}
+                                    tooltip={t('errors.retryRound')}
+                                  >
+                                    <RefreshCcwIcon className="size-3" />
+                                  </Action>
+                                )}
+                              </Actions>
+                            );
+                          })()}
+                        </div>
+                      )}
 
-                    {item.type === 'analysis' && (
-                      <div className="mt-6 mb-4">
-                        <RoundAnalysisCard
-                          analysis={item.data}
-                          threadId={thread.id}
-                          isLatest={itemIndex === messagesWithAnalysesAndChangelog.length - 1}
-                          streamingRoundNumber={streamingRoundNumber}
-                          onStreamStart={() => {
+                      {item.type === 'analysis' && (
+                        <div className="mt-6 mb-4">
+                          <RoundAnalysisCard
+                            analysis={item.data}
+                            threadId={thread.id}
+                            isLatest={itemIndex === messagesWithAnalysesAndChangelog.length - 1}
+                            streamingRoundNumber={streamingRoundNumber}
+                            onStreamStart={() => {
                             // ✅ CRITICAL FIX: Update status to 'streaming' when POST request starts
                             // This matches backend state transition (pending → streaming)
-                            updateAnalysisStatus(item.data.roundNumber, 'streaming');
-                          }}
-                          onStreamComplete={(completedData) => {
-                            if (completedData) {
-                              updateAnalysisData(
-                                item.data.roundNumber,
-                                completedData as import('@/api/routes/chat/schema').ModeratorAnalysisPayload,
-                              );
-                            }
-                          }}
-                        />
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+                              updateAnalysisStatus(item.data.roundNumber, 'streaming');
+                            }}
+                            onStreamComplete={(completedData) => {
+                              if (completedData) {
+                                updateAnalysisData(
+                                  item.data.roundNumber,
+                                  completedData as import('@/api/routes/chat/schema').ModeratorAnalysisPayload,
+                                );
+                              }
+                            }}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
 
-              {(() => {
+                {(() => {
                 // Only show loader during actual streaming or active analysis
-                const isAnalyzing = analyses.some(a => a.status === 'pending' || a.status === 'streaming');
-                const showLoader = (isStreaming || isAnalyzing) && selectedParticipants.length > 1;
+                  const isAnalyzing = analyses.some(a => a.status === 'pending' || a.status === 'streaming');
+                  const showLoader = (isStreaming || isAnalyzing) && selectedParticipants.length > 1;
 
-                return showLoader && (
-                  <div
-                    key="streaming-loader"
-                    style={{
-                      position: 'relative',
+                  return showLoader && (
+                    <div
+                      key="streaming-loader"
+                      style={{
+                        position: 'relative',
+                      }}
+                    >
+                      <StreamingParticipantsLoader
+                        className="mt-12"
+                        participants={selectedParticipants}
+                        currentParticipantIndex={currentParticipantIndex}
+                        isAnalyzing={isAnalyzing}
+                      />
+                    </div>
+                  );
+                })()}
+              </div>
+            </div>
+
+          </div>
+
+          <div
+            ref={inputContainerRef}
+            className="sticky bottom-0 z-50 bg-gradient-to-t from-background via-background to-transparent pt-6 pb-4 mt-auto"
+          >
+            <div className="container max-w-3xl mx-auto px-4 sm:px-6">
+              <ChatInput
+                value={inputValue}
+                onChange={setInputValue}
+                onSubmit={handlePromptSubmit}
+                status={isStreaming ? 'submitted' : 'ready'}
+                onStop={stopStreaming}
+                placeholder={t('input.placeholder')}
+                participants={selectedParticipants}
+                currentParticipantIndex={currentParticipantIndex}
+                onRemoveParticipant={isStreaming
+                  ? undefined
+                  : (participantId) => {
+                      if (selectedParticipants.length <= 1)
+                        return;
+                      removeParticipant(participantId);
                     }}
-                  >
-                    <StreamingParticipantsLoader
-                      className="mt-12"
+                toolbar={(
+                  <>
+                    <ChatParticipantsList
                       participants={selectedParticipants}
-                      currentParticipantIndex={currentParticipantIndex}
-                      isAnalyzing={isAnalyzing}
+                      onParticipantsChange={handleParticipantsChange}
+                      isStreaming={isStreaming}
                     />
-                  </div>
-                );
-              })()}
+                    <ChatModeSelector
+                      selectedMode={selectedMode}
+                      onModeChange={handleModeChange}
+                      disabled={isStreaming}
+                    />
+                  </>
+                )}
+              />
             </div>
           </div>
-
         </div>
-
-        <div
-          ref={inputContainerRef}
-          className="sticky bottom-0 z-50 bg-gradient-to-t from-background via-background to-transparent pt-6 pb-4 mt-auto"
-        >
-          <div className="container max-w-3xl mx-auto px-4 sm:px-6">
-            <ChatInput
-              value={inputValue}
-              onChange={setInputValue}
-              onSubmit={handlePromptSubmit}
-              status={isStreaming ? 'submitted' : 'ready'}
-              onStop={stopStreaming}
-              placeholder={t('input.placeholder')}
-              participants={selectedParticipants}
-              onRemoveParticipant={(participantId) => {
-                if (selectedParticipants.length <= 1)
-                  return;
-                removeParticipant(participantId);
-              }}
-              toolbar={(
-                <>
-                  <ChatParticipantsList
-                    participants={selectedParticipants}
-                    onParticipantsChange={handleParticipantsChange}
-                    isStreaming={isStreaming}
-                  />
-                  <ChatModeSelector
-                    selectedMode={selectedMode}
-                    onModeChange={handleModeChange}
-                    disabled={isStreaming}
-                  />
-                </>
-              )}
-            />
-          </div>
-        </div>
-      </div>
+      </ChatErrorBoundary>
 
       <ChatDeleteDialog
         isOpen={isDeleteDialogOpen.value}

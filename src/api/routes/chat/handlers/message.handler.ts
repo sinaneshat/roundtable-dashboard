@@ -6,7 +6,7 @@
  */
 
 import type { RouteHandler } from '@hono/zod-openapi';
-import { desc, eq } from 'drizzle-orm';
+import { asc, desc, eq } from 'drizzle-orm';
 
 import { createHandler, Responses } from '@/api/core';
 import { IdParamSchema } from '@/api/core/schemas';
@@ -41,7 +41,11 @@ export const getThreadMessagesHandler: RouteHandler<typeof getThreadMessagesRout
     // Fetch all messages
     const messages = await db.query.chatMessage.findMany({
       where: eq(tables.chatMessage.threadId, threadId),
-      orderBy: [tables.chatMessage.createdAt],
+      orderBy: [
+        asc(tables.chatMessage.roundNumber),
+        asc(tables.chatMessage.createdAt),
+        asc(tables.chatMessage.id),
+      ],
     });
 
     return Responses.collection(c, messages);

@@ -54,6 +54,7 @@ type UseMultiParticipantChatReturn = {
   retry: () => void;
   stop: () => void;
   setMessages: (messages: UIMessage[] | ((messages: UIMessage[]) => UIMessage[])) => void;
+  resetHookState: () => void;
 };
 
 /**
@@ -87,8 +88,8 @@ export function useMultiParticipantChat({
     regenerateRoundNumber: regenerateRoundNumberParam,
   });
 
-  // ✅ Round number and participant tracking
-  const roundTracking = useRoundTracking();
+  // ✅ Round number and participant tracking (auto-resets when threadId changes)
+  const roundTracking = useRoundTracking(threadId);
 
   // ✅ Error tracking to prevent duplicates
   const errorTracking = useParticipantErrorTracking();
@@ -209,6 +210,8 @@ export function useMultiParticipantChat({
     messages: initialMessages,
 
     onError: (error) => {
+      console.error('[useChat] onError fired', { error: error.message });
+
       // ✅ CRITICAL FIX: Use currentIndexRef to get correct participant
       // Using currentIndex here would be stale due to closure
       const index = currentIndexRef.current;
@@ -339,7 +342,7 @@ export function useMultiParticipantChat({
         const backendRoundNumber = (data.message.metadata as Record<string, unknown> | undefined)?.roundNumber as number | undefined;
         const metadataWithRoundNumber = {
           ...updatedMetadata,
-          roundNumber: backendRoundNumber || roundTracking.getRoundNumber() || 1,
+          roundNumber: backendRoundNumber || roundTracking.getRoundNumber() || getCurrentRoundNumber(messages) || 1,
         };
 
         setMessages((prev) => {
@@ -467,6 +470,10 @@ export function useMultiParticipantChat({
     // Find last user message to validate it exists and get round number
     const lastUserMessage = messages.findLast(m => m.role === 'user');
     if (!lastUserMessage) {
+      console.error('[useMultiParticipantChat] startRound aborted: no user message found', {
+        messagesCount: messages.length,
+        messages: messages.map(m => ({ role: m.role, id: m.id })),
+      });
       setIsExplicitlyStreaming(false);
       return;
     }
@@ -475,6 +482,9 @@ export function useMultiParticipantChat({
     const userText = textPart && 'text' in textPart ? textPart.text : '';
 
     if (!userText.trim()) {
+      console.error('[useMultiParticipantChat] startRound aborted: empty user message text', {
+        lastUserMessage,
+      });
       setIsExplicitlyStreaming(false);
       return;
     }
@@ -495,7 +505,7 @@ export function useMultiParticipantChat({
         isParticipantTrigger: true, // ✅ Mark as trigger to distinguish from real user messages
       },
     });
-  }, [participants, status, messages, aiSendMessage]);
+  }, [participants, status, messages, aiSendMessage, errorTracking, participantQueue, roundTracking]);
 
   /**
    * Send user message and trigger participant responses
@@ -545,6 +555,8 @@ export function useMultiParticipantChat({
         ? regenerateRoundNumberRef.current
         : calculateNextRoundNumber(messages); // ✅ Use utility instead of inline calculation
 
+      // ✅ CRITICAL FIX: Set round number BEFORE sending message
+      // This ensures roundTracking.getRoundNumber() returns correct value during streaming
       roundTracking.setRoundNumber(newRoundNumber);
 
       aiSendMessage({
@@ -552,7 +564,7 @@ export function useMultiParticipantChat({
         metadata: { roundNumber: newRoundNumber },
       });
     },
-    [participants, status, aiSendMessage, messages],
+    [participants, status, aiSendMessage, messages, errorTracking, participantQueue, roundTracking],
   );
 
   /**
@@ -640,6 +652,29 @@ export function useMultiParticipantChat({
     participantQueue.setPending(false);
   }, [stop, participantQueue]);
 
+  /**
+   * Reset all internal hook state
+   * Used by ChatContext during initializeThread to ensure clean state
+   */
+  const resetHookState = useCallback(() => {
+    // Reset participant queue
+    participantQueue.reset();
+    participantQueue.setPending(false);
+
+    // Reset round tracking
+    roundTracking.reset();
+
+    // Reset error tracking
+    errorTracking.reset();
+
+    // Reset regeneration state
+    setRegenerateRoundNumber(null);
+    regenerateRoundNumberRef.current = null;
+
+    // Reset streaming flag
+    setIsExplicitlyStreaming(false);
+  }, [participantQueue, roundTracking, errorTracking]);
+
   return {
     messages,
     sendMessage,
@@ -650,5 +685,6 @@ export function useMultiParticipantChat({
     retry,
     stop: stopStreaming, // ✅ Use wrapper that also sets flag to false
     setMessages,
+    resetHookState,
   };
 }

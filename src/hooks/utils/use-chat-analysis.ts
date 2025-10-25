@@ -83,23 +83,6 @@ export function useChatAnalysis({
       userQuestion: string,
     ) => {
       try {
-        // 🔍 DEBUG: Log all messages and their metadata
-        console.group(`[createPendingAnalysis] Round ${roundNumber} - Message Extraction`);
-        console.log('Total messages:', messages.length);
-        console.log('Expected participants:', participants.filter(p => p.isEnabled).length);
-
-        // Log all messages with their metadata
-        messages.forEach((m, index) => {
-          const metadata = m.metadata as Record<string, unknown> | undefined;
-          console.log(`Message ${index}:`, {
-            id: m.id,
-            role: m.role,
-            roundNumber: metadata?.roundNumber,
-            roundNumberType: typeof metadata?.roundNumber,
-            participantId: metadata?.participantId,
-          });
-        });
-
         // ✅ CRITICAL FIX: Extract message IDs from the CURRENT round only
         // Handle potential type mismatches between stored and parameter roundNumber
         const roundMessages = messages.filter((m) => {
@@ -118,35 +101,10 @@ export function useChatAnalysis({
           const isAssistant = m.role === 'assistant';
           const roundMatches = messageRound === targetRound;
 
-          // Debug log for assistant messages to trace filtering
-          if (isAssistant) {
-            console.log(`[Filter] Assistant message ${m.id}:`, {
-              messageRound,
-              targetRound,
-              roundMatches,
-              willInclude: roundMatches && isAssistant,
-            });
-          }
-
           return roundMatches && isAssistant;
         });
 
-        // 🔍 DEBUG: Log filtered round messages
-        console.log(`Filtered messages for round ${roundNumber}:`, roundMessages.length);
-        roundMessages.forEach((m, index) => {
-          const metadata = m.metadata as Record<string, unknown> | undefined;
-          console.log(`Round message ${index}:`, {
-            id: m.id,
-            role: m.role,
-            participantId: metadata?.participantId,
-            roundNumber: metadata?.roundNumber,
-          });
-        });
-
         const participantMessageIds = roundMessages.map(m => m.id);
-
-        // 🔍 DEBUG: Log extracted participant message IDs
-        console.log('Extracted participantMessageIds:', participantMessageIds);
 
         // ✅ VALIDATION: Check if we have the expected number of participant messages
         const expectedCount = participants.filter(p => p.isEnabled).length;
@@ -162,12 +120,10 @@ export function useChatAnalysis({
             participantMessageIds,
             enabledParticipants: participants.filter(p => p.isEnabled).map(p => ({ id: p.id, modelId: p.modelId })),
           });
-          console.groupEnd();
 
           // ✅ FIX: During regeneration, participants might still be streaming
           // Allow creating pending analysis even if count doesn't match yet
           // The backend will handle validation when streaming completes
-          console.log(`[useChatAnalysis] Creating pending analysis anyway for round ${roundNumber} during regeneration/streaming`);
           // Continue instead of returning early
         }
 
@@ -181,8 +137,6 @@ export function useChatAnalysis({
             participantMessageIds,
           });
         }
-
-        console.groupEnd();
 
         const pendingAnalysis: StoredModeratorAnalysis = {
           id: `pending-${threadId}-${roundNumber}-${Date.now()}`,
@@ -214,11 +168,21 @@ export function useChatAnalysis({
               };
             }
 
-            // ✅ FIX: Remove ALL existing analyses for this round before adding new pending
-            // This prevents duplicates when createPendingAnalysis is called multiple times
+            // ✅ FIX: Only remove pending/streaming analyses for this round
+            // Keep completed analyses to prevent them from reverting to streaming state
             const filteredItems = typedData.data.items.filter(
-              a => a.roundNumber !== roundNumber,
+              a => a.roundNumber !== roundNumber || a.status === 'completed',
             );
+
+            // Only add new pending analysis if no completed analysis exists for this round
+            const hasCompletedAnalysis = typedData.data.items.some(
+              a => a.roundNumber === roundNumber && a.status === 'completed',
+            );
+
+            if (hasCompletedAnalysis) {
+              // Keep the completed analysis, don't add pending
+              return typedData;
+            }
 
             // Add new pending analysis
             return {

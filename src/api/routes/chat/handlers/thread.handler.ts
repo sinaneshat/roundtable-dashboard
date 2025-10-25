@@ -421,7 +421,11 @@ export const getThreadHandler: RouteHandler<typeof getThreadRoute, ApiEnv> = cre
 
     const messages = await db.query.chatMessage.findMany({
       where: eq(tables.chatMessage.threadId, id),
-      orderBy: [tables.chatMessage.createdAt],
+      orderBy: [
+        asc(tables.chatMessage.roundNumber),
+        asc(tables.chatMessage.createdAt),
+        asc(tables.chatMessage.id),
+      ],
     });
 
     // Fetch changelog entries (ordered by creation time, newest first)
@@ -751,7 +755,11 @@ export const getPublicThreadHandler: RouteHandler<typeof getPublicThreadRoute, A
 
     const messages = await db.query.chatMessage.findMany({
       where: eq(tables.chatMessage.threadId, thread.id),
-      orderBy: [tables.chatMessage.createdAt],
+      orderBy: [
+        asc(tables.chatMessage.roundNumber),
+        asc(tables.chatMessage.createdAt),
+        asc(tables.chatMessage.id),
+      ],
     });
 
     const changelog = await db.query.chatThreadChangelog.findMany({
@@ -810,7 +818,11 @@ export const getThreadBySlugHandler: RouteHandler<typeof getThreadBySlugRoute, A
 
     const messages = await db.query.chatMessage.findMany({
       where: eq(tables.chatMessage.threadId, thread.id),
-      orderBy: [tables.chatMessage.createdAt],
+      orderBy: [
+        asc(tables.chatMessage.roundNumber),
+        asc(tables.chatMessage.createdAt),
+        asc(tables.chatMessage.id),
+      ],
     });
 
     return Responses.ok(c, {

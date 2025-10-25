@@ -233,57 +233,88 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
       // ✅ If real message with content, increment to new round
       if ((isParticipantTrigger || textContent.length === 0) && lastRoundNumber > 0) {
         currentRoundNumber = lastRoundNumber; // Reuse existing round
-        // Round reused for trigger message (consider structured logging if needed)
+        console.warn('[streamChat] Round number reused for trigger message:', {
+          threadId,
+          currentRoundNumber,
+          lastRoundNumber,
+          isParticipantTrigger,
+          hasContent: textContent.length > 0,
+        });
       } else {
         currentRoundNumber = lastRoundNumber + 1; // New round
-        // New round started (consider structured logging if needed)
+        console.warn('[streamChat] New round started:', {
+          threadId,
+          currentRoundNumber,
+          previousRoundNumber: lastRoundNumber,
+          isParticipantTrigger,
+          hasContent: textContent.length > 0,
+        });
       }
     } else {
-      // ✅ SUBSEQUENT PARTICIPANTS: Get round number from assistant messages OR user messages
-      // CRITICAL FIX: When participants run in parallel, Participant 0's user message might not be saved yet
-      // Solution: Check both assistant messages AND user messages for the current round
-
+      // ✅ SUBSEQUENT PARTICIPANTS: Get round number from the latest user message
+      // CRITICAL FIX: Replaced time-based filtering with explicit round number matching
+      //
       // Strategy:
-      // 1. First, check if any assistant messages exist for this stream (same participants in same round)
-      // 2. If assistant messages exist, use their roundNumber (they're from the current round)
-      // 3. If no assistant messages yet, fall back to latest user message roundNumber
+      // 1. Query the last user message to get the expected round number
+      // 2. Check if any assistant has responded in that round
+      // 3. Use that round number for subsequent participants
+      // 4. Throw clear errors if round number cannot be determined
+      //
+      // This prevents race conditions where time-based filtering (30 seconds) could
+      // incorrectly identify the round number or silently fall back to round 1.
 
-      // Check for recent assistant messages (within last 30 seconds to handle parallel execution)
-      const recentAssistantMessages = await db.query.chatMessage.findMany({
+      // Step 1: Get the last user message to determine expected round number
+      const lastUserMessage = await db.query.chatMessage.findFirst({
         where: and(
           eq(tables.chatMessage.threadId, threadId),
-          eq(tables.chatMessage.role, 'assistant'),
+          eq(tables.chatMessage.role, 'user'),
         ),
         columns: { roundNumber: true, createdAt: true },
         orderBy: desc(tables.chatMessage.createdAt),
-        limit: 10, // Check recent messages to find current round
       });
 
-      // Filter to messages from the current round (created in last 30 seconds)
-      const thirtySecondsAgo = new Date(Date.now() - 30000);
-      const currentRoundAssistantMessages = recentAssistantMessages.filter(
-        msg => msg.createdAt >= thirtySecondsAgo,
-      );
+      if (!lastUserMessage) {
+        throw createError.internal(
+          `Cannot determine round number for participant ${participantIndex}: No user messages found in thread ${threadId}`,
+        );
+      }
 
-      const firstAssistantMessage = currentRoundAssistantMessages[0];
-      if (firstAssistantMessage) {
+      const expectedRoundNumber = lastUserMessage.roundNumber;
+
+      // Step 2: Check if any assistant messages exist for this round
+      // This handles the race condition where participant 0 might not have saved yet
+      const assistantInRound = await db.query.chatMessage.findFirst({
+        where: and(
+          eq(tables.chatMessage.threadId, threadId),
+          eq(tables.chatMessage.role, 'assistant'),
+          eq(tables.chatMessage.roundNumber, expectedRoundNumber),
+        ),
+        columns: { roundNumber: true, createdAt: true },
+        orderBy: desc(tables.chatMessage.createdAt),
+      });
+
+      // Step 3: Use the round number from either the assistant or the user message
+      if (assistantInRound) {
         // ✅ Use roundNumber from parallel participant (same round, already saved)
-        currentRoundNumber = firstAssistantMessage.roundNumber;
-        // Round number determined from parallel assistant (consider structured logging if needed)
-      } else {
-        // ✅ Fallback: Get round number from latest user message
-        const userMessages = await db.query.chatMessage.findMany({
-          where: and(
-            eq(tables.chatMessage.threadId, threadId),
-            eq(tables.chatMessage.role, 'user'),
-          ),
-          columns: { id: true, roundNumber: true },
-          orderBy: desc(tables.chatMessage.createdAt),
-          limit: 1,
+        currentRoundNumber = assistantInRound.roundNumber;
+        console.warn('[streamChat] Round number determined from parallel assistant:', {
+          threadId,
+          participantIndex,
+          currentRoundNumber,
+          assistantCreatedAt: assistantInRound.createdAt,
+          userMessageCreatedAt: lastUserMessage.createdAt,
         });
-
-        currentRoundNumber = userMessages[0]?.roundNumber || 1;
-        // Round number determined from user message (consider structured logging if needed)
+      } else {
+        // ✅ Use round number from the last user message
+        // This is safe because participant 0 calculated this round number before starting
+        currentRoundNumber = expectedRoundNumber;
+        console.warn('[streamChat] Backend fallback: Round number determined from user message:', {
+          threadId,
+          participantIndex,
+          currentRoundNumber,
+          fallbackReason: 'No assistant messages found in current round yet',
+          userMessageCreatedAt: lastUserMessage.createdAt,
+        });
       }
     }
 
@@ -651,7 +682,11 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
     // Load all previous messages from database
     const previousDbMessages = await db.query.chatMessage.findMany({
       where: eq(tables.chatMessage.threadId, threadId),
-      orderBy: [asc(tables.chatMessage.createdAt)],
+      orderBy: [
+        asc(tables.chatMessage.roundNumber),
+        asc(tables.chatMessage.createdAt),
+        asc(tables.chatMessage.id),
+      ],
     });
 
     // Convert database messages to UIMessage format
@@ -726,6 +761,9 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
                 role: 'user',
                 parts: [{ type: 'text', text: content }],
                 roundNumber: currentRoundNumber,
+                metadata: {
+                  roundNumber: currentRoundNumber,
+                },
                 createdAt: new Date(),
               });
               await incrementMessageUsage(user.id, 1);
@@ -1001,6 +1039,23 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
     // but doesn't include the full reasoning in finishResult for most models
     const reasoningDeltas: string[] = [];
 
+    // ✅ MESSAGE ID TRACKING: Capture the ID generated by generateMessageId to use in onFinish
+    // This ensures frontend and backend use the same message ID, preventing duplication
+    let streamMessageId: string | undefined;
+
+    // =========================================================================
+    // ✅ PREPARE PARTICIPANT METADATA FOR STREAMING
+    // =========================================================================
+    // This metadata will be injected into the streaming response via messageMetadata callback
+    // It ensures the frontend receives participant information during streaming, not just after completion
+    const streamMetadata = {
+      roundNumber: currentRoundNumber,
+      participantId: participant.id,
+      participantIndex,
+      participantRole: participant.role,
+      model: participant.modelId,
+    };
+
     // =========================================================================
     // ✅ AI SDK V5 BUILT-IN RETRY LOGIC
     // =========================================================================
@@ -1254,9 +1309,14 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
             parts.push({ type: 'text', text: '' });
           }
 
+          // ✅ CRITICAL FIX: Use streamMessageId from generateMessageId if available
+          // This ensures frontend and backend use the same message ID, preventing duplication
+          // Fallback to ulid() only if streamMessageId wasn't set (should never happen)
+          const messageId = streamMessageId || ulid();
+
           const [savedMessage] = await db.insert(tables.chatMessage)
             .values({
-              id: ulid(),
+              id: messageId,
               threadId,
               participantId: participant.id,
               role: 'assistant' as const,
@@ -1317,7 +1377,11 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
                 eq(tables.chatMessage.threadId, threadId),
                 eq(tables.chatMessage.roundNumber, currentRoundNumber),
               ),
-              orderBy: [tables.chatMessage.createdAt],
+              orderBy: [
+                asc(tables.chatMessage.roundNumber),
+                asc(tables.chatMessage.createdAt),
+                asc(tables.chatMessage.id),
+              ],
             });
 
             // ✅ CHECK ALL PARTICIPANTS RESPONDED: Analysis only happens if round is complete
@@ -1475,15 +1539,27 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
 
       // ✅ OFFICIAL PATTERN: Pass original messages for type-safe metadata
       // Reference: https://sdk.vercel.ai/docs/ai-sdk-ui/25-message-metadata
-      originalMessages: typedMessages,
+      // ✅ CRITICAL FIX: Use previousMessages but exclude the new user message
+      // The frontend's aiSendMessage() already adds the user message to state
+      // Backend shouldn't re-send it in originalMessages to avoid duplication
+      // Filter out the new message by ID to handle race conditions where subsequent
+      // participants might query the DB after participant 0 saved the message
+      originalMessages: previousMessages.filter(m => m.id !== (message as UIMessage).id),
 
       // ✅ AI SDK V5 OFFICIAL PATTERN: Server-side message ID generation
       // Reference: https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot-message-persistence#message-ids
       // Ensures consistent IDs for database-backed persistence across client refreshes
-      generateMessageId: createIdGenerator({
-        prefix: 'msg',
-        size: 16,
-      }),
+      generateMessageId: () => {
+        // Generate ID and store it for use in onFinish
+        const id = createIdGenerator({ prefix: 'msg', size: 16 })();
+        streamMessageId = id;
+        return id;
+      },
+
+      // ✅ CRITICAL FIX: Inject participant metadata into stream
+      // Reference: AI SDK messageMetadata callback - called on 'start' and 'finish' events
+      // This ensures frontend receives participant info during streaming, not just after completion
+      messageMetadata: () => streamMetadata,
 
       onError: (error) => {
         // ✅ DEEPSEEK R1 WORKAROUND: Suppress logprobs validation errors

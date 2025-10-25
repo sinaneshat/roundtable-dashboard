@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import ChatErrorBoundary, { StreamingErrorBoundary } from '@/components/chat/chat-error-boundary';
 import type { ParticipantConfig } from '@/components/chat/chat-form-schemas';
 import { toCreateThreadRequest } from '@/components/chat/chat-form-schemas';
 import { ChatInput } from '@/components/chat/chat-input';
@@ -26,6 +27,7 @@ import { useSession } from '@/lib/auth/client';
 import type { ChatModeId } from '@/lib/config/chat-modes';
 import { getDefaultChatMode } from '@/lib/config/chat-modes';
 import { showApiErrorToast } from '@/lib/toast';
+import { chatAnalysisLogger, chatOverviewLogger } from '@/lib/utils/chat-error-logger';
 import { chatMessagesToUIMessages } from '@/lib/utils/message-transforms';
 
 /**
@@ -141,7 +143,24 @@ export default function ChatOverviewScreen() {
       e.preventDefault();
 
       const prompt = inputValue.trim();
+
+      // ✅ ERROR TRACKING: Log form submission attempt
+      chatOverviewLogger.formSubmit({
+        hasPrompt: !!prompt,
+        participantCount: selectedParticipants.length,
+        isCreatingThread,
+        isStreaming,
+        mode: selectedMode,
+      });
+
       if (!prompt || selectedParticipants.length === 0 || isCreatingThread || isStreaming) {
+        // ✅ ERROR TRACKING: Log validation failure
+        chatOverviewLogger.warn('Form submit aborted - validation failed', {
+          hasPrompt: !!prompt,
+          participantCount: selectedParticipants.length,
+          isCreatingThread,
+          isStreaming,
+        });
         return;
       }
 
@@ -154,11 +173,24 @@ export default function ChatOverviewScreen() {
           participants: selectedParticipants,
         });
 
+        // ✅ ERROR TRACKING: Log API request
+        chatOverviewLogger.threadCreated('pending', {
+          participantCount: createThreadRequest.participants.length,
+          mode: createThreadRequest.mode,
+        });
+
         const response = await createThreadMutation.mutateAsync({
           json: createThreadRequest,
         });
 
         const { thread, participants, messages: initialMessages } = response.data;
+
+        // ✅ ERROR TRACKING: Log successful thread creation
+        chatOverviewLogger.threadCreated(thread.id, {
+          participantCount: participants.length,
+          messageCount: initialMessages.length,
+          mode: thread.mode,
+        });
 
         const threadWithDates = {
           ...thread,
@@ -192,6 +224,12 @@ export default function ChatOverviewScreen() {
 
           // Only trigger analysis if we actually have responses
           if (assistantMessages.length === 0 || assistantMessages.length < enabledParticipants.length) {
+            // ✅ ERROR TRACKING: Log incomplete round
+            chatOverviewLogger.warn('Round incomplete - not creating analysis', {
+              threadId: thread.id,
+              assistantMessageCount: assistantMessages.length,
+              enabledParticipantCount: enabledParticipants.length,
+            });
             return;
           }
 
@@ -202,21 +240,51 @@ export default function ChatOverviewScreen() {
           const textPart = lastUserMessage?.parts?.find(p => p.type === 'text');
           const userQuestion = (textPart && 'text' in textPart ? textPart.text : '') || '';
 
+          // ✅ ERROR TRACKING: Log analysis creation
+          chatAnalysisLogger.create(roundNumber, {
+            threadId: thread.id,
+            participantCount: currentParticipants.length,
+            messageCount: currentMessages.length,
+          });
+
           // ✅ Create pending analysis when round completes AND we have all responses
-          createPendingAnalysisRef.current(
-            roundNumber,
-            currentMessages,
-            currentParticipants,
-            userQuestion,
-          );
+          try {
+            createPendingAnalysisRef.current(
+              roundNumber,
+              currentMessages,
+              currentParticipants,
+              userQuestion,
+            );
+          } catch (error) {
+            // ✅ ERROR TRACKING: Log analysis creation failure
+            chatAnalysisLogger.error(roundNumber, error, {
+              threadId: thread.id,
+            });
+          }
+        });
+
+        // ✅ ERROR TRACKING: Log thread initialization
+        chatOverviewLogger.autoStartRound({
+          threadId: threadWithDates.id,
+          participantCount: participantsWithDates.length,
+          messageCount: uiMessages.length,
         });
 
         initializeThread(threadWithDates, participantsWithDates, uiMessages);
 
+        // ✅ CRITICAL FIX: Set flag to trigger startRound() when messages appear in state
+        // Cannot call startRound() directly because AI SDK's setMessages() is async
+        // The effect below will call startRound() when messages.length > 0
         hasSentInitialPromptRef.current = false;
         setInitialPrompt(prompt);
       } catch (error) {
-        showApiErrorToast('Error', error);
+        // ✅ ERROR TRACKING: Log thread creation failure
+        chatOverviewLogger.error('THREAD_CREATE_FAILED', error, {
+          participantCount: selectedParticipants.length,
+          mode: selectedMode,
+        });
+
+        showApiErrorToast('Error creating thread', error);
         setShowInitialUI(true);
       } finally {
         setIsCreatingThread(false);
@@ -240,12 +308,59 @@ export default function ChatOverviewScreen() {
     setSelectedParticipants(participants);
   }, [setSelectedParticipants]);
 
+  // ✅ CRITICAL FIX: Wait for messages to appear in AI SDK state before calling startRound()
+  // This effect runs when messages.length changes from 0 → 1 after initializeThread()
+  //
+  // ISSUE: chat.setMessages() in initializeThread() is async (AI SDK internal behavior)
+  // - initializeThread() calls chat.setMessages([userMessage]) at line 253
+  // - AI SDK updates messages state asynchronously
+  // - This effect must wait for messages.length to transition from 0 → 1
+  //
+  // SOLUTION: Effect triggers on messages.length changes
+  // - initialPrompt flag set after initializeThread() completes (line 261)
+  // - When messages populate, effect detects transition and calls startRound()
+  // - hasSentInitialPromptRef prevents multiple triggers
   useEffect(() => {
-    if (initialPrompt && currentThread && !isStreaming && !hasSentInitialPromptRef.current) {
+    const hasMessages = messages.length > 0;
+    const hasUserMessage = messages.some(m => m.role === 'user');
+
+    // Only trigger if:
+    // 1. We have an initialPrompt (thread just created)
+    // 2. We have a currentThread
+    // 3. Not already streaming
+    // 4. Haven't sent initial prompt yet (prevents duplicate calls)
+    // 5. Messages have appeared in state (messages.length > 0)
+    // 6. At least one user message exists (ensures proper state)
+    if (
+      initialPrompt
+      && currentThread
+      && !isStreaming
+      && !hasSentInitialPromptRef.current
+      && hasMessages
+      && hasUserMessage
+    ) {
+      // ✅ ERROR TRACKING: Log auto-start round trigger
+      chatOverviewLogger.autoStartRound({
+        threadId: currentThread.id,
+        messageCount: messages.length,
+        participantCount: contextParticipants.length,
+      });
+
       hasSentInitialPromptRef.current = true;
-      startRound();
+
+      try {
+        startRound();
+      } catch (error) {
+        // ✅ ERROR TRACKING: Log startRound failure
+        chatOverviewLogger.error('STREAM_FAILED', error, {
+          threadId: currentThread.id,
+          messageCount: messages.length,
+        });
+
+        showApiErrorToast('Error starting conversation', error);
+      }
     }
-  }, [initialPrompt, currentThread, isStreaming, startRound]);
+  }, [initialPrompt, currentThread, isStreaming, startRound, messages, contextParticipants]);
 
   const currentStreamingParticipant = contextParticipants[currentParticipantIndex] || null;
 
@@ -284,168 +399,189 @@ export default function ChatOverviewScreen() {
   const inputContainerRef = useRef<HTMLDivElement | null>(null);
 
   return (
-    <div className="min-h-screen flex flex-col">
-      <div className="fixed inset-0 -z-10 overflow-hidden">
-        <WavyBackground containerClassName="h-full w-full" />
-      </div>
+    <ChatErrorBoundary>
+      <div className="min-h-screen flex flex-col">
+        <div className="fixed inset-0 -z-10 overflow-hidden">
+          <WavyBackground containerClassName="h-full w-full" />
+        </div>
 
-      <div id="chat-scroll-container" className="container max-w-3xl mx-auto px-4 sm:px-6 pt-0 pb-32 flex-1">
-        <AnimatePresence>
-          {showInitialUI && (
-            <motion.div
-              key="initial-ui"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              transition={{ duration: 0.3 }}
-              className="pb-8"
-            >
-              <div className="flex flex-col items-center gap-4 sm:gap-6 text-center">
-                <motion.div
-                  className="relative h-20 w-20 xs:h-24 xs:w-24 sm:h-28 sm:w-28 md:h-32 md:w-32 lg:h-36 lg:w-36"
-                  initial={{ scale: 0.8, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  transition={{ delay: 0.1 }}
-                >
-                  <Image
-                    src={BRAND.logos.main}
-                    alt={BRAND.name}
-                    fill
-                    className="object-contain"
-                    priority
-                  />
-                </motion.div>
-
-                <motion.h1
-                  className="text-2xl xs:text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold text-gray-900 dark:text-white"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ delay: 0.2 }}
-                >
-                  {BRAND.name}
-                </motion.h1>
-
-                <motion.p
-                  className="text-base xs:text-lg sm:text-xl md:text-2xl text-gray-600 dark:text-gray-300 max-w-2xl"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ delay: 0.3 }}
-                >
-                  {BRAND.tagline}
-                </motion.p>
-
-                <motion.div
-                  className="w-full mt-4 sm:mt-6 md:mt-8"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ delay: 0.4 }}
-                >
-                  <ChatQuickStart onSuggestionClick={handleSuggestionClick} />
-                </motion.div>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        <AnimatePresence>
-          {!showInitialUI && currentThread && (
-            <motion.div
-              key="streaming-ui"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              transition={{ duration: 0.3 }}
-            >
-              <ChatMessageList
-                messages={messages}
-                user={{
-                  name: sessionUser?.name || 'You',
-                  image: sessionUser?.image || null,
-                }}
-                participants={contextParticipants}
-                isStreaming={isStreaming}
-                currentParticipantIndex={currentParticipantIndex}
-                currentStreamingParticipant={currentStreamingParticipant}
-              />
-
-              {createdThreadId && analyses[0] && (
-                <div className="mt-6">
-                  <RoundAnalysisCard
-                    analysis={analyses[0]}
-                    threadId={createdThreadId}
-                    isLatest={true}
-                    onStreamComplete={async () => {
-                      setHasLoadedAnalysis(true);
-
-                      // ✅ STATE STABILIZATION: Brief delay for React state updates and cache writes
-                      await new Promise(resolve => setTimeout(resolve, 300));
-
-                      router.push(`/chat/${currentThread?.slug}`);
-                    }}
-                  />
-                </div>
-              )}
-
-              {streamError && !isStreaming && (
-                <div className="flex justify-center mt-4">
-                  <button
-                    type="button"
-                    onClick={retryRound}
-                    className="px-4 py-2 text-sm font-medium rounded-lg bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 transition-colors"
+        <div id="chat-scroll-container" className="container max-w-3xl mx-auto px-4 sm:px-6 pt-0 pb-32 flex-1">
+          <AnimatePresence>
+            {showInitialUI && (
+              <motion.div
+                key="initial-ui"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                transition={{ duration: 0.3 }}
+                className="pb-8"
+              >
+                <div className="flex flex-col items-center gap-4 sm:gap-6 text-center">
+                  <motion.div
+                    className="relative h-20 w-20 xs:h-24 xs:w-24 sm:h-28 sm:w-28 md:h-32 md:w-32 lg:h-36 lg:w-36"
+                    initial={{ scale: 0.8, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    transition={{ delay: 0.1 }}
                   >
-                    {t('chat.errors.retry')}
-                  </button>
+                    <Image
+                      src={BRAND.logos.main}
+                      alt={BRAND.name}
+                      fill
+                      className="object-contain"
+                      priority
+                    />
+                  </motion.div>
+
+                  <motion.h1
+                    className="text-2xl xs:text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold text-gray-900 dark:text-white"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: 0.2 }}
+                  >
+                    {BRAND.name}
+                  </motion.h1>
+
+                  <motion.p
+                    className="text-base xs:text-lg sm:text-xl md:text-2xl text-gray-600 dark:text-gray-300 max-w-2xl"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: 0.3 }}
+                  >
+                    {BRAND.tagline}
+                  </motion.p>
+
+                  <motion.div
+                    className="w-full mt-4 sm:mt-6 md:mt-8"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: 0.4 }}
+                  >
+                    <ChatQuickStart onSuggestionClick={handleSuggestionClick} />
+                  </motion.div>
                 </div>
-              )}
-
-              {(() => {
-                // ✅ Compute isAnalyzing state from analyses array
-                const isAnalyzing = analyses.some(a => a.status === 'pending' || a.status === 'streaming');
-                const showLoader = (isStreaming || isAnalyzing) && selectedParticipants.length > 1;
-
-                return showLoader && (
-                  <StreamingParticipantsLoader
-                    className="mt-4"
-                    participants={selectedParticipants}
-                    currentParticipantIndex={currentParticipantIndex}
-                    isAnalyzing={isAnalyzing}
-                  />
-                );
-              })()}
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
-
-      <div
-        ref={inputContainerRef}
-        className="sticky bottom-0 z-50 bg-gradient-to-t from-background via-background to-transparent pt-6 pb-4 mt-auto"
-      >
-        <div className="container max-w-3xl mx-auto px-4 sm:px-6">
-          <ChatInput
-            value={inputValue}
-            onChange={setInputValue}
-            onSubmit={handlePromptSubmit}
-            status={isCreatingThread || isStreaming ? 'submitted' : 'ready'}
-            onStop={stopStreaming}
-            placeholder={t('chat.input.placeholder')}
-            participants={selectedParticipants}
-            onRemoveParticipant={handleRemoveParticipant}
-            toolbar={(
-              <>
-                <ChatParticipantsList
-                  participants={selectedParticipants}
-                  onParticipantsChange={setSelectedParticipants}
-                />
-                <ChatModeSelector
-                  selectedMode={selectedMode}
-                  onModeChange={setSelectedMode}
-                />
-              </>
+              </motion.div>
             )}
-          />
+          </AnimatePresence>
+
+          <AnimatePresence>
+            {!showInitialUI && currentThread && (
+              <motion.div
+                key="streaming-ui"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                transition={{ duration: 0.3 }}
+              >
+                <StreamingErrorBoundary onRetry={retryRound}>
+                  <ChatMessageList
+                    messages={messages}
+                    user={{
+                      name: sessionUser?.name || 'You',
+                      image: sessionUser?.image || null,
+                    }}
+                    participants={contextParticipants}
+                    isStreaming={isStreaming}
+                    currentParticipantIndex={currentParticipantIndex}
+                    currentStreamingParticipant={currentStreamingParticipant}
+                  />
+                </StreamingErrorBoundary>
+
+                {createdThreadId && analyses[0] && (
+                  <div className="mt-6">
+                    <RoundAnalysisCard
+                      analysis={analyses[0]}
+                      threadId={createdThreadId}
+                      isLatest={true}
+                      onStreamComplete={async () => {
+                        try {
+                          setHasLoadedAnalysis(true);
+
+                          // ✅ ERROR TRACKING: Log navigation
+                          chatOverviewLogger.navigate(`/chat/${currentThread?.slug}`, {
+                            threadId: createdThreadId,
+                            analysisStatus: analyses[0]?.status,
+                          });
+
+                          // ✅ STATE STABILIZATION: Brief delay for React state updates and cache writes
+                          await new Promise(resolve => setTimeout(resolve, 300));
+
+                          router.push(`/chat/${currentThread?.slug}`);
+                        } catch (error) {
+                        // ✅ ERROR TRACKING: Log navigation failure
+                          chatOverviewLogger.error('NETWORK_ERROR', error, {
+                            threadId: createdThreadId,
+                            destination: `/chat/${currentThread?.slug}`,
+                          });
+
+                          showApiErrorToast('Error navigating to thread', error);
+                        }
+                      }}
+                    />
+                  </div>
+                )}
+
+                {streamError && !isStreaming && (
+                  <div className="flex justify-center mt-4">
+                    <button
+                      type="button"
+                      onClick={retryRound}
+                      className="px-4 py-2 text-sm font-medium rounded-lg bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 transition-colors"
+                    >
+                      {t('chat.errors.retry')}
+                    </button>
+                  </div>
+                )}
+
+                {(() => {
+                // ✅ Compute isAnalyzing state from analyses array
+                  const isAnalyzing = analyses.some(a => a.status === 'pending' || a.status === 'streaming');
+                  const showLoader = (isStreaming || isAnalyzing) && selectedParticipants.length > 1;
+
+                  return showLoader && (
+                    <StreamingParticipantsLoader
+                      className="mt-4"
+                      participants={selectedParticipants}
+                      currentParticipantIndex={currentParticipantIndex}
+                      isAnalyzing={isAnalyzing}
+                    />
+                  );
+                })()}
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+
+        <div
+          ref={inputContainerRef}
+          className="sticky bottom-0 z-50 bg-gradient-to-t from-background via-background to-transparent pt-6 pb-4 mt-auto"
+        >
+          <div className="container max-w-3xl mx-auto px-4 sm:px-6">
+            <ChatInput
+              value={inputValue}
+              onChange={setInputValue}
+              onSubmit={handlePromptSubmit}
+              status={isCreatingThread || isStreaming ? 'submitted' : 'ready'}
+              onStop={stopStreaming}
+              placeholder={t('chat.input.placeholder')}
+              participants={selectedParticipants}
+              currentParticipantIndex={currentParticipantIndex}
+              onRemoveParticipant={isStreaming ? undefined : handleRemoveParticipant}
+              toolbar={(
+                <>
+                  <ChatParticipantsList
+                    participants={selectedParticipants}
+                    onParticipantsChange={isStreaming ? undefined : setSelectedParticipants}
+                  />
+                  <ChatModeSelector
+                    selectedMode={selectedMode}
+                    onModeChange={isStreaming ? undefined : setSelectedMode}
+                  />
+                </>
+              )}
+            />
+          </div>
         </div>
       </div>
-    </div>
+    </ChatErrorBoundary>
   );
 }

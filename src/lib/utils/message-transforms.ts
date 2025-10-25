@@ -89,12 +89,34 @@ export function filterNonEmptyMessages(messages: UIMessage[]): UIMessage[] {
  */
 export function deduplicateMessages(messages: UIMessage[]): UIMessage[] {
   const seen = new Set<string>();
-  return messages.filter((msg) => {
-    if (seen.has(msg.id))
+  const duplicates: Array<{ id: string; role: string; roundNumber?: number }> = [];
+
+  const deduplicated = messages.filter((msg) => {
+    if (seen.has(msg.id)) {
+      // ✅ LOGGING: Track duplicates found for debugging
+      const metadata = msg.metadata as Record<string, unknown> | undefined;
+      duplicates.push({
+        id: msg.id,
+        role: msg.role,
+        roundNumber: typeof metadata?.roundNumber === 'number' ? metadata.roundNumber : undefined,
+      });
       return false;
+    }
     seen.add(msg.id);
     return true;
   });
+
+  // ✅ LOGGING: Log when duplicates are found to help debug round ordering
+  if (duplicates.length > 0) {
+    console.warn('[deduplicateMessages] Found and removed duplicate messages:', {
+      count: duplicates.length,
+      duplicates,
+      totalMessages: messages.length,
+      afterDeduplication: deduplicated.length,
+    });
+  }
+
+  return deduplicated;
 }
 
 /**
@@ -209,6 +231,8 @@ export function mergeParticipantMetadata(
     participantIndex: currentIndex,
     ...(participant.role && { participantRole: participant.role }),
     model: participant.modelId,
+    // ✅ Explicitly preserve critical metadata fields
+    ...(metadata?.roundNumber !== undefined && { roundNumber: metadata.roundNumber }),
     ...(hasError && {
       hasError: true,
       errorType: metadata?.errorType || (isEmptyResponse ? 'empty_response' : 'unknown'),

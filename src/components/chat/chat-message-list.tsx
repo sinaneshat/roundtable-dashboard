@@ -3,6 +3,7 @@
 import type { UIMessage } from 'ai';
 import Image from 'next/image';
 import { useTranslations } from 'next-intl';
+import { memo, useMemo } from 'react';
 
 import type { ChatParticipant } from '@/api/routes/chat/schema';
 import { canAccessModelByPricing } from '@/api/services/product-logic.service';
@@ -41,7 +42,7 @@ type ChatMessageListProps = {
   userAvatar?: { src: string; name: string };
 };
 
-export function ChatMessageList({
+export const ChatMessageList = memo(({
   messages,
   user = null,
   participants = EMPTY_PARTICIPANTS,
@@ -51,7 +52,7 @@ export function ChatMessageList({
   currentStreamingParticipant = null,
   currentParticipantIndex = 0,
   userAvatar,
-}: ChatMessageListProps) {
+}: ChatMessageListProps) => {
   // Use isStreaming as an alias for isLoading for backward compatibility
   const isCurrentlyLoading = isLoading || isStreaming;
   const t = useTranslations();
@@ -66,13 +67,18 @@ export function ChatMessageList({
   const userAvatarSrc = userAvatar?.src || userInfo.image || '/avatars/user.png';
   const userAvatarName = userAvatar?.name || userInfo.name;
 
-  // ✅ SHARED UTILITY: Filter out empty user messages (used for triggering subsequent participants)
-  // ✅ DEDUPLICATION: Remove consecutive duplicate user messages (caused by startRound)
-  const nonEmptyMessages = deduplicateConsecutiveUserMessages(filterNonEmptyMessages(messages));
+  // ✅ MEMOIZED FILTERING: Prevent flickering by stabilizing message filtering
+  // Filters are applied once per messages array change, not on every render
+  // This prevents messages from appearing/disappearing during streaming
+  const filteredMessages = useMemo(() => {
+    // ✅ SHARED UTILITY: Filter out empty user messages (used for triggering subsequent participants)
+    // ✅ DEDUPLICATION: Remove consecutive duplicate user messages (caused by startRound)
+    return deduplicateConsecutiveUserMessages(filterNonEmptyMessages(messages));
+  }, [messages]);
 
   return (
     <>
-      {nonEmptyMessages.map((message) => {
+      {filteredMessages.map((message) => {
         // User message
         if (message.role === 'user') {
           return (
@@ -256,4 +262,4 @@ export function ChatMessageList({
       })}
     </>
   );
-}
+});

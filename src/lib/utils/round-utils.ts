@@ -139,11 +139,10 @@ export function getCurrentRoundNumber(messages: UIMessage[]): number {
 
 /**
  * Group messages by round number
- * Implements four-pass algorithm as documented in FLOW_DOCUMENTATION.md:
- * 1. First Pass: Extract explicit round numbers from user messages
- * 2. Second Pass: Fill in missing round numbers (inferred from context)
- * 3. Third Pass: Group all messages by determined round
- * 4. Deduplication: Remove duplicate messages by ID
+ * Implements three-pass algorithm as documented in FLOW_DOCUMENTATION.md:
+ * 1. First Pass: Determine round number for each message (explicit from metadata or inferred)
+ * 2. Second Pass: Group all messages by determined round
+ * 3. Third Pass: Deduplication - Remove duplicate messages by ID
  *
  * CRITICAL LOGIC FOR INCOMPLETE ROUNDS:
  * - All messages SHOULD have roundNumber in metadata (set by backend)
@@ -158,27 +157,23 @@ export function getCurrentRoundNumber(messages: UIMessage[]): number {
  * - Round 2: Incomplete (only 2 messages, but correctly grouped as round 2)
  */
 export function groupMessagesByRound(messages: UIMessage[]): Map<number, UIMessage[]> {
-  // PASS 1: Extract explicit round numbers from user messages
-  // Build a map of message index -> round number for user messages
-  const userMessageRounds = new Map<number, number>();
-  messages.forEach((message, index) => {
-    if (message.role === 'user') {
-      const roundNumber = safeGetRoundNumber(message.metadata, 1);
-      userMessageRounds.set(index, roundNumber);
-    }
-  });
-
-  // PASS 2: Fill in missing round numbers (inferred)
+  // PASS 1: Determine round number for each message
   // For each message, determine its round number:
-  // - If it has roundNumber in metadata, use it
+  // - If it has roundNumber in metadata, use it directly
   // - Otherwise, infer from the most recent user message BEFORE this message
   const messageRounds = new Map<number, number>();
+  const inferredMessages: Array<{ messageId: string; role: string; index: number; inferredRound: number }> = [];
 
   messages.forEach((message, index) => {
-    const explicitRoundNumber = safeGetRoundNumber(message.metadata, 0);
+    // Check if message has explicit round number in metadata
+    const hasExplicitRound = message.metadata
+      && typeof message.metadata === 'object'
+      && 'roundNumber' in message.metadata
+      && typeof (message.metadata as Record<string, unknown>).roundNumber === 'number';
 
-    if (explicitRoundNumber > 0) {
+    if (hasExplicitRound) {
       // Message has explicit round number in metadata - use it directly
+      const explicitRoundNumber = (message.metadata as Record<string, unknown>).roundNumber as number;
       messageRounds.set(index, explicitRoundNumber);
     } else {
       // No explicit round number - infer from context
@@ -200,6 +195,13 @@ export function groupMessagesByRound(messages: UIMessage[]): Map<number, UIMessa
         }
 
         messageRounds.set(index, inferredRound);
+        // ✅ LOGGING: Track when round number inference is used
+        inferredMessages.push({
+          messageId: message.id,
+          role: message.role,
+          index,
+          inferredRound,
+        });
       } else {
         // Assistant/system message without explicit round number
         // Infer from the most recent user message BEFORE this message
@@ -217,11 +219,27 @@ export function groupMessagesByRound(messages: UIMessage[]): Map<number, UIMessa
         }
 
         messageRounds.set(index, inferredRound);
+        // ✅ LOGGING: Track when round number inference is used
+        inferredMessages.push({
+          messageId: message.id,
+          role: message.role,
+          index,
+          inferredRound,
+        });
       }
     }
   });
 
-  // PASS 3: Group all messages by determined round
+  // ✅ LOGGING: Warn when round number inference fallback is used
+  if (inferredMessages.length > 0) {
+    console.warn('[groupMessagesByRound] Used round number inference for messages without explicit roundNumber:', {
+      count: inferredMessages.length,
+      details: inferredMessages,
+      recommendation: 'Backend should always set roundNumber in metadata',
+    });
+  }
+
+  // PASS 2: Group all messages by determined round
   const grouped = new Map<number, UIMessage[]>();
   messages.forEach((message, index) => {
     const roundNumber = messageRounds.get(index) || 1;
@@ -232,21 +250,43 @@ export function groupMessagesByRound(messages: UIMessage[]): Map<number, UIMessa
     grouped.get(roundNumber)!.push(message);
   });
 
-  // PASS 4: Deduplication - Remove duplicate messages by ID
+  // PASS 3: Deduplication - Remove duplicate messages by ID
   const deduped = new Map<number, UIMessage[]>();
+  const duplicatesFoundInRounds: Array<{ roundNumber: number; duplicateCount: number; duplicateIds: string[] }> = [];
+
   grouped.forEach((roundMessages, roundNumber) => {
     const seenMessageIds = new Set<string>();
     const uniqueMessages: UIMessage[] = [];
+    const duplicateIds: string[] = [];
 
     roundMessages.forEach((message) => {
       if (!seenMessageIds.has(message.id)) {
         seenMessageIds.add(message.id);
         uniqueMessages.push(message);
+      } else {
+        // ✅ LOGGING: Track duplicates during round grouping
+        duplicateIds.push(message.id);
       }
     });
 
+    if (duplicateIds.length > 0) {
+      duplicatesFoundInRounds.push({
+        roundNumber,
+        duplicateCount: duplicateIds.length,
+        duplicateIds,
+      });
+    }
+
     deduped.set(roundNumber, uniqueMessages);
   });
+
+  // ✅ LOGGING: Log when duplicates are found during round grouping
+  if (duplicatesFoundInRounds.length > 0) {
+    console.warn('[groupMessagesByRound] Found duplicates during round grouping:', {
+      roundsWithDuplicates: duplicatesFoundInRounds.length,
+      details: duplicatesFoundInRounds,
+    });
+  }
 
   return deduped;
 }
