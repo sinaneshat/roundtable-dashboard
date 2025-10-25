@@ -22,6 +22,7 @@ import {
 } from '@/api/services/usage-tracking.service';
 import type { getDbAsync } from '@/db';
 import * as tables from '@/db/schema';
+import { ErrorCategorySchema, FinishReasonSchema } from '@/lib/schemas/error-schemas';
 import { extractTextFromParts } from '@/lib/schemas/message-schemas';
 
 // ============================================================================
@@ -176,7 +177,7 @@ function extractErrorMetadata(
     }
     // Check for moderation/content filter errors
     if (metadata.moderation || metadata.contentFilter) {
-      errorCategory = 'content_filter';
+      errorCategory = ErrorCategorySchema.enum.content_filter;
       openRouterError = openRouterError || 'Content was filtered by safety systems';
     }
   }
@@ -207,40 +208,40 @@ function extractErrorMetadata(
       // Categorize based on error content
       const errorLower = openRouterError.toLowerCase();
       if (errorLower.includes('not found') || errorLower.includes('does not exist')) {
-        errorCategory = 'model_not_found';
+        errorCategory = ErrorCategorySchema.enum.model_not_found;
       } else if (errorLower.includes('filter') || errorLower.includes('safety') || errorLower.includes('moderation')) {
-        errorCategory = 'content_filter';
+        errorCategory = ErrorCategorySchema.enum.content_filter;
       } else if (errorLower.includes('rate limit') || errorLower.includes('quota')) {
-        errorCategory = 'rate_limit';
+        errorCategory = ErrorCategorySchema.enum.rate_limit;
       } else if (errorLower.includes('timeout') || errorLower.includes('connection')) {
-        errorCategory = 'network';
+        errorCategory = ErrorCategorySchema.enum.network;
       } else {
-        errorCategory = errorCategory || 'provider_error';
+        errorCategory = errorCategory || ErrorCategorySchema.enum.provider_error;
       }
     } else if (outputTokens === 0) {
       // Build context-aware error messages
       const baseStats = `Input: ${inputTokens} tokens, Output: 0 tokens, Status: ${finishReason}`;
 
-      if (finishReason === 'stop') {
+      if (finishReason === FinishReasonSchema.enum.stop) {
         providerMessage = `Model completed but returned no content. ${baseStats}. This may indicate content filtering, safety constraints, or the model chose not to respond.`;
         errorMessage = 'Returned empty response - possible content filtering or safety block';
-        errorCategory = 'content_filter';
-      } else if (finishReason === 'length') {
+        errorCategory = ErrorCategorySchema.enum.content_filter;
+      } else if (finishReason === FinishReasonSchema.enum.length) {
         providerMessage = `Model hit token limit before generating content. ${baseStats}. Try reducing the conversation history or input length.`;
         errorMessage = 'Exceeded token limit without generating content';
-        errorCategory = 'provider_error';
-      } else if (finishReason === 'content-filter') {
+        errorCategory = ErrorCategorySchema.enum.provider_error;
+      } else if (finishReason === FinishReasonSchema.enum['content-filter']) {
         providerMessage = `Content was filtered by safety systems. ${baseStats}`;
         errorMessage = 'Blocked by content filter';
-        errorCategory = 'content_filter';
-      } else if (finishReason === 'error' || finishReason === 'other') {
+        errorCategory = ErrorCategorySchema.enum.content_filter;
+      } else if (finishReason === FinishReasonSchema.enum.error || finishReason === FinishReasonSchema.enum.other) {
         providerMessage = `Provider error prevented response generation. ${baseStats}. This may be a temporary issue with the model provider.`;
         errorMessage = 'Encountered a provider error';
-        errorCategory = 'provider_error';
+        errorCategory = ErrorCategorySchema.enum.provider_error;
       } else {
         providerMessage = `Model returned empty response. ${baseStats}`;
         errorMessage = `Returned empty response (reason: ${finishReason})`;
-        errorCategory = 'empty_response';
+        errorCategory = ErrorCategorySchema.enum.empty_response;
       }
     }
   }
@@ -250,10 +251,10 @@ function extractErrorMetadata(
 
   // Determine if error is transient (worth retrying)
   const isTransientError = hasError && (
-    errorCategory === 'provider_error'
-    || errorCategory === 'network'
-    || errorCategory === 'rate_limit'
-    || (errorCategory === 'empty_response' && finishReason !== 'stop')
+    errorCategory === ErrorCategorySchema.enum.provider_error
+    || errorCategory === ErrorCategorySchema.enum.network
+    || errorCategory === ErrorCategorySchema.enum.rate_limit
+    || (errorCategory === ErrorCategorySchema.enum.empty_response && finishReason !== FinishReasonSchema.enum.stop)
   );
 
   return {
@@ -560,7 +561,7 @@ async function createPendingAnalysis(
           roundNumber,
           mode: threadMode as 'analyzing' | 'brainstorming' | 'debating' | 'solving',
           userQuestion,
-          status: 'pending',
+          status: 'pending' as const,
           participantMessageIds,
           analysisData: null,
           completedAt: null,

@@ -1,6 +1,10 @@
 import type { UIMessage } from 'ai';
+import { validateUIMessages } from 'ai';
 
 import type * as tables from '@/db/schema';
+import type { ErrorCategory } from '@/lib/schemas/error-schemas';
+import { categorizeErrorMessage, ErrorCategorySchema, FinishReasonSchema } from '@/lib/schemas/error-schemas';
+import { UIMessageMetadataSchema } from '@/lib/schemas/message-metadata';
 
 // ============================================================================
 // ERROR CATEGORIZATION HELPERS
@@ -8,27 +12,15 @@ import type * as tables from '@/db/schema';
 
 /**
  * Categorize error based on error message content
+ * ✅ Now using Zod-inferred ErrorCategory type from error-schemas
  */
-export function categorizeError(errorMessage: string): string {
-  const errorLower = errorMessage.toLowerCase();
-
-  if (errorLower.includes('not found') || errorLower.includes('does not exist')) {
-    return 'model_not_found';
-  }
-  if (errorLower.includes('filter') || errorLower.includes('safety') || errorLower.includes('moderation')) {
-    return 'content_filter';
-  }
-  if (errorLower.includes('rate limit') || errorLower.includes('quota')) {
-    return 'rate_limit';
-  }
-  if (errorLower.includes('timeout') || errorLower.includes('connection')) {
-    return 'network';
-  }
-  return 'provider_error';
+export function categorizeError(errorMessage: string): ErrorCategory {
+  return categorizeErrorMessage(errorMessage);
 }
 
 /**
  * Build structured error message from streaming response
+ * ✅ Now using ErrorCategory type from error-schemas
  */
 export function buildStreamErrorMessage(options: {
   openRouterError?: string;
@@ -36,7 +28,7 @@ export function buildStreamErrorMessage(options: {
   inputTokens: number;
   finishReason: string;
   modelId: string;
-}): { errorMessage: string; providerMessage: string; errorCategory: string } | null {
+}): { errorMessage: string; providerMessage: string; errorCategory: ErrorCategory } | null {
   const { openRouterError, outputTokens, inputTokens, finishReason, modelId } = options;
 
   if (openRouterError) {
@@ -51,39 +43,39 @@ export function buildStreamErrorMessage(options: {
   if (outputTokens === 0) {
     const baseStats = `Input: ${inputTokens} tokens, Output: 0 tokens, Status: ${finishReason}`;
 
-    if (finishReason === 'stop') {
+    if (finishReason === FinishReasonSchema.enum.stop) {
       return {
         providerMessage: `Model completed but returned no content. ${baseStats}. This may indicate content filtering, safety constraints, or the model chose not to respond.`,
         errorMessage: `${modelId} returned empty response - possible content filtering or safety block`,
-        errorCategory: 'content_filter',
+        errorCategory: ErrorCategorySchema.enum.content_filter,
       };
     }
-    if (finishReason === 'length') {
+    if (finishReason === FinishReasonSchema.enum.length) {
       return {
         providerMessage: `Model hit token limit before generating content. ${baseStats}. Try reducing the conversation history or input length.`,
         errorMessage: `${modelId} exceeded token limit without generating content`,
-        errorCategory: 'provider_error',
+        errorCategory: ErrorCategorySchema.enum.provider_error,
       };
     }
-    if (finishReason === 'content-filter') {
+    if (finishReason === FinishReasonSchema.enum['content-filter']) {
       return {
         providerMessage: `Content was filtered by safety systems. ${baseStats}`,
         errorMessage: `${modelId} blocked by content filter`,
-        errorCategory: 'content_filter',
+        errorCategory: ErrorCategorySchema.enum.content_filter,
       };
     }
-    if (finishReason === 'error' || finishReason === 'other') {
+    if (finishReason === FinishReasonSchema.enum.error || finishReason === FinishReasonSchema.enum.other) {
       return {
         providerMessage: `Provider error prevented response generation. ${baseStats}. This may be a temporary issue with the model provider.`,
         errorMessage: `${modelId} encountered a provider error`,
-        errorCategory: 'provider_error',
+        errorCategory: ErrorCategorySchema.enum.provider_error,
       };
     }
 
     return {
       providerMessage: `Model returned empty response. ${baseStats}`,
       errorMessage: `${modelId} returned empty response (reason: ${finishReason})`,
-      errorCategory: 'empty_response',
+      errorCategory: ErrorCategorySchema.enum.empty_response,
     };
   }
 
@@ -92,13 +84,14 @@ export function buildStreamErrorMessage(options: {
 
 /**
  * Extract OpenRouter error details from provider metadata or response
+ * ✅ Now using ErrorCategory type from error-schemas
  */
 export function extractOpenRouterError(
   providerMetadata: unknown,
   response: unknown,
-): { openRouterError?: string; errorCategory?: string } {
+): { openRouterError?: string; errorCategory?: ErrorCategory } {
   let openRouterError: string | undefined;
-  let errorCategory: string | undefined;
+  let errorCategory: ErrorCategory | undefined;
 
   // Check providerMetadata
   if (providerMetadata && typeof providerMetadata === 'object') {
@@ -112,7 +105,7 @@ export function extractOpenRouterError(
       openRouterError = String(metadata.errorMessage);
     }
     if (metadata.moderation || metadata.contentFilter) {
-      errorCategory = 'content_filter';
+      errorCategory = ErrorCategorySchema.enum.content_filter;
       openRouterError = openRouterError || 'Content was filtered by safety systems';
     }
   }
@@ -133,21 +126,69 @@ export function extractOpenRouterError(
 /**
  * Convert database chat messages to UI Message format
  *
+ * ✅ AI SDK V5 OFFICIAL PATTERN - Database Message Validation
+ * Reference: https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot-message-persistence#validating-messages-from-database
+ *
  * Transforms messages from database format to the UIMessage format expected by the AI SDK.
+ * Uses AI SDK's validateUIMessages() for robust validation instead of custom Zod schemas.
+ *
+ * Validation Flow:
+ * 1. Load messages from database (Drizzle query)
+ * 2. Transform to UIMessage format (with parts, metadata, createdAt)
+ * 3. Validate with AI SDK validateUIMessages() (ensures compliance)
+ * 4. Return validated UIMessage[] ready for conversion or streaming
+ *
+ * IMPORTANT: This function now uses async AI SDK validation.
+ * Callers must handle Promise resolution (await or .then()).
  *
  * @param dbMessages - Array of chat messages from database
- * @returns Array of UIMessage objects for client consumption
+ * @returns Promise resolving to validated UIMessage array
+ * @throws Error if messages fail AI SDK validation (fail-fast approach)
+ *
+ * @example
+ * ```typescript
+ * const dbMessages = await db.query.chatMessage.findMany({ ... });
+ * const uiMessages = await chatMessagesToUIMessages(dbMessages);
+ * const modelMessages = convertToModelMessages(uiMessages);
+ * ```
  */
-export function chatMessagesToUIMessages(
+export async function chatMessagesToUIMessages(
   dbMessages: Array<typeof tables.chatMessage.$inferSelect>,
-): UIMessage[] {
-  return dbMessages.map(msg => ({
-    id: msg.id,
-    role: msg.role as 'user' | 'assistant',
-    parts: msg.parts as unknown as Array<{ type: 'text'; text: string } | { type: 'reasoning'; text: string }>,
-    ...(msg.metadata && { metadata: msg.metadata }),
-    createdAt: msg.createdAt,
-  })) as UIMessage[];
+): Promise<UIMessage[]> {
+  // Transform database messages to UIMessage format
+  const messages = dbMessages.map((msg) => {
+    // Ensure parts is an array and properly typed
+    const parts = Array.isArray(msg.parts) ? msg.parts : [];
+
+    return {
+      id: msg.id,
+      role: msg.role,
+      parts,
+      metadata: msg.metadata || null,
+      createdAt: msg.createdAt,
+    };
+  });
+
+  // ✅ AI SDK V5 VALIDATION: Use official validateUIMessages() instead of custom Zod
+  // Benefits:
+  // - Official AI SDK validation (more robust than custom schemas)
+  // - Catches format issues early (before streaming)
+  // - Better error messages from AI SDK
+  // - Consistent with streaming handler validation patterns
+  try {
+    return await validateUIMessages({
+      messages: messages as UIMessage[],
+      metadataSchema: UIMessageMetadataSchema, // Custom metadata validation for participant tracking
+    });
+  } catch (error) {
+    console.error('AI SDK message validation failed for database messages:', error);
+    // ✅ FAIL-FAST: Throw error instead of silent fallback
+    // This ensures invalid database data is caught early rather than causing
+    // downstream issues in message conversion or streaming
+    throw new Error(
+      `Invalid message format from database: ${error instanceof Error ? error.message : 'Unknown validation error'}`,
+    );
+  }
 }
 
 // ============================================================================

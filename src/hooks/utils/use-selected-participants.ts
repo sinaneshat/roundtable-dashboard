@@ -18,8 +18,15 @@
 'use client';
 
 import { useCallback, useState } from 'react';
+import { z } from 'zod';
 
 import type { ParticipantConfig } from '@/components/chat/chat-form-schemas';
+import { ParticipantConfigSchema } from '@/components/chat/chat-form-schemas';
+
+/**
+ * Zod schema for initial participants validation
+ */
+const InitialParticipantsSchema = z.array(ParticipantConfigSchema);
 
 export type UseSelectedParticipantsReturn = {
   /** Current selected participants */
@@ -56,10 +63,13 @@ export type UseSelectedParticipantsReturn = {
 export function useSelectedParticipants(
   initialParticipants: ParticipantConfig[] = [],
 ): UseSelectedParticipantsReturn {
+  // Validate initial participants
+  const validatedInitialParticipants = InitialParticipantsSchema.parse(initialParticipants);
+
   // ✅ REACT 19: Use factory function to initialize state only once
   // This prevents re-initialization on every render and avoids stale closures
   const [selectedParticipants, setSelectedParticipants] = useState<ParticipantConfig[]>(
-    () => initialParticipants,
+    () => validatedInitialParticipants,
   );
 
   /**
@@ -90,17 +100,20 @@ export function useSelectedParticipants(
    * ✅ DEDUPLICATION: Prevents adding duplicate participants by modelId
    */
   const handleAddParticipant = useCallback((participant: ParticipantConfig) => {
+    // Validate participant at function entry
+    const validatedParticipant = ParticipantConfigSchema.parse(participant);
+
     setSelectedParticipants((prev) => {
       // ✅ DEDUPLICATION: Check if model is already selected by modelId
-      const exists = prev.some(p => p.modelId === participant.modelId);
+      const exists = prev.some(p => p.modelId === validatedParticipant.modelId);
       if (exists) {
-        console.warn('[useSelectedParticipants] Prevented duplicate participant:', participant.modelId);
+        console.warn('[useSelectedParticipants] Prevented duplicate participant:', validatedParticipant.modelId);
         return prev; // Don't add duplicate
       }
 
       // Add participant with priority set to the end
       const newParticipant = {
-        ...participant,
+        ...validatedParticipant,
         priority: prev.length,
       };
 

@@ -42,6 +42,7 @@ import { extractTextFromParts } from '@/lib/schemas/message-schemas';
 import { filterNonEmptyMessages } from '@/lib/utils/message-transforms';
 
 import type { streamChatRoute } from '../route';
+import type { ChangeData } from '../schema';
 import { StreamChatRequestSchema } from '../schema';
 import { chatMessagesToUIMessages } from './helpers';
 
@@ -154,32 +155,12 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
     if (providedParticipants && participantIndex === 0) {
       // ✅ DETAILED CHANGE DETECTION: Track specific types of changes
       // Type-safe changeData that matches database schema exactly
-      type ChangeDataType = {
-        type: 'participant' | 'participant_role' | 'mode_change' | 'participant_reorder';
-        // For mode_change
-        oldMode?: string;
-        newMode?: string;
-        // For participant changes
-        participantId?: string;
-        modelId?: string;
-        role?: string | null;
-        oldRole?: string | null;
-        newRole?: string | null;
-        // For participant_reorder
-        participants?: Array<{
-          id: string;
-          modelId: string;
-          role: string | null;
-          priority: number;
-        }>;
-        [key: string]: unknown;
-      };
-
+      // ✅ Using Zod-inferred ChangeData type from schema
       const changelogEntries: Array<{
         id: string;
         changeType: typeof ChangelogTypes[keyof typeof ChangelogTypes];
         changeSummary: string;
-        changeData: ChangeDataType;
+        changeData: ChangeData;
       }> = [];
 
       // ✅ CRITICAL: Load ALL participants (including disabled) for accurate change detection
@@ -501,8 +482,9 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
       ],
     });
 
-    // Convert database messages to UIMessage format
-    const previousMessages = chatMessagesToUIMessages(previousDbMessages);
+    // ✅ AI SDK V5 VALIDATION: Convert and validate database messages
+    // chatMessagesToUIMessages() now uses AI SDK validateUIMessages() internally
+    const previousMessages = await chatMessagesToUIMessages(previousDbMessages);
 
     // =========================================================================
     // STEP 3.5: ✅ AI SDK V5 MESSAGE VALIDATION - Validate incoming messages
@@ -510,12 +492,20 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
     // OFFICIAL AI SDK PATTERN: Always validate incoming messages before processing
     // Reference: https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot#validating-messages-from-database
     //
+    // VALIDATION FLOW:
+    // 1. Previous messages loaded from DB → validated by chatMessagesToUIMessages()
+    // 2. New message from frontend → needs validation
+    // 3. Combine ALL messages → re-validate entire conversation history
+    // 4. Ensures complete conversation compliance before streaming
+    //
     // This ensures:
     // - Message format compliance (UIMessage structure)
     // - Metadata schema validation (roundNumber, participantId, etc.)
     // - Data integrity before any processing or database operations
     //
     // CRITICAL: Validate at entry point to catch malformed messages early
+    //
+    // NOTE: AI SDK deduplicates messages internally, so duplicates are safe
 
     const allMessages = [...previousMessages, message as UIMessage];
 
@@ -523,7 +513,10 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
 
     try {
       // ✅ AI SDK V5 BEST PRACTICE: Validate ALL messages (previous + new)
-      // This ensures the entire conversation history is valid before streaming
+      // - Previous messages already validated by chatMessagesToUIMessages()
+      // - New message validated here
+      // - Full conversation history re-validated for safety
+      // - AI SDK handles deduplication automatically
       typedMessages = await validateUIMessages({
         messages: allMessages,
         metadataSchema: UIMessageMetadataSchema,
@@ -707,15 +700,31 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
     // =========================================================================
     // AI SDK V5 PATTERN: Convert validated UIMessages to ModelMessages for LLM
     // Reference: https://sdk.vercel.ai/docs/ai-sdk-core/generating-text#stream-text
+    // Reference: https://sdk.vercel.ai/docs/reference/ai-sdk-core/convert-to-model-messages
     //
-    // IMPORTANT: Messages were already validated at entry point (line 700-703)
+    // MESSAGE FORMAT TRANSFORMATION:
+    // - UIMessage: Rich format with parts[], metadata, createdAt (frontend/database)
+    // - CoreMessage (ModelMessage): Simplified format for LLM providers (OpenRouter, OpenAI, etc.)
+    //
+    // CONVERSION PROCESS:
+    // 1. UIMessage.parts[] → CoreMessage.content (text, tool-call, tool-result)
+    // 2. UIMessage.metadata → Stripped (not sent to LLM)
+    // 3. UIMessage.createdAt → Stripped (not sent to LLM)
+    // 4. UIMessage.role → CoreMessage.role (preserved)
+    //
+    // IMPORTANT: Messages were already validated at entry point (line 515-529)
     // This ensures we NEVER pass UIMessage[] directly to streamText/generateText
-    // Only ModelMessage[] should be passed to LLM providers
+    // Only CoreMessage[] should be passed to LLM providers
+    //
+    // WHY THIS MATTERS:
+    // - LLM providers don't understand UIMessage format (they expect CoreMessage)
+    // - Direct UIMessage[] to streamText() will cause runtime errors
+    // - convertToModelMessages() handles all edge cases (empty parts, tool calls, etc.)
 
     let modelMessages;
     try {
       // ✅ CRITICAL: Use convertToModelMessages() to transform validated UIMessages
-      // This converts UIMessage format (with parts[]) to ModelMessage format expected by LLMs
+      // This converts UIMessage format (with parts[]) to CoreMessage format expected by LLMs
       // NEVER pass UIMessage[] directly to streamText() - always convert first
       modelMessages = convertToModelMessages(nonEmptyMessages);
     } catch (error) {

@@ -29,7 +29,9 @@ import type {
   analyzeRoundRoute,
   getThreadAnalysesRoute,
 } from '../route';
+import type { MessageWithParticipant } from '../schema';
 import {
+  MessageWithParticipantSchema,
   ModeratorAnalysisPayloadSchema,
   ModeratorAnalysisRequestSchema,
 } from '../schema';
@@ -189,9 +191,6 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
           .where(eq(tables.chatModeratorAnalysis.id, existingAnalysis.id));
       }
     }
-    type MessageWithParticipant = Awaited<ReturnType<typeof db.query.chatMessage.findMany>>[number] & {
-      participant: NonNullable<Awaited<ReturnType<typeof db.query.chatParticipant.findFirst>>>;
-    };
     let participantMessages: MessageWithParticipant[] | null = null;
     if (body.participantMessageIds && body.participantMessageIds.length > 0) {
       const messageIds = body.participantMessageIds;
@@ -211,8 +210,21 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
           asc(tables.chatMessage.id),
         ],
       });
+
+      // Validate query results with Zod schema
       if (foundMessages.length === messageIds.length) {
-        participantMessages = foundMessages as MessageWithParticipant[];
+        const validationResult = MessageWithParticipantSchema.array().safeParse(foundMessages);
+        if (validationResult.success) {
+          participantMessages = validationResult.data;
+        } else {
+          throw createError.internal(
+            'Failed to validate participant messages',
+            {
+              errorType: 'validation',
+              field: 'participantMessageIds',
+            },
+          );
+        }
       }
     }
     if (!participantMessages) {
@@ -241,7 +253,20 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
           },
         );
       }
-      participantMessages = roundMessages as MessageWithParticipant[];
+
+      // Validate query results with Zod schema
+      const validationResult = MessageWithParticipantSchema.array().safeParse(roundMessages);
+      if (validationResult.success) {
+        participantMessages = validationResult.data;
+      } else {
+        throw createError.internal(
+          'Failed to validate round messages',
+          {
+            errorType: 'validation',
+            field: 'roundMessages',
+          },
+        );
+      }
     }
     if (participantMessages.length === 0) {
       throw createError.badRequest(

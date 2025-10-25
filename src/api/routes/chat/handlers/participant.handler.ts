@@ -76,7 +76,7 @@ export const addParticipantHandler: RouteHandler<typeof addParticipantRoute, Api
       id: changelogId,
       threadId: id,
       roundNumber: nextRoundNumber,
-      changeType: 'added',
+      changeType: ChangelogTypes.ADDED,
       changeSummary: `Added ${modelName}${body.role ? ` as "${body.role}"` : ''}`,
       changeData: {
         type: 'participant',

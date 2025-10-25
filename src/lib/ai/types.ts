@@ -22,6 +22,34 @@ import type {
 } from 'ai';
 
 /**
+ * Extended metadata for UIMessage with product-specific fields
+ *
+ * Used throughout the application to attach additional context to messages:
+ * - Participant tracking (multi-model chat)
+ * - Round-based conversation flow
+ * - Error handling and retry state
+ * - Model performance metadata
+ *
+ * @example
+ * ```typescript
+ * const message: UIMessage = {
+ *   id: ulid(),
+ *   role: 'assistant',
+ *   parts: [{ type: 'text', text: 'Hello!' }],
+ *   metadata: {
+ *     participantId: 'part_123',
+ *     participantIndex: 0,
+ *     model: 'gpt-4o-mini',
+ *     roundNumber: 1,
+ *     createdAt: new Date().toISOString()
+ *   }
+ * };
+ * ```
+ */
+// ✅ UIMessageMetadata - Now imported from Zod schema (single source of truth)
+export type { UIMessageMetadata } from '@/lib/schemas/message-metadata';
+
+/**
  * UIMessage - Represents messages as they appear in the UI
  * @see https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot-message-persistence
  */
@@ -52,78 +80,16 @@ export type { Tool, ToolCallPart, ToolResultPart } from 'ai';
  */
 export type { LanguageModel } from 'ai';
 
+// ============================================================================
+// Product-Specific Type Extensions
+// ============================================================================
+
 /**
  * Message validation types
  * @see https://sdk.vercel.ai/docs/reference/ai-sdk-core/validate-ui-messages
  * Note: AI SDK v5 renamed ValidationError to TypeValidationError
  */
 export type { TypeValidationError } from 'ai';
-
-// ============================================================================
-// Product-Specific Type Extensions
-// ============================================================================
-
-/**
- * Extended metadata for UIMessage with product-specific fields
- *
- * Used throughout the application to attach additional context to messages:
- * - Participant tracking (multi-model chat)
- * - Round-based conversation flow
- * - Error handling and retry state
- * - Model performance metadata
- *
- * @example
- * ```typescript
- * const message: UIMessage = {
- *   id: ulid(),
- *   role: 'assistant',
- *   parts: [{ type: 'text', text: 'Hello!' }],
- *   metadata: {
- *     participantId: 'part_123',
- *     participantIndex: 0,
- *     model: 'gpt-4o-mini',
- *     roundNumber: 1,
- *     createdAt: new Date().toISOString()
- *   }
- * };
- * ```
- */
-export type UIMessageMetadata = {
-  // Participant tracking (multi-model chat)
-  participantId?: string;
-  participantIndex?: number;
-  participantRole?: string | null;
-
-  // Model information
-  model?: string;
-
-  // Round-based conversation
-  roundNumber?: number;
-
-  // Timestamps
-  createdAt?: string;
-
-  // Error handling
-  hasError?: boolean;
-  errorType?: string;
-  errorMessage?: string;
-  errorCategory?: string;
-  statusCode?: number;
-  rawErrorMessage?: string;
-  providerMessage?: string;
-  openRouterError?: string;
-  openRouterCode?: string;
-
-  // Performance metadata
-  usage?: {
-    promptTokens?: number;
-    completionTokens?: number;
-    totalTokens?: number;
-  };
-
-  // Allow additional metadata fields
-  [key: string]: unknown;
-};
 
 /**
  * UIMessage with typed metadata for product-specific use cases

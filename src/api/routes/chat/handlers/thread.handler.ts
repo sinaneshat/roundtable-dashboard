@@ -20,6 +20,7 @@ import {
   Responses,
 } from '@/api/core';
 import type { ChatMode, ThreadStatus } from '@/api/core/enums';
+import { ThreadStatusSchema } from '@/api/core/enums';
 import { IdParamSchema, ThreadSlugParamSchema } from '@/api/core/schemas';
 import { openRouterModelsService } from '@/api/services/openrouter-models.service';
 import {
@@ -68,7 +69,7 @@ export const listThreadsHandler: RouteHandler<typeof listThreadsRoute, ApiEnv> =
     const db = await getDbAsync();
     const filters: SQL[] = [
       eq(tables.chatThread.userId, user.id),
-      ne(tables.chatThread.status, 'deleted'),
+      ne(tables.chatThread.status, ThreadStatusSchema.enum.deleted),
     ];
     const fetchLimit = query.search ? 200 : (query.limit + 1);
     const allThreads = await db.query.chatThread.findMany({
@@ -150,7 +151,7 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
         title: tempTitle,
         slug: tempSlug,
         mode: (body.mode || 'brainstorming') as ChatMode,
-        status: 'active',
+        status: ThreadStatusSchema.enum.active,
         isFavorite: false,
         isPublic: false,
         metadata: body.metadata,
@@ -495,7 +496,7 @@ export const deleteThreadHandler: RouteHandler<typeof deleteThreadRoute, ApiEnv>
     await db
       .update(tables.chatThread)
       .set({
-        status: 'deleted',
+        status: ThreadStatusSchema.enum.deleted,
         updatedAt: new Date(),
       })
       .where(eq(tables.chatThread.id, id));
@@ -530,8 +531,8 @@ export const getPublicThreadHandler: RouteHandler<typeof getPublicThreadRoute, A
         ErrorContextBuilders.resourceNotFound('thread', slug),
       );
     }
-    if (!thread.isPublic || thread.status === 'archived' || thread.status === 'deleted') {
-      const reason = thread.status === 'deleted' ? 'deleted' : thread.status === 'archived' ? 'archived' : 'private';
+    if (!thread.isPublic || thread.status === ThreadStatusSchema.enum.archived || thread.status === ThreadStatusSchema.enum.deleted) {
+      const reason = thread.status === ThreadStatusSchema.enum.deleted ? 'deleted' : thread.status === ThreadStatusSchema.enum.archived ? 'archived' : 'private';
       throw createError.gone(
         `Thread is no longer publicly available (${reason})`,
       );

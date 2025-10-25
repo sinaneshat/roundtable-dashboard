@@ -8,6 +8,7 @@
 'use client';
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { z } from 'zod';
 
 import { invalidationPatterns, queryKeys } from '@/lib/data/query-keys';
 import {
@@ -22,6 +23,127 @@ import {
   updateParticipantService,
   updateThreadService,
 } from '@/services/api';
+
+// ============================================================================
+// Validation Schemas - Type-safe cache updates
+// ============================================================================
+
+/**
+ * Schema for usage stats data structure
+ * Validates optimistic cache updates for thread/message counts
+ */
+const UsageStatsDataSchema = z.object({
+  messages: z.object({
+    used: z.number(),
+    limit: z.number(),
+    remaining: z.number(),
+    percentage: z.number(),
+  }),
+  threads: z.object({
+    used: z.number(),
+    limit: z.number(),
+    remaining: z.number(),
+    percentage: z.number(),
+  }),
+  subscription: z.unknown(),
+  period: z.unknown(),
+});
+
+/**
+ * Schema for API response wrapper
+ * Validates the standard API response structure
+ */
+const ApiResponseSchema = z.object({
+  success: z.boolean(),
+  data: z.unknown(),
+});
+
+/**
+ * Schema for thread data in cache
+ * Validates thread object structure for optimistic updates
+ */
+const ThreadDataSchema = z.object({
+  id: z.string(),
+  title: z.string().optional(),
+  mode: z.string().optional(),
+  status: z.string().optional(),
+  isFavorite: z.boolean().optional(),
+  isPublic: z.boolean().optional(),
+  metadata: z.unknown().optional(),
+});
+
+/**
+ * Schema for thread detail response data
+ * Validates thread detail payload structure
+ */
+const ThreadDetailDataSchema = z.object({
+  thread: z.unknown(),
+  participants: z.array(z.unknown()).optional(),
+  messages: z.array(z.unknown()).optional(),
+  changelog: z.array(z.unknown()).optional(),
+  user: z.unknown().optional(),
+});
+
+/**
+ * Schema for paginated response pages
+ * Validates infinite query page structure
+ */
+const PaginatedPageSchema = z.object({
+  success: z.boolean(),
+  data: z
+    .object({
+      items: z.array(ThreadDataSchema).optional(),
+    })
+    .optional(),
+});
+
+/**
+ * Schema for infinite query data
+ * Validates the complete infinite query structure
+ */
+const InfiniteQueryDataSchema = z.object({
+  pages: z.array(PaginatedPageSchema),
+  pageParams: z.array(z.unknown()).optional(),
+});
+
+// ============================================================================
+// Type-safe cache update helpers
+// ============================================================================
+
+/**
+ * Safely parse and validate unknown cache data
+ * Returns null if data doesn't match expected schema
+ */
+function parseUsageStatsData(data: unknown) {
+  const response = ApiResponseSchema.safeParse(data);
+  if (!response.success || !response.data.success)
+    return null;
+
+  const usageData = UsageStatsDataSchema.safeParse(response.data.data);
+  return usageData.success ? usageData.data : null;
+}
+
+/**
+ * Safely parse thread detail data from cache
+ * Returns null if data doesn't match expected schema
+ */
+function parseThreadDetailData(data: unknown) {
+  const response = ApiResponseSchema.safeParse(data);
+  if (!response.success || !response.data.success)
+    return null;
+
+  const threadData = ThreadDetailDataSchema.safeParse(response.data.data);
+  return threadData.success ? threadData.data : null;
+}
+
+/**
+ * Safely parse infinite query data from cache
+ * Returns null if data doesn't match expected schema
+ */
+function parseInfiniteQueryData(data: unknown) {
+  const queryData = InfiniteQueryDataSchema.safeParse(data);
+  return queryData.success ? queryData.data : null;
+}
 
 // ============================================================================
 // Thread Mutations
@@ -50,33 +172,22 @@ export function useCreateThreadMutation() {
       queryClient.setQueryData(
         queryKeys.usage.stats(),
         (oldData: unknown) => {
-          if (!oldData || typeof oldData !== 'object')
+          const usageData = parseUsageStatsData(oldData);
+          if (!usageData)
             return oldData;
-          if (!('success' in oldData) || !oldData.success)
-            return oldData;
-          if (!('data' in oldData) || !oldData.data || typeof oldData.data !== 'object')
-            return oldData;
-
-          const data = oldData.data as {
-            messages: { used: number; limit: number; remaining: number; percentage: number };
-            threads: { used: number; limit: number; remaining: number; percentage: number };
-            subscription: unknown;
-            period: unknown;
-          };
 
           // ✅ OPTIMISTIC UPDATE: Only increment 'used' count
           // Backend will recompute remaining, percentage, and status on next fetch
           return {
-            ...oldData,
+            success: true,
             data: {
-              ...data,
+              ...usageData,
               threads: {
-                ...data.threads,
-                used: data.threads.used + 1,
+                ...usageData.threads,
+                used: usageData.threads.used + 1,
                 // Keep existing values - backend will provide correct values on refetch
-                remaining: data.threads.remaining,
-                percentage: data.threads.percentage,
-                status: 'status' in data.threads ? data.threads.status : 'default',
+                remaining: usageData.threads.remaining,
+                percentage: usageData.threads.percentage,
               },
             },
           };
@@ -136,18 +247,23 @@ export function useUpdateThreadMutation() {
       queryClient.setQueryData(
         queryKeys.threads.detail(variables.param.id),
         (old: unknown) => {
-          if (!old || typeof old !== 'object')
+          const parsedData = parseThreadDetailData(old);
+          if (!parsedData)
             return old;
-          if (!('success' in old) || !old.success)
-            return old;
-          if (!('data' in old) || !old.data || typeof old.data !== 'object')
+
+          // Validate update payload before merging
+          const updatePayload = ThreadDataSchema.partial().safeParse(variables.json);
+          if (!updatePayload.success)
             return old;
 
           return {
-            ...old,
+            success: true,
             data: {
-              ...(old.data as Record<string, unknown>),
-              ...variables.json,
+              ...parsedData,
+              thread: {
+                ...(parsedData.thread as object),
+                ...updatePayload.data,
+              },
             },
           };
         },
@@ -157,15 +273,18 @@ export function useUpdateThreadMutation() {
       queryClient.setQueriesData(
         { queryKey: queryKeys.threads.all },
         (old: unknown) => {
-          if (!old || typeof old !== 'object')
+          const parsedQuery = parseInfiniteQueryData(old);
+          if (!parsedQuery)
             return old;
-          if (!('pages' in old))
+
+          // Validate update payload
+          const updatePayload = ThreadDataSchema.partial().safeParse(variables.json);
+          if (!updatePayload.success)
             return old;
-          const pages = old.pages as Array<{ success: boolean; data?: { items?: Array<{ id: string }> } }>;
 
           return {
-            ...old,
-            pages: pages.map((page) => {
+            ...parsedQuery,
+            pages: parsedQuery.pages.map((page) => {
               if (!page.success || !page.data?.items)
                 return page;
 
@@ -173,11 +292,16 @@ export function useUpdateThreadMutation() {
                 ...page,
                 data: {
                   ...page.data,
-                  items: page.data.items.map(thread =>
-                    thread.id === variables.param.id
-                      ? { ...thread, ...variables.json }
-                      : thread,
-                  ),
+                  items: page.data.items.map((thread) => {
+                    // Validate thread data before updating
+                    const threadData = ThreadDataSchema.safeParse(thread);
+                    if (!threadData.success)
+                      return thread;
+
+                    return threadData.data.id === variables.param.id
+                      ? { ...threadData.data, ...updatePayload.data }
+                      : thread;
+                  }),
                 },
               };
             }),
@@ -187,30 +311,33 @@ export function useUpdateThreadMutation() {
 
       // Optimistically update bySlug query if slug is provided
       if ('slug' in variables.json && variables.json.slug) {
-        queryClient.setQueryData(
-          queryKeys.threads.bySlug(variables.json.slug as string),
-          (old: unknown) => {
-            if (!old || typeof old !== 'object')
-              return old;
-            if (!('success' in old) || !old.success)
-              return old;
-            if (!('data' in old) || !old.data || typeof old.data !== 'object')
-              return old;
-            if (!('thread' in old.data))
-              return old;
+        const slug = variables.json.slug;
+        if (typeof slug === 'string') {
+          queryClient.setQueryData(
+            queryKeys.threads.bySlug(slug),
+            (old: unknown) => {
+              const parsedData = parseThreadDetailData(old);
+              if (!parsedData)
+                return old;
 
-            return {
-              ...old,
-              data: {
-                ...(old.data as Record<string, unknown>),
-                thread: {
-                  ...(old.data as { thread: Record<string, unknown> }).thread,
-                  ...variables.json,
+              // Validate update payload
+              const updatePayload = ThreadDataSchema.partial().safeParse(variables.json);
+              if (!updatePayload.success)
+                return old;
+
+              return {
+                success: true,
+                data: {
+                  ...parsedData,
+                  thread: {
+                    ...(parsedData.thread as object),
+                    ...updatePayload.data,
+                  },
                 },
-              },
-            };
-          },
-        );
+              };
+            },
+          );
+        }
       }
 
       // Return context with previous values for rollback
@@ -262,15 +389,13 @@ export function useDeleteThreadMutation() {
       queryClient.setQueriesData(
         { queryKey: queryKeys.threads.all },
         (old: unknown) => {
-          if (!old || typeof old !== 'object')
+          const parsedQuery = parseInfiniteQueryData(old);
+          if (!parsedQuery)
             return old;
-          if (!('pages' in old))
-            return old;
-          const pages = old.pages as Array<{ success: boolean; data?: { items?: Array<{ id: string }> } }>;
 
           return {
-            ...old,
-            pages: pages.map((page) => {
+            ...parsedQuery,
+            pages: parsedQuery.pages.map((page) => {
               if (!page.success || !page.data?.items)
                 return page;
 
@@ -278,9 +403,10 @@ export function useDeleteThreadMutation() {
                 ...page,
                 data: {
                   ...page.data,
-                  items: page.data.items.filter(thread =>
-                    thread.id !== variables.param.id,
-                  ),
+                  items: page.data.items.filter((thread) => {
+                    const threadData = ThreadDataSchema.safeParse(thread);
+                    return threadData.success && threadData.data.id !== variables.param.id;
+                  }),
                 },
               };
             }),
@@ -292,32 +418,23 @@ export function useDeleteThreadMutation() {
       queryClient.setQueryData(
         queryKeys.usage.stats(),
         (oldData: unknown) => {
-          if (!oldData || typeof oldData !== 'object')
+          const usageData = parseUsageStatsData(oldData);
+          if (!usageData)
             return oldData;
-          if (!('success' in oldData) || !oldData.success)
-            return oldData;
-          if (!('data' in oldData) || !oldData.data || typeof oldData.data !== 'object')
-            return oldData;
-
-          const data = oldData.data as {
-            messages: { used: number; limit: number; remaining: number; percentage: number };
-            threads: { used: number; limit: number; remaining: number; percentage: number };
-            subscription: unknown;
-            period: unknown;
-          };
 
           return {
-            ...oldData,
+            success: true,
             data: {
-              ...data,
+              ...usageData,
               threads: {
-                ...data.threads,
-                used: Math.max(0, data.threads.used - 1), // Prevent negative
-                remaining: data.threads.remaining + 1,
+                ...usageData.threads,
+                used: Math.max(0, usageData.threads.used - 1), // Prevent negative
+                remaining: usageData.threads.remaining + 1,
                 // Recalculate percentage
-                percentage: data.threads.limit > 0
-                  ? Math.round(((data.threads.used - 1) / data.threads.limit) * 100)
-                  : 0,
+                percentage:
+                  usageData.threads.limit > 0
+                    ? Math.round(((usageData.threads.used - 1) / usageData.threads.limit) * 100)
+                    : 0,
               },
             },
           };
@@ -410,21 +527,16 @@ export function useToggleFavoriteMutation() {
         queryClient.setQueryData(
           queryKeys.threads.bySlug(variables.slug),
           (old: unknown) => {
-            if (!old || typeof old !== 'object')
-              return old;
-            if (!('success' in old) || !old.success)
-              return old;
-            if (!('data' in old) || !old.data || typeof old.data !== 'object')
-              return old;
-            if (!('thread' in old.data))
+            const parsedData = parseThreadDetailData(old);
+            if (!parsedData)
               return old;
 
             return {
-              ...old,
+              success: true,
               data: {
-                ...(old.data as Record<string, unknown>),
+                ...parsedData,
                 thread: {
-                  ...(old.data as { thread: Record<string, unknown> }).thread,
+                  ...(parsedData.thread as object),
                   isFavorite: variables.isFavorite,
                 },
               },
@@ -517,21 +629,16 @@ export function useTogglePublicMutation() {
         queryClient.setQueryData(
           queryKeys.threads.bySlug(variables.slug),
           (old: unknown) => {
-            if (!old || typeof old !== 'object')
-              return old;
-            if (!('success' in old) || !old.success)
-              return old;
-            if (!('data' in old) || !old.data || typeof old.data !== 'object')
-              return old;
-            if (!('thread' in old.data))
+            const parsedData = parseThreadDetailData(old);
+            if (!parsedData)
               return old;
 
             return {
-              ...old,
+              success: true,
               data: {
-                ...(old.data as Record<string, unknown>),
+                ...parsedData,
                 thread: {
-                  ...(old.data as { thread: Record<string, unknown> }).thread,
+                  ...(parsedData.thread as object),
                   isPublic: variables.isPublic,
                 },
               },

@@ -15,6 +15,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useSession } from '@/lib/auth/client';
 import { queryKeys } from '@/lib/data/query-keys';
 import { STALE_TIMES } from '@/lib/data/stale-times';
+import { AnalysisStatusSchema } from '@/lib/schemas/error-schemas';
 import { getThreadAnalysesService } from '@/services/api';
 
 /**
@@ -85,7 +86,7 @@ export function useThreadAnalysesQuery(threadId: string, enabled?: boolean) {
 
       // Extract cached pending/streaming analyses that aren't on server yet
       const cachedPendingOrStreaming = cachedData.data.items.filter(
-        item => item.status === 'pending' || item.status === 'streaming',
+        item => item.status === AnalysisStatusSchema.enum.pending || item.status === AnalysisStatusSchema.enum.streaming,
       );
 
       if (cachedPendingOrStreaming.length === 0) {

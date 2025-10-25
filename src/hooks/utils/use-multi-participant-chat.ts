@@ -4,14 +4,39 @@ import { useChat } from '@ai-sdk/react';
 import type { UIMessage } from 'ai';
 import { DefaultChatTransport } from 'ai';
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { z } from 'zod';
 
 import type { ChatParticipant } from '@/api/routes/chat/schema';
+import { chatParticipantSelectSchema } from '@/db/validation/chat';
+import { ParticipantSettingsSchema } from '@/lib/config/participant-settings';
 import type { UIMessageErrorType } from '@/lib/utils/message-transforms';
 import { createErrorUIMessage, mergeParticipantMetadata } from '@/lib/utils/message-transforms';
 import { deduplicateParticipants } from '@/lib/utils/participant-utils';
 import { calculateNextRoundNumber, getCurrentRoundNumber } from '@/lib/utils/round-utils';
 
 import { useParticipantErrorTracking } from './use-participant-error-tracking';
+
+/**
+ * Full ChatParticipant schema with settings
+ * Matches the ChatParticipant type from the API routes
+ */
+const ChatParticipantSchema = chatParticipantSelectSchema
+  .extend({
+    settings: ParticipantSettingsSchema,
+  });
+
+/**
+ * Zod schema for UseMultiParticipantChatOptions validation
+ * Validates hook options at entry point to ensure type safety
+ * Note: Callbacks are not validated to preserve their type signatures
+ */
+const UseMultiParticipantChatOptionsSchema = z.object({
+  threadId: z.string().min(1, 'Thread ID is required'),
+  participants: z.array(ChatParticipantSchema).min(0, 'Participants must be an array'),
+  messages: z.array(z.custom<UIMessage>()).optional(),
+  mode: z.string().optional(),
+  regenerateRoundNumber: z.number().int().positive().optional(),
+}).passthrough(); // Allow callbacks to pass through without validation
 
 /**
  * Options for configuring the multi-participant chat hook
@@ -82,16 +107,28 @@ type UseMultiParticipantChatReturn = {
  *
  * await chat.sendMessage("What's the best way to learn React?");
  */
-export function useMultiParticipantChat({
-  threadId,
-  participants,
-  messages: initialMessages = [],
-  onComplete,
-  onRetry,
-  onError,
-  mode,
-  regenerateRoundNumber: regenerateRoundNumberParam,
-}: UseMultiParticipantChatOptions): UseMultiParticipantChatReturn {
+export function useMultiParticipantChat(
+  options: UseMultiParticipantChatOptions,
+): UseMultiParticipantChatReturn {
+  // Validate critical options at hook entry point (excluding callbacks to preserve types)
+  const validationResult = UseMultiParticipantChatOptionsSchema.safeParse(options);
+
+  if (!validationResult.success) {
+    console.error('[useMultiParticipantChat] Invalid options:', validationResult.error);
+    throw new Error(`Invalid hook options: ${validationResult.error.message}`);
+  }
+
+  const {
+    threadId,
+    participants,
+    messages: initialMessages = [],
+    onComplete,
+    onRetry,
+    onError,
+    mode,
+    regenerateRoundNumber: regenerateRoundNumberParam,
+  } = options;
+
   const errorTracking = useParticipantErrorTracking();
 
   // Track regenerate round number for backend communication

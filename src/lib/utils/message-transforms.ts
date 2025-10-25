@@ -13,6 +13,8 @@
 import type { UIMessage } from 'ai';
 
 import type { ChatMessage } from '@/api/routes/chat/schema';
+import type { ErrorMetadata, UIMessageErrorType } from '@/lib/schemas/error-schemas';
+import { ErrorMetadataSchema, UIMessageErrorTypeSchema } from '@/lib/schemas/error-schemas';
 import type { UIMessageMetadata } from '@/lib/schemas/message-metadata';
 import { UIMessageMetadataSchema } from '@/lib/schemas/message-metadata';
 
@@ -20,20 +22,8 @@ import { UIMessageMetadataSchema } from '@/lib/schemas/message-metadata';
 // Type Definitions
 // ============================================================================
 
-/**
- * Error types for UIMessage error metadata
- */
-export type UIMessageErrorType
-  = | 'provider_rate_limit'
-    | 'provider_network'
-    | 'model_not_found'
-    | 'model_content_filter'
-    | 'authentication'
-    | 'validation'
-    | 'silent_failure'
-    | 'empty_response'
-    | 'error'
-    | 'unknown';
+// ✅ UIMessageErrorType now imported from error-schemas (single source of truth)
+export type { UIMessageErrorType };
 
 /**
  * Validation result for message order checks
@@ -192,13 +182,7 @@ export function filterNonEmptyMessages(messages: UIMessage[]): UIMessage[] {
  * @param currentIndex - Participant index in the conversation
  * @param errorMessage - Human-readable error message
  * @param errorType - Error category (defaults to 'error')
- * @param errorMetadata - Additional error context
- * @param errorMetadata.errorCategory - Error category classification
- * @param errorMetadata.statusCode - HTTP status code if applicable
- * @param errorMetadata.rawErrorMessage - Original error message from provider
- * @param errorMetadata.openRouterError - OpenRouter-specific error message
- * @param errorMetadata.openRouterCode - OpenRouter-specific error code
- * @param errorMetadata.providerMessage - Provider-specific error message
+ * @param errorMetadata - Additional error context (validated against ErrorMetadataSchema)
  * @param roundNumber - Round number where error occurred
  * @returns UIMessage with error metadata
  *
@@ -209,7 +193,7 @@ export function filterNonEmptyMessages(messages: UIMessage[]): UIMessage[] {
  *   0,
  *   'Connection timeout',
  *   'provider_network',
- *   { statusCode: 504 },
+ *   { statusCode: 504, errorCategory: 'network' },
  *   currentRound
  * );
  * ```
@@ -218,17 +202,17 @@ export function createErrorUIMessage(
   participant: { id: string; modelId: string; role: string | null },
   currentIndex: number,
   errorMessage: string,
-  errorType: UIMessageErrorType = 'error',
-  errorMetadata?: {
-    errorCategory?: string;
-    statusCode?: number;
-    rawErrorMessage?: string;
-    openRouterError?: string;
-    openRouterCode?: string;
-    providerMessage?: string;
-  },
+  errorType: UIMessageErrorType = UIMessageErrorTypeSchema.enum.error,
+  errorMetadata?: ErrorMetadata,
   roundNumber?: number,
 ): UIMessage {
+  // Validate metadata if provided
+  const validatedMetadata = errorMetadata
+    ? ErrorMetadataSchema.safeParse(errorMetadata)
+    : { success: false, data: undefined };
+
+  const metadata = validatedMetadata.success ? validatedMetadata.data : errorMetadata;
+
   return {
     id: `error-${crypto.randomUUID()}-${currentIndex}`,
     role: 'assistant',
@@ -241,12 +225,12 @@ export function createErrorUIMessage(
       hasError: true,
       errorType,
       errorMessage,
-      errorCategory: errorMetadata?.errorCategory || errorType,
-      statusCode: errorMetadata?.statusCode,
-      rawErrorMessage: errorMetadata?.rawErrorMessage,
-      providerMessage: errorMetadata?.providerMessage || errorMetadata?.rawErrorMessage || errorMessage,
-      openRouterError: errorMetadata?.openRouterError,
-      openRouterCode: errorMetadata?.openRouterCode,
+      errorCategory: metadata?.errorCategory || errorType,
+      statusCode: metadata?.statusCode,
+      rawErrorMessage: metadata?.rawErrorMessage,
+      providerMessage: metadata?.providerMessage || metadata?.rawErrorMessage || errorMessage,
+      openRouterError: metadata?.openRouterError,
+      openRouterCode: metadata?.openRouterCode,
       roundNumber,
     },
   };
@@ -305,7 +289,7 @@ export function mergeParticipantMetadata(
     ...(metadata?.roundNumber !== undefined && { roundNumber: metadata.roundNumber }),
     ...(hasError && {
       hasError: true,
-      errorType: metadata?.errorType || (isEmptyResponse ? 'empty_response' : 'unknown'),
+      errorType: metadata?.errorType || (isEmptyResponse ? UIMessageErrorTypeSchema.enum.empty_response : UIMessageErrorTypeSchema.enum.unknown),
       errorMessage,
       providerMessage: metadata?.providerMessage || metadata?.openRouterError || errorMessage,
       openRouterError: metadata?.openRouterError,

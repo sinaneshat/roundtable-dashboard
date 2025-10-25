@@ -16,22 +16,74 @@
 import { useQueryClient } from '@tanstack/react-query';
 import type { UIMessage } from 'ai';
 import { useCallback, useMemo, useState } from 'react';
+import { z } from 'zod';
 
+import { ChatModeSchema } from '@/api/core/enums';
 import type { ChatParticipant, ModeratorAnalysisPayload, StoredModeratorAnalysis } from '@/api/routes/chat/schema';
 import { ModeratorAnalysisPayloadSchema } from '@/api/routes/chat/schema';
+import { chatParticipantSelectSchema } from '@/db/validation/chat';
 import { useThreadAnalysesQuery } from '@/hooks/queries/chat';
-import type { ChatModeId } from '@/lib/config/chat-modes';
+import { ParticipantSettingsSchema } from '@/lib/config/participant-settings';
 import { queryKeys } from '@/lib/data/query-keys';
 
-type UseChatAnalysisOptions = {
-  threadId: string;
-  mode: ChatModeId;
-  /**
-   * ✅ STREAMING PROTECTION: Disable query during active streaming
-   * This prevents refetches from disrupting the streaming state
-   */
-  enabled?: boolean;
-};
+/**
+ * Full ChatParticipant schema with settings
+ * Matches the ChatParticipant type from the API routes
+ */
+const ChatParticipantSchema = chatParticipantSelectSchema
+  .extend({
+    settings: ParticipantSettingsSchema,
+  });
+
+/**
+ * Zod schema for analysis status
+ */
+const AnalysisStatusSchema = z.enum(['pending', 'streaming', 'completed', 'failed']);
+
+/**
+ * Zod schema for UseChatAnalysisOptions validation
+ * Validates hook options at entry point to ensure type safety
+ */
+const UseChatAnalysisOptionsSchema = z.object({
+  threadId: z.string().min(1, 'Thread ID is required'),
+  mode: ChatModeSchema,
+  enabled: z.boolean().optional().default(true),
+}).strict();
+
+/**
+ * Options for configuring the chat analysis hook
+ * Derived from Zod schema for type safety
+ */
+type UseChatAnalysisOptions = z.infer<typeof UseChatAnalysisOptionsSchema>;
+
+/**
+ * Zod schemas for internal function parameters
+ */
+const CreatePendingAnalysisParamsSchema = z.object({
+  roundNumber: z.number().int().positive(),
+  messages: z.array(z.custom<UIMessage>()),
+  participants: z.array(ChatParticipantSchema),
+  userQuestion: z.string().min(1),
+}).strict();
+
+const UpdateAnalysisDataParamsSchema = z.object({
+  roundNumber: z.number().int().positive(),
+  data: ModeratorAnalysisPayloadSchema,
+}).strict();
+
+const UpdateAnalysisStatusParamsSchema = z.object({
+  roundNumber: z.number().int().positive(),
+  status: AnalysisStatusSchema,
+}).strict();
+
+const RoundNumberParamSchema = z.object({
+  roundNumber: z.number().int().positive(),
+}).strict();
+
+const MarkAnalysisFailedParamsSchema = z.object({
+  roundNumber: z.number().int().positive(),
+  errorMessage: z.string().min(1),
+}).strict();
 
 type UseChatAnalysisReturn = {
   analyses: StoredModeratorAnalysis[];
@@ -49,11 +101,18 @@ type UseChatAnalysisReturn = {
   validateAnalysisData: (data: unknown) => data is ModeratorAnalysisPayload;
 };
 
-export function useChatAnalysis({
-  threadId,
-  mode,
-  enabled = true,
-}: UseChatAnalysisOptions): UseChatAnalysisReturn {
+export function useChatAnalysis(
+  options: UseChatAnalysisOptions,
+): UseChatAnalysisReturn {
+  // Validate options at hook entry point
+  const validatedOptions = UseChatAnalysisOptionsSchema.parse(options);
+
+  const {
+    threadId,
+    mode,
+    enabled = true,
+  } = validatedOptions;
+
   const queryClient = useQueryClient();
   const [_hookError, setHookError] = useState<Error | null>(null);
 
@@ -83,9 +142,16 @@ export function useChatAnalysis({
       userQuestion: string,
     ) => {
       try {
+        // Validate parameters at function entry
+        const validated = CreatePendingAnalysisParamsSchema.parse({
+          roundNumber,
+          messages,
+          participants,
+          userQuestion,
+        });
         // ✅ CRITICAL FIX: Extract message IDs from the CURRENT round only
         // Handle potential type mismatches between stored and parameter roundNumber
-        const roundMessages = messages.filter((m) => {
+        const roundMessages = validated.messages.filter((m) => {
           const metadata = m.metadata as Record<string, unknown> | undefined;
 
           // Ensure we're comparing numbers, not strings
@@ -94,9 +160,9 @@ export function useChatAnalysis({
             ? messageRoundNumber
             : (typeof messageRoundNumber === 'string' ? Number(messageRoundNumber) : null);
 
-          const targetRound = typeof roundNumber === 'number'
-            ? roundNumber
-            : Number(roundNumber);
+          const targetRound = typeof validated.roundNumber === 'number'
+            ? validated.roundNumber
+            : Number(validated.roundNumber);
 
           const isAssistant = m.role === 'assistant';
           const roundMatches = messageRound === targetRound;
@@ -107,18 +173,18 @@ export function useChatAnalysis({
         const participantMessageIds = roundMessages.map(m => m.id);
 
         // ✅ VALIDATION: Check if we have the expected number of participant messages
-        const expectedCount = participants.filter(p => p.isEnabled).length;
+        const expectedCount = validated.participants.filter(p => p.isEnabled).length;
         const actualCount = participantMessageIds.length;
 
         if (actualCount < expectedCount) {
           // ✅ RECOVERY: Round is incomplete - log warning
-          console.warn(`[useChatAnalysis] Incomplete round ${roundNumber}: Expected ${expectedCount} participant messages, but found ${actualCount}`, {
+          console.warn(`[useChatAnalysis] Incomplete round ${validated.roundNumber}: Expected ${expectedCount} participant messages, but found ${actualCount}`, {
             threadId,
-            roundNumber,
+            roundNumber: validated.roundNumber,
             expectedCount,
             actualCount,
             participantMessageIds,
-            enabledParticipants: participants.filter(p => p.isEnabled).map(p => ({ id: p.id, modelId: p.modelId })),
+            enabledParticipants: validated.participants.filter(p => p.isEnabled).map(p => ({ id: p.id, modelId: p.modelId })),
           });
 
           // ✅ FIX: During regeneration, participants might still be streaming
@@ -129,9 +195,9 @@ export function useChatAnalysis({
 
         if (actualCount > expectedCount) {
           // ✅ VALIDATION: More messages than expected - this shouldn't happen but handle gracefully
-          console.warn(`[useChatAnalysis] Extra messages in round ${roundNumber}: Expected ${expectedCount} participant messages, but found ${actualCount}`, {
+          console.warn(`[useChatAnalysis] Extra messages in round ${validated.roundNumber}: Expected ${expectedCount} participant messages, but found ${actualCount}`, {
             threadId,
-            roundNumber,
+            roundNumber: validated.roundNumber,
             expectedCount,
             actualCount,
             participantMessageIds,
@@ -139,11 +205,11 @@ export function useChatAnalysis({
         }
 
         const pendingAnalysis: StoredModeratorAnalysis = {
-          id: `pending-${threadId}-${roundNumber}-${Date.now()}`,
+          id: `pending-${threadId}-${validated.roundNumber}-${Date.now()}`,
           threadId,
-          roundNumber,
+          roundNumber: validated.roundNumber,
           mode,
-          userQuestion,
+          userQuestion: validated.userQuestion,
           status: 'pending' as const,
           participantMessageIds,
           analysisData: null,
@@ -171,12 +237,12 @@ export function useChatAnalysis({
             // ✅ FIX: Only remove pending/streaming analyses for this round
             // Keep completed analyses to prevent them from reverting to streaming state
             const filteredItems = typedData.data.items.filter(
-              a => a.roundNumber !== roundNumber || a.status === 'completed',
+              a => a.roundNumber !== validated.roundNumber || a.status === AnalysisStatusSchema.enum.completed,
             );
 
             // Only add new pending analysis if no completed analysis exists for this round
             const hasCompletedAnalysis = typedData.data.items.some(
-              a => a.roundNumber === roundNumber && a.status === 'completed',
+              a => a.roundNumber === validated.roundNumber && a.status === AnalysisStatusSchema.enum.completed,
             );
 
             if (hasCompletedAnalysis) {
@@ -206,13 +272,11 @@ export function useChatAnalysis({
   const updateAnalysisData = useCallback(
     (roundNumber: number, data: ModeratorAnalysisPayload) => {
       try {
-        // ✅ VALIDATION: Validate analysis data before updating
-        const validationResult = ModeratorAnalysisPayloadSchema.safeParse(data);
-        if (!validationResult.success) {
-          console.error('Invalid analysis data:', validationResult.error);
-          setHookError(new Error('Invalid analysis data structure'));
-          return;
-        }
+        // Validate parameters at function entry
+        const validated = UpdateAnalysisDataParamsSchema.parse({
+          roundNumber,
+          data,
+        });
 
         queryClient.setQueryData(
           queryKeys.threads.analyses(threadId),
@@ -229,20 +293,20 @@ export function useChatAnalysis({
             // ✅ CRITICAL: Find and update the specific analysis by round number
             // Preserve all other analyses unchanged to prevent cache corruption
             const updated = typedData.data.items.map((analysis) => {
-              if (analysis.roundNumber === roundNumber) {
+              if (analysis.roundNumber === validated.roundNumber) {
                 // ✅ CRITICAL FIX: Only update if status is pending or streaming
                 // Don't overwrite already completed analyses (prevents regression)
-                if (analysis.status === 'pending' || analysis.status === 'streaming') {
+                if (analysis.status === AnalysisStatusSchema.enum.pending || analysis.status === AnalysisStatusSchema.enum.streaming) {
                   return {
                     ...analysis,
-                    status: 'completed' as const,
-                    analysisData: data,
+                    status: AnalysisStatusSchema.enum.completed,
+                    analysisData: validated.data,
                     completedAt: new Date(),
                     errorMessage: null, // Clear any previous errors
                   };
                 }
                 // ✅ If already completed, don't overwrite (prevents stale data from replacing fresh data)
-                console.warn(`[useChatAnalysis] Skipping update for round ${roundNumber} - analysis already ${analysis.status}`);
+                console.warn(`[useChatAnalysis] Skipping update for round ${validated.roundNumber} - analysis already ${analysis.status}`);
               }
               return analysis;
             });
@@ -269,6 +333,12 @@ export function useChatAnalysis({
   const updateAnalysisStatus = useCallback(
     (roundNumber: number, status: 'pending' | 'streaming' | 'completed' | 'failed') => {
       try {
+        // Validate parameters at function entry
+        const validated = UpdateAnalysisStatusParamsSchema.parse({
+          roundNumber,
+          status,
+        });
+
         queryClient.setQueryData(
           queryKeys.threads.analyses(threadId),
           (oldData: unknown) => {
@@ -282,10 +352,10 @@ export function useChatAnalysis({
             }
 
             const updated = typedData.data.items.map((analysis) => {
-              if (analysis.roundNumber === roundNumber) {
+              if (analysis.roundNumber === validated.roundNumber) {
                 return {
                   ...analysis,
-                  status,
+                  status: validated.status,
                 };
               }
               return analysis;
@@ -308,6 +378,9 @@ export function useChatAnalysis({
   const removePendingAnalysis = useCallback(
     (roundNumber: number) => {
       try {
+        // Validate parameters at function entry
+        const validated = RoundNumberParamSchema.parse({ roundNumber });
+
         // ✅ IMMEDIATE REMOVAL: Completely remove analysis for this round from cache
         // This ensures the UI immediately stops showing the old analysis
         // When the round regenerates, createPendingAnalysis will add a new one
@@ -325,7 +398,7 @@ export function useChatAnalysis({
 
             // Filter out ALL analyses for this round (including completed, pending, streaming)
             const filtered = typedData.data.items.filter(
-              a => a.roundNumber !== roundNumber,
+              a => a.roundNumber !== validated.roundNumber,
             );
 
             return {
@@ -350,6 +423,12 @@ export function useChatAnalysis({
   const markAnalysisFailed = useCallback(
     (roundNumber: number, errorMessage: string) => {
       try {
+        // Validate parameters at function entry
+        const validated = MarkAnalysisFailedParamsSchema.parse({
+          roundNumber,
+          errorMessage,
+        });
+
         queryClient.setQueryData(
           queryKeys.threads.analyses(threadId),
           (oldData: unknown) => {
@@ -363,11 +442,11 @@ export function useChatAnalysis({
             }
 
             const updated = typedData.data.items.map((analysis) => {
-              if (analysis.roundNumber === roundNumber) {
+              if (analysis.roundNumber === validated.roundNumber) {
                 return {
                   ...analysis,
                   status: 'failed' as const,
-                  errorMessage,
+                  errorMessage: validated.errorMessage,
                   completedAt: new Date(),
                 };
               }

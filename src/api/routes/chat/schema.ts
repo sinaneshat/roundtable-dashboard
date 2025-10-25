@@ -551,3 +551,23 @@ export const SetRoundFeedbackResponseSchema = createApiResponseSchema(
 export const GetThreadFeedbackResponseSchema = createApiResponseSchema(
   z.array(ChatRoundFeedbackSchema),
 ).openapi('GetThreadFeedbackResponse');
+
+// ============================================================================
+// DATABASE QUERY RESULT SCHEMAS
+// ============================================================================
+
+/**
+ * Schema for chat messages with their associated participants
+ * Used in analysis and streaming handlers to validate query results
+ *
+ * Pattern: Combines chatMessageSelectSchema with nested participant relation
+ * This replaces complex type extraction like:
+ * type MessageWithParticipant = Awaited<ReturnType<typeof db.query.chatMessage.findMany>>[number] & {...}
+ */
+export const MessageWithParticipantSchema = chatMessageSelectSchema
+  .extend({
+    participant: ChatParticipantSchema.nullable(),
+  })
+  .openapi('MessageWithParticipant');
+
+export type MessageWithParticipant = z.infer<typeof MessageWithParticipantSchema>;
