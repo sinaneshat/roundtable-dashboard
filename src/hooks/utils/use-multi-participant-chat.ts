@@ -31,7 +31,7 @@ const ChatParticipantSchema = chatParticipantSelectSchema
  * Note: Callbacks are not validated to preserve their type signatures
  */
 const UseMultiParticipantChatOptionsSchema = z.object({
-  threadId: z.string().min(1, 'Thread ID is required'),
+  threadId: z.string(), // Allow empty string for initial state
   participants: z.array(ChatParticipantSchema).min(0, 'Participants must be an array'),
   messages: z.array(z.custom<UIMessage>()).optional(),
   mode: z.string().optional(),

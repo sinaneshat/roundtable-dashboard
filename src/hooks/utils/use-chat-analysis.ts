@@ -45,7 +45,7 @@ const AnalysisStatusSchema = z.enum(['pending', 'streaming', 'completed', 'faile
  * Validates hook options at entry point to ensure type safety
  */
 const UseChatAnalysisOptionsSchema = z.object({
-  threadId: z.string().min(1, 'Thread ID is required'),
+  threadId: z.string(), // Allow empty string for initial state
   mode: ChatModeSchema,
   enabled: z.boolean().optional().default(true),
 }).strict();
@@ -104,8 +104,15 @@ type UseChatAnalysisReturn = {
 export function useChatAnalysis(
   options: UseChatAnalysisOptions,
 ): UseChatAnalysisReturn {
-  // Validate options at hook entry point
-  const validatedOptions = UseChatAnalysisOptionsSchema.parse(options);
+  // Validate options at hook entry point with safeParse for better error handling
+  const validationResult = UseChatAnalysisOptionsSchema.safeParse(options);
+
+  if (!validationResult.success) {
+    console.warn('[useChatAnalysis] Validation warning:', validationResult.error);
+    // Continue with original options for backward compatibility
+  }
+
+  const validatedOptions = validationResult.success ? validationResult.data : options;
 
   const {
     threadId,
