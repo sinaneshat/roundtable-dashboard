@@ -216,14 +216,15 @@ export default function ChatThreadScreen({
   const currentRoundNumberRef = useRef<number | null>(null);
   const regenerateRoundNumberRef = useRef<number | null>(null);
 
-  // State to track previous items for optimization (declared early to avoid use-before-define)
+  // State to track previous items for streaming optimization (declared early to avoid use-before-define)
   const wasStreamingRef = useRef(false);
   const [wasStreaming, setWasStreaming] = useState(false);
   const [previousItems, setPreviousItems] = useState<Array<
     | { type: 'messages'; data: UIMessage[]; key: string; roundNumber: number }
-    | { type: 'analysis'; data: (typeof analyses)[number]; key: string; roundNumber: number }
-    | { type: 'changelog'; data: (typeof changelog)[number][]; key: string; roundNumber: number }
+    | { type: 'analysis'; data: StoredModeratorAnalysis; key: string; roundNumber: number }
+    | { type: 'changelog'; data: ChangelogItem[]; key: string; roundNumber: number }
   >>([]);
+
   const initialParticipants = useMemo<ParticipantConfig[]>(() => {
     return contextParticipants
       .filter(p => p.isEnabled)
@@ -628,14 +629,26 @@ export default function ChatThreadScreen({
       return true;
     });
     return deduplicatedItems;
-  }, [messages, analyses, changelog, isStreaming, previousItems, wasStreaming]);
+    // NOTE: previousItems and wasStreaming are intentionally excluded from dependencies
+    // They are optimization state, not source data - including them causes infinite loops
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messages, analyses, changelog, isStreaming]);
 
-  // Update wasStreaming and previousItems in useEffect
+  // Update wasStreaming and previousItems after render for next optimization cycle
   useEffect(() => {
-    setWasStreaming(isStreaming);
+    // Update refs for consistency
     wasStreamingRef.current = isStreaming;
-    setPreviousItems(messagesWithAnalysesAndChangelog);
     previousItemsRef.current = messagesWithAnalysesAndChangelog;
+
+    // Update state only if changed to prevent unnecessary re-renders
+    setWasStreaming(prev => prev !== isStreaming ? isStreaming : prev);
+    setPreviousItems((prev) => {
+      // Only update if the array reference or length changed
+      if (prev === messagesWithAnalysesAndChangelog || prev.length !== messagesWithAnalysesAndChangelog.length) {
+        return messagesWithAnalysesAndChangelog;
+      }
+      return prev;
+    });
   }, [messagesWithAnalysesAndChangelog, isStreaming]);
   const feedbackHandlersRef = useRef(new Map<number, (feedbackType: 'like' | 'dislike' | null) => void>());
   const getFeedbackHandler = useCallback((roundNumber: number) => {
@@ -787,7 +800,6 @@ export default function ChatThreadScreen({
                   transform: `translateY(${firstItemStart}px)`,
                 }}
               >
-                {/* eslint-disable-next-line react-hooks/refs -- virtualItems from react-virtual is safe to use in render */}
                 {virtualItems.map((virtualItem) => {
                   const item = messagesWithAnalysesAndChangelog[virtualItem.index];
                   if (!item)
