@@ -1,5 +1,4 @@
 'use client';
-
 import {
   ArrowUpCircle,
   BarChart3,
@@ -18,30 +17,15 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useUsageStatsQuery } from '@/hooks/queries';
 import { cn } from '@/lib/ui/cn';
 
-/**
- * UsageMetrics Component - Following shadcn/ui Design Patterns
- *
- * Displays usage statistics with clean, minimal design
- * Features:
- * - Progress bars use default theme colors (bg-primary)
- * - Warning colors (amber) only appear when usage >= 80%
- * - Critical colors (destructive) only appear when usage >= 100%
- * - Follows design system consistently
- */
 export function UsageMetrics() {
   const t = useTranslations();
   const router = useRouter();
   const { data: usageData, isLoading, isError } = useUsageStatsQuery();
-
-  // ✅ BACKEND-COMPUTED STATUS: Use status field from backend (no threshold logic here)
   const threadsStatus = usageData?.success ? usageData.data.threads.status : 'default';
   const messagesStatus = usageData?.success ? usageData.data.messages.status : 'default';
   const analysisStatus = usageData?.success ? usageData.data.analysis.status : 'default';
-
   const isMaxedOut = threadsStatus === 'critical' || messagesStatus === 'critical' || analysisStatus === 'critical';
   const hasWarning = threadsStatus === 'warning' || messagesStatus === 'warning' || analysisStatus === 'warning' || isMaxedOut;
-
-  // Loading state - improved skeleton
   if (isLoading) {
     return (
       <div className="space-y-3">
@@ -51,55 +35,39 @@ export function UsageMetrics() {
       </div>
     );
   }
-
-  // Error state - hide completely on error
   if (isError || !usageData?.success) {
     return null;
   }
-
   const usage = usageData.data;
-
-  // Extract percentage values from backend response
   const threadsPercentage = usage.threads.percentage;
   const messagesPercentage = usage.messages.percentage;
   const analysisPercentage = usage.analysis.percentage;
-
   const handleUpgrade = () => {
     router.push('/chat/pricing');
   };
-
-  // Determine if user has premium tier
   const isPremiumTier = usage.subscription.tier !== 'free';
-
-  // Get progress bar color based on usage status
-  // Following shadcn/ui patterns: only apply custom colors for warning/critical states
   const getProgressColor = (status: string) => {
     switch (status) {
       case 'critical':
-        return '[&>*]:bg-destructive'; // Red when at/over limit
+        return '[&>*]:bg-destructive';
       case 'warning':
-        return '[&>*]:bg-orange-500 dark:[&>*]:bg-orange-600'; // Orange when approaching limit (>=80%)
+        return '[&>*]:bg-orange-500 dark:[&>*]:bg-orange-600';
       default:
-        return ''; // Use default bg-primary from design system
+        return '';
     }
   };
-
   return (
     <div className="space-y-2.5">
-      {/* Header: Plan Badge (Left) & Days Remaining (Right) */}
       <div className="flex items-center justify-between">
         <Badge
           variant={isPremiumTier ? 'default' : 'outline'}
           className={cn(
             'text-[11px] px-2 py-0.5 h-5 font-semibold capitalize',
-            // Only show warning colors on badge if at/over limit
             isMaxedOut && !isPremiumTier && 'border-destructive/40 text-destructive bg-destructive/10',
           )}
         >
           {t(`subscription.tiers.${usage.subscription.tier}.name`)}
         </Badge>
-
-        {/* Days Remaining */}
         <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
           <Clock className="size-3" />
           <span className="font-medium">
@@ -109,12 +77,8 @@ export function UsageMetrics() {
           </span>
         </div>
       </div>
-
       <Separator className="my-2" />
-
-      {/* Usage Metrics */}
       <div className="space-y-2.5">
-        {/* Threads Usage */}
         <div className="space-y-1">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-1">
@@ -156,8 +120,6 @@ export function UsageMetrics() {
             </span>
           </div>
         </div>
-
-        {/* Messages Usage */}
         <div className="space-y-1">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-1">
@@ -199,8 +161,6 @@ export function UsageMetrics() {
             </span>
           </div>
         </div>
-
-        {/* Analysis Usage */}
         <div className="space-y-1">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-1">
@@ -243,8 +203,6 @@ export function UsageMetrics() {
           </div>
         </div>
       </div>
-
-      {/* Pending Tier Change Alert */}
       {usage.subscription.pendingTierChange && (
         <>
           <Separator className="my-2" />
@@ -266,8 +224,6 @@ export function UsageMetrics() {
           </div>
         </>
       )}
-
-      {/* Upgrade Button - shown when approaching or at limit */}
       {(hasWarning || isMaxedOut) && !isPremiumTier && (
         <>
           <Separator className="my-2" />

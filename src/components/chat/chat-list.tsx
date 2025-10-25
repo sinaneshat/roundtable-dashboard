@@ -1,5 +1,4 @@
 'use client';
-
 import { Loader2, Trash2 } from 'lucide-react';
 import { motion } from 'motion/react';
 import Link from 'next/link';
@@ -27,50 +26,29 @@ import {
 } from '@/components/ui/sidebar';
 import { cn } from '@/lib/ui/cn';
 
-// ============================================================================
-// Sidebar Types (Inline Component Types)
-// ============================================================================
-
-/**
- * Simplified thread representation for sidebar display
- * Transformed from API thread list responses
- */
 export type Chat = {
   id: string;
   title: string;
   slug: string;
   createdAt: Date;
   updatedAt: Date;
-  messages: never[]; // Always empty in sidebar context - messages loaded separately
+  messages: never[];
   isActive?: boolean;
   isFavorite?: boolean;
   isPublic?: boolean;
 };
-
-/**
- * Time-based grouping structure for sidebar organization
- */
 export type ChatGroup = {
   label: string;
   chats: Chat[];
 };
-
-/**
- * Group chats by time periods for sidebar organization
- * Groups by: Today, Yesterday, X days ago, X weeks ago
- * Max grouping is weeks (no months/years)
- */
 export function groupChatsByPeriod(chats: Chat[]): ChatGroup[] {
   const now = Date.now();
   const groups = new Map<string, Chat[]>();
-
   chats.forEach((chat) => {
     const chatTime = chat.updatedAt.getTime();
     const diffMs = now - chatTime;
     const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-
     let label: string;
-
     if (diffDays < 1) {
       label = 'chat.today';
     } else if (diffDays === 1) {
@@ -81,23 +59,16 @@ export function groupChatsByPeriod(chats: Chat[]): ChatGroup[] {
       const weeks = Math.floor(diffDays / 7);
       label = `chat.weeksAgo:${weeks}`;
     }
-
     if (!groups.has(label)) {
       groups.set(label, []);
     }
     groups.get(label)!.push(chat);
   });
-
   return Array.from(groups.entries()).map(([label, chats]) => ({
     label,
     chats,
   }));
 }
-
-// ============================================================================
-// Component Props
-// ============================================================================
-
 type ChatListProps = {
   chatGroups: ChatGroup[];
   favorites: Chat[];
@@ -107,16 +78,9 @@ type ChatListProps = {
   isMobile?: boolean;
   onNavigate?: () => void;
 };
-
-// Stable default value to avoid infinite render loop
 const EMPTY_FAVORITES: Chat[] = [];
-
-/**
- * StickyHeader - Timestamp header that stays visible while scrolling
- */
 function StickyHeader({ children, zIndex = 10 }: { children: React.ReactNode; zIndex?: number }) {
   const headerRef = useRef<HTMLDivElement>(null);
-
   return (
     <motion.div
       ref={headerRef}
@@ -138,10 +102,6 @@ function StickyHeader({ children, zIndex = 10 }: { children: React.ReactNode; zI
     </motion.div>
   );
 }
-
-/**
- * ChatItem - Individual chat item component
- */
 function ChatItem({
   chat,
   isActive,
@@ -159,7 +119,6 @@ function ChatItem({
 }) {
   const t = useTranslations();
   const chatUrl = `/chat/${chat.slug}`;
-
   return (
     <SidebarMenuItem>
       <SidebarMenuButton asChild isActive={isActive} disabled={isDeleting}>
@@ -199,16 +158,6 @@ function ChatItem({
     </SidebarMenuItem>
   );
 }
-
-/**
- * ChatList - Renders chat items in sidebar
- *
- * Features:
- * - Sticky timestamp headers for scroll visibility
- * - Grouped chats by time period
- * - Favorites section
- * - Delete confirmation dialog
- */
 export function ChatList({
   chatGroups,
   favorites = EMPTY_FAVORITES,
@@ -221,32 +170,25 @@ export function ChatList({
   const pathname = usePathname();
   const t = useTranslations();
   const [chatToDelete, setChatToDelete] = useState<Chat | null>(null);
-
   const handleDeleteClick = (chat: Chat) => {
     setChatToDelete(chat);
   };
-
   const handleConfirmDelete = () => {
     if (chatToDelete) {
       onDeleteChat(chatToDelete.id);
       setChatToDelete(null);
     }
   };
-
   const handleCancelDelete = () => {
     setChatToDelete(null);
   };
-
-  // Helper to format group labels (handles dynamic labels like "daysAgo:3")
   const formatGroupLabel = (label: string) => {
     if (label.includes(':')) {
       const [key, value] = label.split(':');
       if (!key || !value) {
         return t(label.replace('chat.', 'chat.'));
       }
-
       const translationKey = key.replace('chat.', '');
-
       if (translationKey === 'daysAgo') {
         return `${value} days ago`;
       }
@@ -255,11 +197,8 @@ export function ChatList({
         return weeks === 1 ? '1 week ago' : `${weeks} weeks ago`;
       }
     }
-
     return t(label.replace('chat.', 'chat.'));
   };
-
-  // Show empty state when no results from search
   if (searchTerm && chatGroups.length === 0 && favorites.length === 0) {
     return (
       <SidebarGroup className="group-data-[collapsible=icon]:hidden">
@@ -270,10 +209,8 @@ export function ChatList({
       </SidebarGroup>
     );
   }
-
   return (
     <>
-      {/* Favorites Section - No header, parent provides it */}
       {favorites.length > 0 && (
         <SidebarGroup className="group-data-[collapsible=icon]:hidden">
           <SidebarMenu>
@@ -281,7 +218,6 @@ export function ChatList({
               const chatUrl = `/chat/${chat.slug}`;
               const isActive = pathname === chatUrl;
               const isDeleting = deletingChatId === chat.id;
-
               return (
                 <ChatItem
                   key={chat.id}
@@ -297,13 +233,9 @@ export function ChatList({
           </SidebarMenu>
         </SidebarGroup>
       )}
-
-      {/* Regular Chat Groups - WITH sticky timestamp headers */}
       {chatGroups.map((group, groupIndex) => {
-        // Each subsequent section gets a higher z-index
         const baseZIndex = favorites.length > 0 ? 11 : 10;
         const sectionZIndex = baseZIndex + groupIndex;
-
         return (
           <SidebarGroup key={group.label} className="group-data-[collapsible=icon]:hidden">
             <StickyHeader zIndex={sectionZIndex}>
@@ -327,7 +259,6 @@ export function ChatList({
                 const chatUrl = `/chat/${chat.slug}`;
                 const isActive = pathname === chatUrl;
                 const isDeleting = deletingChatId === chat.id;
-
                 return (
                   <ChatItem
                     key={chat.id}
@@ -344,8 +275,6 @@ export function ChatList({
           </SidebarGroup>
         );
       })}
-
-      {/* Delete Confirmation Dialog */}
       <AlertDialog open={!!chatToDelete} onOpenChange={open => !open && handleCancelDelete()}>
         <AlertDialogContent>
           <AlertDialogHeader>

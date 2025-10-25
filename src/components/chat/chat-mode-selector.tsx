@@ -1,5 +1,4 @@
 'use client';
-
 import { Check } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
@@ -30,22 +29,8 @@ type ChatModeSelectorProps = {
   selectedMode: ChatModeId;
   onModeChange?: (mode: ChatModeId) => void;
   className?: string;
-  disabled?: boolean; // ✅ STREAMING PROTECTION: Disable during streaming to prevent mid-stream mode changes
+  disabled?: boolean;
 };
-
-/**
- * ChatModeSelector - Icon-based mode selector matching toolbar button style
- *
- * Follows exact styling patterns from ChatParticipantsList:
- * - Same button variant, size, and spacing
- * - Icon + text label with responsive visibility
- * - Popover interaction with Command component
- * - Tooltip showing current mode description
- *
- * ✅ STREAMING PROTECTION: Disabled during streaming to prevent mode changes mid-conversation
- *
- * Pattern from: /src/components/chat/chat-participants-list.tsx:772-784
- */
 export function ChatModeSelector({
   selectedMode,
   onModeChange,
@@ -57,7 +42,6 @@ export function ChatModeSelector({
   const chatModeOptions = getChatModeOptions();
   const currentMode = getChatModeById(selectedMode);
   const ModeIcon = currentMode?.icon;
-
   return (
     <div className={cn('flex items-center gap-1.5', className)}>
       <TooltipProvider>
@@ -79,7 +63,6 @@ export function ChatModeSelector({
                 </Button>
               </PopoverTrigger>
             </TooltipTrigger>
-
             <TooltipContent side="top" className="max-w-xs">
               <div className="space-y-1">
                 <div className="font-semibold text-xs">{t('currentMode')}</div>
@@ -92,7 +75,6 @@ export function ChatModeSelector({
               </div>
             </TooltipContent>
           </Tooltip>
-
           <PopoverContent className="w-[calc(100vw-2rem)] sm:w-[280px] p-0" align="start">
             <Command>
               <CommandList>
@@ -100,7 +82,6 @@ export function ChatModeSelector({
                   {chatModeOptions.map((option) => {
                     const OptionIcon = option.icon;
                     const isSelected = option.value === selectedMode;
-
                     return (
                       <CommandItem
                         key={option.value}

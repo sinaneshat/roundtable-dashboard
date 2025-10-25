@@ -8,23 +8,6 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { ScaleIn, StaggerContainer, StaggerItem } from '@/components/ui/motion';
 
-/**
- * Billing Failure Client Component
- *
- * Displays payment failure information with error details and support guidance.
- * Follows the same design patterns as BillingSuccessClient for consistency.
- *
- * ✅ NO useEffect - all data is server-hydrated via HydrationBoundary
- * ✅ No client-side query invalidation - queries are prefetched on server
- *
- * Key Features:
- * - Shows failure animation with clear error messaging
- * - Displays specific error details when available
- * - Provides support contact information
- * - Offers retry action via pricing page with fresh hydrated data
- *
- * @param failureData - Payment failure details from server action
- */
 type BillingFailureClientProps = {
   failureData?: {
     error?: string;
@@ -39,7 +22,6 @@ export function BillingFailureClient({ failureData }: BillingFailureClientProps)
   const router = useRouter();
   const t = useTranslations();
 
-  // Determine error details based on error type
   const getErrorDetails = () => {
     switch (failureData?.errorType) {
       case 'payment_failed':
@@ -74,7 +56,7 @@ export function BillingFailureClient({ failureData }: BillingFailureClientProps)
         staggerDelay={0.15}
         delayChildren={0.1}
       >
-        {/* Error Icon with Animation */}
+        {}
         <StaggerItem>
           <ScaleIn duration={0.3} delay={0}>
             <div className="flex size-20 items-center justify-center rounded-full bg-destructive/10 ring-4 ring-destructive/20 md:size-24">
@@ -83,7 +65,7 @@ export function BillingFailureClient({ failureData }: BillingFailureClientProps)
           </ScaleIn>
         </StaggerItem>
 
-        {/* Main Error Message */}
+        {}
         <StaggerItem className="space-y-2">
           <h1 className="text-2xl font-bold tracking-tight md:text-3xl">
             {t('billing.failure.title')}
@@ -93,7 +75,7 @@ export function BillingFailureClient({ failureData }: BillingFailureClientProps)
           </p>
         </StaggerItem>
 
-        {/* Error Details Alert */}
+        {}
         {failureData && (
           <StaggerItem className="w-full">
             <Alert variant="destructive">
@@ -122,7 +104,7 @@ export function BillingFailureClient({ failureData }: BillingFailureClientProps)
           </StaggerItem>
         )}
 
-        {/* Common Reasons */}
+        {}
         <StaggerItem className="w-full text-left">
           <div className="rounded-lg border bg-card p-4 text-sm">
             <h3 className="mb-2 font-semibold">{t('billing.failure.commonReasons.title')}</h3>
@@ -147,7 +129,7 @@ export function BillingFailureClient({ failureData }: BillingFailureClientProps)
           </div>
         </StaggerItem>
 
-        {/* Support Information */}
+        {}
         <StaggerItem className="w-full">
           <div className="rounded-lg border bg-card p-4">
             <div className="flex items-start gap-3">
@@ -165,7 +147,7 @@ export function BillingFailureClient({ failureData }: BillingFailureClientProps)
           </div>
         </StaggerItem>
 
-        {/* Action Buttons */}
+        {}
         <StaggerItem className="flex w-full flex-col items-center gap-3 sm:flex-row sm:justify-center">
           <Button
             onClick={() => router.push('/chat/pricing')}

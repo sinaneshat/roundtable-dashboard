@@ -1,9 +1,8 @@
 'use client';
-
 import type { UIMessage } from 'ai';
 import Image from 'next/image';
 import { useTranslations } from 'next-intl';
-import { memo, useMemo } from 'react';
+import { memo } from 'react';
 
 import type { ChatParticipant } from '@/api/routes/chat/schema';
 import { canAccessModelByPricing } from '@/api/services/product-logic.service';
@@ -12,36 +11,25 @@ import { Response } from '@/components/ai-elements/response';
 import { ModelMessageCard } from '@/components/chat/model-message-card';
 import { useModelsQuery } from '@/hooks/queries/models';
 import { useUsageStatsQuery } from '@/hooks/queries/usage';
-import type { MessageStatus } from '@/lib/schemas/message-schemas';
+import type { MessagePart, MessageStatus } from '@/lib/schemas/message-schemas';
 import { getAvatarPropsFromModelId } from '@/lib/utils/ai-display';
-import { deduplicateConsecutiveUserMessages, filterNonEmptyMessages, getMessageMetadata } from '@/lib/utils/message-transforms';
+import { getMessageMetadata } from '@/lib/utils/message-transforms';
 
-// Stable default values to prevent re-renders
 const EMPTY_PARTICIPANTS: ChatParticipant[] = [];
-
 type ChatMessageListProps = {
   messages: UIMessage[];
-  /** User information for displaying user messages. Optional - defaults to generic user. */
   user?: {
     name: string;
     image: string | null;
   } | null;
-  /** List of AI participants. Optional - will be inferred from message metadata if not provided. */
   participants?: ChatParticipant[];
-  /** Hide metadata like timestamps and model names */
   hideMetadata?: boolean;
-  /** Whether messages are currently being streamed (loading state) */
   isLoading?: boolean;
-  /** Whether any participant is currently streaming (alias for isLoading) */
   isStreaming?: boolean;
-  /** Currently active streaming participant */
   currentStreamingParticipant?: ChatParticipant | null;
-  /** Index of currently active participant */
   currentParticipantIndex?: number;
-  /** Optional custom user avatar (overrides user.image) */
   userAvatar?: { src: string; name: string };
 };
-
 export const ChatMessageList = memo(({
   messages,
   user = null,
@@ -53,38 +41,27 @@ export const ChatMessageList = memo(({
   currentParticipantIndex = 0,
   userAvatar,
 }: ChatMessageListProps) => {
-  // Use isStreaming as an alias for isLoading for backward compatibility
   const isCurrentlyLoading = isLoading || isStreaming;
   const t = useTranslations();
   const { data: modelsData } = useModelsQuery();
   const { data: usageData } = useUsageStatsQuery();
-
   const allModels = modelsData?.data?.items || [];
   const userTier = usageData?.data?.subscription?.tier || 'free';
-
-  // Default user info if not provided
   const userInfo = user || { name: 'User', image: null };
   const userAvatarSrc = userAvatar?.src || userInfo.image || '/avatars/user.png';
   const userAvatarName = userAvatar?.name || userInfo.name;
 
-  // ✅ MEMOIZED FILTERING: Prevent flickering by stabilizing message filtering
-  // Filters are applied once per messages array change, not on every render
-  // This prevents messages from appearing/disappearing during streaming
-  const filteredMessages = useMemo(() => {
-    // ✅ SHARED UTILITY: Filter out empty user messages (used for triggering subsequent participants)
-    // ✅ DEDUPLICATION: Remove consecutive duplicate user messages (caused by startRound)
-    return deduplicateConsecutiveUserMessages(filterNonEmptyMessages(messages));
-  }, [messages]);
+  // ✅ NO DEDUPLICATION NEEDED: Messages are already deduplicated in ChatContext.initializeThread()
+  // This prevents redundant O(n) processing on every render
+  // See: src/contexts/chat-context.tsx:145 and src/lib/utils/message-transforms.ts:deduplicateMessages()
 
   return (
     <>
-      {filteredMessages.map((message) => {
-        // User message
+      {messages.map((message) => {
         if (message.role === 'user') {
           return (
             <Message from="user" key={message.id}>
               <MessageContent>
-                {/* eslint-disable react/no-array-index-key -- Parts array is stable, order is meaningful, and scoped by message.id */}
                 {message.parts.map((part, partIndex) => {
                   if (part.type === 'text') {
                     return (
@@ -93,7 +70,6 @@ export const ChatMessageList = memo(({
                       </Response>
                     );
                   }
-
                   if (part.type === 'file' && part.mediaType?.startsWith('image/')) {
                     return (
                       <div key={`${message.id}-${partIndex}`} className="my-2">
@@ -112,7 +88,6 @@ export const ChatMessageList = memo(({
                       </div>
                     );
                   }
-
                   if (part.type === 'file') {
                     return (
                       <div key={`${message.id}-${partIndex}`} className="my-2 p-3 border border-border rounded-lg">
@@ -134,10 +109,8 @@ export const ChatMessageList = memo(({
                       </div>
                     );
                   }
-
                   return null;
                 })}
-                {/* eslint-enable react/no-array-index-key */}
               </MessageContent>
               <MessageAvatar
                 src={userAvatarSrc}
@@ -146,65 +119,49 @@ export const ChatMessageList = memo(({
             </Message>
           );
         }
-
-        // Assistant message
         const metadata = getMessageMetadata(message.metadata);
-
-        // ✅ CRITICAL FIX: Always use metadata for saved messages, participant only for streaming
-        // Saved messages have metadata.model set - this is the source of truth
-        // Streaming messages don't have metadata yet - use current participant from index
-
         const hasSavedMetadata = !!metadata?.model;
-
-        // ✅ CRITICAL FIX: For participantIndex, NEVER fallback to currentParticipantIndex for saved messages
-        // This prevents historical messages from being re-attributed to current participants
         const participantIndex = hasSavedMetadata
-          ? (metadata?.participantIndex ?? 0) // Saved message - use metadata only (fallback to 0 if missing)
-          : (metadata?.participantIndex ?? currentParticipantIndex); // Streaming message - can use current index
-
-        // Only lookup participant for streaming messages (no saved metadata yet)
+          ? (metadata?.participantIndex ?? 0)
+          : (metadata?.participantIndex ?? currentParticipantIndex);
         const participant = !hasSavedMetadata
           ? (participantIndex !== undefined && participants[participantIndex])
               ? participants[participantIndex]
               : currentStreamingParticipant
-          : undefined; // Saved message - don't use participant at all
-
-        // ✅ CRITICAL FIX: For saved messages, use ONLY metadata (never look at current participants)
-        // For streaming messages: Use participant (metadata not set yet)
-        // This ensures historical messages maintain their original model/role attribution
+          : undefined;
         const storedModelId = hasSavedMetadata ? metadata.model : (participant?.modelId || metadata?.model);
         const storedRole = hasSavedMetadata ? (metadata.participantRole || null) : (participant?.role || metadata?.participantRole || null);
-
         const avatarProps = getAvatarPropsFromModelId(
           message.role === 'system' ? 'assistant' : message.role,
           storedModelId,
           userInfo.image,
           userInfo.name,
         );
-
         const model = storedModelId ? allModels.find(m => m.id === storedModelId) : undefined;
         const isAccessible = model ? canAccessModelByPricing(userTier, model) : true;
         const hasError = metadata?.hasError === true || !!metadata?.error;
         const isCurrentlyStreaming = isCurrentlyLoading && participant?.id === currentStreamingParticipant?.id;
-        const hasContent = message.parts.some(p => p.type === 'text' && p.text.trim().length > 0);
-
+        const hasTextContent = message.parts.some(p => p.type === 'text' && p.text.trim().length > 0);
+        const hasToolCalls = message.parts.some(p => p.type === 'tool-call');
+        const hasAnyContent = hasTextContent || hasToolCalls;
         const messageStatus: MessageStatus = hasError
           ? 'error'
-          : isCurrentlyStreaming && !hasContent
+          : isCurrentlyStreaming && !hasAnyContent
             ? 'thinking'
             : isCurrentlyStreaming
               ? 'streaming'
               : 'completed';
-
-        const filteredParts = message.parts.filter(
-          (p): p is { type: 'text'; text: string } | { type: 'reasoning'; text: string } =>
-            p.type === 'text' || p.type === 'reasoning',
-        );
-
+        const filteredParts = message.parts
+          .filter(p =>
+            p.type === 'text'
+            || p.type === 'reasoning'
+            || p.type === 'tool-call'
+            || p.type === 'tool-result',
+          )
+          .map(p => p as MessagePart);
         const sourceParts = message.parts.filter(p =>
           'type' in p && (p.type === 'source-url' || p.type === 'source-document'),
         );
-
         return (
           <div key={message.id}>
             <ModelMessageCard
@@ -219,7 +176,6 @@ export const ChatMessageList = memo(({
               metadata={hideMetadata ? null : (metadata ?? null)}
               isAccessible={isAccessible}
             />
-
             {sourceParts.length > 0 && (
               <div className="mt-2 ml-12 space-y-1">
                 <p className="text-xs font-medium text-muted-foreground">{t('sources.title')}</p>

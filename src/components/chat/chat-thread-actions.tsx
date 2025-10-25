@@ -1,5 +1,4 @@
 'use client';
-
 import { Loader2, Lock, Share2, Star, Trash2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
@@ -15,54 +14,28 @@ import {
 import { useToggleFavoriteMutation, useTogglePublicMutation } from '@/hooks/mutations/chat-mutations';
 import { cn } from '@/lib/ui/cn';
 
-/**
- * Shared Thread Actions Component
- *
- * Renders thread-specific action buttons:
- * - Toggle favorite status
- * - Toggle public/private visibility
- * - Copy public link (when public)
- * - Delete thread
- *
- * Used by both ChatThreadScreen (via context) and potentially other thread views
- *
- * NOTE: Uses local optimistic state to reflect changes immediately while mutations are pending
- */
 type ChatThreadActionsProps = {
   thread: ChatThread | (Omit<ChatThread, 'createdAt' | 'updatedAt' | 'lastMessageAt'> & { createdAt: string | Date; updatedAt: string | Date; lastMessageAt: string | Date | null });
   slug: string;
   onDeleteClick?: () => void;
-  /**
-   * Public mode - hides favorite, public/private toggle, and delete button
-   * Only shows copy link button when thread is public
-   */
   isPublicMode?: boolean;
 };
-
 export function ChatThreadActions({ thread, slug, onDeleteClick, isPublicMode = false }: ChatThreadActionsProps) {
   const t = useTranslations('chat');
   const toggleFavoriteMutation = useToggleFavoriteMutation();
   const togglePublicMutation = useTogglePublicMutation();
-
-  // Determine current display state with proper priority:
-  // 1. If mutation succeeded, use the response data (most accurate)
-  // 2. If mutation is pending, use the optimistic variables
-  // 3. Otherwise, fall back to thread prop
   const displayIsFavorite = toggleFavoriteMutation.isSuccess && toggleFavoriteMutation.data?.success
     ? toggleFavoriteMutation.data.data.thread.isFavorite
     : toggleFavoriteMutation.isPending && toggleFavoriteMutation.variables
       ? toggleFavoriteMutation.variables.isFavorite
       : thread.isFavorite;
-
   const displayIsPublic = togglePublicMutation.isSuccess && togglePublicMutation.data?.success
     ? togglePublicMutation.data.data.thread.isPublic
     : togglePublicMutation.isPending && togglePublicMutation.variables
       ? togglePublicMutation.variables.isPublic
       : thread.isPublic;
-
   return (
     <TooltipProvider>
-      {/* Favorite/Unfavorite Button - hidden in public mode */}
       {!isPublicMode && (
         <Tooltip delayDuration={300}>
           <TooltipTrigger asChild>
@@ -105,8 +78,6 @@ export function ChatThreadActions({ thread, slug, onDeleteClick, isPublicMode = 
           </TooltipContent>
         </Tooltip>
       )}
-
-      {/* Public/Private Toggle Button - hidden in public mode */}
       {!isPublicMode && (
         <Tooltip delayDuration={300}>
           <TooltipTrigger asChild>
@@ -146,8 +117,6 @@ export function ChatThreadActions({ thread, slug, onDeleteClick, isPublicMode = 
           </TooltipContent>
         </Tooltip>
       )}
-
-      {/* Social Share Button (only shown when public) - uses optimistic state */}
       {displayIsPublic && (
         <SocialShareButton
           url={`${process.env.NEXT_PUBLIC_APP_URL || (typeof window !== 'undefined' ? window.location.origin : '')}/public/chat/${slug}`}
@@ -156,8 +125,6 @@ export function ChatThreadActions({ thread, slug, onDeleteClick, isPublicMode = 
           showTextOnLargeScreens={isPublicMode}
         />
       )}
-
-      {/* Delete Button - hidden in public mode */}
       {!isPublicMode && onDeleteClick && (
         <Tooltip delayDuration={300}>
           <TooltipTrigger asChild>

@@ -13,14 +13,6 @@ import {
   useSwitchSubscriptionMutation,
 } from '@/hooks';
 
-/**
- * Pricing Modal Screen
- *
- * Intercepted modal route for pricing display
- * Shown when navigating to /chat/pricing as a modal
- * Uses Next.js intercepting routes pattern with (.) prefix
- * Displays available products and pricing options
- */
 export default function PricingModalScreen() {
   const router = useRouter();
   const [processingPriceId, setProcessingPriceId] = useState<string | null>(null);
@@ -46,19 +38,15 @@ export default function PricingModalScreen() {
     setProcessingPriceId(priceId);
     try {
       if (activeSubscription) {
-        // In-app subscription switch (upgrade/downgrade)
         const result = await switchMutation.mutateAsync({
           param: { id: activeSubscription.id },
           json: { newPriceId: priceId },
         });
 
-        // ✅ Always redirect to subscription changed page after successful switch
-        // Show comparison if we have changeDetails, otherwise just show new plan
         if (result.success) {
           const changeDetails = result.data?.changeDetails;
 
           if (changeDetails) {
-            // We have before/after data - build full query params
             const changeType = changeDetails.isUpgrade ? 'upgrade' : changeDetails.isDowngrade ? 'downgrade' : 'change';
 
             const params = new URLSearchParams({
@@ -69,14 +57,10 @@ export default function PricingModalScreen() {
 
             window.location.href = `/chat/billing/subscription-changed?${params.toString()}`;
           } else {
-            // Intentionally empty
-            // No changeDetails - redirect without query params (page will show just new plan)
             window.location.href = '/chat/billing/subscription-changed';
           }
         }
       } else {
-        // Intentionally empty
-        // New subscription - redirect to Stripe Checkout
         const result = await createCheckoutMutation.mutateAsync({
           json: { priceId },
         });
@@ -85,7 +69,7 @@ export default function PricingModalScreen() {
           window.location.href = result.data.url;
         }
       }
-    } catch { /* Intentionally suppressed */ } finally {
+    } catch { } finally {
       setProcessingPriceId(null);
     }
   };
@@ -97,7 +81,7 @@ export default function PricingModalScreen() {
         param: { id: subscriptionId },
         json: { immediately: false },
       });
-    } catch { /* Intentionally suppressed */ } finally {
+    } catch { } finally {
       setCancelingSubscriptionId(null);
     }
   };
@@ -114,7 +98,7 @@ export default function PricingModalScreen() {
       if (result.success && result.data?.url) {
         window.open(result.data.url, '_blank', 'noopener,noreferrer');
       }
-    } catch { /* Intentionally suppressed */ } finally {
+    } catch { } finally {
       setIsManagingBilling(false);
     }
   };

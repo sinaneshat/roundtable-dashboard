@@ -1,10 +1,3 @@
-/**
- * Participant Handlers - Operations for chat participants (AI models in threads)
- *
- * Following backend-patterns.md: Domain-specific handler module
- * Extracted from monolithic handler.ts for better maintainability
- */
-
 import type { RouteHandler } from '@hono/zod-openapi';
 import { and, desc, eq } from 'drizzle-orm';
 import { ulid } from 'ulid';
@@ -37,10 +30,6 @@ import {
 } from '../schema';
 import { verifyThreadOwnership } from './helpers';
 
-// ============================================================================
-// Participant Handlers
-// ============================================================================
-
 export const addParticipantHandler: RouteHandler<typeof addParticipantRoute, ApiEnv> = createHandlerWithBatch(
   {
     auth: 'session',
@@ -52,19 +41,10 @@ export const addParticipantHandler: RouteHandler<typeof addParticipantRoute, Api
     const { user } = c.auth();
     const { id } = c.validated.params;
     const body = c.validated.body;
-    // ✅ BATCH PATTERN: Access database through batch.db for atomic operations
     const db = batch.db;
-
-    // Verify thread ownership
     await verifyThreadOwnership(id, user.id, db);
-
-    // Get user's subscription tier to validate model access
-    // ✅ DRY: Using centralized getUserTier utility with 5-minute caching
     const userTier = await getUserTier(user.id);
-
-    // ✅ SINGLE SOURCE OF TRUTH: Validate model access using backend service
     const model = await openRouterModelsService.getModelById(body.modelId as string);
-
     if (!model) {
       throw createError.badRequest(
         `Model "${body.modelId}" not found`,
@@ -74,8 +54,6 @@ export const addParticipantHandler: RouteHandler<typeof addParticipantRoute, Api
         },
       );
     }
-
-    // ✅ PRICING-BASED ACCESS: Check using dynamic pricing from OpenRouter
     const canAccess = canAccessModelByPricing(userTier, model);
     if (!canAccess) {
       const requiredTier = getRequiredTierForModel(model);
@@ -88,18 +66,13 @@ export const addParticipantHandler: RouteHandler<typeof addParticipantRoute, Api
         },
       );
     }
-
-    // Validate maxConcurrentModels limit for user's tier
-    // Only count enabled participants for accurate tier limit enforcement
     const existingParticipants = await db.query.chatParticipant.findMany({
       where: and(
         eq(tables.chatParticipant.threadId, id),
         eq(tables.chatParticipant.isEnabled, true),
       ),
     });
-
     const currentModelCount = existingParticipants.length;
-
     const maxModels = await getMaxModels(userTier);
     if (currentModelCount >= maxModels) {
       throw createError.badRequest(
@@ -110,10 +83,8 @@ export const addParticipantHandler: RouteHandler<typeof addParticipantRoute, Api
         },
       );
     }
-
     const participantId = ulid();
     const now = new Date();
-
     const [participant] = await db
       .insert(tables.chatParticipant)
       .values({
@@ -128,7 +99,6 @@ export const addParticipantHandler: RouteHandler<typeof addParticipantRoute, Api
         updatedAt: now,
       })
       .returning();
-
     const existingUserMessages = await db.query.chatMessage.findMany({
       where: and(
         eq(tables.chatMessage.threadId, id),
@@ -139,29 +109,27 @@ export const addParticipantHandler: RouteHandler<typeof addParticipantRoute, Api
       limit: 1,
     });
     const nextRoundNumber = (existingUserMessages[0]?.roundNumber || 0) + 1;
-
     const modelName = extractModeratorModelName(body.modelId as string);
     const changelogId = ulid();
     await db.insert(tables.chatThreadChangelog).values({
       id: changelogId,
       threadId: id,
       roundNumber: nextRoundNumber,
-      changeType: 'participant_added',
+      changeType: 'added',
       changeSummary: `Added ${modelName}${body.role ? ` as "${body.role}"` : ''}`,
       changeData: {
+        type: 'participant',
         participantId,
         modelId: body.modelId as string,
         role: body.role as string | null,
       },
       createdAt: now,
     });
-
     return Responses.ok(c, {
       participant,
     });
   },
 );
-
 export const updateParticipantHandler: RouteHandler<typeof updateParticipantRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
@@ -174,23 +142,18 @@ export const updateParticipantHandler: RouteHandler<typeof updateParticipantRout
     const { id } = c.validated.params;
     const body = c.validated.body;
     const db = await getDbAsync();
-
-    // Get participant and verify thread ownership
     const participant = await db.query.chatParticipant.findFirst({
       where: eq(tables.chatParticipant.id, id),
       with: {
         thread: true,
       },
     });
-
     if (!participant) {
       throw createError.notFound('Participant not found', ErrorContextBuilders.resourceNotFound('participant', id));
     }
-
     if (participant.thread.userId !== user.id) {
       throw createError.unauthorized('Not authorized to modify this participant', ErrorContextBuilders.authorization('participant', id));
     }
-
     const [updatedParticipant] = await db
       .update(tables.chatParticipant)
       .set({
@@ -202,7 +165,6 @@ export const updateParticipantHandler: RouteHandler<typeof updateParticipantRout
       })
       .where(eq(tables.chatParticipant.id, id))
       .returning();
-
     if (body.role !== undefined && body.role !== participant.role) {
       const existingUserMessages = await db.query.chatMessage.findMany({
         where: and(
@@ -214,16 +176,16 @@ export const updateParticipantHandler: RouteHandler<typeof updateParticipantRout
         limit: 1,
       });
       const nextRoundNumber = (existingUserMessages[0]?.roundNumber || 0) + 1;
-
       const modelName = extractModeratorModelName(participant.modelId);
       const changelogId = ulid();
       await db.insert(tables.chatThreadChangelog).values({
         id: changelogId,
         threadId: participant.threadId,
         roundNumber: nextRoundNumber,
-        changeType: ChangelogTypes.PARTICIPANT_UPDATED,
+        changeType: ChangelogTypes.MODIFIED,
         changeSummary: `Updated ${modelName} role from "${participant.role || 'none'}" to "${body.role || 'none'}"`,
         changeData: {
+          type: 'participant_role',
           participantId: id,
           modelId: participant.modelId,
           oldRole: participant.role,
@@ -232,13 +194,11 @@ export const updateParticipantHandler: RouteHandler<typeof updateParticipantRout
         createdAt: new Date(),
       });
     }
-
     return Responses.ok(c, {
       participant: updatedParticipant,
     });
   },
 );
-
 export const deleteParticipantHandler: RouteHandler<typeof deleteParticipantRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
@@ -249,24 +209,18 @@ export const deleteParticipantHandler: RouteHandler<typeof deleteParticipantRout
     const { user } = c.auth();
     const { id } = c.validated.params;
     const db = await getDbAsync();
-
-    // Get participant and verify thread ownership
     const participant = await db.query.chatParticipant.findFirst({
       where: eq(tables.chatParticipant.id, id),
       with: {
         thread: true,
       },
     });
-
     if (!participant) {
       throw createError.notFound('Participant not found', ErrorContextBuilders.resourceNotFound('participant', id));
     }
-
     if (participant.thread.userId !== user.id) {
       throw createError.unauthorized('Not authorized to delete this participant', ErrorContextBuilders.authorization('participant', id));
     }
-
-    // ✅ CALCULATE NEXT ROUND NUMBER for changelog
     const existingUserMessages = await db.query.chatMessage.findMany({
       where: and(
         eq(tables.chatMessage.threadId, participant.threadId),
@@ -277,18 +231,17 @@ export const deleteParticipantHandler: RouteHandler<typeof deleteParticipantRout
       limit: 1,
     });
     const nextRoundNumber = (existingUserMessages[0]?.roundNumber || 0) + 1;
-
     const modelName = extractModeratorModelName(participant.modelId);
     const changelogId = ulid();
-
     await executeBatch(db, [
       db.insert(tables.chatThreadChangelog).values({
         id: changelogId,
         threadId: participant.threadId,
         roundNumber: nextRoundNumber,
-        changeType: ChangelogTypes.PARTICIPANT_REMOVED,
+        changeType: ChangelogTypes.REMOVED,
         changeSummary: `Removed ${modelName}${participant.role ? ` ("${participant.role}")` : ''}`,
         changeData: {
+          type: 'participant',
           participantId: id,
           modelId: participant.modelId,
           role: participant.role,
@@ -297,7 +250,6 @@ export const deleteParticipantHandler: RouteHandler<typeof deleteParticipantRout
       }),
       db.delete(tables.chatParticipant).where(eq(tables.chatParticipant.id, id)),
     ]);
-
     return Responses.ok(c, {
       deleted: true,
     });

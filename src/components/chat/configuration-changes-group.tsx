@@ -1,16 +1,8 @@
 'use client';
-
 import { ArrowRight, Clock, Minus, Pencil, Plus } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
 import type { ChatThreadChangelog } from '@/api/routes/chat/schema';
-import {
-  parseModeChangeData,
-  parseParticipantAddedData,
-  parseParticipantRemovedData,
-  parseParticipantsReorderedData,
-  parseParticipantUpdatedData,
-} from '@/api/routes/chat/schema';
 import {
   ChainOfThought,
   ChainOfThoughtContent,
@@ -30,31 +22,13 @@ type ConfigurationChangesGroupProps = {
   className?: string;
 };
 
-// ============================================================================
-// Simple inline categorization - no separate file needed
-// ============================================================================
-
+// Simplified type definition - now matches the backend 1:1
 type ChangeAction = 'added' | 'modified' | 'removed';
 
+// No conversion needed - changeType IS the action
 function getChangeAction(changeType: ChatThreadChangelog['changeType']): ChangeAction {
-  switch (changeType) {
-    case 'participant_added':
-      return 'added';
-    case 'participant_removed':
-      return 'removed';
-    case 'participant_updated':
-    case 'participants_reordered':
-    case 'mode_change':
-      return 'modified';
-    default:
-      return 'modified';
-  }
+  return changeType;
 }
-
-/**
- * Action configuration for consistent icons and colors
- * Note: labels are now provided via translation hooks in the component
- */
 const actionConfig: Record<ChangeAction, { icon: typeof Plus; color: string }> = {
   added: {
     icon: Plus,
@@ -69,18 +43,12 @@ const actionConfig: Record<ChangeAction, { icon: typeof Plus; color: string }> =
     color: 'text-red-500',
   },
 };
-
-/**
- * Configuration Changes Group
- *
- * Displays multiple configuration changes that occurred together,
- * grouped by action type (Added, Modified, Removed) for better organization.
- */
 export function ConfigurationChangesGroup({ group, className }: ConfigurationChangesGroupProps) {
   const t = useTranslations('chat.configuration');
   const tActionSummary = useTranslations('chat.configuration.actionSummary');
-
-  // Group changes by action type for organized display - simple inline logic
+  if (!group.changes || group.changes.length === 0) {
+    return null;
+  }
   const changesByAction = group.changes.reduce(
     (acc, change) => {
       const action = getChangeAction(change.changeType);
@@ -92,12 +60,8 @@ export function ConfigurationChangesGroup({ group, className }: ConfigurationCha
     },
     {} as Record<ChangeAction, (ChatThreadChangelog | (Omit<ChatThreadChangelog, 'createdAt'> & { createdAt: string | Date }))[]>,
   );
-
-  // Sort by action order: added -> modified -> removed
   const actionOrder: ChangeAction[] = ['added', 'modified', 'removed'];
   const sortedActions = actionOrder.filter(action => changesByAction[action]);
-
-  // Create summary text for header
   const actionSummaries: string[] = [];
   if (changesByAction.added?.length) {
     actionSummaries.push(`${changesByAction.added.length} ${tActionSummary('added')}`);
@@ -108,7 +72,6 @@ export function ConfigurationChangesGroup({ group, className }: ConfigurationCha
   if (changesByAction.removed?.length) {
     actionSummaries.push(`${changesByAction.removed.length} ${tActionSummary('removed')}`);
   }
-
   return (
     <div className={cn('py-2', className)}>
       <ChainOfThought defaultOpen={false}>
@@ -116,7 +79,6 @@ export function ConfigurationChangesGroup({ group, className }: ConfigurationCha
           <div className="flex items-center gap-2">
             <Clock className="size-4 text-muted-foreground flex-shrink-0" />
             <span className="text-sm">{t('configurationChanged')}</span>
-            {/* Show detailed info only on desktop */}
             <span className="hidden md:inline text-xs text-muted-foreground">•</span>
             <span className="hidden md:inline text-xs text-muted-foreground truncate">
               {actionSummaries.join(', ')}
@@ -129,23 +91,18 @@ export function ConfigurationChangesGroup({ group, className }: ConfigurationCha
         </ChainOfThoughtHeader>
         <ChainOfThoughtContent>
           <div className="space-y-4">
-            {/* Render each action group */}
             {sortedActions.map((action) => {
               const changes = changesByAction[action];
               const config = actionConfig[action];
               const Icon = config.icon;
-
               return (
                 <div key={action} className="space-y-2">
-                  {/* Action header */}
                   <div className="flex items-center gap-2 px-1">
                     <Icon className={cn('size-4', config.color)} />
                     <span className={cn('text-sm font-medium', config.color)}>
                       {t(action)}
                     </span>
                   </div>
-
-                  {/* Changes for this action - Responsive: horizontal scroll on desktop, vertical stack on mobile */}
                   <div className="w-full overflow-x-auto md:overflow-x-auto">
                     <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 pb-2 pl-6">
                       {changes.map(change => (
@@ -162,50 +119,87 @@ export function ConfigurationChangesGroup({ group, className }: ConfigurationCha
     </div>
   );
 }
+// Simplified change data structure - discriminated by 'type' field
+type ChangeDataBase = {
+  type: 'participant' | 'participant_role' | 'mode_change';
+};
 
-/**
- * Individual change item renderer with glassmorphism style
- * Matches the ParticipantsPreview badge design
- */
+type ParticipantChangeData = ChangeDataBase & {
+  type: 'participant';
+  modelId: string;
+  role?: string | null;
+  participantId?: string;
+};
+
+type ParticipantRoleChangeData = ChangeDataBase & {
+  type: 'participant_role';
+  modelId: string;
+  oldRole?: string | null;
+  newRole?: string | null;
+  participantId?: string;
+};
+
+type ModeChangeData = ChangeDataBase & {
+  type: 'mode_change';
+  oldMode: string;
+  newMode: string;
+};
+
+type ChangeData = ParticipantChangeData | ParticipantRoleChangeData | ModeChangeData;
+
 function ChangeItem({ change }: { change: ChatThreadChangelog | (Omit<ChatThreadChangelog, 'createdAt'> & { createdAt: string | Date }) }) {
-  // ✅ SINGLE SOURCE OF TRUTH: Fetch models from backend
   const { data: modelsData } = useModelsQuery();
   const allModels = modelsData?.data?.items || [];
 
-  // ✅ ZOD PATTERN: Parse changeData using type-safe schemas (no inline casting)
-  const participantAddedData = parseParticipantAddedData(change.changeData);
-  const participantRemovedData = parseParticipantRemovedData(change.changeData);
-  const participantUpdatedData = parseParticipantUpdatedData(change.changeData);
-  const participantsReorderedData = parseParticipantsReorderedData(change.changeData);
-  const modeChangeData = parseModeChangeData(change.changeData);
+  // Parse changeData with type discrimination
+  const changeData = change.changeData as ChangeData | null;
 
-  // ✅ SINGLE SOURCE OF TRUTH: Find model from backend data
-  const modelId = participantAddedData?.modelId || participantRemovedData?.modelId || participantUpdatedData?.modelId;
-  const role = participantAddedData?.role || participantRemovedData?.role;
+  if (!changeData?.type) {
+    return null; // Invalid data
+  }
+
+  // Extract relevant data based on type
+  const isParticipant = changeData.type === 'participant';
+  const isParticipantRole = changeData.type === 'participant_role';
+  const isModeChange = changeData.type === 'mode_change';
+
+  const modelId = (isParticipant || isParticipantRole) ? (changeData as ParticipantChangeData | ParticipantRoleChangeData).modelId : undefined;
+  const role = isParticipant ? (changeData as ParticipantChangeData).role : undefined;
+  const oldRole = isParticipantRole ? (changeData as ParticipantRoleChangeData).oldRole : undefined;
+  const newRole = isParticipantRole ? (changeData as ParticipantRoleChangeData).newRole : undefined;
+  const oldMode = isModeChange ? (changeData as ModeChangeData).oldMode : undefined;
+  const newMode = isModeChange ? (changeData as ModeChangeData).newMode : undefined;
+
   const model = modelId ? allModels.find(m => m.id === modelId) : undefined;
-
-  // Extract data for participant_updated (role changes)
-  // Note: The service stores modelId, oldRole, newRole (not separate before/after objects)
-  const oldRole = participantUpdatedData?.oldRole;
-  const newRole = participantUpdatedData?.newRole;
-
-  // Extract participants data for reordering
-  const participants = participantsReorderedData?.participants;
-
-  // Extract mode change details
-  const previousMode = modeChangeData?.previousMode;
-  const newMode = modeChangeData?.newMode;
-
+  const showMissingModelFallback = (change.changeType === 'added' || change.changeType === 'removed') && modelId && !model;
+  // Simplified rendering - single pattern for participants, simpler mode display
   return (
     <>
-      {/* Participant Added/Removed - Glassmorphism badge style */}
-      {(change.changeType === 'participant_added' || change.changeType === 'participant_removed') && model && (
+      {/* Missing model fallback */}
+      {showMissingModelFallback && (
+        <div
+          className={cn(
+            'relative flex items-center gap-2 px-2.5 py-1.5 shrink-0',
+            'backdrop-blur-md border rounded-lg shadow-md',
+            'bg-background/10 border-white/30 dark:border-white/20 opacity-60',
+          )}
+        >
+          <div className="text-xs text-muted-foreground italic">
+            Model no longer available (
+            {modelId?.slice(0, 8)}
+            ...)
+          </div>
+        </div>
+      )}
+
+      {/* Participant changes (added/removed) */}
+      {isParticipant && model && (
         <div
           className={cn(
             'relative flex items-center gap-1.5 sm:gap-2 px-2 sm:px-2.5 py-1 sm:py-1.5 shrink-0',
             'backdrop-blur-md border rounded-lg shadow-md',
             'bg-background/10 border-white/30 dark:border-white/20',
-            change.changeType === 'participant_removed' && 'opacity-60',
+            change.changeType === 'removed' && 'opacity-60',
           )}
         >
           <Avatar className="size-4 sm:size-5 shrink-0">
@@ -217,7 +211,7 @@ function ChangeItem({ change }: { change: ChatThreadChangelog | (Omit<ChatThread
           <div className="flex flex-col gap-0.5 min-w-0">
             <span className={cn(
               'text-[10px] sm:text-xs font-medium truncate whitespace-nowrap text-foreground/90',
-              change.changeType === 'participant_removed' && 'line-through',
+              change.changeType === 'removed' && 'line-through',
             )}
             >
               {model.name}
@@ -231,8 +225,8 @@ function ChangeItem({ change }: { change: ChatThreadChangelog | (Omit<ChatThread
         </div>
       )}
 
-      {/* Participant Updated - Show role change with before → after */}
-      {change.changeType === 'participant_updated' && model && (oldRole || newRole) && (
+      {/* Participant role changes */}
+      {isParticipantRole && model && (oldRole || newRole) && (
         <div
           className={cn(
             'relative flex items-center gap-1.5 sm:gap-2 px-2 sm:px-2.5 py-1 sm:py-1.5 shrink-0',
@@ -269,53 +263,8 @@ function ChangeItem({ change }: { change: ChatThreadChangelog | (Omit<ChatThread
         </div>
       )}
 
-      {/* Participants Reordered - Show all participants in new priority order */}
-      {change.changeType === 'participants_reordered' && participants && participants.length > 0 && (
-        <>
-          {participants
-            .sort((a: { priority: number }, b: { priority: number }) => a.priority - b.priority)
-            .map((p: { id: string; modelId: string; role: string | null; priority: number }, index: number) => {
-              const pModel = allModels.find(m => m.id === p.modelId);
-              if (!pModel)
-                return null;
-
-              return (
-                <div
-                  key={p.id}
-                  className={cn(
-                    'relative flex items-center gap-1.5 sm:gap-2 px-2 sm:px-2.5 py-1 sm:py-1.5 shrink-0',
-                    'backdrop-blur-md border rounded-lg shadow-md',
-                    'bg-background/10 border-white/30 dark:border-white/20',
-                  )}
-                >
-                  {/* Order number badge */}
-                  <div className="flex items-center justify-center size-4 sm:size-5 shrink-0 rounded-full bg-primary/20 text-primary">
-                    <span className="text-[8px] sm:text-[10px] font-bold">{index + 1}</span>
-                  </div>
-                  <Avatar className="size-4 sm:size-5 shrink-0">
-                    <AvatarImage src={getProviderIcon(pModel.provider)} alt={pModel.name} />
-                    <AvatarFallback className="text-[8px] sm:text-[10px]">
-                      {pModel.name.slice(0, 2).toUpperCase()}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="flex flex-col gap-0.5 min-w-0">
-                    <span className="text-[10px] sm:text-xs font-medium truncate whitespace-nowrap text-foreground/90">
-                      {pModel.name}
-                    </span>
-                    {p.role && (
-                      <span className="text-[9px] sm:text-[10px] text-muted-foreground/70 truncate whitespace-nowrap">
-                        {p.role}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-        </>
-      )}
-
-      {/* Mode Change */}
-      {change.changeType === 'mode_change' && (previousMode || newMode) && (
+      {/* Mode changes */}
+      {isModeChange && (oldMode || newMode) && (
         <div
           className={cn(
             'flex items-center gap-2 px-2 sm:px-2.5 py-1 sm:py-1.5 shrink-0',
@@ -323,8 +272,8 @@ function ChangeItem({ change }: { change: ChatThreadChangelog | (Omit<ChatThread
             'bg-background/10 border-white/30 dark:border-white/20',
           )}
         >
-          {previousMode && (
-            <span className="text-[10px] sm:text-xs opacity-60">{previousMode}</span>
+          {oldMode && (
+            <span className="text-[10px] sm:text-xs opacity-60">{oldMode}</span>
           )}
           <ArrowRight className="size-3 text-muted-foreground shrink-0" />
           {newMode && (

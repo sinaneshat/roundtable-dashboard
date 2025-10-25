@@ -93,13 +93,12 @@ export function useCreateThreadMutation() {
       }
     },
     onSuccess: () => {
-      // Invalidate thread lists and usage stats (including quotas)
-      // Note: Full usage stats are invalidated because thread creation counts toward quota
-      invalidationPatterns.threads.forEach((key) => {
-        queryClient.invalidateQueries({ queryKey: key });
-      });
-      // Also invalidate full usage stats for real-time sidebar update
-      queryClient.invalidateQueries({ queryKey: queryKeys.usage.stats() });
+      // ✅ ONE-WAY DATA FLOW: NO invalidation during active sessions
+      // Client state already updated optimistically
+      // Usage stats already updated optimistically in onMutate
+      // Thread list will refresh naturally when user navigates or refreshes page
+
+      // NO query invalidation - respects ONE-WAY data flow architecture
     },
     retry: false,
     throwOnError: false,
@@ -110,21 +109,128 @@ export function useCreateThreadMutation() {
  * Hook to update thread details
  * Protected endpoint - requires authentication
  *
- * ✅ ONE-WAY DATA FLOW: NO query invalidation
+ * ✅ ONE-WAY DATA FLOW: Uses optimistic updates for instant UI feedback
  * ChatThreadScreen manages its own state and doesn't need server refetches.
- * This is a FIRE-AND-FORGET mutation - persist to server, client handles UI.
  */
 export function useUpdateThreadMutation() {
+  const queryClient = useQueryClient();
+
   return useMutation({
     mutationFn: updateThreadService,
+    onMutate: async (variables) => {
+      // Cancel any outgoing refetches to prevent overwriting optimistic update
+      await queryClient.cancelQueries({ queryKey: queryKeys.threads.detail(variables.param.id) });
+      await queryClient.cancelQueries({ queryKey: queryKeys.threads.all });
+      if ('slug' in variables.json && variables.json.slug) {
+        await queryClient.cancelQueries({ queryKey: queryKeys.threads.bySlug(variables.json.slug as string) });
+      }
+
+      // Snapshot the previous values for rollback
+      const previousThread = queryClient.getQueryData(queryKeys.threads.detail(variables.param.id));
+      const previousThreads = queryClient.getQueryData(queryKeys.threads.all);
+      const previousBySlug = ('slug' in variables.json && variables.json.slug)
+        ? queryClient.getQueryData(queryKeys.threads.bySlug(variables.json.slug as string))
+        : null;
+
+      // Optimistically update thread detail query
+      queryClient.setQueryData(
+        queryKeys.threads.detail(variables.param.id),
+        (old: unknown) => {
+          if (!old || typeof old !== 'object')
+            return old;
+          if (!('success' in old) || !old.success)
+            return old;
+          if (!('data' in old) || !old.data || typeof old.data !== 'object')
+            return old;
+
+          return {
+            ...old,
+            data: {
+              ...(old.data as Record<string, unknown>),
+              ...variables.json,
+            },
+          };
+        },
+      );
+
+      // Optimistically update all thread list queries
+      queryClient.setQueriesData(
+        { queryKey: queryKeys.threads.all },
+        (old: unknown) => {
+          if (!old || typeof old !== 'object')
+            return old;
+          if (!('pages' in old))
+            return old;
+          const pages = old.pages as Array<{ success: boolean; data?: { items?: Array<{ id: string }> } }>;
+
+          return {
+            ...old,
+            pages: pages.map((page) => {
+              if (!page.success || !page.data?.items)
+                return page;
+
+              return {
+                ...page,
+                data: {
+                  ...page.data,
+                  items: page.data.items.map(thread =>
+                    thread.id === variables.param.id
+                      ? { ...thread, ...variables.json }
+                      : thread,
+                  ),
+                },
+              };
+            }),
+          };
+        },
+      );
+
+      // Optimistically update bySlug query if slug is provided
+      if ('slug' in variables.json && variables.json.slug) {
+        queryClient.setQueryData(
+          queryKeys.threads.bySlug(variables.json.slug as string),
+          (old: unknown) => {
+            if (!old || typeof old !== 'object')
+              return old;
+            if (!('success' in old) || !old.success)
+              return old;
+            if (!('data' in old) || !old.data || typeof old.data !== 'object')
+              return old;
+            if (!('thread' in old.data))
+              return old;
+
+            return {
+              ...old,
+              data: {
+                ...(old.data as Record<string, unknown>),
+                thread: {
+                  ...(old.data as { thread: Record<string, unknown> }).thread,
+                  ...variables.json,
+                },
+              },
+            };
+          },
+        );
+      }
+
+      // Return context with previous values for rollback
+      return { previousThread, previousThreads, previousBySlug, slug: 'slug' in variables.json ? variables.json.slug as string : null };
+    },
+    onError: (_unusedError, variables, context) => {
+      // Rollback on error
+      if (context?.previousThread) {
+        queryClient.setQueryData(queryKeys.threads.detail(variables.param.id), context.previousThread);
+      }
+      if (context?.previousThreads) {
+        queryClient.setQueryData(queryKeys.threads.all, context.previousThreads);
+      }
+      if (context?.slug && context?.previousBySlug) {
+        queryClient.setQueryData(queryKeys.threads.bySlug(context.slug), context.previousBySlug);
+      }
+    },
     onSuccess: () => {
       // ✅ ONE-WAY DATA FLOW: NO invalidation
-      // ChatThreadScreen uses client-side state as source of truth
-      // The mutation response is ignored - client state already updated optimistically
-    },
-    onError: () => {
-      // Error is handled by throwOnError: false
-      // Client state remains unchanged (optimistic update not rolled back)
+      // ChatThreadScreen uses optimistically updated cache as source of truth
     },
     retry: false,
     throwOnError: false,
@@ -135,23 +241,105 @@ export function useUpdateThreadMutation() {
  * Hook to delete a thread
  * Protected endpoint - requires authentication
  *
- * After successful deletion, invalidates thread lists and usage stats
+ * Uses optimistic cache removal instead of invalidation
+ * Respects ONE-WAY data flow pattern
  */
 export function useDeleteThreadMutation() {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: deleteThreadService,
-    onSuccess: () => {
-      // Invalidate thread lists and usage stats (including quotas)
-      invalidationPatterns.threads.forEach((key) => {
-        queryClient.invalidateQueries({ queryKey: key });
-      });
-      // Also invalidate full usage stats for real-time sidebar update
-      queryClient.invalidateQueries({ queryKey: queryKeys.usage.stats() });
+    onMutate: async (variables) => {
+      // Cancel any outgoing refetches to prevent overwriting optimistic update
+      await queryClient.cancelQueries({ queryKey: queryKeys.threads.all });
+      await queryClient.cancelQueries({ queryKey: queryKeys.usage.stats() });
+
+      // Snapshot the previous values for rollback
+      const previousThreads = queryClient.getQueryData(queryKeys.threads.all);
+      const previousUsage = queryClient.getQueryData(queryKeys.usage.stats());
+
+      // Optimistically remove thread from all thread list queries
+      queryClient.setQueriesData(
+        { queryKey: queryKeys.threads.all },
+        (old: unknown) => {
+          if (!old || typeof old !== 'object')
+            return old;
+          if (!('pages' in old))
+            return old;
+          const pages = old.pages as Array<{ success: boolean; data?: { items?: Array<{ id: string }> } }>;
+
+          return {
+            ...old,
+            pages: pages.map((page) => {
+              if (!page.success || !page.data?.items)
+                return page;
+
+              return {
+                ...page,
+                data: {
+                  ...page.data,
+                  items: page.data.items.filter(thread =>
+                    thread.id !== variables.param.id,
+                  ),
+                },
+              };
+            }),
+          };
+        },
+      );
+
+      // Optimistically update usage stats - decrement thread count
+      queryClient.setQueryData(
+        queryKeys.usage.stats(),
+        (oldData: unknown) => {
+          if (!oldData || typeof oldData !== 'object')
+            return oldData;
+          if (!('success' in oldData) || !oldData.success)
+            return oldData;
+          if (!('data' in oldData) || !oldData.data || typeof oldData.data !== 'object')
+            return oldData;
+
+          const data = oldData.data as {
+            messages: { used: number; limit: number; remaining: number; percentage: number };
+            threads: { used: number; limit: number; remaining: number; percentage: number };
+            subscription: unknown;
+            period: unknown;
+          };
+
+          return {
+            ...oldData,
+            data: {
+              ...data,
+              threads: {
+                ...data.threads,
+                used: Math.max(0, data.threads.used - 1), // Prevent negative
+                remaining: data.threads.remaining + 1,
+                // Recalculate percentage
+                percentage: data.threads.limit > 0
+                  ? Math.round(((data.threads.used - 1) / data.threads.limit) * 100)
+                  : 0,
+              },
+            },
+          };
+        },
+      );
+
+      // Return context with previous values for rollback
+      return { previousThreads, previousUsage };
     },
-    onError: () => {
-      // Error is handled by throwOnError: false
+    onError: (_unusedError, _unusedVariables, context) => {
+      // Rollback on error
+      if (context?.previousThreads) {
+        queryClient.setQueryData(queryKeys.threads.all, context.previousThreads);
+      }
+      if (context?.previousUsage) {
+        queryClient.setQueryData(queryKeys.usage.stats(), context.previousUsage);
+      }
+    },
+    onSuccess: () => {
+      // ✅ ONE-WAY DATA FLOW: NO invalidation
+      // Cache already updated optimistically
+      // Changes persist across navigation
     },
     retry: false,
     throwOnError: false,
@@ -401,17 +589,111 @@ export function useTogglePublicMutation() {
  * Hook to add a participant to a thread
  * Protected endpoint - requires authentication
  *
- * After successful addition, invalidates specific thread
+ * Uses optimistic updates for instant UI feedback
  */
 export function useAddParticipantMutation() {
+  const queryClient = useQueryClient();
+
   return useMutation({
     mutationFn: addParticipantService,
-    onSuccess: () => {
-      // ✅ NO invalidation - ChatThreadScreen manages participants in client state
-      // Participant changes reflected via optimistic updates
+    onMutate: async (variables) => {
+      const threadId = variables.param.id;
+
+      // Cancel any outgoing refetches to prevent overwriting optimistic update
+      await queryClient.cancelQueries({ queryKey: queryKeys.threads.detail(threadId) });
+
+      // Snapshot the previous value for rollback
+      const previousThread = queryClient.getQueryData(queryKeys.threads.detail(threadId));
+
+      // Optimistically add participant to thread detail query
+      queryClient.setQueryData(
+        queryKeys.threads.detail(threadId),
+        (old: unknown) => {
+          if (!old || typeof old !== 'object')
+            return old;
+          if (!('success' in old) || !old.success)
+            return old;
+          if (!('data' in old) || !old.data || typeof old.data !== 'object')
+            return old;
+          if (!('participants' in old.data) || !Array.isArray((old.data as { participants: unknown }).participants))
+            return old;
+
+          const data = old.data as { participants: Array<Record<string, unknown>> };
+
+          // Create optimistic participant with temporary ID
+          const participantData = variables.json as {
+            modelId: unknown;
+            role?: string | null;
+            customRoleId?: string | null;
+            priority: unknown;
+            isEnabled?: boolean;
+          };
+          const optimisticParticipant = {
+            id: `temp-${Date.now()}`, // Temporary ID until server responds
+            threadId,
+            modelId: participantData.modelId,
+            role: participantData.role,
+            customRoleId: participantData.customRoleId ?? null,
+            priority: participantData.priority,
+            isEnabled: participantData.isEnabled ?? true,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          };
+
+          return {
+            ...old,
+            data: {
+              ...data,
+              participants: [...data.participants, optimisticParticipant],
+            },
+          };
+        },
+      );
+
+      // Return context with previous value for rollback
+      return { previousThread, threadId };
     },
-    onError: () => {
-      // Error is handled by throwOnError: false
+    onError: (_unusedError, _unusedVariables, context) => {
+      // Rollback on error
+      if (context?.previousThread && context?.threadId) {
+        queryClient.setQueryData(queryKeys.threads.detail(context.threadId), context.previousThread);
+      }
+    },
+    onSuccess: (data, variables) => {
+      const threadId = variables.param.id;
+
+      // Update cache with real participant ID from server response
+      queryClient.setQueryData(
+        queryKeys.threads.detail(threadId),
+        (old: unknown) => {
+          if (!old || typeof old !== 'object')
+            return old;
+          if (!('success' in old) || !old.success)
+            return old;
+          if (!('data' in old) || !old.data || typeof old.data !== 'object')
+            return old;
+          if (!('participants' in old.data) || !Array.isArray((old.data as { participants: unknown }).participants))
+            return old;
+
+          const oldData = old.data as { participants: Array<Record<string, unknown>> };
+
+          // Replace temporary participant with real server data
+          return {
+            ...old,
+            data: {
+              ...oldData,
+              participants: oldData.participants.map(p =>
+                typeof p.id === 'string' && p.id.startsWith('temp-')
+                  ? (data.success && data.data ? data.data : p)
+                  : p,
+              ),
+            },
+          };
+        },
+      );
+
+      // ✅ ONE-WAY DATA FLOW: NO invalidation
+      // ChatThreadScreen uses optimistically updated cache as source of truth
     },
     retry: false,
     throwOnError: false,
@@ -422,18 +704,69 @@ export function useAddParticipantMutation() {
  * Hook to update participant settings
  * Protected endpoint - requires authentication
  *
- * After successful update, invalidates all thread lists (we don't know which thread)
+ * Uses optimistic updates for instant UI feedback
  */
 export function useUpdateParticipantMutation() {
+  const queryClient = useQueryClient();
+
   return useMutation({
     mutationFn: (data: Parameters<typeof updateParticipantService>[0] & { threadId?: string }) =>
       updateParticipantService(data),
-    onSuccess: () => {
-      // ✅ NO invalidation - ChatThreadScreen manages participants in client state
-      // Participant changes reflected via optimistic updates
+    onMutate: async (variables) => {
+      // Extract threadId from variables (passed as extra param)
+      const threadId = variables.threadId;
+      if (!threadId) {
+        // If no threadId provided, skip optimistic update
+        return { previousThread: null, threadId: null };
+      }
+
+      // Cancel any outgoing refetches to prevent overwriting optimistic update
+      await queryClient.cancelQueries({ queryKey: queryKeys.threads.detail(threadId) });
+
+      // Snapshot the previous value for rollback
+      const previousThread = queryClient.getQueryData(queryKeys.threads.detail(threadId));
+
+      // Optimistically update participant in thread detail query
+      queryClient.setQueryData(
+        queryKeys.threads.detail(threadId),
+        (old: unknown) => {
+          if (!old || typeof old !== 'object')
+            return old;
+          if (!('success' in old) || !old.success)
+            return old;
+          if (!('data' in old) || !old.data || typeof old.data !== 'object')
+            return old;
+          if (!('participants' in old.data) || !Array.isArray((old.data as { participants: unknown }).participants))
+            return old;
+
+          const data = old.data as { participants: Array<Record<string, unknown>> };
+
+          return {
+            ...old,
+            data: {
+              ...data,
+              participants: data.participants.map(p =>
+                p.id === variables.param.id
+                  ? { ...p, ...variables.json, updatedAt: new Date().toISOString() }
+                  : p,
+              ),
+            },
+          };
+        },
+      );
+
+      // Return context with previous value for rollback
+      return { previousThread, threadId };
     },
-    onError: () => {
-      // Error is handled by throwOnError: false
+    onError: (_unusedError, _unusedVariables, context) => {
+      // Rollback on error
+      if (context?.previousThread && context?.threadId) {
+        queryClient.setQueryData(queryKeys.threads.detail(context.threadId), context.previousThread);
+      }
+    },
+    onSuccess: () => {
+      // ✅ ONE-WAY DATA FLOW: NO invalidation
+      // ChatThreadScreen uses optimistically updated cache as source of truth
     },
     retry: false,
     throwOnError: false,
@@ -444,18 +777,67 @@ export function useUpdateParticipantMutation() {
  * Hook to delete a participant from a thread
  * Protected endpoint - requires authentication
  *
- * After successful deletion, invalidates all thread lists
+ * Uses optimistic updates for instant UI feedback
  */
 export function useDeleteParticipantMutation() {
+  const queryClient = useQueryClient();
+
   return useMutation({
     mutationFn: (data: Parameters<typeof deleteParticipantService>[0] & { threadId?: string }) =>
       deleteParticipantService(data),
-    onSuccess: () => {
-      // ✅ NO invalidation - ChatThreadScreen manages participants in client state
-      // Participant changes reflected via optimistic updates
+    onMutate: async (variables) => {
+      // Extract threadId from variables (passed as extra param)
+      const threadId = variables.threadId;
+      if (!threadId) {
+        // If no threadId provided, skip optimistic update
+        return { previousThread: null, threadId: null };
+      }
+
+      // Cancel any outgoing refetches to prevent overwriting optimistic update
+      await queryClient.cancelQueries({ queryKey: queryKeys.threads.detail(threadId) });
+
+      // Snapshot the previous value for rollback
+      const previousThread = queryClient.getQueryData(queryKeys.threads.detail(threadId));
+
+      // Optimistically remove participant from thread detail query
+      queryClient.setQueryData(
+        queryKeys.threads.detail(threadId),
+        (old: unknown) => {
+          if (!old || typeof old !== 'object')
+            return old;
+          if (!('success' in old) || !old.success)
+            return old;
+          if (!('data' in old) || !old.data || typeof old.data !== 'object')
+            return old;
+          if (!('participants' in old.data) || !Array.isArray((old.data as { participants: unknown }).participants))
+            return old;
+
+          const data = old.data as { participants: Array<Record<string, unknown>> };
+
+          return {
+            ...old,
+            data: {
+              ...data,
+              participants: data.participants.filter(p =>
+                p.id !== variables.param.id,
+              ),
+            },
+          };
+        },
+      );
+
+      // Return context with previous value for rollback
+      return { previousThread, threadId };
     },
-    onError: () => {
-      // Error is handled by throwOnError: false
+    onError: (_unusedError, _unusedVariables, context) => {
+      // Rollback on error
+      if (context?.previousThread && context?.threadId) {
+        queryClient.setQueryData(queryKeys.threads.detail(context.threadId), context.previousThread);
+      }
+    },
+    onSuccess: () => {
+      // ✅ ONE-WAY DATA FLOW: NO invalidation
+      // ChatThreadScreen uses optimistically updated cache as source of truth
     },
     retry: false,
     throwOnError: false,

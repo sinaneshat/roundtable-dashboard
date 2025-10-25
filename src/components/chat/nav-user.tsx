@@ -1,5 +1,4 @@
 'use client';
-
 import { ChevronsUpDown, CreditCard, Key, Loader2, LogOut, Sparkles } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -43,11 +42,8 @@ export function NavUser() {
   const { data: subscriptionsData } = useSubscriptionsQuery();
   const showCancelDialog = useBoolean(false);
   const showApiKeysModal = useBoolean(false);
-
-  // Mutations
   const customerPortalMutation = useCreateCustomerPortalSessionMutation();
   const cancelSubscriptionMutation = useCancelSubscriptionMutation();
-
   const user = session?.user;
   const userInitials = user?.name
     ? user.name
@@ -56,18 +52,14 @@ export function NavUser() {
         .join('')
         .toUpperCase()
     : user?.email?.[0]?.toUpperCase() || 'U';
-
-  // Get active subscription
   const subscriptions = subscriptionsData?.success ? subscriptionsData.data?.items || [] : [];
   const activeSubscription = subscriptions.find(
     sub => (sub.status === 'active' || sub.status === 'trialing') && !sub.cancelAtPeriodEnd,
   );
-
   const handleSignOut = async () => {
     await signOut();
     router.push('/auth/sign-in');
   };
-
   const handleManageBilling = async () => {
     try {
       const result = await customerPortalMutation.mutateAsync({
@@ -75,7 +67,6 @@ export function NavUser() {
           returnUrl: window.location.href,
         },
       });
-
       if (result.success && result.data?.url) {
         window.open(result.data.url, '_blank', 'noopener,noreferrer');
       }
@@ -83,30 +74,23 @@ export function NavUser() {
       showApiErrorToast('Portal Error', error);
     }
   };
-
   const handleConfirmCancellation = async () => {
     if (!activeSubscription)
       return;
-
     try {
       const result = await cancelSubscriptionMutation.mutateAsync({
         param: { id: activeSubscription.id },
         json: { immediately: false },
       });
-
       if (result.success) {
         showCancelDialog.onFalse();
-        // Success is obvious from the dialog closing and UI update - no toast needed
       }
     } catch (error) {
       showApiErrorToast('Cancellation Failed', error);
     }
   };
-
-  // Get subscription tier
   const subscriptionTier = usageData?.success ? usageData.data.subscription.tier : 'free';
   const isPremium = subscriptionTier !== 'free';
-
   return (
     <>
       <SidebarMenu>
@@ -155,14 +139,10 @@ export function NavUser() {
                 </div>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
-
-              {/* Usage & Plan Section */}
               <div className="px-2 py-2">
                 <UsageMetrics />
               </div>
               <DropdownMenuSeparator />
-
-              {/* Account Actions */}
               <DropdownMenuGroup>
                 <DropdownMenuItem asChild>
                   <Link href="/chat/pricing">
@@ -175,8 +155,6 @@ export function NavUser() {
                   API Keys
                 </DropdownMenuItem>
               </DropdownMenuGroup>
-
-              {/* Billing Actions - Only show for users with active subscriptions */}
               {activeSubscription && (
                 <>
                   <DropdownMenuSeparator />
@@ -202,7 +180,6 @@ export function NavUser() {
                   </DropdownMenuGroup>
                 </>
               )}
-
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={handleSignOut}>
                 <LogOut />
@@ -212,8 +189,6 @@ export function NavUser() {
           </DropdownMenu>
         </SidebarMenuItem>
       </SidebarMenu>
-
-      {/* Cancel Subscription Confirmation Dialog */}
       <CancelSubscriptionDialog
         open={showCancelDialog.value}
         onOpenChange={showCancelDialog.setValue}
@@ -222,8 +197,6 @@ export function NavUser() {
         currentPeriodEnd={activeSubscription?.currentPeriodEnd}
         isProcessing={cancelSubscriptionMutation.isPending}
       />
-
-      {/* API Keys Modal */}
       <ApiKeysModal
         open={showApiKeysModal.value}
         onOpenChange={showApiKeysModal.setValue}

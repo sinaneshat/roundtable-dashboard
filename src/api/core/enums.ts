@@ -94,6 +94,12 @@ export const THREAD_STATUS_ENUM_VALUES = THREAD_STATUSES as unknown as [ThreadSt
 /**
  * Changelog event types tuple
  * ✅ SINGLE SOURCE: All changelog types defined here
+ * ✅ SIMPLIFIED: Consolidated to 3 change types for cleaner handling
+ *
+ * Types:
+ * - added: New item added (participant, feature, etc.)
+ * - modified: Existing item changed (mode, role, settings, etc.)
+ * - removed: Item deleted or removed
  *
  * Used by:
  * - /src/api/routes/chat/schema.ts - ChangelogTypeSchema
@@ -101,20 +107,19 @@ export const THREAD_STATUS_ENUM_VALUES = THREAD_STATUSES as unknown as [ThreadSt
  * - /src/api/services/thread-changelog.service.ts - Changelog operations
  */
 export const CHANGELOG_TYPES = [
-  'mode_change',
-  'participant_added',
-  'participant_removed',
-  'participant_updated',
-  'participants_reordered',
+  'added',
+  'modified',
+  'removed',
 ] as const;
 
 /**
  * Changelog type Zod schema
  * ✅ RUNTIME VALIDATION: Validates changelog type values
+ * ✅ SIMPLIFIED: 3 types instead of 5
  */
 export const ChangelogTypeSchema = z.enum(CHANGELOG_TYPES).openapi({
-  description: 'Type of changelog event',
-  example: 'participant_added',
+  description: 'Type of changelog event (added, modified, removed)',
+  example: 'added',
 });
 
 /**
@@ -130,21 +135,20 @@ export const CHANGELOG_TYPES_ENUM_VALUES = CHANGELOG_TYPES as unknown as [Change
 
 /**
  * Changelog types object for clear constant access
- * ✅ RECOMMENDED PATTERN: Use ChangelogTypes.PARTICIPANT_ADDED instead of 'participant_added'
+ * ✅ SIMPLIFIED: Consolidated to 3 change types for cleaner handling
+ * ✅ RECOMMENDED PATTERN: Use ChangelogTypes.ADDED instead of 'added'
  *
  * @example
  * // ❌ WRONG: Hardcoded string
- * changeType: 'participant_added'
+ * changeType: 'added'
  *
  * // ✅ CORRECT: Type-safe constant
- * changeType: ChangelogTypes.PARTICIPANT_ADDED
+ * changeType: ChangelogTypes.ADDED
  */
 export const ChangelogTypes = {
-  MODE_CHANGE: 'mode_change' as const,
-  PARTICIPANT_ADDED: 'participant_added' as const,
-  PARTICIPANT_REMOVED: 'participant_removed' as const,
-  PARTICIPANT_UPDATED: 'participant_updated' as const,
-  PARTICIPANTS_REORDERED: 'participants_reordered' as const,
+  ADDED: 'added' as const,
+  MODIFIED: 'modified' as const,
+  REMOVED: 'removed' as const,
 } as const satisfies Record<string, ChangelogType>;
 
 // ============================================================================

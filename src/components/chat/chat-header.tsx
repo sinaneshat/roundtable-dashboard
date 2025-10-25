@@ -1,5 +1,4 @@
 'use client';
-
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
@@ -24,42 +23,19 @@ import { ChatScrollButton } from './chat-scroll-button';
 import { ChatSection } from './chat-states';
 import { useThreadHeaderOptional } from './thread-header-context';
 
-// =============================================================================
-// UNIFIED HEADER SYSTEM FOR CHAT
-// Consolidates: chat-header.tsx + page-header.tsx + chat/chat-header.tsx
-// Following Next.js best practices: Server components pass data as props
-// =============================================================================
-
 const breadcrumbMap: Record<string, { titleKey: string; parent?: string }> = {
   '/chat': { titleKey: 'navigation.chat' },
   '/chat/pricing': { titleKey: 'navigation.pricing', parent: '/chat' },
 };
-
-// Navigation Header - consolidated navigation component
 type NavigationHeaderProps = {
   className?: string;
-  /**
-   * Dynamic breadcrumb for thread pages - passed from server
-   * Following Next.js pattern: server component passes data as props
-   */
   threadTitle?: string;
   threadParent?: string;
   threadActions?: ReactNode;
-  /**
-   * Show sidebar trigger - set to false for public pages
-   */
   showSidebarTrigger?: boolean;
-  /**
-   * Show logo instead of sidebar trigger - for public pages
-   */
   showLogo?: boolean;
-  /**
-   * Constrain header content width to match page content
-   */
   maxWidth?: boolean;
 };
-
-// ✅ CRITICAL: Memoize navigation header to prevent re-renders during message streaming
 function NavigationHeaderComponent({
   className,
   threadTitle: threadTitleProp,
@@ -71,31 +47,18 @@ function NavigationHeaderComponent({
 }: NavigationHeaderProps = {}) {
   const pathname = usePathname();
   const t = useTranslations();
-
-  // Get thread data from context (used by child components to pass data up to layout)
-  // Use optional version that doesn't throw if provider is missing (for public pages)
   const context = useThreadHeaderOptional();
-
-  // Merge context values with props (props take precedence for backward compatibility)
-  // For public pages (showSidebarTrigger=false), don't use context values
   const threadTitle = threadTitleProp ?? (showSidebarTrigger ? context.threadTitle : null);
   const threadParent = threadParentProp ?? '/chat';
   const threadActions = threadActionsProp ?? (showSidebarTrigger ? context.threadActions : null);
-
-  // Check if this is a thread page (dynamic route)
-  // Handles both authenticated (/chat/[slug]) and public (/public/chat/[slug]) thread pages
   const isThreadPage = (
     (pathname?.startsWith('/chat/') && pathname !== '/chat' && pathname !== '/chat/pricing')
     || pathname?.startsWith('/public/chat/')
   );
-
-  // Use thread props for thread pages, otherwise use static map
   const currentPage = isThreadPage && threadTitle
     ? { titleKey: threadTitle, parent: threadParent, isDynamic: true }
     : pathname ? breadcrumbMap[pathname] : undefined;
-
   const parentPage = currentPage?.parent ? breadcrumbMap[currentPage.parent] : null;
-
   return (
     <header
       className={cn(
@@ -110,7 +73,6 @@ function NavigationHeaderComponent({
       )}
       >
         <div className="flex items-center gap-2 min-w-0 flex-1">
-          {/* Show either sidebar trigger or logo based on context */}
           {showSidebarTrigger && (
             <>
               <SidebarTrigger className="-ms-1 flex-shrink-0" />
@@ -154,10 +116,7 @@ function NavigationHeaderComponent({
             </Breadcrumb>
           )}
         </div>
-
-        {/* Action buttons at the right end - passed from server as props */}
         <div className="flex items-center gap-2 flex-shrink-0">
-          {/* Scroll to bottom button - appears when scrolled away from bottom */}
           <ChatScrollButton variant="header" />
           {threadActions}
         </div>
@@ -165,12 +124,7 @@ function NavigationHeaderComponent({
     </header>
   );
 }
-
-// Export memoized version to prevent unnecessary re-renders
 export const NavigationHeader = React.memo(NavigationHeaderComponent);
-
-// Minimal Header - for overview/introduction pages (no breadcrumbs, just sidebar toggle)
-// Transparent design without background blur or borders - only holds the sidebar toggle
 function MinimalHeaderComponent({ className }: { className?: string } = {}) {
   return (
     <header
@@ -185,10 +139,7 @@ function MinimalHeaderComponent({ className }: { className?: string } = {}) {
     </header>
   );
 }
-
 export const MinimalHeader = React.memo(MinimalHeaderComponent);
-
-// Page Header - replaces page-header.tsx
 type PageHeaderProps = {
   title: string;
   description?: string;
@@ -198,7 +149,6 @@ type PageHeaderProps = {
   size?: 'sm' | 'md' | 'lg';
   className?: string;
 };
-
 export function PageHeader({
   title,
   description,
@@ -225,9 +175,7 @@ export function PageHeader({
       spacing: 'space-y-8',
     },
   };
-
   const config = sizeConfig[size];
-
   return (
     <div className={cn(config.spacing, className)}>
       <div className="flex items-center justify-between">
@@ -244,8 +192,6 @@ export function PageHeader({
     </div>
   );
 }
-
-// Chat Page Header - replaces ui/chat-header.tsx
 type ChatPageHeaderProps = {
   title: string;
   description: string;
@@ -253,7 +199,6 @@ type ChatPageHeaderProps = {
   size?: 'sm' | 'md' | 'lg';
   className?: string;
 };
-
 export function ChatPageHeader({
   title,
   description,
@@ -281,8 +226,6 @@ export function ChatPageHeader({
     </ChatSection>
   );
 }
-
-// Header Action Wrapper
 export function PageHeaderAction({ children }: { children: ReactNode }) {
   return <div className="flex items-center space-x-2">{children}</div>;
 }

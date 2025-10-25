@@ -166,7 +166,10 @@ export const chatThreadChangelog = sqliteTable('chat_thread_changelog', {
     .default(1), // 1-indexed to match messages and analysis
   changeType: text('change_type', { enum: CHANGELOG_TYPES_ENUM_VALUES }).notNull(),
   changeSummary: text('change_summary').notNull(), // Human-readable summary
+  // ✅ SIMPLIFIED SCHEMA: Discriminated union via 'type' field
+  // Each changeData includes a type field: 'participant', 'participant_role', or 'mode_change'
   changeData: text('change_data', { mode: 'json' }).$type<{
+    type: 'participant' | 'participant_role' | 'mode_change' | 'participant_reorder';
     // For mode_change
     oldMode?: string;
     newMode?: string;
@@ -176,12 +179,12 @@ export const chatThreadChangelog = sqliteTable('chat_thread_changelog', {
     role?: string | null;
     oldRole?: string | null;
     newRole?: string | null;
-    // For participants_reordered
+    // For participant_reorder
     participants?: Array<{
       id: string;
       modelId: string;
       role: string | null;
-      order: number;
+      priority: number;
     }>;
     [key: string]: unknown;
   }>(),

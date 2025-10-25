@@ -1,5 +1,4 @@
 'use client';
-
 import { AlertCircle, Calendar, Loader2, X, XCircle } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
@@ -23,7 +22,6 @@ type CancelSubscriptionDialogProps = {
   currentPeriodEnd?: string | null;
   isProcessing?: boolean;
 };
-
 export function CancelSubscriptionDialog({
   open,
   onOpenChange,
@@ -33,14 +31,12 @@ export function CancelSubscriptionDialog({
   isProcessing = false,
 }: CancelSubscriptionDialogProps) {
   const t = useTranslations();
-
   const endDate = currentPeriodEnd ? new Date(currentPeriodEnd) : null;
   const formattedEndDate = endDate?.toLocaleDateString(undefined, {
     year: 'numeric',
     month: 'long',
     day: 'numeric',
   });
-
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
       <AlertDialogContent className="max-w-lg">
@@ -54,7 +50,6 @@ export function CancelSubscriptionDialog({
             </AlertDialogTitle>
           </div>
           <AlertDialogDescription className="space-y-4 pt-4">
-            {/* Current Plan Info */}
             <div className="flex items-center gap-2 rounded-lg bg-muted/50 p-3">
               <Badge variant="secondary" className="capitalize">
                 {subscriptionTier}
@@ -72,8 +67,6 @@ export function CancelSubscriptionDialog({
                 </div>
               )}
             </div>
-
-            {/* Warning Message */}
             <div className="space-y-2">
               <p className="text-sm font-medium text-foreground">
                 {t('billing.cancelSubscription.warning')}
@@ -82,8 +75,6 @@ export function CancelSubscriptionDialog({
                 {t('billing.cancelSubscription.description')}
               </p>
             </div>
-
-            {/* What You'll Lose */}
             <div className="space-y-3 rounded-lg border border-destructive/20 bg-destructive/5 p-4">
               <div className="flex items-center gap-2">
                 <AlertCircle className="size-4 text-destructive" />
@@ -110,8 +101,6 @@ export function CancelSubscriptionDialog({
                 </li>
               </ul>
             </div>
-
-            {/* Data Access Timeline */}
             {endDate && (
               <div className="space-y-2 rounded-lg border bg-muted/30 p-4">
                 <p className="text-sm font-semibold text-foreground">
@@ -141,8 +130,6 @@ export function CancelSubscriptionDialog({
                 </ul>
               </div>
             )}
-
-            {/* Terms Notice */}
             <p className="text-xs text-muted-foreground">
               {t('billing.cancelSubscription.termsNotice')}
             </p>

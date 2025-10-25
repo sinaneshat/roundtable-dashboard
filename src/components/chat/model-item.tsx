@@ -1,5 +1,4 @@
 'use client';
-
 import { GripVertical, Lock } from 'lucide-react';
 import { Reorder, useDragControls } from 'motion/react';
 import Link from 'next/link';
@@ -22,78 +21,22 @@ import type { ListCustomRolesResponse } from '@/services/api/chat-roles';
 
 import { RoleSelector } from './role-selector';
 
-/**
- * ModelItem - Individual model selection item with drag-and-drop
- *
- * A complex component that handles:
- * - Model selection via checkbox
- * - Drag-and-drop reordering
- * - Tier-based access control with upgrade prompts
- * - Inline role assignment
- * - Visual feedback for disabled states
- * - Responsive layout for mobile/desktop
- *
- * Extracted from ChatParticipantsList to reduce complexity.
- * Used in the AI model selector popover.
- *
- * @example
- * // Selected model (draggable)
- * <ModelItem
- *   orderedModel={orderedModel}
- *   allParticipants={participants}
- *   customRoles={customRoles}
- *   onToggle={() => handleToggle(model.id)}
- *   onRoleChange={(role, customRoleId) => handleRoleChange(model.id, role, customRoleId)}
- *   onClearRole={() => handleClearRole(model.id)}
- *   selectedCount={2}
- *   maxModels={3}
- *   userTierInfo={userTierInfo}
- * />
- *
- * // Unselected model (static)
- * <ModelItem
- *   orderedModel={orderedModel}
- *   allParticipants={participants}
- *   customRoles={customRoles}
- *   onToggle={() => handleToggle(model.id)}
- *   onRoleChange={(role, customRoleId) => {}}
- *   onClearRole={() => {}}
- *   selectedCount={2}
- *   maxModels={3}
- *   enableDrag={false}
- *   userTierInfo={userTierInfo}
- * />
- */
-
-// RPC-inferred type from service response
 type CustomRole = NonNullable<Extract<ListCustomRolesResponse, { success: true }>['data']>['items'][number];
-
 export type OrderedModel = {
   model: EnhancedModelResponse;
   participant: ParticipantConfig | null;
   order: number;
 };
-
 export type ModelItemProps = {
-  /** Model with participant state */
   orderedModel: OrderedModel;
-  /** All participants (for custom role uniqueness check) */
   allParticipants: ParticipantConfig[];
-  /** Available custom roles */
   customRoles: CustomRole[];
-  /** Callback when model selection is toggled */
   onToggle: () => void;
-  /** Callback when role is changed */
   onRoleChange: (role: string, customRoleId?: string) => void;
-  /** Callback when role is cleared */
   onClearRole: () => void;
-  /** Current number of selected models */
   selectedCount: number;
-  /** Maximum allowed models per user tier */
   maxModels: number;
-  /** Enable drag-and-drop (only for selected models) */
   enableDrag?: boolean;
-  /** User tier information for access control */
   userTierInfo?: {
     tier_name: string;
     max_models: number;
@@ -101,7 +44,6 @@ export type ModelItemProps = {
     can_upgrade: boolean;
   };
 };
-
 export function ModelItem({
   orderedModel,
   allParticipants,
@@ -118,16 +60,10 @@ export function ModelItem({
   const tModels = useTranslations('chat.models');
   const { model, participant } = orderedModel;
   const isSelected = participant !== null;
-
-  // Backend-computed access control
   const isAccessible = model.is_accessible_to_user ?? isSelected;
-
-  // Disable reasons (checked in order of priority)
   const isDisabledDueToTier = !isSelected && !isAccessible;
   const isDisabledDueToLimit = !isSelected && selectedCount >= maxModels;
   const isDisabled = isDisabledDueToTier || isDisabledDueToLimit;
-
-  // Create upgrade tooltip content
   let upgradeTooltipContent: string | undefined;
   if (isDisabledDueToTier) {
     const requiredTierName = model.required_tier_name || model.required_tier || 'free';
@@ -135,7 +71,6 @@ export function ModelItem({
   } else if (isDisabledDueToLimit) {
     upgradeTooltipContent = `Your ${userTierInfo?.tier_name || 'current'} plan allows up to ${maxModels} models per conversation. Upgrade to select more models.`;
   }
-
   const itemContent = (
     <Tooltip delayDuration={300}>
       <TooltipTrigger asChild>
@@ -160,7 +95,6 @@ export function ModelItem({
           }
         >
           <div className="flex items-center gap-2">
-            {/* Drag Handle - Only shown for selected models */}
             {enableDrag && (
               <div
                 className={cn(
@@ -183,8 +117,6 @@ export function ModelItem({
                 <GripVertical className="size-4" />
               </div>
             )}
-
-            {/* Checkbox for Selection */}
             <Checkbox
               checked={isSelected}
               onCheckedChange={isDisabled ? undefined : onToggle}
@@ -192,8 +124,6 @@ export function ModelItem({
               className="size-4 flex-shrink-0"
               onClick={e => e.stopPropagation()}
             />
-
-            {/* Model Avatar and Name */}
             <div className="flex items-center gap-2 flex-1 min-w-0">
               <Avatar className="size-8 flex-shrink-0">
                 <AvatarImage src={getProviderIcon(model.provider)} alt={model.name} />
@@ -201,7 +131,6 @@ export function ModelItem({
                   {model.name.slice(0, 2).toUpperCase()}
                 </AvatarFallback>
               </Avatar>
-
               <div className="flex-1 min-w-0">
                 <div className="text-sm font-medium truncate flex items-center gap-2">
                   {model.name}
@@ -233,8 +162,6 @@ export function ModelItem({
                 </div>
               </div>
             </div>
-
-            {/* Role Selector - shown for selected models or enabled unselected models */}
             {(isSelected || !isDisabled) && (
               <div
                 onClick={e => e.stopPropagation()}
@@ -283,7 +210,6 @@ export function ModelItem({
       )}
     </Tooltip>
   );
-
   if (enableDrag) {
     return (
       <Reorder.Item
@@ -296,6 +222,5 @@ export function ModelItem({
       </Reorder.Item>
     );
   }
-
   return <div className="relative">{itemContent}</div>;
 }

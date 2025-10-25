@@ -1,5 +1,4 @@
 'use client';
-
 import type { UseMutationResult } from '@tanstack/react-query';
 import { Check, Plus, Trash2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
@@ -34,57 +33,15 @@ import type {
   ListCustomRolesResponse,
 } from '@/services/api/chat-roles';
 
-/**
- * RoleSelector - Role assignment popover with custom role creation
- *
- * A comprehensive role selection component that supports:
- * - Default role selection (Analyst, Writer, etc.)
- * - Custom role creation and management
- * - Role uniqueness enforcement (1 custom role per participant)
- * - Inline role deletion
- * - Search and filtering
- *
- * Extracted from ChatParticipantsList to reduce complexity.
- * Used for assigning roles to AI participants in conversations.
- *
- * @example
- * // Add role to unselected participant
- * <RoleSelector
- *   participant={null}
- *   allParticipants={participants}
- *   customRoles={customRoles}
- *   onRoleChange={(role, customRoleId) => handleRoleChange(role, customRoleId)}
- *   onClearRole={() => handleClearRole()}
- * />
- *
- * // Edit existing role
- * <RoleSelector
- *   participant={selectedParticipant}
- *   allParticipants={participants}
- *   customRoles={customRoles}
- *   onRoleChange={(role, customRoleId) => handleRoleChange(role, customRoleId)}
- *   onClearRole={() => handleClearRole()}
- * />
- */
-
-// RPC-inferred type from service response
 type CustomRole = NonNullable<Extract<ListCustomRolesResponse, { success: true }>['data']>['items'][number];
-
 export type RoleSelectorProps = {
-  /** Current participant (null if model not yet selected) */
   participant: ParticipantConfig | null;
-  /** All participants (for custom role uniqueness check) */
   allParticipants: ParticipantConfig[];
-  /** Available custom roles from backend */
   customRoles: CustomRole[];
-  /** Callback when role is selected */
   onRoleChange: (role: string, customRoleId?: string) => void;
-  /** Callback when role is cleared */
   onClearRole: () => void;
-  /** Callback to trigger participant selection (if participant is null) */
   onRequestSelection?: () => void;
 };
-
 export function RoleSelector({
   participant,
   allParticipants,
@@ -96,53 +53,39 @@ export function RoleSelector({
   const t = useTranslations('chat.roles');
   const [rolePopoverOpen, setRolePopoverOpen] = useState(false);
   const [roleSearchQuery, setRoleSearchQuery] = useState('');
-
   const createRoleMutation = useCreateCustomRoleMutation();
   const deleteRoleMutation = useDeleteCustomRoleMutation();
   const hasRole = Boolean(participant?.role);
-
-  // Handle opening popover - select model first if needed
   const handleOpenChange = (open: boolean) => {
     if (open && !participant && onRequestSelection) {
-      // Auto-select the model first
       onRequestSelection();
-      // Wait a tick for the selection to complete, then open popover
       setTimeout(() => setRolePopoverOpen(true), 50);
       return;
     }
     setRolePopoverOpen(open);
   };
-
-  // Custom role uniqueness: Filter custom roles already assigned to OTHER participants
   const customRolesInUseByOthers = new Set(
     allParticipants
       .filter(p => p.customRoleId && p.id !== participant?.id)
       .map(p => p.customRoleId)
       .filter((id): id is string => Boolean(id)),
   );
-
   const availableCustomRoles = customRoles.filter(
     role => !customRolesInUseByOthers.has(role.id),
   );
-
-  // Combine all existing roles for checking duplicates
   const allRoles = [
     ...DEFAULT_ROLES,
     ...customRoles.map(r => r.name),
   ];
-
-  // Check if the search query is a new role name
   const isNewRole = Boolean(
     roleSearchQuery.trim()
     && !allRoles.some(role => role.toLowerCase() === roleSearchQuery.trim().toLowerCase()),
   );
-
   const handleSelectRole = (roleName: string, customRoleId?: string) => {
     onRoleChange(roleName, customRoleId);
     setRolePopoverOpen(false);
     setRoleSearchQuery('');
   };
-
   const handleCreateRole = async (roleName: string) => {
     try {
       const result = await createRoleMutation.mutateAsync({
@@ -152,9 +95,7 @@ export function RoleSelector({
           systemPrompt: `You are a ${roleName} assistant.`,
         },
       });
-
       if (result.success && result.data?.customRole) {
-        // Auto-select the newly created role
         handleSelectRole(result.data.customRole.name, result.data.customRole.id);
         setRoleSearchQuery('');
       }
@@ -163,15 +104,11 @@ export function RoleSelector({
       toastManager.error('Failed to create role', errorMessage);
     }
   };
-
   const handleDeleteRole = async (roleId: string, roleName: string, e: React.MouseEvent) => {
     e.stopPropagation();
-
     try {
       const result = await deleteRoleMutation.mutateAsync({ param: { id: roleId } });
-
       if (result.success) {
-        // If the deleted role was the currently selected role, clear it
         if (participant?.customRoleId === roleId || participant?.role === roleName) {
           onClearRole();
         }
@@ -181,8 +118,6 @@ export function RoleSelector({
       toastManager.error('Failed to delete role', errorMessage);
     }
   };
-
-  // Render "+ Role" button if no role assigned
   if (!hasRole) {
     return (
       <Popover open={rolePopoverOpen} onOpenChange={handleOpenChange}>
@@ -213,11 +148,8 @@ export function RoleSelector({
       </Popover>
     );
   }
-
-  // Render role chip with integrated X button
   if (!participant)
     return null;
-
   return (
     <div className="flex items-center gap-1">
       <Popover open={rolePopoverOpen} onOpenChange={handleOpenChange}>
@@ -257,8 +189,6 @@ export function RoleSelector({
     </div>
   );
 }
-
-// Internal component for popover content (shared between both states)
 function RoleSelectorContent({
   participant,
   availableCustomRoles,
@@ -293,7 +223,6 @@ function RoleSelectorContent({
         onValueChange={setRoleSearchQuery}
       />
       <CommandList>
-        {/* Create Custom Role button */}
         <CommandGroup>
           <CommandItem
             onSelect={() => setRoleSearchQuery('')}
@@ -303,10 +232,7 @@ function RoleSelectorContent({
             <span>{t('createCustomRole')}</span>
           </CommandItem>
         </CommandGroup>
-
         <CommandSeparator />
-
-        {/* Default Roles */}
         <CommandGroup heading={t('defaultRoles')}>
           {DEFAULT_ROLES.map(role => (
             <CommandItem
@@ -324,8 +250,6 @@ function RoleSelectorContent({
             </CommandItem>
           ))}
         </CommandGroup>
-
-        {/* Custom Roles */}
         {availableCustomRoles.length > 0 && (
           <>
             <CommandSeparator />
@@ -373,8 +297,6 @@ function RoleSelectorContent({
             </CommandGroup>
           </>
         )}
-
-        {/* Create New Role Option */}
         {isNewRole && (
           <>
             <CommandSeparator />
@@ -406,7 +328,6 @@ function RoleSelectorContent({
             </CommandGroup>
           </>
         )}
-
         <CommandEmpty>{t('noRolesFound')}</CommandEmpty>
       </CommandList>
     </Command>

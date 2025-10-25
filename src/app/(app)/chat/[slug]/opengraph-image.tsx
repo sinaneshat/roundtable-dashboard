@@ -1,7 +1,11 @@
 /**
  * Dynamic Open Graph Image for Chat Thread pages
  * Following official Next.js patterns: https://nextjs.org/docs/app/api-reference/file-conventions/metadata/opengraph-image
+ *
+ * Note: This file uses Next.js Metadata API which requires named exports.
+ * The react-refresh warning is disabled as this is not a React component file.
  */
+/* eslint-disable react-refresh/only-export-components */
 import { ImageResponse } from 'next/og';
 
 import { BRAND } from '@/constants/brand';

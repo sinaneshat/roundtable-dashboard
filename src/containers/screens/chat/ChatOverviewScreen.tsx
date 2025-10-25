@@ -6,7 +6,6 @@ import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import ChatErrorBoundary, { StreamingErrorBoundary } from '@/components/chat/chat-error-boundary';
 import type { ParticipantConfig } from '@/components/chat/chat-form-schemas';
 import { toCreateThreadRequest } from '@/components/chat/chat-form-schemas';
 import { ChatInput } from '@/components/chat/chat-input';
@@ -17,6 +16,7 @@ import { ChatQuickStart } from '@/components/chat/chat-quick-start';
 import { RoundAnalysisCard } from '@/components/chat/moderator/round-analysis-card';
 import { StreamingParticipantsLoader } from '@/components/chat/streaming-participants-loader';
 import { useThreadHeader } from '@/components/chat/thread-header-context';
+import { UnifiedErrorBoundary } from '@/components/chat/unified-error-boundary';
 import { WavyBackground } from '@/components/ui/wavy-background';
 import { BRAND } from '@/constants/brand';
 import { useSharedChatContext } from '@/contexts/chat-context';
@@ -29,23 +29,8 @@ import { getDefaultChatMode } from '@/lib/config/chat-modes';
 import { showApiErrorToast } from '@/lib/toast';
 import { chatAnalysisLogger, chatOverviewLogger } from '@/lib/utils/chat-error-logger';
 import { chatMessagesToUIMessages } from '@/lib/utils/message-transforms';
+import { deduplicateParticipants } from '@/lib/utils/participant-utils';
 
-/**
- * ✅ ONE-WAY DATA FLOW: Chat Overview Screen
- *
- * This is a TEMPORARY screen for new thread creation:
- * 1. User submits prompt → Create thread
- * 2. Initialize context → Stream first round
- * 3. Round completes → Create analysis (client-side)
- * 4. Analysis streams → Display analysis card
- * 5. Analysis completes → Navigate to thread detail page
- *
- * Key principles:
- * - No query invalidations (navigating away immediately)
- * - Analysis created in client cache (one-time flow)
- * - Navigation happens after analysis completes
- * - Thread detail page loads fresh data from server (RSC)
- */
 export default function ChatOverviewScreen() {
   const router = useRouter();
   const t = useTranslations();
@@ -69,7 +54,6 @@ export default function ChatOverviewScreen() {
     stop: stopStreaming,
   } = useSharedChatContext();
 
-  // ✅ Use refs to capture current values for the callback
   const messagesRef = useRef(messages);
   const participantsRef = useRef(contextParticipants);
 
@@ -97,9 +81,6 @@ export default function ChatOverviewScreen() {
     return [];
   }, [defaultModelId]);
 
-  // ✅ PRE-THREAD PARTICIPANT SELECTION: Local state for participant selection BEFORE thread creation
-  // This is the ONLY place where local participant state is valid
-  // Once initializeThread() is called (line 220), participants come from context ONLY
   const {
     selectedParticipants,
     setSelectedParticipants,
@@ -114,23 +95,15 @@ export default function ChatOverviewScreen() {
   const hasSentInitialPromptRef = useRef(false);
   const [createdThreadId, setCreatedThreadId] = useState<string | null>(null);
 
-  // ✅ ONE-WAY DATA FLOW: Track initial load for overview screen
-  // Overview screen is temporary - after analysis completes, we navigate to thread detail
-  // No need for complex client state since we're navigating away
-  const [_hasLoadedAnalysis, setHasLoadedAnalysis] = useState(false);
-
-  // ✅ NO QUERY: We don't use the analyses query here - only create pending analysis in cache
-  // This prevents the query from fetching empty data and overwriting our pending analysis
   const {
     analyses,
     createPendingAnalysis,
   } = useChatAnalysis({
-    threadId: createdThreadId || '', // Need real ID for cache operations
+    threadId: createdThreadId || '',
     mode: selectedMode,
-    enabled: false, // ✅ ALWAYS DISABLED - never fetch from server on overview screen
+    enabled: false,
   });
 
-  // ✅ Capture createPendingAnalysis in a ref for the callback
   const createPendingAnalysisRef = useRef(createPendingAnalysis);
   useEffect(() => {
     createPendingAnalysisRef.current = createPendingAnalysis;
@@ -144,7 +117,6 @@ export default function ChatOverviewScreen() {
 
       const prompt = inputValue.trim();
 
-      // ✅ ERROR TRACKING: Log form submission attempt
       chatOverviewLogger.formSubmit({
         hasPrompt: !!prompt,
         participantCount: selectedParticipants.length,
@@ -154,7 +126,6 @@ export default function ChatOverviewScreen() {
       });
 
       if (!prompt || selectedParticipants.length === 0 || isCreatingThread || isStreaming) {
-        // ✅ ERROR TRACKING: Log validation failure
         chatOverviewLogger.warn('Form submit aborted - validation failed', {
           hasPrompt: !!prompt,
           participantCount: selectedParticipants.length,
@@ -173,7 +144,6 @@ export default function ChatOverviewScreen() {
           participants: selectedParticipants,
         });
 
-        // ✅ ERROR TRACKING: Log API request
         chatOverviewLogger.threadCreated('pending', {
           participantCount: createThreadRequest.participants.length,
           mode: createThreadRequest.mode,
@@ -185,7 +155,6 @@ export default function ChatOverviewScreen() {
 
         const { thread, participants, messages: initialMessages } = response.data;
 
-        // ✅ ERROR TRACKING: Log successful thread creation
         chatOverviewLogger.threadCreated(thread.id, {
           participantCount: participants.length,
           messageCount: initialMessages.length,
@@ -205,31 +174,22 @@ export default function ChatOverviewScreen() {
           updatedAt: new Date(p.updatedAt),
         }));
 
+        const deduplicatedParticipants = deduplicateParticipants(participantsWithDates);
+
         const uiMessages = chatMessagesToUIMessages(initialMessages);
 
         setShowInitialUI(false);
         setInputValue('');
         setCreatedThreadId(thread.id);
 
-        // ✅ CRITICAL FIX: Set up onComplete BEFORE initializing thread
-        // This callback fires when the round completes (after all participants finish streaming)
-        setOnComplete(() => {
-          // Get current values from refs (not stale closure)
+        setOnComplete(() => () => {
           const currentMessages = messagesRef.current;
           const currentParticipants = participantsRef.current;
 
-          // Validate we have participant responses before triggering analysis
           const assistantMessages = currentMessages.filter(m => m.role === 'assistant');
           const enabledParticipants = currentParticipants.filter(p => p.isEnabled);
 
-          // Only trigger analysis if we actually have responses
           if (assistantMessages.length === 0 || assistantMessages.length < enabledParticipants.length) {
-            // ✅ ERROR TRACKING: Log incomplete round
-            chatOverviewLogger.warn('Round incomplete - not creating analysis', {
-              threadId: thread.id,
-              assistantMessageCount: assistantMessages.length,
-              enabledParticipantCount: enabledParticipants.length,
-            });
             return;
           }
 
@@ -240,14 +200,12 @@ export default function ChatOverviewScreen() {
           const textPart = lastUserMessage?.parts?.find(p => p.type === 'text');
           const userQuestion = (textPart && 'text' in textPart ? textPart.text : '') || '';
 
-          // ✅ ERROR TRACKING: Log analysis creation
           chatAnalysisLogger.create(roundNumber, {
             threadId: thread.id,
             participantCount: currentParticipants.length,
             messageCount: currentMessages.length,
           });
 
-          // ✅ Create pending analysis when round completes AND we have all responses
           try {
             createPendingAnalysisRef.current(
               roundNumber,
@@ -256,29 +214,23 @@ export default function ChatOverviewScreen() {
               userQuestion,
             );
           } catch (error) {
-            // ✅ ERROR TRACKING: Log analysis creation failure
             chatAnalysisLogger.error(roundNumber, error, {
               threadId: thread.id,
             });
           }
         });
 
-        // ✅ ERROR TRACKING: Log thread initialization
         chatOverviewLogger.autoStartRound({
           threadId: threadWithDates.id,
-          participantCount: participantsWithDates.length,
+          participantCount: deduplicatedParticipants.length,
           messageCount: uiMessages.length,
         });
 
-        initializeThread(threadWithDates, participantsWithDates, uiMessages);
+        initializeThread(threadWithDates, deduplicatedParticipants, uiMessages);
 
-        // ✅ CRITICAL FIX: Set flag to trigger startRound() when messages appear in state
-        // Cannot call startRound() directly because AI SDK's setMessages() is async
-        // The effect below will call startRound() when messages.length > 0
         hasSentInitialPromptRef.current = false;
         setInitialPrompt(prompt);
       } catch (error) {
-        // ✅ ERROR TRACKING: Log thread creation failure
         chatOverviewLogger.error('THREAD_CREATE_FAILED', error, {
           participantCount: selectedParticipants.length,
           mode: selectedMode,
@@ -308,29 +260,10 @@ export default function ChatOverviewScreen() {
     setSelectedParticipants(participants);
   }, [setSelectedParticipants]);
 
-  // ✅ CRITICAL FIX: Wait for messages to appear in AI SDK state before calling startRound()
-  // This effect runs when messages.length changes from 0 → 1 after initializeThread()
-  //
-  // ISSUE: chat.setMessages() in initializeThread() is async (AI SDK internal behavior)
-  // - initializeThread() calls chat.setMessages([userMessage]) at line 253
-  // - AI SDK updates messages state asynchronously
-  // - This effect must wait for messages.length to transition from 0 → 1
-  //
-  // SOLUTION: Effect triggers on messages.length changes
-  // - initialPrompt flag set after initializeThread() completes (line 261)
-  // - When messages populate, effect detects transition and calls startRound()
-  // - hasSentInitialPromptRef prevents multiple triggers
   useEffect(() => {
     const hasMessages = messages.length > 0;
     const hasUserMessage = messages.some(m => m.role === 'user');
 
-    // Only trigger if:
-    // 1. We have an initialPrompt (thread just created)
-    // 2. We have a currentThread
-    // 3. Not already streaming
-    // 4. Haven't sent initial prompt yet (prevents duplicate calls)
-    // 5. Messages have appeared in state (messages.length > 0)
-    // 6. At least one user message exists (ensures proper state)
     if (
       initialPrompt
       && currentThread
@@ -339,7 +272,6 @@ export default function ChatOverviewScreen() {
       && hasMessages
       && hasUserMessage
     ) {
-      // ✅ ERROR TRACKING: Log auto-start round trigger
       chatOverviewLogger.autoStartRound({
         threadId: currentThread.id,
         messageCount: messages.length,
@@ -351,7 +283,6 @@ export default function ChatOverviewScreen() {
       try {
         startRound();
       } catch (error) {
-        // ✅ ERROR TRACKING: Log startRound failure
         chatOverviewLogger.error('STREAM_FAILED', error, {
           threadId: currentThread.id,
           messageCount: messages.length,
@@ -368,7 +299,6 @@ export default function ChatOverviewScreen() {
     if (selectedParticipants.length === 0 && defaultModelId && initialParticipants.length > 0) {
       setSelectedParticipants(initialParticipants);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [defaultModelId]);
 
   useEffect(() => {
@@ -382,7 +312,6 @@ export default function ChatOverviewScreen() {
     }
   }, [showInitialUI, isStreaming, stopStreaming]);
 
-  // ✅ CLEANUP: Clear onComplete callback on unmount
   useEffect(() => {
     return () => {
       setOnComplete(undefined);
@@ -399,7 +328,7 @@ export default function ChatOverviewScreen() {
   const inputContainerRef = useRef<HTMLDivElement | null>(null);
 
   return (
-    <ChatErrorBoundary>
+    <UnifiedErrorBoundary context="chat">
       <div className="min-h-screen flex flex-col">
         <div className="fixed inset-0 -z-10 overflow-hidden">
           <WavyBackground containerClassName="h-full w-full" />
@@ -472,7 +401,7 @@ export default function ChatOverviewScreen() {
                 exit={{ opacity: 0, y: -20 }}
                 transition={{ duration: 0.3 }}
               >
-                <StreamingErrorBoundary onRetry={retryRound}>
+                <UnifiedErrorBoundary context="message-list" onReset={retryRound}>
                   <ChatMessageList
                     messages={messages}
                     user={{
@@ -484,7 +413,7 @@ export default function ChatOverviewScreen() {
                     currentParticipantIndex={currentParticipantIndex}
                     currentStreamingParticipant={currentStreamingParticipant}
                   />
-                </StreamingErrorBoundary>
+                </UnifiedErrorBoundary>
 
                 {createdThreadId && analyses[0] && (
                   <div className="mt-6">
@@ -494,20 +423,15 @@ export default function ChatOverviewScreen() {
                       isLatest={true}
                       onStreamComplete={async () => {
                         try {
-                          setHasLoadedAnalysis(true);
-
-                          // ✅ ERROR TRACKING: Log navigation
                           chatOverviewLogger.navigate(`/chat/${currentThread?.slug}`, {
                             threadId: createdThreadId,
                             analysisStatus: analyses[0]?.status,
                           });
 
-                          // ✅ STATE STABILIZATION: Brief delay for React state updates and cache writes
-                          await new Promise(resolve => setTimeout(resolve, 300));
+                          await new Promise(resolve => setTimeout(resolve, 800));
 
                           router.push(`/chat/${currentThread?.slug}`);
                         } catch (error) {
-                        // ✅ ERROR TRACKING: Log navigation failure
                           chatOverviewLogger.error('NETWORK_ERROR', error, {
                             threadId: createdThreadId,
                             destination: `/chat/${currentThread?.slug}`,
@@ -533,16 +457,19 @@ export default function ChatOverviewScreen() {
                 )}
 
                 {(() => {
-                // ✅ Compute isAnalyzing state from analyses array
                   const isAnalyzing = analyses.some(a => a.status === 'pending' || a.status === 'streaming');
-                  const showLoader = (isStreaming || isAnalyzing) && selectedParticipants.length > 1;
+                  const hasMessages = messages.length > 0;
+                  const hasCompletedAnalysis = analyses.some(a => a.status === 'completed' || a.status === 'failed');
+                  const isTransitioning = hasMessages && !hasCompletedAnalysis && !isStreaming && !isAnalyzing;
+
+                  const showLoader = ((isStreaming || isAnalyzing || isTransitioning) && selectedParticipants.length > 1);
 
                   return showLoader && (
                     <StreamingParticipantsLoader
                       className="mt-4"
                       participants={selectedParticipants}
                       currentParticipantIndex={currentParticipantIndex}
-                      isAnalyzing={isAnalyzing}
+                      isAnalyzing={isAnalyzing || isTransitioning}
                     />
                   );
                 })()}
@@ -582,6 +509,6 @@ export default function ChatOverviewScreen() {
           </div>
         </div>
       </div>
-    </ChatErrorBoundary>
+    </UnifiedErrorBoundary>
   );
 }

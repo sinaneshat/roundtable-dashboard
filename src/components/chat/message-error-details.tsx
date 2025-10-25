@@ -1,5 +1,4 @@
 'use client';
-
 import { AlertCircle } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
@@ -10,33 +9,16 @@ type MessageErrorDetailsProps = {
   metadata: UIMessageMetadata | null | undefined;
   className?: string;
 };
-
-/**
- * MessageErrorDetails - Comprehensive error display for failed AI generations
- *
- * Shows:
- * - User-friendly error message
- * - Error type (rate limit, API error, etc.)
- * - Detailed error information (expandable)
- * - Retry button for transient errors
- * - Model and participant information for debugging
- */
 export function MessageErrorDetails({
   metadata,
   className,
 }: MessageErrorDetailsProps) {
   const t = useTranslations('chat.errors');
   const showDetails = useBoolean(false);
-
-  // Check if this message has an error
   const hasError = metadata?.hasError || metadata?.error || metadata?.errorMessage;
-
   if (!hasError) {
     return null;
   }
-
-  // Extract error information from metadata (with type safety)
-  // Prioritize providerMessage for most detailed error information
   const providerMessage = metadata?.providerMessage ? String(metadata.providerMessage) : null;
   const errorMessage = providerMessage
     || String(metadata?.errorMessage || metadata?.error || 'An unexpected error occurred');
@@ -44,8 +26,6 @@ export function MessageErrorDetails({
   const model = String(metadata?.model || t('unknownModel'));
   const participantIndex = typeof metadata?.participantIndex === 'number' ? metadata.participantIndex : null;
   const aborted = metadata?.aborted || false;
-
-  // Determine user-friendly error title
   const getErrorTitle = () => {
     if (aborted)
       return t('generationCancelled');
@@ -63,10 +43,8 @@ export function MessageErrorDetails({
       return t('requestTimeout');
     return t('generationFailed');
   };
-
   return (
     <div className={`text-sm text-destructive/90 ${className || ''}`}>
-      {/* Error message */}
       <div className="flex items-start gap-2">
         <AlertCircle className="size-4 mt-0.5 flex-shrink-0" />
         <div className="flex-1">
@@ -74,8 +52,6 @@ export function MessageErrorDetails({
           <p className="text-xs mt-0.5 text-destructive/70">{errorMessage}</p>
         </div>
       </div>
-
-      {/* Expandable details - simple text button */}
       <button
         type="button"
         onClick={showDetails.onToggle}
@@ -83,7 +59,6 @@ export function MessageErrorDetails({
       >
         {showDetails.value ? t('hideDetails') : t('showDetails')}
       </button>
-
       {showDetails.value && (
         <div className="mt-2 ml-6 space-y-1 text-xs text-destructive/70">
           <div className="flex gap-2">
@@ -129,8 +104,6 @@ export function MessageErrorDetails({
               </pre>
             </div>
           )}
-
-          {/* Helpful suggestions */}
           {!aborted && (
             <div className="mt-2 pt-2 border-t border-destructive/20 text-xs">
               {errorType === 'rate_limit' && (
@@ -168,8 +141,6 @@ export function MessageErrorDetails({
               )}
             </div>
           )}
-
-          {/* Raw metadata for debugging */}
           {process.env.NODE_ENV === 'development' && metadata && (
             <details className="mt-2 pt-2 border-t border-destructive/20">
               <summary className="cursor-pointer font-medium text-destructive/60">{t('fullMetadata')}</summary>

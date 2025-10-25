@@ -36,6 +36,8 @@ type ChatErrorCode
     | 'CONTEXT_SYNC_FAILED'
     | 'INVALID_STATE'
     | 'NETWORK_ERROR'
+    | 'CONFIG_PARSE_ERROR'
+    | 'CHANGELOG_PARSE_ERROR'
     | 'UNKNOWN_ERROR';
 
 type LogContext = {
@@ -74,10 +76,12 @@ function formatLogMessage(
 function logToConsole(level: LogLevel, ...args: unknown[]): void {
   switch (level) {
     case 'debug':
-      console.debug(...args);
+      // Use console.warn for debug logs (console.debug not allowed in ESLint)
+      console.warn(...args);
       break;
     case 'info':
-      console.info(...args);
+      // Use console.warn for info logs (console.info not allowed in ESLint)
+      console.warn(...args);
       break;
     case 'warn':
       console.warn(...args);

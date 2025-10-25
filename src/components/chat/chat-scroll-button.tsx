@@ -1,5 +1,4 @@
 'use client';
-
 import { ArrowDown } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
@@ -10,62 +9,31 @@ type ChatScrollButtonProps = {
   variant?: 'floating' | 'header';
   className?: string;
 };
-
-/**
- * Custom Scroll-to-Bottom Button
- *
- * Detects scroll position on window-level scrolling and shows/hides the button accordingly.
- *
- * Features:
- * - Appears when scrolled up from bottom (>200px from bottom)
- * - Smooth scroll to bottom on click
- * - Two variants: floating (bottom-right) or header (inline in header)
- * - Uses scroll event throttling for performance
- * - Accounts for bottom padding to scroll to content, not excessive padding
- *
- * Architecture:
- * - Monitors scroll on window (document.documentElement)
- * - Scrolls to content bottom, not document bottom (accounts for padding)
- */
 export function ChatScrollButton({ variant = 'floating', className }: ChatScrollButtonProps = {}) {
   const [showButton, setShowButton] = useState(false);
-
   useEffect(() => {
     let rafId: number | null = null;
     let lastScrollTime = 0;
-    const throttleMs = 100; // Throttle to once per 100ms for performance
-
+    const throttleMs = 100;
     const checkScrollPosition = () => {
       const now = Date.now();
       if (now - lastScrollTime < throttleMs) {
-        // Schedule next check
         rafId = requestAnimationFrame(checkScrollPosition);
         return;
       }
-
       lastScrollTime = now;
-
       const { scrollTop, scrollHeight, clientHeight } = document.documentElement;
       const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
-
-      // Show button when more than 200px from bottom
       setShowButton(distanceFromBottom > 200);
-
       rafId = null;
     };
-
     const handleScroll = () => {
       if (rafId === null) {
         rafId = requestAnimationFrame(checkScrollPosition);
       }
     };
-
-    // Initial check
     checkScrollPosition();
-
-    // Listen to scroll events on window
     window.addEventListener('scroll', handleScroll, { passive: true });
-
     return () => {
       window.removeEventListener('scroll', handleScroll);
       if (rafId !== null) {
@@ -73,19 +41,14 @@ export function ChatScrollButton({ variant = 'floating', className }: ChatScroll
       }
     };
   }, []);
-
   const scrollToBottom = () => {
-    // ✅ WINDOW-LEVEL SCROLLING: Scroll to absolute bottom of document
-    // This ensures we scroll past all content including bottom padding
     window.scrollTo({
       top: document.documentElement.scrollHeight,
       behavior: 'smooth',
     });
   };
-
   if (!showButton)
     return null;
-
   if (variant === 'header') {
     return (
       <Button
@@ -104,7 +67,6 @@ export function ChatScrollButton({ variant = 'floating', className }: ChatScroll
       </Button>
     );
   }
-
   return (
     <Button
       variant="outline"

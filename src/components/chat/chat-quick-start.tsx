@@ -1,5 +1,4 @@
 'use client';
-
 import { MessageSquare, Users } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useCallback, useMemo } from 'react';
@@ -13,17 +12,12 @@ import type { ChatModeId } from '@/lib/config/chat-modes';
 import { cn } from '@/lib/ui/cn';
 import { getProviderIcon } from '@/lib/utils/ai-display';
 
-// ============================================================================
-// Types
-// ============================================================================
-
 type QuickStartSuggestion = {
   title: string;
   prompt: string;
   mode: ChatModeId;
   participants: ParticipantConfig[];
 };
-
 type ChatQuickStartProps = {
   onSuggestionClick: (
     prompt: string,
@@ -32,101 +26,61 @@ type ChatQuickStartProps = {
   ) => void;
   className?: string;
 };
-
-// ============================================================================
-// Component
-// ============================================================================
-
-/**
- * ChatQuickStart Component
- *
- * Compact quick start suggestions for all screen sizes
- * Filters suggestions based on user's subscription tier
- * ✅ ENSURES UNIQUE PROVIDERS: Each suggestion uses models from different providers
- */
 export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartProps) {
-  // Get user's subscription tier
   const { data: usageData } = useUsageStatsQuery();
   const userTier = (usageData?.success ? usageData.data.subscription.tier : 'free') as SubscriptionTier;
-
-  // ✅ DYNAMIC: Fetch all models from OpenRouter API with tier access info
   const { data: modelsResponse, isLoading: modelsLoading } = useModelsQuery();
   const allModels = useMemo(
     () => (modelsResponse?.success ? modelsResponse.data.items : []),
     [modelsResponse],
   );
-
-  // ✅ BACKEND-COMPUTED ACCESS: Use backend's is_accessible_to_user flag
   const accessibleModels = useMemo(() => {
     return allModels.filter(model => model.is_accessible_to_user ?? true);
   }, [allModels]);
-
-  // ✅ GROUP MODELS BY PROVIDER: Essential for ensuring unique providers per card
   const modelsByProvider = useMemo(() => {
     const grouped = new Map<string, typeof accessibleModels>();
-
     for (const model of accessibleModels) {
       const provider = model.provider || model.id.split('/')[0] || 'unknown';
-
       if (!grouped.has(provider)) {
         grouped.set(provider, []);
       }
       grouped.get(provider)!.push(model);
     }
-
     return grouped;
   }, [accessibleModels]);
-
-  // ✅ SELECT MODELS WITH UNIQUE PROVIDERS: Each model must be from a different provider
   const selectUniqueProviderModels = useCallback(
     (count: number): string[] => {
       const selectedModels: string[] = [];
       const usedProviders = new Set<string>();
-
-      // Get providers sorted by number of models (prefer providers with more options)
       const providers = Array.from(modelsByProvider.entries())
         .sort((a, b) => b[1].length - a[1].length)
         .map(([provider]) => provider);
-
-      // Select one model from each provider until we have enough
       for (const provider of providers) {
         if (selectedModels.length >= count)
           break;
         if (usedProviders.has(provider))
           continue;
-
         const providerModels = modelsByProvider.get(provider);
         if (!providerModels || providerModels.length === 0)
           continue;
-
-        // Take the first (usually most popular) model from this provider
         const model = providerModels[0];
         if (model) {
           selectedModels.push(model.id);
           usedProviders.add(provider);
         }
       }
-
       return selectedModels;
     },
     [modelsByProvider],
   );
-
-  // Tier-based gray area questions - always returns exactly 3 suggestions
-  // Designed to be morally ambiguous, thought-provoking, and accessible to each tier
-  // ✅ FULLY DYNAMIC: Models selected from OpenRouter API with UNIQUE PROVIDERS per card
   const suggestions: QuickStartSuggestion[] = useMemo(() => {
-    // Return empty array while models are loading
     if (modelsLoading || accessibleModels.length === 0 || modelsByProvider.size === 0) {
       return [];
     }
-
-    // ✅ UNIQUE PROVIDERS: Each suggestion uses models from different providers
     const freeModels = selectUniqueProviderModels(2);
     const starterModels = selectUniqueProviderModels(3);
     const proModels = selectUniqueProviderModels(4);
     const powerModels = selectUniqueProviderModels(6);
-
     const freeTierSuggestions: QuickStartSuggestion[] = freeModels.length >= 2
       ? [
           {
@@ -158,7 +112,6 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
           },
         ]
       : [];
-
     const starterTierSuggestions: QuickStartSuggestion[] = starterModels.length >= 3
       ? [
           {
@@ -193,7 +146,6 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
           },
         ]
       : [];
-
     const proTierSuggestions: QuickStartSuggestion[] = proModels.length >= 3
       ? [
           {
@@ -230,7 +182,6 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
           },
         ]
       : [];
-
     const powerTierSuggestions: QuickStartSuggestion[] = powerModels.length >= 3
       ? [
           {
@@ -274,10 +225,7 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
           },
         ]
       : [];
-
-    // Select suggestions based on user tier
     let tierSuggestions: QuickStartSuggestion[];
-
     if (userTier === 'free') {
       tierSuggestions = freeTierSuggestions;
     } else if (userTier === 'starter') {
@@ -285,15 +233,10 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
     } else if (userTier === 'pro') {
       tierSuggestions = proTierSuggestions;
     } else {
-    // Intentionally empty
-      // power tier
       tierSuggestions = powerTierSuggestions;
     }
-
     return tierSuggestions;
   }, [userTier, modelsLoading, accessibleModels, modelsByProvider.size, selectUniqueProviderModels]);
-
-  // Helper function to get mode icon and color
   const getModeConfig = (mode: ChatModeId) => {
     switch (mode) {
       case 'debating':
@@ -322,16 +265,12 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
         };
     }
   };
-
-  // Helper to render participant item
   const renderParticipant = (participant: ParticipantConfig) => {
     const model = allModels.find(m => m.id === participant.modelId);
     if (!model)
       return null;
-
     const isAccessible = model.is_accessible_to_user ?? true;
     const provider = model.provider || model.id.split('/')[0] || 'unknown';
-
     return (
       <div
         key={participant.id}
@@ -352,15 +291,12 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
       </div>
     );
   };
-
   return (
     <div className={cn('w-full relative z-20', className)}>
-      {/* Unified: Compact List Layout for all screen sizes */}
       <div className="flex flex-col gap-3">
         {suggestions.map((suggestion, index) => {
           const modeConfig = getModeConfig(suggestion.mode);
           const ModeIcon = modeConfig.icon;
-
           return (
             <motion.button
               key={suggestion.title}
@@ -387,7 +323,6 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
                   <span>{modeConfig.label}</span>
                 </div>
               </div>
-
               <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide">
                 {suggestion.participants
                   .sort((a, b) => a.priority - b.priority)

@@ -19,7 +19,7 @@
  * @see exercises/07-streaming/07.01-custom-data-parts in AI SDK v5 course
  */
 
-import { createIdGenerator } from 'ai';
+import { generateId } from 'ai';
 
 // ============================================================================
 // ID Generation for Data Parts
@@ -28,12 +28,12 @@ import { createIdGenerator } from 'ai';
 /**
  * Create ID generator for data parts
  *
- * Wrapper around AI SDK's createIdGenerator() with clear naming.
+ * Wrapper around AI SDK's generateId() with clear naming.
  * CRITICAL: Each data part needs a unique ID to prevent frontend conflicts.
  *
  * AI SDK v5 Pattern:
- * - createIdGenerator() returns a function that generates sequential IDs
- * - IDs are strings like "0", "1", "2", etc.
+ * - generateId() returns a unique ID string
+ * - IDs are random strings for uniqueness
  * - Prevents ID reuse bugs in streaming custom data
  *
  * Common Bug:
@@ -45,22 +45,20 @@ import { createIdGenerator } from 'ai';
  *
  * @example
  * ```typescript
- * const generateId = createDataPartIdGenerator('analysis');
- * const id1 = generateId(); // "analysis-0"
- * const id2 = generateId(); // "analysis-1"
- * const id3 = generateId(); // "analysis-2"
+ * const generateAnalysisId = createDataPartIdGenerator('analysis');
+ * const id1 = generateAnalysisId(); // "analysis-<random>"
+ * const id2 = generateAnalysisId(); // "analysis-<random>"
+ * const id3 = generateAnalysisId(); // "analysis-<random>"
  * ```
  *
- * @see https://sdk.vercel.ai/docs/reference/ai-sdk-core/create-id-generator
+ * @see https://sdk.vercel.ai/docs/reference/ai-sdk-core/generate-id
  */
 export function createDataPartIdGenerator(prefix?: string): () => string {
-  const baseGenerator = createIdGenerator();
-
   if (!prefix) {
-    return baseGenerator;
+    return generateId;
   }
 
-  return () => `${prefix}-${baseGenerator()}`;
+  return () => `${prefix}-${generateId()}`;
 }
 
 /**
@@ -126,7 +124,7 @@ export function createStreamingDataPart<T = unknown>(
   data: T,
   idGenerator?: () => string,
 ): { id: string; type: string; data: T } {
-  const id = idGenerator ? idGenerator() : createIdGenerator()();
+  const id = idGenerator ? idGenerator() : generateId();
 
   return {
     id,
@@ -171,7 +169,7 @@ export function createMultipleDataParts<T = unknown>(
   dataArray: T[],
   idGenerator?: () => string,
 ): Array<{ id: string; type: string; data: T }> {
-  const generator = idGenerator || createIdGenerator();
+  const generator = idGenerator || generateId;
 
   return dataArray.map(data => ({
     id: generator(),

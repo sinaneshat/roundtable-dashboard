@@ -1,5 +1,4 @@
 'use client';
-
 import { Loader2, ThumbsDown, ThumbsUp } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { memo } from 'react';
@@ -12,21 +11,6 @@ import {
 } from '@/components/ui/tooltip';
 import { cn } from '@/lib/ui/cn';
 
-/**
- * Round Feedback Component
- *
- * Displays like/dislike buttons for a conversation round.
- * Following AI Elements pattern - always visible for better discoverability.
- *
- * Features:
- * - Like button (thumbs up)
- * - Dislike button (thumbs down)
- * - Always visible (AI Elements pattern)
- * - Visual feedback for current state
- * - Loading state during mutation
- * - Tooltips for accessibility
- * - Toggle behavior (click again to remove)
- */
 type RoundFeedbackProps = {
   threadId: string;
   roundNumber: number;
@@ -37,7 +21,6 @@ type RoundFeedbackProps = {
   pendingType?: 'like' | 'dislike' | null;
   className?: string;
 };
-
 function RoundFeedbackComponent({
   currentFeedback,
   onFeedbackChange,
@@ -47,24 +30,16 @@ function RoundFeedbackComponent({
   className,
 }: RoundFeedbackProps) {
   const t = useTranslations('chat.feedback');
-
   const handleLike = () => {
-    // Toggle: if already liked, remove feedback; otherwise set to like
     onFeedbackChange(currentFeedback === 'like' ? null : 'like');
   };
-
   const handleDislike = () => {
-    // Toggle: if already disliked, remove feedback; otherwise set to dislike
     onFeedbackChange(currentFeedback === 'dislike' ? null : 'dislike');
   };
-
-  // Determine which button should show loading state
   const isLikePending = isPending && pendingType === 'like';
   const isDislikePending = isPending && pendingType === 'dislike';
-
   return (
     <>
-      {/* Like Button */}
       <Tooltip>
         <TooltipTrigger asChild>
           <Button
@@ -93,8 +68,6 @@ function RoundFeedbackComponent({
           <p>{t('like')}</p>
         </TooltipContent>
       </Tooltip>
-
-      {/* Dislike Button */}
       <Tooltip>
         <TooltipTrigger asChild>
           <Button
@@ -126,13 +99,9 @@ function RoundFeedbackComponent({
     </>
   );
 }
-
-// Custom comparison function that ignores onFeedbackChange
-// This prevents infinite re-renders when the handler function reference changes
 export const RoundFeedback = memo(
   RoundFeedbackComponent,
   (prevProps, nextProps) => {
-    // Compare all props EXCEPT onFeedbackChange
     return (
       prevProps.threadId === nextProps.threadId
       && prevProps.roundNumber === nextProps.roundNumber

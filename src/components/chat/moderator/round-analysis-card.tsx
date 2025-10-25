@@ -1,5 +1,4 @@
 'use client';
-
 import { Clock, RotateCcw } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -28,7 +27,6 @@ type RoundAnalysisCardProps = {
   onStreamComplete?: (completedAnalysisData?: unknown) => void;
   streamingRoundNumber?: number | null;
 };
-
 export function RoundAnalysisCard({
   analysis,
   threadId,
@@ -39,7 +37,6 @@ export function RoundAnalysisCard({
   streamingRoundNumber,
 }: RoundAnalysisCardProps) {
   const t = useTranslations('moderator');
-
   const statusConfig = {
     pending: {
       label: t('analyzing'),
@@ -58,19 +55,15 @@ export function RoundAnalysisCard({
       color: 'bg-red-500/10 text-red-500 border-red-500/20',
     },
   } as const;
-
   const config = statusConfig[analysis.status];
-
   const [isManuallyControlled, setIsManuallyControlled] = useState(false);
   const [manuallyOpen, setManuallyOpen] = useState(false);
   const [isRetrying, setIsRetrying] = useState(false);
   const prevStreamingRoundRef = useRef<number | null | undefined>(null);
   const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-
   useEffect(() => {
     if (streamingRoundNumber !== prevStreamingRoundRef.current) {
       prevStreamingRoundRef.current = streamingRoundNumber;
-
       if (streamingRoundNumber != null && !isLatest && streamingRoundNumber > analysis.roundNumber) {
         const timeoutId = setTimeout(() => {
           setIsManuallyControlled(false);
@@ -81,26 +74,18 @@ export function RoundAnalysisCard({
     }
     return undefined;
   }, [streamingRoundNumber, isLatest, analysis.roundNumber, threadId]);
-
   const isOpen = isManuallyControlled ? manuallyOpen : isLatest;
-
   const handleOpenChange = useCallback((open: boolean) => {
     setIsManuallyControlled(true);
     setManuallyOpen(open);
   }, []);
-
   const handleRetry = useCallback(async () => {
-    // Debounce: prevent multiple rapid clicks
     if (isRetrying)
       return;
-
-    // Clear any pending retry timeout
     if (retryTimeoutRef.current) {
       clearTimeout(retryTimeoutRef.current);
     }
-
     setIsRetrying(true);
-
     try {
       await fetch(`/api/v1/chat/threads/${threadId}/rounds/${analysis.roundNumber}/analyze`, {
         method: 'POST',
@@ -110,19 +95,13 @@ export function RoundAnalysisCard({
         }),
       });
     } catch {
-      /* Intentionally suppressed */
     }
-
-    // Debounce timeout: re-enable after 2 seconds
     retryTimeoutRef.current = setTimeout(() => {
       setIsRetrying(false);
     }, 2000);
   }, [threadId, analysis.roundNumber, analysis.participantMessageIds, isRetrying]);
-
   const containerRef = useRef<HTMLDivElement>(null);
   const previousStatusRef = useRef(analysis.status);
-
-  // Cleanup timeout on unmount
   useEffect(() => {
     return () => {
       if (retryTimeoutRef.current) {
@@ -130,11 +109,9 @@ export function RoundAnalysisCard({
       }
     };
   }, []);
-
   useEffect(() => {
     const justCompleted = (previousStatusRef.current === AnalysisStatuses.PENDING || previousStatusRef.current === AnalysisStatuses.STREAMING)
       && analysis.status === AnalysisStatuses.COMPLETED;
-
     const cleanup = (() => {
       if (justCompleted && isLatest && isOpen && containerRef.current) {
         const scrollTimeout = setTimeout(() => {
@@ -144,17 +121,13 @@ export function RoundAnalysisCard({
             inline: 'nearest',
           });
         }, 300);
-
         return () => clearTimeout(scrollTimeout);
       }
       return undefined;
     })();
-
     previousStatusRef.current = analysis.status;
-
     return cleanup;
   }, [analysis.status, isLatest, isOpen]);
-
   return (
     <div ref={containerRef} className={cn('py-1.5', className)}>
       <ChainOfThought open={isOpen} onOpenChange={handleOpenChange}>
@@ -164,16 +137,13 @@ export function RoundAnalysisCard({
             <span className="text-sm font-medium">
               {t('roundAnalysis', { number: analysis.roundNumber })}
             </span>
-
             <Badge variant="outline" className={cn('text-xs h-6', config.color)}>
               {config.label}
             </Badge>
-
             <span className="hidden md:inline text-sm text-muted-foreground">•</span>
             <span className="hidden md:inline text-xs text-muted-foreground capitalize">
               {t(`mode.${analysis.mode}`)}
             </span>
-
             {analysis.status === AnalysisStatuses.FAILED && (
               <button
                 type="button"
@@ -196,7 +166,6 @@ export function RoundAnalysisCard({
             )}
           </div>
         </ChainOfThoughtHeader>
-
         <ChainOfThoughtContent>
           <div className="space-y-4">
             {analysis.userQuestion && analysis.userQuestion !== 'N/A' && (
@@ -207,7 +176,6 @@ export function RoundAnalysisCard({
                 </p>
               </div>
             )}
-
             {(analysis.status === AnalysisStatuses.PENDING || analysis.status === AnalysisStatuses.STREAMING)
               ? (
                   <ModeratorAnalysisStream
@@ -224,7 +192,6 @@ export function RoundAnalysisCard({
                       {analysis.analysisData.leaderboard && analysis.analysisData.leaderboard.length > 0 && (
                         <LeaderboardCard leaderboard={analysis.analysisData.leaderboard} />
                       )}
-
                       {analysis.analysisData.participantAnalyses && analysis.analysisData.participantAnalyses.length > 0 && (
                         <>
                           <SkillsComparisonChart participants={analysis.analysisData.participantAnalyses} />
@@ -238,7 +205,6 @@ export function RoundAnalysisCard({
                           </div>
                         </>
                       )}
-
                       {analysis.analysisData.overallSummary && (
                         <div className="space-y-1.5 pt-2">
                           <h3 className="text-sm font-semibold">{t('summary')}</h3>
@@ -247,7 +213,6 @@ export function RoundAnalysisCard({
                           </p>
                         </div>
                       )}
-
                       {analysis.analysisData.conclusion && (
                         <div className="space-y-1.5 pt-2">
                           <h3 className="text-sm font-semibold text-primary">{t('conclusion')}</h3>

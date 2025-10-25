@@ -1,5 +1,4 @@
 'use client';
-
 import { ChevronDown } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import type { ReactNode } from 'react';
@@ -21,21 +20,6 @@ type SidebarSectionProps = {
   className?: string;
   collapsible?: boolean;
 };
-
-/**
- * SidebarSection - Reusable collapsible section for sidebar
- *
- * Features:
- * - Optional collapsible behavior
- * - Icon support
- * - Count badge
- * - Smooth animations
- * - Follows Open WebUI sidebar patterns
- *
- * Based on:
- * - Radix Collapsible primitives
- * - shadcn/ui patterns from `/docs/frontend-patterns.md`
- */
 export function SidebarSection({
   title,
   icon,
@@ -46,7 +30,6 @@ export function SidebarSection({
   collapsible = true,
 }: SidebarSectionProps) {
   const [isOpen, setIsOpen] = useState(defaultOpen);
-
   if (!collapsible) {
     return (
       <div className={cn('space-y-1', className)}>
@@ -67,7 +50,6 @@ export function SidebarSection({
       </div>
     );
   }
-
   return (
     <Collapsible
       open={isOpen}
@@ -99,7 +81,6 @@ export function SidebarSection({
           />
         </div>
       </CollapsibleTrigger>
-
       <CollapsibleContent asChild>
         <AnimatePresence initial={false}>
           {isOpen && (

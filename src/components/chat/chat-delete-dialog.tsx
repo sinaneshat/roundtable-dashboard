@@ -1,5 +1,4 @@
 'use client';
-
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 
@@ -21,17 +20,8 @@ type ChatDeleteDialogProps = {
   onOpenChange: (open: boolean) => void;
   threadId: string;
   threadSlug?: string;
-  /**
-   * If true and current URL matches thread slug, redirects to /chat after deletion
-   */
   redirectIfCurrent?: boolean;
 };
-
-/**
- * Reusable delete confirmation dialog
- * Shared between sidebar and thread page
- * Follows same patterns and mutations as sidebar implementation
- */
 export function ChatDeleteDialog({
   isOpen,
   onOpenChange,
@@ -43,7 +33,6 @@ export function ChatDeleteDialog({
   const tActions = useTranslations('actions');
   const router = useRouter();
   const deleteThreadMutation = useDeleteThreadMutation();
-
   const handleDelete = () => {
     deleteThreadMutation.mutate({ param: { id: threadId } }, {
       onSuccess: () => {
@@ -51,15 +40,12 @@ export function ChatDeleteDialog({
           t('threadDeleted'),
           t('threadDeletedDescription'),
         );
-
-        // Redirect if current thread is being deleted
         if (redirectIfCurrent && threadSlug) {
           const currentPath = window.location.pathname;
           if (currentPath.includes(`/chat/${threadSlug}`)) {
             router.push('/chat');
           }
         }
-
         onOpenChange(false);
       },
       onError: () => {
@@ -70,7 +56,6 @@ export function ChatDeleteDialog({
       },
     });
   };
-
   return (
     <AlertDialog open={isOpen} onOpenChange={onOpenChange}>
       <AlertDialogContent>

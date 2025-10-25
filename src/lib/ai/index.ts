@@ -159,7 +159,7 @@ export type {
  */
 export {
   convertToModelMessages,
-  createIdGenerator,
+  generateId,
   generateObject,
   generateText,
   streamObject,

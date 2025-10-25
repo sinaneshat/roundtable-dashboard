@@ -202,13 +202,6 @@ export const ThreadCacheTags = {
   bySlug: (slug: string) => `thread-slug-${slug}`,
 
   /**
-   * Thread messages
-   * TTL: 5 seconds (near real-time for chat)
-   * @example 'thread-messages-01JHJZ8X9Z3Q7W5KFDNMH3R4QV'
-   */
-  messages: (threadId: string) => `thread-messages-${threadId}`,
-
-  /**
    * Thread participants
    * TTL: 10 seconds
    * @example 'thread-participants-01JHJZ8X9Z3Q7W5KFDNMH3R4QV'
@@ -217,14 +210,13 @@ export const ThreadCacheTags = {
 
   /**
    * Get all thread-related cache tags for bulk invalidation
-   * @example ['threads-list-...', 'thread-...', 'thread-messages-...', 'thread-participants-...']
+   * @example ['threads-list-...', 'thread-...', 'thread-participants-...']
    */
   all: (userId: string, threadId?: string, slug?: string) => {
     const tags = [ThreadCacheTags.list(userId)];
     if (threadId) {
       tags.push(
         ThreadCacheTags.single(threadId),
-        ThreadCacheTags.messages(threadId),
         ThreadCacheTags.participants(threadId),
       );
     }

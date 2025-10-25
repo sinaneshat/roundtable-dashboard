@@ -1,5 +1,4 @@
 'use client';
-
 import { Check, Copy, Facebook, Linkedin, Mail, Share2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import {
@@ -29,32 +28,13 @@ import { BRAND } from '@/constants/brand';
 import { useBoolean } from '@/hooks/utils';
 import { cn } from '@/lib/ui/cn';
 
-/**
- * Social Share Button Component
- *
- * Provides a dropdown menu with social media sharing options:
- * - Twitter/X
- * - LinkedIn
- * - Facebook
- * - Reddit
- * - Email
- * - Copy Link
- *
- * Uses shadcn DropdownMenu pattern for consistent UX
- */
 type SocialShareButtonProps = {
-  /** The URL to share */
   url: string;
-  /** Title for the shared content */
   title: string;
-  /** Optional description for platforms that support it */
   description?: string;
-  /** Show text on larger screens, icon only on small screens */
   showTextOnLargeScreens?: boolean;
-  /** Custom className for the trigger button */
   className?: string;
 };
-
 export function SocialShareButton({
   url,
   title,
@@ -65,11 +45,8 @@ export function SocialShareButton({
   const t = useTranslations('chat');
   const isOpen = useBoolean(false);
   const copySuccess = useBoolean(false);
-
-  // Prepare sharing text with brand mention
   const shareTitle = `${title} - ${BRAND.displayName}`;
   const shareDescription = description || `Check out this conversation on ${BRAND.displayName}, where multiple AI models collaborate to solve problems.`;
-
   const handleCopyLink = async () => {
     try {
       await navigator.clipboard.writeText(url);
@@ -79,11 +56,8 @@ export function SocialShareButton({
         isOpen.onFalse();
       }, 2000);
     } catch {
-      // Clipboard copy failed - gracefully handled by not showing success message
     }
   };
-
-  // Social share platforms configuration
   const shareButtons = [
     {
       name: 'X (Twitter)',
@@ -124,7 +98,6 @@ export function SocialShareButton({
       props: { subject: shareTitle, body: `${shareDescription}\n\n${url}`, url },
     },
   ];
-
   return (
     <DropdownMenu open={isOpen.value} onOpenChange={isOpen.setValue}>
       <TooltipProvider>
@@ -162,7 +135,6 @@ export function SocialShareButton({
           </TooltipContent>
         </Tooltip>
       </TooltipProvider>
-
       <DropdownMenuContent align="end" className="w-56">
         <DropdownMenuLabel>
           <div className="flex flex-col gap-1">
@@ -173,12 +145,10 @@ export function SocialShareButton({
           </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-
         {shareButtons.map(({ name, icon, Component, props }) => (
           <Component
             key={name}
             {...props}
-            // Wrap in DropdownMenuItem for proper styling
             beforeOnClick={() => {
               isOpen.onFalse();
             }}
@@ -194,9 +164,7 @@ export function SocialShareButton({
             </DropdownMenuItem>
           </Component>
         ))}
-
         <DropdownMenuSeparator />
-
         <DropdownMenuItem
           className="cursor-pointer"
           onClick={handleCopyLink}

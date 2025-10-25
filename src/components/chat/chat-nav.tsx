@@ -1,5 +1,4 @@
 'use client';
-
 import { Flame, MessageSquare, MessageSquarePlus, Plus, Search, Star } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -43,17 +42,12 @@ import { useDeleteThreadMutation } from '@/hooks/mutations/chat-mutations';
 import { useThreadsQuery } from '@/hooks/queries/chat';
 import { toastManager } from '@/lib/toast/toast-manager';
 
-// ✅ CRITICAL: Memoize sidebar to prevent re-renders during message streaming
-// Without this, every message update triggers sidebar re-render, causing Next.js prefetch requests
 function AppSidebarComponent({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const router = useRouter();
   const t = useTranslations();
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const { isMobile, setOpenMobile } = useSidebar();
-
-  // Fetch real threads from API with infinite scroll (50 items initially, 20 per page after)
-  // Following React Query v5 best practices: handle isLoading, isError, isFetchingNextPage
   const {
     data: threadsData,
     fetchNextPage,
@@ -63,63 +57,48 @@ function AppSidebarComponent({ ...props }: React.ComponentProps<typeof Sidebar>)
     isError,
     error,
   } = useThreadsQuery();
-
-  // Mutations
   const deleteThreadMutation = useDeleteThreadMutation();
-
-  // Transform threads to Chat type
   const chats: Chat[] = useMemo(() => {
     if (!threadsData?.pages)
       return [];
-
     const threads = threadsData.pages.flatMap(page =>
       page.success && page.data?.items ? page.data.items : [],
     );
-
     return threads.map(thread => ({
       id: thread.id,
       title: thread.title,
       slug: thread.slug,
       createdAt: new Date(thread.createdAt),
       updatedAt: new Date(thread.updatedAt),
-      messages: [], // Messages loaded separately when viewing thread
+      messages: [],
       isFavorite: thread.isFavorite ?? false,
       isPublic: thread.isPublic ?? false,
     }));
   }, [threadsData]);
-
-  // Keyboard shortcut to open search (Cmd+K / Ctrl+K)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
         e.preventDefault();
         setIsSearchOpen(true);
-        // Close mobile sidebar when search opens
         if (isMobile) {
           setOpenMobile(false);
         }
       }
     };
-
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isMobile, setOpenMobile]);
-
   const handleNewChat = () => {
     router.push('/chat');
     if (isMobile) {
       setOpenMobile(false);
     }
   };
-
   const handleDeleteChat = (chatId: string) => {
-    // Find the chat being deleted to get its slug
     const chat = chats.find(c => c.id === chatId);
     const chatSlug = chat?.slug;
-
     deleteThreadMutation.mutate({ param: { id: chatId } }, {
       onSuccess: () => {
-        // If deleting the currently viewed thread, redirect to /chat
         if (chatSlug) {
           const currentPath = window.location.pathname;
           if (currentPath.includes(`/chat/${chatSlug}`)) {
@@ -135,50 +114,32 @@ function AppSidebarComponent({ ...props }: React.ComponentProps<typeof Sidebar>)
       },
     });
   };
-
-  // Get favorites from chats and group them by time
   const favorites = useMemo(() =>
     chats.filter(chat => chat.isFavorite), [chats]);
-
   const favoriteGroups = useMemo(() =>
     groupChatsByPeriod(favorites), [favorites]);
-
-  // Get non-favorite chats for grouping
   const nonFavoriteChats = useMemo(() =>
     chats.filter(chat => !chat.isFavorite), [chats]);
-
   const chatGroups = groupChatsByPeriod(nonFavoriteChats);
-
-  // Extract loading states from mutations
   const deletingChatId = deleteThreadMutation.isPending && deleteThreadMutation.variables?.param?.id
     ? deleteThreadMutation.variables.param.id
     : null;
-
-  // Infinite scroll handler - Following TanStack Query official patterns
   const handleScroll = useCallback(() => {
     if (!scrollAreaRef.current || !hasNextPage || isFetchingNextPage)
       return;
-
     const { scrollTop, scrollHeight, clientHeight } = scrollAreaRef.current;
     const scrollPercentage = (scrollTop + clientHeight) / scrollHeight;
-
-    // Load more when scrolled to 80% of the content
-    // Following official TanStack Query pattern: hasNextPage && !isFetchingNextPage && fetchNextPage()
     if (scrollPercentage > 0.8) {
       fetchNextPage();
     }
   }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
-
-  // Attach scroll listener
   useEffect(() => {
     const scrollArea = scrollAreaRef.current;
     if (!scrollArea)
       return;
-
     scrollArea.addEventListener('scroll', handleScroll);
     return () => scrollArea.removeEventListener('scroll', handleScroll);
   }, [handleScroll]);
-
   return (
     <>
       <TooltipProvider>
@@ -212,21 +173,16 @@ function AppSidebarComponent({ ...props }: React.ComponentProps<typeof Sidebar>)
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
-
-              {/* New Chat Button - Visible in both expanded and collapsed states */}
               <SidebarMenuItem>
                 <SidebarMenuButton onClick={handleNewChat} tooltip={t('navigation.newChat')}>
                   <Plus className="size-4" />
                   <span>{t('navigation.newChat')}</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
-
-              {/* Search Button - Icon only when collapsed */}
               <SidebarMenuItem className="group-data-[collapsible=icon]:block hidden">
                 <SidebarMenuButton
                   onClick={() => {
                     setIsSearchOpen(true);
-                    // Close mobile sidebar when search opens
                     if (isMobile) {
                       setOpenMobile(false);
                     }
@@ -238,15 +194,12 @@ function AppSidebarComponent({ ...props }: React.ComponentProps<typeof Sidebar>)
                 </SidebarMenuButton>
               </SidebarMenuItem>
             </SidebarMenu>
-
-            {/* Search Bar - Only visible when expanded */}
             <SidebarGroup className="py-0 group-data-[collapsible=icon]:hidden">
               <Button
                 variant="outline"
                 className="w-full justify-start text-sm text-muted-foreground h-9"
                 onClick={() => {
                   setIsSearchOpen(true);
-                  // Close mobile sidebar when search opens
                   if (isMobile) {
                     setOpenMobile(false);
                   }
@@ -261,13 +214,9 @@ function AppSidebarComponent({ ...props }: React.ComponentProps<typeof Sidebar>)
               </Button>
             </SidebarGroup>
           </SidebarHeader>
-
           <SidebarContent className="p-0">
             <ScrollArea ref={scrollAreaRef} className="h-full w-full">
               <div className="px-2 py-2 space-y-2">
-                {/* ==================== NEW SECTIONS (Open WebUI-inspired) ==================== */}
-
-                {/* Favorites Section - Always visible, collapsible, with time-based grouping */}
                 {!isLoading && !isError && favorites.length > 0 && (
                   <div className="group-data-[collapsible=icon]:hidden">
                     <SidebarSection
@@ -293,8 +242,6 @@ function AppSidebarComponent({ ...props }: React.ComponentProps<typeof Sidebar>)
                     </SidebarSection>
                   </div>
                 )}
-
-                {/* Trending Section - Coming soon */}
                 <div className="group-data-[collapsible=icon]:hidden">
                   <div className="space-y-1 opacity-60 cursor-not-allowed">
                     <div className="flex items-center justify-between px-2 py-1">
@@ -314,13 +261,7 @@ function AppSidebarComponent({ ...props }: React.ComponentProps<typeof Sidebar>)
                     </div>
                   </div>
                 </div>
-
-                {/* ==================== EXISTING CHAT SECTIONS (Now Collapsible) ==================== */}
-
-                {/* Initial Loading State - Following React Query v5 pattern */}
                 {isLoading && <ChatSidebarSkeleton count={15} showFavorites={false} />}
-
-                {/* Error State - Following React Query v5 pattern - Hidden when collapsed */}
                 {isError && (
                   <div className="px-2 py-4 text-center group-data-[collapsible=icon]:hidden">
                     <p className="text-sm text-destructive mb-2">
@@ -331,8 +272,6 @@ function AppSidebarComponent({ ...props }: React.ComponentProps<typeof Sidebar>)
                     </p>
                   </div>
                 )}
-
-                {/* Empty State - No chats yet */}
                 {!isLoading && !isError && chats.length === 0 && (
                   <div className="px-2 py-4 group-data-[collapsible=icon]:hidden">
                     <Empty className="border-none p-4">
@@ -348,11 +287,8 @@ function AppSidebarComponent({ ...props }: React.ComponentProps<typeof Sidebar>)
                     </Empty>
                   </div>
                 )}
-
-                {/* Data Loaded - Show Chat List */}
                 {!isLoading && !isError && chatGroups.length > 0 && (
                   <div className="group-data-[collapsible=icon]:hidden">
-                    {/* Single "Chat" section - Always expanded */}
                     <SidebarSection
                       title={t('navigation.chat')}
                       icon={<MessageSquare className="size-3.5" />}
@@ -373,11 +309,7 @@ function AppSidebarComponent({ ...props }: React.ComponentProps<typeof Sidebar>)
                           }
                         }}
                       />
-
-                      {/* Pagination Loading Skeleton - Following React Query v5 pattern */}
                       {isFetchingNextPage && <ChatSidebarPaginationSkeleton count={20} />}
-
-                      {/* Show end message when no more pages */}
                       {!hasNextPage && !isFetchingNextPage && chats.length > 0 && (
                         <div className="px-2 py-4 text-center text-xs text-muted-foreground">
                           {t('chat.noMoreThreads')}
@@ -389,15 +321,11 @@ function AppSidebarComponent({ ...props }: React.ComponentProps<typeof Sidebar>)
               </div>
             </ScrollArea>
           </SidebarContent>
-
           <SidebarFooter>
             <NavUser />
           </SidebarFooter>
-
           <SidebarRail />
         </Sidebar>
-
-        {/* Command Search Modal */}
         <CommandSearch
           isOpen={isSearchOpen}
           onClose={() => setIsSearchOpen(false)}
@@ -406,6 +334,4 @@ function AppSidebarComponent({ ...props }: React.ComponentProps<typeof Sidebar>)
     </>
   );
 }
-
-// Export memoized version to prevent unnecessary re-renders
 export const AppSidebar = React.memo(AppSidebarComponent);

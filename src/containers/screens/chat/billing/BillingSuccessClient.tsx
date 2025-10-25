@@ -14,44 +14,22 @@ import { useSyncAfterCheckoutMutation } from '@/hooks/mutations/checkout';
 import { useCurrentSubscriptionQuery, useSubscriptionsQuery } from '@/hooks/queries/subscriptions';
 import { useUsageStatsQuery } from '@/hooks/queries/usage';
 
-/**
- * Billing Success Client Component - Client-Side Sync Pattern
- *
- * This component handles the post-checkout flow with client-side sync:
- * 1. Initiates sync mutation on mount
- * 2. Shows loading states with progress indicators
- * 3. Fetches subscription data after sync completes
- * 4. Displays subscription details and plan limitations
- *
- * ✅ User sees sync progress in real-time
- * ✅ Clear loading states and error handling
- * ✅ Shows activated subscription with plan details
- * ✅ Displays plan limitations based on tier
- */
 export function BillingSuccessClient() {
   const router = useRouter();
   const t = useTranslations();
-  const [countdown, setCountdown] = useState(10); // 10 second countdown
+  const [countdown, setCountdown] = useState(10);
 
-  // Sync mutation
   const syncMutation = useSyncAfterCheckoutMutation();
 
-  // Subscription queries - automatically fetch after sync completes
   const { data: subscriptionData, isFetching: isSubscriptionsFetching } = useSubscriptionsQuery();
   const { data: currentSubscription, isFetching: isCurrentSubscriptionFetching } = useCurrentSubscriptionQuery();
 
-  // Get usage stats for tier quotas
   const { data: usageStats, isFetching: isUsageStatsFetching } = useUsageStatsQuery();
 
-  // Track initialization to prevent double-calls in React.StrictMode
   const hasInitiatedSync = useRef(false);
 
-  // ✅ REACT 19 PATTERN: Derive display subscription during render, no useEffect setState
-  // Query data is stable during render, no need to "capture" it in state
   const displaySubscription = currentSubscription || subscriptionData?.data?.items?.[0] || null;
 
-  // ✅ Initiate sync once on mount (billing success page requires immediate sync)
-  // Ref guard prevents double-calls in React.StrictMode
   useEffect(() => {
     if (!hasInitiatedSync.current) {
       syncMutation.mutate(undefined);
@@ -59,10 +37,7 @@ export function BillingSuccessClient() {
     }
   }, [syncMutation]);
 
-  // Countdown timer for auto-redirect
   useEffect(() => {
-    // ✅ FIX: Only start countdown after sync AND queries are complete
-    // This ensures we have fresh subscription data before redirecting
     const isDataReady = syncMutation.isSuccess
       && !isSubscriptionsFetching
       && !isCurrentSubscriptionFetching
@@ -83,9 +58,6 @@ export function BillingSuccessClient() {
     return () => clearTimeout(timer);
   }, [countdown, syncMutation.isSuccess, isSubscriptionsFetching, isCurrentSubscriptionFetching, isUsageStatsFetching, router]);
 
-  // Loading state - syncing OR refetching subscription data after sync
-  // ✅ FIX: Wait for both sync AND subscription queries to complete
-  // This prevents showing empty plan details due to race condition
   const isLoadingData = syncMutation.isPending
     || (syncMutation.isSuccess && (isSubscriptionsFetching || isCurrentSubscriptionFetching || isUsageStatsFetching));
 
@@ -118,7 +90,6 @@ export function BillingSuccessClient() {
     );
   }
 
-  // Error state
   if (syncMutation.isError) {
     return (
       <div className="flex min-h-screen w-full flex-col items-center justify-start px-4 pt-16 md:pt-20">
@@ -158,19 +129,15 @@ export function BillingSuccessClient() {
     );
   }
 
-  // Success state - show subscription details
-  // Use centralized tier mapping from ai-config service
   const tierString = displaySubscription?.price?.productId
     ? getTierFromProductId(displaySubscription.price.productId)
     : 'free';
 
-  // ✅ RUNTIME VALIDATION: Validate tier is a valid SubscriptionTier
   const validTiers: SubscriptionTier[] = ['free', 'starter', 'pro', 'power'];
   const tier: SubscriptionTier = validTiers.includes(tierString as SubscriptionTier)
     ? (tierString as SubscriptionTier)
-    : 'free'; // Fallback to free if invalid
+    : 'free';
 
-  // ✅ SINGLE SOURCE OF TRUTH: Get tier quotas from usage stats (database-driven)
   const tierName = SUBSCRIPTION_TIER_NAMES[tier];
   const maxModels = getMaxModelsForTier(tier);
   const threadsLimit = usageStats?.data?.threads?.limit || 0;
@@ -238,7 +205,7 @@ export function BillingSuccessClient() {
                   <div className="space-y-1">
                     <p className="text-sm font-medium">{t('billing.success.planLimits.maxMemories')}</p>
                     <p className="text-2xl font-bold text-primary">
-                      {/* Memories not in current schema, show as 0 for now */}
+                      {}
                       0
                     </p>
                   </div>

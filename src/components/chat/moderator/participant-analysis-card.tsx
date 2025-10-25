@@ -1,17 +1,4 @@
 'use client';
-
-/**
- * ParticipantAnalysisCard Component
- *
- * ✅ CLEAN MINIMALIST DESIGN:
- * - NO separators or borders
- * - NO count badges
- * - Uses getAvatarPropsFromModelId for proper icon loading
- * - Simple card with pros/cons and summary
- * - High contrast text
- * ✅ ZERO HARDCODING: Import types from RPC schema
- */
-
 import { motion } from 'framer-motion';
 import { CheckCircle2, XCircle } from 'lucide-react';
 import { useTranslations } from 'next-intl';
@@ -25,22 +12,9 @@ type ParticipantAnalysisCardProps = {
   analysis: ParticipantAnalysis;
   rank?: number;
 };
-
-/**
- * ParticipantAnalysisCard - Minimal, borderless card for participant summary
- *
- * @param props - Component props
- * @param props.analysis - Participant analysis data
- * @param props.rank - Optional rank in leaderboard
- */
 export function ParticipantAnalysisCard({ analysis, rank }: ParticipantAnalysisCardProps) {
   const t = useTranslations('moderator');
-
-  // ✅ AI SDK V5 PATTERN: Use optional chaining for partial objects
   const avatarProps = getAvatarPropsFromModelId('assistant', analysis.modelId ?? '');
-
-  // Format rating for display with safe access
-  // Use '–' (en dash) instead of '...' to avoid looking like a loading indicator
   const ratingDisplay = analysis.overallRating?.toFixed(1) ?? '–';
   const ratingColor = analysis.overallRating
     ? analysis.overallRating >= 8
@@ -49,7 +23,6 @@ export function ParticipantAnalysisCard({ analysis, rank }: ParticipantAnalysisC
         ? 'text-yellow-500'
         : 'text-orange-500'
     : 'text-foreground/60';
-
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
@@ -57,11 +30,8 @@ export function ParticipantAnalysisCard({ analysis, rank }: ParticipantAnalysisC
       transition={{ duration: 0.2 }}
       className="relative w-full"
     >
-      {/* Minimal container - NO borders */}
       <div className="relative flex flex-col gap-3 p-3 rounded-lg bg-background/5">
-        {/* Header: Avatar + Model Info + Rating */}
         <div className="flex items-center gap-3">
-          {/* Model Avatar with rank badge */}
           <div className="relative flex-shrink-0">
             <Avatar className="size-10 ring-1 ring-white/10">
               <AvatarImage src={avatarProps.src} alt={avatarProps.name} />
@@ -85,8 +55,6 @@ export function ParticipantAnalysisCard({ analysis, rank }: ParticipantAnalysisC
               </motion.div>
             )}
           </div>
-
-          {/* Model Info */}
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <h3 className="text-sm font-semibold text-foreground">
@@ -101,8 +69,6 @@ export function ParticipantAnalysisCard({ analysis, rank }: ParticipantAnalysisC
               )}
             </div>
           </div>
-
-          {/* Rating Badge - Compact */}
           <div className="flex-shrink-0">
             <div className="flex items-center gap-1 px-2 py-1 rounded-md bg-background/20">
               <span className={cn('text-lg font-bold', ratingColor)}>
@@ -112,10 +78,7 @@ export function ParticipantAnalysisCard({ analysis, rank }: ParticipantAnalysisC
             </div>
           </div>
         </div>
-
-        {/* Pros & Cons Grid - Better spacing and readability */}
         <div className="grid grid-cols-2 gap-3 text-xs">
-          {/* Pros */}
           <div className="space-y-1.5">
             <div className="flex items-center gap-2">
               <CheckCircle2 className="size-3.5 text-green-500 flex-shrink-0" />
@@ -141,8 +104,6 @@ export function ParticipantAnalysisCard({ analysis, rank }: ParticipantAnalysisC
               )}
             </ul>
           </div>
-
-          {/* Cons */}
           <div className="space-y-1.5">
             <div className="flex items-center gap-2">
               <XCircle className="size-3.5 text-orange-500 flex-shrink-0" />
@@ -169,8 +130,6 @@ export function ParticipantAnalysisCard({ analysis, rank }: ParticipantAnalysisC
             </ul>
           </div>
         </div>
-
-        {/* Summary - Better readability */}
         {analysis.summary && (
           <div className="space-y-1">
             <h4 className="text-xs font-semibold text-foreground">{t('summary')}</h4>

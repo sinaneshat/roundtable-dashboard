@@ -366,6 +366,11 @@
         "added": "added",
         "modified": "modified",
         "removed": "removed"
+      },
+      "errorBoundary": {
+        "title": "Unable to display configuration changes",
+        "description": "There was an error loading the configuration history. The conversation content is still available.",
+        "retry": "Try Again"
       }
     },
     "errors": {
@@ -425,7 +430,17 @@
       "howToFix": "How to fix",
       "emptyResponse": "No Response Generated",
       "tryDifferentModel": "Try using a different AI model",
-      "tryDifferentPrompt": "Rephrase your question or use a different prompt"
+      "tryDifferentPrompt": "Rephrase your question or use a different prompt",
+      "messageList": {
+        "title": "Unable to Display Messages",
+        "description": "There was an error rendering the conversation messages. Your conversation is safe and can be recovered.",
+        "whatToDo": "What you can do:",
+        "tryRefresh": "Click the Retry button to attempt re-rendering messages",
+        "continueConversation": "You can still continue the conversation with new messages",
+        "contactSupport": "Contact support if this issue persists",
+        "retry": "Retry Rendering",
+        "refreshPage": "Refresh Page"
+      }
     },
     "addToFavorites": "Add to favorites",
     "addingToFavorites": "Adding to favorites...",

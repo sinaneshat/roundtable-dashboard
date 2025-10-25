@@ -1,9 +1,9 @@
 'use client';
-
 import type { ChatStatus } from 'ai';
 import { ArrowUp, Square, X } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import type { FormEvent } from 'react';
+import { useEffect, useRef } from 'react';
 
 import type { ParticipantConfig } from '@/components/chat/chat-form-schemas';
 import { Button } from '@/components/ui/button';
@@ -12,60 +12,22 @@ import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { useModelsQuery } from '@/hooks/queries/models';
 import { cn } from '@/lib/ui/cn';
 
-// ============================================================================
-// OFFICIAL AI SDK PATTERN: Chat Input Component
-// Following official documentation - no custom types or logic
-// ============================================================================
-
-// Stable default values to prevent re-renders
 const EMPTY_PARTICIPANTS: ParticipantConfig[] = [];
-
 type ChatInputProps = {
-  /** Current input value */
   value: string;
-  /** Input change handler */
   onChange: (value: string) => void;
-  /** Form submit handler */
   onSubmit: (e: FormEvent) => void;
-  /** Chat status from official AI SDK */
   status: ChatStatus;
-  /** Stop handler for interrupting streaming */
   onStop?: () => void;
-  /** Placeholder text */
   placeholder?: string;
-  /** Disabled state */
   disabled?: boolean;
-  /** Auto focus */
   autoFocus?: boolean;
-  /** Toolbar content (participants, mode selectors) */
   toolbar?: React.ReactNode;
-  /** Selected participants to display as chips */
   participants?: ParticipantConfig[];
-  /** Callback to remove a participant */
   onRemoveParticipant?: (participantId: string) => void;
-  /** Additional className */
   className?: string;
-  /** Current participant index during streaming */
   currentParticipantIndex?: number;
 };
-
-/**
- * Shared Chat Input Component
- *
- * OFFICIAL AI SDK PATTERN + ENHANCED UX:
- * - Uses ChatStatus from 'ai' package (no custom types)
- * - Simple form submission with useState + onChange
- * - Double-layer glassmorphic border design
- * - Selected models displayed as chips at bottom
- * - Model icons and roles shown in chips
- * - Quick remove functionality with X button
- *
- * Design Inspiration:
- * - Double-border glass effect with different opacities
- * - Clean chip display for selected models
- * - Prominent submit button
- * - Responsive and mobile-friendly
- */
 export function ChatInput({
   value,
   onChange,
@@ -84,31 +46,32 @@ export function ChatInput({
   const t = useTranslations();
   const { data: modelsData } = useModelsQuery();
   const allModels = modelsData?.data?.items || [];
-
-  // ✅ FIX: AI SDK v5 uses 'in_progress' for streaming, not 'submitted' or 'streaming'
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const isStreaming = status !== 'ready';
-
-  // ✅ FIX: Calculate streaming progress for button label
   const streamingProgress = isStreaming && currentParticipantIndex !== undefined && participants.length > 1
-    ? `${currentParticipantIndex + 1}/${participants.length}`
+    ? `${currentParticipantIndex}/${participants.length}`
     : null;
-
-  // Submit button should be disabled when explicitly disabled or when not ready AND not streaming (error state)
   const isDisabled = disabled || status === 'error';
-  // ✅ VALIDATION: Submit should be disabled if no participants are selected or input is empty
   const hasValidInput = value.trim().length > 0 && participants.length > 0;
 
-  // OFFICIAL PATTERN: Simple keyboard handler
+  useEffect(() => {
+    if (autoFocus && textareaRef.current) {
+      const timeoutId = setTimeout(() => {
+        textareaRef.current?.focus();
+      }, 100);
+      return () => clearTimeout(timeoutId);
+    }
+    return undefined;
+  }, [autoFocus]);
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       onSubmit(e as unknown as FormEvent);
     }
   };
-
   return (
     <div className="w-full">
-      {/* ✅ DOUBLE-LAYER GLASS BORDER: Outer container with subtle border */}
       <div className={cn(
         'relative h-full',
         'rounded-2xl md:rounded-3xl',
@@ -118,7 +81,6 @@ export function ChatInput({
         className,
       )}
       >
-        {/* ✅ GLOWING EFFECT: Interactive gradient border animation */}
         <GlowingEffect
           blur={0}
           borderWidth={2}
@@ -128,8 +90,6 @@ export function ChatInput({
           proximity={64}
           inactiveZone={0.01}
         />
-
-        {/* ✅ INNER GLASS LAYER: Glass see-through design with strong blur */}
         <div className={cn(
           'relative flex flex-col overflow-hidden',
           'rounded-xl',
@@ -137,12 +97,10 @@ export function ChatInput({
           'dark:shadow-[0px_0px_27px_0px_#2D2D2D]',
         )}
         >
-          {/* OFFICIAL PATTERN: Simple HTML form */}
           <form onSubmit={onSubmit} className="flex flex-col">
-            {/* Main Input Area - NO submit button here */}
             <div className="relative flex items-end px-5 py-4">
-              {/* Textarea Input */}
               <textarea
+                ref={textareaRef}
                 value={value}
                 onChange={e => onChange(e.target.value)}
                 onKeyDown={handleKeyDown}
@@ -151,22 +109,12 @@ export function ChatInput({
                 rows={1}
                 className="flex-1 bg-transparent border-0 text-base focus:outline-none focus:ring-0 placeholder:text-muted-foreground/60 disabled:opacity-50 resize-none min-h-[44px] max-h-[200px]"
                 style={{ fieldSizing: 'content' } as React.CSSProperties}
-                // eslint-disable-next-line jsx-a11y/no-autofocus -- Intentional UX for chat input
-                autoFocus={autoFocus}
               />
             </div>
-
-            {/* Footer Section: Two rows - toolbar first, then chips */}
             <div className="border-t border-white/5">
-              {/* Row 1: Toolbar buttons and submit button */}
               <div className="px-5 py-3 flex items-center gap-2">
-                {/* Toolbar buttons on the left */}
                 {toolbar}
-
-                {/* Spacer to push submit button to the right */}
                 <div className="flex-1" />
-
-                {/* Submit/Stop Button on the far right - square icon button */}
                 {isStreaming && onStop
                   ? (
                       <Button
@@ -196,8 +144,6 @@ export function ChatInput({
                       </Button>
                     )}
               </div>
-
-              {/* Row 2: Selected model chips (separate row below toolbar) */}
               {participants.length > 0 && (
                 <div className="px-5 pb-3 pt-2">
                   <ScrollArea className="w-full">
@@ -208,7 +154,6 @@ export function ChatInput({
                           const model = allModels.find(m => m.id === participant.modelId);
                           if (!model)
                             return null;
-
                           return (
                             <div
                               key={participant.id}
@@ -220,12 +165,9 @@ export function ChatInput({
                                 'flex-shrink-0',
                               )}
                             >
-                              {/* Model Name */}
                               <span className="text-xs leading-none">
                                 {model.name}
                               </span>
-
-                              {/* Remove Button */}
                               {onRemoveParticipant && (
                                 <button
                                   type="button"

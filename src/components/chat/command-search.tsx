@@ -1,5 +1,4 @@
 'use client';
-
 import { Search, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import Link from 'next/link';
@@ -17,10 +16,6 @@ type CommandSearchProps = {
   isOpen: boolean;
   onClose: () => void;
 };
-
-/**
- * SearchResultItem - Individual search result
- */
 function SearchResultItem({
   thread,
   index,
@@ -35,7 +30,6 @@ function SearchResultItem({
   onSelect: (index: number) => void;
 }) {
   const href = `/chat/${thread.slug}`;
-
   return (
     <Link
       href={href}
@@ -60,22 +54,15 @@ function SearchResultItem({
     </Link>
   );
 }
-
 export function CommandSearch({ isOpen, onClose }: CommandSearchProps) {
   const router = useRouter();
   const t = useTranslations();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
-
-  // Refs for click-outside detection
   const modalRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
-
-  // Debounce search query for backend fuzzy search API (300ms delay)
   const debouncedSearch = useDebouncedValue(searchQuery, 300);
-
-  // Fetch threads with debounced search (backend will use fuse.js)
   const {
     data: threadsData,
     fetchNextPage,
@@ -83,22 +70,15 @@ export function CommandSearch({ isOpen, onClose }: CommandSearchProps) {
     isFetchingNextPage,
     isLoading,
   } = useThreadsQuery(debouncedSearch || undefined);
-
-  // Extract threads from pages
   const threads = useMemo(() =>
     threadsData?.pages.flatMap(page =>
       page.success && page.data?.items ? page.data.items : [],
     ) || [], [threadsData]);
-
-  // ✅ REACT 19 PATTERN: Wrap onClose to include cleanup logic
-  // Move state resets from useEffect to event handler where they belong
   const handleClose = useCallback(() => {
     setSearchQuery('');
     setSelectedIndex(0);
     onClose();
   }, [onClose]);
-
-  // Focus search input when modal opens (side effect - keeps useEffect)
   useEffect(() => {
     if (isOpen) {
       const timeoutId = setTimeout(() => {
@@ -108,13 +88,10 @@ export function CommandSearch({ isOpen, onClose }: CommandSearchProps) {
     }
     return undefined;
   }, [isOpen]);
-
-  // Handle keyboard navigation
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (!isOpen)
         return;
-
       switch (e.key) {
         case 'ArrowDown':
           e.preventDefault();
@@ -137,62 +114,45 @@ export function CommandSearch({ isOpen, onClose }: CommandSearchProps) {
           break;
       }
     };
-
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, threads, selectedIndex, router, handleClose]);
-
-  // Handle click outside to close
   useEffect(() => {
     if (!isOpen)
       return;
-
     const handleClickOutside = (event: MouseEvent) => {
       if (modalRef.current && !modalRef.current.contains(event.target as Node)) {
         handleClose();
       }
     };
-
-    // Add listener with a small delay to avoid immediate closing
     const timeoutId = setTimeout(() => {
       document.addEventListener('mousedown', handleClickOutside);
     }, 100);
-
     return () => {
       clearTimeout(timeoutId);
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, [isOpen, handleClose]);
-
-  // Infinite scroll handler
   const handleScroll = useCallback(() => {
     if (!scrollAreaRef.current || !hasNextPage || isFetchingNextPage)
       return;
-
     const { scrollTop, scrollHeight, clientHeight } = scrollAreaRef.current;
     const scrollPercentage = (scrollTop + clientHeight) / scrollHeight;
-
-    // Load more when scrolled to 80% of the content
     if (scrollPercentage > 0.8) {
       fetchNextPage();
     }
   }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
-
-  // Attach scroll listener
   useEffect(() => {
     const scrollArea = scrollAreaRef.current;
     if (!scrollArea)
       return;
-
     scrollArea.addEventListener('scroll', handleScroll);
     return () => scrollArea.removeEventListener('scroll', handleScroll);
   }, [handleScroll]);
-
   return (
     <AnimatePresence>
       {isOpen && (
         <>
-          {/* Backdrop */}
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -200,8 +160,6 @@ export function CommandSearch({ isOpen, onClose }: CommandSearchProps) {
             transition={{ duration: 0.15 }}
             className={cn('fixed inset-0 z-[60]', glassOverlay)}
           />
-
-          {/* Search Modal */}
           <div className="fixed inset-0 z-[60] flex items-start justify-center pt-[20vh] overflow-hidden pointer-events-none">
             <motion.div
               ref={modalRef}
@@ -212,7 +170,6 @@ export function CommandSearch({ isOpen, onClose }: CommandSearchProps) {
               className="relative w-full max-w-2xl mx-4 overflow-hidden pointer-events-auto"
             >
               <div className={cn('backdrop-blur-sm bg-background/95 border shadow-2xl', 'rounded-lg border overflow-hidden')}>
-                {/* Search Input */}
                 <div className="flex items-center gap-3 px-4 py-3 border-b border-border">
                   <Search className="size-5 text-muted-foreground" />
                   <input
@@ -232,8 +189,6 @@ export function CommandSearch({ isOpen, onClose }: CommandSearchProps) {
                     <X className="size-4" />
                   </Button>
                 </div>
-
-                {/* Search Results */}
                 <div
                   ref={scrollAreaRef}
                   className="max-h-[60vh] overflow-y-auto overflow-x-hidden"
@@ -257,7 +212,6 @@ export function CommandSearch({ isOpen, onClose }: CommandSearchProps) {
                                 onSelect={setSelectedIndex}
                               />
                             ))}
-                            {/* Loading more indicator */}
                             {isFetchingNextPage && (
                               <div className="flex items-center justify-center py-4">
                                 <div className="size-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
@@ -272,8 +226,6 @@ export function CommandSearch({ isOpen, onClose }: CommandSearchProps) {
                           </div>
                         )}
                 </div>
-
-                {/* Footer with keyboard shortcuts */}
                 <div className="flex items-center gap-4 px-4 py-2 border-t border-border bg-muted/30 text-xs text-muted-foreground">
                   <div className="flex items-center gap-1">
                     <kbd className="px-1.5 py-0.5 rounded bg-background border border-border">↑</kbd>

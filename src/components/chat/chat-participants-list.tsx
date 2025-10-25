@@ -1,13 +1,10 @@
 'use client';
-
 import type { UIMessage } from 'ai';
 import { Bot, Lock } from 'lucide-react';
 import { motion, Reorder } from 'motion/react';
 import { useTranslations } from 'next-intl';
 import { useMemo, useRef, useState } from 'react';
 
-// ✅ ZOD-INFERRED TYPE: Import from schema (no hardcoded interfaces)
-// EnhancedModelResponse includes tier access fields (is_accessible_to_user, required_tier, required_tier_name)
 import type { EnhancedModelResponse } from '@/api/routes/models/schema';
 import type { SubscriptionTier } from '@/api/services/product-logic.service';
 import type { ParticipantConfig } from '@/components/chat/chat-form-schemas';
@@ -38,40 +35,18 @@ import { useFuzzySearch } from '@/hooks/utils/use-fuzzy-search';
 import { toastManager } from '@/lib/toast/toast-manager';
 import { cn } from '@/lib/ui/cn';
 import { getProviderIcon } from '@/lib/utils/ai-display';
-// ============================================================================
-// Types - ✅ Inferred from Backend Schema (Zero Hardcoding)
-// ============================================================================
 
 type ChatParticipantsListProps = {
   participants: ParticipantConfig[];
   onParticipantsChange?: (participants: ParticipantConfig[]) => void;
   className?: string;
-  isStreaming?: boolean; // Disable queries during streaming to prevent excessive refetches
+  isStreaming?: boolean;
 };
-
-// ✅ ZERO TRANSFORMATION: Use RPC types directly
 type OrderedModel = {
-  model: EnhancedModelResponse; // ✅ Direct RPC type - no wrapper
+  model: EnhancedModelResponse;
   participant: ParticipantConfig | null;
   order: number;
 };
-
-// ============================================================================
-// Main Component
-// ============================================================================
-
-/**
- * ChatParticipantsList - Tier-grouped AI model participant selector
- *
- * Features:
- * - Models grouped by subscription tier (Free, Starter, Pro, Power)
- * - Sticky tier headers that remain visible while scrolling
- * - Drag and drop to reorder models within each tier
- * - Checkboxes for selection with tier-based access control
- * - Inline role assignment for selected models
- * - Visual tier progression showing upgrade path
- * - Pricing indicators on each model
- */
 export function ChatParticipantsList({
   participants,
   onParticipantsChange,
@@ -81,50 +56,31 @@ export function ChatParticipantsList({
   const tModels = useTranslations('chat.models');
   const [open, setOpen] = useState(false);
   const [modelSearchQuery, setModelSearchQuery] = useState('');
-
-  // ✅ Counter for generating unique participant IDs (avoids Date.now() which is impure)
   const participantIdCounterRef = useRef(0);
-
-  // Only fetch when popover is open (not on page load)
   const { data: customRolesData } = useCustomRolesQuery(open && !isStreaming);
-  const { data: modelsData } = useModelsQuery(); // Fetch ALL models with tier groups
-
+  const { data: modelsData } = useModelsQuery();
   const customRoles = customRolesData?.pages.flatMap(page =>
     (page?.success && page.data?.items) ? page.data.items : [],
   ) || [];
-
-  // ✅ BACKEND TIER CONFIG: Get ALL tier data from backend (max_models, tier_name, etc.)
   const userTierConfig = modelsData?.data?.user_tier_config || {
     tier: 'free' as SubscriptionTier,
     tier_name: 'Free',
     max_models: 2,
     can_upgrade: true,
   };
-
   const maxModels = userTierConfig.max_models;
   const tierName = userTierConfig.tier_name;
   const userTier = userTierConfig.tier;
-
-  // ✅ ZERO TRANSFORMATION: Use RPC types directly from backend
-  // ✅ REACT 19: Memoize to prevent unnecessary recalculations in dependent useMemos
   const allEnabledModels: EnhancedModelResponse[] = useMemo(
     () => modelsData?.data?.items || [],
     [modelsData?.data?.items],
   );
-
-  // ✅ REACT 19 PATTERN: Derive state using useMemo instead of useEffect
-  // This eliminates extra render passes and prevents potential infinite loops
-  // Reference: React docs - "Calculate what you can during rendering"
   const orderedModels = useMemo<OrderedModel[]>(() => {
-    // Wait for models to load before computing
     if (allEnabledModels.length === 0)
       return [];
-
-    // Selected models maintain their participant priority order
     const selectedModels: OrderedModel[] = participants
       .sort((a, b) => a.priority - b.priority)
       .flatMap((p, index) => {
-        // ✅ BACKEND DATA ONLY: Find model from backend response
         const model = allEnabledModels.find(m => m.id === p.modelId);
         return model
           ? [{
@@ -134,8 +90,6 @@ export function ChatParticipantsList({
             }]
           : [];
       });
-
-    // Unselected models go to the end, sorted alphabetically
     const selectedIds = new Set(participants.map(p => p.modelId));
     const unselectedModels: OrderedModel[] = allEnabledModels
       .filter(m => !selectedIds.has(m.id))
@@ -145,30 +99,21 @@ export function ChatParticipantsList({
         participant: null,
         order: selectedModels.length + index,
       }));
-
     return [...selectedModels, ...unselectedModels];
   }, [participants, allEnabledModels]);
-
-  // ✅ USER TIER INFO: Construct from computed values for backward compatibility
   const userTierInfo = {
     tier_name: tierName,
     max_models: maxModels,
     current_tier: userTier,
     can_upgrade: userTier !== 'power',
   };
-
-  // Toggle model selection
   const handleToggleModel = (modelId: string) => {
     const orderedModel = orderedModels.find(om => om.model.id === modelId);
     if (!orderedModel)
       return;
-
-    // ✅ BACKEND-COMPUTED ACCESS CONTROL: Use backend's is_accessible_to_user flag
     if (!orderedModel.participant) {
-      // Check backend-computed accessibility flag
       const openRouterModel = modelsData?.data?.items.find(m => m.id === modelId);
       if (openRouterModel && !openRouterModel.is_accessible_to_user) {
-        // Prevent selection of models user doesn't have access to
         toastManager.error(
           'Model not accessible',
           `Your ${userTierInfo?.tier_name || 'current'} plan does not include access to this model.`,
@@ -176,35 +121,25 @@ export function ChatParticipantsList({
         return;
       }
     }
-
     if (orderedModel.participant) {
-      // Deselect - remove from participants
       const filtered = participants.filter(p => p.id !== orderedModel.participant!.id);
       const reindexed = filtered.map((p, index) => ({ ...p, priority: index }));
       onParticipantsChange?.(reindexed);
     } else {
-      // Select - add to participants without role by default
-
-      // ✅ DEDUPLICATION: Check if model is already selected by modelId
       const existingParticipant = participants.find(p => p.modelId === modelId);
       if (existingParticipant) {
-        console.warn('[ChatParticipantsList] Prevented duplicate participant:', modelId);
-        return; // Don't add duplicate
+        return;
       }
-
-      // ✅ Generate unique ID for new participant using counter ref (avoids impure Date.now())
       participantIdCounterRef.current += 1;
       const newParticipant: ParticipantConfig = {
         id: `participant-${participantIdCounterRef.current}`,
         modelId,
-        role: '', // No role by default
+        role: '',
         priority: participants.length,
       };
       onParticipantsChange?.([...participants, newParticipant]);
     }
   };
-
-  // Update role for a participant
   const handleRoleChange = (modelId: string, role: string, customRoleId?: string) => {
     onParticipantsChange?.(
       participants.map(p =>
@@ -212,8 +147,6 @@ export function ChatParticipantsList({
       ),
     );
   };
-
-  // Clear role for a participant
   const handleClearRole = (modelId: string) => {
     onParticipantsChange?.(
       participants.map(p =>
@@ -221,27 +154,19 @@ export function ChatParticipantsList({
       ),
     );
   };
-
-  // Handle reordering of selected models only
   const handleReorderSelected = (newOrder: OrderedModel[]) => {
-    // Update participant priority based on new drag position
     const reorderedParticipants = newOrder.map((om, index) => ({
       ...om.participant!,
       priority: index,
     }));
-
     onParticipantsChange?.(reorderedParticipants);
   };
-
-  // ✅ BACKEND DATA: Single source of truth
   const tierGroups = useMemo(() => modelsData?.data?.tier_groups || [], [modelsData?.data?.tier_groups]);
   const flagshipModels = useMemo(() => modelsData?.data?.flagship_models || [], [modelsData?.data?.flagship_models]);
   const selectedModelIds = useMemo(
     () => new Set(participants.map(p => p.modelId)),
     [participants],
   );
-
-  // ✅ SEARCH: Apply fuzzy search to all enabled models
   const searchFilteredModels = useFuzzySearch(
     allEnabledModels,
     modelSearchQuery,
@@ -252,15 +177,11 @@ export function ChatParticipantsList({
       minMatchCharLength: 1,
     },
   );
-
-  // ✅ SEARCH FILTER SET: Efficient lookup for search-filtered models
   const searchFilteredIds = useMemo(() => {
     if (!modelSearchQuery)
-      return null; // No search = show all
+      return null;
     return new Set(searchFilteredModels.map(m => m.id));
   }, [searchFilteredModels, modelSearchQuery]);
-
-  // ✅ SELECTED MODELS: Filter search results from ordered models
   const selectedModels = useMemo(() => {
     return orderedModels
       .filter(om =>
@@ -269,42 +190,31 @@ export function ChatParticipantsList({
       )
       .sort((a, b) => a.participant!.priority - b.participant!.priority);
   }, [orderedModels, searchFilteredIds]);
-
-  // ✅ FLAT UNSELECTED LIST: When searching, show all unselected models in flat list
   const flatUnselectedModels = useMemo(() => {
     if (!modelSearchQuery || !searchFilteredIds)
       return [];
-
-    // Combine flagship + tier models into flat list
     const allUnselected: EnhancedModelResponse[] = [];
-
-    // Add flagship models first
     flagshipModels.forEach((model) => {
       if (!selectedModelIds.has(model.id) && searchFilteredIds.has(model.id)) {
         allUnselected.push(model);
       }
     });
-
-    // Add tier models (excluding flagships to avoid duplication)
     const flagshipIds = new Set(flagshipModels.map(m => m.id));
     tierGroups.forEach((tierGroup) => {
       tierGroup.models.forEach((model) => {
         if (
           !selectedModelIds.has(model.id)
           && searchFilteredIds.has(model.id)
-          && !flagshipIds.has(model.id) // Avoid duplication
+          && !flagshipIds.has(model.id)
         ) {
           allUnselected.push(model);
         }
       });
     });
-
     return allUnselected;
   }, [modelSearchQuery, searchFilteredIds, flagshipModels, tierGroups, selectedModelIds]);
-
   return (
     <div className={cn('flex items-center gap-1.5', className)}>
-      {/* Add AI Button with Count */}
       <TooltipProvider>
         <Popover open={open} onOpenChange={setOpen}>
           <Tooltip>
@@ -326,8 +236,6 @@ export function ChatParticipantsList({
                 </Button>
               </PopoverTrigger>
             </TooltipTrigger>
-
-            {/* Tooltip showing participant details */}
             {participants.length > 0 && (
               <TooltipContent side="top" className="max-w-xs">
                 <div className="space-y-1">
@@ -335,11 +243,9 @@ export function ChatParticipantsList({
                   {participants
                     .sort((a, b) => a.priority - b.priority)
                     .map((participant) => {
-                      // ✅ SINGLE SOURCE OF TRUTH: Find model from backend data
                       const model = allEnabledModels.find(m => m.id === participant.modelId);
                       if (!model)
                         return null;
-
                       return (
                         <div key={participant.id} className="flex items-center gap-2 text-xs">
                           <Avatar className="size-4">
@@ -360,7 +266,6 @@ export function ChatParticipantsList({
               </TooltipContent>
             )}
           </Tooltip>
-
           <PopoverContent className="p-0 w-[calc(100vw-2rem)] sm:w-[420px] lg:w-[480px]" align="start">
             <Command shouldFilter={false}>
               <CommandInput
@@ -369,10 +274,8 @@ export function ChatParticipantsList({
                 value={modelSearchQuery}
                 onValueChange={setModelSearchQuery}
               />
-
               <CommandList>
                 {(() => {
-                  // ✅ SEARCH RESULTS: Check if any models match search query
                   const hasResults = searchFilteredIds
                     ? searchFilteredIds.size > 0
                     : allEnabledModels.length > 0;
@@ -380,139 +283,40 @@ export function ChatParticipantsList({
                     <CommandEmpty>{tModels('noModelsFound')}</CommandEmpty>
                   );
                 })()}
-
-                {/* ✅ CONDITIONAL RENDERING: Search mode (flat list) vs Grouped mode (with headers) */}
-                {/* eslint-disable-next-line style/multiline-ternary */}
-                {modelSearchQuery ? (
-                  <>
-                    {/* SEARCH MODE: Flat list without headers */}
-                    {selectedModels.length > 0 && (
-                      <div className="border-b">
-                        <Reorder.Group
-                          axis="y"
-                          values={selectedModels}
-                          onReorder={handleReorderSelected}
-                          className="space-y-0"
-                          as="div"
-                        >
-                          {selectedModels.map(orderedModel => (
-                            <ModelItem
-                              key={orderedModel.participant!.id}
-                              orderedModel={orderedModel}
-                              allParticipants={participants}
-                              customRoles={customRoles}
-                              onToggle={() => handleToggleModel(orderedModel.model.id)}
-                              onRoleChange={(role, customRoleId) => handleRoleChange(orderedModel.model.id, role, customRoleId)}
-                              onClearRole={() => handleClearRole(orderedModel.model.id)}
-                              selectedCount={participants.length}
-                              maxModels={maxModels}
-                              userTierInfo={userTierInfo}
-                            />
-                          ))}
-                        </Reorder.Group>
-                      </div>
-                    )}
-
-                    {/* Unselected - Flat list without headers */}
-                    {flatUnselectedModels.length > 0 && (
-                      <div className="space-y-0">
-                        {flatUnselectedModels.map((model, index) => (
-                          <ModelItem
-                            key={`search-${model.id}`}
-                            orderedModel={{ model, participant: null, order: index }}
-                            allParticipants={participants}
-                            customRoles={customRoles}
-                            onToggle={() => handleToggleModel(model.id)}
-                            onRoleChange={(role, customRoleId) => handleRoleChange(model.id, role, customRoleId)}
-                            onClearRole={() => handleClearRole(model.id)}
-                            selectedCount={participants.length}
-                            maxModels={maxModels}
-                            enableDrag={false}
-                            userTierInfo={userTierInfo}
-                          />
-                        ))}
-                      </div>
-                    )}
-                  </>
-                ) : (
-                  <>
-                    {/* GROUPED MODE: Show headers and tier groups */}
-
-                    {/* Selected Models Section - Draggable for reordering */}
-                    {selectedModels.length > 0 && (
-                      <div className="border-b">
-                        <div className="px-3 py-2 text-xs font-semibold text-foreground bg-primary/10 border-b border-primary/20 sticky top-0 z-20 backdrop-blur-sm" style={{ boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1)' }}>
-                          <div className="flex items-center justify-between">
-                            <span className="flex items-center gap-2">
-                              {tModels('selectedModels')}
-                              <Badge variant="default" className="text-[10px] px-1.5 py-0 h-4">
-                                {selectedModels.length}
-                                /
-                                {maxModels}
-                              </Badge>
-                            </span>
-                            <span className="text-[10px] opacity-70">{tModels('dragToReorder')}</span>
+                {modelSearchQuery
+                  ? (
+                      <>
+                        {selectedModels.length > 0 && (
+                          <div className="border-b">
+                            <Reorder.Group
+                              axis="y"
+                              values={selectedModels}
+                              onReorder={handleReorderSelected}
+                              className="space-y-0"
+                              as="div"
+                            >
+                              {selectedModels.map(orderedModel => (
+                                <ModelItem
+                                  key={orderedModel.participant!.id}
+                                  orderedModel={orderedModel}
+                                  allParticipants={participants}
+                                  customRoles={customRoles}
+                                  onToggle={() => handleToggleModel(orderedModel.model.id)}
+                                  onRoleChange={(role, customRoleId) => handleRoleChange(orderedModel.model.id, role, customRoleId)}
+                                  onClearRole={() => handleClearRole(orderedModel.model.id)}
+                                  selectedCount={participants.length}
+                                  maxModels={maxModels}
+                                  userTierInfo={userTierInfo}
+                                />
+                              ))}
+                            </Reorder.Group>
                           </div>
-                        </div>
-                        <Reorder.Group
-                          axis="y"
-                          values={selectedModels}
-                          onReorder={handleReorderSelected}
-                          className="space-y-0"
-                          as="div"
-                        >
-                          {selectedModels.map(orderedModel => (
-                            <ModelItem
-                              key={orderedModel.participant!.id}
-                              orderedModel={orderedModel}
-                              allParticipants={participants}
-                              customRoles={customRoles}
-                              onToggle={() => handleToggleModel(orderedModel.model.id)}
-                              onRoleChange={(role, customRoleId) => handleRoleChange(orderedModel.model.id, role, customRoleId)}
-                              onClearRole={() => handleClearRole(orderedModel.model.id)}
-                              selectedCount={participants.length}
-                              maxModels={maxModels}
-                              userTierInfo={userTierInfo}
-                            />
-                          ))}
-                        </Reorder.Group>
-                      </div>
-                    )}
-
-                    {/* ✅ MOST POPULAR MODELS - Backend filtered, frontend renders */}
-                    {flagshipModels.length > 0 && (() => {
-                      const unselectedFlagships = flagshipModels.filter(m =>
-                        !selectedModelIds.has(m.id)
-                        && (!searchFilteredIds || searchFilteredIds.has(m.id)),
-                      );
-                      return unselectedFlagships.length > 0 && (
-                        <div className="space-y-0">
-                          <div
-                            className={cn(
-                              'px-3 py-2.5 text-xs font-medium border-b',
-                              'sticky top-0 z-20 backdrop-blur-sm',
-                              'bg-accent/50 text-accent-foreground border-accent',
-                            )}
-                            style={{ boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1)' }}
-                          >
-                            <div className="flex items-center justify-between">
-                              <span className="flex items-center gap-2">
-                                <span className="font-semibold">{tModels('mostPopular')}</span>
-                                <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4">
-                                  {tModels('topModels')}
-                                </Badge>
-                              </span>
-                              <span className="text-[10px] opacity-80">
-                                {unselectedFlagships.length}
-                                {' '}
-                                {unselectedFlagships.length === 1 ? tModels('model') : tModels('models')}
-                              </span>
-                            </div>
-                          </div>
+                        )}
+                        {flatUnselectedModels.length > 0 && (
                           <div className="space-y-0">
-                            {unselectedFlagships.map((model, index) => (
+                            {flatUnselectedModels.map((model, index) => (
                               <ModelItem
-                                key={`flagship-${model.id}`}
+                                key={`search-${model.id}`}
                                 orderedModel={{ model, participant: null, order: index }}
                                 allParticipants={participants}
                                 customRoles={customRoles}
@@ -526,74 +330,83 @@ export function ChatParticipantsList({
                               />
                             ))}
                           </div>
-                        </div>
-                      );
-                    })()}
-
-                    {/* ✅ TIER GROUPS - Backend grouped, frontend renders */}
-                    {tierGroups.length > 0 && (
-                      <div className="space-y-0">
-                        {tierGroups.map((tierGroup, tierIndex) => {
-                          const unselectedTierModels = tierGroup.models.filter(m =>
+                        )}
+                      </>
+                    )
+                  : (
+                      <>
+                        {selectedModels.length > 0 && (
+                          <div className="border-b">
+                            <div className="px-3 py-2 text-xs font-semibold text-foreground bg-primary/10 border-b border-primary/20 sticky top-0 z-20 backdrop-blur-sm" style={{ boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1)' }}>
+                              <div className="flex items-center justify-between">
+                                <span className="flex items-center gap-2">
+                                  {tModels('selectedModels')}
+                                  <Badge variant="default" className="text-[10px] px-1.5 py-0 h-4">
+                                    {selectedModels.length}
+                                    /
+                                    {maxModels}
+                                  </Badge>
+                                </span>
+                                <span className="text-[10px] opacity-70">{tModels('dragToReorder')}</span>
+                              </div>
+                            </div>
+                            <Reorder.Group
+                              axis="y"
+                              values={selectedModels}
+                              onReorder={handleReorderSelected}
+                              className="space-y-0"
+                              as="div"
+                            >
+                              {selectedModels.map(orderedModel => (
+                                <ModelItem
+                                  key={orderedModel.participant!.id}
+                                  orderedModel={orderedModel}
+                                  allParticipants={participants}
+                                  customRoles={customRoles}
+                                  onToggle={() => handleToggleModel(orderedModel.model.id)}
+                                  onRoleChange={(role, customRoleId) => handleRoleChange(orderedModel.model.id, role, customRoleId)}
+                                  onClearRole={() => handleClearRole(orderedModel.model.id)}
+                                  selectedCount={participants.length}
+                                  maxModels={maxModels}
+                                  userTierInfo={userTierInfo}
+                                />
+                              ))}
+                            </Reorder.Group>
+                          </div>
+                        )}
+                        {flagshipModels.length > 0 && (() => {
+                          const unselectedFlagships = flagshipModels.filter(m =>
                             !selectedModelIds.has(m.id)
                             && (!searchFilteredIds || searchFilteredIds.has(m.id)),
                           );
-                          if (unselectedTierModels.length === 0)
-                            return null;
-
-                          // ✅ USE BACKEND DATA: Tier ordering from backend tier_groups array
-                          const isUserTier = tierGroup.is_user_tier;
-                          const userTierIndex = tierGroups.findIndex(g => g.is_user_tier);
-                          const isLowerTier = tierIndex < userTierIndex;
-                          const isHigherTier = tierIndex > userTierIndex;
-
-                          return (
-                            <div key={tierGroup.tier}>
-                              {/* Tier Header - Sticky header showing upgrade path */}
+                          return unselectedFlagships.length > 0 && (
+                            <div className="space-y-0">
                               <div
                                 className={cn(
                                   'px-3 py-2.5 text-xs font-medium border-b',
-                                  'sticky top-0 z-20', // Sticky positioning with high z-index
-                                  'backdrop-blur-sm', // Subtle blur effect for better visibility
-                                  isUserTier && 'bg-primary/15 text-primary border-primary/20',
-                                  isLowerTier && 'bg-muted/50 text-muted-foreground',
-                                  isHigherTier && 'bg-muted/60 text-muted-foreground border-muted',
+                                  'sticky top-0 z-20 backdrop-blur-sm',
+                                  'bg-accent/50 text-accent-foreground border-accent',
                                 )}
-                                style={{
-                                  // Ensure sticky header stays above content
-                                  boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1)',
-                                }}
+                                style={{ boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1)' }}
                               >
                                 <div className="flex items-center justify-between">
                                   <span className="flex items-center gap-2">
-                                    <span className="font-semibold">{tierGroup.tier_name}</span>
-                                    {isUserTier && (
-                                      <Badge variant="default" className="text-[10px] px-1.5 py-0 h-4">
-                                        {tModels('yourPlan')}
-                                      </Badge>
-                                    )}
-                                    {isHigherTier && (
-                                      <Lock className="size-3 opacity-70" />
-                                    )}
+                                    <span className="font-semibold">{tModels('mostPopular')}</span>
+                                    <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4">
+                                      {tModels('topModels')}
+                                    </Badge>
                                   </span>
                                   <span className="text-[10px] opacity-80">
-                                    {unselectedTierModels.length}
+                                    {unselectedFlagships.length}
                                     {' '}
-                                    {unselectedTierModels.length === 1 ? tModels('model') : tModels('models')}
+                                    {unselectedFlagships.length === 1 ? tModels('model') : tModels('models')}
                                   </span>
                                 </div>
-                                {isHigherTier && (
-                                  <div className="text-[10px] opacity-70 mt-1">
-                                    {tModels('upgradeToUnlock')}
-                                  </div>
-                                )}
                               </div>
-
-                              {/* ✅ MODELS - Direct render from backend */}
                               <div className="space-y-0">
-                                {unselectedTierModels.map((model, index) => (
+                                {unselectedFlagships.map((model, index) => (
                                   <ModelItem
-                                    key={`tier-${tierGroup.tier}-${model.id}`}
+                                    key={`flagship-${model.id}`}
                                     orderedModel={{ model, participant: null, order: index }}
                                     allParticipants={participants}
                                     customRoles={customRoles}
@@ -609,11 +422,83 @@ export function ChatParticipantsList({
                               </div>
                             </div>
                           );
-                        })}
-                      </div>
+                        })()}
+                        {tierGroups.length > 0 && (
+                          <div className="space-y-0">
+                            {tierGroups.map((tierGroup, tierIndex) => {
+                              const unselectedTierModels = tierGroup.models.filter(m =>
+                                !selectedModelIds.has(m.id)
+                                && (!searchFilteredIds || searchFilteredIds.has(m.id)),
+                              );
+                              if (unselectedTierModels.length === 0)
+                                return null;
+                              const isUserTier = tierGroup.is_user_tier;
+                              const userTierIndex = tierGroups.findIndex(g => g.is_user_tier);
+                              const isLowerTier = tierIndex < userTierIndex;
+                              const isHigherTier = tierIndex > userTierIndex;
+                              return (
+                                <div key={tierGroup.tier}>
+                                  <div
+                                    className={cn(
+                                      'px-3 py-2.5 text-xs font-medium border-b',
+                                      'sticky top-0 z-20',
+                                      'backdrop-blur-sm',
+                                      isUserTier && 'bg-primary/15 text-primary border-primary/20',
+                                      isLowerTier && 'bg-muted/50 text-muted-foreground',
+                                      isHigherTier && 'bg-muted/60 text-muted-foreground border-muted',
+                                    )}
+                                    style={{
+                                      boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1)',
+                                    }}
+                                  >
+                                    <div className="flex items-center justify-between">
+                                      <span className="flex items-center gap-2">
+                                        <span className="font-semibold">{tierGroup.tier_name}</span>
+                                        {isUserTier && (
+                                          <Badge variant="default" className="text-[10px] px-1.5 py-0 h-4">
+                                            {tModels('yourPlan')}
+                                          </Badge>
+                                        )}
+                                        {isHigherTier && (
+                                          <Lock className="size-3 opacity-70" />
+                                        )}
+                                      </span>
+                                      <span className="text-[10px] opacity-80">
+                                        {unselectedTierModels.length}
+                                        {' '}
+                                        {unselectedTierModels.length === 1 ? tModels('model') : tModels('models')}
+                                      </span>
+                                    </div>
+                                    {isHigherTier && (
+                                      <div className="text-[10px] opacity-70 mt-1">
+                                        {tModels('upgradeToUnlock')}
+                                      </div>
+                                    )}
+                                  </div>
+                                  <div className="space-y-0">
+                                    {unselectedTierModels.map((model, index) => (
+                                      <ModelItem
+                                        key={`tier-${tierGroup.tier}-${model.id}`}
+                                        orderedModel={{ model, participant: null, order: index }}
+                                        allParticipants={participants}
+                                        customRoles={customRoles}
+                                        onToggle={() => handleToggleModel(model.id)}
+                                        onRoleChange={(role, customRoleId) => handleRoleChange(model.id, role, customRoleId)}
+                                        onClearRole={() => handleClearRole(model.id)}
+                                        selectedCount={participants.length}
+                                        maxModels={maxModels}
+                                        enableDrag={false}
+                                        userTierInfo={userTierInfo}
+                                      />
+                                    ))}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </>
                     )}
-                  </>
-                )}
               </CommandList>
             </Command>
           </PopoverContent>
@@ -622,17 +507,12 @@ export function ChatParticipantsList({
     </div>
   );
 }
-
-// ============================================================================
-// Participants Preview (External - above chat box)
-// ============================================================================
-
 export function ParticipantsPreview({
   participants,
   isStreaming,
   currentParticipantIndex,
   className,
-  chatMessages: _chatMessages, // Renamed to indicate intentionally unused (for future feature)
+  chatMessages: _chatMessages,
 }: {
   participants: ParticipantConfig[];
   isStreaming?: boolean;
@@ -640,30 +520,21 @@ export function ParticipantsPreview({
   className?: string;
   chatMessages?: UIMessage[];
 }) {
-  // ✅ ZERO TRANSFORMATION: Use RPC types directly from backend
   const { data: modelsData } = useModelsQuery();
   const allModels: EnhancedModelResponse[] = modelsData?.data?.items || [];
-
   if (participants.length === 0) {
     return null;
   }
-
   return (
     <div className={cn('w-full overflow-x-auto', className)}>
       <div className="flex items-center gap-2 pb-2">
         {participants
           .sort((a, b) => a.priority - b.priority)
           .map((participant, index) => {
-            // ✅ SINGLE SOURCE OF TRUTH: Find model from backend data
             const model = allModels.find(m => m.id === participant.modelId);
             if (!model)
               return null;
-
-            // Note: Participant message tracking removed for cleaner liquid glass UI
-
-            // Determine participant status during streaming - simplified for minimalistic UI
             const isWaitingInQueue = isStreaming && currentParticipantIndex !== undefined && index > currentParticipantIndex;
-
             return (
               <motion.div
                 key={participant.id}
@@ -675,11 +546,9 @@ export function ParticipantsPreview({
                 }}
                 className={cn(
                   'relative flex items-center gap-1.5 sm:gap-2 shrink-0',
-                  // Simplified - no background effects, just content
                   isWaitingInQueue && 'opacity-60',
                 )}
               >
-                {/* Content - minimalistic display */}
                 <div className="flex items-center gap-1.5 sm:gap-2">
                   <Avatar className="size-6 sm:size-7 shrink-0">
                     <AvatarImage src={getProviderIcon(model.provider)} alt={model.name} />

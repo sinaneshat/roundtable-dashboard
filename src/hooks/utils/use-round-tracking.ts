@@ -1,93 +1,79 @@
-/**
- * Round Number Tracking Hook
- *
- * Manages round number state and participant snapshots for multi-participant chat rounds.
- * Provides ref-based storage for round metadata that persists across component renders.
- *
- * @module hooks/utils/use-round-tracking
- */
-
 'use client';
 
 import { useCallback, useEffect, useRef } from 'react';
 
 import type { ChatParticipant } from '@/api/routes/chat/schema';
 
+/**
+ * Return value from the round tracking hook
+ */
 export type UseRoundTrackingReturn = {
-  /**
-   * Set the current round number
-   * @param roundNumber - Round number to track
-   */
+  /** Set the current round number */
   setRoundNumber: (roundNumber: number) => void;
-
-  /**
-   * Get the current round number
-   * @returns Current round number or null if not set
-   */
+  /** Get the current round number (returns null if not set) */
   getRoundNumber: () => number | null;
-
-  /**
-   * Snapshot participants at the start of a round
-   * Prevents stale metadata when participant list changes mid-round
-   *
-   * @param participants - Participants to snapshot
-   */
+  /** Snapshot the current participants at the start of a round */
   snapshotParticipants: (participants: ChatParticipant[]) => void;
-
-  /**
-   * Get the snapshotted participants for current round
-   * @returns Participants array from round start
-   */
+  /** Get the snapshotted participants for the current round */
   getRoundParticipants: () => ChatParticipant[];
-
-  /**
-   * Reset tracking state (clear round number and participants)
-   */
+  /** Reset all round tracking state */
   reset: () => void;
 };
 
 /**
- * Hook for tracking round number and participant state in multi-participant chats
+ * Round Tracking Hook - Round Context and Participant Snapshot Management
  *
- * Uses refs to maintain state across renders without triggering re-renders.
- * Ensures round metadata remains consistent throughout the round lifecycle.
- *
- * Key features:
- * - Round number tracking for consistent metadata
- * - Participant snapshotting to prevent stale data
- * - Ref-based storage for performance
- * - Auto-reset on threadId changes to prevent stale data across threads
- *
- * @param threadId - Current thread ID to track (auto-resets refs when changed)
+ * Maintains round number and participant snapshot across streaming sessions.
+ * Ensures participants can't join or leave mid-round by capturing state at round start.
  *
  * @example
- * ```tsx
- * const roundTracking = useRoundTracking(threadId);
+ * ```typescript
+ * const roundTracking = useRoundTracking('thread-123');
  *
- * // When starting a round
- * roundTracking.setRoundNumber(5);
- * roundTracking.snapshotParticipants(participants);
+ * // At the start of a round
+ * const enabledParticipants = participants.filter(p => p.isEnabled);
+ * roundTracking.snapshotParticipants(enabledParticipants); // Freeze participant list
+ * roundTracking.setRoundNumber(2);
  *
- * // During round processing
- * const roundNumber = roundTracking.getRoundNumber(); // 5
- * const participants = roundTracking.getRoundParticipants(); // Frozen snapshot
+ * // During the round
+ * const roundNumber = roundTracking.getRoundNumber(); // 2
+ * const participants = roundTracking.getRoundParticipants(); // Original 3 participants
  *
- * // When round completes or thread changes
- * roundTracking.reset();
+ * // Even if user enables a 4th participant mid-round:
+ * // getRoundParticipants() still returns the original 3
+ * // The 4th participant will join in round 3
  * ```
+ *
+ * **Why Snapshots Matter**:
+ * Without snapshots, participants could be added/removed mid-round, causing:
+ * - Incorrect participant indexing in the queue
+ * - Mismatched metadata (wrong participant tagged in message)
+ * - Race conditions in error tracking
+ *
+ * **Thread Management**:
+ * - Automatically resets when `threadId` changes
+ * - Preserves state within the same thread across re-renders
+ * - Safe to call multiple times with the same threadId
+ *
+ * **Integration**: Works with `useParticipantQueue` and `useParticipantErrorTracking`
+ * to provide complete participant orchestration. See `/src/hooks/utils/README.md`
+ * for full architecture documentation.
+ *
+ * @param threadId - The current chat thread ID
+ * @returns Round tracking state and control functions
  */
 export function useRoundTracking(threadId: string): UseRoundTrackingReturn {
-  // ✅ CRITICAL: Track current round number for this streaming session
-  // Set ONCE when user sends message, used by all participants in the round
   const currentRoundNumberRef = useRef<number | null>(null);
-
-  // ✅ Snapshot participants at round start to prevent stale metadata
-  // When participant list changes mid-round, we use the snapshot to ensure
-  // correct metadata is attached to messages
   const roundParticipantsRef = useRef<ChatParticipant[]>([]);
+  const prevThreadIdRef = useRef<string>(threadId);
 
   /**
    * Set the current round number
+   *
+   * Called at the start of a round to track which round is active.
+   * This is used for message metadata and round-based operations.
+   *
+   * @param roundNumber - The round number to set (typically starts at 1)
    */
   const setRoundNumber = useCallback((roundNumber: number) => {
     currentRoundNumberRef.current = roundNumber;
@@ -95,40 +81,62 @@ export function useRoundTracking(threadId: string): UseRoundTrackingReturn {
 
   /**
    * Get the current round number
+   *
+   * @returns The current round number, or null if not set
    */
   const getRoundNumber = useCallback(() => {
     return currentRoundNumberRef.current;
   }, []);
 
   /**
-   * Snapshot participants at the start of a round
+   * Snapshot the current participants at the start of a round
+   *
+   * Captures the participant list to prevent mid-round changes from affecting
+   * the current round. New participants will join starting in the next round.
+   *
+   * @param participants - The enabled participants to snapshot
    */
   const snapshotParticipants = useCallback((participants: ChatParticipant[]) => {
     roundParticipantsRef.current = participants;
   }, []);
 
   /**
-   * Get the snapshotted participants for current round
+   * Get the snapshotted participants for the current round
+   *
+   * @returns The participant list as it was at the start of the round
    */
   const getRoundParticipants = useCallback(() => {
     return roundParticipantsRef.current;
   }, []);
 
   /**
-   * Reset tracking state
+   * Reset all round tracking state
+   *
+   * Clears round number and participant snapshot. Called when starting a new
+   * round or switching threads.
    */
   const reset = useCallback(() => {
     currentRoundNumberRef.current = null;
     roundParticipantsRef.current = [];
   }, []);
 
-  // ✅ AUTO-RESET: Clear refs when threadId changes
-  // This prevents stale round data when switching between chat threads
+  /**
+   * Auto-reset on thread change
+   *
+   * When the user navigates to a different thread, automatically clear the
+   * round tracking state to prevent stale data from affecting the new thread.
+   */
   useEffect(() => {
-    // Reset tracking state for new thread
-    currentRoundNumberRef.current = null;
-    roundParticipantsRef.current = [];
-  }, [threadId]); // Reset whenever threadId changes
+    const hasSnapshot = roundParticipantsRef.current.length > 0;
+    const isThreadChange = prevThreadIdRef.current && prevThreadIdRef.current !== threadId;
+
+    if (isThreadChange && hasSnapshot) {
+      currentRoundNumberRef.current = null;
+      roundParticipantsRef.current = [];
+    }
+
+    prevThreadIdRef.current = threadId;
+  }, [threadId]);
 
   return {
     setRoundNumber,

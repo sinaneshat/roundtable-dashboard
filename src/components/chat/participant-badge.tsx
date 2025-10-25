@@ -1,5 +1,4 @@
 'use client';
-
 import type { EnhancedModelResponse } from '@/api/routes/models/schema';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
@@ -9,59 +8,16 @@ import { getProviderIcon } from '@/lib/utils/ai-display';
 import type { StatusIndicatorStatus } from './status-indicator';
 import { StatusIndicator } from './status-indicator';
 
-/**
- * ParticipantBadge - Compact participant display with model + role
- *
- * A reusable component that displays AI participant information in a badge format.
- * Shows model avatar, name, role, and optional status indicator.
- *
- * Used in:
- * - Chat participant lists (3+ places)
- * - Message headers
- * - Participant tooltips
- * - Configuration panels
- *
- * Saves ~200 lines of duplicated code across the application.
- *
- * @example
- * // Minimal usage
- * <ParticipantBadge model={gpt4Model} />
- *
- * // With role
- * <ParticipantBadge model={claudeModel} role="Analyst" />
- *
- * // With streaming status
- * <ParticipantBadge model={geminiModel} role="Writer" status="streaming" />
- *
- * // Large variant with all features
- * <ParticipantBadge
- *   model={model}
- *   role="Researcher"
- *   status="streaming"
- *   size="lg"
- *   showProvider
- * />
- */
-
 export type ParticipantBadgeProps = {
-  /** The AI model being displayed */
   model: EnhancedModelResponse;
-  /** Optional role assignment (e.g., "Analyst", "Writer") */
   role?: string | null;
-  /** Current activity status */
   status?: StatusIndicatorStatus;
-  /** Visual size variant */
   size?: 'sm' | 'md' | 'lg';
-  /** Show provider name alongside model name */
   showProvider?: boolean;
-  /** Additional CSS classes */
   className?: string;
-  /** Click handler for interactive badges */
   onClick?: () => void;
-  /** Make the badge interactive (adds hover effects) */
   interactive?: boolean;
 };
-
 const sizeConfig = {
   sm: {
     avatar: 'size-6',
@@ -85,7 +41,6 @@ const sizeConfig = {
     roleBadge: 'text-xs px-2 py-0.5 h-5',
   },
 };
-
 export function ParticipantBadge({
   model,
   role,
@@ -97,12 +52,9 @@ export function ParticipantBadge({
   interactive = false,
 }: ParticipantBadgeProps) {
   const config = sizeConfig[size];
-
-  // Build display text: "ModelName" or "Provider: ModelName"
   const displayName = showProvider && model.provider
     ? `${model.provider}: ${model.name}`
     : model.name;
-
   return (
     <div
       className={cn(
@@ -124,7 +76,6 @@ export function ParticipantBadge({
           }
         : undefined}
     >
-      {/* Model Avatar */}
       <Avatar className={cn(config.avatar, 'shrink-0')}>
         <AvatarImage
           src={getProviderIcon(model.provider)}
@@ -134,14 +85,10 @@ export function ParticipantBadge({
           {model.name.slice(0, 2).toUpperCase()}
         </AvatarFallback>
       </Avatar>
-
-      {/* Model Name & Role */}
       <div className="flex items-center gap-1.5 min-w-0">
         <span className={cn(config.text, 'font-medium truncate')}>
           {displayName}
         </span>
-
-        {/* Role Badge (if assigned) */}
         {role && (
           <Badge
             variant="secondary"
@@ -151,8 +98,6 @@ export function ParticipantBadge({
           </Badge>
         )}
       </div>
-
-      {/* Status Indicator (if provided) */}
       {status && (
         <StatusIndicator
           status={status}

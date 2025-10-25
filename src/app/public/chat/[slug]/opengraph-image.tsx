@@ -16,7 +16,11 @@
  * - Proper size and contentType exports
  * - ISR configuration matching page
  * - Dynamic params from route
+ *
+ * Note: This file uses Next.js Metadata API which requires named exports.
+ * The react-refresh warning is disabled as this is not a React component file.
  */
+/* eslint-disable react-refresh/only-export-components */
 import { ImageResponse } from 'next/og';
 
 import { BRAND } from '@/constants/brand';

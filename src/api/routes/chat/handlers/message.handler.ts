@@ -1,10 +1,3 @@
-/**
- * Message Handlers - Operations for chat messages and changelog
- *
- * Following backend-patterns.md: Domain-specific handler module
- * Extracted from monolithic handler.ts for better maintainability
- */
-
 import type { RouteHandler } from '@hono/zod-openapi';
 import { asc, desc, eq } from 'drizzle-orm';
 
@@ -20,10 +13,6 @@ import type {
 } from '../route';
 import { verifyThreadOwnership } from './helpers';
 
-// ============================================================================
-// Message & Changelog Handlers
-// ============================================================================
-
 export const getThreadMessagesHandler: RouteHandler<typeof getThreadMessagesRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
@@ -34,11 +23,9 @@ export const getThreadMessagesHandler: RouteHandler<typeof getThreadMessagesRout
     const { user } = c.auth();
     const { id: threadId } = c.validated.params;
     const db = await getDbAsync();
-
-    // Verify thread ownership
     await verifyThreadOwnership(threadId, user.id, db);
 
-    // Fetch all messages
+    // Direct database query for thread messages
     const messages = await db.query.chatMessage.findMany({
       where: eq(tables.chatMessage.threadId, threadId),
       orderBy: [
@@ -51,7 +38,6 @@ export const getThreadMessagesHandler: RouteHandler<typeof getThreadMessagesRout
     return Responses.collection(c, messages);
   },
 );
-
 export const getThreadChangelogHandler: RouteHandler<typeof getThreadChangelogRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
@@ -62,16 +48,11 @@ export const getThreadChangelogHandler: RouteHandler<typeof getThreadChangelogRo
     const { user } = c.auth();
     const { id: threadId } = c.validated.params;
     const db = await getDbAsync();
-
-    // Verify thread ownership
     await verifyThreadOwnership(threadId, user.id, db);
-
-    // Fetch changelog entries
     const changelog = await db.query.chatThreadChangelog.findMany({
       where: eq(tables.chatThreadChangelog.threadId, threadId),
       orderBy: [desc(tables.chatThreadChangelog.createdAt)],
     });
-
     return Responses.collection(c, changelog);
   },
 );

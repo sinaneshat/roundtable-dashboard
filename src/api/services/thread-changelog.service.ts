@@ -21,7 +21,7 @@ import * as tables from '@/db/schema';
  * ```typescript
  * const changelogId = await createChangelogEntry({
  *   threadId: 'thread_123',
- *   changeType: 'participant_added',
+ *   changeType: 'added',
  *   changeSummary: 'Added Claude 3.5 Sonnet as The Ideator',
  *   changeData: {
  *     participantId: 'participant_456',
@@ -38,6 +38,15 @@ export async function createChangelogEntry(params: CreateChangelogParams): Promi
 
   // ✅ ATOMIC BATCH: Insert changelog + update thread timestamp
   // Using reusable batch helper from @/api/common/batch-operations
+  // Type assertion to match database schema
+  type DBChangeData = {
+    type: 'participant' | 'participant_role' | 'mode_change' | 'participant_reorder';
+    [key: string]: unknown;
+  };
+
+  // Ensure changeData has the required 'type' field and matches DB type
+  const changeData = (params.changeData as DBChangeData) ?? { type: 'participant' as const };
+
   await executeBatch(db, [
     db.insert(tables.chatThreadChangelog).values({
       id: changelogId,
@@ -45,7 +54,7 @@ export async function createChangelogEntry(params: CreateChangelogParams): Promi
       roundNumber: params.roundNumber,
       changeType: params.changeType,
       changeSummary: params.changeSummary,
-      changeData: params.changeData,
+      changeData,
       createdAt: now,
     }),
     // Update thread.updatedAt to trigger ISR revalidation for public pages
@@ -93,9 +102,10 @@ export async function logModeChange(
   return createChangelogEntry({
     threadId,
     roundNumber,
-    changeType: ChangelogTypes.MODE_CHANGE,
+    changeType: ChangelogTypes.MODIFIED,
     changeSummary: `Changed conversation mode from ${oldMode} to ${newMode}`,
     changeData: {
+      type: 'mode_change',
       oldMode,
       newMode,
     },
@@ -120,9 +130,10 @@ export async function logParticipantAdded(
   return createChangelogEntry({
     threadId,
     roundNumber,
-    changeType: ChangelogTypes.PARTICIPANT_ADDED,
+    changeType: ChangelogTypes.ADDED,
     changeSummary: summary,
     changeData: {
+      type: 'participant',
       participantId,
       modelId,
       role,
@@ -148,9 +159,10 @@ export async function logParticipantRemoved(
   return createChangelogEntry({
     threadId,
     roundNumber,
-    changeType: ChangelogTypes.PARTICIPANT_REMOVED,
+    changeType: ChangelogTypes.REMOVED,
     changeSummary: summary,
     changeData: {
+      type: 'participant',
       participantId,
       modelId,
       role,
@@ -175,9 +187,10 @@ export async function logParticipantUpdated(
   return createChangelogEntry({
     threadId,
     roundNumber,
-    changeType: ChangelogTypes.PARTICIPANT_UPDATED,
+    changeType: ChangelogTypes.MODIFIED,
     changeSummary: summary,
     changeData: {
+      type: 'participant_role',
       participantId,
       modelId,
       oldRole,
@@ -206,9 +219,10 @@ export async function logParticipantsReordered(
   return createChangelogEntry({
     threadId,
     roundNumber,
-    changeType: ChangelogTypes.PARTICIPANTS_REORDERED,
+    changeType: ChangelogTypes.MODIFIED,
     changeSummary: `Reordered participants: ${participantNames}`,
     changeData: {
+      type: 'participant_reorder',
       participants,
     },
   });
