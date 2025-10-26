@@ -24,7 +24,7 @@
  */
 
 import type { UIMessage } from 'ai';
-import { createContext, use, useCallback, useMemo, useState } from 'react';
+import { createContext, use, useCallback, useMemo, useRef, useState } from 'react';
 
 import type { ChatParticipant, ChatThread } from '@/api/routes/chat/schema';
 import { useMultiParticipantChat } from '@/hooks/utils';
@@ -55,9 +55,8 @@ type ChatContextValue = {
   updateParticipants: (participants: ChatParticipant[]) => void; // ✅ Update participants (local only, persisted on next message)
 
   // Callbacks - SIMPLIFIED (2 callbacks instead of 3)
-  onComplete?: () => void; // ✅ MERGED: Combines onStreamComplete + onRoundComplete
+  // Using refs for synchronous updates, avoiding race conditions
   setOnComplete: (callback: (() => void) | undefined) => void;
-  onRetry?: (roundNumber: number) => void;
   setOnRetry: (callback: ((roundNumber: number) => void) | undefined) => void;
 };
 
@@ -69,9 +68,33 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   const [participants, setParticipants] = useState<ChatParticipant[]>([]);
   const [messages, setMessages] = useState<UIMessage[]>([]);
 
-  // Completion callbacks (set by components for custom behavior) - SIMPLIFIED
-  const [onComplete, setOnComplete] = useState<(() => void) | undefined>(undefined);
-  const [onRetry, setOnRetry] = useState<((roundNumber: number) => void) | undefined>(undefined);
+  // ✅ Use refs for callbacks to avoid timing/race conditions
+  // Refs update synchronously, unlike state which triggers async re-renders
+  const onCompleteRef = useRef<(() => void) | undefined>(undefined);
+  const onRetryRef = useRef<((roundNumber: number) => void) | undefined>(undefined);
+
+  // ✅ Stable callback wrappers that read from refs
+  // These never change, avoiding unnecessary re-renders and stale closures
+  const handleComplete = useCallback(() => {
+    if (onCompleteRef.current) {
+      onCompleteRef.current();
+    }
+  }, []);
+
+  const handleRetry = useCallback((roundNumber: number) => {
+    if (onRetryRef.current) {
+      onRetryRef.current(roundNumber);
+    }
+  }, []);
+
+  // ✅ Stable setter functions that update refs synchronously
+  const setOnComplete = useCallback((callback: (() => void) | undefined) => {
+    onCompleteRef.current = callback;
+  }, []);
+
+  const setOnRetry = useCallback((callback: ((roundNumber: number) => void) | undefined) => {
+    onRetryRef.current = callback;
+  }, []);
 
   // Single chat instance shared across all screens
   // This is the core AI SDK v5 pattern - one hook instance for entire app
@@ -80,16 +103,8 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     participants,
     messages,
     mode: thread?.mode,
-    onComplete: () => {
-      if (onComplete) {
-        onComplete();
-      }
-    },
-    onRetry: (roundNumber) => {
-      if (onRetry) {
-        onRetry(roundNumber);
-      }
-    },
+    onComplete: handleComplete, // ✅ Stable callback that reads from ref
+    onRetry: handleRetry, // ✅ Stable callback that reads from ref
   });
 
   // Error handling is managed by AI SDK v5 error boundaries
@@ -141,7 +156,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     setMessages([]);
     setOnComplete(undefined);
     setOnRetry(undefined);
-  }, []);
+  }, [setOnComplete, setOnRetry]);
 
   /**
    * Update participants (staged changes - persisted on next message)
@@ -162,12 +177,10 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       initializeThread,
       clearThread,
       updateParticipants,
-      onComplete,
       setOnComplete,
-      onRetry,
       setOnRetry,
     }),
-    [thread, participants, chat, initializeThread, clearThread, updateParticipants, onComplete, onRetry],
+    [thread, participants, chat, initializeThread, clearThread, updateParticipants, setOnComplete, setOnRetry],
   );
 
   return <ChatContext value={value}>{children}</ChatContext>;

@@ -154,16 +154,15 @@ export default function ChatOverviewScreen() {
         setInputValue('');
         setCreatedThreadId(thread.id);
 
-        setOnComplete(() => () => {
-          // Filter out participant trigger messages (duplicates created for orchestration)
+        setOnComplete(() => {
           const allMessages = messagesRef.current;
           const currentMessages = allMessages.filter((m) => {
             if (m.role !== 'user') {
-              return true; // Keep all non-user messages
+              return true;
             }
             const metadata = m.metadata as Record<string, unknown> | undefined;
             const isParticipantTrigger = metadata?.isParticipantTrigger === true;
-            return !isParticipantTrigger; // Filter out participant triggers
+            return !isParticipantTrigger;
           });
 
           const currentParticipants = participantsRef.current;
@@ -175,12 +174,10 @@ export default function ChatOverviewScreen() {
             return;
           }
 
-          // Find last REAL user message (not participant trigger)
           const lastUserMessage = currentMessages.findLast(m => m.role === 'user');
           const metadata = lastUserMessage?.metadata as Record<string, unknown> | undefined;
           const roundNumber = (metadata?.roundNumber as number) || 1;
 
-          // Extract text from user message parts
           let userQuestion = '';
           if (lastUserMessage?.parts) {
             const textPart = lastUserMessage.parts.find(p => p.type === 'text');
@@ -189,7 +186,6 @@ export default function ChatOverviewScreen() {
             }
           }
 
-          // Only skip if truly empty (allowing for fallback in the hook)
           if (!lastUserMessage) {
             return;
           }
@@ -199,10 +195,9 @@ export default function ChatOverviewScreen() {
               roundNumber,
               currentMessages,
               currentParticipants,
-              userQuestion || 'No question provided', // Ensure we always have something
+              userQuestion || 'No question provided',
             );
           } catch {
-            // Analysis creation failed - non-critical
           }
         });
 
@@ -263,6 +258,7 @@ export default function ChatOverviewScreen() {
     if (selectedParticipants.length === 0 && defaultModelId && initialParticipants.length > 0) {
       setSelectedParticipants(initialParticipants);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [defaultModelId]);
 
   useEffect(() => {
