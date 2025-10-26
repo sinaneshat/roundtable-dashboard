@@ -21,6 +21,11 @@ import type {
   UIMessage,
 } from 'ai';
 
+import type { UIMessageMetadata } from '@/lib/schemas/message-metadata';
+
+// ✅ UIMessageMetadata - Now imported from Zod schema (single source of truth)
+export type { UIMessageMetadata } from '@/lib/schemas/message-metadata';
+
 /**
  * Extended metadata for UIMessage with product-specific fields
  *
@@ -46,9 +51,6 @@ import type {
  * };
  * ```
  */
-// ✅ UIMessageMetadata - Now imported from Zod schema (single source of truth)
-export type { UIMessageMetadata } from '@/lib/schemas/message-metadata';
-
 /**
  * UIMessage - Represents messages as they appear in the UI
  * @see https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot-message-persistence

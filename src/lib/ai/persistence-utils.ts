@@ -262,17 +262,23 @@ export function createAssistantMessage(
   metadata?: Partial<UIMessageMetadata>,
   roundNumber?: number,
 ): DatabaseMessage {
+  // If roundNumber is provided, include it in metadata (required by schema)
+  // Otherwise, metadata is null
+  const messageMetadata = roundNumber
+    ? {
+        participantId,
+        roundNumber,
+        ...(metadata || {}),
+      }
+    : null;
+
   return {
     id: ulid(),
     threadId,
     role: 'assistant',
     parts: [{ type: 'text', text: content }],
     participantId,
-    metadata: {
-      participantId,
-      ...(metadata || {}),
-      ...(roundNumber && { roundNumber }),
-    },
+    metadata: messageMetadata,
     roundNumber: roundNumber || null,
     createdAt: new Date(),
   };

@@ -131,7 +131,6 @@ export default async function ChatLayout({ children, modal }: ChatLayoutProps) {
 
             {/* ✅ WINDOW-LEVEL SCROLLING: Content scrolls at window level, not in a nested div */}
             {/* Header is fixed via absolute positioning, content flows naturally below it */}
-            {/* This enables proper window virtualizer and auto-scroll behavior */}
             <div id="chat-scroll-container">
               <Suspense fallback={<ContentLoadingFallback />}>
                 {children}

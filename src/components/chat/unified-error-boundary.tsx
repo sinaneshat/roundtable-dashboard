@@ -153,9 +153,6 @@ export class UnifiedErrorBoundary extends Component<
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    // Log error to monitoring service
-    console.error(`[${this.state.context}] Error caught:`, error, errorInfo);
-
     // Update state with error details
     this.setState({
       error,
@@ -180,14 +177,12 @@ export class UnifiedErrorBoundary extends Component<
       timestamp: new Date().toISOString(),
     };
 
-    // Send to monitoring service (using console.error as it's allowed by ESLint)
-    if (process.env.NODE_ENV === 'production') {
-      // In production, send to actual monitoring service
-      // Example: sendToMonitoringService(errorData);
-    } else {
-      // In development, log to console for debugging
-      console.error('Tracking error:', errorData);
+    // In production, send to actual monitoring service
+    // For now, log to console in development
+    if (process.env.NODE_ENV === 'development') {
+      console.error('Error tracked:', errorData);
     }
+    // Example: sendToMonitoringService(errorData);
   };
 
   handleReset = () => {

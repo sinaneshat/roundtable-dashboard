@@ -109,18 +109,23 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 
   // Error handling is managed by AI SDK v5 error boundaries
 
+  // Use ref to track current thread ID without causing re-renders
+  const currentThreadIdRef = useRef<string | null>(null);
+
   /**
    * Initialize or update thread context
    * Called when navigating to a thread or creating a new one
    *
-   * AI SDK v5 PATTERN:
-   * 1. Set thread state
-   * 2. Set participants (backend already deduplicates)
-   * 3. Set messages (backend already deduplicates)
-   * 4. Let useChat re-initialize naturally with new threadId
+   * AI SDK v5 PATTERN (from crash course Exercise 01.07, 04.02, 04.03):
+   * 1. Set thread state (triggers useChat re-initialization via id change)
+   * 2. Set participants (backend source of truth)
+   * 3. Set initial messages ONCE (useChat uses these on mount, ignores updates)
+   * 4. Let useChat manage message state from there
+   *
+   * CRITICAL: When threadId changes, useChat automatically resets and loads
+   * the new thread's messages. We just need to provide initialMessages once.
    *
    * NOTE: Backend handles deduplication (see backend-patterns.md)
-   * Frontend trusts the backend as source of truth
    */
   const initializeThread = useCallback(
     (
@@ -128,22 +133,27 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       newParticipants: ChatParticipant[],
       newMessages?: UIMessage[],
     ) => {
-      const isNewThread = thread?.id !== newThread.id;
+      // Check if this is a new thread
+      const isNewThread = currentThreadIdRef.current !== newThread.id;
 
       if (isNewThread) {
+        // Reset error tracking state
         chat.resetHookState();
-      }
+        currentThreadIdRef.current = newThread.id;
 
-      setThread(newThread);
-      setParticipants(newParticipants);
+        // Set new thread state - this triggers useChat re-initialization
+        setThread(newThread);
+        setParticipants(newParticipants);
 
-      if (newMessages) {
-        setMessages(newMessages);
+        // AI SDK v5 Pattern: Set messages ONCE for new thread
+        // useChat will use these as initialMessages and manage from there
+        setMessages(newMessages || []);
       } else {
-        setMessages([]);
+        // Same thread - just update participants if needed
+        setParticipants(newParticipants);
       }
     },
-    [chat, thread],
+    [chat], // ✅ Only depend on chat, not thread (prevents infinite loop)
   );
 
   /**
@@ -199,6 +209,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
  * const { messages, sendMessage, isStreaming } = useSharedChatContext();
  * ```
  */
+// eslint-disable-next-line react-refresh/only-export-components -- Standard React pattern: export context provider and hook from same file
 export function useSharedChatContext() {
   const context = use(ChatContext);
   if (!context) {

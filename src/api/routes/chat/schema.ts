@@ -101,6 +101,8 @@ const CreateParticipantSchema = BaseParticipantSchema.omit({
 
 /**
  * Participant schema for update operations - partial updates allowed
+ * Note: id is optional to support both updating existing participants (with id)
+ * and creating new participants (without id or with empty id)
  */
 const UpdateParticipantSchema = BaseParticipantSchema.pick({
   id: true,
@@ -109,6 +111,12 @@ const UpdateParticipantSchema = BaseParticipantSchema.pick({
   customRoleId: true,
   priority: true,
   isEnabled: true,
+}).extend({
+  // Override id to be optional - allows creating new participants without IDs
+  id: CoreSchemas.id().optional().or(z.literal('')).openapi({
+    description: 'Participant ID (optional - omit or use empty string for new participants)',
+    example: 'participant_1',
+  }),
 });
 
 /**

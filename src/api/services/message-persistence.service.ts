@@ -11,7 +11,7 @@
  * - RAG embedding storage for semantic search
  */
 
-import { and, asc, desc, eq } from 'drizzle-orm';
+import { and, asc, eq } from 'drizzle-orm';
 import { revalidateTag } from 'next/cache';
 import { ulid } from 'ulid';
 
@@ -333,42 +333,6 @@ export async function saveStreamedMessage(
       parts.push({ type: 'text', text: '' });
     }
 
-    // Validate round number before save
-    const latestMessages = await db.query.chatMessage.findMany({
-      where: eq(tables.chatMessage.threadId, threadId),
-      orderBy: desc(tables.chatMessage.roundNumber),
-      limit: 5,
-    });
-
-    const latestRoundNumber = latestMessages.length > 0
-      ? Math.max(...latestMessages.map(m => m.roundNumber))
-      : 0;
-
-    // Log warnings in development for round number mismatches
-    if (process.env.NODE_ENV === 'development') {
-      if (roundNumber < latestRoundNumber - 1) {
-        console.warn('[saveStreamedMessage] Round number too far behind:', {
-          threadId,
-          participantIndex,
-          participantId,
-          messageId,
-          calculatedRoundNumber: roundNumber,
-          latestRoundNumber,
-          difference: latestRoundNumber - roundNumber,
-        });
-      } else if (roundNumber > latestRoundNumber + 1) {
-        console.warn('[saveStreamedMessage] Round number jumped forward:', {
-          threadId,
-          participantIndex,
-          participantId,
-          messageId,
-          calculatedRoundNumber: roundNumber,
-          latestRoundNumber,
-          difference: roundNumber - latestRoundNumber,
-        });
-      }
-    }
-
     // Save message to database
     const [savedMessage] = await db.insert(tables.chatMessage)
       .values({
@@ -474,15 +438,6 @@ async function createPendingAnalysis(
       // Check analysis quota first
       const analysisQuota = await checkAnalysisQuota(userId);
       if (!analysisQuota.canCreate) {
-        if (process.env.NODE_ENV === 'development') {
-          console.warn('[createPendingAnalysis] Analysis quota exceeded', {
-            userId,
-            current: analysisQuota.current,
-            limit: analysisQuota.limit,
-            threadId,
-            roundNumber,
-          });
-        }
         return;
       }
 
@@ -521,17 +476,6 @@ async function createPendingAnalysis(
       );
 
       if (assistantMessages.length < participants.length || messagesWithErrors.length > 0) {
-        if (process.env.NODE_ENV === 'development') {
-          if (messagesWithErrors.length > 0) {
-            console.warn(`[createPendingAnalysis] Round ${roundNumber} has ${messagesWithErrors.length} error messages, skipping analysis`);
-          }
-          if (assistantMessages.length < participants.length) {
-            console.warn(`[createPendingAnalysis] Round ${roundNumber} incomplete, skipping analysis`, {
-              expected: participants.length,
-              actual: assistantMessages.length,
-            });
-          }
-        }
         return;
       }
 
@@ -539,9 +483,6 @@ async function createPendingAnalysis(
       const participantMessageIds = assistantMessages.map(m => m.id);
 
       if (participantMessageIds.length === 0) {
-        if (process.env.NODE_ENV === 'development') {
-          console.error(`[createPendingAnalysis] No assistant messages found for round ${roundNumber}`);
-        }
         return;
       }
 
@@ -568,10 +509,8 @@ async function createPendingAnalysis(
           errorMessage: null,
         })
         .run();
-    } catch (error) {
-      if (process.env.NODE_ENV === 'development') {
-        console.error('[createPendingAnalysis] Failed to create analysis:', error);
-      }
+    } catch {
+      // Analysis creation is non-blocking, errors are swallowed
     }
   })();
 }

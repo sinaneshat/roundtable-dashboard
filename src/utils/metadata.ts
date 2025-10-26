@@ -311,7 +311,7 @@ export function createMetadata({
     other: {
       'theme-color': BRAND.colors.primary,
       'msapplication-TileColor': BRAND.colors.primary,
-      'apple-mobile-web-app-capable': 'yes',
+      'mobile-web-app-capable': 'yes',
       'apple-mobile-web-app-status-bar-style': 'default',
       'format-detection': 'telephone=no',
     },

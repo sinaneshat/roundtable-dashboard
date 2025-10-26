@@ -181,7 +181,6 @@ export async function chatMessagesToUIMessages(
       metadataSchema: UIMessageMetadataSchema, // Custom metadata validation for participant tracking
     });
   } catch (error) {
-    console.error('AI SDK message validation failed for database messages:', error);
     // ✅ FAIL-FAST: Throw error instead of silent fallback
     // This ensures invalid database data is caught early rather than causing
     // downstream issues in message conversion or streaming

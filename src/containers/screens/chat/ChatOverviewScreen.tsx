@@ -27,7 +27,6 @@ import { useSession } from '@/lib/auth/client';
 import type { ChatModeId } from '@/lib/config/chat-modes';
 import { getDefaultChatMode } from '@/lib/config/chat-modes';
 import { showApiErrorToast } from '@/lib/toast';
-import { chatMessagesToUIMessages } from '@/lib/utils/message-transforms';
 
 export default function ChatOverviewScreen() {
   const router = useRouter();
@@ -40,7 +39,7 @@ export default function ChatOverviewScreen() {
 
   const {
     messages,
-    startRound,
+    sendMessage,
     isStreaming,
     currentParticipantIndex,
     error: streamError,
@@ -132,7 +131,7 @@ export default function ChatOverviewScreen() {
           json: createThreadRequest,
         });
 
-        const { thread, participants, messages: initialMessages } = response.data;
+        const { thread, participants, messages: _initialMessages } = response.data;
 
         // Backend already provides clean, deduplicated data
         const threadWithDates = {
@@ -147,8 +146,6 @@ export default function ChatOverviewScreen() {
           createdAt: new Date(p.createdAt),
           updatedAt: new Date(p.updatedAt),
         }));
-
-        const uiMessages = chatMessagesToUIMessages(initialMessages);
 
         setShowInitialUI(false);
         setInputValue('');
@@ -201,7 +198,11 @@ export default function ChatOverviewScreen() {
           }
         });
 
-        initializeThread(threadWithDates, participantsWithDates, uiMessages);
+        // AI SDK v5 Pattern: Initialize thread WITHOUT messages
+        // We'll let sendMessage add the user message naturally to trigger participant streaming
+        // The backend already saved the user message, so when sendMessage sends it again,
+        // the backend's duplicate prevention will skip saving but still stream the response
+        initializeThread(threadWithDates, participantsWithDates, []);
 
         hasSentInitialPromptRef.current = false;
         setInitialPrompt(prompt);
@@ -231,26 +232,25 @@ export default function ChatOverviewScreen() {
   }, [setSelectedParticipants]);
 
   useEffect(() => {
-    const hasMessages = messages.length > 0;
-    const hasUserMessage = messages.some(m => m.role === 'user');
-
+    // AI SDK v5 Pattern: After thread creation, send the user message to trigger participant streaming
+    // The backend already saved the user message, so we send it again which triggers the streaming flow
+    // Backend has duplicate prevention logic to avoid saving the same message twice
     if (
       initialPrompt
       && currentThread
       && !isStreaming
       && !hasSentInitialPromptRef.current
-      && hasMessages
-      && hasUserMessage
     ) {
       hasSentInitialPromptRef.current = true;
 
       try {
-        startRound();
+        // Send the initial prompt to trigger sequential participant responses
+        sendMessage(initialPrompt);
       } catch (error) {
         showApiErrorToast('Error starting conversation', error);
       }
     }
-  }, [initialPrompt, currentThread, isStreaming, startRound, messages, contextParticipants]);
+  }, [initialPrompt, currentThread, isStreaming, sendMessage]);
 
   const currentStreamingParticipant = contextParticipants[currentParticipantIndex] || null;
 

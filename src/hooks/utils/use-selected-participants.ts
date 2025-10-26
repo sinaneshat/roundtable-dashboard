@@ -107,7 +107,6 @@ export function useSelectedParticipants(
       // ✅ DEDUPLICATION: Check if model is already selected by modelId
       const exists = prev.some(p => p.modelId === validatedParticipant.modelId);
       if (exists) {
-        console.warn('[useSelectedParticipants] Prevented duplicate participant:', validatedParticipant.modelId);
         return prev; // Don't add duplicate
       }
 
