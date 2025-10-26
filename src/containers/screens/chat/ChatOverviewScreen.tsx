@@ -155,7 +155,17 @@ export default function ChatOverviewScreen() {
         setCreatedThreadId(thread.id);
 
         setOnComplete(() => () => {
-          const currentMessages = messagesRef.current;
+          // Filter out participant trigger messages (duplicates created for orchestration)
+          const allMessages = messagesRef.current;
+          const currentMessages = allMessages.filter((m) => {
+            if (m.role !== 'user') {
+              return true; // Keep all non-user messages
+            }
+            const metadata = m.metadata as Record<string, unknown> | undefined;
+            const isParticipantTrigger = metadata?.isParticipantTrigger === true;
+            return !isParticipantTrigger; // Filter out participant triggers
+          });
+
           const currentParticipants = participantsRef.current;
 
           const assistantMessages = currentMessages.filter(m => m.role === 'assistant');
@@ -165,19 +175,31 @@ export default function ChatOverviewScreen() {
             return;
           }
 
+          // Find last REAL user message (not participant trigger)
           const lastUserMessage = currentMessages.findLast(m => m.role === 'user');
           const metadata = lastUserMessage?.metadata as Record<string, unknown> | undefined;
           const roundNumber = (metadata?.roundNumber as number) || 1;
 
-          const textPart = lastUserMessage?.parts?.find(p => p.type === 'text');
-          const userQuestion = (textPart && 'text' in textPart ? textPart.text : '') || '';
+          // Extract text from user message parts
+          let userQuestion = '';
+          if (lastUserMessage?.parts) {
+            const textPart = lastUserMessage.parts.find(p => p.type === 'text');
+            if (textPart && typeof textPart === 'object' && 'text' in textPart) {
+              userQuestion = String(textPart.text || '');
+            }
+          }
+
+          // Only skip if truly empty (allowing for fallback in the hook)
+          if (!lastUserMessage) {
+            return;
+          }
 
           try {
             createPendingAnalysisRef.current(
               roundNumber,
               currentMessages,
               currentParticipants,
-              userQuestion,
+              userQuestion || 'No question provided', // Ensure we always have something
             );
           } catch {
             // Analysis creation failed - non-critical

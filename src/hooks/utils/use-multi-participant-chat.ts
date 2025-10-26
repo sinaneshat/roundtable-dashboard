@@ -102,7 +102,9 @@ type UseMultiParticipantChatReturn = {
  *     { id: '1', modelId: 'gpt-4', isEnabled: true, priority: 0 },
  *     { id: '2', modelId: 'claude-3', isEnabled: true, priority: 1 },
  *   ],
- *   onComplete: () => console.log('Round complete!')
+ *   onComplete: () => {
+ *     // Round complete callback
+ *   }
  * });
  *
  * await chat.sendMessage("What's the best way to learn React?");
@@ -114,7 +116,6 @@ export function useMultiParticipantChat(
   const validationResult = UseMultiParticipantChatOptionsSchema.safeParse(options);
 
   if (!validationResult.success) {
-    console.error('[useMultiParticipantChat] Invalid options:', validationResult.error);
     throw new Error(`Invalid hook options: ${validationResult.error.message}`);
   }
 
@@ -154,9 +155,10 @@ export function useMultiParticipantChat(
   const advanceToNextParticipant = useCallback(() => {
     setCurrentParticipantIndex((prevIndex) => {
       const nextIndex = prevIndex + 1;
+      const totalParticipants = roundParticipantsRef.current.length;
 
       // Check if we've completed the round
-      if (nextIndex >= roundParticipantsRef.current.length) {
+      if (nextIndex >= totalParticipants) {
         // Round complete - reset state and trigger callback
         setIsParticipantPending(false);
         setIsExplicitlyStreaming(false);
@@ -374,31 +376,57 @@ export function useMultiParticipantChat(
 
   /**
    * Automatic participant triggering
-   * When pending, automatically trigger the next participant's response
+   * ✅ RE-ENABLED: Orchestrates sequential participant responses after user sends ONE message
+   * Backend handles one participant per request via participantIndex
+   * Frontend triggers each subsequent participant by resending the last USER message
+   * Backend ignores duplicate user messages for participantIndex > 0 (line 538 in streaming.handler.ts)
    */
   useLayoutEffect(() => {
-    if (!isParticipantPending || status !== 'ready') {
+    // Only trigger if we're waiting for the next participant and not currently streaming
+    if (!isParticipantPending || status !== 'ready' || !isExplicitlyStreaming) {
       return;
     }
 
-    const timeoutId = setTimeout(() => {
+    const enabled = roundParticipantsRef.current;
+
+    // Check if there are more participants to process
+    if (currentParticipantIndex >= enabled.length) {
+      return; // Round complete
+    }
+
+    // Find the last user message to resend (backend uses it for context, doesn't duplicate)
+    const lastUserMessage = messages.findLast((m: UIMessage) => m.role === 'user');
+    if (!lastUserMessage) {
+      return; // No user message found, skip triggering
+    }
+
+    // Extract text from the user message
+    const textPart = lastUserMessage.parts?.find((p: { type: string; text?: string }) => p.type === 'text' && 'text' in p);
+    const userText = textPart && 'text' in textPart ? String(textPart.text || '') : '';
+
+    if (!userText.trim()) {
+      return; // Empty message, skip triggering
+    }
+
+    // Small delay to ensure smooth UI transitions
+    const timer = setTimeout(() => {
+      // Mark as not pending before triggering next participant
       setIsParticipantPending(false);
 
+      // Resend the same user message - backend only persists it for participantIndex === 0
+      // For participantIndex > 0, backend uses it for context but doesn't create duplicate in DB
       aiSendMessage({
-        role: 'user',
-        parts: [{ type: 'text', text: '' }],
-        metadata: {
-          roundNumber: currentRound,
-          isParticipantTrigger: true,
-        },
+        text: userText,
+        metadata: { roundNumber: currentRound, isParticipantTrigger: true },
       });
-    }, 200);
+    }, 100);
 
-    return () => clearTimeout(timeoutId);
-  }, [isParticipantPending, status, aiSendMessage, currentRound]);
+    return () => clearTimeout(timer);
+  }, [isParticipantPending, status, aiSendMessage, currentRound, isExplicitlyStreaming, currentParticipantIndex, messages]);
 
   /**
    * Start a new round with existing participants
+   * NOTE: This should trigger the backend to orchestrate all participants, not send empty messages
    */
   const startRound = useCallback(() => {
     if (status !== 'ready' || isExplicitlyStreaming) {
@@ -414,7 +442,7 @@ export function useMultiParticipantChat(
 
     setIsExplicitlyStreaming(true);
     setCurrentParticipantIndex(0);
-    setIsParticipantPending(false);
+    setIsParticipantPending(true); // Keep pending to show loading state
     errorTracking.reset();
     roundParticipantsRef.current = enabled;
 
@@ -435,15 +463,9 @@ export function useMultiParticipantChat(
     const roundNumber = getCurrentRoundNumber(messages);
     setCurrentRound(roundNumber);
 
-    aiSendMessage({
-      role: 'user',
-      parts: [{ type: 'text', text: '' }],
-      metadata: {
-        roundNumber,
-        isParticipantTrigger: true,
-      },
-    });
-  }, [participants, status, messages, aiSendMessage, errorTracking, isExplicitlyStreaming]);
+    // Backend should handle orchestrating all participants from this single request
+    // Not sending empty message anymore - this violates FLOW_DOCUMENTATION
+  }, [participants, status, messages, errorTracking, isExplicitlyStreaming]);
 
   /**
    * Send a user message and start a new round

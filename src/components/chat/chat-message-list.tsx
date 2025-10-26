@@ -2,7 +2,7 @@
 import type { UIMessage } from 'ai';
 import Image from 'next/image';
 import { useTranslations } from 'next-intl';
-import { memo } from 'react';
+import { memo, useMemo } from 'react';
 
 import type { ChatParticipant } from '@/api/routes/chat/schema';
 import { canAccessModelByPricing } from '@/api/services/product-logic.service';
@@ -51,15 +51,62 @@ export const ChatMessageList = memo(({
   const userAvatarSrc = userAvatar?.src || userInfo.image || '/avatars/user.png';
   const userAvatarName = userAvatar?.name || userInfo.name;
 
-  // ✅ NO DEDUPLICATION NEEDED: AI SDK v5's useChat handles deduplication automatically
-  // This prevents redundant O(n) processing on every render
+  // ✅ DEDUPLICATION: Focus on user messages to prevent duplicate triggers
+  // According to FLOW_DOCUMENTATION: One user message → All participants respond → One analysis
+  // Also filters out participant trigger messages (created when orchestrating sequential responses)
+  const deduplicatedMessages = useMemo(() => {
+    const seenRounds = new Map<number, UIMessage>(); // roundNumber -> first user message
+    const result: UIMessage[] = [];
+
+    for (const message of messages) {
+      // For user messages, deduplicate by round number and filter participant triggers
+      if (message.role === 'user') {
+        const metadata = message.metadata as Record<string, unknown> | undefined;
+        const roundNumber = metadata?.roundNumber as number | undefined;
+        const isParticipantTrigger = metadata?.isParticipantTrigger === true;
+
+        // Skip participant trigger duplicates completely
+        if (isParticipantTrigger) {
+          continue;
+        }
+
+        // For regular user messages, keep only first per round
+        if (roundNumber !== undefined) {
+          if (!seenRounds.has(roundNumber)) {
+            seenRounds.set(roundNumber, message);
+            result.push(message);
+          }
+        } else {
+          // Messages without round numbers (shouldn't happen, but keep them)
+          result.push(message);
+        }
+      } else {
+        // For assistant/system messages, keep all (participants can have multiple messages)
+        result.push(message);
+      }
+    }
+
+    return result;
+  }, [messages]);
+
+  // Create safe React keys even with potential duplicate IDs
+  const seenIds = new Set<string>();
+  const keyForMessage = (message: UIMessage, index: number): string => {
+    if (seenIds.has(message.id)) {
+      // Fallback key for duplicate IDs
+      return `${message.id}-${index}`;
+    }
+    seenIds.add(message.id);
+    return message.id;
+  };
 
   return (
     <>
-      {messages.map((message) => {
+      {deduplicatedMessages.map((message, index) => {
+        const messageKey = keyForMessage(message, index);
         if (message.role === 'user') {
           return (
-            <Message from="user" key={message.id}>
+            <Message from="user" key={messageKey}>
               <MessageContent>
                 {message.parts.map((part, partIndex) => {
                   if (part.type === 'text') {
@@ -162,7 +209,7 @@ export const ChatMessageList = memo(({
           'type' in p && (p.type === 'source-url' || p.type === 'source-document'),
         );
         return (
-          <div key={message.id}>
+          <div key={messageKey}>
             <ModelMessageCard
               messageId={message.id}
               model={model}

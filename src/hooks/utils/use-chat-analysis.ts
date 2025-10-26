@@ -107,11 +107,6 @@ export function useChatAnalysis(
   // Validate options at hook entry point with safeParse for better error handling
   const validationResult = UseChatAnalysisOptionsSchema.safeParse(options);
 
-  if (!validationResult.success) {
-    console.warn('[useChatAnalysis] Validation warning:', validationResult.error);
-    // Continue with original options for backward compatibility
-  }
-
   const validatedOptions = validationResult.success ? validationResult.data : options;
 
   const {
@@ -149,12 +144,17 @@ export function useChatAnalysis(
       userQuestion: string,
     ) => {
       try {
+        // Provide a fallback for empty user questions and ensure it's always a string
+        const safeUserQuestion = (userQuestion && typeof userQuestion === 'string' && userQuestion.trim())
+          ? userQuestion.trim()
+          : 'No question provided';
+
         // Validate parameters at function entry
         const validated = CreatePendingAnalysisParamsSchema.parse({
           roundNumber,
           messages,
           participants,
-          userQuestion,
+          userQuestion: safeUserQuestion,
         });
         // ✅ CRITICAL FIX: Extract message IDs from the CURRENT round only
         // Handle potential type mismatches between stored and parameter roundNumber
@@ -184,31 +184,11 @@ export function useChatAnalysis(
         const actualCount = participantMessageIds.length;
 
         if (actualCount < expectedCount) {
-          // ✅ RECOVERY: Round is incomplete - log warning
-          console.warn(`[useChatAnalysis] Incomplete round ${validated.roundNumber}: Expected ${expectedCount} participant messages, but found ${actualCount}`, {
-            threadId,
-            roundNumber: validated.roundNumber,
-            expectedCount,
-            actualCount,
-            participantMessageIds,
-            enabledParticipants: validated.participants.filter(p => p.isEnabled).map(p => ({ id: p.id, modelId: p.modelId })),
-          });
-
+          // ✅ RECOVERY: Round is incomplete
           // ✅ FIX: During regeneration, participants might still be streaming
           // Allow creating pending analysis even if count doesn't match yet
           // The backend will handle validation when streaming completes
           // Continue instead of returning early
-        }
-
-        if (actualCount > expectedCount) {
-          // ✅ VALIDATION: More messages than expected - this shouldn't happen but handle gracefully
-          console.warn(`[useChatAnalysis] Extra messages in round ${validated.roundNumber}: Expected ${expectedCount} participant messages, but found ${actualCount}`, {
-            threadId,
-            roundNumber: validated.roundNumber,
-            expectedCount,
-            actualCount,
-            participantMessageIds,
-          });
         }
 
         const pendingAnalysis: StoredModeratorAnalysis = {
@@ -247,13 +227,16 @@ export function useChatAnalysis(
               a => a.roundNumber !== validated.roundNumber || a.status === AnalysisStatusSchema.enum.completed,
             );
 
-            // Only add new pending analysis if no completed analysis exists for this round
-            const hasCompletedAnalysis = typedData.data.items.some(
-              a => a.roundNumber === validated.roundNumber && a.status === AnalysisStatusSchema.enum.completed,
+            // Check if any analysis (pending, streaming, or completed) already exists for this round
+            const hasExistingAnalysis = typedData.data.items.some(
+              a => a.roundNumber === validated.roundNumber
+                && (a.status === AnalysisStatusSchema.enum.completed
+                  || a.status === AnalysisStatusSchema.enum.pending
+                  || a.status === AnalysisStatusSchema.enum.streaming),
             );
 
-            if (hasCompletedAnalysis) {
-              // Keep the completed analysis, don't add pending
+            if (hasExistingAnalysis) {
+              // Don't create duplicate analysis for the same round
               return typedData;
             }
 
@@ -268,8 +251,7 @@ export function useChatAnalysis(
           },
         );
       } catch (error) {
-        // ✅ ERROR RECOVERY: If creating pending analysis fails, log and set error state
-        console.error('Failed to create pending analysis:', error);
+        // ✅ ERROR RECOVERY: If creating pending analysis fails, set error state
         setHookError(error instanceof Error ? error : new Error('Failed to create pending analysis'));
       }
     },
@@ -313,7 +295,6 @@ export function useChatAnalysis(
                   };
                 }
                 // ✅ If already completed, don't overwrite (prevents stale data from replacing fresh data)
-                console.warn(`[useChatAnalysis] Skipping update for round ${validated.roundNumber} - analysis already ${analysis.status}`);
               }
               return analysis;
             });
@@ -329,8 +310,7 @@ export function useChatAnalysis(
         // Cache is updated directly above - invalidation would trigger refetch and break streaming
         // The query is disabled during streaming anyway (enabled: false in ChatThreadScreen)
       } catch (error) {
-        // ✅ ERROR RECOVERY: If updating analysis fails, log and set error state
-        console.error('Failed to update analysis data:', error);
+        // ✅ ERROR RECOVERY: If updating analysis fails, set error state
         setHookError(error instanceof Error ? error : new Error('Failed to update analysis data'));
       }
     },
@@ -375,7 +355,6 @@ export function useChatAnalysis(
           },
         );
       } catch (error) {
-        console.error('Failed to update analysis status:', error);
         setHookError(error instanceof Error ? error : new Error('Failed to update analysis status'));
       }
     },
@@ -415,8 +394,7 @@ export function useChatAnalysis(
           },
         );
       } catch (error) {
-        // ✅ ERROR RECOVERY: If removing analysis fails, log and set error state
-        console.error('Failed to remove pending analysis:', error);
+        // ✅ ERROR RECOVERY: If removing analysis fails, set error state
         setHookError(error instanceof Error ? error : new Error('Failed to remove pending analysis'));
       }
     },
@@ -467,7 +445,6 @@ export function useChatAnalysis(
           },
         );
       } catch (error) {
-        console.error('Failed to mark analysis as failed:', error);
         setHookError(error instanceof Error ? error : new Error('Failed to mark analysis as failed'));
       }
     },
@@ -480,11 +457,7 @@ export function useChatAnalysis(
    */
   const validateAnalysisData = useCallback((data: unknown): data is ModeratorAnalysisPayload => {
     const result = ModeratorAnalysisPayloadSchema.safeParse(data);
-    if (!result.success) {
-      console.error('Analysis data validation failed:', result.error);
-      return false;
-    }
-    return true;
+    return result.success;
   }, []);
 
   return {
