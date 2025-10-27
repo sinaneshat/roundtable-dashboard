@@ -1,3 +1,5 @@
+export { useAnalysisCreation } from './use-analysis-creation';
+export { useAnalysisDeduplication } from './use-analysis-deduplication';
 export { useAutoScrollToBottom } from './use-auto-scroll-to-bottom';
 export { useBoolean } from './use-boolean';
 export { useChatAnalysis } from './use-chat-analysis';
@@ -6,4 +8,7 @@ export { useFuzzySearch } from './use-fuzzy-search';
 export { useIsMobile } from './use-mobile';
 export { useMultiParticipantChat } from './use-multi-participant-chat';
 export { useSelectedParticipants } from './use-selected-participants';
+export { useSyncedMessageRefs } from './use-synced-message-refs';
 export { toast, useToast } from './use-toast';
+export { useChatScroll } from './useChatScroll';
+export { useStreamingLoaderState } from './useStreamingLoaderState';

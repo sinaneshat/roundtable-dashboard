@@ -298,7 +298,6 @@ export const ChatMessageList = memo(
           // AI SDK v5 Pattern: Use pre-calculated participant info from memoized array
           // This prevents recalculating participant info on every render
           if (!participantInfo) {
-            console.error('participantInfo is null for assistant message', message.id);
             return null;
           }
 

@@ -5,7 +5,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { ParticipantConfig } from '@/components/chat/chat-form-schemas';
 import { toCreateThreadRequest } from '@/components/chat/chat-form-schemas';
@@ -23,7 +23,15 @@ import { BRAND } from '@/constants/brand';
 import { useSharedChatContext } from '@/contexts/chat-context';
 import { useCreateThreadMutation } from '@/hooks/mutations/chat-mutations';
 import { useModelsQuery } from '@/hooks/queries/models';
-import { useAutoScrollToBottom, useChatAnalysis, useSelectedParticipants } from '@/hooks/utils';
+import {
+  useAnalysisCreation,
+  useAnalysisDeduplication,
+  useChatAnalysis,
+  useChatScroll,
+  useSelectedParticipants,
+  useStreamingLoaderState,
+  useSyncedMessageRefs,
+} from '@/hooks/utils';
 import { useSession } from '@/lib/auth/client';
 import type { ChatModeId } from '@/lib/config/chat-modes';
 import { getDefaultChatMode } from '@/lib/config/chat-modes';
@@ -54,19 +62,6 @@ export default function ChatOverviewScreen() {
 
   // Track if we're waiting to start streaming after thread creation
   const [waitingToStartStreaming, setWaitingToStartStreaming] = useState(false);
-
-  const messagesRef = useRef(messages);
-  const participantsRef = useRef(contextParticipants);
-
-  // React 19.2 Pattern: Use useLayoutEffect for synchronous ref updates
-  // Ensures refs are current BEFORE browser paint, preventing stale closure issues
-  useLayoutEffect(() => {
-    messagesRef.current = messages;
-  }, [messages]);
-
-  useLayoutEffect(() => {
-    participantsRef.current = contextParticipants;
-  }, [contextParticipants]);
 
   const { setThreadTitle, setThreadActions } = useThreadHeader();
 
@@ -107,72 +102,24 @@ export default function ChatOverviewScreen() {
     enabled: false,
   });
 
-  // AI SDK v5 Pattern: Deduplicate analyses to prevent double rendering/triggering
-  // Similar pattern to ChatThreadScreen deduplication logic
-  const analyses = useMemo(() => {
-    // Step 1: Deduplicate by ID
-    const seenIds = new Set<string>();
-    const uniqueById = rawAnalyses.filter((item) => {
-      if (seenIds.has(item.id)) {
-        return false;
-      }
-      seenIds.add(item.id);
-      return true;
-    });
+  // Deduplicate analyses using shared hook
+  const analyses = useAnalysisDeduplication(rawAnalyses);
 
-    // Step 2: Filter out failed analyses
-    const validAnalyses = uniqueById.filter((item) => item.status !== 'failed');
+  // Use synced refs to prevent stale closures in callbacks
+  const { messagesRef, participantsRef } = useSyncedMessageRefs({
+    messages,
+    participants: contextParticipants,
+    createPendingAnalysis,
+  });
 
-    // Step 3: Deduplicate by round number (keep highest priority status)
-    const deduplicatedByRound = validAnalyses.reduce((acc, item) => {
-      const existing = acc.get(item.roundNumber);
-      if (!existing) {
-        acc.set(item.roundNumber, item);
-        return acc;
-      }
-
-      // Priority: completed > streaming > pending
-      const getStatusPriority = (status: string) => {
-        switch (status) {
-          case 'completed': return 3;
-          case 'streaming': return 2;
-          case 'pending': return 1;
-          default: return 0;
-        }
-      };
-
-      const itemPriority = getStatusPriority(item.status);
-      const existingPriority = getStatusPriority(existing.status);
-
-      if (itemPriority > existingPriority) {
-        acc.set(item.roundNumber, item);
-        return acc;
-      }
-
-      // If same priority, keep the most recent one
-      if (itemPriority === existingPriority) {
-        const itemTime = item.createdAt instanceof Date ? item.createdAt.getTime() : new Date(item.createdAt).getTime();
-        const existingTime = existing.createdAt instanceof Date ? existing.createdAt.getTime() : new Date(existing.createdAt).getTime();
-        if (itemTime > existingTime) {
-          acc.set(item.roundNumber, item);
-        }
-      }
-
-      return acc;
-    }, new Map<number, typeof rawAnalyses[number]>());
-
-    return Array.from(deduplicatedByRound.values()).sort((a, b) => a.roundNumber - b.roundNumber);
-  }, [rawAnalyses]);
-
-  const createPendingAnalysisRef = useRef(createPendingAnalysis);
-  // React 19.2 Pattern: Use useLayoutEffect for synchronous ref updates
-  useLayoutEffect(() => {
-    createPendingAnalysisRef.current = createPendingAnalysis;
-  }, [createPendingAnalysis]);
-
-  // AI SDK v5 Pattern: Track which rounds have analysis created to prevent duplicates
-  // Module-level Map would persist across component instances, so use ref
-  const createdAnalysisRoundsRef = useRef(new Set<number>());
+  // Use consolidated analysis creation hook
+  const { handleComplete: analysisCompleteCallback, createdAnalysisRoundsRef } = useAnalysisCreation({
+    createPendingAnalysis,
+    messages,
+    participants: contextParticipants,
+    messagesRef,
+    participantsRef,
+  });
 
   const createThreadMutation = useCreateThreadMutation();
 
@@ -225,83 +172,8 @@ export default function ChatOverviewScreen() {
         setInputValue('');
         setCreatedThreadId(thread.id);
 
-        // AI SDK v5 Pattern: Last Participant Callback Flow
-        // When the LAST participant completes its response:
-        // 1. useMultiParticipantChat triggers onComplete callback
-        // 2. This callback creates a pending analysis (once per round via tracking)
-        // 3. ModeratorAnalysisStream detects the pending analysis and invokes the stream
-        // This ensures the analysis stream is ONLY triggered after ALL participants complete
-        setOnComplete(() => {
-          const allMessages = messagesRef.current;
-          const currentMessages = allMessages.filter((m) => {
-            if (m.role !== 'user') {
-              return true;
-            }
-            const metadata = m.metadata as Record<string, unknown> | undefined;
-            const isParticipantTrigger = metadata?.isParticipantTrigger === true;
-            return !isParticipantTrigger;
-          });
-
-          const currentParticipants = participantsRef.current;
-
-          const assistantMessages = currentMessages.filter(m => m.role === 'assistant');
-          const enabledParticipants = currentParticipants.filter(p => p.isEnabled);
-
-          if (assistantMessages.length === 0 || assistantMessages.length < enabledParticipants.length) {
-            return;
-          }
-
-          const lastUserMessage = currentMessages.findLast(m => m.role === 'user');
-          const metadata = lastUserMessage?.metadata as Record<string, unknown> | undefined;
-          const roundNumber = (metadata?.roundNumber as number) || 1;
-
-          // AI SDK v5 Pattern: Prevent duplicate analysis creation
-          // Check if we've already created an analysis for this round
-          if (createdAnalysisRoundsRef.current.has(roundNumber)) {
-            return;
-          }
-
-          let userQuestion = '';
-          if (lastUserMessage?.parts) {
-            const textPart = lastUserMessage.parts.find(p => p.type === 'text');
-            if (textPart && typeof textPart === 'object' && 'text' in textPart) {
-              userQuestion = String(textPart.text || '');
-            }
-          }
-
-          if (!lastUserMessage) {
-            return;
-          }
-
-          // ✅ CRITICAL FIX: Don't create analysis if all participants failed
-          // Check if there are any successful assistant messages in this round
-          const allParticipantsFailed = assistantMessages.every((m) => {
-            const metadata = m.metadata as Record<string, unknown> | undefined;
-            const errorCategory = metadata?.errorCategory;
-            return errorCategory !== undefined && errorCategory !== null;
-          });
-
-          if (allParticipantsFailed && assistantMessages.length > 0) {
-            // All participants failed - don't create analysis
-            return;
-          }
-
-          try {
-            // Mark this round as having analysis created BEFORE calling createPendingAnalysis
-            // This prevents duplicate calls if onComplete is triggered multiple times
-            createdAnalysisRoundsRef.current.add(roundNumber);
-
-            createPendingAnalysisRef.current(
-              roundNumber,
-              currentMessages,
-              currentParticipants,
-              userQuestion || 'No question provided',
-            );
-          } catch {
-            // If creation fails, remove from tracked set so it can be retried
-            createdAnalysisRoundsRef.current.delete(roundNumber);
-          }
-        });
+        // Set analysis creation callback
+        setOnComplete(analysisCompleteCallback);
 
         // AI SDK v5 Pattern: Initialize thread WITH backend messages
         // Backend already saved the user message and returns it in the response
@@ -338,7 +210,7 @@ export default function ChatOverviewScreen() {
       createThreadMutation,
       initializeThread,
       setOnComplete,
-      startRound,
+      analysisCompleteCallback,
     ],
   );
 
@@ -447,12 +319,23 @@ export default function ChatOverviewScreen() {
     };
   }, [setOnComplete]);
 
-  const lastMessage = messages[messages.length - 1];
-  const lastMessageContent = lastMessage?.parts?.map(p => (p.type === 'text' || p.type === 'reasoning') ? p.text : '').join('') || '';
-  useAutoScrollToBottom(
-    { length: messages.length, content: lastMessageContent, isStreaming },
-    !showInitialUI,
-  );
+  // Scroll management - auto-scroll during streaming (if user is near bottom)
+  // Always scroll when analysis appears (regardless of position)
+  useChatScroll({
+    messages,
+    analyses,
+    isStreaming,
+    scrollContainerId: 'chat-scroll-container',
+    enableNearBottomDetection: !showInitialUI, // Only enable detection when chat is visible
+  });
+
+  // Streaming loader state calculation
+  const { showLoader, isAnalyzing } = useStreamingLoaderState({
+    analyses,
+    isStreaming,
+    messages,
+    selectedParticipants,
+  });
 
   const inputContainerRef = useRef<HTMLDivElement | null>(null);
 
@@ -594,23 +477,14 @@ export default function ChatOverviewScreen() {
                   </div>
                 )}
 
-                {(() => {
-                  const isAnalyzing = analyses.some(a => a.status === 'pending' || a.status === 'streaming');
-                  const hasMessages = messages.length > 0;
-                  const hasCompletedAnalysis = analyses.some(a => a.status === 'completed' || a.status === 'failed');
-                  const isTransitioning = hasMessages && !hasCompletedAnalysis && !isStreaming && !isAnalyzing;
-
-                  const showLoader = ((isStreaming || isAnalyzing || isTransitioning) && selectedParticipants.length > 1);
-
-                  return showLoader && (
-                    <StreamingParticipantsLoader
-                      className="mt-4"
-                      participants={selectedParticipants}
-                      currentParticipantIndex={currentParticipantIndex}
-                      isAnalyzing={isAnalyzing || isTransitioning}
-                    />
-                  );
-                })()}
+                {showLoader && (
+                  <StreamingParticipantsLoader
+                    className="mt-4"
+                    participants={selectedParticipants}
+                    currentParticipantIndex={currentParticipantIndex}
+                    isAnalyzing={isAnalyzing}
+                  />
+                )}
               </motion.div>
             )}
           </AnimatePresence>

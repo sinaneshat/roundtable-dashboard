@@ -86,7 +86,7 @@ export default antfu(
       }],
       'ts/no-explicit-any': 'error',
       'ts/explicit-function-return-type': 'off',
-      'no-console': ['warn', { allow: ['error', 'warn'] }],
+      'no-console': 'error',
 
       // // Prevent re-exports and enforce better export patterns
       // 'import/no-namespace': ['error', { ignore: ['*.css', '*.scss', '*.less'] }], // Prevents export * from './module'

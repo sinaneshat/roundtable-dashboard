@@ -169,7 +169,8 @@ export class UnifiedErrorBoundary extends Component<
   trackError = (error: Error, errorInfo: ErrorInfo) => {
     // Send to error tracking service
     // This would integrate with your monitoring solution
-    const errorData = {
+    // Placeholder for future error tracking integration
+    void {
       message: error.message,
       stack: error.stack,
       context: this.state.context,
@@ -178,11 +179,7 @@ export class UnifiedErrorBoundary extends Component<
     };
 
     // In production, send to actual monitoring service
-    // For now, log to console in development
-    if (process.env.NODE_ENV === 'development') {
-      console.error('Error tracked:', errorData);
-    }
-    // Example: sendToMonitoringService(errorData);
+    // Example: sendToMonitoringService(_errorData);
   };
 
   handleReset = () => {
@@ -256,7 +253,6 @@ export const InlineErrorDisplay: React.FC<{
 //
 //   React.useEffect(() => {
 //     if (chatError) {
-//       console.error('Chat error:', chatError);
 //       // Handle AI SDK errors appropriately
 //     }
 //   }, [chatError]);

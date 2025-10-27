@@ -5,6 +5,8 @@
  * with automatic log limiting to prevent console spam.
  */
 
+/* eslint-disable no-console */
+
 type LogEntry = {
   timestamp: number;
   message: string;
