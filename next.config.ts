@@ -205,12 +205,20 @@ const nextConfig: NextConfig = {
   // This prevents Next.js from trying to analyze React Email components during build
   webpack: (config, { isServer }) => {
     if (isServer) {
-      // Ensure email templates are only loaded dynamically at runtime
+      // Exclude email templates and components from server bundle during static generation
       config.externals = config.externals || [];
       if (Array.isArray(config.externals)) {
-        config.externals.push({
-          '@/emails/templates': 'commonjs @/emails/templates',
-        });
+        config.externals.push(
+          '@/emails/templates',
+          '@/emails/components',
+          ({ request }: { request?: string }, callback: (error?: Error | null, result?: string) => void) => {
+            // Externalize any imports from the emails directory during static generation
+            if (request && (request.startsWith('@/emails') || request.includes('/emails/'))) {
+              return callback(null, `commonjs ${request}`);
+            }
+            callback();
+          },
+        );
       }
     }
     return config;
