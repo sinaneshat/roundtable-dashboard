@@ -210,15 +210,18 @@ export function useMultiParticipantChat(
       regenerateRoundNumberRef.current = null;
       setCurrentParticipantIndex(0);
 
-      // ✅ CRITICAL FIX: Use double requestAnimationFrame to ensure AI SDK state propagates
-      // Race condition: queueMicrotask runs too quickly, before messages state from useChat updates
+      // ✅ CRITICAL FIX: Use TRIPLE requestAnimationFrame to ensure AI SDK state propagates
+      // Race condition: Even double rAF wasn't enough - messages state from useChat needs more time
       // First rAF: Waits for browser paint after last participant's message metadata is added
-      // Second rAF: Ensures messages state from useChat has fully updated and synced to messagesRef
-      // This prevents analysis from being created with incomplete participant message IDs
+      // Second rAF: Ensures messages state from useChat has updated
+      // Third rAF: Ensures messagesRef has been synced via useLayoutEffect with ALL participant messages
+      // This prevents analysis from being created with incomplete participant message IDs (N-1 bug)
       // See: use-analysis-creation.ts:245-254 for similar pattern
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
-          onComplete?.();
+          requestAnimationFrame(() => {
+            onComplete?.();
+          });
         });
       });
 

@@ -203,6 +203,7 @@ export function apiMetadataToNextMetadata(seoData: SeoMetadata): Metadata {
     : `${baseUrl}${seoData.ogImage}`;
 
   return {
+    metadataBase: new URL(baseUrl),
     title: seoData.title,
     description: seoData.description,
     keywords: seoData.keywords.join(', '),
@@ -289,6 +290,7 @@ export function createMetadata({
   };
 
   return {
+    metadataBase: new URL(baseUrl),
     title,
     description,
     keywords: keywords.join(', '),

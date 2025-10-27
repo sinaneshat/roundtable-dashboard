@@ -17,10 +17,9 @@ const nextConfig: NextConfig = {
     removeConsole: process.env.NEXT_PUBLIC_WEBAPP_ENV === 'prod',
   },
 
-  // External packages for Server Components bundling
-  // Required for React Email to work in edge runtime and Cloudflare Workers
-  // @see https://github.com/resend/react-email/issues/977
-  serverExternalPackages: [
+  // Keep react-email packages external to avoid bundling issues
+  // OpenNext will handle copying them to the output correctly
+  serverComponentsExternalPackages: [
     '@react-email/components',
     '@react-email/render',
     'react-email',
@@ -201,25 +200,16 @@ const nextConfig: NextConfig = {
     ],
   },
 
-  // Webpack configuration to exclude email templates from static generation
-  // This prevents Next.js from trying to analyze React Email components during build
+  // Webpack configuration for Cloudflare Workers compatibility
   webpack: (config, { isServer }) => {
     if (isServer) {
-      // Exclude email templates and components from server bundle during static generation
-      config.externals = config.externals || [];
-      if (Array.isArray(config.externals)) {
-        config.externals.push(
-          '@/emails/templates',
-          '@/emails/components',
-          ({ request }: { request?: string }, callback: (error?: Error | null, result?: string) => void) => {
-            // Externalize any imports from the emails directory during static generation
-            if (request && (request.startsWith('@/emails') || request.includes('/emails/'))) {
-              return callback(null, `commonjs ${request}`);
-            }
-            callback();
-          },
-        );
-      }
+      // Configure module resolution to use Node.js exports instead of edge exports
+      // This fixes @react-email/render resolution issues in Cloudflare Workers
+      config.resolve = config.resolve || {};
+      config.resolve.conditionNames = ['node', 'import', 'require', 'default'];
+
+      // Ensure TypeScript and TSX files are properly handled
+      config.resolve.extensions = ['.ts', '.tsx', '.js', '.jsx', '.json'];
     }
     return config;
   },

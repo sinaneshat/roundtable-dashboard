@@ -36,9 +36,14 @@ import {
 } from '@/lib/utils/og-image-helpers';
 import { getPublicThreadService } from '@/services/api';
 
-import * as config from './opengraph-image.config';
-
-export { alt, contentType, revalidate, size } from './opengraph-image.config';
+// Open Graph Image metadata - must be direct exports (not re-exported)
+export const revalidate = 86400; // ISR: Revalidate every 24 hours (same as page)
+export const size = {
+  width: 1200,
+  height: 630,
+};
+export const contentType = 'image/png';
+export const alt = 'Public AI Chat Thread';
 
 export default async function Image({
   params,
@@ -123,7 +128,7 @@ export default async function Image({
           </div>
         ),
         {
-          ...config.size,
+          ...size,
         },
       );
     }
@@ -439,7 +444,7 @@ export default async function Image({
         </div>
       ),
       {
-        ...config.size,
+        ...size,
       },
     );
   } catch {
@@ -490,7 +495,7 @@ export default async function Image({
         </div>
       ),
       {
-        ...config.size,
+        ...size,
       },
     );
   }

@@ -11,9 +11,13 @@ import { ImageResponse } from 'next/og';
 
 import { BRAND } from '@/constants/brand';
 
-import * as config from './opengraph-image.config';
-
-export { contentType, revalidate, size } from './opengraph-image.config';
+// Open Graph Image metadata - must be direct exports (not re-exported)
+export const revalidate = 3600; // ISR: Revalidate every hour
+export const size = {
+  width: 1200,
+  height: 630,
+};
+export const contentType = 'image/png';
 export const alt = BRAND.fullName;
 
 export default async function Image() {
@@ -99,7 +103,7 @@ export default async function Image() {
       </div>
     ),
     {
-      ...config.size,
+      ...size,
     },
   );
 }
