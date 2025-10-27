@@ -11,7 +11,6 @@ type EmailFooterProps = {
   privacyUrl?: string;
   termsUrl?: string;
   contactEmail?: string;
-  className?: string;
 };
 
 export function EmailFooter({
@@ -20,12 +19,11 @@ export function EmailFooter({
   privacyUrl,
   termsUrl,
   contactEmail = BRAND.support,
-  className,
 }: EmailFooterProps) {
   return (
     <>
       <EmailDivider />
-      <EmailSection className={className} align="center" spacing="md">
+      <EmailSection align="center" spacing="md">
         <EmailText size="sm" color="muted" align="center">
           © 2025
           {' '}

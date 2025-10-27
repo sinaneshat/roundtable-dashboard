@@ -1,6 +1,7 @@
 import React from 'react';
 
 import { BRAND } from '@/constants/brand';
+import { assets } from '@/emails/design-tokens';
 
 type LogoProps = {
   width?: number;
@@ -12,7 +13,7 @@ export function Logo({ width = 160, height = 40 }: LogoProps) {
     <div style={{ display: 'block' }}>
       {/* eslint-disable-next-line next/no-img-element */}
       <img
-        src="/static/logo.svg"
+        src={assets.logo}
         alt={`${BRAND.displayName} Logo`}
         style={{
           width,

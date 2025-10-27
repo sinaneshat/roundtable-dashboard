@@ -1,40 +1,38 @@
 import { Link } from '@react-email/components';
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
+
+import { colors } from '@/emails/design-tokens';
 
 type EmailLinkProps = {
   children: ReactNode;
   href: string;
-  className?: string;
   target?: '_blank' | '_self';
   color?: 'primary' | 'secondary' | 'dark' | 'muted';
-  style?: React.CSSProperties;
+  style?: CSSProperties;
 };
 
-const colorStyles = {
-  primary: 'text-brand-primary',
-  secondary: 'text-brand-secondary',
-  dark: 'text-brand-dark',
-  muted: 'text-muted-foreground',
+const colorStyles: Record<string, CSSProperties> = {
+  primary: { color: colors.primary },
+  secondary: { color: colors.secondary },
+  dark: { color: colors.foreground },
+  muted: { color: colors.mutedForeground },
 };
 
 export function EmailLink({
   children,
   href,
-  className,
   target = '_blank',
   color = 'primary',
   style,
 }: EmailLinkProps) {
-  const baseClass = `${colorStyles[color]} underline`;
-  const finalClass = className || baseClass;
+  const combinedStyle: CSSProperties = {
+    textDecoration: 'underline',
+    ...colorStyles[color],
+    ...style,
+  };
 
   return (
-    <Link
-      href={href}
-      className={finalClass}
-      target={target}
-      style={style}
-    >
+    <Link href={href} target={target} style={combinedStyle}>
       {children}
     </Link>
   );

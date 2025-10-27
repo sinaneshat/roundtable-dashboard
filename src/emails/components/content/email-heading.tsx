@@ -1,37 +1,65 @@
 import { Heading } from '@react-email/components';
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
+
+import { colors, spacing, typography } from '@/emails/design-tokens';
 
 type EmailHeadingProps = {
   children: ReactNode;
   level?: 1 | 2 | 3 | 4;
-  className?: string;
   align?: 'left' | 'center' | 'right';
+  style?: CSSProperties;
 };
 
-const headingStyles = {
-  1: 'text-[30px] font-bold leading-[36px] text-black',
-  2: 'text-[24px] font-bold leading-[30px] text-black',
-  3: 'text-[20px] font-semibold leading-[26px] text-black',
-  4: 'text-[18px] font-semibold leading-[24px] text-black',
+const headingStyles: Record<number, CSSProperties> = {
+  1: {
+    fontSize: typography.fontSize['3xl'],
+    fontWeight: typography.fontWeight.bold,
+    lineHeight: '36px',
+    color: colors.foreground,
+  },
+  2: {
+    fontSize: typography.fontSize['2xl'],
+    fontWeight: typography.fontWeight.bold,
+    lineHeight: '30px',
+    color: colors.foreground,
+  },
+  3: {
+    fontSize: typography.fontSize.xl,
+    fontWeight: typography.fontWeight.semibold,
+    lineHeight: '26px',
+    color: colors.foreground,
+  },
+  4: {
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.semibold,
+    lineHeight: typography.lineHeight.normal,
+    color: colors.foreground,
+  },
 };
 
-const alignStyles = {
-  left: 'text-start',
-  center: 'text-center',
-  right: 'text-end',
+const alignStyles: Record<string, CSSProperties> = {
+  left: { textAlign: 'left' },
+  center: { textAlign: 'center' },
+  right: { textAlign: 'right' },
 };
 
 export function EmailHeading({
   children,
   level = 1,
-  className,
   align = 'center',
+  style,
 }: EmailHeadingProps) {
-  const baseClass = `mx-0 my-[30px] p-0 font-normal ${headingStyles[level]} ${alignStyles[align]}`;
-  const finalClass = className || baseClass;
+  const combinedStyle: CSSProperties = {
+    margin: `${spacing[8]} 0`,
+    padding: '0',
+    fontFamily: typography.fontFamily,
+    ...headingStyles[level],
+    ...alignStyles[align],
+    ...style,
+  };
 
   return (
-    <Heading as={`h${level}` as const} className={finalClass}>
+    <Heading as={`h${level}` as const} style={combinedStyle}>
       {children}
     </Heading>
   );
