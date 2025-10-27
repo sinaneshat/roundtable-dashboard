@@ -1,4 +1,4 @@
-import { render } from '@react-email/render';
+import { render } from '@react-email/components';
 import { AwsClient } from 'aws4fetch';
 
 import { BRAND } from '@/constants';
@@ -132,8 +132,8 @@ class EmailService {
     const { MagicLink } = await import('@/emails/templates');
 
     // Render React Email template to HTML
-    // Note: React Email fixed edge runtime compatibility in v1.1.0+
-    // Combined with serverExternalPackages config, this works in Cloudflare Workers
+    // Note: Using @react-email/components instead of @react-email/render
+    // to avoid edge runtime export resolution issues in Cloudflare Workers
     const html = await render(MagicLink({
       loginUrl: magicLink,
     }));

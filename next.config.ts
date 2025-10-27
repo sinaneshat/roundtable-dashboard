@@ -20,11 +20,13 @@ const nextConfig: NextConfig = {
   // Keep react-email packages external to avoid bundling issues
   // OpenNext will handle copying them to the output correctly
   // Also externalize packages with acorn dependencies for Cloudflare Workers compatibility
+  // Note: Using @react-email/components instead of @react-email/render to avoid edge export issues
   serverExternalPackages: [
     '@react-email/components',
     '@react-email/render',
     '@react-email/html',
     'react-email',
+    'react-dom/server',
     'acorn',
     'streamdown',
     'mermaid',
@@ -211,11 +213,22 @@ const nextConfig: NextConfig = {
   webpack: (config, { isServer }) => {
     if (isServer) {
       // Configure module resolution to use Node.js exports instead of edge exports
+      // This prevents issues with packages like @react-email/render that have edge exports
+      // pointing to non-existent files
       config.resolve = config.resolve || {};
       config.resolve.conditionNames = ['node', 'import', 'require', 'default'];
 
+      // Explicitly exclude edge-related exports from being resolved
+      config.resolve.mainFields = ['main', 'module'];
+
       // Ensure TypeScript and TSX files are properly handled
       config.resolve.extensions = ['.ts', '.tsx', '.js', '.jsx', '.json'];
+
+      // Add alias to force @react-email/render to use components package
+      config.resolve.alias = {
+        ...config.resolve.alias,
+        '@react-email/render': '@react-email/components',
+      };
     }
     return config;
   },
