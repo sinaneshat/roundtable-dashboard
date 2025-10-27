@@ -23,6 +23,7 @@ const nextConfig: NextConfig = {
   serverExternalPackages: [
     '@react-email/components',
     '@react-email/render',
+    '@react-email/html',
     'react-email',
     'acorn',
     'streamdown',
@@ -210,7 +211,6 @@ const nextConfig: NextConfig = {
   webpack: (config, { isServer }) => {
     if (isServer) {
       // Configure module resolution to use Node.js exports instead of edge exports
-      // This fixes @react-email/render resolution issues in Cloudflare Workers
       config.resolve = config.resolve || {};
       config.resolve.conditionNames = ['node', 'import', 'require', 'default'];
 
