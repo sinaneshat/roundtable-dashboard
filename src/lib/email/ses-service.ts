@@ -1,4 +1,4 @@
-import { render } from '@react-email/render';
+import { render } from '@react-email/components';
 import { AwsClient } from 'aws4fetch';
 
 import { BRAND } from '@/constants';
