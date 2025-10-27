@@ -355,9 +355,15 @@ export function useUpdateThreadMutation() {
         queryClient.setQueryData(queryKeys.threads.bySlug(context.slug), context.previousBySlug);
       }
     },
-    onSuccess: () => {
-      // ✅ ONE-WAY DATA FLOW: NO invalidation
-      // ChatThreadScreen uses optimistically updated cache as source of truth
+    onSuccess: async (_data, variables) => {
+      // ✅ CRITICAL FIX: Invalidate changelog when participants/mode changes
+      // The backend creates changelog entries, so we need to refetch to show them
+      // Only invalidate if participants or mode was updated
+      if ('participants' in variables.json || 'mode' in variables.json) {
+        await queryClient.invalidateQueries({
+          queryKey: queryKeys.threads.changelog(variables.param.id),
+        });
+      }
     },
     retry: false,
     throwOnError: false,

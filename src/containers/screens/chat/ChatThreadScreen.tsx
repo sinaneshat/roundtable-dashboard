@@ -1,4 +1,5 @@
 'use client';
+import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -24,6 +25,7 @@ import { useSetRoundFeedbackMutation, useUpdateThreadMutation } from '@/hooks/mu
 import { useThreadChangelogQuery, useThreadFeedbackQuery } from '@/hooks/queries/chat';
 import { useBoolean, useChatAnalysis, useSelectedParticipants } from '@/hooks/utils';
 import type { ChatModeId } from '@/lib/config/chat-modes';
+import { queryKeys } from '@/lib/data/query-keys';
 import { messageHasError, MessageMetadataSchema } from '@/lib/schemas/message-metadata';
 import { extractTextFromMessage } from '@/lib/schemas/message-schemas';
 import { chatMessagesToUIMessages } from '@/lib/utils/message-transforms';
@@ -68,6 +70,7 @@ export default function ChatThreadScreen({
   user,
 }: ChatThreadScreenProps) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const t = useTranslations('chat');
   const isDeleteDialogOpen = useBoolean(false);
   useThreadHeaderUpdater({
@@ -91,24 +94,25 @@ export default function ChatThreadScreen({
     setMessages, // ✅ Added for message refetch functionality
   } = useSharedChatContext();
   const [hasInitiallyLoaded, setHasInitiallyLoaded] = useState(false);
-  const { data: changelogResponse } = useThreadChangelogQuery(thread.id, !hasInitiallyLoaded);
-  type ChangelogItem = NonNullable<NonNullable<typeof changelogResponse>['data']>['items'][number];
-  const [clientChangelog, setClientChangelog] = useState<ChangelogItem[]>([]);
-  useEffect(() => {
-    if (!hasInitiallyLoaded && changelogResponse?.success) {
-      const items = changelogResponse.data.items || [];
-      const seen = new Set<string>();
-      const deduplicated = items.filter((item) => {
-        if (seen.has(item.id))
-          return false;
-        seen.add(item.id);
-        return true;
-      });
-      // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- Intentional initial data load
-      setClientChangelog(deduplicated);
+  // ✅ CRITICAL FIX: Keep changelog query always enabled so it refetches when invalidated
+  // Previously disabled after initial load, preventing real-time changelog updates
+  const { data: changelogResponse, isFetching: isChangelogFetching } = useThreadChangelogQuery(thread.id, true);
+
+  // ✅ Use changelog data directly from query instead of client state
+  // This ensures real-time updates when the query is invalidated by mutations
+  const changelog = useMemo(() => {
+    if (!changelogResponse?.success) {
+      return [];
     }
-  }, [changelogResponse, hasInitiallyLoaded]);
-  const changelog = clientChangelog;
+    const items = changelogResponse.data.items || [];
+    const seen = new Set<string>();
+    return items.filter((item) => {
+      if (seen.has(item.id))
+        return false;
+      seen.add(item.id);
+      return true;
+    });
+  }, [changelogResponse]);
   const { data: feedbackData, isSuccess: feedbackSuccess } = useThreadFeedbackQuery(thread.id, !hasInitiallyLoaded);
 
   // ✅ CRITICAL FIX: Refetch messages after initial load to catch any race condition
@@ -143,6 +147,8 @@ export default function ChatThreadScreen({
   const [isCreatingAnalysis, setIsCreatingAnalysis] = useState(false);
   // State to track which round is being regenerated (for UI filtering)
   const [regeneratingRoundNumber, setRegeneratingRoundNumber] = useState<number | null>(null);
+  // ✅ Track when we're waiting for changelog after participant/mode update
+  const [isWaitingForChangelog, setIsWaitingForChangelog] = useState(false);
 
   const {
     analyses: rawAnalyses,
@@ -437,6 +443,32 @@ export default function ChatThreadScreen({
         const latestUserMessage = latestMessages.findLast(m => m.role === 'user');
         const latestUserQuestion = extractTextFromMessage(latestUserMessage);
 
+        // ✅ CRITICAL FIX: Don't create analysis if all participants failed
+        // Check if there are any successful assistant messages in this round
+        const roundMessages = latestMessages.filter((m) => {
+          const metadata = m.metadata as Record<string, unknown> | undefined;
+          return (metadata?.roundNumber as number) === roundNumber;
+        });
+
+        const assistantMessages = roundMessages.filter(m => m.role === 'assistant');
+        const allParticipantsFailed = assistantMessages.every((m) => {
+          const parsed = MessageMetadataSchema.safeParse(m.metadata);
+          return parsed.success && messageHasError(parsed.data);
+        });
+
+        if (allParticipantsFailed && assistantMessages.length > 0) {
+          // All participants failed - don't create analysis
+          // Clear states and return early
+          if (regenerateRoundNumberRef.current === roundNumber) {
+            regenerateRoundNumberRef.current = null;
+            setRegeneratingRoundNumber(null);
+            setIsRegenerating(false);
+          }
+          setStreamingRoundNumber(null);
+          currentRoundNumberRef.current = null;
+          return;
+        }
+
         // CRITICAL FIX: Set flag to prevent query from refetching
         // This blocks the query until the pending analysis has time to render and trigger
         setIsCreatingAnalysis(true);
@@ -476,6 +508,12 @@ export default function ChatThreadScreen({
           queryReEnableTimeoutRef.current = requestAnimationFrame(() => {
             requestAnimationFrame(() => {
               setIsCreatingAnalysis(false);
+              // ✅ CRITICAL FIX: Invalidate analyses query to trigger refetch
+              // After creating pending analysis, we need to refetch to pick it up
+              // The query was disabled during creation, so it needs manual invalidation
+              queryClient.invalidateQueries({
+                queryKey: queryKeys.threads.analyses(thread.id),
+              });
             });
           }) as unknown as NodeJS.Timeout;
         });
@@ -540,8 +578,8 @@ export default function ChatThreadScreen({
       // ✅ STEP 4.6: Clear analysis tracking for this round to allow recreation
       createdAnalysisRoundsRef.current.delete(roundNumber);
 
-      // STEP 5: Clean up changelog and feedback for this round
-      setClientChangelog(prev => prev.filter(item => item.roundNumber !== roundNumber));
+      // STEP 5: Clean up feedback for this round
+      // Note: Changelog is managed by query and will be refetched automatically
       setClientFeedback((prev) => {
         const updated = new Map(prev);
         updated.delete(roundNumber);
@@ -571,6 +609,18 @@ export default function ChatThreadScreen({
       return;
     }
 
+    // ✅ CRITICAL FIX: Wait for changelog query to complete before starting streaming
+    // This ensures changelog appears in UI BEFORE participants start streaming
+    if (isWaitingForChangelog && isChangelogFetching) {
+      return;
+    }
+
+    // Clear waiting flag once we proceed
+    if (isWaitingForChangelog) {
+      // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- Intentional flag clear before proceeding
+      setIsWaitingForChangelog(false);
+    }
+
     hasSentPendingMessageRef.current = true;
 
     // AI SDK v5 Pattern: Calculate round number for the NEW user message
@@ -592,7 +642,7 @@ export default function ChatThreadScreen({
     // before the message streaming starts
     // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- Intentional flag reset after successful send
     setHasPendingConfigChanges(false);
-  }, [pendingMessage, expectedParticipantIds, contextParticipants, sendMessage, messages]);
+  }, [pendingMessage, expectedParticipantIds, contextParticipants, sendMessage, messages, isWaitingForChangelog, isChangelogFetching]);
   const handlePromptSubmit = useCallback(
     async (e: React.FormEvent) => {
       e.preventDefault();
@@ -666,19 +716,24 @@ export default function ChatThreadScreen({
           setExpectedParticipantIds(optimisticParticipants.map(p => p.modelId));
         }
         hasSentPendingMessageRef.current = false;
+        // ✅ CRITICAL FIX: Set flag to wait for changelog before starting streaming
+        // This ensures changelog appears in UI before participants start responding
+        setIsWaitingForChangelog(true);
         setPendingMessage(trimmed);
         // CRITICAL FIX: Don't reset hasPendingConfigChanges here
         // It will be reset in the useEffect (line 452) AFTER message is sent
         // This prevents the sync effect from interfering with optimistic updates
       } catch {
-        // Error path: send message directly and reset flag
+        // Error path: send message directly and reset flags
         await sendMessage(trimmed);
         // Reset pending changes flag on error path
         setHasPendingConfigChanges(false);
+        // Clear waiting flag on error path since we're not going through normal flow
+        setIsWaitingForChangelog(false);
       }
       setInputValue('');
     },
-    [inputValue, sendMessage, thread.id, selectedParticipants, selectedMode, updateThreadMutation, updateParticipants, contextParticipants],
+    [inputValue, sendMessage, thread.id, selectedParticipants, selectedMode, updateThreadMutation, updateParticipants],
   );
   const activeParticipants = contextParticipants;
   const maxRoundNumber = useMemo(() => getMaxRoundNumber(messages), [messages]);
@@ -853,7 +908,10 @@ export default function ChatThreadScreen({
     const newAnalyses = analyses.filter(a => !scrolledToAnalysesRef.current.has(a.id));
     const hasNewAnalysis = newAnalyses.length > 0;
     const shouldScrollForAnalysis = hasNewAnalysis && !isStreaming;
-    const shouldScroll = isStreaming || shouldScrollForAnalysis || isNearBottomRef.current;
+    // ✅ CRITICAL FIX: Only auto-scroll during streaming if user is near bottom
+    // This allows users to "opt out" by scrolling up during streaming
+    // Analysis appearance always scrolls since it's a significant event
+    const shouldScroll = (isStreaming && isNearBottomRef.current) || shouldScrollForAnalysis;
     if (shouldScroll) {
       if (hasNewAnalysis) {
         newAnalyses.forEach(a => scrolledToAnalysesRef.current.add(a.id));
@@ -940,7 +998,8 @@ export default function ChatThreadScreen({
                         // 1. It's the last round
                         // 2. Analysis is NOT in progress (completed, failed, or doesn't exist)
                         // User shouldn't see retry during analysis streaming
-                        const showRetryButton = isLastRound && !isAnalysisInProgress;
+                        // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Temporarily disabled, will be used when retry is re-enabled
+                        const _showRetryButton = isLastRound && !isAnalysisInProgress;
 
                         return (
                           <Actions className="mt-3 mb-2">

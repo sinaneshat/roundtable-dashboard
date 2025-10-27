@@ -35,18 +35,15 @@ export function useAutoScrollToBottom(dependency: unknown, enabled = true) {
     // This is the standard way to measure and control window scrolling
     const { scrollTop, scrollHeight, clientHeight } = document.documentElement;
 
-    // ✅ CRITICAL FIX: Always scroll when streaming, otherwise check if near bottom
-    // This ensures continuous scrolling during streaming updates
-    const parsed = typeof dependency === 'object' && dependency !== null ? dependency as Record<string, unknown> : null;
-    const isStreamingActive = parsed?.isStreaming === true;
-
-    // Check if we're near the bottom (within 200px)
+    // ✅ CRITICAL FIX: Only scroll when user is near bottom
+    // This allows users to "opt out" of auto-scroll by scrolling up
+    // If they scroll back to near bottom, auto-scroll resumes
     const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
     const isNearBottom = distanceFromBottom < 200;
 
-    // Auto-scroll if: (1) streaming is active, OR (2) we're already near the bottom
-    // This ensures smooth streaming experience while respecting user's manual scrolling
-    if (isStreamingActive || isNearBottom) {
+    // Auto-scroll only if we're already near the bottom
+    // This respects user's manual scrolling during streaming
+    if (isNearBottom) {
       requestAnimationFrame(() => {
         // ✅ WINDOW SCROLLING: Scroll to show content, accounting for bottom padding
         // Get the actual content height by checking the chat-scroll-container

@@ -273,6 +273,19 @@ export default function ChatOverviewScreen() {
             return;
           }
 
+          // ✅ CRITICAL FIX: Don't create analysis if all participants failed
+          // Check if there are any successful assistant messages in this round
+          const allParticipantsFailed = assistantMessages.every((m) => {
+            const metadata = m.metadata as Record<string, unknown> | undefined;
+            const errorCategory = metadata?.errorCategory;
+            return errorCategory !== undefined && errorCategory !== null;
+          });
+
+          if (allParticipantsFailed && assistantMessages.length > 0) {
+            // All participants failed - don't create analysis
+            return;
+          }
+
           try {
             // Mark this round as having analysis created BEFORE calling createPendingAnalysis
             // This prevents duplicate calls if onComplete is triggered multiple times
