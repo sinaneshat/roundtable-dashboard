@@ -20,7 +20,7 @@ const nextConfig: NextConfig = {
   // Keep react-email packages external to avoid bundling issues
   // OpenNext will handle copying them to the output correctly
   // Also externalize packages with acorn dependencies for Cloudflare Workers compatibility
-  serverComponentsExternalPackages: [
+  serverExternalPackages: [
     '@react-email/components',
     '@react-email/render',
     'react-email',
