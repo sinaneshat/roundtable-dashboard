@@ -64,6 +64,7 @@ export default async function Image() {
         {/* Main Title */}
         <div
           style={{
+            display: 'flex',
             fontSize: 72,
             fontWeight: 800,
             color: OG_COLORS.textPrimary,
