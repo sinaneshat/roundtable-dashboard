@@ -23,4 +23,31 @@ export default defineCloudflareConfig({
 
   // Automatic cache purge when pages are revalidated (requires zone setup)
   cachePurge: purgeCache({ type: 'durableObject' }),
+
+  // Build configuration overrides for Cloudflare Workers compatibility
+  // default: {
+  //   override: {
+  //     wrapper: 'cloudflare-node',
+  //     converter: 'edge',
+  //     esbuild: {
+  //       // Mark KaTeX font files as external - they're not needed in the Worker bundle
+  //       // KaTeX is a transitive dep from streamdown/@scalar/openapi-to-markdown
+  //       // Fonts are served from CDN or static assets, not bundled in Worker
+  //       external: [
+  //         'fonts/KaTeX_*',
+  //         '*/fonts/KaTeX_*',
+  //         '**/fonts/KaTeX_*',
+  //       ],
+
+  //       // Ensure proper module resolution for edge environments
+  //       mainFields: ['module', 'main'],
+
+  //       // Target ES2022 for Cloudflare Workers compatibility
+  //       target: 'es2022',
+
+  //       // Keep names for debugging (set to false in production for smaller bundle)
+  //       keepNames: process.env.NODE_ENV === 'development',
+  //     },
+  //   },
+  // },
 });
