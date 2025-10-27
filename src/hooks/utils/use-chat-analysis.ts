@@ -177,7 +177,9 @@ export function useChatAnalysis(
           return roundMatches && isAssistant;
         });
 
-        const participantMessageIds = roundMessages.map(m => m.id);
+        // ✅ CRITICAL FIX: Deduplicate message IDs to prevent duplicate submissions
+        // If there are duplicate messages in the array, we'd get duplicate IDs
+        const participantMessageIds = Array.from(new Set(roundMessages.map(m => m.id)));
 
         // ✅ VALIDATION: Check if we have the expected number of participant messages
         const expectedCount = validated.participants.filter(p => p.isEnabled).length;

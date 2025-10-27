@@ -1,6 +1,7 @@
 'use client';
 import { Check, Copy, Facebook, Linkedin, Mail, Share2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
+import { useEffect, useRef } from 'react';
 import {
   EmailShareButton,
   FacebookShareButton,
@@ -45,13 +46,24 @@ export function SocialShareButton({
   const t = useTranslations('chat');
   const isOpen = useBoolean(false);
   const copySuccess = useBoolean(false);
+  const copyTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const shareTitle = `${title} - ${BRAND.displayName}`;
   const shareDescription = description || `Check out this conversation on ${BRAND.displayName}, where multiple AI models collaborate to solve problems.`;
+
+  // AI SDK v5 Pattern: Clean up pending timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (copyTimeoutRef.current) {
+        clearTimeout(copyTimeoutRef.current);
+      }
+    };
+  }, []);
+
   const handleCopyLink = async () => {
     try {
       await navigator.clipboard.writeText(url);
       copySuccess.onTrue();
-      setTimeout(() => {
+      copyTimeoutRef.current = setTimeout(() => {
         copySuccess.onFalse();
         isOpen.onFalse();
       }, 2000);

@@ -65,11 +65,12 @@ export function RoundAnalysisCard({
     if (streamingRoundNumber !== prevStreamingRoundRef.current) {
       prevStreamingRoundRef.current = streamingRoundNumber;
       if (streamingRoundNumber != null && !isLatest && streamingRoundNumber > analysis.roundNumber) {
-        const timeoutId = setTimeout(() => {
+        // AI SDK v5 Pattern: Use queueMicrotask instead of setTimeout(0)
+        // This schedules state updates in the microtask queue, more efficient than timer queue
+        queueMicrotask(() => {
           setIsManuallyControlled(false);
           setManuallyOpen(false);
-        }, 0);
-        return () => clearTimeout(timeoutId);
+        });
       }
     }
     return undefined;
@@ -114,14 +115,18 @@ export function RoundAnalysisCard({
       && analysis.status === AnalysisStatuses.COMPLETED;
     const cleanup = (() => {
       if (justCompleted && isLatest && isOpen && containerRef.current) {
-        const scrollTimeout = setTimeout(() => {
-          containerRef.current?.scrollIntoView({
-            behavior: 'smooth',
-            block: 'nearest',
-            inline: 'nearest',
+        // AI SDK v5 Pattern: Use requestAnimationFrame instead of setTimeout for scroll
+        // This ensures scroll happens after browser completes rendering and layout
+        const rafId = requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            containerRef.current?.scrollIntoView({
+              behavior: 'smooth',
+              block: 'nearest',
+              inline: 'nearest',
+            });
           });
-        }, 300);
-        return () => clearTimeout(scrollTimeout);
+        });
+        return () => cancelAnimationFrame(rafId);
       }
       return undefined;
     })();

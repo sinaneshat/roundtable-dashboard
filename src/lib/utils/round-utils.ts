@@ -230,14 +230,7 @@ export function groupMessagesByRound(messages: UIMessage[]): Map<number, UIMessa
     }
   });
 
-  // ✅ LOGGING: Warn when round number inference fallback is used
-  if (inferredMessages.length > 0) {
-    console.warn('[groupMessagesByRound] Used round number inference for messages without explicit roundNumber:', {
-      count: inferredMessages.length,
-      details: inferredMessages,
-      recommendation: 'Backend should always set roundNumber in metadata',
-    });
-  }
+  // Round number inference used when messages don't have explicit roundNumber in metadata
 
   // PASS 2: Group all messages by determined round
   const grouped = new Map<number, UIMessage[]>();
@@ -280,13 +273,7 @@ export function groupMessagesByRound(messages: UIMessage[]): Map<number, UIMessa
     deduped.set(roundNumber, uniqueMessages);
   });
 
-  // ✅ LOGGING: Log when duplicates are found during round grouping
-  if (duplicatesFoundInRounds.length > 0) {
-    console.warn('[groupMessagesByRound] Found duplicates during round grouping:', {
-      roundsWithDuplicates: duplicatesFoundInRounds.length,
-      details: duplicatesFoundInRounds,
-    });
-  }
+  // Duplicates are automatically filtered during the deduplication pass
 
   return deduped;
 }

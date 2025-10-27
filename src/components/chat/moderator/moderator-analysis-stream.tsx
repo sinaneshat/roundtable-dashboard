@@ -18,7 +18,35 @@ type ModeratorAnalysisStreamProps = {
   onStreamComplete?: (completedAnalysisData?: unknown) => void;
   onStreamStart?: () => void;
 };
+
+// ✅ CRITICAL FIX: Track at TWO levels to prevent duplicate submissions
+// 1. Analysis ID level - prevents same analysis from submitting twice
+// 2. Round number level - prevents different analyses for same round from submitting
 const triggeredAnalysisIds = new Map<string, boolean>();
+const triggeredRounds = new Map<string, Set<number>>(); // threadId -> Set of round numbers
+
+// Export cleanup function for regeneration scenarios
+export function clearTriggeredAnalysis(analysisId: string) {
+  triggeredAnalysisIds.delete(analysisId);
+}
+
+// Export cleanup function to clear all triggered analyses for a round
+export function clearTriggeredAnalysesForRound(roundNumber: number) {
+  // Clear analysis IDs
+  const keysToDelete: string[] = [];
+  triggeredAnalysisIds.forEach((_value, key) => {
+    if (key.includes(`-${roundNumber}-`) || key.includes(`round-${roundNumber}`)) {
+      keysToDelete.push(key);
+    }
+  });
+  keysToDelete.forEach(key => triggeredAnalysisIds.delete(key));
+
+  // Clear round tracking
+  triggeredRounds.forEach((roundSet) => {
+    roundSet.delete(roundNumber);
+  });
+}
+
 function ModeratorAnalysisStreamComponent({
   threadId,
   analysis,
@@ -26,10 +54,21 @@ function ModeratorAnalysisStreamComponent({
   onStreamStart,
 }: ModeratorAnalysisStreamProps) {
   const is409Conflict = useBoolean(false);
-  const { object: partialAnalysis, error, submit } = useObject({
+
+  // Track if component is mounted to prevent state updates after unmount
+  const isMountedRef = { current: true };
+
+  // AI SDK v5 Pattern: useObject hook for streaming structured data
+  const { object: partialAnalysis, error, submit, stop } = useObject({
     api: `/api/v1/chat/threads/${threadId}/rounds/${analysis.roundNumber}/analyze`,
     schema: ModeratorAnalysisPayloadSchema,
+    // React 19 Pattern: Use onFinish callback instead of useEffect for completion
     onFinish: ({ object: finalObject, error: streamError }) => {
+      // CRITICAL: Check if component is still mounted before calling callbacks
+      if (!isMountedRef.current) {
+        return;
+      }
+
       if (streamError) {
         const errorMessage = streamError.message || String(streamError);
         const isAborted = streamError instanceof Error
@@ -43,30 +82,70 @@ function ModeratorAnalysisStreamComponent({
         }
         return;
       }
-      if (finalObject) {
+      if (finalObject && isMountedRef.current) {
         onStreamComplete?.(finalObject);
       }
     },
   });
+
+  // Cleanup on unmount: stop streaming and mark component as unmounted
   useEffect(() => {
-    if (triggeredAnalysisIds.has(analysis.id)) {
-      return undefined;
+    return () => {
+      // Mark component as unmounted to prevent state updates
+      isMountedRef.current = false;
+
+      // Stop any active streaming
+      stop();
+
+      // ✅ CRITICAL FIX: Do NOT delete analysis ID from triggered map on unmount
+      // This prevents double-calling when component unmounts/remounts (e.g., React Strict Mode, parent re-renders)
+      // The ID is only cleared via clearTriggeredAnalysesForRound() during regeneration
+      // triggeredAnalysisIds.delete(analysis.id); // REMOVED - causes double streaming
+    };
+  }, [analysis.id, stop]);
+
+  // ✅ CRITICAL FIX: Prevent duplicate submissions at both analysis ID and round number level
+  // React 19 Pattern: Schedule side effects using queueMicrotask instead of useEffect
+  const roundAlreadyTriggered = triggeredRounds.get(threadId)?.has(analysis.roundNumber) ?? false;
+
+  if (
+    !triggeredAnalysisIds.has(analysis.id)
+    && !roundAlreadyTriggered
+    && analysis.status === AnalysisStatuses.PENDING
+  ) {
+    // Mark as triggered at BOTH levels BEFORE scheduling to prevent duplicate calls
+    triggeredAnalysisIds.set(analysis.id, true);
+
+    if (!triggeredRounds.has(threadId)) {
+      triggeredRounds.set(threadId, new Set());
     }
-    if (analysis.status === AnalysisStatuses.FAILED || analysis.status === AnalysisStatuses.COMPLETED) {
-      triggeredAnalysisIds.set(analysis.id, true);
-      return undefined;
-    }
-    const shouldTrigger = analysis.status === AnalysisStatuses.PENDING;
-    if (shouldTrigger) {
-      triggeredAnalysisIds.set(analysis.id, true);
+    triggeredRounds.get(threadId)!.add(analysis.roundNumber);
+
+    // Schedule the streaming trigger for after this render completes
+    // This is the React 19 pattern for post-render work without useEffect
+    queueMicrotask(() => {
       onStreamStart?.();
       submit({ participantMessageIds: analysis.participantMessageIds });
+    });
+  }
+
+  // Mark completed/failed/streaming analyses as triggered to prevent re-triggering
+  const roundAlreadyMarked = triggeredRounds.get(threadId)?.has(analysis.roundNumber) ?? false;
+
+  if (
+    !triggeredAnalysisIds.has(analysis.id)
+    && !roundAlreadyMarked
+    && (analysis.status === AnalysisStatuses.COMPLETED
+      || analysis.status === AnalysisStatuses.FAILED
+      || analysis.status === AnalysisStatuses.STREAMING)
+  ) {
+    triggeredAnalysisIds.set(analysis.id, true);
+
+    if (!triggeredRounds.has(threadId)) {
+      triggeredRounds.set(threadId, new Set());
     }
-    if (analysis.status === AnalysisStatuses.STREAMING) {
-      triggeredAnalysisIds.set(analysis.id, true);
-    }
-    return undefined;
-  }, [analysis.status, analysis.id]);
+    triggeredRounds.get(threadId)!.add(analysis.roundNumber);
+  }
   const shouldShowError = error && !is409Conflict.value && !(
     error instanceof Error
     && (error.name === 'AbortError' || error.message?.includes('aborted'))

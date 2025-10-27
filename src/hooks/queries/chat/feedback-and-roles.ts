@@ -48,6 +48,11 @@ export function useThreadFeedbackQuery(threadId: string, enabled = true) {
       return response.data;
     },
     staleTime: STALE_TIME_PRESETS.medium,
+    // ✅ CRITICAL FIX: Preserve previous data during refetches
+    // This prevents feedback buttons from losing state when query is invalidated
+    // Without this, feedback temporarily becomes empty during refetch,
+    // causing buttons to lose their like/dislike state momentarily
+    placeholderData: previousData => previousData,
     enabled,
   });
 }

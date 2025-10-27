@@ -400,9 +400,20 @@ export async function saveStreamedMessage(
         db,
       });
     }
-  } catch {
+  } catch (error) {
+    // ✅ IMPROVED ERROR LOGGING: Log error details for debugging
     // Non-blocking error - allow round to continue
     // This allows the next participant to respond even if this one failed to save
+    console.error('[saveStreamedMessage] Failed to save message:', {
+      messageId,
+      threadId,
+      participantId,
+      participantIndex,
+      modelId,
+      roundNumber,
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+    });
   }
 }
 

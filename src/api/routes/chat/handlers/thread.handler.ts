@@ -605,11 +605,12 @@ export const getThreadBySlugHandler: RouteHandler<typeof getThreadBySlugRoute, A
         ErrorContextBuilders.authorization('thread', slug),
       );
     }
+    // ✅ CRITICAL FIX: Return ALL participants (enabled + disabled)
+    // Messages contain participant metadata, so they need access to all participant info
+    // Filtering by isEnabled caused issues where messages from "disabled" participants
+    // wouldn't display properly in the thread view
     const participants = await db.query.chatParticipant.findMany({
-      where: and(
-        eq(tables.chatParticipant.threadId, thread.id),
-        eq(tables.chatParticipant.isEnabled, true),
-      ),
+      where: eq(tables.chatParticipant.threadId, thread.id),
       orderBy: [tables.chatParticipant.priority, tables.chatParticipant.id],
     });
     const messages = await db.query.chatMessage.findMany({

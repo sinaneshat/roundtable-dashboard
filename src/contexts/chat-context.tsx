@@ -1,10 +1,16 @@
 'use client';
 
 /**
- * Chat Context - AI SDK v5 Shared State Pattern - SIMPLIFIED
+ * Chat Context - AI SDK v5 Shared State Pattern + React 19.2
  *
  * OFFICIAL AI SDK v5 PATTERN: Share chat state across components
  * Reference: https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot#share-useChat-state-across-components
+ *
+ * React 19.2 PATTERNS APPLIED:
+ * - Callback refs for non-reactive callbacks (preventing unnecessary re-renders)
+ * - Proper event listener management (separate from useEffect dependencies)
+ * - Refs for synchronous updates (avoiding race conditions)
+ * - Clean separation of reactive and non-reactive logic
  *
  * This context follows the official pattern for sharing chat state between:
  * - ChatOverviewScreen: Initial prompt and streaming before navigation
@@ -43,6 +49,7 @@ type ChatContextValue = {
   error: Error | null;
   retry: () => void;
   stop: () => void; // ✅ Stop streaming
+  setMessages: (messages: UIMessage[] | ((messages: UIMessage[]) => UIMessage[])) => void; // ✅ Manually set messages (for optimistic updates)
   resetHookState: () => void; // ✅ Reset all internal hook state
 
   // Thread management
@@ -119,11 +126,16 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
    * AI SDK v5 PATTERN (from crash course Exercise 01.07, 04.02, 04.03):
    * 1. Set thread state (triggers useChat re-initialization via id change)
    * 2. Set participants (backend source of truth)
-   * 3. Set initial messages ONCE (useChat uses these on mount, ignores updates)
+   * 3. Set initial messages (useChat reads these when threadId changes)
    * 4. Let useChat manage message state from there
    *
-   * CRITICAL: When threadId changes, useChat automatically resets and loads
-   * the new thread's messages. We just need to provide initialMessages once.
+   * CRITICAL: When threadId changes, useChat automatically resets and uses
+   * the messages state as initialMessages. We ALWAYS set state to ensure
+   * proper hydration on page refresh and navigation.
+   *
+   * CRITICAL FIX: When threadId stays the same (e.g., navigating from overview to thread screen),
+   * useChat doesn't re-initialize, so we must explicitly update its internal messages state
+   * via chat.setMessages. This prevents message loss during navigation.
    *
    * NOTE: Backend handles deduplication (see backend-patterns.md)
    */
@@ -133,25 +145,29 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       newParticipants: ChatParticipant[],
       newMessages?: UIMessage[],
     ) => {
-      // Check if this is a new thread
+      const messagesToSet = newMessages || [];
+
+      // Check if this is a new thread to decide whether to reset hook state
       const isNewThread = currentThreadIdRef.current !== newThread.id;
 
       if (isNewThread) {
-        // Reset error tracking state
+        // Reset error tracking state for new thread
         chat.resetHookState();
         currentThreadIdRef.current = newThread.id;
-
-        // Set new thread state - this triggers useChat re-initialization
-        setThread(newThread);
-        setParticipants(newParticipants);
-
-        // AI SDK v5 Pattern: Set messages ONCE for new thread
-        // useChat will use these as initialMessages and manage from there
-        setMessages(newMessages || []);
-      } else {
-        // Same thread - just update participants if needed
-        setParticipants(newParticipants);
       }
+
+      // ALWAYS set state - required for proper hydration
+      // useChat reads the messages state when threadId changes
+      // This ensures server-side data is properly loaded on page refresh
+      setThread(newThread);
+      setParticipants(newParticipants);
+      setMessages(messagesToSet);
+
+      // CRITICAL FIX: Update useChat's internal messages state
+      // This is essential when threadId stays the same but messages have changed
+      // (e.g., navigating from overview screen to thread screen with same thread ID)
+      // AI SDK v5 Pattern: setMessages updates useChat's internal state directly
+      chat.setMessages(messagesToSet);
     },
     [chat], // ✅ Only depend on chat, not thread (prevents infinite loop)
   );

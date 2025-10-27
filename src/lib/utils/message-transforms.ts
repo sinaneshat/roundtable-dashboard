@@ -111,6 +111,9 @@ export function chatMessageToUIMessage(
  * Batch conversion for multiple messages. Uses chatMessageToUIMessage internally.
  * Preserves message order from database.
  *
+ * CRITICAL FIX: Ensures all messages have roundNumber set in metadata.
+ * If backend messages are missing roundNumber, assigns them based on user message sequence.
+ *
  * @param messages - Array of backend ChatMessages from database
  * @returns Array of UIMessages compatible with AI SDK
  *
@@ -124,7 +127,49 @@ export function chatMessageToUIMessage(
 export function chatMessagesToUIMessages(
   messages: (ChatMessage | (Omit<ChatMessage, 'createdAt'> & { createdAt: string | Date }))[],
 ): UIMessage[] {
-  return messages.map(chatMessageToUIMessage);
+  // Convert all messages first
+  const uiMessages = messages.map(chatMessageToUIMessage);
+
+  // CRITICAL FIX: Ensure all messages have roundNumber in metadata
+  // This prevents groupMessagesByRound from having to use inference logic
+  // which can fail and cause messages to not be displayed
+  let currentRound = 0;
+  const messagesWithRoundNumber = uiMessages.map((message) => {
+    // Check if message already has roundNumber in metadata
+    const hasRoundNumber = message.metadata
+      && typeof message.metadata === 'object'
+      && 'roundNumber' in message.metadata
+      && typeof (message.metadata as Record<string, unknown>).roundNumber === 'number'
+      && ((message.metadata as Record<string, unknown>).roundNumber as number) > 0;
+
+    if (hasRoundNumber) {
+      // Update current round tracker
+      const explicitRound = (message.metadata as Record<string, unknown>).roundNumber as number;
+      if (message.role === 'user' && explicitRound > currentRound) {
+        currentRound = explicitRound;
+      }
+      return message;
+    }
+
+    // Message missing roundNumber - assign based on current round
+    if (message.role === 'user') {
+      // New user message starts a new round
+      currentRound += 1;
+    }
+
+    // Assign roundNumber to message metadata
+    const messageWithRound: UIMessage = {
+      ...message,
+      metadata: {
+        ...(message.metadata || {}),
+        roundNumber: currentRound || 1, // Default to round 1 if no rounds yet
+      },
+    };
+
+    return messageWithRound;
+  });
+
+  return messagesWithRoundNumber;
 }
 
 // ============================================================================

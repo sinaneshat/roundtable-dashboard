@@ -4,7 +4,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 import type { Chat } from '@/components/chat/chat-list';
 import { ChatList, groupChatsByPeriod } from '@/components/chat/chat-list';
@@ -75,8 +75,14 @@ function AppSidebarComponent({ ...props }: React.ComponentProps<typeof Sidebar>)
       isPublic: thread.isPublic ?? false,
     }));
   }, [threadsData]);
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
+  // React 19.2 Pattern: Use ref to store callback, preventing listener re-mounting
+  // Ref allows reading latest isMobile/setOpenMobile without re-adding listener
+  const keyDownHandlerRef = useRef<((e: KeyboardEvent) => void) | null>(null);
+
+  // React 19.2: Store latest callback in ref using useLayoutEffect (synchronous, before paint)
+  // This avoids the "Cannot access refs during render" rule violation
+  useLayoutEffect(() => {
+    keyDownHandlerRef.current = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
         e.preventDefault();
         setIsSearchOpen(true);
@@ -85,9 +91,15 @@ function AppSidebarComponent({ ...props }: React.ComponentProps<typeof Sidebar>)
         }
       }
     };
+  });
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      keyDownHandlerRef.current?.(e);
+    };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isMobile, setOpenMobile]);
+  }, []); // No dependencies - ref always has latest callback
   const handleNewChat = () => {
     router.push('/chat');
     if (isMobile) {

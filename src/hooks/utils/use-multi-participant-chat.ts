@@ -80,7 +80,7 @@ type UseMultiParticipantChatReturn = {
   currentParticipantIndex: number;
   /** Any error that occurred during the chat */
   error: Error | null;
-  /** Retry the last round (regenerate responses) */
+  /** Retry the last round (regenerate entire round from scratch - deletes all messages and re-sends user prompt) */
   retry: () => void;
   /** Stop the current streaming session */
   stop: () => void;
@@ -202,17 +202,20 @@ export function useMultiParticipantChat(
     const nextIndex = currentIndexRef.current + 1;
     const totalParticipants = roundParticipantsRef.current.length;
 
-    // Round complete - all participants have responded
+    // AI SDK v5 Pattern: Round Complete - Last Participant Callback
+    // When the last participant finishes, trigger the completion callback
+    // This callback is used to invoke analysis stream after ALL participants complete
     if (nextIndex >= totalParticipants) {
       setIsExplicitlyStreaming(false);
       errorTracking.reset();
       regenerateRoundNumberRef.current = null;
       setCurrentParticipantIndex(0);
 
-      // Trigger completion callback
-      setTimeout(() => {
+      // AI SDK v5 Pattern: Use queueMicrotask instead of setTimeout(0)
+      // This schedules callback after current microtask queue, avoiding setTimeout overhead
+      queueMicrotask(() => {
         onComplete?.();
-      }, 0);
+      });
 
       return;
     }
@@ -275,10 +278,11 @@ export function useMultiParticipantChat(
       });
     }
 
-    // Reset trigger lock after a brief moment
-    setTimeout(() => {
+    // AI SDK v5 Pattern: Use requestAnimationFrame instead of setTimeout
+    // This resets trigger lock after the browser's next paint cycle
+    requestAnimationFrame(() => {
       isTriggeringRef.current = false;
-    }, 100);
+    });
   }, [errorTracking, onComplete]);
 
   /**
@@ -328,9 +332,10 @@ export function useMultiParticipantChat(
   } = useChat({
     id: threadId,
     transport,
-    // AI SDK v5 Pattern: Pass initialMessages on mount ONLY
-    // After mount, useChat manages its own messages state
-    ...(initialMessages && initialMessages.length > 0 ? { initialMessages } : {}),
+    // AI SDK v5 Pattern: Pass messages (renamed from initialMessages in v5.0)
+    // When provided from backend after thread creation, these hydrate the chat
+    // Reference: https://github.com/vercel/ai/blob/ai_5_0_0/content/docs/08-migration-guides/26-migration-guide-5-0.mdx
+    ...(initialMessages && initialMessages.length > 0 ? { messages: initialMessages } : {}),
 
     /**
      * Handle participant errors - create error UI and continue to next participant
@@ -545,6 +550,10 @@ export function useMultiParticipantChat(
 
   /**
    * Start a new round with existing participants
+   *
+   * AI SDK v5 Pattern: Used when initializing a thread with existing messages
+   * (e.g., from backend after thread creation) and need to trigger streaming
+   * for the first participant. This is the pattern from Exercise 01.07, 04.02, 04.03.
    */
   const startRound = useCallback(() => {
     if (status !== 'ready' || isExplicitlyStreaming) {
@@ -558,14 +567,9 @@ export function useMultiParticipantChat(
       return;
     }
 
-    setIsExplicitlyStreaming(true);
-    setCurrentParticipantIndex(0);
-    errorTracking.reset();
-    roundParticipantsRef.current = enabled;
-
     const lastUserMessage = messages.findLast(m => m.role === 'user');
+
     if (!lastUserMessage) {
-      setIsExplicitlyStreaming(false);
       return;
     }
 
@@ -573,16 +577,35 @@ export function useMultiParticipantChat(
     const userText = textPart && 'text' in textPart ? textPart.text : '';
 
     if (!userText.trim()) {
-      setIsExplicitlyStreaming(false);
       return;
     }
 
     const roundNumber = getCurrentRoundNumber(messages);
-    setCurrentRound(roundNumber);
 
-    // This function is currently not being used but kept for API compatibility
-    // Consider removing in future if not needed
-  }, [participants, status, messages, errorTracking, isExplicitlyStreaming]);
+    // CRITICAL: Update refs FIRST to avoid race conditions
+    // These refs are used in prepareSendMessagesRequest and must be set before the API call
+    currentIndexRef.current = 0;
+    roundParticipantsRef.current = enabled;
+    isTriggeringRef.current = false;
+    currentRoundRef.current = roundNumber;
+
+    // Reset all state for new round
+    setIsExplicitlyStreaming(true);
+    setCurrentParticipantIndex(0);
+    setCurrentRound(roundNumber);
+    errorTracking.reset();
+
+    // CRITICAL: Use queueMicrotask to ensure state updates are committed before API call
+    // This follows the same pattern as sendMessage to ensure proper message ordering
+    queueMicrotask(() => {
+      // Trigger streaming with the existing user message
+      // Use isParticipantTrigger:true to indicate this is triggering the first participant
+      aiSendMessage({
+        text: userText,
+        metadata: { roundNumber, isParticipantTrigger: true },
+      });
+    });
+  }, [participants, status, messages, errorTracking, isExplicitlyStreaming, aiSendMessage]);
 
   /**
    * Send a user message and start a new round
@@ -647,8 +670,11 @@ export function useMultiParticipantChat(
   );
 
   /**
-   * Retry the last round (regenerate responses)
+   * Retry the last round (regenerate entire round from scratch)
    * AI SDK v5 Pattern: Clean state management for round regeneration
+   *
+   * This completely removes ALL messages from the round (user + assistant)
+   * and re-sends the user's prompt to regenerate the round from ground up.
    */
   const retry = useCallback(() => {
     if (status !== 'ready') {
@@ -681,6 +707,9 @@ export function useMultiParticipantChat(
       return;
     }
 
+    // Save the user's prompt text before we delete everything
+    const userPromptText = textPart.text;
+
     const roundNumber = getCurrentRoundNumber(messages);
 
     // STEP 1: Set regenerate flag to preserve round numbering
@@ -692,12 +721,20 @@ export function useMultiParticipantChat(
       onRetry(roundNumber);
     }
 
-    // STEP 3: Remove AI responses but KEEP the user message (per FLOW_DOCUMENTATION.md Part 6 line 258)
-    // "Keeps user's original question" - only AI responses are regenerated
-    // Backend has duplicate prevention logic to avoid saving the user message twice
-    const lastUserIndex = messages.findLastIndex(m => m.role === 'user');
-    const messagesIncludingUserQuestion = messages.slice(0, lastUserIndex + 1); // +1 to include user message
-    setMessages(messagesIncludingUserQuestion);
+    // STEP 3: Remove ALL messages from the current round (user + assistant)
+    // Find the first message of the current round and remove everything from that point
+    const firstMessageIndexOfRound = messages.findIndex((m) => {
+      const metadata = m.metadata as Record<string, unknown> | undefined;
+      const msgRoundNumber = metadata?.roundNumber as number | undefined;
+      return msgRoundNumber === roundNumber;
+    });
+
+    // If we found the round, remove all messages from that point onward
+    const messagesBeforeRound = firstMessageIndexOfRound >= 0
+      ? messages.slice(0, firstMessageIndexOfRound)
+      : messages.slice(0, -1); // Fallback: remove last message if round not found
+
+    setMessages(messagesBeforeRound);
 
     // STEP 4: Reset streaming state to start fresh
     setIsExplicitlyStreaming(false);
@@ -712,9 +749,10 @@ export function useMultiParticipantChat(
     isTriggeringRef.current = false;
 
     // STEP 5: Send message to start regeneration (as if user just sent the message)
-    // No setTimeout needed - React will batch the state updates naturally
+    // This will create a new round with fresh messages (user + assistant)
+    // React will batch the state updates naturally
     // The sendMessage function will handle participant orchestration properly
-    sendMessage(textPart.text);
+    sendMessage(userPromptText);
   }, [messages, sendMessage, status, setMessages, onRetry, errorTracking]);
 
   /**

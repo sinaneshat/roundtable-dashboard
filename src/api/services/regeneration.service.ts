@@ -46,10 +46,11 @@ export type RegenerateRoundResult = {
  * CRITICAL PATTERNS:
  * - Only participant 0 can trigger regeneration (prevents duplicate cleanup)
  * - Validates regeneration is for most recent round only
- * - Deletes assistant messages but preserves user messages
+ * - Deletes ALL messages from the round (both user and assistant)
  * - Cleans up RAG embeddings for deleted messages (non-blocking)
  * - Removes analysis, feedback, and changelog entries for the round
  * - Uses batch operations for atomicity
+ * - User's prompt text is re-sent from frontend to create fresh messages
  *
  * Reference: streaming.handler.ts lines 97-156
  */
@@ -77,15 +78,16 @@ export async function handleRoundRegeneration(
 
   try {
     // =========================================================================
-    // STEP 2: Delete assistant messages (preserve user messages)
+    // STEP 2: Delete ALL messages from round (user + assistant)
     // =========================================================================
+    // When regenerating, we want to delete the entire round and start fresh
+    // The user's prompt will be re-sent as a new message
     const deletedMessages = await db
       .delete(tables.chatMessage)
       .where(
         and(
           eq(tables.chatMessage.threadId, threadId),
           eq(tables.chatMessage.roundNumber, regenerateRound),
-          eq(tables.chatMessage.role, 'assistant'),
         ),
       )
       .returning();

@@ -54,12 +54,18 @@ export function ChatInput({
   const isDisabled = disabled || status === 'error';
   const hasValidInput = value.trim().length > 0 && participants.length > 0;
 
+  // AI SDK v5 Pattern: Use requestAnimationFrame for focus after DOM renders
+  // This ensures the textarea is visible and properly mounted before focusing
+  // More reliable than arbitrary setTimeout delays
   useEffect(() => {
     if (autoFocus && textareaRef.current) {
-      const timeoutId = setTimeout(() => {
-        textareaRef.current?.focus();
-      }, 100);
-      return () => clearTimeout(timeoutId);
+      // Double rAF ensures focus happens after browser completes layout and paint
+      const rafId = requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          textareaRef.current?.focus();
+        });
+      });
+      return () => cancelAnimationFrame(rafId);
     }
     return undefined;
   }, [autoFocus]);
@@ -150,6 +156,10 @@ export function ChatInput({
                     <div className="flex items-center gap-2 pb-2">
                       {participants
                         .sort((a, b) => a.priority - b.priority)
+                        // Defensive deduplication: Remove duplicates by ID to prevent React key errors
+                        .filter((participant, index, array) => {
+                          return array.findIndex(p => p.id === participant.id) === index;
+                        })
                         .map((participant) => {
                           const model = allModels.find(m => m.id === participant.modelId);
                           if (!model)

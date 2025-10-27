@@ -59,7 +59,9 @@ export function RoleSelector({
   const handleOpenChange = (open: boolean) => {
     if (open && !participant && onRequestSelection) {
       onRequestSelection();
-      setTimeout(() => setRolePopoverOpen(true), 50);
+      // AI SDK v5 Pattern: Use requestAnimationFrame instead of setTimeout
+      // This ensures popover opens after participant selection completes rendering
+      requestAnimationFrame(() => setRolePopoverOpen(true));
       return;
     }
     setRolePopoverOpen(open);
