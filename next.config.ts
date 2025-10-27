@@ -201,6 +201,21 @@ const nextConfig: NextConfig = {
     ],
   },
 
+  // Webpack configuration to exclude email templates from static generation
+  // This prevents Next.js from trying to analyze React Email components during build
+  webpack: (config, { isServer }) => {
+    if (isServer) {
+      // Ensure email templates are only loaded dynamically at runtime
+      config.externals = config.externals || [];
+      if (Array.isArray(config.externals)) {
+        config.externals.push({
+          '@/emails/templates': 'commonjs @/emails/templates',
+        });
+      }
+    }
+    return config;
+  },
+
 };
 
 const withNextIntl = createNextIntlPlugin('./src/i18n/request.ts');

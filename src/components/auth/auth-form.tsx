@@ -4,7 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { Mail } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
@@ -35,7 +35,11 @@ const magicLinkSchema = z.object({
 
 type MagicLinkFormData = z.infer<typeof magicLinkSchema>;
 
-export function AuthForm() {
+/**
+ * Internal component that uses useSearchParams
+ * Separated to allow Suspense wrapping per Next.js 15 requirements
+ */
+function AuthFormContent() {
   const t = useTranslations();
   const searchParams = useSearchParams();
   const isLoading = useBoolean(false);
@@ -177,5 +181,27 @@ export function AuthForm() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+/**
+ * Auth Form wrapper component with Suspense boundary
+ * Following Next.js 15 pattern for useSearchParams usage
+ */
+export function AuthForm() {
+  return (
+    <Suspense
+      fallback={(
+        <div className="relative">
+          <Card className="w-full max-w-md mx-auto">
+            <CardHeader className="text-center">
+              <CardTitle>Loading...</CardTitle>
+            </CardHeader>
+          </Card>
+        </div>
+      )}
+    >
+      <AuthFormContent />
+    </Suspense>
   );
 }

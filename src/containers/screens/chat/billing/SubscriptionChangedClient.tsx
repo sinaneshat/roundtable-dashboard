@@ -3,7 +3,7 @@
 import { AlertCircle, ArrowDown, ArrowUp, CheckCircle } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 
 import type { SubscriptionTier } from '@/api/services/product-logic.service';
 import { getMaxModelsForTier, getTierFromProductId, SUBSCRIPTION_TIER_NAMES } from '@/api/services/product-logic.service';
@@ -43,7 +43,11 @@ function ChangeBadge({ changeType, t }: {
   );
 }
 
-export function SubscriptionChangedClient() {
+/**
+ * Internal component that uses useSearchParams
+ * Separated to allow Suspense wrapping per Next.js 15 requirements
+ */
+function SubscriptionChangedContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const t = useTranslations();
@@ -395,5 +399,30 @@ export function SubscriptionChangedClient() {
         </StaggerItem>
       </StaggerContainer>
     </div>
+  );
+}
+
+/**
+ * Subscription Changed Client wrapper component with Suspense boundary
+ * Following Next.js 15 pattern for useSearchParams usage
+ */
+export function SubscriptionChangedClient() {
+  return (
+    <Suspense
+      fallback={(
+        <div className="flex min-h-screen w-full flex-col items-center justify-start px-4 pt-16 md:pt-20">
+          <div className="flex flex-col items-center gap-6 text-center max-w-md">
+            <div className="flex size-20 items-center justify-center rounded-full bg-primary/10 ring-4 ring-primary/20 md:size-24">
+              <CheckCircle className="size-10 text-primary md:size-12 animate-pulse" strokeWidth={2} />
+            </div>
+            <h1 className="text-2xl font-bold tracking-tight md:text-3xl">
+              Loading...
+            </h1>
+          </div>
+        </div>
+      )}
+    >
+      <SubscriptionChangedContent />
+    </Suspense>
   );
 }

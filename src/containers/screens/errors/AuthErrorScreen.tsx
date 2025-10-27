@@ -4,6 +4,7 @@ import { AlertCircle, ArrowLeft, RefreshCw } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
+import { Suspense } from 'react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -16,7 +17,11 @@ import {
   EmptyTitle,
 } from '@/components/ui/empty';
 
-export default function AuthErrorScreen() {
+/**
+ * Internal component that uses useSearchParams
+ * Separated to allow Suspense wrapping per Next.js 15 requirements
+ */
+function AuthErrorContent() {
   const t = useTranslations();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -117,5 +122,30 @@ export default function AuthErrorScreen() {
         </div>
       </EmptyContent>
     </Empty>
+  );
+}
+
+/**
+ * Auth Error Screen wrapper component with Suspense boundary
+ * Following Next.js 15 pattern for useSearchParams usage
+ */
+export default function AuthErrorScreen() {
+  return (
+    <Suspense
+      fallback={(
+        <Empty className="w-full max-w-sm border-none">
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <AlertCircle className="text-destructive" />
+            </EmptyMedia>
+            <EmptyTitle className="text-xl font-semibold">
+              Loading...
+            </EmptyTitle>
+          </EmptyHeader>
+        </Empty>
+      )}
+    >
+      <AuthErrorContent />
+    </Suspense>
   );
 }

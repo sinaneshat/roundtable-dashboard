@@ -3,6 +3,7 @@
 import type { AbstractIntlMessages } from 'next-intl';
 import { NextIntlClientProvider } from 'next-intl';
 import { NuqsAdapter } from 'nuqs/adapters/next/app';
+import { Suspense } from 'react';
 
 import { Toaster } from '@/components/ui/toaster';
 import { ChatProvider } from '@/contexts/chat-context';
@@ -52,7 +53,10 @@ export function AppProviders({
       environment={env.NEXT_PUBLIC_WEBAPP_ENV}
     >
       {/* PostHog pageview tracking for Next.js App Router */}
-      <PostHogPageview />
+      {/* Wrapped in Suspense to prevent blocking static generation (Next.js 15 requirement) */}
+      <Suspense fallback={null}>
+        <PostHogPageview />
+      </Suspense>
       <QueryClientProvider>
         {/* ✅ AI SDK v5 PATTERN: Shared chat context wraps entire app */}
         <ChatProvider>
