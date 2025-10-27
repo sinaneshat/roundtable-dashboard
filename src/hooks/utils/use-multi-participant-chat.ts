@@ -10,7 +10,6 @@ import { z } from 'zod';
 import type { ChatParticipant } from '@/api/routes/chat/schema';
 import { chatParticipantSelectSchema } from '@/db/validation/chat';
 import { ParticipantSettingsSchema } from '@/lib/config/participant-settings';
-import { debugLog } from '@/lib/utils/debug-logger';
 import type { UIMessageErrorType } from '@/lib/utils/message-transforms';
 import { createErrorUIMessage, mergeParticipantMetadata } from '@/lib/utils/message-transforms';
 import { deduplicateParticipants } from '@/lib/utils/participant-utils';
@@ -211,10 +210,16 @@ export function useMultiParticipantChat(
       regenerateRoundNumberRef.current = null;
       setCurrentParticipantIndex(0);
 
-      // AI SDK v5 Pattern: Use queueMicrotask instead of setTimeout(0)
-      // This schedules callback after current microtask queue, avoiding setTimeout overhead
-      queueMicrotask(() => {
-        onComplete?.();
+      // ✅ CRITICAL FIX: Use double requestAnimationFrame to ensure AI SDK state propagates
+      // Race condition: queueMicrotask runs too quickly, before messages state from useChat updates
+      // First rAF: Waits for browser paint after last participant's message metadata is added
+      // Second rAF: Ensures messages state from useChat has fully updated and synced to messagesRef
+      // This prevents analysis from being created with incomplete participant message IDs
+      // See: use-analysis-creation.ts:245-254 for similar pattern
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          onComplete?.();
+        });
       });
 
       return;
@@ -228,13 +233,6 @@ export function useMultiParticipantChat(
     // so we must update it synchronously before calling aiSendMessage
     currentIndexRef.current = nextIndex;
 
-    debugLog.stateChange('triggerNext: Setting participant index', {
-      fromIndex: currentIndexRef.current - 1,
-      toIndex: nextIndex,
-      totalParticipants: roundParticipantsRef.current.length,
-      nextParticipant: roundParticipantsRef.current[nextIndex],
-    });
-
     // CRITICAL FIX: Use flushSync to ensure participant index update is committed BEFORE triggering next participant
     // Without flushSync, React batches this state update and may re-render with the new index
     // before the first participant's message metadata is properly evaluated, causing both messages
@@ -243,11 +241,6 @@ export function useMultiParticipantChat(
     // eslint-disable-next-line react-dom/no-flush-sync -- Required for multi-participant chat synchronization
     flushSync(() => {
       setCurrentParticipantIndex(nextIndex);
-    });
-
-    debugLog.stateChange('triggerNext: Participant index updated via flushSync', {
-      currentIndex: nextIndex,
-      messagesCount: messagesRef.current.length,
     });
 
     // Find the last user message using ref
@@ -441,15 +434,6 @@ export function useMultiParticipantChat(
           roundNumber: finalRoundNumber,
         };
 
-        debugLog.metadataUpdate('onFinish: Setting message metadata', {
-          messageId: data.message.id,
-          participantId: participant.id,
-          participantIndex: currentIndex,
-          modelId: participant.modelId,
-          hasModel: !!(metadataWithRoundNumber as { model?: string }).model,
-          roundNumber: finalRoundNumber,
-        });
-
         // Use flushSync to force React to commit metadata update synchronously
         // AI SDK v5 Pattern: Prevents race conditions between sequential participants
         // eslint-disable-next-line react-dom/no-flush-sync -- Required for multi-participant chat synchronization
@@ -478,15 +462,6 @@ export function useMultiParticipantChat(
 
               // Message has no participant metadata yet - it's safe to claim
               return true;
-            });
-
-            debugLog.metadataUpdate('onFinish: flushSync updating messages', {
-              messageId: data.message.id,
-              existingMessageIndex,
-              totalMessages: prev.length,
-              currentParticipantId: participant.id,
-              currentParticipantIndex: currentIndex,
-              metadata: completeMessage.metadata,
             });
 
             if (existingMessageIndex === -1) {

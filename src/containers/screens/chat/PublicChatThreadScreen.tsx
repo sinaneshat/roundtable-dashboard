@@ -19,11 +19,10 @@ import { Button } from '@/components/ui/button';
 import { BRAND } from '@/constants';
 import { usePublicThreadQuery } from '@/hooks/queries/chat';
 import { useModelsQuery } from '@/hooks/queries/models';
+import type { TimelineItem } from '@/hooks/utils';
+import { useThreadTimeline } from '@/hooks/utils';
 import { getAvatarPropsFromModelId } from '@/lib/utils/ai-display';
 import { chatMessagesToUIMessages, getMessageMetadata } from '@/lib/utils/message-transforms';
-import type { GetPublicThreadResponse } from '@/services/api/chat-threads';
-
-type Changelog = NonNullable<Extract<GetPublicThreadResponse, { success: true }>['data']>['changelog'][number];
 
 export default function PublicChatThreadScreen({ slug }: { slug: string }) {
   const t = useTranslations();
@@ -40,58 +39,14 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
   const user = useMemo(() => threadResponse?.user, [threadResponse]);
 
   const messages: UIMessage[] = useMemo(() => chatMessagesToUIMessages(serverMessages), [serverMessages]);
-  const timeline = useMemo(() => {
-    const items: Array<
-      | { type: 'messages'; data: UIMessage[]; key: string; roundNumber: number }
-      | { type: 'changelog'; data: Changelog[]; key: string; roundNumber: number }
-    > = [];
 
-    const messagesByRound = new Map<number, UIMessage[]>();
-    messages.forEach((message) => {
-      const metadata = getMessageMetadata(message.metadata);
-      const roundNumber = metadata?.roundNumber || 1;
-
-      if (!messagesByRound.has(roundNumber)) {
-        messagesByRound.set(roundNumber, []);
-      }
-      messagesByRound.get(roundNumber)!.push(message);
-    });
-
-    const changelogByRound = new Map<number, Changelog[]>();
-    changelog.forEach((change) => {
-      const roundNumber = change.roundNumber || 1;
-
-      if (!changelogByRound.has(roundNumber)) {
-        changelogByRound.set(roundNumber, []);
-      }
-      changelogByRound.get(roundNumber)!.push(change);
-    });
-
-    const sortedRounds = Array.from(messagesByRound.keys()).sort((a, b) => a - b);
-
-    sortedRounds.forEach((roundNumber) => {
-      const roundMessages = messagesByRound.get(roundNumber)!;
-      const roundChangelog = changelogByRound.get(roundNumber);
-
-      if (roundChangelog && roundChangelog.length > 0) {
-        items.push({
-          type: 'changelog',
-          data: roundChangelog,
-          key: `round-${roundNumber}-changelog`,
-          roundNumber,
-        });
-      }
-
-      items.push({
-        type: 'messages',
-        data: roundMessages,
-        key: `round-${roundNumber}-messages`,
-        roundNumber,
-      });
-    });
-
-    return items;
-  }, [messages, changelog]);
+  // ✅ CONSOLIDATED: Timeline grouping logic moved to useThreadTimeline hook
+  // Replaces 52 lines of inline logic with clean, reusable hook
+  const timeline: TimelineItem[] = useThreadTimeline({
+    messages,
+    changelog,
+    // No analyses for public view
+  });
 
   if (isLoadingThread) {
     return (
@@ -188,17 +143,22 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
                       );
                     }
 
+                    // Messages case - TypeScript type narrowing
+                    if (item.type !== 'messages') {
+                      return null;
+                    }
+
                     return (
                       <div key={item.key} className="space-y-4">
-                        {item.data.map((message) => {
+                        {item.data.map((message: UIMessage) => {
                           if (message.role === 'user') {
                             return (
                               <Message from="user" key={message.id}>
                                 <MessageContent>
-                                  {}
-                                  {message.parts.map((part, partIndex) => {
-                                    if (part.type === 'text') {
+                                  {message.parts.map((part: { type: string; text?: string }, partIndex: number) => {
+                                    if (part.type === 'text' && part.text) {
                                       return (
+                                        // eslint-disable-next-line react/no-array-index-key -- partIndex is stable for message parts (parts are immutable once created)
                                         <Response key={`${message.id}-${partIndex}`}>
                                           {part.text}
                                         </Response>
@@ -206,7 +166,6 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
                                     }
                                     return null;
                                   })}
-                                  {}
                                 </MessageContent>
                                 <MessageAvatar
                                   src={user?.image || ''}
@@ -235,8 +194,8 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
                             : 'completed';
 
                           const filteredParts = message.parts.filter(
-                            (p): p is { type: 'text'; text: string } | { type: 'reasoning'; text: string } =>
-                              p.type === 'text' || p.type === 'reasoning',
+                            (p: { type: string; text?: string }): p is { type: 'text'; text: string } | { type: 'reasoning'; text: string } =>
+                              (p.type === 'text' || p.type === 'reasoning') && typeof p.text === 'string',
                           );
 
                           return (

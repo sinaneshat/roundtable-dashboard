@@ -172,9 +172,6 @@ export default function ChatOverviewScreen() {
         setInputValue('');
         setCreatedThreadId(thread.id);
 
-        // Set analysis creation callback
-        setOnComplete(analysisCompleteCallback);
-
         // AI SDK v5 Pattern: Initialize thread WITH backend messages
         // Backend already saved the user message and returns it in the response
         // We pass it to initializeThread, which sets it as initialMessages for useChat
@@ -287,6 +284,14 @@ export default function ChatOverviewScreen() {
     setThreadActions(null);
   }, [setThreadTitle, setThreadActions]);
 
+  // ✅ CRITICAL FIX: Update analysis callback when threadId changes
+  // This prevents stale closure where callback uses empty string threadId
+  useEffect(() => {
+    if (createdThreadId) {
+      setOnComplete(analysisCompleteCallback);
+    }
+  }, [createdThreadId, analysisCompleteCallback, setOnComplete]);
+
   // React 19 Pattern: Handle streaming stop when returning to initial UI using queueMicrotask
   // This avoids reactive useEffect and provides more predictable behavior
   const prevShowInitialUIRef = useRef(showInitialUI);
@@ -315,8 +320,10 @@ export default function ChatOverviewScreen() {
       hasTriggeredStreamingRef.current = false;
       setWaitingToStartStreaming(false);
       // AI SDK v5 Pattern: Clear analysis tracking on unmount
+      // eslint-disable-next-line react-hooks/exhaustive-deps -- Intentionally accessing current ref value in cleanup - we want to clear the LATEST Set state on unmount
       createdAnalysisRoundsRef.current.clear();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- createdAnalysisRoundsRef is a ref and should not be in dependency array (doesn't trigger re-renders)
   }, [setOnComplete]);
 
   // Scroll management - auto-scroll during streaming (if user is near bottom)

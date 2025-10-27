@@ -18,7 +18,13 @@ type PostHogProviderProps = {
  * Provides PostHog analytics capabilities for the application.
  * Only initializes in production environment to avoid tracking development/preview data.
  *
+ * Following official PostHog Next.js patterns:
+ * - Client-side initialization with useEffect
+ * - PostHogProvider wrapper for React hooks
+ * - Environment-based conditional initialization
+ *
  * Pattern: src/components/providers/posthog-provider.tsx
+ * Reference: https://posthog.com/docs/libraries/next-js
  *
  * @param props - Component props
  * @param props.children - Child components to wrap
@@ -37,26 +43,30 @@ function PostHogProvider({
     const isProduction = environment === 'prod';
 
     if (isProduction && apiKey && apiHost) {
-      // Check if PostHog is already initialized to avoid duplicate initialization
-      // PostHog uses __loaded flag internally (not part of public API, but safe to check)
-      if (!('__loaded' in posthog) || !posthog.__loaded) {
-        posthog.init(apiKey, {
-          api_host: apiHost,
-          person_profiles: 'identified_only', // Only create profiles for identified users
-          capture_pageview: false, // We'll capture pageviews manually via Next.js routing
-          capture_pageleave: true, // Track when users leave pages
-          autocapture: true, // Automatically capture clicks, form submissions, etc.
-          session_recording: {
-            recordCrossOriginIframes: false, // Don't record cross-origin iframes for privacy
-          },
-          // Performance optimizations
-          loaded: () => {
-            // PostHog initialized successfully
-          },
-        });
-      }
-    } else if (!isProduction) {
-      // PostHog is disabled in non-production environments
+      // Initialize PostHog - it handles duplicate initialization internally
+      posthog.init(apiKey, {
+        api_host: apiHost,
+        // API version date - ensures consistent behavior across PostHog updates
+        defaults: '2025-05-24',
+        // Only create profiles for identified users
+        person_profiles: 'identified_only',
+        // Manual pageview tracking via Next.js routing (see posthog-pageview.tsx)
+        capture_pageview: false,
+        // Track when users leave pages
+        capture_pageleave: true,
+        // Automatically capture clicks, form submissions, etc.
+        autocapture: true,
+        // Session recording configuration
+        session_recording: {
+          recordCrossOriginIframes: false, // Privacy: don't record cross-origin iframes
+        },
+        // Callback when PostHog is fully loaded
+        loaded: (posthog) => {
+          if (process.env.NODE_ENV === 'development') {
+            posthog.debug(); // Enable debug mode in development
+          }
+        },
+      });
     }
   }, [apiKey, apiHost, environment]);
 

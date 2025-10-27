@@ -26,11 +26,13 @@ const triggeredAnalysisIds = new Map<string, boolean>();
 const triggeredRounds = new Map<string, Set<number>>(); // threadId -> Set of round numbers
 
 // Export cleanup function for regeneration scenarios
+// eslint-disable-next-line react-refresh/only-export-components -- Utility function for managing component state
 export function clearTriggeredAnalysis(analysisId: string) {
   triggeredAnalysisIds.delete(analysisId);
 }
 
 // Export cleanup function to clear all triggered analyses for a round
+// eslint-disable-next-line react-refresh/only-export-components -- Utility function for managing component state
 export function clearTriggeredAnalysesForRound(roundNumber: number) {
   // Clear analysis IDs
   const keysToDelete: string[] = [];
@@ -102,6 +104,7 @@ function ModeratorAnalysisStreamComponent({
       // The ID is only cleared via clearTriggeredAnalysesForRound() during regeneration
       // triggeredAnalysisIds.delete(analysis.id); // REMOVED - causes double streaming
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- isMountedRef is a ref and should not be in dependency array (doesn't trigger re-renders)
   }, [analysis.id, stop]);
 
   // ✅ CRITICAL FIX: Prevent duplicate submissions at both analysis ID and round number level

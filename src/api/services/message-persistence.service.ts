@@ -389,8 +389,10 @@ export async function saveStreamedMessage(
     // Increment message usage quota (charged regardless of stream completion)
     await incrementMessageUsage(userId, 1);
 
-    // Trigger analysis creation if last participant and round is complete
-    if (participantIndex === participants.length - 1 && savedMessage) {
+    // ✅ CRITICAL FIX: Trigger analysis creation if last participant
+    // Removed savedMessage check because onConflictDoNothing() can return undefined
+    // even when the message exists, preventing analysis creation
+    if (participantIndex === participants.length - 1) {
       await createPendingAnalysis({
         threadId,
         roundNumber,
@@ -433,8 +435,12 @@ type CreatePendingAnalysisParams = {
 /**
  * Create pending analysis record for completed rounds
  *
- * This runs asynchronously after the last participant completes streaming.
+ * This runs synchronously after the last participant completes streaming.
  * The frontend will then stream the analysis using the analysis endpoint.
+ *
+ * ✅ CRITICAL FIX: Removed fire-and-forget pattern to prevent race conditions
+ * Previously used IIFE that ran in background, causing database queries to execute
+ * before all participant messages were fully visible, resulting in incomplete analysis records.
  *
  * Reference: streaming.handler.ts lines 1524-1621
  */
@@ -443,33 +449,43 @@ async function createPendingAnalysis(
 ): Promise<void> {
   const { threadId, roundNumber, threadMode, userId, participants, db } = params;
 
-  // Run in background (non-blocking)
-  (async () => {
-    try {
-      // Check analysis quota first
-      const analysisQuota = await checkAnalysisQuota(userId);
-      if (!analysisQuota.canCreate) {
-        return;
-      }
+  try {
+    // Check analysis quota first
+    const analysisQuota = await checkAnalysisQuota(userId);
+    if (!analysisQuota.canCreate) {
+      return;
+    }
 
-      // Check if analysis already exists
-      const existingAnalysis = await db
-        .select()
-        .from(tables.chatModeratorAnalysis)
-        .where(
-          and(
-            eq(tables.chatModeratorAnalysis.threadId, threadId),
-            eq(tables.chatModeratorAnalysis.roundNumber, roundNumber),
-          ),
-        )
-        .get();
+    // Check if analysis already exists
+    const existingAnalysis = await db
+      .select()
+      .from(tables.chatModeratorAnalysis)
+      .where(
+        and(
+          eq(tables.chatModeratorAnalysis.threadId, threadId),
+          eq(tables.chatModeratorAnalysis.roundNumber, roundNumber),
+        ),
+      )
+      .get();
 
-      if (existingAnalysis) {
-        return; // Analysis already exists
-      }
+    if (existingAnalysis) {
+      return; // Analysis already exists
+    }
 
-      // Validate round is complete (all participants responded without errors)
-      const roundMessages = await db.query.chatMessage.findMany({
+    // ✅ CRITICAL FIX: Retry logic to ensure all participant messages are visible
+    // D1/SQLite has eventual consistency - we need to poll until all messages are found
+    // This prevents creating analysis records with incomplete participant message IDs
+    let roundMessages: Array<typeof tables.chatMessage.$inferSelect> = [];
+    let assistantMessages: Array<typeof tables.chatMessage.$inferSelect> = [];
+    const maxRetries = 10;
+    const retryDelayMs = 150;
+
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      // Add delay before checking (first attempt also waits to give DB time to commit)
+      await new Promise(resolve => setTimeout(resolve, retryDelayMs));
+
+      // Query for all messages in this round
+      roundMessages = await db.query.chatMessage.findMany({
         where: and(
           eq(tables.chatMessage.threadId, threadId),
           eq(tables.chatMessage.roundNumber, roundNumber),
@@ -481,47 +497,70 @@ async function createPendingAnalysis(
         ],
       });
 
-      const assistantMessages = roundMessages.filter(msg => msg.role === 'assistant');
-      const messagesWithErrors = assistantMessages.filter(
-        msg => (msg.metadata as { hasError?: boolean })?.hasError === true,
-      );
+      assistantMessages = roundMessages.filter(msg => msg.role === 'assistant');
 
-      if (assistantMessages.length < participants.length || messagesWithErrors.length > 0) {
-        return;
+      // Check if we have all expected participant messages
+      if (assistantMessages.length >= participants.length) {
+        break; // Found all messages, exit retry loop
       }
 
-      // Extract participant message IDs
-      const participantMessageIds = assistantMessages.map(m => m.id);
-
-      if (participantMessageIds.length === 0) {
-        return;
+      // If not last attempt, continue polling
+      if (attempt < maxRetries - 1) {
+        continue;
       }
 
-      // Get user question from this round
-      const userMessage = roundMessages.find(m => m.role === 'user');
-      const userQuestion = userMessage
-        ? extractTextFromParts(userMessage.parts as Array<{ type: 'text'; text: string }>)
-        : 'No user question found';
-
-      // Create pending analysis record
-      const analysisId = ulid();
-      await db
-        .insert(tables.chatModeratorAnalysis)
-        .values({
-          id: analysisId,
-          threadId,
-          roundNumber,
-          mode: threadMode as 'analyzing' | 'brainstorming' | 'debating' | 'solving',
-          userQuestion,
-          status: 'pending' as const,
-          participantMessageIds,
-          analysisData: null,
-          completedAt: null,
-          errorMessage: null,
-        })
-        .run();
-    } catch {
-      // Analysis creation is non-blocking, errors are swallowed
+      // Final attempt failed - log and return
+      console.warn('[createPendingAnalysis] Failed to find all participant messages after retries:', {
+        threadId,
+        roundNumber,
+        expectedCount: participants.length,
+        foundCount: assistantMessages.length,
+        attempts: maxRetries,
+      });
+      return;
     }
-  })();
+
+    // Check for messages with errors
+    const messagesWithErrors = assistantMessages.filter(
+      msg => (msg.metadata as { hasError?: boolean })?.hasError === true,
+    );
+
+    if (messagesWithErrors.length > 0) {
+      return;
+    }
+
+    // Extract participant message IDs
+    const participantMessageIds = assistantMessages.map(m => m.id);
+
+    if (participantMessageIds.length === 0) {
+      return;
+    }
+
+    // Get user question from this round
+    const userMessage = roundMessages.find(m => m.role === 'user');
+    const userQuestion = userMessage
+      ? extractTextFromParts(userMessage.parts as Array<{ type: 'text'; text: string }>)
+      : 'No user question found';
+
+    // Create pending analysis record
+    const analysisId = ulid();
+    await db
+      .insert(tables.chatModeratorAnalysis)
+      .values({
+        id: analysisId,
+        threadId,
+        roundNumber,
+        mode: threadMode as 'analyzing' | 'brainstorming' | 'debating' | 'solving',
+        userQuestion,
+        status: 'pending' as const,
+        participantMessageIds,
+        analysisData: null,
+        completedAt: null,
+        errorMessage: null,
+      })
+      .run();
+  } catch {
+    // Analysis creation errors should not break the chat flow
+    // Silently fail and let frontend handle analysis creation if needed
+  }
 }

@@ -274,6 +274,9 @@ export function validateDataParts(
  * Useful for handling different data part types in frontend.
  *
  * @param part - Data part object
+ * @param part.id - Unique identifier for the data part
+ * @param part.type - Type identifier string
+ * @param part.data - The actual data payload
  * @param type - Expected type string
  * @returns True if part matches type
  *

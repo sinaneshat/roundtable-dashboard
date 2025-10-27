@@ -7,6 +7,7 @@ import { NuqsAdapter } from 'nuqs/adapters/next/app';
 import { Toaster } from '@/components/ui/toaster';
 import { ChatProvider } from '@/contexts/chat-context';
 
+import { PostHogPageview } from './posthog-pageview';
 import PostHogProvider from './posthog-provider';
 import QueryClientProvider from './query-client-provider';
 
@@ -50,6 +51,8 @@ export function AppProviders({
       apiHost={env.NEXT_PUBLIC_POSTHOG_HOST}
       environment={env.NEXT_PUBLIC_WEBAPP_ENV}
     >
+      {/* PostHog pageview tracking for Next.js App Router */}
+      <PostHogPageview />
       <QueryClientProvider>
         {/* ✅ AI SDK v5 PATTERN: Shared chat context wraps entire app */}
         <ChatProvider>

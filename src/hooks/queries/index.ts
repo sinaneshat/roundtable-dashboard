@@ -39,6 +39,9 @@ export {
   useThreadsQuery,
 } from './chat/threads';
 
+// Model queries (protected)
+export { useModelsQuery } from './models';
+
 // Product queries (public)
 export { useProductQuery, useProductsQuery } from './products';
 

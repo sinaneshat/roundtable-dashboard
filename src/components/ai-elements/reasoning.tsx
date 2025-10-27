@@ -69,6 +69,7 @@ export function Reasoning({
 
   useEffect(() => {
     if (isStreaming && !open) {
+      // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- Intentional: syncing state with isStreaming prop
       setOpen(true);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- Intentional: only trigger on isStreaming change

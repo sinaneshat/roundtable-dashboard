@@ -1,12 +1,6 @@
 export { ChatParticipantsList, ParticipantsPreview } from './chat-participants-list';
-export type { MessageStatusBadgeProps, MessageStatusType, TokenMetadata } from './message-status-badge';
-export { MessageStatusBadge } from './message-status-badge';
 export type { ModelItemProps, OrderedModel } from './model-item';
 export { ModelItem } from './model-item';
-export type { ParticipantBadgeProps } from './participant-badge';
-export { ParticipantBadge } from './participant-badge';
 export type { RoleSelectorProps } from './role-selector';
 export { RoleSelector } from './role-selector';
-export type { StatusIndicatorProps, StatusIndicatorStatus } from './status-indicator';
-export { StatusIndicator } from './status-indicator';
 export { InlineErrorDisplay, UnifiedErrorBoundary } from './unified-error-boundary';

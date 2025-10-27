@@ -1,7 +1,7 @@
 'use client';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useTranslations } from 'next-intl';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import type { ParticipantConfig } from '@/components/chat/chat-form-schemas';
 import { cn } from '@/lib/ui/cn';
@@ -19,9 +19,13 @@ export function StreamingParticipantsLoader({
   className,
 }: StreamingParticipantsLoaderProps) {
   const t = useTranslations('chat.streaming');
-  const thinkingMessages = isAnalyzing
-    ? (t.raw('analyzingMessages') as string[] || ['Analyzing responses...', 'Preparing analysis...'])
-    : (t.raw('thinkingMessages') as string[]);
+  const thinkingMessages = useMemo(
+    () =>
+      isAnalyzing
+        ? (t.raw('analyzingMessages') as string[] || ['Analyzing responses...', 'Preparing analysis...'])
+        : (t.raw('thinkingMessages') as string[]),
+    [isAnalyzing, t],
+  );
   const [thinkingMessage, setThinkingMessage] = useState(thinkingMessages[0]);
   useEffect(() => {
     let index = 0;

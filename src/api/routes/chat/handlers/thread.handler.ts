@@ -20,7 +20,7 @@ import {
   Responses,
 } from '@/api/core';
 import type { ChatMode, ThreadStatus } from '@/api/core/enums';
-import { ThreadStatusSchema } from '@/api/core/enums';
+import { ChangelogTypes, ThreadStatusSchema } from '@/api/core/enums';
 import { IdParamSchema, ThreadSlugParamSchema } from '@/api/core/schemas';
 import { openRouterModelsService } from '@/api/services/openrouter-models.service';
 import {
@@ -51,6 +51,7 @@ import type {
   listThreadsRoute,
   updateThreadRoute,
 } from '../route';
+import type { ChangeData } from '../schema';
 import {
   CreateThreadRequestSchema,
   ThreadListQuerySchema,
@@ -434,7 +435,126 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
       if (batchOperations.length > 0) {
         await executeBatch(db, batchOperations);
       }
+
+      // ✅ CREATE CHANGELOG ENTRIES for participant changes
+      // Need to get latest roundNumber from messages
+      const latestMessages = await db.query.chatMessage.findMany({
+        where: eq(tables.chatMessage.threadId, id),
+        orderBy: [desc(tables.chatMessage.createdAt)],
+        limit: 1,
+      });
+
+      const currentRoundNumber = latestMessages.length > 0 && latestMessages[0]?.metadata
+        ? ((latestMessages[0].metadata as { roundNumber?: number }).roundNumber ?? 1)
+        : 1;
+
+      const changelogEntries: Array<{
+        id: string;
+        threadId: string;
+        roundNumber: number;
+        changeType: typeof ChangelogTypes[keyof typeof ChangelogTypes];
+        changeSummary: string;
+        changeData: ChangeData;
+        createdAt: Date;
+      }> = [];
+
+      // Get current enabled participants before the update (for changelog comparison)
+      const oldParticipantsMap = new Map(currentParticipants.map(p => [p.modelId, p]));
+      const newParticipantsMap = new Map(body.participants.filter(p => p.isEnabled !== false).map(p => [p.modelId, p]));
+
+      // Helper to extract model name from modelId
+      const extractModelName = (modelId: string) => {
+        const parts = modelId.split('/');
+        return parts[parts.length - 1] || modelId;
+      };
+
+      // Detect added participants
+      for (const newP of body.participants.filter(p => p.isEnabled !== false)) {
+        if (!oldParticipantsMap.has(newP.modelId)) {
+          const modelName = extractModelName(newP.modelId);
+          const displayName = newP.role || modelName;
+          changelogEntries.push({
+            id: ulid(),
+            threadId: id,
+            roundNumber: currentRoundNumber,
+            changeType: ChangelogTypes.ADDED,
+            changeSummary: `Added ${displayName}`,
+            changeData: {
+              type: 'participant',
+              modelId: newP.modelId,
+              role: newP.role || null,
+            },
+            createdAt: now,
+          });
+        }
+      }
+
+      // Detect removed participants
+      for (const current of currentParticipants.filter(p => p.isEnabled)) {
+        if (!newParticipantsMap.has(current.modelId)) {
+          const modelName = extractModelName(current.modelId);
+          const displayName = current.role || modelName;
+          changelogEntries.push({
+            id: ulid(),
+            threadId: id,
+            roundNumber: currentRoundNumber,
+            changeType: ChangelogTypes.REMOVED,
+            changeSummary: `Removed ${displayName}`,
+            changeData: {
+              type: 'participant',
+              participantId: current.id,
+              modelId: current.modelId,
+              role: current.role,
+            },
+            createdAt: now,
+          });
+        }
+      }
+
+      // Insert changelog entries if any
+      if (changelogEntries.length > 0) {
+        await db.insert(tables.chatThreadChangelog).values(changelogEntries);
+      }
     }
+
+    // ✅ CREATE CHANGELOG ENTRY for mode change
+    if (body.mode !== undefined && body.mode !== thread.mode) {
+      // Need to get latest roundNumber from messages
+      const latestMessagesForMode = await db.query.chatMessage.findMany({
+        where: eq(tables.chatMessage.threadId, id),
+        orderBy: [desc(tables.chatMessage.createdAt)],
+        limit: 1,
+      });
+
+      const currentRoundNumber = latestMessagesForMode.length > 0 && latestMessagesForMode[0]?.metadata
+        ? ((latestMessagesForMode[0].metadata as { roundNumber?: number }).roundNumber ?? 1)
+        : 1;
+
+      const changelogForModeChange: {
+        id: string;
+        threadId: string;
+        roundNumber: number;
+        changeType: typeof ChangelogTypes[keyof typeof ChangelogTypes];
+        changeSummary: string;
+        changeData: ChangeData;
+        createdAt: Date;
+      } = {
+        id: ulid(),
+        threadId: id,
+        roundNumber: currentRoundNumber,
+        changeType: ChangelogTypes.MODIFIED,
+        changeSummary: `Changed mode from ${thread.mode} to ${body.mode}`,
+        changeData: {
+          type: 'mode_change',
+          oldMode: thread.mode,
+          newMode: body.mode,
+        },
+        createdAt: now,
+      };
+
+      await db.insert(tables.chatThreadChangelog).values(changelogForModeChange);
+    }
+
     const updateData: {
       title?: string;
       mode?: ChatMode;

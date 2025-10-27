@@ -13,7 +13,6 @@ import { useModelsQuery } from '@/hooks/queries/models';
 import { useUsageStatsQuery } from '@/hooks/queries/usage';
 import type { MessagePart, MessageStatus } from '@/lib/schemas/message-schemas';
 import { getAvatarPropsFromModelId } from '@/lib/utils/ai-display';
-import { debugLog } from '@/lib/utils/debug-logger';
 import { getMessageMetadata } from '@/lib/utils/message-transforms';
 
 const EMPTY_PARTICIPANTS: ChatParticipant[] = [];
@@ -59,37 +58,16 @@ function getParticipantInfoForMessage({
   // This happens AFTER streaming completes and BEFORE the next participant starts (via flushSync)
   const isComplete = !!metadata?.model;
 
-  debugLog.participantInfo('getParticipantInfo: Evaluating message', {
-    messageId: message.id,
-    messageIndex,
-    messageRole: message.role,
-    isComplete,
-    hasMetadata: !!metadata,
-    metadataModel: metadata?.model,
-    metadataParticipantId: metadata?.participantId,
-    metadataParticipantIndex: metadata?.participantIndex,
-    currentParticipantIndex,
-    isGlobalStreaming,
-    rawMetadata: message.metadata,
-  });
-
   if (isComplete) {
     // ✅ CRITICAL FIX: Use saved metadata for completed messages
     // Once a message has metadata.model, it should NEVER revert to streaming state
     // This prevents the first participant's message from "disappearing" when the second starts
-    const result = {
+    return {
       participantIndex: metadata?.participantIndex ?? 0,
       modelId: metadata.model,
       role: metadata.participantRole || null,
       isStreaming: false,
     };
-
-    debugLog.participantInfo('getParticipantInfo: Using saved metadata (complete)', {
-      ...result,
-      messageId: message.id,
-      savedParticipantId: metadata?.participantId,
-    });
-    return result;
   }
 
   // AI SDK v5 Pattern: Only messages WITHOUT metadata.model can be streaming
@@ -144,11 +122,6 @@ export const ChatMessageList = memo(
     currentParticipantIndex = 0,
     userAvatar,
   }: ChatMessageListProps) => {
-    debugLog.messageRender('ChatMessageList: Rendering', {
-      messageCount: messages.length,
-      isStreaming,
-      currentParticipantIndex,
-    });
     const t = useTranslations();
     const { data: modelsData } = useModelsQuery();
     const { data: usageData } = useUsageStatsQuery();
@@ -396,10 +369,6 @@ export const ChatMessageList = memo(
   (prevProps, nextProps) => {
     // Always re-render if streaming state changes
     if (prevProps.isStreaming !== nextProps.isStreaming) {
-      debugLog.messageRender('ChatMessageList: Re-render due to isStreaming change', {
-        prev: prevProps.isStreaming,
-        next: nextProps.isStreaming,
-      });
       return false;
     }
 
@@ -408,11 +377,6 @@ export const ChatMessageList = memo(
       prevProps.messages !== nextProps.messages
       || prevProps.messages.length !== nextProps.messages.length
     ) {
-      debugLog.messageRender('ChatMessageList: Re-render due to messages change', {
-        prevLength: prevProps.messages.length,
-        nextLength: nextProps.messages.length,
-        sameReference: prevProps.messages === nextProps.messages,
-      });
       return false;
     }
 
@@ -422,19 +386,11 @@ export const ChatMessageList = memo(
       prevProps.currentParticipantIndex !== nextProps.currentParticipantIndex
       && nextProps.isStreaming
     ) {
-      debugLog.messageRender('ChatMessageList: Re-render due to participant index change during streaming', {
-        prev: prevProps.currentParticipantIndex,
-        next: nextProps.currentParticipantIndex,
-      });
       return false;
     }
 
     // Re-render if participants reference changes (shouldn't happen often)
     if (prevProps.participants !== nextProps.participants) {
-      debugLog.messageRender('ChatMessageList: Re-render due to participants change', {
-        prevLength: prevProps.participants?.length ?? 0,
-        nextLength: nextProps.participants?.length ?? 0,
-      });
       return false;
     }
 
@@ -443,18 +399,10 @@ export const ChatMessageList = memo(
       prevProps.currentStreamingParticipant !== nextProps.currentStreamingParticipant
       && nextProps.isStreaming
     ) {
-      debugLog.messageRender('ChatMessageList: Re-render due to streaming participant change', {
-        prevModel: prevProps.currentStreamingParticipant?.modelId,
-        nextModel: nextProps.currentStreamingParticipant?.modelId,
-      });
       return false;
     }
 
     // Skip re-render - no meaningful changes
-    debugLog.messageRender('ChatMessageList: Skipping re-render (no meaningful changes)', {
-      currentParticipantIndexChanged: prevProps.currentParticipantIndex !== nextProps.currentParticipantIndex,
-      isStreaming: nextProps.isStreaming,
-    });
     return true;
   },
 );

@@ -41,6 +41,7 @@ export type ChatGroup = {
   label: string;
   chats: Chat[];
 };
+// eslint-disable-next-line react-refresh/only-export-components -- Utility function closely related to ChatList component
 export function groupChatsByPeriod(chats: Chat[]): ChatGroup[] {
   const now = Date.now();
   const groups = new Map<string, Chat[]>();

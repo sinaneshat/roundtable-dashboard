@@ -29,6 +29,7 @@ export function ThreadHeaderProvider({ children }: { children: ReactNode }) {
     </ThreadHeaderContext>
   );
 }
+// eslint-disable-next-line react-refresh/only-export-components -- Hook closely related to ThreadHeaderProvider component
 export function useThreadHeader() {
   const context = use(ThreadHeaderContext);
   if (context === undefined) {
@@ -36,6 +37,7 @@ export function useThreadHeader() {
   }
   return context;
 }
+// eslint-disable-next-line react-refresh/only-export-components -- Hook closely related to ThreadHeaderProvider component
 export function useThreadHeaderOptional(): ThreadHeaderContextValue {
   const context = use(ThreadHeaderContext);
   return context ?? {

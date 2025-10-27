@@ -1,6 +1,5 @@
 export { useAnalysisCreation } from './use-analysis-creation';
 export { useAnalysisDeduplication } from './use-analysis-deduplication';
-export { useAutoScrollToBottom } from './use-auto-scroll-to-bottom';
 export { useBoolean } from './use-boolean';
 export { useChatAnalysis } from './use-chat-analysis';
 export { useDebouncedValue } from './use-debounced-value';
@@ -12,3 +11,5 @@ export { useSyncedMessageRefs } from './use-synced-message-refs';
 export { toast, useToast } from './use-toast';
 export { useChatScroll } from './useChatScroll';
 export { useStreamingLoaderState } from './useStreamingLoaderState';
+export type { TimelineItem, UseThreadTimelineOptions } from './useThreadTimeline';
+export { useThreadTimeline } from './useThreadTimeline';

@@ -35,9 +35,10 @@ import type { ChatParticipant } from '@/api/routes/chat/schema';
  * - Reading state in callbacks creates stale closures
  * - Refs provide mutable values that callbacks can read without closure issues
  *
- * @param messages - Current messages array from useChat
- * @param participants - Current participants array from context
- * @param createPendingAnalysis - Optional function to create pending analyses
+ * @param params - The hook parameters
+ * @param params.messages - Current messages array from useChat
+ * @param params.participants - Current participants array from context
+ * @param params.createPendingAnalysis - Optional function to create pending analyses
  * @returns Stable refs synchronized with current state
  *
  * @example

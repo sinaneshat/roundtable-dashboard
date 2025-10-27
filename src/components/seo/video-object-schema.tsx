@@ -112,6 +112,7 @@ export function VideoObjectSchema(props: VideoObjectSchemaProps) {
   return (
     <script
       type="application/ld+json"
+      // eslint-disable-next-line react-dom/no-dangerously-set-innerhtml -- Required for JSON-LD structured data injection (SEO)
       dangerouslySetInnerHTML={{
         __html: JSON.stringify(structuredData).replace(/</g, '\u003C'),
       }}

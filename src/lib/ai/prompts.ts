@@ -115,6 +115,11 @@ export type PromptBuildOptions = {
  * - Constraints and guardrails
  *
  * @param config - Prompt configuration
+ * @param config.role - The AI's role definition
+ * @param config.instructions - Array of instruction strings
+ * @param config.constraints - Array of constraint strings
+ * @param config.outputFormat - Expected output format description
+ * @param config.additionalContext - Any additional context to include
  * @returns Formatted system prompt string
  *
  * @example
@@ -230,6 +235,8 @@ export function buildConversationalPrompt(
  * @param template - Template string with {{variable}} placeholders
  * @param variables - Object with variable values
  * @param options - Interpolation options
+ * @param options.validate - Whether to validate all variables are provided (default: true)
+ * @param options.trim - Whether to trim whitespace from result (default: true)
  * @returns Interpolated string
  *
  * @example
@@ -365,6 +372,9 @@ export function buildPromptFromTemplate(
  *
  * @param prompt - Prompt string to validate
  * @param options - Validation options
+ * @param options.minLength - Minimum prompt length (optional)
+ * @param options.maxLength - Maximum prompt length (optional)
+ * @param options.requireRole - Whether role definition is required (default: false)
  * @returns Validation result
  *
  * @example

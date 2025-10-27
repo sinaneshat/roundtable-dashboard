@@ -118,11 +118,37 @@ export function useChatAnalysis(
   const queryClient = useQueryClient();
   const [_hookError, setHookError] = useState<Error | null>(null);
 
+  // ✅ CRITICAL FIX: State trigger to force re-renders when cache is updated manually
+  // When query is disabled, cache updates don't trigger re-renders automatically
+  const [cacheVersion, setCacheVersion] = useState(0);
+
   // ✅ STREAMING PROTECTION: Only enable query when explicitly allowed
   // This prevents the aggressive polling and refetchOnMount from disrupting streaming
   const { data: analysesResponse, isLoading } = useThreadAnalysesQuery(threadId, enabled && !!threadId);
 
   const analyses = useMemo(() => {
+    // ✅ CRITICAL FIX: When query is disabled, read directly from cache
+    // This allows pending analyses created via createPendingAnalysis to be visible
+    if (!enabled && threadId) {
+      const cachedData = queryClient.getQueryData(queryKeys.threads.analyses(threadId)) as {
+        success: boolean;
+        data: { items: StoredModeratorAnalysis[] };
+      } | undefined;
+
+      if (cachedData?.success && cachedData.data?.items) {
+        return cachedData.data.items.map(item => ({
+          ...item,
+          createdAt: typeof item.createdAt === 'string' ? new Date(item.createdAt) : item.createdAt as Date,
+          completedAt: item.completedAt
+            ? (typeof item.completedAt === 'string' ? new Date(item.completedAt) : item.completedAt as Date)
+            : null,
+        })) as StoredModeratorAnalysis[];
+      }
+
+      return [];
+    }
+
+    // When query is enabled, use the query response
     if (!analysesResponse?.success) {
       return [];
     }
@@ -134,7 +160,8 @@ export function useChatAnalysis(
         ? (typeof item.completedAt === 'string' ? new Date(item.completedAt) : item.completedAt as Date)
         : null,
     })) as StoredModeratorAnalysis[];
-  }, [analysesResponse]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- cacheVersion intentionally included to force re-computation when cache is manually updated
+  }, [analysesResponse, enabled, threadId, queryClient, cacheVersion]);
 
   const createPendingAnalysis = useCallback(
     (
@@ -252,6 +279,9 @@ export function useChatAnalysis(
             };
           },
         );
+
+        // ✅ CRITICAL FIX: Trigger re-render when cache is updated
+        setCacheVersion(v => v + 1);
       } catch (error) {
         // ✅ ERROR RECOVERY: If creating pending analysis fails, set error state
         setHookError(error instanceof Error ? error : new Error('Failed to create pending analysis'));
@@ -308,6 +338,9 @@ export function useChatAnalysis(
           },
         );
 
+        // ✅ CRITICAL FIX: Trigger re-render when cache is updated
+        setCacheVersion(v => v + 1);
+
         // ✅ ONE-WAY DATA FLOW: NO query invalidation
         // Cache is updated directly above - invalidation would trigger refetch and break streaming
         // The query is disabled during streaming anyway (enabled: false in ChatThreadScreen)
@@ -356,6 +389,9 @@ export function useChatAnalysis(
             };
           },
         );
+
+        // ✅ CRITICAL FIX: Trigger re-render when cache is updated
+        setCacheVersion(v => v + 1);
       } catch (error) {
         setHookError(error instanceof Error ? error : new Error('Failed to update analysis status'));
       }
@@ -395,6 +431,9 @@ export function useChatAnalysis(
             };
           },
         );
+
+        // ✅ CRITICAL FIX: Trigger re-render when cache is updated
+        setCacheVersion(v => v + 1);
       } catch (error) {
         // ✅ ERROR RECOVERY: If removing analysis fails, set error state
         setHookError(error instanceof Error ? error : new Error('Failed to remove pending analysis'));
@@ -446,6 +485,9 @@ export function useChatAnalysis(
             };
           },
         );
+
+        // ✅ CRITICAL FIX: Trigger re-render when cache is updated
+        setCacheVersion(v => v + 1);
       } catch (error) {
         setHookError(error instanceof Error ? error : new Error('Failed to mark analysis as failed'));
       }

@@ -371,6 +371,7 @@ export function ChatThreadStateProvider({ children }: { children: React.ReactNod
  * }
  * ```
  */
+// eslint-disable-next-line react-refresh/only-export-components -- Hook closely related to ChatThreadStateProvider component
 export function useChatThreadState(): ChatThreadState {
   const context = use(ChatThreadStateContext);
   if (!context) {
@@ -397,6 +398,7 @@ export function useChatThreadState(): ChatThreadState {
  * });
  * ```
  */
+// eslint-disable-next-line react-refresh/only-export-components -- Hook closely related to ChatThreadStateProvider component
 export function useChatThreadDispatch(): React.Dispatch<ChatThreadAction> {
   const context = use(ChatThreadDispatchContext);
   if (!context) {
@@ -420,6 +422,7 @@ export function useChatThreadDispatch(): React.Dispatch<ChatThreadAction> {
  * actions.completeStreaming();
  * ```
  */
+// eslint-disable-next-line react-refresh/only-export-components -- Hook closely related to ChatThreadStateProvider component
 export function useChatThreadActions() {
   const dispatch = useChatThreadDispatch();
   const state = useChatThreadState();
@@ -475,6 +478,38 @@ export function useChatThreadActions() {
 
       clearAnalysisTracking: (roundNumber: number) => {
         createdAnalysisRoundsRef.current.delete(roundNumber);
+      },
+
+      // Flag setters (semantic wrappers for common dispatch patterns)
+      setHasInitiallyLoaded: (value: boolean) => {
+        dispatch({ type: 'SET_HAS_INITIALLY_LOADED', payload: value });
+      },
+
+      setHasRefetchedMessages: (value: boolean) => {
+        dispatch({ type: 'SET_HAS_REFETCHED_MESSAGES', payload: value });
+      },
+
+      setIsCreatingAnalysis: (value: boolean) => {
+        dispatch({ type: 'SET_IS_CREATING_ANALYSIS', payload: value });
+      },
+
+      setStreamingRoundNumber: (roundNumber: number | null) => {
+        dispatch({ type: 'SET_STREAMING_ROUND_NUMBER', payload: roundNumber });
+        if (roundNumber === null) {
+          currentRoundNumberRef.current = null;
+        }
+      },
+
+      setHasPendingConfigChanges: (value: boolean) => {
+        dispatch({ type: 'SET_HAS_PENDING_CONFIG_CHANGES', payload: value });
+      },
+
+      setIsWaitingForChangelog: (value: boolean) => {
+        dispatch({ type: 'SET_IS_WAITING_FOR_CHANGELOG', payload: value });
+      },
+
+      setExpectedParticipantIds: (ids: string[] | null) => {
+        dispatch({ type: 'SET_EXPECTED_PARTICIPANT_IDS', payload: ids });
       },
     }),
     [dispatch, currentRoundNumberRef, hasSentPendingMessageRef, createdAnalysisRoundsRef],

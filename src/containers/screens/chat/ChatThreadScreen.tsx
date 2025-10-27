@@ -21,9 +21,10 @@ import { StreamingParticipantsLoader } from '@/components/chat/streaming-partici
 import { useThreadHeader } from '@/components/chat/thread-header-context';
 import { UnifiedErrorBoundary } from '@/components/chat/unified-error-boundary';
 import { useSharedChatContext } from '@/contexts/chat-context';
-import { useChatThreadDispatch, useChatThreadState } from '@/contexts/chat-thread-state-context';
+import { useChatThreadActions, useChatThreadState } from '@/contexts/chat-thread-state-context';
 import { useSetRoundFeedbackMutation, useUpdateThreadMutation } from '@/hooks/mutations/chat-mutations';
 import { useThreadChangelogQuery, useThreadFeedbackQuery } from '@/hooks/queries/chat';
+import type { TimelineItem } from '@/hooks/utils';
 import {
   useAnalysisCreation,
   useAnalysisDeduplication,
@@ -33,12 +34,13 @@ import {
   useSelectedParticipants,
   useStreamingLoaderState,
   useSyncedMessageRefs,
+  useThreadTimeline,
 } from '@/hooks/utils';
 import type { ChatModeId } from '@/lib/config/chat-modes';
 import { queryKeys } from '@/lib/data/query-keys';
 import { messageHasError, MessageMetadataSchema } from '@/lib/schemas/message-metadata';
 import { chatMessagesToUIMessages } from '@/lib/utils/message-transforms';
-import { calculateNextRoundNumber, getRoundNumberFromMetadata, groupMessagesByRound } from '@/lib/utils/round-utils';
+import { calculateNextRoundNumber, getRoundNumberFromMetadata } from '@/lib/utils/round-utils';
 
 type ChatThreadScreenProps = {
   thread: ChatThread;
@@ -102,9 +104,9 @@ export default function ChatThreadScreen({
     updateParticipants,
     setMessages, // ✅ Added for message refetch functionality
   } = useSharedChatContext();
-  // ✅ REACT 19 PATTERN: Use context state and dispatch instead of scattered useState
+  // ✅ REACT 19 PATTERN: Use context state and actions helper instead of scattered useState
   const state = useChatThreadState();
-  const dispatch = useChatThreadDispatch();
+  const actions = useChatThreadActions();
 
   // ✅ CRITICAL FIX: Keep changelog query always enabled so it refetches when invalidated
   // Previously disabled after initial load, preventing real-time changelog updates
@@ -182,10 +184,10 @@ export default function ChatThreadScreen({
   const setRoundFeedbackMutation = useSetRoundFeedbackMutation();
   useEffect(() => {
     if (!state.flags.hasInitiallyLoaded && changelogResponse && feedbackSuccess) {
-      // ✅ REACT 19 PATTERN: Use dispatch instead of setState
-      dispatch({ type: 'SET_HAS_INITIALLY_LOADED', payload: true });
+      // ✅ REACT 19 PATTERN: Use actions helper for semantic state updates
+      actions.setHasInitiallyLoaded(true);
     }
-  }, [changelogResponse, feedbackSuccess, state.flags.hasInitiallyLoaded, dispatch]);
+  }, [changelogResponse, feedbackSuccess, state.flags.hasInitiallyLoaded, actions]);
 
   // ✅ CRITICAL FIX: One-time message refetch to handle race condition
   // After initial load completes, use requestIdleCallback to refetch when browser is idle
@@ -217,8 +219,8 @@ export default function ChatThreadScreen({
         } catch {
           // Silently fail - this is just a safety net
         } finally {
-          // ✅ REACT 19 PATTERN: Use dispatch instead of setState
-          dispatch({ type: 'SET_HAS_REFETCHED_MESSAGES', payload: true });
+          // ✅ REACT 19 PATTERN: Use actions helper for semantic state updates
+          actions.setHasRefetchedMessages(true);
         }
       };
 
@@ -236,7 +238,7 @@ export default function ChatThreadScreen({
       };
     }
     return undefined;
-  }, [state.flags.hasInitiallyLoaded, hasRefetchedMessages, messages.length, slug, setMessages, dispatch]);
+  }, [state.flags.hasInitiallyLoaded, hasRefetchedMessages, messages.length, slug, setMessages, actions]);
 
   // Use synced refs to prevent stale closures in callbacks
   const {
@@ -249,7 +251,7 @@ export default function ChatThreadScreen({
   });
 
   // Use consolidated analysis creation hook with regeneration support
-  const { handleComplete: analysisCompleteCallback, createdAnalysisRoundsRef } = useAnalysisCreation({
+  const { handleComplete: analysisCompleteCallback } = useAnalysisCreation({
     createPendingAnalysis,
     messages,
     participants: contextParticipants,
@@ -258,16 +260,15 @@ export default function ChatThreadScreen({
     isRegeneration: state.data.regeneratingRoundNumber !== null,
     regeneratingRoundNumber: state.data.regeneratingRoundNumber,
     onBeforeCreate: () => {
-      dispatch({ type: 'SET_IS_CREATING_ANALYSIS', payload: true });
+      actions.setIsCreatingAnalysis(true);
     },
     onAfterCreate: (roundNumber) => {
       // Complete regeneration if active
       if (state.data.regeneratingRoundNumber === roundNumber) {
-        dispatch({ type: 'COMPLETE_REGENERATION', payload: roundNumber });
+        actions.completeRegeneration(roundNumber);
       }
-      dispatch({ type: 'SET_STREAMING_ROUND_NUMBER', payload: null });
-      state.currentRoundNumberRef.current = null;
-      dispatch({ type: 'SET_IS_CREATING_ANALYSIS', payload: false });
+      actions.setStreamingRoundNumber(null);
+      actions.setIsCreatingAnalysis(false);
 
       // Invalidate analyses query to trigger refetch
       queryClient.invalidateQueries({
@@ -277,10 +278,9 @@ export default function ChatThreadScreen({
     onAllParticipantsFailed: (roundNumber) => {
       // Complete regeneration if active
       if (state.data.regeneratingRoundNumber === roundNumber) {
-        dispatch({ type: 'COMPLETE_REGENERATION', payload: roundNumber });
+        actions.completeRegeneration(roundNumber);
       }
-      dispatch({ type: 'SET_STREAMING_ROUND_NUMBER', payload: null });
-      state.currentRoundNumberRef.current = null;
+      actions.setStreamingRoundNumber(null);
     },
   });
 
@@ -300,7 +300,6 @@ export default function ChatThreadScreen({
    * Note: regeneratingRoundNumber accessed via state.data.regeneratingRoundNumber in useMemo deps
    */
   const { streamingRoundNumber } = state.data;
-  const { currentRoundNumberRef } = state;
 
   const initialParticipants = useMemo<ParticipantConfig[]>(() => {
     return contextParticipants
@@ -347,17 +346,15 @@ export default function ChatThreadScreen({
     if (isStreaming)
       return;
     setSelectedMode(newMode);
-    // ✅ REACT 19 PATTERN: Use dispatch instead of setState
-    dispatch({ type: 'SET_HAS_PENDING_CONFIG_CHANGES', payload: true });
-  }, [isStreaming, dispatch]);
+    actions.setHasPendingConfigChanges(true);
+  }, [isStreaming, actions]);
 
   const handleParticipantsChange = useCallback(async (newParticipants: ParticipantConfig[]) => {
     if (isStreaming)
       return;
     setSelectedParticipants(newParticipants);
-    // ✅ REACT 19 PATTERN: Use dispatch instead of setState
-    dispatch({ type: 'SET_HAS_PENDING_CONFIG_CHANGES', payload: true });
-  }, [isStreaming, setSelectedParticipants, dispatch]);
+    actions.setHasPendingConfigChanges(true);
+  }, [isStreaming, setSelectedParticipants, actions]);
 
   // Keep a ref of the last synced context participants to prevent infinite loops
   const lastSyncedContextRef = useRef<string>('');
@@ -412,13 +409,11 @@ export default function ChatThreadScreen({
   // - Call initializeThread once when thread.id changes
   // - useChat handles state management from there
   useEffect(() => {
-    // ✅ REACT 19 PATTERN: Use dispatch for batch state reset
-    dispatch({ type: 'RESET_THREAD_STATE' });
+    // Reset all thread state and refs
+    actions.resetThreadState();
 
-    // Reset UI state for new thread
+    // Reset UI state for new thread (local refs not managed by context)
     scrolledToAnalysesRef.current.clear();
-    state.currentRoundNumberRef.current = null;
-    state.createdAnalysisRoundsRef.current.clear();
     lastSyncedContextRef.current = '';
 
     // Set analysis completion callback with router refresh for new conversations
@@ -435,8 +430,7 @@ export default function ChatThreadScreen({
     const uiMessages = chatMessagesToUIMessages(initialMessages);
     initializeThread(thread, participants, uiMessages);
 
-    // ✅ REACT 19 PATTERN: Use dispatch to set initially loaded flag
-    dispatch({ type: 'SET_HAS_INITIALLY_LOADED', payload: true });
+    actions.setHasInitiallyLoaded(true);
 
     return () => {
       setOnComplete(undefined);
@@ -446,10 +440,9 @@ export default function ChatThreadScreen({
   useEffect(() => {
     setOnRetry(() => (roundNumber: number) => {
       // AI SDK v5 Pattern: Immediate state cleanup before streaming starts
-      // ✅ REACT 19 PATTERN: Use dispatch for batch state updates (no local ref needed)
 
-      // STEP 1: Set regenerate flag to preserve round numbering
-      dispatch({ type: 'START_REGENERATION', payload: roundNumber });
+      // STEP 1: Set regenerate flag and clear analysis tracking (actions.startRegeneration handles both)
+      actions.startRegeneration(roundNumber);
 
       // STEP 2: Remove analysis IMMEDIATELY from cache
       removePendingAnalysis(roundNumber);
@@ -457,28 +450,23 @@ export default function ChatThreadScreen({
       // STEP 3: Clear triggered analysis IDs to prevent infinite loops
       clearTriggeredAnalysesForRound(roundNumber);
 
-      // STEP 4: Clear analysis tracking for this round to allow recreation
-      createdAnalysisRoundsRef.current.delete(roundNumber);
-
-      // STEP 5: Clean up feedback for this round
+      // STEP 4: Clean up feedback for this round
       setClientFeedback((prev) => {
         const updated = new Map(prev);
         updated.delete(roundNumber);
         return updated;
       });
 
-      // STEP 6: Reset streaming round number to trigger fresh UI state
-      dispatch({ type: 'SET_STREAMING_ROUND_NUMBER', payload: null });
-      currentRoundNumberRef.current = null;
+      // STEP 5: Reset streaming round number (actions.setStreamingRoundNumber handles currentRoundNumberRef)
+      actions.setStreamingRoundNumber(null);
     });
-  }, [thread.id, setOnRetry, removePendingAnalysis, dispatch]);
+  }, [thread.id, setOnRetry, removePendingAnalysis, actions]);
   useEffect(() => {
     const wasStreaming = isStreaming;
     if (wasStreaming && !isStreaming) {
-      // ✅ REACT 19 PATTERN: Use dispatch when streaming completes
-      dispatch({ type: 'SET_STREAMING_ROUND_NUMBER', payload: null });
+      actions.setStreamingRoundNumber(null);
     }
-  }, [isStreaming, dispatch]);
+  }, [isStreaming, actions]);
   useEffect(() => {
     if (!pendingMessage || !expectedParticipantIds || hasSentPendingMessageRef.current) {
       return;
@@ -496,9 +484,9 @@ export default function ChatThreadScreen({
       return;
     }
 
-    // ✅ REACT 19 PATTERN: Use dispatch to clear waiting flag
+    // ✅ REACT 19 PATTERN: Clear waiting flag
     if (isWaitingForChangelog) {
-      dispatch({ type: 'SET_IS_WAITING_FOR_CHANGELOG', payload: false });
+      actions.setIsWaitingForChangelog(false);
     }
 
     hasSentPendingMessageRef.current = true;
@@ -506,16 +494,16 @@ export default function ChatThreadScreen({
     // AI SDK v5 Pattern: Calculate round number for the NEW user message
     const newRoundNumber = calculateNextRoundNumber(messages);
 
-    // ✅ REACT 19 PATTERN: Use dispatch to set streaming round number
-    dispatch({ type: 'SET_STREAMING_ROUND_NUMBER', payload: newRoundNumber });
-    currentRoundNumberRef.current = newRoundNumber;
+    // ✅ REACT 19 PATTERN: Set streaming round number (handles currentRoundNumberRef internally)
+    actions.setStreamingRoundNumber(newRoundNumber);
 
     // AI SDK v5 Pattern: Use sendMessage() to add user message AND trigger streaming
     sendMessage(pendingMessage);
 
     // ✅ REACT 19 PATTERN: Reset pending changes flag after message is sent
-    dispatch({ type: 'SET_HAS_PENDING_CONFIG_CHANGES', payload: false });
-  }, [pendingMessage, expectedParticipantIds, contextParticipants, sendMessage, messages, isWaitingForChangelog, isChangelogFetching, dispatch]);
+    actions.setHasPendingConfigChanges(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- hasSentPendingMessageRef is a ref and should not be in dependency array (doesn't trigger re-renders)
+  }, [pendingMessage, expectedParticipantIds, contextParticipants, sendMessage, messages, isWaitingForChangelog, isChangelogFetching, actions]);
   const handlePromptSubmit = useCallback(
     async (e: React.FormEvent) => {
       e.preventDefault();
@@ -570,10 +558,10 @@ export default function ChatThreadScreen({
             updateParticipants(participantsWithDates);
             // AI SDK v5 Pattern: Use queueMicrotask instead of setTimeout delay
             await new Promise(resolve => queueMicrotask(resolve));
-            // ✅ REACT 19 PATTERN: Use dispatch to set expected participant IDs
-            dispatch({ type: 'SET_EXPECTED_PARTICIPANT_IDS', payload: participantsWithDates.map(p => p.modelId) });
+            // ✅ REACT 19 PATTERN: Set expected participant IDs
+            actions.setExpectedParticipantIds(participantsWithDates.map(p => p.modelId));
           } else {
-            dispatch({ type: 'SET_EXPECTED_PARTICIPANT_IDS', payload: optimisticParticipants.map(p => p.modelId) });
+            actions.setExpectedParticipantIds(optimisticParticipants.map(p => p.modelId));
           }
         } else {
           updateParticipants(optimisticParticipants);
@@ -587,107 +575,36 @@ export default function ChatThreadScreen({
           });
           // AI SDK v5 Pattern: Use queueMicrotask instead of setTimeout delay
           await new Promise(resolve => queueMicrotask(resolve));
-          // ✅ REACT 19 PATTERN: Use dispatch to set expected participant IDs
-          dispatch({ type: 'SET_EXPECTED_PARTICIPANT_IDS', payload: optimisticParticipants.map(p => p.modelId) });
+          // ✅ REACT 19 PATTERN: Set expected participant IDs
+          actions.setExpectedParticipantIds(optimisticParticipants.map(p => p.modelId));
         }
-        // ✅ REACT 19 PATTERN: Use batch action to prepare for new message
+        // ✅ REACT 19 PATTERN: Prepare for new message
         // This sets: isWaitingForChangelog=true, pendingMessage, and resets hasSentPendingMessageRef
-        dispatch({
-          type: 'PREPARE_FOR_NEW_MESSAGE',
-          payload: { message: trimmed, participantIds: [] }, // participantIds set above via SET_EXPECTED_PARTICIPANT_IDS
-        });
+        // participantIds set above via setExpectedParticipantIds
+        actions.prepareForNewMessage(trimmed, []);
         // CRITICAL FIX: Don't reset hasPendingConfigChanges here
         // It will be reset in the useEffect AFTER message is sent
         // This prevents the sync effect from interfering with optimistic updates
       } catch {
         // Error path: send message directly and reset flags
         await sendMessage(trimmed);
-        // ✅ REACT 19 PATTERN: Use dispatch to reset flags on error path
-        dispatch({ type: 'SET_HAS_PENDING_CONFIG_CHANGES', payload: false });
-        dispatch({ type: 'SET_IS_WAITING_FOR_CHANGELOG', payload: false });
+        // ✅ REACT 19 PATTERN: Reset flags on error path
+        actions.setHasPendingConfigChanges(false);
+        actions.setIsWaitingForChangelog(false);
       }
       setInputValue('');
     },
-    [inputValue, sendMessage, thread.id, selectedParticipants, selectedMode, updateThreadMutation, updateParticipants, dispatch],
+    [inputValue, sendMessage, thread.id, selectedParticipants, selectedMode, updateThreadMutation, updateParticipants, actions],
   );
   const activeParticipants = contextParticipants;
 
-  const messagesWithAnalysesAndChangelog = useMemo(() => {
-    type ItemType
-      = | { type: 'messages'; data: typeof messages; key: string; roundNumber: number }
-        | { type: 'analysis'; data: (typeof analyses)[number]; key: string; roundNumber: number }
-        | { type: 'changelog'; data: (typeof changelog)[number][]; key: string; roundNumber: number };
-
-    // AI SDK v5 Pattern: Simple, straightforward grouping without optimization
-    // Trust the messages array and let React handle efficient diffing
-    const messagesByRound = groupMessagesByRound(messages);
-    const items: ItemType[] = [];
-
-    // Group changelog items by round
-    const changelogByRound = new Map<number, (typeof changelog)>();
-    changelog.forEach((change) => {
-      const roundNumber = change.roundNumber || 1;
-      if (!changelogByRound.has(roundNumber)) {
-        changelogByRound.set(roundNumber, []);
-      }
-      const roundChanges = changelogByRound.get(roundNumber)!;
-      const exists = roundChanges.some(existing => existing.id === change.id);
-      if (!exists) {
-        roundChanges.push(change);
-      }
-    });
-
-    // Get all unique round numbers from messages, changelog, and analyses
-    const allRoundNumbers = new Set([
-      ...messagesByRound.keys(),
-      ...changelogByRound.keys(),
-      ...analyses.map(a => a.roundNumber),
-    ]);
-
-    // Process rounds in order
-    const sortedRounds = Array.from(allRoundNumbers).sort((a, b) => a - b);
-
-    sortedRounds.forEach((roundNumber) => {
-      const roundMessages = messagesByRound.get(roundNumber);
-      const roundChangelog = changelogByRound.get(roundNumber);
-      const roundAnalysis = analyses.find(a => a.roundNumber === roundNumber);
-
-      // Skip rounds without messages
-      if (!roundMessages || roundMessages.length === 0) {
-        return;
-      }
-
-      // Add changelog first (shows before messages in the round)
-      if (roundChangelog && roundChangelog.length > 0) {
-        items.push({
-          type: 'changelog',
-          data: roundChangelog,
-          key: `round-${roundNumber}-changelog`,
-          roundNumber,
-        });
-      }
-
-      // Add messages for this round
-      items.push({
-        type: 'messages',
-        data: roundMessages,
-        key: `round-${roundNumber}-messages`,
-        roundNumber,
-      });
-
-      // Add analysis after messages (if exists)
-      if (roundAnalysis) {
-        items.push({
-          type: 'analysis',
-          data: roundAnalysis,
-          key: `round-${roundNumber}-analysis`,
-          roundNumber,
-        });
-      }
-    });
-
-    return items;
-  }, [messages, analyses, changelog]);
+  // ✅ CONSOLIDATED: Timeline grouping logic moved to useThreadTimeline hook
+  // Replaces 76 lines of inline logic with clean, reusable hook
+  const messagesWithAnalysesAndChangelog: TimelineItem[] = useThreadTimeline({
+    messages,
+    analyses,
+    changelog,
+  });
 
   const feedbackHandlersRef = useRef(new Map<number, (feedbackType: 'like' | 'dislike' | null) => void>());
   const getFeedbackHandler = useCallback((roundNumber: number) => {
@@ -861,8 +778,8 @@ export default function ChatThreadScreen({
                       if (selectedParticipants.length <= 1)
                         return;
                       removeParticipant(participantId);
-                      // ✅ REACT 19 PATTERN: Use dispatch instead of setState
-                      dispatch({ type: 'SET_HAS_PENDING_CONFIG_CHANGES', payload: true });
+                      // ✅ REACT 19 PATTERN: Mark config changes
+                      actions.setHasPendingConfigChanges(true);
                     }}
                 toolbar={(
                   <>

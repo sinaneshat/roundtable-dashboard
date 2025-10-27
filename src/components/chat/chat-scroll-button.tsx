@@ -24,6 +24,7 @@ export function ChatScrollButton({ variant = 'floating', className }: ChatScroll
       lastScrollTime = now;
       const { scrollTop, scrollHeight, clientHeight } = document.documentElement;
       const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+      // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- Intentional: updating state based on scroll position
       setShowButton(distanceFromBottom > 200);
       rafId = null;
     };
