@@ -1,5 +1,7 @@
 # CLAUDE.md
 
+- In all interactions and commit messages, be extremely concise and sacrifice grammar for the sake of concision. 
+
 Project guidance for Claude Code specialized agents working on Roundtable - a collaborative AI brainstorming platform where multiple AI models work together to solve problems and generate ideas.
 
 ## 🚨 DOCUMENTATION HIERARCHY
