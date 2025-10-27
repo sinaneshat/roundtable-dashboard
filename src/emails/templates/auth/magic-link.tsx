@@ -64,9 +64,9 @@ const buttonContainer = {
 };
 
 const button = {
-  backgroundColor: colors.primary,
+  backgroundColor: '#000000',
   borderRadius: '6px',
-  color: colors.primaryForeground,
+  color: '#FFFFFF',
   fontSize: typography.fontSize.sm,
   fontWeight: typography.fontWeight.medium,
   textDecoration: 'none',
@@ -88,7 +88,7 @@ const footer = {
 };
 
 const link = {
-  color: colors.primary,
+  color: '#000000',
   textDecoration: 'underline',
 };
 
