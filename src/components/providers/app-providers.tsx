@@ -5,6 +5,7 @@ import { NextIntlClientProvider } from 'next-intl';
 import { NuqsAdapter } from 'nuqs/adapters/next/app';
 import { Suspense } from 'react';
 
+import { ChangelogModal } from '@/components/changelog-modal';
 import { Toaster } from '@/components/ui/toaster';
 
 import { ChatStoreProvider } from './chat-store-provider';
@@ -72,6 +73,7 @@ export function AppProviders({
                 : (
                     <div>Maintenance</div>
                   )}
+              <ChangelogModal />
               <Toaster />
             </NextIntlClientProvider>
           </NuqsAdapter>
