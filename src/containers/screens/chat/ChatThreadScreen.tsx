@@ -193,7 +193,11 @@ export default function ChatThreadScreen({
   const hasRefetchedMessages = state.flags.hasRefetchedMessages;
   // ✅ REACT 19 PATTERN: Use context state instead of scattered useState
   // All regeneration, analysis, and changelog flags now managed by reducer
-  const { isWaitingForChangelog, hasPendingConfigChanges } = state.flags;
+  const { isWaitingForChangelog, hasPendingConfigChanges, isCreatingAnalysis } = state.flags;
+
+  // ✅ DISABLE EDITS: Disable participant/mode changes during entire round lifecycle
+  // Round is in progress when participants are streaming OR analysis is being created
+  const isRoundInProgress = isStreaming || isCreatingAnalysis;
 
   // Analyses from store (already deduplicated by orchestrator)
   const analyses = useChatStore(s => s.analyses);
@@ -372,17 +376,17 @@ export default function ChatThreadScreen({
   });
 
   const handleModeChange = useCallback(async (newMode: ChatModeId) => {
-    if (isStreaming)
+    if (isRoundInProgress)
       return;
     formActions.handleModeChange(newMode);
-  }, [isStreaming, formActions]);
+  }, [isRoundInProgress, formActions]);
 
   const handleParticipantsChange = useCallback(async (newParticipants: ParticipantConfig[]) => {
-    if (isStreaming)
+    if (isRoundInProgress)
       return;
     setSelectedParticipants(newParticipants);
     actions.setHasPendingConfigChanges(true);
-  }, [isStreaming, setSelectedParticipants, actions]);
+  }, [isRoundInProgress, setSelectedParticipants, actions]);
 
   // Keep ref of the last synced context to prevent infinite loops
   const lastSyncedContextRef = useRef<string>('');
@@ -396,9 +400,9 @@ export default function ChatThreadScreen({
   // This allows users to modify participants and have changes staged until next message submission
   useEffect(() => {
     // Don't sync if:
-    // 1. User is actively streaming
+    // 1. Round is in progress (streaming or creating analysis)
     // 2. User has pending configuration changes (staged for next message)
-    if (isStreaming || hasPendingConfigChanges) {
+    if (isRoundInProgress || hasPendingConfigChanges) {
       return;
     }
 
@@ -435,7 +439,7 @@ export default function ChatThreadScreen({
     // Update state and ref together
     lastSyncedContextRef.current = contextKey;
     setSelectedParticipants(syncedParticipants);
-  }, [contextParticipants, isStreaming, hasPendingConfigChanges, setSelectedParticipants]);
+  }, [contextParticipants, isRoundInProgress, hasPendingConfigChanges, setSelectedParticipants]);
   // AI SDK v5 Pattern: Initialize thread on mount and when thread ID changes
   // Following crash course Exercise 01.07, 04.02, 04.03:
   // - Server provides initialMessages via props
@@ -686,12 +690,12 @@ export default function ChatThreadScreen({
                 value={inputValue}
                 onChange={setInputValue}
                 onSubmit={handlePromptSubmit}
-                status={isStreaming ? 'submitted' : 'ready'}
+                status={isRoundInProgress ? 'submitted' : 'ready'}
                 onStop={stopStreaming}
                 placeholder={t('input.placeholder')}
                 participants={selectedParticipants}
                 currentParticipantIndex={currentParticipantIndex}
-                onRemoveParticipant={isStreaming
+                onRemoveParticipant={isRoundInProgress
                   ? undefined
                   : (participantId) => {
                       if (selectedParticipants.length <= 1)
@@ -705,12 +709,12 @@ export default function ChatThreadScreen({
                     <ChatParticipantsList
                       participants={selectedParticipants}
                       onParticipantsChange={handleParticipantsChange}
-                      isStreaming={isStreaming}
+                      isStreaming={isRoundInProgress}
                     />
                     <ChatModeSelector
                       selectedMode={selectedMode || (thread.mode as ChatModeId)}
                       onModeChange={handleModeChange}
-                      disabled={isStreaming}
+                      disabled={isRoundInProgress}
                     />
                   </>
                 )}
