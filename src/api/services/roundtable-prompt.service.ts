@@ -445,7 +445,7 @@ export function buildRoundtableContextMessage(config: RoundtablePromptConfig): s
       '',
     );
 
-    otherParticipants.forEach((p, idx) => {
+    otherParticipants.forEach((p, _idx) => {
       const modelDisplay = p.modelName || extractModelName(p.modelId);
       const roleDisplay = p.role ? ` (${p.role})` : '';
 

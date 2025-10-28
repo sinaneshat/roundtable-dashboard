@@ -96,7 +96,9 @@ export default function ChatThreadScreen({
   const stopStreaming = useChatStore(s => s.stop);
   const setOnRetry = useChatStore(s => s.setOnRetry);
   const contextParticipants = useChatStore(s => s.participants);
-  const setMessages = useChatStore(s => s.setMessages);
+  // ✅ FIX: Use chatSetMessages (from useChat) instead of store's setMessages
+  // This updates useChat's state, which then syncs to store via provider
+  const chatSetMessages = useChatStore(s => s.chatSetMessages);
 
   // ✅ ZUSTAND V5 PATTERN: Use useShallow for object selectors to prevent re-renders
   // Object selectors without useShallow create new references each render causing infinite loops
@@ -243,8 +245,9 @@ export default function ChatThreadScreen({
               mod => mod.chatMessagesToUIMessages(freshMessages, result.data.participants),
             );
 
-            // Update context messages
-            setMessages(uiMessages);
+            // ✅ FIX: Update useChat's messages (not store directly)
+            // chatSetMessages updates useChat state, which syncs to store via provider
+            chatSetMessages?.(uiMessages);
           }
         } catch {
           // Silently fail - this is just a safety net
@@ -275,7 +278,7 @@ export default function ChatThreadScreen({
     isStreaming,
     hasPendingConfigChanges,
     slug,
-    setMessages,
+    chatSetMessages,
     actions,
   ]);
 

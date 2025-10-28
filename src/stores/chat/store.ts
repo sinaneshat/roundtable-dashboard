@@ -100,6 +100,8 @@ type ThreadSlice = {
   startRound: (() => void) | undefined;
   retry: (() => void) | undefined;
   stop: (() => void) | undefined;
+  // ✅ FIX: Expose chat.setMessages to allow refetch to update useChat's state
+  chatSetMessages: ((messages: UIMessage[] | ((messages: UIMessage[]) => UIMessage[])) => void) | undefined;
 
   setThread: (thread: ChatThread | null) => void;
   setParticipants: (participants: ChatParticipant[]) => void;
@@ -111,6 +113,7 @@ type ThreadSlice = {
   setStartRound: (fn: (() => void) | undefined) => void;
   setRetry: (fn: (() => void) | undefined) => void;
   setStop: (fn: (() => void) | undefined) => void;
+  setChatSetMessages: (fn: ((messages: UIMessage[] | ((messages: UIMessage[]) => UIMessage[])) => void) | undefined) => void;
 };
 
 type FlagsSlice = {
@@ -436,6 +439,7 @@ const createThreadSlice: StateCreator<
   startRound: undefined,
   retry: undefined,
   stop: undefined,
+  chatSetMessages: undefined,
 
   setThread: thread =>
     set({ thread }, false, 'thread/setThread'),
@@ -459,6 +463,8 @@ const createThreadSlice: StateCreator<
     set({ retry: fn }, false, 'thread/setRetry'),
   setStop: fn =>
     set({ stop: fn }, false, 'thread/setStop'),
+  setChatSetMessages: fn =>
+    set({ chatSetMessages: fn }, false, 'thread/setChatSetMessages'),
 });
 
 const createFlagsSlice: StateCreator<

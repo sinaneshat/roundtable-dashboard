@@ -4,6 +4,7 @@ import { ArrowRight, Lock, Sparkles } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useMemo } from 'react';
 
+import type { ChatParticipant, RoundFeedback as RoundFeedbackType } from '@/api/routes/chat/schema';
 import { Actions } from '@/components/ai-elements/actions';
 import { ChatMessageList } from '@/components/chat/chat-message-list';
 import { ConfigurationChangesGroup } from '@/components/chat/configuration-changes-group';
@@ -37,7 +38,7 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
   const messages = useMemo(() => chatMessagesToUIMessages(serverMessages), [serverMessages]);
 
   // Transform participants - convert string dates to Date objects
-  const participants = useMemo(() => rawParticipants.map((p: any) => ({
+  const participants = useMemo(() => rawParticipants.map((p: ChatParticipant) => ({
     ...p,
     createdAt: new Date(p.createdAt),
     updatedAt: new Date(p.updatedAt),
@@ -49,7 +50,7 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
   // Build feedback map for quick lookup
   const feedbackByRound = useMemo(() => {
     const map = new Map<number, 'like' | 'dislike'>();
-    rawFeedback.forEach((fb: any) => {
+    rawFeedback.forEach((fb: RoundFeedbackType) => {
       if (fb.feedbackType) {
         map.set(fb.roundNumber, fb.feedbackType);
       }

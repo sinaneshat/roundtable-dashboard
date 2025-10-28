@@ -86,12 +86,14 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
 
   // ✅ OPTIMIZATION: Consolidated sync effect (single effect, batched updates)
   // React batches multiple setState calls in the same effect automatically
+  // ✅ FIX: Sync chat.setMessages so refetch can update useChat state directly
   useEffect(() => {
     store.setState({
       sendMessage: chat.sendMessage,
       startRound: chat.startRound,
       retry: chat.retry,
       stop: chat.stop,
+      chatSetMessages: chat.setMessages, // ✅ Expose chat's setMessages
       messages: chat.messages,
       isStreaming: chat.isStreaming,
       currentParticipantIndex: chat.currentParticipantIndex,
@@ -102,6 +104,7 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
     chat.startRound,
     chat.retry,
     chat.stop,
+    chat.setMessages,
     chat.messages,
     chat.isStreaming,
     chat.currentParticipantIndex,
@@ -156,6 +159,7 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
           startRound: undefined,
           retry: undefined,
           stop: undefined,
+          chatSetMessages: undefined,
 
           // Clear UI state
           showInitialUI: true,
@@ -206,6 +210,7 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
           startRound: undefined,
           retry: undefined,
           stop: undefined,
+          chatSetMessages: undefined,
 
           // Clear UI state
           showInitialUI: true,
@@ -251,7 +256,7 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
 
     // Update previous pathname
     prevPathnameRef.current = currentPath;
-  }, [pathname, store, onCompleteRef, onRetryRef]);
+  }, [pathname, store]);
 
   return (
     <ChatStoreContext value={store}>
