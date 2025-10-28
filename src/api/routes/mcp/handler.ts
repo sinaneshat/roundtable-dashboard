@@ -14,6 +14,7 @@ import { ulid } from 'ulid';
 import { ErrorContextBuilders } from '@/api/common/error-contexts';
 import { createError } from '@/api/common/error-handling';
 import { createHandler, createHandlerWithBatch, Responses } from '@/api/core';
+import { DEFAULT_CHAT_MODE } from '@/api/core/enums';
 import { openRouterModelsService } from '@/api/services/openrouter-models.service';
 import { canAccessModelByPricing } from '@/api/services/product-logic.service';
 import { getUserTier } from '@/api/services/usage-tracking.service';
@@ -88,7 +89,7 @@ const MCP_TOOLS: MCPTool[] = [
           type: 'string',
           enum: ['analyzing', 'brainstorming', 'debating', 'solving'],
           description: 'Chat mode determining participant behavior',
-          default: 'brainstorming',
+          default: DEFAULT_CHAT_MODE,
         },
         participants: {
           type: 'array',
@@ -346,7 +347,7 @@ export const createThreadToolHandler: RouteHandler<typeof createThreadToolRoute,
 
     // Create thread
     const threadId = ulid();
-    const threadMode = input.mode || 'brainstorming';
+    const threadMode = input.mode || DEFAULT_CHAT_MODE;
     await batch.db.insert(tables.chatThread).values({
       id: threadId,
       userId: user.id,
@@ -393,7 +394,7 @@ export const createThreadToolHandler: RouteHandler<typeof createThreadToolRoute,
         threadId,
         slug,
         title: input.title,
-        mode: input.mode || 'brainstorming',
+        mode: input.mode || DEFAULT_CHAT_MODE,
         participantIds,
         participantCount: input.participants.length,
       },

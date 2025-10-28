@@ -3,6 +3,7 @@ import { Loader2, ThumbsDown, ThumbsUp } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { memo } from 'react';
 
+import type { FeedbackType } from '@/api/core/enums';
 import { Button } from '@/components/ui/button';
 import {
   Tooltip,
@@ -14,11 +15,11 @@ import { cn } from '@/lib/ui/cn';
 type RoundFeedbackProps = {
   threadId: string;
   roundNumber: number;
-  currentFeedback: 'like' | 'dislike' | null;
-  onFeedbackChange: (feedbackType: 'like' | 'dislike' | null) => void;
+  currentFeedback: FeedbackType | null;
+  onFeedbackChange: (feedbackType: FeedbackType | null) => void;
   disabled?: boolean;
   isPending?: boolean;
-  pendingType?: 'like' | 'dislike' | null;
+  pendingType?: FeedbackType | null;
   className?: string;
 };
 function RoundFeedbackComponent({

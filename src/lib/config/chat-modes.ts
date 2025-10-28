@@ -16,6 +16,7 @@ import type { LucideIcon } from 'lucide-react';
 import { Lightbulb, Scale, Search, Target } from 'lucide-react';
 
 import type { ChatMode } from '@/api/core/enums';
+import { DEFAULT_CHAT_MODE as DEFAULT_MODE_FROM_ENUM } from '@/api/core/enums';
 
 // ============================================================================
 // Type Alias for Chat Mode ID
@@ -176,11 +177,18 @@ export function getChatModeSystemPrompt(modeId: ChatModeId): string {
 }
 
 /**
- * Get default chat mode (first enabled mode)
+ * Default chat mode constant
+ * ✅ SINGLE SOURCE: Re-export from /src/api/core/enums.ts
+ * ✅ TYPE-SAFE: Uses ChatMode enum from /src/api/core/enums.ts
+ */
+export const DEFAULT_CHAT_MODE: ChatModeId = DEFAULT_MODE_FROM_ENUM;
+
+/**
+ * Get default chat mode
+ * ✅ Returns constant from enum file
  */
 export function getDefaultChatMode(): ChatModeId {
-  const firstEnabled = getEnabledChatModes()[0];
-  return firstEnabled?.id ?? 'brainstorming';
+  return DEFAULT_CHAT_MODE;
 }
 
 // ============================================================================

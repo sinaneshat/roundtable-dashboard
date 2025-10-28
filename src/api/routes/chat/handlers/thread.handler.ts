@@ -20,7 +20,7 @@ import {
   Responses,
 } from '@/api/core';
 import type { ChatMode, ThreadStatus } from '@/api/core/enums';
-import { ChangelogTypes, ThreadStatusSchema } from '@/api/core/enums';
+import { ChangelogTypes, DEFAULT_CHAT_MODE, ThreadStatusSchema } from '@/api/core/enums';
 import { IdParamSchema, ThreadSlugParamSchema } from '@/api/core/schemas';
 import { openRouterModelsService } from '@/api/services/openrouter-models.service';
 import {
@@ -151,7 +151,7 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
         userId: user.id,
         title: tempTitle,
         slug: tempSlug,
-        mode: (body.mode || 'brainstorming') as ChatMode,
+        mode: (body.mode || DEFAULT_CHAT_MODE) as ChatMode,
         status: ThreadStatusSchema.enum.active,
         isFavorite: false,
         isPublic: false,
@@ -448,6 +448,11 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
         ? ((latestMessages[0].metadata as { roundNumber?: number }).roundNumber ?? 1)
         : 1;
 
+      // ✅ CRITICAL FIX: Changelog should appear BEFORE the next round
+      // User makes changes AFTER round N completes, so changelog belongs to round N+1
+      // This ensures changelog appears between round N and round N+1 messages
+      const nextRoundNumber = currentRoundNumber + 1;
+
       const changelogEntries: Array<{
         id: string;
         threadId: string;
@@ -476,7 +481,7 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
           changelogEntries.push({
             id: ulid(),
             threadId: id,
-            roundNumber: currentRoundNumber,
+            roundNumber: nextRoundNumber,
             changeType: ChangelogTypes.ADDED,
             changeSummary: `Added ${displayName}`,
             changeData: {
@@ -497,7 +502,7 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
           changelogEntries.push({
             id: ulid(),
             threadId: id,
-            roundNumber: currentRoundNumber,
+            roundNumber: nextRoundNumber,
             changeType: ChangelogTypes.REMOVED,
             changeSummary: `Removed ${displayName}`,
             changeData: {
@@ -530,6 +535,10 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
         ? ((latestMessagesForMode[0].metadata as { roundNumber?: number }).roundNumber ?? 1)
         : 1;
 
+      // ✅ CRITICAL FIX: Changelog should appear BEFORE the next round
+      // Mode change applies to the next round, not the current one
+      const nextRoundNumber = currentRoundNumber + 1;
+
       const changelogForModeChange: {
         id: string;
         threadId: string;
@@ -541,7 +550,7 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
       } = {
         id: ulid(),
         threadId: id,
-        roundNumber: currentRoundNumber,
+        roundNumber: nextRoundNumber,
         changeType: ChangelogTypes.MODIFIED,
         changeSummary: `Changed mode from ${thread.mode} to ${body.mode}`,
         changeData: {

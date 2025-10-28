@@ -10,9 +10,9 @@
 export { useBoolean } from './use-boolean';
 export { useDebouncedValue } from './use-debounced-value';
 export { useFuzzySearch } from './use-fuzzy-search';
+export type { MessagePartsFilter, UseMessagePartsOptions, UseMessagePartsReturn } from './use-message-parts';
+export { getMessageParts, useMessageParts } from './use-message-parts';
 export { useIsMobile } from './use-mobile';
-export type { UseMessagePartsOptions, UseMessagePartsReturn } from './use-message-parts';
-export { useMessageParts } from './use-message-parts';
 export type { UseModelLookupReturn } from './use-model-lookup';
 export { useModelLookup } from './use-model-lookup';
 export { useMultiParticipantChat } from './use-multi-participant-chat';

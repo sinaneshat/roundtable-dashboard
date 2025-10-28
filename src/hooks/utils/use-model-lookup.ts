@@ -64,7 +64,11 @@ export function useModelLookup(): UseModelLookupReturn {
   const { data: modelsData, isLoading } = useModelsQuery();
 
   // Extract model list and default ID from response
-  const allModels = modelsData?.data?.items || [];
+  // Memoize allModels to prevent new array creation on every render
+  const allModels = useMemo(
+    () => modelsData?.data?.items || [],
+    [modelsData?.data?.items],
+  );
   const defaultModelId = modelsData?.data?.default_model_id;
 
   // Memoized find function (only recreates when model list changes)

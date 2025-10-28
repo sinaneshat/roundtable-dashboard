@@ -31,6 +31,13 @@ import { z } from '@hono/zod-openapi';
 export const CHAT_MODES = ['analyzing', 'brainstorming', 'debating', 'solving'] as const;
 
 /**
+ * Default chat mode constant
+ * ✅ SINGLE SOURCE: Default mode for new conversations and fallbacks
+ * ✅ TYPE-SAFE: Uses ChatMode enum
+ */
+export const DEFAULT_CHAT_MODE: ChatMode = 'debating';
+
+/**
  * Chat mode Zod schema
  * ✅ RUNTIME VALIDATION: Validates chat mode values
  */

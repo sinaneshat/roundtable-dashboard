@@ -19,7 +19,7 @@ import type { StateCreator } from 'zustand';
 import { devtools } from 'zustand/middleware';
 import { createStore } from 'zustand/vanilla';
 
-import type { ChatMode } from '@/api/core/enums';
+import type { ChatMode, FeedbackType } from '@/api/core/enums';
 import type { ChatParticipant, ChatThread, ModeratorAnalysisPayload, StoredModeratorAnalysis } from '@/api/routes/chat/schema';
 import type { ParticipantConfig } from '@/components/chat/chat-form-schemas';
 import type { ChatModeId } from '@/lib/config/chat-modes';
@@ -44,14 +44,14 @@ type ChatFormSlice = {
 };
 
 type FeedbackSlice = {
-  feedbackByRound: Map<number, 'like' | 'dislike' | null>;
-  pendingFeedback: { roundNumber: number; type: 'like' | 'dislike' } | null;
+  feedbackByRound: Map<number, FeedbackType | null>;
+  pendingFeedback: { roundNumber: number; type: FeedbackType } | null;
   hasLoadedFeedback: boolean;
 
-  setFeedback: (roundNumber: number, type: 'like' | 'dislike' | null) => void;
-  setPendingFeedback: (feedback: { roundNumber: number; type: 'like' | 'dislike' } | null) => void;
+  setFeedback: (roundNumber: number, type: FeedbackType | null) => void;
+  setPendingFeedback: (feedback: { roundNumber: number; type: FeedbackType } | null) => void;
   clearFeedback: (roundNumber: number) => void;
-  loadFeedbackFromServer: (data: Array<{ roundNumber: number; feedbackType: 'like' | 'dislike' | null }>) => void;
+  loadFeedbackFromServer: (data: Array<{ roundNumber: number; feedbackType: FeedbackType | null }>) => void;
   resetFeedback: () => void;
 };
 
@@ -161,6 +161,21 @@ type CallbacksSlice = {
   setOnRetry: (callback: ((roundNumber: number) => void) | undefined) => void;
 };
 
+/**
+ * Screen Mode Type
+ * Imported from screen-initialization to avoid duplication
+ * @see src/stores/chat/actions/screen-initialization.ts
+ */
+export type { ScreenMode } from './actions/screen-initialization';
+
+type ScreenSlice = {
+  screenMode: import('./actions/screen-initialization').ScreenMode | null;
+  isReadOnly: boolean;
+
+  setScreenMode: (mode: import('./actions/screen-initialization').ScreenMode | null) => void;
+  resetScreenMode: () => void;
+};
+
 type OperationsSlice = {
   resetThreadState: () => void;
   resetHookState: () => void;
@@ -187,6 +202,7 @@ export type ChatStore
     & DataSlice
     & TrackingSlice
     & CallbacksSlice
+    & ScreenSlice
     & OperationsSlice;
 
 // ============================================================================
@@ -200,7 +216,7 @@ const createChatFormSlice: StateCreator<
   ChatFormSlice
 > = set => ({
   inputValue: '',
-  selectedMode: null,
+  selectedMode: null, // ✅ null on init, set to DEFAULT_CHAT_MODE by component
   selectedParticipants: [],
 
   setInputValue: value =>
@@ -241,7 +257,7 @@ const createChatFormSlice: StateCreator<
   resetForm: () =>
     set({
       inputValue: '',
-      selectedMode: null,
+      selectedMode: null, // ✅ Reset to null, component will set DEFAULT_CHAT_MODE
       selectedParticipants: [],
     }, false, 'form/resetForm'),
 });
@@ -523,6 +539,27 @@ const createCallbacksSlice: StateCreator<
     set({ onRetry: callback }, false, 'callbacks/setOnRetry'),
 });
 
+const createScreenSlice: StateCreator<
+  ChatStore,
+  [['zustand/devtools', never]],
+  [],
+  ScreenSlice
+> = set => ({
+  screenMode: null,
+  isReadOnly: false,
+
+  setScreenMode: mode =>
+    set({
+      screenMode: mode,
+      isReadOnly: mode === 'public',
+    }, false, 'screen/setScreenMode'),
+  resetScreenMode: () =>
+    set({
+      screenMode: null,
+      isReadOnly: false,
+    }, false, 'screen/resetScreenMode'),
+});
+
 const createOperationsSlice: StateCreator<
   ChatStore,
   [['zustand/devtools', never]],
@@ -633,6 +670,7 @@ export function createChatStore() {
         ...createDataSlice(...args),
         ...createTrackingSlice(...args),
         ...createCallbacksSlice(...args),
+        ...createScreenSlice(...args),
         ...createOperationsSlice(...args),
       }),
       { name: 'ChatStore' },

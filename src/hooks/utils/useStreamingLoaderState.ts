@@ -9,7 +9,6 @@ type UseStreamingLoaderStateParams = {
   isStreaming: boolean;
   messages: UIMessage[];
   selectedParticipants: ParticipantConfig[];
-  minParticipantsForLoader?: number;
 };
 
 type UseStreamingLoaderStateResult = {
@@ -28,7 +27,6 @@ type UseStreamingLoaderStateResult = {
  * @param params.isStreaming - Whether participant streaming is in progress
  * @param params.messages - Array of UI messages
  * @param params.selectedParticipants - Array of selected participants
- * @param params.minParticipantsForLoader - Minimum participants required to show loader (default: 2)
  * @returns Object containing loader state booleans
  *
  * @example
@@ -54,7 +52,6 @@ export function useStreamingLoaderState({
   isStreaming,
   messages,
   selectedParticipants,
-  minParticipantsForLoader = 2,
 }: UseStreamingLoaderStateParams): UseStreamingLoaderStateResult {
   return useMemo(() => {
     // Check if analysis is in progress (pending or streaming)
@@ -72,13 +69,13 @@ export function useStreamingLoaderState({
 
     // Show loader if:
     // 1. Currently streaming OR analyzing OR transitioning
-    // 2. AND there are enough participants to warrant showing the loader
-    const showLoader = (isStreaming || isAnalyzing || isTransitioning) && selectedParticipants.length >= minParticipantsForLoader;
+    // 2. AND there are participants configured
+    const showLoader = (isStreaming || isAnalyzing || isTransitioning) && selectedParticipants.length > 0;
 
     return {
       showLoader,
       isAnalyzing: isAnalyzing || isTransitioning,
       isTransitioning,
     };
-  }, [analyses, isStreaming, messages.length, selectedParticipants.length, minParticipantsForLoader]);
+  }, [analyses, isStreaming, messages.length, selectedParticipants.length]);
 }

@@ -31,9 +31,8 @@ import { getDefaultChatMode } from '@/lib/config/chat-modes';
 import { showApiErrorToast } from '@/lib/toast';
 import { waitForIdleOrRender } from '@/lib/utils/browser-timing';
 import {
-  useAnalysisOrchestrator,
   useChatFormActions,
-  useChatInitialization,
+  useScreenInitialization,
 } from '@/stores/chat';
 
 export default function ChatOverviewScreen() {
@@ -103,12 +102,13 @@ export default function ChatOverviewScreen() {
   );
 
   // Form actions
-  const { setInputValue, setSelectedMode, setSelectedParticipants, removeParticipant } = useChatStore(
+  const { setInputValue, setSelectedMode, setSelectedParticipants, removeParticipant, resetForm } = useChatStore(
     useShallow(s => ({
       setInputValue: s.setInputValue,
       setSelectedMode: s.setSelectedMode,
       setSelectedParticipants: s.setSelectedParticipants,
       removeParticipant: s.removeParticipant,
+      resetForm: s.resetForm,
     })),
   );
 
@@ -143,19 +143,12 @@ export default function ChatOverviewScreen() {
   // Form actions hook
   const formActions = useChatFormActions();
 
-  // Analysis orchestrator - syncs server data to store
-  // DISABLED on overview screen: only client-side pending analyses shown
-  // Server sync happens on thread screen after navigation
-  useAnalysisOrchestrator({
-    threadId: createdThreadId || '',
-    mode: selectedMode || getDefaultChatMode(),
-    enabled: false,
-  });
-
-  // Initialize analysis callback (stable, no infinite loops)
-  useChatInitialization({
-    threadId: createdThreadId,
-    mode: selectedMode,
+  // Unified screen initialization
+  useScreenInitialization({
+    mode: 'overview',
+    thread: currentThread,
+    participants: contextParticipants,
+    chatMode: selectedMode,
   });
 
   // Handle form submission
@@ -236,7 +229,23 @@ export default function ChatOverviewScreen() {
     setThreadActions(null);
   }, [setThreadTitle, setThreadActions]);
 
-  // React 19 Pattern: Initialize default participants and mode on mount
+  // Consolidated: Reset to defaults on mount (atomically)
+  // Runs on mount to reset form state when navigating from thread → overview
+  useEffect(() => {
+    // Reset form to clear any thread-specific state
+    resetForm();
+
+    // Immediately set defaults if available
+    if (defaultModelId && initialParticipants.length > 0) {
+      setSelectedParticipants(initialParticipants);
+      setSelectedMode(getDefaultChatMode());
+    }
+    // Only run on mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Fallback: Initialize defaults when defaultModelId becomes available (first load)
+  // This handles the case where defaultModelId isn't ready on initial mount
   useEffect(() => {
     if (
       selectedParticipants.length === 0
@@ -248,9 +257,7 @@ export default function ChatOverviewScreen() {
         setSelectedMode(getDefaultChatMode());
       }
     }
-    // Only run on mount or when defaultModelId becomes available
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [defaultModelId]);
+  }, [defaultModelId, initialParticipants, selectedParticipants.length, selectedMode, setSelectedParticipants, setSelectedMode]);
 
   // React 19 Pattern: Handle streaming stop when returning to initial UI using queueMicrotask
   // This avoids reactive useEffect and provides more predictable behavior
@@ -386,9 +393,7 @@ export default function ChatOverviewScreen() {
                       isLatest={true}
                       onStreamComplete={async () => {
                         try {
-                          // ✅ CRITICAL: Wait for backend message persistence before navigation
-                          // Race condition: Backend saves messages asynchronously after streaming
-                          // If we navigate too quickly, thread page SSR fetch won't get all messages
+                          // Wait for backend persistence before navigation
                           await waitForIdleOrRender();
                           router.push(`/chat/${currentThread?.slug}`);
                         } catch (error) {

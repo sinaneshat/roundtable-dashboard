@@ -5,6 +5,7 @@ import {
   ANALYSIS_STATUSES_ENUM_VALUES,
   CHANGELOG_TYPES_ENUM_VALUES,
   CHAT_MODE_ENUM_VALUES,
+  DEFAULT_CHAT_MODE,
   FEEDBACK_TYPES_ENUM_VALUES,
   MESSAGE_ROLES_ENUM_VALUES,
   THREAD_STATUS_ENUM_VALUES,
@@ -25,7 +26,7 @@ export const chatThread = sqliteTable('chat_thread', {
   slug: text('slug').notNull().unique(), // SEO-friendly URL slug (e.g., "product-strategy-abc123")
   mode: text('mode', { enum: CHAT_MODE_ENUM_VALUES })
     .notNull()
-    .default('brainstorming'),
+    .default(DEFAULT_CHAT_MODE),
   status: text('status', { enum: THREAD_STATUS_ENUM_VALUES })
     .notNull()
     .default('active'),

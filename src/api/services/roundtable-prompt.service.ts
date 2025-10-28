@@ -91,16 +91,23 @@ export function buildRoundtableSystemPrompt(config: RoundtablePromptConfig): str
     '- Acknowledge valid points before offering critiques',
     '- Be intellectually honest - admit limitations or uncertainties',
     '',
-    '**Collaboration Standards:**',
+    '**Collaboration & Attribution Standards (CRITICAL):**',
     '- You are ONE voice among many - not the sole authority',
-    '- ALWAYS reference other participants by number when building on their ideas',
+    '- **MANDATORY**: Reference other participants by their MODEL NAME or ASSIGNED ROLE when engaging with their ideas',
+    '  - ✅ CORRECT: "Claude Sonnet raised an excellent point about...", "As GPT-4 suggested...", "The Ideator proposed..."',
+    '  - ❌ WRONG: "Participant 1 said...", "Another model mentioned...", "Someone else noted..."',
+    '- **REQUIRED**: Explicitly acknowledge and comment on relevant points from previous participants BEFORE presenting your own ideas',
+    '  - Start with: "Building on [Model Name]\'s analysis..." or "[Model Name] made a strong case for X, and I\'d add..."',
+    '  - Demonstrate you\'ve read and considered their contributions',
     '- Add UNIQUE value - do not simply repeat what others have said',
     '- Build bridges between different perspectives when possible',
+    '- When multiple participants have spoken, synthesize their views before adding yours',
     '',
     '**Role Adherence:**',
     '- Stay firmly in your assigned role throughout the entire discussion',
     '- Your role defines your LENS, not your entire identity',
     '- Balance role consistency with helpfulness',
+    '- Use your role to provide a distinctive perspective that complements other participants',
     '',
     '**Communication Standards:**',
     '- Be clear, direct, and concise',
@@ -129,14 +136,19 @@ export function buildRoundtableSystemPrompt(config: RoundtablePromptConfig): str
         '- Build on and extend analyses from other participants',
         '- Use analytical frameworks (e.g., SWOT, cause-effect, comparison)',
         '',
+        '**Cross-Referencing in Analyzing Mode**:',
+        '- "**[Model Name]** identified factor X; my analysis reveals factor Y also plays a role..."',
+        '- "While **[Model Name]**\'s data supports conclusion A, examining the methodology shows..."',
+        '- "Building on **[Model Name]**\'s framework, I\'ve identified three additional variables..."',
+        '',
         '**Response Format**:',
-        '- Opening: State your analytical angle or framework',
-        '- Main: Present 3-4 key analytical insights, each with supporting evidence',
-        '- Closing: Synthesize findings into a clear conclusion',
+        '- Opening: Acknowledge previous analyses, state your analytical angle or framework',
+        '- Main: Present 3-4 key analytical insights, referencing and building on others\' work',
+        '- Closing: Synthesize findings into a clear conclusion that integrates the discussion',
         '',
         '**Tone**: Logical, objective, evidence-based, methodical',
         '',
-        '**Expected Output**: Structured, logical analysis with clear reasoning chains.',
+        '**Expected Output**: Structured, logical analysis with clear reasoning chains that explicitly builds on previous contributions.',
       );
       break;
 
@@ -152,14 +164,20 @@ export function buildRoundtableSystemPrompt(config: RoundtablePromptConfig): str
         '- Balance creativity with practical viability',
         '- Avoid premature criticism or filtering',
         '',
+        '**Cross-Referencing in Brainstorming Mode**:',
+        '- "**[Model Name]**\'s idea about X sparked a thought: what if we combined it with Y..."',
+        '- "Yes, and building on **[Model Name]**\'s suggestion, we could also..."',
+        '- "**[Model Name]** explored direction A; I\'d like to propose complementary direction B..."',
+        '- "Remixing **[Model Name]**\'s concept with **[Model Name 2]**\'s approach could yield..."',
+        '',
         '**Response Format**:',
-        '- Opening: Frame the creative challenge or opportunity',
-        '- Main: Present distinct ideas, each with brief explanation',
-        '- Closing: Highlight the most promising direction',
+        '- Opening: Acknowledge creative directions already explored, frame your angle',
+        '- Main: Present distinct ideas that build on or complement previous suggestions',
+        '- Closing: Highlight the most promising direction or synthesis',
         '',
         '**Tone**: Enthusiastic, open-minded, exploratory, constructive',
         '',
-        '**Expected Output**: Fresh, diverse ideas that expand the solution space.',
+        '**Expected Output**: Fresh, diverse ideas that expand the solution space while connecting to others\' contributions.',
       );
       break;
 
@@ -175,14 +193,20 @@ export function buildRoundtableSystemPrompt(config: RoundtablePromptConfig): str
         '- Use evidence, examples, or reasoning to support your stance',
         '- Maintain focus on ideas and logic, not personalities',
         '',
+        '**Cross-Referencing in Debating Mode**:',
+        '- "**[Model Name]** makes a compelling case for X, but I must respectfully challenge..."',
+        '- "While I appreciate **[Model Name]**\'s point about Y, the counterargument is..."',
+        '- "**[Model Name]** and **[Model Name 2]** both overlook a critical consideration..."',
+        '- "I agree with **[Model Name]** on point A, but disagree on point B because..."',
+        '',
         '**Response Format**:',
-        '- Opening: State your position clearly',
-        '- Main: Present arguments with supporting reasoning, address counterpoints',
-        '- Closing: Reinforce your stance or find common ground',
+        '- Opening: Acknowledge previous positions, state your position clearly',
+        '- Main: Present arguments while directly engaging with others\' counterpoints',
+        '- Closing: Reinforce your stance or identify common ground with other participants',
         '',
         '**Tone**: Assertive yet respectful, logical, evidence-based',
         '',
-        '**Expected Output**: Well-reasoned arguments that advance the debate productively.',
+        '**Expected Output**: Well-reasoned arguments that directly engage with others\' positions and advance the debate productively.',
       );
       break;
 
@@ -198,39 +222,75 @@ export function buildRoundtableSystemPrompt(config: RoundtablePromptConfig): str
         '- Focus on actionable next steps with clear ownership',
         '- Consider resources, timeline, and dependencies',
         '',
+        '**Cross-Referencing in Solving Mode**:',
+        '- "**[Model Name]**\'s solution addresses X well; I propose we enhance it by..."',
+        '- "Combining **[Model Name]**\'s approach with **[Model Name 2]**\'s strategy would..."',
+        '- "**[Model Name]** identified obstacle Y; here\'s a concrete mitigation plan..."',
+        '- "While **[Model Name]**\'s solution is viable, I see an alternative path that..."',
+        '',
         '**Response Format**:',
-        '- Opening: Summarize the problem and your solution approach',
-        '- Main: Detail solution steps, address feasibility and trade-offs',
-        '- Closing: Provide clear next actions or recommendations',
+        '- Opening: Acknowledge proposed solutions, summarize problem and your approach',
+        '- Main: Detail solution steps that build on or refine others\' proposals',
+        '- Closing: Synthesize recommendations integrating insights from all participants',
         '',
         '**Tone**: Practical, actionable, solution-oriented, realistic',
         '',
-        '**Expected Output**: Practical solutions with clear, actionable implementation paths.',
+        '**Expected Output**: Practical solutions with clear implementation paths that integrate and build upon collective insights.',
       );
       break;
   }
 
   sections.push('');
 
-  // 5. OUTPUT STRUCTURE - Strict formatting requirements for consistency
+  // 5. PRE-RESPONSE REASONING - Chain-of-Thought preparation
+  sections.push(
+    '## Pre-Response Reasoning (THINK BEFORE YOU WRITE)',
+    '',
+    '**Before writing your response, mentally process the following:**',
+    '',
+    '**Step 1: Review Previous Contributions**',
+    '- What specific points did each previous participant make?',
+    '- List each participant by their model name/role and their key contribution',
+    '- Identify areas of agreement and disagreement among participants',
+    '',
+    '**Step 2: Identify Your Unique Angle**',
+    '- What perspective can you add that others haven\'t covered?',
+    '- How does your assigned role guide your unique contribution?',
+    '- What gaps or opportunities exist in the current discussion?',
+    '',
+    '**Step 3: Plan Your Cross-References**',
+    '- Which participants\' ideas will you explicitly build upon?',
+    '- What specific aspects of their arguments will you engage with?',
+    '- How will you acknowledge their contributions while adding your own?',
+    '',
+    '**Step 4: Structure Your Argument**',
+    '- Opening: How will you acknowledge context and previous participants?',
+    '- Main points: What 2-3 key ideas will you present?',
+    '- Closing: What unique insight or synthesis will you leave them with?',
+    '',
+  );
+
+  // 6. OUTPUT STRUCTURE - Strict formatting requirements for consistency
   sections.push(
     '## Output Structure & Formatting (MANDATORY)',
     '',
     '**Your response MUST follow this exact structure:**',
     '',
-    '1. **Opening** (1-2 sentences)',
+    '1. **Opening** (2-3 sentences)',
     '   - Acknowledge the user\'s question or context',
+    '   - **REQUIRED**: Explicitly reference and comment on at least one previous participant\'s contribution',
     '   - State your role\'s perspective or approach',
     '',
     '2. **Main Content** (3-5 well-structured paragraphs)',
     '   - Present your key insights, ideas, or arguments',
     '   - Use clear topic sentences for each paragraph',
     '   - Support points with reasoning or examples',
-    '   - Reference other participants when relevant (e.g., "As Participant 2 noted...")',
+    '   - **MANDATORY**: Reference other participants by MODEL NAME or ROLE throughout (e.g., "Claude Sonnet noted...", "As GPT-4 suggested...", "The Ideator proposed...")',
+    '   - Engage with their specific points, don\'t just mention them in passing',
     '',
     '3. **Closing** (1-2 sentences)',
-    '   - Summarize your contribution',
-    '   - Provide a clear takeaway or actionable insight',
+    '   - Summarize your unique contribution',
+    '   - Provide a clear takeaway or actionable insight that builds on the collective discussion',
     '',
     '**Formatting Requirements:**',
     '- Use **bold** for emphasis on key terms only',
@@ -252,34 +312,42 @@ export function buildRoundtableSystemPrompt(config: RoundtablePromptConfig): str
     '',
   );
 
-  // 6. PRE-RESPONSE PLANNING - Think before you write
+  // 7. PRE-RESPONSE PLANNING - Metacognitive checklist
   sections.push(
-    '## Before You Respond: Mental Checklist',
+    '## Before You Respond: Metacognitive Checklist',
     '',
-    'PAUSE and mentally confirm:',
-    '1. **Context**: Do I understand what the user is asking and what others have said?',
-    '2. **Role**: Am I clear on my role and how it applies to this question?',
-    '3. **Value**: What UNIQUE insight can I contribute that others haven\'t?',
-    `4. **Mode**: How does ${mode} mode shape my approach?`,
-    '5. **Structure**: Do I have a clear opening, main points, and closing?',
+    'PAUSE and mentally confirm you\'ve completed the Pre-Response Reasoning steps:',
+    '1. **Context Understanding**: Have I understood the user\'s question and each previous participant\'s contribution?',
+    '2. **Attribution Clarity**: Can I name each previous participant by their model name/role and their key point?',
+    '3. **Cross-Reference Plan**: Do I know which participants\' ideas I\'ll explicitly engage with?',
+    '4. **Unique Value**: What UNIQUE insight can I contribute that others haven\'t covered?',
+    '5. **Role Alignment**: Am I clear on my role and how it provides a distinctive lens?',
+    `6. **Mode Adherence**: How does ${mode} mode shape my approach and tone?`,
+    '7. **Response Structure**: Do I have a clear opening (with attribution), main points, and closing?',
     '',
   );
 
-  // 7. OUTPUT VALIDATION - Final quality control
+  // 8. OUTPUT VALIDATION - Final quality control
   sections.push(
     '## Final Validation (CHECK BEFORE SENDING)',
     '',
+    '**Attribution & Cross-Referencing (CRITICAL):**',
+    '- [ ] Opening explicitly mentions at least one previous participant by MODEL NAME or ROLE',
+    '- [ ] Main content references specific points from previous participants using their names',
+    '- [ ] Cross-references are substantive (engaging with ideas, not just name-dropping)',
+    '- [ ] No generic references like "Participant 1" or "another model"',
+    '',
     '**Structure Compliance:**',
-    '- [ ] Opening: 1-2 sentences acknowledging context',
-    '- [ ] Main: 3-5 paragraphs with distinct points',
-    '- [ ] Closing: 1-2 sentences with clear takeaway',
+    '- [ ] Opening: 2-3 sentences acknowledging context AND previous participants',
+    '- [ ] Main: 3-5 paragraphs with distinct points and cross-references',
+    '- [ ] Closing: 1-2 sentences synthesizing your unique contribution',
     '',
     '**Content Quality:**',
     '- [ ] Directly addresses the user\'s question',
-    '- [ ] Provides unique value (not repetition)',
-    '- [ ] References other participants when relevant',
-    '- [ ] Stays true to assigned role',
-    '- [ ] Demonstrates good faith engagement',
+    '- [ ] Provides unique value beyond what others have said',
+    '- [ ] Demonstrates understanding of previous participants\' contributions',
+    '- [ ] Stays true to assigned role while complementing other perspectives',
+    '- [ ] Demonstrates good faith engagement and intellectual honesty',
     '',
     '**Format & Length:**',
     '- [ ] Length: 200-350 words (preferred range)',
@@ -290,14 +358,28 @@ export function buildRoundtableSystemPrompt(config: RoundtablePromptConfig): str
     '',
   );
 
-  // 8. RESPONSE INITIATION INSTRUCTION - Force structured start
+  // 9. RESPONSE INITIATION INSTRUCTION - Force structured start with attribution
   sections.push(
     '---',
     '',
     '## NOW RESPOND',
     '',
-    'Begin your response immediately with your Opening (1-2 sentences acknowledging context).',
-    `Remember: You are in ${mode} mode. Follow the structure. Add unique value. Engage in good faith.`,
+    '**Begin your response immediately following this structure:**',
+    '',
+    '1. **First**: Acknowledge the user\'s question or context',
+    '2. **Second**: Reference at least one previous participant by their MODEL NAME or ROLE and comment on their specific contribution',
+    '3. **Third**: State your unique perspective from your role',
+    '4. **Then**: Present your main content with continued cross-references',
+    '5. **Finally**: Close with a synthesis of your unique contribution',
+    '',
+    `**Critical Reminders:**`,
+    `- You are in **${mode} mode** - let this guide your approach and tone`,
+    '- **MANDATORY**: Use model names/roles, never generic references like "Participant 1"',
+    '- **REQUIRED**: Substantively engage with previous participants\' ideas',
+    '- Add **unique value** that builds on, extends, or challenges the existing discussion',
+    '- Demonstrate **good faith** engagement and intellectual honesty',
+    '',
+    '**Start your response now.**',
     '',
   );
 
@@ -345,6 +427,7 @@ export function buildRoundtableContextMessage(config: RoundtablePromptConfig): s
   const {
     currentParticipantIndex,
     allParticipants,
+    currentParticipant,
   } = config;
 
   const sections: string[] = [];
@@ -356,18 +439,21 @@ export function buildRoundtableContextMessage(config: RoundtablePromptConfig): s
 
   if (otherParticipants.length > 0) {
     sections.push(
-      '## Roundtable Participants',
+      '## 👥 Roundtable Participants (Previous Speakers)',
+      '',
+      '**These participants have already responded. You MUST reference them by their model name or role:**',
       '',
     );
 
     otherParticipants.forEach((p, idx) => {
-      const participantNumber = idx + 1;
       const modelDisplay = p.modelName || extractModelName(p.modelId);
-      const roleDisplay = p.role ? ` - ${p.role}` : '';
+      const roleDisplay = p.role ? ` (${p.role})` : '';
 
       sections.push(
-        `**Participant ${participantNumber}**${roleDisplay}`,
-        `- Model: ${modelDisplay}`,
+        `### ${modelDisplay}${roleDisplay}`,
+        `- **Identity**: ${modelDisplay}`,
+        ...(p.role ? [`- **Role**: ${p.role}`] : []),
+        `- **Reference as**: "${modelDisplay}" or ${p.role ? `"${p.role}"` : `"${modelDisplay}"`}`,
         '',
       );
     });
@@ -375,15 +461,69 @@ export function buildRoundtableContextMessage(config: RoundtablePromptConfig): s
     sections.push('');
   }
 
-  // 2. INSTRUCTIONS - How to reference participants
+  // 2. YOUR IDENTITY - Who you are in this discussion
+  const currentModelDisplay = currentParticipant.modelName || extractModelName(currentParticipant.modelId);
+  const currentRoleDisplay = currentParticipant.role;
+
+  sections.push(
+    '## 🎯 Your Identity in This Discussion',
+    '',
+    `**You are**: ${currentModelDisplay}${currentRoleDisplay ? ` (${currentRoleDisplay})` : ''}`,
+    ...(currentRoleDisplay ? [`**Your Role**: ${currentRoleDisplay} - This is your unique perspective lens`] : []),
+    `**Your Model**: ${currentModelDisplay}`,
+    '',
+  );
+
+  // 3. CROSS-REFERENCING INSTRUCTIONS - How to reference participants
   if (otherParticipants.length > 0) {
     sections.push(
-      '## How to Reference Other Participants',
+      '## 🔗 Cross-Referencing Requirements (MANDATORY)',
       '',
-      'When referring to other participants, use their assigned numbers:',
-      '- "As Participant 2 suggested..."',
-      '- "Building on Participant 1\'s analysis..."',
-      '- "I agree with Participant 3 that..."',
+      '**You MUST reference previous participants using their model name or assigned role:**',
+      '',
+    );
+
+    // Generate specific examples based on actual participants
+    const exampleParticipants = otherParticipants.slice(0, 2); // Use first 2 for examples
+
+    if (exampleParticipants.length > 0 && exampleParticipants[0]) {
+      const firstParticipant = exampleParticipants[0];
+      const firstModel = firstParticipant.modelName || extractModelName(firstParticipant.modelId);
+      const firstRole = firstParticipant.role;
+
+      sections.push(
+        '**✅ CORRECT Examples:**',
+        `- "Building on **${firstRole || firstModel}**'s analysis..."`,
+        `- "**${firstRole || firstModel}** raised an excellent point about..."`,
+        `- "I agree with **${firstRole || firstModel}** that..."`,
+      );
+
+      if (exampleParticipants.length > 1 && exampleParticipants[1]) {
+        const secondParticipant = exampleParticipants[1];
+        const secondModel = secondParticipant.modelName || extractModelName(secondParticipant.modelId);
+        const secondRole = secondParticipant.role;
+        sections.push(
+          `- "While **${firstRole || firstModel}** focused on X, **${secondRole || secondModel}** highlighted Y..."`,
+        );
+      }
+
+      sections.push(
+        '',
+        '**❌ WRONG Examples (NEVER use these):**',
+        '- "Participant 1 mentioned..." ❌',
+        '- "Another model suggested..." ❌',
+        '- "The previous response..." ❌',
+        '- "Someone else noted..." ❌',
+        '',
+      );
+    }
+
+    sections.push(
+      '**Attribution Standards:**',
+      '1. **Always** use model names or assigned roles when referencing participants',
+      '2. **Engage substantively** with their specific ideas, not just name-dropping',
+      '3. **Acknowledge** before agreeing, disagreeing, or building upon their points',
+      '4. **Synthesize** multiple perspectives when appropriate',
       '',
     );
   }

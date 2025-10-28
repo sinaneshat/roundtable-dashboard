@@ -10,7 +10,7 @@
 
 import { z } from '@hono/zod-openapi';
 
-import { ChatModeSchema } from '@/api/core/enums';
+import { ChatModeSchema, DEFAULT_CHAT_MODE } from '@/api/core/enums';
 import { CoreSchemas, createApiResponseSchema } from '@/api/core/schemas';
 
 // ============================================================================
@@ -104,7 +104,7 @@ export const CreateThreadInputSchema = z.object({
     description: 'Thread title',
     example: 'Product Strategy Discussion',
   }),
-  mode: ChatModeSchema.default('brainstorming').openapi({
+  mode: ChatModeSchema.default(DEFAULT_CHAT_MODE).openapi({
     description: 'Chat mode determining participant behavior',
     example: 'brainstorming',
   }),

@@ -55,7 +55,7 @@ export type UseMessagePartsReturn = {
 };
 
 /**
- * Extract and filter message parts for rendering with memoization
+ * Extract and filter message parts (non-hook utility)
  *
  * Provides pre-filtered part arrays and derived state flags:
  * - textParts: For simple text/reasoning display (PublicChatThreadScreen)
@@ -63,12 +63,74 @@ export type UseMessagePartsReturn = {
  * - sourceParts: For citation display
  * - hasAnyContent: For determining 'thinking' vs 'streaming' status
  *
- * Performance:
- * - Memoized per message.parts reference
- * - Only recomputes when parts array changes
- * - Prevents filtering on every render
+ * Use this function when you need to process message parts inside callbacks or loops.
+ * Use `useMessageParts` hook for memoization in component scope.
  *
  * @param options - Message and filter mode
+ * @param options.message - The message to process
+ * @param options.filter - Filter mode (optional)
+ * @returns Filtered parts and derived state
+ */
+export function getMessageParts({
+  message,
+  filter: _filter = 'displayable',
+}: UseMessagePartsOptions): UseMessagePartsReturn {
+  // Text-only parts (text + reasoning)
+  // Used by PublicChatThreadScreen and simple text display
+  const textParts = message.parts.filter(
+    p =>
+      (p.type === 'text' || p.type === 'reasoning')
+      && 'text' in p
+      && typeof p.text === 'string',
+  );
+
+  // Displayable parts (text + reasoning + tools)
+  // Used by ChatMessageList for full participant message rendering
+  const displayableParts = message.parts.filter(
+    p =>
+      p.type === 'text'
+      || p.type === 'reasoning'
+      || p.type === 'tool-call'
+      || p.type === 'tool-result',
+  );
+
+  // Source parts for citation display
+  // Used for showing sources/references
+  const sourceParts = message.parts.filter(
+    p =>
+      'type' in p && (p.type === 'source-url' || p.type === 'source-document'),
+  );
+
+  // Derived state flags
+  // Note: We check text content manually since hasText expects MessagePart[]
+  const hasTextContent = message.parts.some(p => p.type === 'text' && 'text' in p && typeof p.text === 'string' && p.text.trim().length > 0);
+  const hasToolCalls = message.parts.some(p => p.type === 'tool-call');
+
+  // Combined content check for status determination
+  // Used by getMessageStatus to distinguish 'thinking' from 'streaming'
+  const hasAnyContent = hasTextContent || hasToolCalls;
+
+  return {
+    textParts,
+    displayableParts,
+    sourceParts,
+    hasTextContent,
+    hasToolCalls,
+    hasAnyContent,
+  };
+}
+
+/**
+ * Extract and filter message parts for rendering with memoization
+ *
+ * React hook version of getMessageParts with automatic memoization.
+ * Use this in component scope for optimal performance.
+ *
+ * For use inside callbacks or loops, use `getMessageParts` instead.
+ *
+ * @param options - Message and filter mode
+ * @param options.message - The message to process
+ * @param options.filter - Filter mode (optional)
  * @returns Filtered parts and derived state
  *
  * @example
@@ -88,49 +150,8 @@ export function useMessageParts({
   message,
   filter = 'displayable',
 }: UseMessagePartsOptions): UseMessagePartsReturn {
-  return useMemo(() => {
-    // Text-only parts (text + reasoning)
-    // Used by PublicChatThreadScreen and simple text display
-    const textParts = message.parts.filter(
-      p =>
-        (p.type === 'text' || p.type === 'reasoning')
-        && 'text' in p
-        && typeof p.text === 'string',
-    );
-
-    // Displayable parts (text + reasoning + tools)
-    // Used by ChatMessageList for full participant message rendering
-    const displayableParts = message.parts.filter(
-      p =>
-        p.type === 'text'
-        || p.type === 'reasoning'
-        || p.type === 'tool-call'
-        || p.type === 'tool-result',
-    );
-
-    // Source parts for citation display
-    // Used for showing sources/references
-    const sourceParts = message.parts.filter(
-      p =>
-        'type' in p && (p.type === 'source-url' || p.type === 'source-document'),
-    );
-
-    // Derived state flags
-    // Note: We check text content manually since hasText expects MessagePart[]
-    const hasTextContent = message.parts.some(p => p.type === 'text' && 'text' in p && typeof p.text === 'string' && p.text.trim().length > 0);
-    const hasToolCalls = message.parts.some(p => p.type === 'tool-call');
-
-    // Combined content check for status determination
-    // Used by getMessageStatus to distinguish 'thinking' from 'streaming'
-    const hasAnyContent = hasTextContent || hasToolCalls;
-
-    return {
-      textParts,
-      displayableParts,
-      sourceParts,
-      hasTextContent,
-      hasToolCalls,
-      hasAnyContent,
-    };
-  }, [message.parts]); // Only recompute when parts array reference changes
+  return useMemo(
+    () => getMessageParts({ message, filter }),
+    [message, filter], // Only recompute when message or filter changes
+  );
 }

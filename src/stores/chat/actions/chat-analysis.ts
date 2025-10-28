@@ -18,7 +18,7 @@ import type { UIMessage } from 'ai';
 import { useCallback, useMemo, useState } from 'react';
 import { z } from 'zod';
 
-import { ChatModeSchema } from '@/api/core/enums';
+import { AnalysisStatusSchema, ChatModeSchema } from '@/api/core/enums';
 import type { ChatParticipant, ModeratorAnalysisPayload, StoredModeratorAnalysis } from '@/api/routes/chat/schema';
 import { ModeratorAnalysisPayloadSchema } from '@/api/routes/chat/schema';
 import { chatParticipantSelectSchema } from '@/db/validation/chat';
@@ -34,11 +34,6 @@ const ChatParticipantSchema = chatParticipantSelectSchema
   .extend({
     settings: ParticipantSettingsSchema,
   });
-
-/**
- * Zod schema for analysis status
- */
-const AnalysisStatusSchema = z.enum(['pending', 'streaming', 'completed', 'failed']);
 
 /**
  * Zod schema for UseChatAnalysisOptions validation

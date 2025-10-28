@@ -4,8 +4,20 @@
  * Zustand v5 Pattern: Store-specific action hook co-located with store
  * Manages analysis creation lifecycle with duplicate prevention and regeneration support.
  *
+ * INTERNAL HOOK - DO NOT EXPORT
+ * Used by useChatInitialization to handle analysis creation logic.
+ *
+ * ANALYSIS CREATION FLOW:
+ * 1. Hook is initialized with createPendingAnalysis function and message refs
+ * 2. Returns handleComplete callback to be registered with AI SDK
+ * 3. When AI SDK finishes streaming, handleComplete is called
+ * 4. Validates all participant messages synced for current round
+ * 5. Checks if all participants failed (skip analysis if true)
+ * 6. Calls createPendingAnalysis to add analysis to store
+ * 7. Analysis orchestrator picks it up and streams from backend
+ *
  * Location: /src/stores/chat/actions/analysis-creation.ts
- * Used by: ChatOverviewScreen, ChatThreadScreen (via analysis-orchestrator)
+ * Used by: useChatInitialization (internal composition)
  */
 
 import type { UIMessage } from 'ai';

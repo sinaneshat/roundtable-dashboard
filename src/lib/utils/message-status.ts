@@ -39,6 +39,9 @@ export type MessageStatusInput = {
  * - PublicChatThreadScreen (read-only completed messages)
  *
  * @param input - Message and streaming state
+ * @param input.message - The UIMessage to check status for
+ * @param input.isStreaming - Whether message is currently streaming
+ * @param input.hasAnyContent - Whether message has any displayable content
  * @returns MessageStatus enum value
  *
  * @example

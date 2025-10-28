@@ -3,22 +3,25 @@
  *
  * Zustand v5 Pattern: Centralized exports for chat store
  * Following Next.js App Router best practices for state management
+ *
+ * EXPORTED FOR SCREENS:
+ * - useScreenInitialization: Unified initialization for all screen modes
+ * - useChatFormActions: Form submission and management
+ * - useFeedbackActions: Round feedback management
+ *
+ * INTERNAL (not exported):
+ * - useAnalysisCreation, useAnalysisDeduplication, useAnalysisOrchestrator
+ * - useChatInitialization, useChatAnalysis
+ * These are used internally by useScreenInitialization and other composed hooks
  */
 
-export type { AnalysisCreationOptions, AnalysisCreationReturn } from './actions/analysis-creation';
-export { useAnalysisCreation } from './actions/analysis-creation';
-export { useAnalysisDeduplication } from './actions/analysis-deduplication';
-export type { UseAnalysisOrchestratorOptions, UseAnalysisOrchestratorReturn } from './actions/analysis-orchestrator';
-export { useAnalysisOrchestrator } from './actions/analysis-orchestrator';
-export { useChatAnalysis } from './actions/chat-analysis';
+// Primary Screen Hooks
 export type { UseFeedbackActionsOptions, UseFeedbackActionsReturn } from './actions/feedback-actions';
 export { useFeedbackActions } from './actions/feedback-actions';
-
-// Action Hooks
 export type { UseChatFormActionsReturn } from './actions/form-actions';
 export { useChatFormActions } from './actions/form-actions';
-export type { UseChatInitializationOptions } from './actions/chat-initialization';
-export { useChatInitialization } from './actions/chat-initialization';
+export type { ScreenMode, UseScreenInitializationOptions } from './actions/screen-initialization';
+export { useScreenInitialization } from './actions/screen-initialization';
 
 // Store
 export type { ChatStore, ChatStoreApi } from './store';

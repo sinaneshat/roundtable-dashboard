@@ -19,7 +19,7 @@ import { Button } from '@/components/ui/button';
 import { BRAND } from '@/constants';
 import { usePublicThreadQuery } from '@/hooks/queries/chat';
 import type { TimelineItem } from '@/hooks/utils';
-import { useMessageParts, useModelLookup, useThreadTimeline } from '@/hooks/utils';
+import { getMessageParts, useModelLookup, useThreadTimeline } from '@/hooks/utils';
 import { getAvatarPropsFromModelId } from '@/lib/utils/ai-display';
 import { getMessageStatus } from '@/lib/utils/message-status';
 import { chatMessagesToUIMessages, getMessageMetadata } from '@/lib/utils/message-transforms';
@@ -193,8 +193,8 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
                           const messageStatus = getMessageStatus({ message });
 
                           // Consolidated message parts filtering (text-only for public view)
-                          // Note: useMessageParts returns AI SDK's UIMessagePart[], we cast to MessagePart[] since we filter to known types
-                          const { textParts } = useMessageParts({ message, filter: 'text-only' });
+                          // Note: getMessageParts returns AI SDK's UIMessagePart[], we cast to MessagePart[] since we filter to known types
+                          const { textParts } = getMessageParts({ message, filter: 'text-only' });
                           const filteredParts = textParts as Parameters<typeof ModelMessageCard>[0]['parts'];
 
                           return (

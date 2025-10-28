@@ -3,6 +3,7 @@ import { z } from '@hono/zod-openapi';
 import {
   ChangelogTypeSchema,
   ChatModeSchema,
+  DEFAULT_CHAT_MODE,
 } from '@/api/core/enums';
 import {
   CoreSchemas,
@@ -186,7 +187,7 @@ export const CreateThreadRequestSchema = chatThreadInsertSchema
       description: 'Thread title (auto-generated from first message if "New Chat")',
       example: 'Product strategy brainstorm',
     }),
-    mode: ChatModeSchema.optional().default('brainstorming').openapi({
+    mode: ChatModeSchema.optional().default(DEFAULT_CHAT_MODE).openapi({
       description: 'Conversation mode',
       example: 'brainstorming',
     }),

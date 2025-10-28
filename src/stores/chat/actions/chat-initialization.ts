@@ -4,8 +4,20 @@
  * Zustand v5 Pattern: Stable initialization hook for screen-specific setup
  * Handles analysis callback registration without infinite loops.
  *
+ * INTERNAL HOOK - DO NOT EXPORT
+ * Used by useScreenInitialization to set up analysis callbacks.
+ * Screens should use useScreenInitialization instead.
+ *
+ * CALLBACK LIFECYCLE:
+ * 1. Hook receives options (threadId, mode, callbacks)
+ * 2. Creates stable createPendingAnalysisWrapper using refs
+ * 3. Passes wrapper to useAnalysisCreation
+ * 4. useAnalysisCreation returns handleComplete callback
+ * 5. Registers handleComplete with CallbackContext via registerOnComplete
+ * 6. ChatStoreProvider triggers callback when AI SDK streaming completes
+ *
  * Location: /src/stores/chat/actions/chat-initialization.ts
- * Used by: ChatOverviewScreen, ChatThreadScreen
+ * Used by: useScreenInitialization (internal composition)
  */
 
 'use client';
@@ -100,7 +112,7 @@ export function useChatInitialization(options: UseChatInitializationOptions) {
   // Store selectors
   const messages = useChatStore(s => s.messages);
   const participants = useChatStore(s => s.participants);
-  const storeFn_createPendingAnalysis = useChatStore(s => s.createPendingAnalysis);
+  const createPendingAnalysis = useChatStore(s => s.createPendingAnalysis);
 
   // Use refs for stability - prevents infinite loops
   const threadIdRef = useRef(threadId);
@@ -122,14 +134,14 @@ export function useChatInitialization(options: UseChatInitializationOptions) {
   });
 
   // Stable wrapper using refs
-  const createPendingAnalysis = useCallback(
+  const createPendingAnalysisWrapper = useCallback(
     (
       roundNumber: number,
       messages: UIMessage[],
       participants: ChatParticipant[],
       userQuestion: string,
     ) => {
-      storeFn_createPendingAnalysis({
+      createPendingAnalysis({
         roundNumber,
         messages,
         participants,
@@ -138,12 +150,12 @@ export function useChatInitialization(options: UseChatInitializationOptions) {
         mode: modeRef.current || getDefaultChatMode(),
       });
     },
-    [storeFn_createPendingAnalysis],
+    [createPendingAnalysis],
   );
 
   // Create analysis callback with refs (prevents infinite loops)
   const { handleComplete: baseAnalysisCallback } = useAnalysisCreation({
-    createPendingAnalysis,
+    createPendingAnalysis: createPendingAnalysisWrapper,
     messages,
     participants,
     messagesRef,

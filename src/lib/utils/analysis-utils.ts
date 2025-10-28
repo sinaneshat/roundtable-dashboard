@@ -153,7 +153,7 @@ export function shouldCreateAnalysis(
 
     // Check if message belongs to current round
     const parsed = MessageMetadataSchema.safeParse(m.metadata);
-    if (!parsed.success) {
+    if (!parsed.success || !parsed.data) {
       return false;
     }
 

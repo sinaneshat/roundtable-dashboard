@@ -36,10 +36,9 @@ import { messageHasError, MessageMetadataSchema } from '@/lib/schemas/message-me
 import { chatMessagesToUIMessages } from '@/lib/utils/message-transforms';
 import { calculateNextRoundNumber, getRoundNumberFromMetadata } from '@/lib/utils/round-utils';
 import {
-  useAnalysisOrchestrator,
   useChatFormActions,
-  useChatInitialization,
   useFeedbackActions,
+  useScreenInitialization,
 } from '@/stores/chat';
 
 type ChatThreadScreenProps = {
@@ -95,7 +94,6 @@ export default function ChatThreadScreen({
   const currentParticipantIndex = useChatStore(s => s.currentParticipantIndex);
   const retryRound = useChatStore(s => s.retry);
   const stopStreaming = useChatStore(s => s.stop);
-  const initializeThread = useChatStore(s => s.initializeThread);
   const setOnRetry = useChatStore(s => s.setOnRetry);
   const contextParticipants = useChatStore(s => s.participants);
   const setMessages = useChatStore(s => s.setMessages);
@@ -172,6 +170,9 @@ export default function ChatThreadScreen({
   // Feedback actions hook
   const feedbackActions = useFeedbackActions({ threadId: thread.id });
 
+  // Transform initial messages once (memoized to prevent re-creation)
+  const uiMessages = useMemo(() => chatMessagesToUIMessages(initialMessages), [initialMessages]);
+
   // Load feedback from server once
   useEffect(() => {
     if (!hasLoadedFeedback && feedbackSuccess && feedbackData) {
@@ -188,14 +189,7 @@ export default function ChatThreadScreen({
   const hasRefetchedMessages = state.flags.hasRefetchedMessages;
   // ✅ REACT 19 PATTERN: Use context state instead of scattered useState
   // All regeneration, analysis, and changelog flags now managed by reducer
-  const { isWaitingForChangelog } = state.flags;
-
-  // Analysis orchestrator - syncs server data to store
-  useAnalysisOrchestrator({
-    threadId: thread.id,
-    mode: thread.mode as ChatModeId,
-    enabled: state.flags.hasInitiallyLoaded && !isStreaming && !state.flags.isRegenerating && !state.flags.isCreatingAnalysis,
-  });
+  const { isWaitingForChangelog, hasPendingConfigChanges } = state.flags;
 
   // Analyses from store (already deduplicated by orchestrator)
   const analyses = useChatStore(s => s.analyses);
@@ -204,6 +198,9 @@ export default function ChatThreadScreen({
   const updateAnalysisData = useChatStore(s => s.updateAnalysisData);
   const updateAnalysisStatus = useChatStore(s => s.updateAnalysisStatus);
   const removePendingAnalysis = useChatStore(s => s.removeAnalysis);
+
+  // ✅ FIX: Declare selectedMode early so it can be used in useScreenInitialization
+  const selectedMode = useChatStore(s => s.selectedMode);
 
   useEffect(() => {
     if (!state.flags.hasInitiallyLoaded && changelogResponse && feedbackSuccess) {
@@ -215,8 +212,15 @@ export default function ChatThreadScreen({
   // ✅ CRITICAL FIX: One-time message refetch to handle race condition
   // After initial load completes, use requestIdleCallback to refetch when browser is idle
   // This ensures all participant messages are displayed without blocking UI
+  // ✅ FIX: Skip refetch during streaming or config changes to prevent message duplication
   useEffect(() => {
-    if (state.flags.hasInitiallyLoaded && !hasRefetchedMessages && messages.length > 0) {
+    if (
+      state.flags.hasInitiallyLoaded
+      && !hasRefetchedMessages
+      && messages.length > 0
+      && !isStreaming
+      && !hasPendingConfigChanges
+    ) {
       // AI SDK v5 Pattern: Use requestIdleCallback (with setTimeout fallback)
       const refetchCallback = async () => {
         try {
@@ -261,18 +265,33 @@ export default function ChatThreadScreen({
       };
     }
     return undefined;
-  }, [state.flags.hasInitiallyLoaded, hasRefetchedMessages, messages.length, slug, setMessages, actions]);
+  }, [
+    state.flags.hasInitiallyLoaded,
+    hasRefetchedMessages,
+    messages.length,
+    isStreaming,
+    hasPendingConfigChanges,
+    slug,
+    setMessages,
+    actions,
+  ]);
 
-  // Initialize analysis callback with regeneration support (stable, no infinite loops)
-  useChatInitialization({
-    threadId: thread.id,
-    mode: thread.mode as ChatModeId,
+  // Unified screen initialization with regeneration support
+  useScreenInitialization({
+    mode: 'thread',
+    thread,
+    participants,
+    initialMessages: uiMessages,
+    // ✅ FIX: Use selectedMode (current form state) if available, otherwise use thread.mode
+    // This ensures analysis is created with the CURRENT mode, not the stale SSR mode
+    chatMode: selectedMode || (thread.mode as ChatModeId),
     isRegeneration: state.data.regeneratingRoundNumber !== null,
     regeneratingRoundNumber: state.data.regeneratingRoundNumber,
-    onBeforeCreate: () => {
+    enableOrchestrator: state.flags.hasInitiallyLoaded && !isStreaming && !state.flags.isRegenerating && !state.flags.isCreatingAnalysis,
+    onBeforeAnalysisCreate: () => {
       actions.setIsCreatingAnalysis(true);
     },
-    onAfterCreate: (roundNumber) => {
+    onAfterAnalysisCreate: (roundNumber) => {
       // Router refresh for "New Conversation" threads (updates title in header)
       if (thread.title === 'New Conversation') {
         router.refresh();
@@ -310,9 +329,8 @@ export default function ChatThreadScreen({
    */
   const { streamingRoundNumber } = state.data;
 
-  // Form state from store
+  // Form state from store (selectedMode declared earlier for useScreenInitialization)
   const selectedParticipants = useChatStore(s => s.selectedParticipants);
-  const selectedMode = useChatStore(s => s.selectedMode);
   const inputValue = useChatStore(s => s.inputValue);
   const setSelectedParticipants = useChatStore(s => s.setSelectedParticipants);
   const setInputValue = useChatStore(s => s.setInputValue);
@@ -321,9 +339,8 @@ export default function ChatThreadScreen({
   // Form actions hook
   const formActions = useChatFormActions();
 
-  // ✅ REACT 19 PATTERN: Use context state instead of local useState
+  // ✅ REACT 19 PATTERN: Use context state instead of local useState (hasPendingConfigChanges declared earlier)
   const { pendingMessage, expectedParticipantIds } = state.data;
-  const hasPendingConfigChanges = state.flags.hasPendingConfigChanges;
 
   // Unified scroll management using useChatScroll hook
   const { scrolledToAnalysesRef } = useChatScroll({
@@ -335,11 +352,17 @@ export default function ChatThreadScreen({
   });
 
   // Streaming loader state calculation
+  // Use contextParticipants (actual thread participants) not selectedParticipants (form state)
   const { showLoader, isAnalyzing } = useStreamingLoaderState({
     analyses,
     isStreaming,
     messages,
-    selectedParticipants,
+    selectedParticipants: contextParticipants.map(p => ({
+      id: p.id,
+      modelId: p.modelId,
+      role: p.role,
+      priority: p.priority,
+    })),
   });
 
   const handleModeChange = useCallback(async (newMode: ChatModeId) => {
@@ -355,8 +378,13 @@ export default function ChatThreadScreen({
     actions.setHasPendingConfigChanges(true);
   }, [isStreaming, setSelectedParticipants, actions]);
 
-  // Keep a ref of the last synced context participants to prevent infinite loops
+  // Keep ref of the last synced context to prevent infinite loops
   const lastSyncedContextRef = useRef<string>('');
+
+  // ✅ REMOVED: Thread mode sync effect was causing double updates
+  // The SSR thread.mode would overwrite user's selectedMode after form submission,
+  // triggering a second update mutation that changed mode back to original value.
+  // Mode is now initialized once by screen initialization and controlled by user.
 
   // Sync local participants with context ONLY when there are no pending user changes
   // This allows users to modify participants and have changes staged until next message submission
@@ -407,7 +435,7 @@ export default function ChatThreadScreen({
   // - Server provides initialMessages via props
   // - Call initializeThread once when thread.id changes
   // - useChat handles state management from there
-  // Initialize thread on mount
+  // Reset state on thread change
   useEffect(() => {
     // Reset all thread state and refs
     actions.resetThreadState();
@@ -415,10 +443,6 @@ export default function ChatThreadScreen({
     // Reset UI state for new thread (local refs not managed by context)
     scrolledToAnalysesRef.current.clear();
     lastSyncedContextRef.current = '';
-
-    // AI SDK v5 Pattern: Initialize thread with server-provided data
-    const uiMessages = chatMessagesToUIMessages(initialMessages);
-    initializeThread(thread, participants, uiMessages);
 
     actions.setHasInitiallyLoaded(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -451,6 +475,12 @@ export default function ChatThreadScreen({
     if (!pendingMessage || !expectedParticipantIds || hasSentPendingMessage) {
       return;
     }
+
+    // ✅ CRITICAL FIX: Prevent sending during streaming to avoid race conditions
+    if (isStreaming) {
+      return;
+    }
+
     const currentModelIds = contextParticipants.map(p => p.modelId).sort().join(',');
     const expectedModelIds = expectedParticipantIds.sort().join(',');
 
@@ -469,6 +499,7 @@ export default function ChatThreadScreen({
       actions.setIsWaitingForChangelog(false);
     }
 
+    // ✅ CRITICAL FIX: Set flag BEFORE any async operations to prevent re-entry
     actions.setHasSentPendingMessage(true);
 
     // AI SDK v5 Pattern: Calculate round number for the NEW user message
@@ -482,7 +513,18 @@ export default function ChatThreadScreen({
 
     // ✅ REACT 19 PATTERN: Reset pending changes flag after message is sent
     actions.setHasPendingConfigChanges(false);
-  }, [pendingMessage, expectedParticipantIds, hasSentPendingMessage, contextParticipants, sendMessage, messages, isWaitingForChangelog, isChangelogFetching, actions]);
+  }, [
+    pendingMessage,
+    expectedParticipantIds,
+    hasSentPendingMessage,
+    contextParticipants,
+    sendMessage,
+    messages,
+    isWaitingForChangelog,
+    isChangelogFetching,
+    isStreaming,
+    actions,
+  ]);
   const handlePromptSubmit = useCallback(
     async (e: React.FormEvent) => {
       e.preventDefault();
@@ -617,7 +659,12 @@ export default function ChatThreadScreen({
               >
                 <StreamingParticipantsLoader
                   className="mt-12"
-                  participants={selectedParticipants}
+                  participants={contextParticipants.map(p => ({
+                    id: p.id,
+                    modelId: p.modelId,
+                    role: p.role,
+                    priority: p.priority,
+                  }))}
                   currentParticipantIndex={currentParticipantIndex}
                   isAnalyzing={isAnalyzing}
                 />

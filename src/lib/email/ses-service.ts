@@ -129,14 +129,14 @@ class EmailService {
   async sendMagicLink(to: string, magicLink: string, expirationMinutes = 15) {
     // Dynamic import to avoid Next.js build issues with React Email components
     // Works with Cloudflare Workers when serverExternalPackages is configured in next.config.ts
-    const { LoginEmail } = await import('@/emails/templates');
+    const { MagicLink } = await import('@/emails/templates');
 
     // Render React Email template to HTML
     // Note: Using @react-email/components instead of @react-email/render
     // to avoid edge runtime export resolution issues in Cloudflare Workers
-    const html = await render(LoginEmail({
+    const html = await render(MagicLink({
       loginUrl: magicLink,
-      expirationMinutes,
+      expirationTime: `${expirationMinutes} minutes`,
     }));
 
     const text = `Sign in to ${BRAND.displayName} using this link: ${magicLink}. This link expires in ${expirationMinutes} minutes.`;

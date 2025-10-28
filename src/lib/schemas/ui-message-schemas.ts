@@ -11,6 +11,8 @@
 
 import { z } from 'zod';
 
+import { MessageRoleSchema } from '@/api/core/enums';
+
 import { UIMessageMetadataSchema } from './message-metadata';
 import { MessagePartSchema } from './message-schemas';
 
@@ -31,7 +33,7 @@ import { MessagePartSchema } from './message-schemas';
  */
 export const UIMessageSchema = z.object({
   id: z.string(),
-  role: z.enum(['user', 'assistant', 'system']),
+  role: MessageRoleSchema.or(z.literal('system')), // ✅ Uses MESSAGE_ROLES from enums + system for AI SDK
   content: z.string().optional(), // Legacy text content
   parts: z.array(MessagePartSchema).optional(), // Modern message parts
   metadata: UIMessageMetadataSchema,

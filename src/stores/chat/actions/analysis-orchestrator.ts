@@ -4,8 +4,18 @@
  * Zustand v5 Pattern: Store-specific action hook co-located with store
  * Syncs server analysis data to store and manages analysis lifecycle.
  *
+ * INTERNAL HOOK - DO NOT EXPORT
+ * Used by useScreenInitialization for thread mode only.
+ *
+ * ORCHESTRATION FLOW:
+ * 1. Fetches analyses from server via useAnalysesQuery
+ * 2. Deduplicates analyses (one per round, highest status priority)
+ * 3. Syncs deduplicated analyses to store via setAnalyses
+ * 4. Streaming analysis updates trigger query invalidation
+ * 5. Hook refetches and re-syncs to store automatically
+ *
  * Location: /src/stores/chat/actions/analysis-orchestrator.ts
- * Used by: ChatThreadScreen, ChatOverviewScreen
+ * Used by: useScreenInitialization (internal composition)
  */
 
 'use client';

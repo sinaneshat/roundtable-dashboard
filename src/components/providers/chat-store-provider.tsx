@@ -27,6 +27,7 @@
  */
 
 import type { ReactNode } from 'react';
+import { usePathname } from 'next/navigation';
 import { createContext, use, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useStore } from 'zustand';
 
@@ -46,7 +47,9 @@ export type ChatStoreProviderProps = {
 };
 
 export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
+  const pathname = usePathname();
   const storeRef = useRef<ChatStoreApi | null>(null);
+  const prevPathnameRef = useRef<string | null>(null);
 
   // Official Pattern: Initialize store once per provider
   if (storeRef.current === null) {
@@ -57,8 +60,8 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
   const store = storeRef.current;
 
   // ✅ OPTIMIZATION: Callbacks as refs (no reactivity needed, prevents re-renders)
-  const onCompleteRef = useRef<(() => void) | undefined>();
-  const onRetryRef = useRef<((roundNumber: number) => void) | undefined>();
+  const onCompleteRef = useRef<(() => void) | undefined>(undefined);
+  const onRetryRef = useRef<((roundNumber: number) => void) | undefined>(undefined);
 
   // Get current state for AI SDK hook initialization (minimal subscriptions)
   const thread = useStore(store, s => s.thread);
@@ -103,6 +106,152 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
     chat.isStreaming,
     chat.currentParticipantIndex,
   ]);
+
+  // ✅ CLEANUP: Reset store state on route changes
+  // When navigating between overview/thread/public screens, clear old state
+  useEffect(() => {
+    const prevPath = prevPathnameRef.current;
+    const currentPath = pathname;
+
+    // Skip on initial mount
+    if (prevPath === null) {
+      prevPathnameRef.current = currentPath;
+      return;
+    }
+
+    // Detect screen type transitions
+    const isOverviewToThread = prevPath === '/chat' && currentPath?.startsWith('/chat/') && !currentPath.startsWith('/chat/public');
+    const isThreadToOverview = prevPath?.startsWith('/chat/') && !prevPath.startsWith('/chat/public') && currentPath === '/chat';
+    const isThreadToPublic = prevPath?.startsWith('/chat/') && !prevPath.startsWith('/chat/public') && currentPath?.startsWith('/chat/public');
+    const isPublicToThread = prevPath?.startsWith('/chat/public') && currentPath?.startsWith('/chat/') && !currentPath.startsWith('/chat/public');
+    const isPublicToOverview = prevPath?.startsWith('/chat/public') && currentPath === '/chat';
+    const isThreadToThread = prevPath?.startsWith('/chat/') && !prevPath.startsWith('/chat/public') && currentPath?.startsWith('/chat/') && !currentPath.startsWith('/chat/public') && prevPath !== currentPath;
+
+    // Clean up state when transitioning between screens
+    if (isOverviewToThread || isThreadToOverview || isThreadToPublic || isPublicToThread || isPublicToOverview || isThreadToThread) {
+      // Stop any ongoing streaming
+      const currentState = store.getState();
+      if (currentState.isStreaming) {
+        currentState.stop?.();
+      }
+
+      // Clear callbacks
+      onCompleteRef.current = undefined;
+      onRetryRef.current = undefined;
+
+      // Reset all state except form data (preserve user input on overview)
+      const shouldPreserveForm = isThreadToOverview || isPublicToOverview;
+
+      if (shouldPreserveForm) {
+        // Preserve form state when returning to overview
+        store.setState({
+          // Clear thread-related state
+          thread: null,
+          participants: [],
+          messages: [],
+          isStreaming: false,
+          currentParticipantIndex: 0,
+          error: null,
+          sendMessage: undefined,
+          startRound: undefined,
+          retry: undefined,
+          stop: undefined,
+
+          // Clear UI state
+          showInitialUI: true,
+          waitingToStartStreaming: false,
+          isCreatingThread: false,
+          createdThreadId: null,
+
+          // Clear analysis state
+          analyses: [],
+
+          // Clear flags
+          hasInitiallyLoaded: false,
+          isRegenerating: false,
+          isCreatingAnalysis: false,
+          isWaitingForChangelog: false,
+          hasPendingConfigChanges: false,
+          hasRefetchedMessages: false,
+
+          // Clear data
+          regeneratingRoundNumber: null,
+          pendingMessage: null,
+          expectedParticipantIds: null,
+          streamingRoundNumber: null,
+          currentRoundNumber: null,
+
+          // Clear tracking
+          hasSentPendingMessage: false,
+          createdAnalysisRounds: new Set<number>(),
+
+          // Clear screen mode
+          screenMode: null,
+          isReadOnly: false,
+
+          // Preserve form state (inputValue, selectedMode, selectedParticipants)
+          // Preserve feedback state (feedbackByRound, pendingFeedback, hasLoadedFeedback)
+        });
+      } else {
+        // Complete reset when going to different thread or from overview
+        store.setState({
+          // Clear thread-related state
+          thread: null,
+          participants: [],
+          messages: [],
+          isStreaming: false,
+          currentParticipantIndex: 0,
+          error: null,
+          sendMessage: undefined,
+          startRound: undefined,
+          retry: undefined,
+          stop: undefined,
+
+          // Clear UI state
+          showInitialUI: true,
+          waitingToStartStreaming: false,
+          isCreatingThread: false,
+          createdThreadId: null,
+
+          // Clear analysis state
+          analyses: [],
+
+          // Clear flags
+          hasInitiallyLoaded: false,
+          isRegenerating: false,
+          isCreatingAnalysis: false,
+          isWaitingForChangelog: false,
+          hasPendingConfigChanges: false,
+          hasRefetchedMessages: false,
+
+          // Clear data
+          regeneratingRoundNumber: null,
+          pendingMessage: null,
+          expectedParticipantIds: null,
+          streamingRoundNumber: null,
+          currentRoundNumber: null,
+
+          // Clear tracking
+          hasSentPendingMessage: false,
+          createdAnalysisRounds: new Set<number>(),
+
+          // Clear screen mode
+          screenMode: null,
+          isReadOnly: false,
+
+          // Reset feedback
+          feedbackByRound: new Map(),
+          pendingFeedback: null,
+          hasLoadedFeedback: false,
+
+          // Keep form state as-is (will be set by screen initialization)
+        });
+      }
+    }
+
+    // Update previous pathname
+    prevPathnameRef.current = currentPath;
+  }, [pathname, store, onCompleteRef, onRetryRef]);
 
   return (
     <ChatStoreContext value={store}>
