@@ -412,11 +412,18 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
           }
         }
       }
+      // ✅ CRITICAL FIX: Disable participants instead of deleting them
+      // Deleting participants breaks foreign key relationships with messages.
+      // Messages reference participants via participantId, so if we delete a participant,
+      // analysis queries with `with: { participant: true }` will fail because the join returns null.
+      // Instead, set isEnabled=false to preserve data integrity while removing from active use.
       const batchOperations: Array<BatchItem<'sqlite'>> = [];
       for (const current of currentParticipants) {
         if (!newMap.has(current.id)) {
           batchOperations.push(
-            db.delete(tables.chatParticipant).where(eq(tables.chatParticipant.id, current.id)),
+            db.update(tables.chatParticipant)
+              .set({ isEnabled: false, updatedAt: new Date() })
+              .where(eq(tables.chatParticipant.id, current.id)),
           );
         }
       }

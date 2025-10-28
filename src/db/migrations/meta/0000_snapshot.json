@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "be4eb92f-daad-46f7-8c4d-616f3db13d60",
+  "id": "34abf250-1ff2-4cd2-b9bc-b5c8d650f10e",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "account": {
@@ -2125,7 +2125,7 @@
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false,
-          "default": "'brainstorming'"
+          "default": "'debating'"
         },
         "status": {
           "name": "status",

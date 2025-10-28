@@ -301,7 +301,7 @@ CREATE TABLE `chat_thread` (
 	`user_id` text NOT NULL,
 	`title` text NOT NULL,
 	`slug` text NOT NULL,
-	`mode` text DEFAULT 'brainstorming' NOT NULL,
+	`mode` text DEFAULT 'debating' NOT NULL,
 	`status` text DEFAULT 'active' NOT NULL,
 	`is_favorite` integer DEFAULT false NOT NULL,
 	`is_public` integer DEFAULT false NOT NULL,
