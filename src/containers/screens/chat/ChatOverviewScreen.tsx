@@ -1,14 +1,13 @@
 'use client';
 
-import type { UIMessage } from 'ai';
 import { AnimatePresence, motion } from 'motion/react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 
 import type { ParticipantConfig } from '@/components/chat/chat-form-schemas';
-import { toCreateThreadRequest } from '@/components/chat/chat-form-schemas';
 import { ChatInput } from '@/components/chat/chat-input';
 import { ChatMessageList } from '@/components/chat/chat-message-list';
 import { ChatModeSelector } from '@/components/chat/chat-mode-selector';
@@ -18,24 +17,24 @@ import { RoundAnalysisCard } from '@/components/chat/moderator/round-analysis-ca
 import { StreamingParticipantsLoader } from '@/components/chat/streaming-participants-loader';
 import { useThreadHeader } from '@/components/chat/thread-header-context';
 import { UnifiedErrorBoundary } from '@/components/chat/unified-error-boundary';
+import { useChatStore } from '@/components/providers/chat-store-provider';
 import { WavyBackground } from '@/components/ui/wavy-background';
 import { BRAND } from '@/constants/brand';
-import { useSharedChatContext } from '@/contexts/chat-context';
-import { useCreateThreadMutation } from '@/hooks/mutations/chat-mutations';
-import { useModelsQuery } from '@/hooks/queries/models';
 import {
-  useAnalysisCreation,
-  useAnalysisDeduplication,
-  useChatAnalysis,
   useChatScroll,
-  useSelectedParticipants,
+  useModelLookup,
   useStreamingLoaderState,
-  useSyncedMessageRefs,
 } from '@/hooks/utils';
 import { useSession } from '@/lib/auth/client';
 import type { ChatModeId } from '@/lib/config/chat-modes';
 import { getDefaultChatMode } from '@/lib/config/chat-modes';
 import { showApiErrorToast } from '@/lib/toast';
+import { waitForIdleOrRender } from '@/lib/utils/browser-timing';
+import {
+  useAnalysisOrchestrator,
+  useChatFormActions,
+  useChatInitialization,
+} from '@/stores/chat';
 
 export default function ChatOverviewScreen() {
   const router = useRouter();
@@ -43,28 +42,90 @@ export default function ChatOverviewScreen() {
   const { data: session } = useSession();
   const sessionUser = session?.user;
 
-  const { data: modelsData } = useModelsQuery();
-  const defaultModelId = modelsData?.data?.default_model_id;
+  // Consolidated model lookup hook
+  const { defaultModelId } = useModelLookup();
 
-  const {
-    messages,
-    startRound,
-    isStreaming,
-    currentParticipantIndex,
-    error: streamError,
-    retry: retryRound,
-    initializeThread,
-    setOnComplete,
-    thread: currentThread,
-    participants: contextParticipants,
-    stop: stopStreaming,
-  } = useSharedChatContext();
+  // ============================================================================
+  // STORE STATE (Grouped with useShallow for Performance)
+  // ============================================================================
 
-  // Track if we're waiting to start streaming after thread creation
-  const [waitingToStartStreaming, setWaitingToStartStreaming] = useState(false);
+  // AI SDK state
+  const { messages, isStreaming, currentParticipantIndex, error: streamError } = useChatStore(
+    useShallow(s => ({
+      messages: s.messages,
+      isStreaming: s.isStreaming,
+      currentParticipantIndex: s.currentParticipantIndex,
+      error: s.error,
+    })),
+  );
+
+  // Thread state
+  const { thread: currentThread, participants: contextParticipants } = useChatStore(
+    useShallow(s => ({
+      thread: s.thread,
+      participants: s.participants,
+    })),
+  );
+
+  // UI state
+  const { showInitialUI, isCreatingThread, waitingToStartStreaming, createdThreadId } = useChatStore(
+    useShallow(s => ({
+      showInitialUI: s.showInitialUI,
+      isCreatingThread: s.isCreatingThread,
+      waitingToStartStreaming: s.waitingToStartStreaming,
+      createdThreadId: s.createdThreadId,
+    })),
+  );
+
+  // Form state
+  const { inputValue, selectedMode, selectedParticipants } = useChatStore(
+    useShallow(s => ({
+      inputValue: s.inputValue,
+      selectedMode: s.selectedMode,
+      selectedParticipants: s.selectedParticipants,
+    })),
+  );
+
+  // Analysis state
+  const analyses = useChatStore(s => s.analyses);
+
+  // ============================================================================
+  // STORE ACTIONS (Grouped with useShallow for Performance)
+  // ============================================================================
+
+  // AI SDK actions
+  const { startRound, retry: retryRound, stop: stopStreaming } = useChatStore(
+    useShallow(s => ({
+      startRound: s.startRound,
+      retry: s.retry,
+      stop: s.stop,
+    })),
+  );
+
+  // Form actions
+  const { setInputValue, setSelectedMode, setSelectedParticipants, removeParticipant } = useChatStore(
+    useShallow(s => ({
+      setInputValue: s.setInputValue,
+      setSelectedMode: s.setSelectedMode,
+      setSelectedParticipants: s.setSelectedParticipants,
+      removeParticipant: s.removeParticipant,
+    })),
+  );
+
+  // UI actions
+  const { setWaitingToStartStreaming } = useChatStore(
+    useShallow(s => ({
+      setWaitingToStartStreaming: s.setWaitingToStartStreaming,
+    })),
+  );
+
+  // Refs for tracking
+  const hasSentInitialPromptRef = useRef(false);
+  const hasTriggeredStreamingRef = useRef(false);
 
   const { setThreadTitle, setThreadActions } = useThreadHeader();
 
+  // Initialize default participants if needed
   const initialParticipants = useMemo<ParticipantConfig[]>(() => {
     if (defaultModelId) {
       return [
@@ -79,143 +140,48 @@ export default function ChatOverviewScreen() {
     return [];
   }, [defaultModelId]);
 
-  const {
-    selectedParticipants,
-    setSelectedParticipants,
-    handleRemoveParticipant,
-  } = useSelectedParticipants(initialParticipants);
+  // Form actions hook
+  const formActions = useChatFormActions();
 
-  const [selectedMode, setSelectedMode] = useState<ChatModeId>(() => getDefaultChatMode());
-  const [inputValue, setInputValue] = useState('');
-  const [showInitialUI, setShowInitialUI] = useState(true);
-  const [isCreatingThread, setIsCreatingThread] = useState(false);
-  const hasSentInitialPromptRef = useRef(false);
-  const hasTriggeredStreamingRef = useRef(false);
-  const [createdThreadId, setCreatedThreadId] = useState<string | null>(null);
-
-  const {
-    analyses: rawAnalyses,
-    createPendingAnalysis,
-  } = useChatAnalysis({
+  // Analysis orchestrator - syncs server data to store
+  // DISABLED on overview screen: only client-side pending analyses shown
+  // Server sync happens on thread screen after navigation
+  useAnalysisOrchestrator({
     threadId: createdThreadId || '',
-    mode: selectedMode,
+    mode: selectedMode || getDefaultChatMode(),
     enabled: false,
   });
 
-  // Deduplicate analyses using shared hook
-  const analyses = useAnalysisDeduplication(rawAnalyses);
-
-  // Use synced refs to prevent stale closures in callbacks
-  const { messagesRef, participantsRef } = useSyncedMessageRefs({
-    messages,
-    participants: contextParticipants,
-    createPendingAnalysis,
+  // Initialize analysis callback (stable, no infinite loops)
+  useChatInitialization({
+    threadId: createdThreadId,
+    mode: selectedMode,
   });
 
-  // Use consolidated analysis creation hook
-  const { handleComplete: analysisCompleteCallback, createdAnalysisRoundsRef } = useAnalysisCreation({
-    createPendingAnalysis,
-    messages,
-    participants: contextParticipants,
-    messagesRef,
-    participantsRef,
-  });
-
-  const createThreadMutation = useCreateThreadMutation();
-
+  // Handle form submission
   const handlePromptSubmit = useCallback(
     async (e: React.FormEvent) => {
       e.preventDefault();
 
-      const prompt = inputValue.trim();
-
-      if (!prompt || selectedParticipants.length === 0 || isCreatingThread || isStreaming) {
+      if (!inputValue.trim() || selectedParticipants.length === 0 || isCreatingThread || isStreaming) {
         return;
       }
 
       try {
-        setIsCreatingThread(true);
-
-        const createThreadRequest = toCreateThreadRequest({
-          message: prompt,
-          mode: selectedMode,
-          participants: selectedParticipants,
-        });
-
-        const response = await createThreadMutation.mutateAsync({
-          json: createThreadRequest,
-        });
-
-        const { thread, participants, messages: initialMessages } = response.data;
-
-        // Backend already provides clean, deduplicated data
-        const threadWithDates = {
-          ...thread,
-          createdAt: new Date(thread.createdAt),
-          updatedAt: new Date(thread.updatedAt),
-          lastMessageAt: thread.lastMessageAt ? new Date(thread.lastMessageAt) : null,
-        };
-
-        const participantsWithDates = participants.map(p => ({
-          ...p,
-          createdAt: new Date(p.createdAt),
-          updatedAt: new Date(p.updatedAt),
-        }));
-
-        // Convert initial messages to UI messages with dates
-        const messagesWithDates = initialMessages.map(m => ({
-          ...m,
-          createdAt: new Date(m.createdAt),
-        }));
-
-        setShowInitialUI(false);
-        setInputValue('');
-        setCreatedThreadId(thread.id);
-
-        // AI SDK v5 Pattern: Initialize thread WITH backend messages
-        // Backend already saved the user message and returns it in the response
-        // We pass it to initializeThread, which sets it as initialMessages for useChat
-        // useChat will automatically trigger streaming because there's a user message without responses
-        // This follows the crash course pattern (Exercise 01.07, 04.02, 04.03)
-        const uiMessages = messagesWithDates.map((m): UIMessage => ({
-          id: m.id,
-          role: m.role as 'user' | 'assistant',
-          parts: m.parts as unknown as UIMessage['parts'],
-          metadata: m.metadata,
-        }));
-
-        initializeThread(threadWithDates, participantsWithDates, uiMessages);
-
-        // AI SDK v5 Pattern: Set flag to trigger streaming once chat is ready
-        // The useEffect below will watch for the thread to be initialized and chat to be ready
-        // before calling startRound() - this ensures useChat has finished re-initializing
-        setWaitingToStartStreaming(true);
+        await formActions.handleCreateThread();
         hasSentInitialPromptRef.current = true;
       } catch (error) {
         showApiErrorToast('Error creating thread', error);
-        setShowInitialUI(true);
-      } finally {
-        setIsCreatingThread(false);
       }
     },
-    [
-      inputValue,
-      isCreatingThread,
-      isStreaming,
-      selectedMode,
-      selectedParticipants,
-      createThreadMutation,
-      initializeThread,
-      setOnComplete,
-      analysisCompleteCallback,
-    ],
+    [inputValue, selectedParticipants, isCreatingThread, isStreaming, formActions],
   );
 
   const handleSuggestionClick = useCallback((prompt: string, mode: ChatModeId, participants: ParticipantConfig[]) => {
     setInputValue(prompt);
     setSelectedMode(mode);
     setSelectedParticipants(participants);
-  }, [setSelectedParticipants]);
+  }, [setInputValue, setSelectedMode, setSelectedParticipants]);
 
   // AI SDK v5 Pattern: Wait for chat to be ready before starting streaming
   // When initializeThread is called with a new thread, the threadId changes
@@ -235,7 +201,7 @@ export default function ChatOverviewScreen() {
 
       if (hasUserMessage) {
         hasTriggeredStreamingRef.current = true;
-        // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- Intentional state update to trigger streaming once chat is ready
+
         setWaitingToStartStreaming(false);
 
         // AI SDK v5 Pattern: Use requestAnimationFrame to ensure React has painted
@@ -244,7 +210,7 @@ export default function ChatOverviewScreen() {
           try {
             // startRound will check if status is 'ready' internally
             // If not ready yet, it will silently return - we rely on the retry mechanism
-            startRound();
+            startRound?.();
           } catch (error) {
             showApiErrorToast('Error starting conversation', error);
             setWaitingToStartStreaming(false);
@@ -259,38 +225,32 @@ export default function ChatOverviewScreen() {
     isStreaming,
     contextParticipants,
     startRound,
+    setWaitingToStartStreaming,
   ]);
 
   const currentStreamingParticipant = contextParticipants[currentParticipantIndex] || null;
 
-  // React 19 Pattern: Initialize default participants using queueMicrotask
-  // Schedule this work to happen after render, avoiding useEffect dependency issues
-  const hasInitializedParticipantsRef = useRef(false);
-  if (
-    !hasInitializedParticipantsRef.current
-    && selectedParticipants.length === 0
-    && defaultModelId
-    && initialParticipants.length > 0
-  ) {
-    hasInitializedParticipantsRef.current = true;
-    queueMicrotask(() => {
-      setSelectedParticipants(initialParticipants);
-    });
-  }
-
-  // React 19 Pattern: Initialize thread header on mount (acceptable use of useEffect for initialization)
+  // React 19 Pattern: Initialize thread header on mount
   useEffect(() => {
     setThreadTitle(null);
     setThreadActions(null);
   }, [setThreadTitle, setThreadActions]);
 
-  // ✅ CRITICAL FIX: Update analysis callback when threadId changes
-  // This prevents stale closure where callback uses empty string threadId
+  // React 19 Pattern: Initialize default participants and mode on mount
   useEffect(() => {
-    if (createdThreadId) {
-      setOnComplete(analysisCompleteCallback);
+    if (
+      selectedParticipants.length === 0
+      && defaultModelId
+      && initialParticipants.length > 0
+    ) {
+      setSelectedParticipants(initialParticipants);
+      if (!selectedMode) {
+        setSelectedMode(getDefaultChatMode());
+      }
     }
-  }, [createdThreadId, analysisCompleteCallback, setOnComplete]);
+    // Only run on mount or when defaultModelId becomes available
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [defaultModelId]);
 
   // React 19 Pattern: Handle streaming stop when returning to initial UI using queueMicrotask
   // This avoids reactive useEffect and provides more predictable behavior
@@ -302,29 +262,13 @@ export default function ChatOverviewScreen() {
       hasTriggeredStreamingRef.current = false;
       setWaitingToStartStreaming(false);
 
-      // AI SDK v5 Pattern: Clear analysis tracking when resetting UI
-      createdAnalysisRoundsRef.current.clear();
-
       if (isStreaming) {
         queueMicrotask(() => {
-          stopStreaming();
+          stopStreaming?.();
         });
       }
     }
   }
-
-  useEffect(() => {
-    return () => {
-      setOnComplete(undefined);
-      // Reset streaming trigger flags on unmount
-      hasTriggeredStreamingRef.current = false;
-      setWaitingToStartStreaming(false);
-      // AI SDK v5 Pattern: Clear analysis tracking on unmount
-      // eslint-disable-next-line react-hooks/exhaustive-deps -- Intentionally accessing current ref value in cleanup - we want to clear the LATEST Set state on unmount
-      createdAnalysisRoundsRef.current.clear();
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- createdAnalysisRoundsRef is a ref and should not be in dependency array (doesn't trigger re-renders)
-  }, [setOnComplete]);
 
   // Scroll management - auto-scroll during streaming (if user is near bottom)
   // Always scroll when analysis appears (regardless of position)
@@ -443,26 +387,9 @@ export default function ChatOverviewScreen() {
                       onStreamComplete={async () => {
                         try {
                           // ✅ CRITICAL: Wait for backend message persistence before navigation
-                          // FLOW_DOCUMENTATION.md Part 1: URL updates after moderator analysis completes
                           // Race condition: Backend saves messages asynchronously after streaming
                           // If we navigate too quickly, thread page SSR fetch won't get all messages
-                          // See: src/api/services/message-persistence.service.ts:287-418
-                          //
-                          // AI SDK v5 Pattern: Use requestIdleCallback with timeout for smart waiting
-                          // This allows navigation during browser idle time, with 2s max fallback
-                          // Reference: AI SDK v5 best practices for async state synchronization
-                          await new Promise<void>((resolve) => {
-                            if (typeof requestIdleCallback !== 'undefined') {
-                              requestIdleCallback(() => resolve(), { timeout: 2000 });
-                            } else {
-                              // Fallback: Double rAF ensures full render cycle + paint before navigation
-                              // More reliable than setTimeout for browser rendering synchronization
-                              requestAnimationFrame(() => {
-                                requestAnimationFrame(() => resolve());
-                              });
-                            }
-                          });
-
+                          await waitForIdleOrRender();
                           router.push(`/chat/${currentThread?.slug}`);
                         } catch (error) {
                           showApiErrorToast('Error navigating to thread', error);
@@ -511,7 +438,7 @@ export default function ChatOverviewScreen() {
               placeholder={t('chat.input.placeholder')}
               participants={selectedParticipants}
               currentParticipantIndex={currentParticipantIndex}
-              onRemoveParticipant={isStreaming ? undefined : handleRemoveParticipant}
+              onRemoveParticipant={isStreaming ? undefined : removeParticipant}
               toolbar={(
                 <>
                   <ChatParticipantsList
@@ -519,7 +446,7 @@ export default function ChatOverviewScreen() {
                     onParticipantsChange={isStreaming ? undefined : setSelectedParticipants}
                   />
                   <ChatModeSelector
-                    selectedMode={selectedMode}
+                    selectedMode={selectedMode || getDefaultChatMode()}
                     onModeChange={isStreaming ? undefined : setSelectedMode}
                   />
                 </>

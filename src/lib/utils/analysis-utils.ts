@@ -107,8 +107,11 @@ export function checkAllParticipantsFailed(messages: UIMessage[]): boolean {
  *
  * Validates preconditions before creating a moderator analysis:
  * 1. Analysis not already created for this round
- * 2. Sufficient participant responses received
+ * 2. Sufficient participant responses received FOR THIS ROUND
  * 3. At least one participant succeeded (not all failed)
+ *
+ * CRITICAL: Only counts messages from the CURRENT round, not all messages.
+ * This prevents false positives in multi-round conversations.
  *
  * @param messages - All messages in the conversation
  * @param participants - Chat participants
@@ -141,17 +144,31 @@ export function shouldCreateAnalysis(
     return false;
   }
 
-  // Get assistant messages and enabled participants
-  const assistantMessages = messages.filter(m => m.role === 'assistant');
+  // CRITICAL FIX: Filter assistant messages BY CURRENT ROUND ONLY
+  // Previous bug: counted messages from ALL rounds, causing validation failures
+  const assistantMessagesInRound = messages.filter((m) => {
+    if (m.role !== 'assistant') {
+      return false;
+    }
+
+    // Check if message belongs to current round
+    const parsed = MessageMetadataSchema.safeParse(m.metadata);
+    if (!parsed.success) {
+      return false;
+    }
+
+    return parsed.data.roundNumber === roundNumber;
+  });
+
   const enabledParticipants = participants.filter(p => p.isEnabled);
 
-  // Check minimum message count
-  if (assistantMessages.length === 0 || assistantMessages.length < enabledParticipants.length) {
+  // Check minimum message count FOR THIS ROUND
+  if (assistantMessagesInRound.length === 0 || assistantMessagesInRound.length < enabledParticipants.length) {
     return false;
   }
 
-  // Check if all participants failed
-  const allParticipantsFailed = checkAllParticipantsFailed(messages);
+  // Check if all participants failed IN THIS ROUND
+  const allParticipantsFailed = checkAllParticipantsFailed(assistantMessagesInRound);
 
   return !allParticipantsFailed;
 }

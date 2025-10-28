@@ -1,23 +1,11 @@
 /**
- * useAnalysisCreation Hook
+ * Analysis Creation Hook
  *
+ * Zustand v5 Pattern: Store-specific action hook co-located with store
  * Manages analysis creation lifecycle with duplicate prevention and regeneration support.
  *
- * React 19.2 Pattern: Uses refs for tracking + useCallback for stable functions
- * AI SDK v5 Pattern: Timing with requestAnimationFrame for browser paint cycles
- *
- * Used by:
- * - ChatOverviewScreen: Basic analysis creation after streaming
- * - ChatThreadScreen: Advanced with regeneration, state management, query invalidation
- *
- * Key Features:
- * - Duplicate prevention via Set-based tracking
- * - Participant failure detection
- * - User question extraction from messages
- * - Regeneration timing with requestAnimationFrame
- * - Flexible state management callbacks
- *
- * @module hooks/utils/use-analysis-creation
+ * Location: /src/stores/chat/actions/analysis-creation.ts
+ * Used by: ChatOverviewScreen, ChatThreadScreen (via analysis-orchestrator)
  */
 
 import type { UIMessage } from 'ai';
@@ -184,6 +172,13 @@ export function useAnalysisCreation(
   const analysisTimeoutRef = useRef<number | null>(null);
   const queryReEnableTimeoutRef = useRef<number | null>(null);
 
+  // Retry tracking for message sync wait (max ~1 second)
+  const retryCountRef = useRef(0);
+  const MAX_RETRIES = 60;
+
+  // Ref for recursive handleComplete calls
+  const handleCompleteRef = useRef<(() => void) | null>(null);
+
   /**
    * Core analysis creation logic
    * Extracted for reuse in both handleComplete and manual creation
@@ -266,10 +261,55 @@ export function useAnalysisCreation(
   /**
    * Handle completion of all participants
    * Called by useSharedChatContext when last participant finishes
+   *
+   * CRITICAL: Implements retry logic to wait for message sync
+   * Race condition: Messages from AI SDK → store (useEffect) → messagesRef (useLayoutEffect)
+   * may not complete before onComplete fires. Retry until all messages present.
    */
   const handleComplete = useCallback(() => {
     const currentMessages = messagesRef.current;
+    const currentParticipants = participantsRef.current;
     const roundNumber = getCurrentRoundNumber(currentMessages);
+
+    // CRITICAL: Validate all participant messages synced for THIS ROUND
+    // Filter messages by current round to avoid counting messages from previous rounds
+    const assistantMessagesInRound = currentMessages.filter((m) => {
+      if (m.role !== 'assistant') {
+        return false;
+      }
+      const metadata = m.metadata as Record<string, unknown> | undefined;
+      const msgRoundNumber = metadata?.roundNumber as number | undefined;
+      return msgRoundNumber === roundNumber;
+    });
+
+    const enabledParticipants = currentParticipants.filter(p => p.isEnabled);
+
+    // If messages haven't synced yet, retry after next frame
+    if (assistantMessagesInRound.length < enabledParticipants.length) {
+      // Safety: prevent infinite loops
+      if (retryCountRef.current >= MAX_RETRIES) {
+        console.error('[analysis-creation] Max retries waiting for message sync', {
+          round: roundNumber,
+          messagesInRound: assistantMessagesInRound.length,
+          expectedParticipants: enabledParticipants.length,
+          retries: retryCountRef.current,
+        });
+        retryCountRef.current = 0;
+        // Proceed anyway to prevent stuck UI
+        createAnalysis(roundNumber);
+        return;
+      }
+
+      // Retry after next animation frame
+      retryCountRef.current++;
+      analysisTimeoutRef.current = requestAnimationFrame(() => {
+        handleCompleteRef.current?.();
+      });
+      return;
+    }
+
+    // All messages synced, reset retry counter
+    retryCountRef.current = 0;
 
     if (isRegeneration) {
       // AI SDK v5 Pattern: Use requestAnimationFrame for UI settling
@@ -281,7 +321,12 @@ export function useAnalysisCreation(
       // Create analysis immediately for normal rounds
       createAnalysis(roundNumber);
     }
-  }, [messagesRef, isRegeneration, createAnalysis]);
+  }, [messagesRef, participantsRef, isRegeneration, createAnalysis]);
+
+  // Store handleComplete in ref for recursive retry calls
+  useEffect(() => {
+    handleCompleteRef.current = handleComplete;
+  }, [handleComplete]);
 
   /**
    * Manually create analysis for a specific round

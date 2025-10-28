@@ -6,8 +6,8 @@ import { NuqsAdapter } from 'nuqs/adapters/next/app';
 import { Suspense } from 'react';
 
 import { Toaster } from '@/components/ui/toaster';
-import { ChatProvider } from '@/contexts/chat-context';
 
+import { ChatStoreProvider } from './chat-store-provider';
 import { PostHogPageview } from './posthog-pageview';
 import PostHogProvider from './posthog-provider';
 import QueryClientProvider from './query-client-provider';
@@ -58,8 +58,8 @@ export function AppProviders({
         <PostHogPageview />
       </Suspense>
       <QueryClientProvider>
-        {/* ✅ AI SDK v5 PATTERN: Shared chat context wraps entire app */}
-        <ChatProvider>
+        {/* ✅ ZUSTAND PATTERN: Chat store provider wraps entire app */}
+        <ChatStoreProvider>
           <NuqsAdapter>
             <NextIntlClientProvider
               messages={messages}
@@ -75,7 +75,7 @@ export function AppProviders({
               <Toaster />
             </NextIntlClientProvider>
           </NuqsAdapter>
-        </ChatProvider>
+        </ChatStoreProvider>
       </QueryClientProvider>
     </PostHogProvider>
   );

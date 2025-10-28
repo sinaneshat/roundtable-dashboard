@@ -4,7 +4,6 @@ import { redirect } from 'next/navigation';
 
 import { BRAND } from '@/constants';
 import { ChatThreadScreen } from '@/containers/screens/chat';
-import { ChatThreadStateProvider } from '@/contexts/chat-thread-state-context';
 import { getQueryClient } from '@/lib/data/query-client';
 import { queryKeys } from '@/lib/data/query-keys';
 import { STALE_TIME_PRESETS, STALE_TIMES } from '@/lib/data/stale-times';
@@ -144,15 +143,13 @@ export default async function ChatThreadPage({
 
   return (
     <HydrationBoundary state={dehydrate(queryClient)}>
-      <ChatThreadStateProvider>
-        <ChatThreadScreen
-          thread={threadWithDates}
-          participants={participantsWithDates}
-          initialMessages={messagesWithDates}
-          slug={slug}
-          user={user}
-        />
-      </ChatThreadStateProvider>
+      <ChatThreadScreen
+        thread={threadWithDates}
+        participants={participantsWithDates}
+        initialMessages={messagesWithDates}
+        slug={slug}
+        user={user}
+      />
     </HydrationBoundary>
   );
 }

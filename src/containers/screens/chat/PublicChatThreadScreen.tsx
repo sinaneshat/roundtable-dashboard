@@ -18,10 +18,10 @@ import { UnifiedErrorBoundary } from '@/components/chat/unified-error-boundary';
 import { Button } from '@/components/ui/button';
 import { BRAND } from '@/constants';
 import { usePublicThreadQuery } from '@/hooks/queries/chat';
-import { useModelsQuery } from '@/hooks/queries/models';
 import type { TimelineItem } from '@/hooks/utils';
-import { useThreadTimeline } from '@/hooks/utils';
+import { useMessageParts, useModelLookup, useThreadTimeline } from '@/hooks/utils';
 import { getAvatarPropsFromModelId } from '@/lib/utils/ai-display';
+import { getMessageStatus } from '@/lib/utils/message-status';
 import { chatMessagesToUIMessages, getMessageMetadata } from '@/lib/utils/message-transforms';
 
 export default function PublicChatThreadScreen({ slug }: { slug: string }) {
@@ -32,8 +32,9 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
   const threadResponse = threadData?.success ? threadData.data : null;
   const thread = threadResponse?.thread || null;
 
-  const { data: modelsData } = useModelsQuery();
-  const allModels = modelsData?.data?.items || [];
+  // Consolidated model lookup hook
+  const { findModel } = useModelLookup();
+
   const serverMessages = useMemo(() => threadResponse?.messages || [], [threadResponse]);
   const changelog = useMemo(() => threadResponse?.changelog || [], [threadResponse]);
   const user = useMemo(() => threadResponse?.user, [threadResponse]);
@@ -185,18 +186,16 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
                             storedModelId,
                           );
 
-                          const model = storedModelId ? allModels.find(m => m.id === storedModelId) : undefined;
+                          // Consolidated model lookup (replaces inline find)
+                          const model = findModel(storedModelId);
 
-                          const hasError = message.metadata && typeof message.metadata === 'object' && 'error' in message.metadata;
+                          // Consolidated message status determination
+                          const messageStatus = getMessageStatus({ message });
 
-                          const messageStatus: 'thinking' | 'streaming' | 'completed' | 'error' = hasError
-                            ? 'error'
-                            : 'completed';
-
-                          const filteredParts = message.parts.filter(
-                            (p: { type: string; text?: string }): p is { type: 'text'; text: string } | { type: 'reasoning'; text: string } =>
-                              (p.type === 'text' || p.type === 'reasoning') && typeof p.text === 'string',
-                          );
+                          // Consolidated message parts filtering (text-only for public view)
+                          // Note: useMessageParts returns AI SDK's UIMessagePart[], we cast to MessagePart[] since we filter to known types
+                          const { textParts } = useMessageParts({ message, filter: 'text-only' });
+                          const filteredParts = textParts as Parameters<typeof ModelMessageCard>[0]['parts'];
 
                           return (
                             <ModelMessageCard

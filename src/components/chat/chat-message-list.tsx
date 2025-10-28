@@ -9,10 +9,11 @@ import { canAccessModelByPricing } from '@/api/services/product-logic.service';
 import { Message, MessageAvatar, MessageContent } from '@/components/ai-elements/message';
 import { Response } from '@/components/ai-elements/response';
 import { ModelMessageCard } from '@/components/chat/model-message-card';
-import { useModelsQuery } from '@/hooks/queries/models';
+import { useModelLookup } from '@/hooks/utils';
 import { useUsageStatsQuery } from '@/hooks/queries/usage';
 import type { MessagePart, MessageStatus } from '@/lib/schemas/message-schemas';
 import { getAvatarPropsFromModelId } from '@/lib/utils/ai-display';
+import { getMessageStatus } from '@/lib/utils/message-status';
 import { getMessageMetadata } from '@/lib/utils/message-transforms';
 
 const EMPTY_PARTICIPANTS: ChatParticipant[] = [];
@@ -123,9 +124,9 @@ export const ChatMessageList = memo(
     userAvatar,
   }: ChatMessageListProps) => {
     const t = useTranslations();
-    const { data: modelsData } = useModelsQuery();
+    // Consolidated model lookup hook
+    const { findModel } = useModelLookup();
     const { data: usageData } = useUsageStatsQuery();
-    const allModels = modelsData?.data?.items || [];
     const userTier = usageData?.data?.subscription?.tier || 'free';
     const userInfo = user || { name: 'User', image: null };
     const userAvatarSrc = userAvatar?.src || userInfo.image || '/avatars/user.png';
@@ -281,21 +282,21 @@ export const ChatMessageList = memo(
             userInfo.image,
             userInfo.name,
           );
-          const model = participantInfo.modelId ? allModels.find(m => m.id === participantInfo.modelId) : undefined;
+          // Consolidated model lookup (replaces inline find)
+          const model = findModel(participantInfo.modelId);
           const isAccessible = model ? canAccessModelByPricing(userTier, model) : true;
-          const hasError = metadata?.hasError === true || !!metadata?.error;
 
+          // Content detection for status determination
           const hasTextContent = message.parts.some(p => p.type === 'text' && p.text.trim().length > 0);
           const hasToolCalls = message.parts.some(p => p.type === 'tool-call');
           const hasAnyContent = hasTextContent || hasToolCalls;
 
-          const messageStatus: MessageStatus = hasError
-            ? 'error'
-            : participantInfo.isStreaming && !hasAnyContent
-              ? 'thinking'
-              : participantInfo.isStreaming
-                ? 'streaming'
-                : 'completed';
+          // Consolidated message status determination
+          const messageStatus: MessageStatus = getMessageStatus({
+            message,
+            isStreaming: participantInfo.isStreaming,
+            hasAnyContent,
+          });
           const filteredParts = message.parts
             .filter(p =>
               p.type === 'text'

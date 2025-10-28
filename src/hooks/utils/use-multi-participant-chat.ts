@@ -164,6 +164,14 @@ export function useMultiParticipantChat(
     regenerateRoundNumber: regenerateRoundNumberParam,
   } = options;
 
+  // ✅ CRITICAL FIX: Use refs for callbacks to capture LATEST values
+  // Race condition: onComplete is undefined when ChatStoreProvider first renders,
+  // then gets set later by useChatInitialization, but this hook captures the initial undefined value
+  // Solution: Store callbacks in refs and update them via useLayoutEffect
+  const onCompleteRef = useRef(onComplete);
+  const onRetryRef = useRef(onRetry);
+  const onErrorRef = useRef(onError);
+
   const errorTracking = useParticipantErrorTracking();
 
   // Track regenerate round number for backend communication
@@ -210,17 +218,21 @@ export function useMultiParticipantChat(
       regenerateRoundNumberRef.current = null;
       setCurrentParticipantIndex(0);
 
-      // ✅ CRITICAL FIX: Use TRIPLE requestAnimationFrame to ensure AI SDK state propagates
-      // Race condition: Even double rAF wasn't enough - messages state from useChat needs more time
+      // ✅ CRITICAL FIX: Use QUADRUPLE requestAnimationFrame to ensure AI SDK state propagates
+      // Race condition: Triple rAF wasn't sufficient - messagesRef needs more time to sync
       // First rAF: Waits for browser paint after last participant's message metadata is added
       // Second rAF: Ensures messages state from useChat has updated
-      // Third rAF: Ensures messagesRef has been synced via useLayoutEffect with ALL participant messages
+      // Third rAF: Ensures messagesRef has been synced via useLayoutEffect
+      // Fourth rAF: Additional frame to guarantee ALL participant messages are in messagesRef
       // This prevents analysis from being created with incomplete participant message IDs (N-1 bug)
-      // See: use-analysis-creation.ts:245-254 for similar pattern
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
           requestAnimationFrame(() => {
-            onComplete?.();
+            requestAnimationFrame(() => {
+              // ✅ CRITICAL: Use ref to get LATEST callback value
+              // onComplete is undefined at hook initialization, gets set later by useChatInitialization
+              onCompleteRef.current?.();
+            });
           });
         });
       });
@@ -279,7 +291,8 @@ export function useMultiParticipantChat(
     requestAnimationFrame(() => {
       isTriggeringRef.current = false;
     });
-  }, [errorTracking, onComplete]);
+    // Note: onComplete not in deps - we use onCompleteRef.current to always get latest value
+  }, [errorTracking]);
 
   /**
    * Prepare request body for AI SDK chat transport
@@ -378,7 +391,7 @@ export function useMultiParticipantChat(
 
       // Trigger next participant immediately (no delay needed)
       triggerNextParticipantWithRefs();
-      onError?.(error instanceof Error ? error : new Error(errorMessage));
+      onErrorRef.current?.(error instanceof Error ? error : new Error(errorMessage));
     },
 
     /**
@@ -415,7 +428,7 @@ export function useMultiParticipantChat(
         // Trigger next participant immediately
         triggerNextParticipantWithRefs();
         const error = new Error(`Participant ${currentIndex} failed: data.message is missing`);
-        onError?.(error);
+        onErrorRef.current?.(error);
         return;
       }
 
@@ -512,6 +525,22 @@ export function useMultiParticipantChat(
     messagesRef.current = messages;
     aiSendMessageRef.current = aiSendMessage;
   }, [messages, aiSendMessage]);
+
+  /**
+   * ✅ CRITICAL FIX: Keep callback refs in sync with latest callback values
+   * This ensures we always call the most recent version of onComplete/onRetry/onError
+   */
+  useLayoutEffect(() => {
+    onCompleteRef.current = onComplete;
+  }, [onComplete]);
+
+  useLayoutEffect(() => {
+    onRetryRef.current = onRetry;
+  }, [onRetry]);
+
+  useLayoutEffect(() => {
+    onErrorRef.current = onError;
+  }, [onError]);
 
   /**
    * AI SDK v5 Pattern: NO manual message syncing needed
