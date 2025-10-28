@@ -8,6 +8,7 @@
  * - Runs once when the client bundle loads
  * - Provides global PostHog instance for client-side usage
  * - Complements the PostHogProvider for React hooks
+ * - Disabled in local environment, enabled in preview and production
  *
  * Reference: https://posthog.com/docs/libraries/next-js
  * Pattern: instrumentation-client.ts (root level)
@@ -22,8 +23,8 @@ if (typeof window !== 'undefined') {
   const apiHost = process.env.NEXT_PUBLIC_POSTHOG_HOST;
   const environment = process.env.NEXT_PUBLIC_WEBAPP_ENV;
 
-  // Only initialize in production environment
-  if (environment === 'prod' && apiKey && apiHost) {
+  // Disable in local environment, enable in preview and production
+  if (environment !== 'local' && apiKey && apiHost) {
     posthog.init(apiKey, {
       api_host: apiHost,
       defaults: '2025-05-24', // API version for consistent behavior

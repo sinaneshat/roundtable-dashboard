@@ -16,7 +16,7 @@ type PostHogProviderProps = {
  * PostHog Analytics Provider
  *
  * Provides PostHog analytics capabilities for the application.
- * Only initializes in production environment to avoid tracking development/preview data.
+ * Disabled in local environment, enabled in preview and production.
  *
  * Following official PostHog Next.js patterns:
  * - Client-side initialization with useEffect
@@ -39,10 +39,10 @@ function PostHogProvider({
   environment,
 }: PostHogProviderProps) {
   useEffect(() => {
-    // Only initialize PostHog in production environment
-    const isProduction = environment === 'prod';
+    // Initialize PostHog in preview and production environments (disabled in local)
+    const shouldInitialize = environment !== 'local';
 
-    if (isProduction && apiKey && apiHost) {
+    if (shouldInitialize && apiKey && apiHost) {
       // Initialize PostHog - it handles duplicate initialization internally
       posthog.init(apiKey, {
         api_host: apiHost,
@@ -70,14 +70,14 @@ function PostHogProvider({
     }
   }, [apiKey, apiHost, environment]);
 
-  // Only wrap children in PostHog provider if we're in production
-  const isProduction = environment === 'prod';
+  // Wrap children in PostHog provider if not in local environment
+  const shouldInitialize = environment !== 'local';
 
-  if (isProduction && apiKey && apiHost) {
+  if (shouldInitialize && apiKey && apiHost) {
     return <PHProvider client={posthog}>{children}</PHProvider>;
   }
 
-  // In non-production environments, just return children without PostHog
+  // In local environment, just return children without PostHog
   return <>{children}</>;
 }
 

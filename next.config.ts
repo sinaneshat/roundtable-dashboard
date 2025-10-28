@@ -1,4 +1,5 @@
 import { initOpenNextCloudflareForDev } from '@opennextjs/cloudflare';
+import withSerwistInit from '@serwist/next';
 import type { NextConfig } from 'next';
 import createNextIntlPlugin from 'next-intl/plugin';
 
@@ -77,8 +78,8 @@ const nextConfig: NextConfig = {
         ],
       },
       {
-        // Public assets folder
-        source: '/(robots.txt|sitemap.xml|manifest.json)',
+        // Public assets folder (manifest.webmanifest served by Next.js)
+        source: '/(robots.txt|sitemap.xml)',
         headers: [
           {
             key: 'Cache-Control',
@@ -204,5 +205,20 @@ const nextConfig: NextConfig = {
 
 };
 
+// Configure Serwist PWA
+const withSerwist = withSerwistInit({
+  swSrc: 'src/app/sw.ts',
+  swDest: 'public/sw.js',
+  // Disable Serwist in development for faster builds
+  disable: process.env.NODE_ENV === 'development',
+  // Additional Serwist configuration
+  cacheOnNavigation: true,
+  reloadOnOnline: true,
+  register: true,
+  scope: '/',
+});
+
 const withNextIntl = createNextIntlPlugin('./src/i18n/request.ts');
-export default withNextIntl(nextConfig);
+
+// Chain plugins: Serwist -> NextIntl -> NextConfig
+export default withSerwist(withNextIntl(nextConfig));

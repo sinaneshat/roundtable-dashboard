@@ -183,12 +183,34 @@ export const ChatMessageList = memo(
 
     // Memoize participant info per message to prevent recalculation on every render
     // This is critical because getParticipantInfoForMessage is expensive and runs for ALL messages
+    //
+    // ✅ CRITICAL FIX: Only recalculate when messages actually change, not when participants change
+    // Completed messages have frozen metadata and should NEVER be affected by current participant state
     const messagesWithParticipantInfo = useMemo(() => {
       return deduplicatedMessages.map((message, index) => {
         if (message.role === 'user') {
           return { message, index, participantInfo: null };
         }
 
+        const metadata = getMessageMetadata(message.metadata);
+        const isComplete = !!metadata?.model;
+
+        // ✅ For completed messages, return frozen metadata immediately without dependencies
+        // This prevents re-rendering with wrong participant info when participants change
+        if (isComplete) {
+          return {
+            message,
+            index,
+            participantInfo: {
+              participantIndex: metadata?.participantIndex ?? 0,
+              modelId: metadata.model,
+              role: metadata.participantRole || null,
+              isStreaming: false,
+            },
+          };
+        }
+
+        // Only for streaming messages, calculate participant info from current state
         const participantInfo = getParticipantInfoForMessage({
           message,
           messageIndex: index,

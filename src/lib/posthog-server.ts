@@ -39,15 +39,16 @@ let posthogClient: PostHog | null = null;
 /**
  * Get or create PostHog server-side client instance
  *
- * Returns null if not in production environment or if API key is missing
+ * Returns null if in local environment or if API key is missing
+ * Enabled in preview and production environments
  */
 export function getPostHogClient(): PostHog | null {
   const apiKey = process.env.NEXT_PUBLIC_POSTHOG_API_KEY;
   const apiHost = process.env.NEXT_PUBLIC_POSTHOG_HOST;
   const environment = process.env.NEXT_PUBLIC_WEBAPP_ENV;
 
-  // Only initialize in production environment
-  if (environment !== 'prod' || !apiKey || !apiHost) {
+  // Disable in local environment, enable in preview and production
+  if (environment === 'local' || !apiKey || !apiHost) {
     return null;
   }
 

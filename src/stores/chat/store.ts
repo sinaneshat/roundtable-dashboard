@@ -371,14 +371,29 @@ const createAnalysisSlice: StateCreator<
   createPendingAnalysis: (params) => {
     const { roundNumber, messages, userQuestion, threadId, mode } = params;
 
-    // Extract participant message IDs from current round
+    // ✅ CRITICAL FIX: Extract participant message IDs from current round
+    // Only include messages that have participantId to prevent backend validation errors
     const participantMessageIds = messages
       .filter((m) => {
         const metadata = m.metadata as Record<string, unknown> | undefined;
         const msgRoundNumber = metadata?.roundNumber as number | undefined;
-        return m.role === 'assistant' && msgRoundNumber === roundNumber;
+        const participantId = metadata?.participantId as string | undefined;
+
+        // Must be assistant message, from current round, AND have participantId
+        return (
+          m.role === 'assistant'
+          && msgRoundNumber === roundNumber
+          && participantId != null
+          && participantId !== ''
+        );
       })
       .map(m => m.id);
+
+    // ✅ SAFETY CHECK: Don't create analysis if no valid participant messages
+    if (participantMessageIds.length === 0) {
+      console.warn(`[createPendingAnalysis] No participant messages with valid participantId found for round ${roundNumber}`);
+      return;
+    }
 
     // Generate unique analysis ID
     const analysisId = `analysis_${threadId}_${roundNumber}_${Date.now()}`;

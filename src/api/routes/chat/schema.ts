@@ -237,6 +237,8 @@ const ThreadDetailPayloadSchema = z.object({
   participants: z.array(ChatParticipantSchema),
   messages: z.array(ChatMessageSchema),
   changelog: z.array(ChatThreadChangelogSchema),
+  analyses: z.array(z.any()).optional(), // ModeratorAnalysis - optional for public threads
+  feedback: z.array(z.any()).optional(), // RoundFeedback - optional for public threads
   user: userSelectSchema.pick({
     id: true,
     name: true,

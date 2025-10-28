@@ -30,8 +30,8 @@
 import type { UIMessage } from 'ai';
 import { useEffect } from 'react';
 
-import type { ChatParticipant, ChatThread } from '@/api/routes/chat/schema';
 import { DEFAULT_CHAT_MODE } from '@/api/core/enums';
+import type { ChatParticipant, ChatThread } from '@/api/routes/chat/schema';
 import { useChatStore } from '@/components/providers/chat-store-provider';
 import type { ChatModeId } from '@/lib/config/chat-modes';
 

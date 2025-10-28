@@ -699,11 +699,21 @@ export const getPublicThreadHandler: RouteHandler<typeof getPublicThreadRoute, A
       where: eq(tables.chatThreadChangelog.threadId, thread.id),
       orderBy: [desc(tables.chatThreadChangelog.createdAt)],
     });
+    const analyses = await db.query.chatModeratorAnalysis.findMany({
+      where: eq(tables.chatModeratorAnalysis.threadId, thread.id),
+      orderBy: [tables.chatModeratorAnalysis.roundNumber],
+    });
+    const feedback = await db.query.chatRoundFeedback.findMany({
+      where: eq(tables.chatRoundFeedback.threadId, thread.id),
+      orderBy: [tables.chatRoundFeedback.roundNumber],
+    });
     return Responses.ok(c, {
       thread,
       participants,
       messages,
       changelog,
+      analyses,
+      feedback,
       user: {
         id: threadOwner.id,
         name: threadOwner.name,

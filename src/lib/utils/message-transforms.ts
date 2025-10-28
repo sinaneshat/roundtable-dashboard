@@ -114,21 +114,32 @@ export function chatMessageToUIMessage(
  * CRITICAL FIX: Ensures all messages have roundNumber set in metadata.
  * If backend messages are missing roundNumber, assigns them based on user message sequence.
  *
+ * ✅ CRITICAL FIX: Enriches messages with participant metadata (model, role, etc.)
+ * This ensures backend messages are recognized as "complete" and never need to lookup
+ * participant info from current state, preventing duplication issues when participants change.
+ *
  * @param messages - Array of backend ChatMessages from database
+ * @param participants - Optional array of participants to enrich messages with model info
  * @returns Array of UIMessages compatible with AI SDK
  *
  * @example
  * ```typescript
  * const dbMessages = await db.query.chatMessage.findMany(...);
- * const uiMessages = chatMessagesToUIMessages(dbMessages);
+ * const uiMessages = chatMessagesToUIMessages(dbMessages, participants);
  * setMessages(uiMessages);
  * ```
  */
 export function chatMessagesToUIMessages(
   messages: (ChatMessage | (Omit<ChatMessage, 'createdAt'> & { createdAt: string | Date }))[],
+  participants?: Array<{ id: string; modelId: string; role: string | null }>,
 ): UIMessage[] {
   // Convert all messages first
   const uiMessages = messages.map(chatMessageToUIMessage);
+
+  // ✅ CRITICAL FIX: Create participant lookup map for enrichment
+  const participantMap = participants
+    ? new Map(participants.map(p => [p.id, p]))
+    : null;
 
   // CRITICAL FIX: Ensure all messages have roundNumber in metadata
   // This prevents groupMessagesByRound from having to use inference logic
@@ -148,6 +159,27 @@ export function chatMessagesToUIMessages(
       if (message.role === 'user' && explicitRound > currentRound) {
         currentRound = explicitRound;
       }
+
+      // ✅ CRITICAL FIX: Still enrich messages that already have roundNumber
+      // They might be missing model/role metadata needed for "complete" status
+      if (participantMap && message.role === 'assistant') {
+        const msgMetadata = message.metadata as Record<string, unknown>;
+        const participantId = msgMetadata.participantId as string | undefined;
+        const participant = participantId ? participantMap.get(participantId) : null;
+
+        if (participant && !msgMetadata.model) {
+          // Add model and role to metadata if missing
+          return {
+            ...message,
+            metadata: {
+              ...msgMetadata,
+              model: participant.modelId,
+              ...(participant.role && { participantRole: participant.role }),
+            },
+          };
+        }
+      }
+
       return message;
     }
 
@@ -157,13 +189,31 @@ export function chatMessagesToUIMessages(
       currentRound += 1;
     }
 
-    // Assign roundNumber to message metadata
+    // ✅ CRITICAL FIX: Enrich message metadata with participant info if available
+    // This makes backend messages "complete" so they don't need participant lookups
+    const baseMetadata: Record<string, unknown> = {
+      ...(message.metadata || {}),
+      roundNumber: currentRound || 1, // Default to round 1 if no rounds yet
+    };
+
+    // If we have participant data and this is an assistant message, enrich it
+    if (participantMap && message.role === 'assistant') {
+      const participantId = (message.metadata as Record<string, unknown> | undefined)?.participantId as string | undefined;
+      const participant = participantId ? participantMap.get(participantId) : null;
+
+      if (participant) {
+        // Add model and role to metadata so message is recognized as "complete"
+        baseMetadata.model = participant.modelId;
+        if (participant.role) {
+          baseMetadata.participantRole = participant.role;
+        }
+      }
+    }
+
+    // Assign roundNumber and enriched metadata to message
     const messageWithRound: UIMessage = {
       ...message,
-      metadata: {
-        ...(message.metadata || {}),
-        roundNumber: currentRound || 1, // Default to round 1 if no rounds yet
-      },
+      metadata: baseMetadata,
     };
 
     return messageWithRound;

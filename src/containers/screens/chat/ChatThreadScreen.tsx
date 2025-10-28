@@ -171,7 +171,9 @@ export default function ChatThreadScreen({
   const feedbackActions = useFeedbackActions({ threadId: thread.id });
 
   // Transform initial messages once (memoized to prevent re-creation)
-  const uiMessages = useMemo(() => chatMessagesToUIMessages(initialMessages), [initialMessages]);
+  // ✅ CRITICAL FIX: Pass participants to enrich messages with model metadata
+  // This ensures backend messages are "complete" and never need participant lookups from current state
+  const uiMessages = useMemo(() => chatMessagesToUIMessages(initialMessages, participants), [initialMessages, participants]);
 
   // Load feedback from server once
   useEffect(() => {
@@ -236,8 +238,9 @@ export default function ChatThreadScreen({
             }));
 
             // Use setMessages from useChat to update internal state
+            // ✅ CRITICAL FIX: Pass participants to enrich messages
             const uiMessages = await import('@/lib/utils/message-transforms').then(
-              mod => mod.chatMessagesToUIMessages(freshMessages),
+              mod => mod.chatMessagesToUIMessages(freshMessages, result.data.participants),
             );
 
             // Update context messages
