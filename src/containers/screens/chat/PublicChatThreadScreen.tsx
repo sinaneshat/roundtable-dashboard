@@ -38,7 +38,7 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
   const messages = useMemo(() => chatMessagesToUIMessages(serverMessages), [serverMessages]);
 
   // Transform participants - convert string dates to Date objects
-  const participants = useMemo(() => rawParticipants.map((p: ChatParticipant) => ({
+  const participants = useMemo(() => rawParticipants.map((p: Omit<ChatParticipant, 'createdAt' | 'updatedAt'> & { createdAt: string; updatedAt: string }) => ({
     ...p,
     createdAt: new Date(p.createdAt),
     updatedAt: new Date(p.updatedAt),
