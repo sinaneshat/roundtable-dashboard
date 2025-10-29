@@ -590,6 +590,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
                 parts: [{ type: 'text', text: content }],
                 roundNumber: currentRoundNumber,
                 metadata: {
+                  role: 'user', // ✅ FIX: Add role discriminator for type guard
                   roundNumber: currentRoundNumber,
                 },
                 createdAt: new Date(),
