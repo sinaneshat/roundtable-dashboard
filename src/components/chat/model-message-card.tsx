@@ -10,6 +10,7 @@ import { MessageErrorDetails } from '@/components/chat/message-error-details';
 import { ToolCallPart } from '@/components/chat/tool-call-part';
 import { ToolResultPart } from '@/components/chat/tool-result-part';
 import type { UIMessageMetadata } from '@/lib/schemas/message-metadata';
+import { isAssistantMetadata } from '@/lib/schemas/message-metadata';
 import type { MessagePart, MessageStatus } from '@/lib/schemas/message-schemas';
 
 type ModelMessageCardProps = {
@@ -42,8 +43,11 @@ export const ModelMessageCard = memo(({
   const modelIsAccessible = model ? (isAccessible ?? model.is_accessible_to_user) : true;
   const showStatusIndicator = status === 'thinking' || status === 'streaming';
   const isError = status === 'error';
-  const hasError = isError || metadata?.hasError || metadata?.error;
-  const modelName = model?.name || metadata?.model || 'AI Assistant';
+
+  // ✅ STRICT TYPING: Only assistant messages have error fields
+  const assistantMetadata = metadata && isAssistantMetadata(metadata) ? metadata : null;
+  const hasError = isError || assistantMetadata?.hasError || assistantMetadata?.error;
+  const modelName = model?.name || assistantMetadata?.model || 'AI Assistant';
   const requiredTierName = model?.required_tier_name;
   return (
     <div className={`space-y-1 ${className || ''}`}>
@@ -123,12 +127,20 @@ export const ModelMessageCard = memo(({
                   />
                 );
               }
-              const unknownPart = part as unknown as { type?: string; data?: unknown };
-              if (unknownPart?.type && typeof unknownPart.type === 'string' && unknownPart.type.startsWith('data-')) {
+              // Type guard for custom data parts
+              const isCustomDataPart = (p: unknown): p is { type: string; data: unknown } =>
+                typeof p === 'object'
+                && p !== null
+                && 'type' in p
+                && typeof p.type === 'string'
+                && p.type.startsWith('data-')
+                && 'data' in p;
+
+              if (isCustomDataPart(part)) {
                 return (
                   <CustomDataPart
                     key={messageId ? `${messageId}-data-${partIndex}` : `data-${partIndex}`}
-                    part={unknownPart as { type: string; data: unknown }}
+                    part={part}
                     className="my-2"
                   />
                 );

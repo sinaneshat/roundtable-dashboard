@@ -55,6 +55,10 @@ export function useChatFormActions(): UseChatFormActionsReturn {
   const initializeThread = useChatStore(s => s.initializeThread);
   const updateParticipants = useChatStore(s => s.updateParticipants);
 
+  // ✅ FIX: Get current thread state for change detection
+  const thread = useChatStore(s => s.thread);
+  const currentParticipants = useChatStore(s => s.participants);
+
   // Store actions
   const setInputValue = useChatStore(s => s.setInputValue);
   const resetForm = useChatStore(s => s.resetForm);
@@ -176,6 +180,27 @@ export function useChatFormActions(): UseChatFormActionsReturn {
     }
 
     try {
+      // ✅ CRITICAL FIX: Detect if participants or mode actually changed
+      // Compare current state with selected state to avoid unnecessary PATCH requests
+      const currentModeId = thread?.mode || null;
+      const hasTemporaryIds = selectedParticipants.some(p => p.id.startsWith('participant-'));
+
+      // Compare participants by modelId and priority (ignore temporary IDs and timestamps)
+      const currentParticipantsKey = currentParticipants
+        .filter(p => p.isEnabled)
+        .sort((a, b) => a.priority - b.priority)
+        .map(p => `${p.modelId}:${p.priority}:${p.role || 'null'}:${p.customRoleId || 'null'}`)
+        .join('|');
+
+      const selectedParticipantsKey = selectedParticipants
+        .sort((a, b) => a.priority - b.priority)
+        .map(p => `${p.modelId}:${p.priority}:${p.role || 'null'}:${p.customRoleId || 'null'}`)
+        .join('|');
+
+      const participantsChanged = currentParticipantsKey !== selectedParticipantsKey;
+      const modeChanged = currentModeId !== selectedMode;
+      const hasChanges = hasTemporaryIds || participantsChanged || modeChanged;
+
       // Prepare participants for update
       const participantsForUpdate = selectedParticipants.map(p => ({
         id: p.id.startsWith('participant-') ? '' : p.id,
@@ -198,46 +223,51 @@ export function useChatFormActions(): UseChatFormActionsReturn {
         updatedAt: new Date(),
       }));
 
-      const hasTemporaryIds = selectedParticipants.some(p => p.id.startsWith('participant-'));
+      // ✅ CRITICAL FIX: Only make PATCH request if something actually changed
+      if (hasChanges) {
+        // Update participants optimistically
+        updateParticipants(optimisticParticipants);
 
-      // Update participants optimistically
-      updateParticipants(optimisticParticipants);
+        if (hasTemporaryIds) {
+          const response = await updateThreadMutation.mutateAsync({
+            param: { id: threadId },
+            json: {
+              participants: participantsForUpdate,
+              mode: selectedMode,
+            },
+          });
 
-      if (hasTemporaryIds) {
-        const response = await updateThreadMutation.mutateAsync({
-          param: { id: threadId },
-          json: {
-            participants: participantsForUpdate,
-            mode: selectedMode,
-          },
-        });
+          if (response?.data?.participants) {
+            const participantsWithDates = response.data.participants.map(p => ({
+              ...p,
+              createdAt: new Date(p.createdAt),
+              updatedAt: new Date(p.updatedAt),
+            }));
 
-        if (response?.data?.participants) {
-          const participantsWithDates = response.data.participants.map(p => ({
-            ...p,
-            createdAt: new Date(p.createdAt),
-            updatedAt: new Date(p.updatedAt),
-          }));
-
-          updateParticipants(participantsWithDates);
-          await new Promise(resolve => queueMicrotask(resolve));
-          setExpectedParticipantIds(participantsWithDates.map(p => p.modelId));
+            updateParticipants(participantsWithDates);
+            await new Promise(resolve => queueMicrotask(resolve));
+            setExpectedParticipantIds(participantsWithDates.map(p => p.modelId));
+          } else {
+            setExpectedParticipantIds(optimisticParticipants.map(p => p.modelId));
+          }
         } else {
+          updateThreadMutation.mutateAsync({
+            param: { id: threadId },
+            json: {
+              participants: participantsForUpdate,
+              mode: selectedMode,
+            },
+          }).catch(() => {
+            // Silently fail - optimistic update already applied
+          });
+
+          await new Promise(resolve => queueMicrotask(resolve));
           setExpectedParticipantIds(optimisticParticipants.map(p => p.modelId));
         }
       } else {
-        updateThreadMutation.mutateAsync({
-          param: { id: threadId },
-          json: {
-            participants: participantsForUpdate,
-            mode: selectedMode,
-          },
-        }).catch(() => {
-          // Silently fail - optimistic update already applied
-        });
-
+        // No changes - just use current participants for expected IDs
         await new Promise(resolve => queueMicrotask(resolve));
-        setExpectedParticipantIds(optimisticParticipants.map(p => p.modelId));
+        setExpectedParticipantIds(currentParticipants.map(p => p.modelId));
       }
 
       // Prepare for new message (sets flags and pending message)
@@ -251,6 +281,8 @@ export function useChatFormActions(): UseChatFormActionsReturn {
     inputValue,
     selectedMode,
     selectedParticipants,
+    thread,
+    currentParticipants,
     updateThreadMutation,
     updateParticipants,
     prepareForNewMessage,

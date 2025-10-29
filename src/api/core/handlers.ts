@@ -433,7 +433,7 @@ export function createHandler<
       }
 
       // Convert other errors to internal server error
-      return Responses.internalServerError(c, 'Handler execution failed');
+      return Responses.internalServerError(c, error instanceof Error ? error.message : 'Handler execution failed');
     }
   };
 
@@ -657,7 +657,7 @@ export function createHandlerWithBatch<
       }
 
       // Generic error fallback
-      return Responses.internalServerError(c, 'An unexpected error occurred');
+      return Responses.internalServerError(c, error instanceof Error ? error.message : 'An unexpected error occurred');
     }
   };
 

@@ -110,8 +110,8 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
     chat.currentParticipantIndex,
   ]);
 
-  // ✅ CLEANUP: Reset store state on route changes
-  // When navigating between overview/thread/public screens, clear old state
+  // ✅ CLEANUP: Only stop streaming on navigation, don't reset state
+  // Screen components manage their own state via useScreenInitialization and thread.id changes
   useEffect(() => {
     const prevPath = prevPathnameRef.current;
     const currentPath = pathname;
@@ -122,137 +122,20 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
       return;
     }
 
-    // Detect screen type transitions
-    const isOverviewToThread = prevPath === '/chat' && currentPath?.startsWith('/chat/') && !currentPath.startsWith('/chat/public');
-    const isThreadToOverview = prevPath?.startsWith('/chat/') && !prevPath.startsWith('/chat/public') && currentPath === '/chat';
-    const isThreadToPublic = prevPath?.startsWith('/chat/') && !prevPath.startsWith('/chat/public') && currentPath?.startsWith('/chat/public');
-    const isPublicToThread = prevPath?.startsWith('/chat/public') && currentPath?.startsWith('/chat/') && !currentPath.startsWith('/chat/public');
-    const isPublicToOverview = prevPath?.startsWith('/chat/public') && currentPath === '/chat';
-    const isThreadToThread = prevPath?.startsWith('/chat/') && !prevPath.startsWith('/chat/public') && currentPath?.startsWith('/chat/') && !currentPath.startsWith('/chat/public') && prevPath !== currentPath;
-
-    // Clean up state when transitioning between screens
-    if (isOverviewToThread || isThreadToOverview || isThreadToPublic || isPublicToThread || isPublicToOverview || isThreadToThread) {
-      // Stop any ongoing streaming
-      const currentState = store.getState();
-      if (currentState.isStreaming) {
-        currentState.stop?.();
-      }
-
-      // Clear callbacks
-      onCompleteRef.current = undefined;
-      onRetryRef.current = undefined;
-
-      // Reset all state except form data (preserve user input on overview)
-      const shouldPreserveForm = isThreadToOverview || isPublicToOverview;
-
-      if (shouldPreserveForm) {
-        // Preserve form state when returning to overview
-        store.setState({
-          // Clear thread-related state
-          thread: null,
-          participants: [],
-          messages: [],
-          isStreaming: false,
-          currentParticipantIndex: 0,
-          error: null,
-          sendMessage: undefined,
-          startRound: undefined,
-          retry: undefined,
-          stop: undefined,
-          chatSetMessages: undefined,
-
-          // Clear UI state
-          showInitialUI: true,
-          waitingToStartStreaming: false,
-          isCreatingThread: false,
-          createdThreadId: null,
-
-          // Clear analysis state
-          analyses: [],
-
-          // Clear flags
-          hasInitiallyLoaded: false,
-          isRegenerating: false,
-          isCreatingAnalysis: false,
-          isWaitingForChangelog: false,
-          hasPendingConfigChanges: false,
-          hasRefetchedMessages: false,
-
-          // Clear data
-          regeneratingRoundNumber: null,
-          pendingMessage: null,
-          expectedParticipantIds: null,
-          streamingRoundNumber: null,
-          currentRoundNumber: null,
-
-          // Clear tracking
-          hasSentPendingMessage: false,
-          createdAnalysisRounds: new Set<number>(),
-
-          // Clear screen mode
-          screenMode: null,
-          isReadOnly: false,
-
-          // Preserve form state (inputValue, selectedMode, selectedParticipants)
-          // Preserve feedback state (feedbackByRound, pendingFeedback, hasLoadedFeedback)
-        });
-      } else {
-        // Complete reset when going to different thread or from overview
-        store.setState({
-          // Clear thread-related state
-          thread: null,
-          participants: [],
-          messages: [],
-          isStreaming: false,
-          currentParticipantIndex: 0,
-          error: null,
-          sendMessage: undefined,
-          startRound: undefined,
-          retry: undefined,
-          stop: undefined,
-          chatSetMessages: undefined,
-
-          // Clear UI state
-          showInitialUI: true,
-          waitingToStartStreaming: false,
-          isCreatingThread: false,
-          createdThreadId: null,
-
-          // Clear analysis state
-          analyses: [],
-
-          // Clear flags
-          hasInitiallyLoaded: false,
-          isRegenerating: false,
-          isCreatingAnalysis: false,
-          isWaitingForChangelog: false,
-          hasPendingConfigChanges: false,
-          hasRefetchedMessages: false,
-
-          // Clear data
-          regeneratingRoundNumber: null,
-          pendingMessage: null,
-          expectedParticipantIds: null,
-          streamingRoundNumber: null,
-          currentRoundNumber: null,
-
-          // Clear tracking
-          hasSentPendingMessage: false,
-          createdAnalysisRounds: new Set<number>(),
-
-          // Clear screen mode
-          screenMode: null,
-          isReadOnly: false,
-
-          // Reset feedback
-          feedbackByRound: new Map(),
-          pendingFeedback: null,
-          hasLoadedFeedback: false,
-
-          // Keep form state as-is (will be set by screen initialization)
-        });
-      }
+    // Only cleanup if pathname actually changed (navigation between different pages)
+    if (prevPath === currentPath) {
+      return;
     }
+
+    // Stop any ongoing streaming before navigation
+    const currentState = store.getState();
+    if (currentState.isStreaming) {
+      currentState.stop?.();
+    }
+
+    // Clear callbacks
+    onCompleteRef.current = undefined;
+    onRetryRef.current = undefined;
 
     // Update previous pathname
     prevPathnameRef.current = currentPath;

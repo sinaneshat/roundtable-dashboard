@@ -297,7 +297,13 @@ export default function ChatThreadScreen({
     chatMode: selectedMode || (thread.mode as ChatModeId),
     isRegeneration: state.data.regeneratingRoundNumber !== null,
     regeneratingRoundNumber: state.data.regeneratingRoundNumber,
-    enableOrchestrator: state.flags.hasInitiallyLoaded && !isStreaming && !state.flags.isRegenerating && !state.flags.isCreatingAnalysis,
+    // ✅ CRITICAL FIX: Don't disable orchestrator during isCreatingAnalysis
+    // Orchestrator must stay enabled to complete analysis streaming
+    // Previously: disabling during analysis creation caused circular dependency where:
+    // 1. Analysis starts → isCreatingAnalysis = true → orchestrator disabled
+    // 2. Orchestrator can't complete streaming while disabled
+    // 3. isCreatingAnalysis stuck at true → input permanently disabled after refresh
+    enableOrchestrator: state.flags.hasInitiallyLoaded && !isStreaming && !state.flags.isRegenerating,
     onBeforeAnalysisCreate: () => {
       actions.setIsCreatingAnalysis(true);
     },
@@ -314,10 +320,10 @@ export default function ChatThreadScreen({
       actions.setStreamingRoundNumber(null);
       actions.setIsCreatingAnalysis(false);
 
-      // Invalidate analyses query to trigger refetch
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.threads.analyses(thread.id),
-      });
+      // ✅ CRITICAL FIX: Do NOT invalidate query here!
+      // Query invalidation moved to onStreamComplete to avoid race conditions.
+      // Invalidating here causes refetch BEFORE analysis streaming completes,
+      // leading to "Controller is already closed" errors and data loss.
     },
     onAllParticipantsFailed: (roundNumber) => {
       // Complete regeneration if active
@@ -399,6 +405,13 @@ export default function ChatThreadScreen({
   // Sync local participants with context ONLY when there are no pending user changes
   // This allows users to modify participants and have changes staged until next message submission
   useEffect(() => {
+    // ✅ CRITICAL FIX: Don't sync if context participants is empty
+    // After state reset, contextParticipants might be [] before screen initialization completes
+    // Syncing empty array would clear selectedParticipants and disable submit button
+    if (contextParticipants.length === 0) {
+      return;
+    }
+
     // Don't sync if:
     // 1. Round is in progress (streaming or creating analysis)
     // 2. User has pending configuration changes (staged for next message)
@@ -440,6 +453,10 @@ export default function ChatThreadScreen({
     lastSyncedContextRef.current = contextKey;
     setSelectedParticipants(syncedParticipants);
   }, [contextParticipants, isRoundInProgress, hasPendingConfigChanges, setSelectedParticipants]);
+
+  // Get setSelectedMode for thread initialization
+  const setSelectedMode = useChatStore(s => s.setSelectedMode);
+
   // AI SDK v5 Pattern: Initialize thread on mount and when thread ID changes
   // Following crash course Exercise 01.07, 04.02, 04.03:
   // - Server provides initialMessages via props
@@ -453,6 +470,12 @@ export default function ChatThreadScreen({
     // Reset UI state for new thread (local refs not managed by context)
     scrolledToAnalysesRef.current.clear();
     lastSyncedContextRef.current = '';
+
+    // ✅ CRITICAL FIX: Initialize selectedMode from thread.mode immediately after reset
+    // This ensures selectedMode is always set when the thread loads
+    if (thread?.mode) {
+      setSelectedMode(thread.mode as ChatModeId);
+    }
 
     actions.setHasInitiallyLoaded(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -653,6 +676,13 @@ export default function ChatThreadScreen({
                               completedData as import('@/api/routes/chat/schema').ModeratorAnalysisPayload,
                             );
                           }
+
+                          // ✅ CRITICAL FIX: Invalidate query AFTER analysis streaming completes
+                          // This ensures the refetch happens when server has persisted the analysis,
+                          // preventing race conditions and "Controller is already closed" errors.
+                          queryClient.invalidateQueries({
+                            queryKey: queryKeys.threads.analyses(thread.id),
+                          });
                         }}
                       />
                     </div>

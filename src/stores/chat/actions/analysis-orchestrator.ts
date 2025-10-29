@@ -98,13 +98,26 @@ export function useAnalysisOrchestrator(
   // CRITICAL: Merge client-side pending/streaming analyses with server analyses
   // to prevent losing analyses that haven't been saved to DB yet
   useEffect(() => {
-    // Preserve client-side analyses that are still pending/streaming
-    const clientPendingAnalyses = analyses.filter(
-      a => a.status === 'pending' || a.status === 'streaming',
+    // ✅ CRITICAL FIX: Don't sync when orchestrator is disabled
+    // When disabled, query doesn't fetch new data, so syncing would use stale data
+    // This prevents completed analyses from being cleared when orchestrator is
+    // temporarily disabled during streaming/analysis creation
+    if (!enabled) {
+      return;
+    }
+
+    // ✅ CRITICAL FIX: Preserve ALL client analyses that aren't on server yet
+    // Not just pending/streaming - completed analyses might not be persisted yet!
+    // When analysis completes, client marks it 'completed' but server might still be saving.
+    // If we only preserve pending/streaming, the completed analysis gets removed before
+    // server has it, causing the component to unmount and aborting the stream.
+    const serverRoundNumbers = new Set(deduplicatedAnalyses.map(a => a.roundNumber));
+    const clientOnlyAnalyses = analyses.filter(
+      a => !serverRoundNumbers.has(a.roundNumber),
     );
 
-    // Merge server analyses with client pending analyses
-    const merged = [...deduplicatedAnalyses, ...clientPendingAnalyses];
+    // Merge server analyses with client-only analyses
+    const merged = [...deduplicatedAnalyses, ...clientOnlyAnalyses];
 
     // Deduplicate by round number (prefer completed server analysis over client pending)
     const byRound = new Map<number, StoredModeratorAnalysis>();
@@ -132,7 +145,7 @@ export function useAnalysisOrchestrator(
     if (analysesChanged) {
       setAnalyses(finalAnalyses);
     }
-  }, [deduplicatedAnalyses, analyses, setAnalyses]);
+  }, [enabled, deduplicatedAnalyses, analyses, setAnalyses]);
 
   return {
     isLoading,

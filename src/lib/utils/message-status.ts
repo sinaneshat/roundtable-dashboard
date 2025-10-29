@@ -9,6 +9,7 @@
 
 import type { UIMessage } from 'ai';
 
+import { isAssistantMetadata } from '@/lib/schemas/message-metadata';
 import type { MessageStatus } from '@/lib/schemas/message-schemas';
 
 import { getMessageMetadata } from './message-transforms';
@@ -69,9 +70,12 @@ export function getMessageStatus({
   // Extract metadata using consolidated utility
   const metadata = getMessageMetadata(message.metadata);
 
+  // ✅ STRICT TYPING: Only assistant messages have error fields
+  const assistantMetadata = metadata && isAssistantMetadata(metadata) ? metadata : null;
+
   // Priority 1: Check for error state
   // hasError flag or error object in metadata indicates failure
-  const hasError = metadata?.hasError === true || !!metadata?.error;
+  const hasError = assistantMetadata?.hasError === true || !!assistantMetadata?.error;
 
   if (hasError) {
     return 'error';

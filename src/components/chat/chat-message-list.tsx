@@ -11,6 +11,7 @@ import { Response } from '@/components/ai-elements/response';
 import { ModelMessageCard } from '@/components/chat/model-message-card';
 import { useUsageStatsQuery } from '@/hooks/queries/usage';
 import { useModelLookup } from '@/hooks/utils';
+import { isAssistantMetadata } from '@/lib/schemas/message-metadata';
 import type { MessagePart, MessageStatus } from '@/lib/schemas/message-schemas';
 import { getAvatarPropsFromModelId } from '@/lib/utils/ai-display';
 import { getMessageStatus } from '@/lib/utils/message-status';
@@ -54,19 +55,22 @@ function getParticipantInfoForMessage({
 } {
   const metadata = getMessageMetadata(message.metadata);
 
+  // ✅ STRICT TYPING: Use type guard to access assistant-specific fields
+  const assistantMetadata = metadata && isAssistantMetadata(metadata) ? metadata : null;
+
   // AI SDK v5 Pattern: A message is complete once it has model metadata
   // The onFinish callback in useMultiParticipantChat adds metadata.model via mergeParticipantMetadata
   // This happens AFTER streaming completes and BEFORE the next participant starts (via flushSync)
-  const isComplete = !!metadata?.model;
+  const isComplete = !!assistantMetadata?.model;
 
-  if (isComplete) {
+  if (isComplete && assistantMetadata) {
     // ✅ CRITICAL FIX: Use saved metadata for completed messages
     // Once a message has metadata.model, it should NEVER revert to streaming state
     // This prevents the first participant's message from "disappearing" when the second starts
     return {
-      participantIndex: metadata?.participantIndex ?? 0,
-      modelId: metadata.model,
-      role: metadata.participantRole || null,
+      participantIndex: assistantMetadata.participantIndex,
+      modelId: assistantMetadata.model,
+      role: assistantMetadata.participantRole,
       isStreaming: false,
     };
   }
@@ -81,8 +85,8 @@ function getParticipantInfoForMessage({
     const participant = participants[currentParticipantIndex] || currentStreamingParticipant;
     return {
       participantIndex: currentParticipantIndex,
-      modelId: participant?.modelId || metadata?.model,
-      role: participant?.role || metadata?.participantRole || null,
+      modelId: participant?.modelId || assistantMetadata?.model,
+      role: participant?.role || assistantMetadata?.participantRole || null,
       isStreaming: true,
     };
   }
@@ -90,9 +94,9 @@ function getParticipantInfoForMessage({
   // Fallback for messages that haven't finished yet but aren't actively streaming
   // This can happen briefly during state transitions
   return {
-    participantIndex: metadata?.participantIndex ?? currentParticipantIndex,
-    modelId: metadata?.model,
-    role: metadata?.participantRole || null,
+    participantIndex: assistantMetadata?.participantIndex ?? currentParticipantIndex,
+    modelId: assistantMetadata?.model,
+    role: assistantMetadata?.participantRole || null,
     isStreaming: false,
   };
 }
@@ -193,18 +197,20 @@ export const ChatMessageList = memo(
         }
 
         const metadata = getMessageMetadata(message.metadata);
-        const isComplete = !!metadata?.model;
+        // ✅ STRICT TYPING: Use type guard to access assistant-specific fields
+        const assistantMetadata = metadata && isAssistantMetadata(metadata) ? metadata : null;
+        const isComplete = !!assistantMetadata?.model;
 
         // ✅ For completed messages, return frozen metadata immediately without dependencies
         // This prevents re-rendering with wrong participant info when participants change
-        if (isComplete) {
+        if (isComplete && assistantMetadata) {
           return {
             message,
             index,
             participantInfo: {
-              participantIndex: metadata?.participantIndex ?? 0,
-              modelId: metadata.model,
-              role: metadata.participantRole || null,
+              participantIndex: assistantMetadata.participantIndex,
+              modelId: assistantMetadata.model,
+              role: assistantMetadata.participantRole,
               isStreaming: false,
             },
           };

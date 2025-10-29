@@ -435,20 +435,18 @@ export function useMultiParticipantChat(
       // AI SDK v5 Pattern: ALWAYS update message metadata on finish
       // The AI SDK adds the message during streaming; we update it with proper metadata
       if (participant && data.message) {
-        const updatedMetadata = mergeParticipantMetadata(
-          data.message,
-          participant,
-          currentIndex,
-        );
-
         // Prefer backend round number, fallback to current state
         const backendRoundNumber = (data.message.metadata as Record<string, unknown> | undefined)?.roundNumber as number | undefined;
         const finalRoundNumber = backendRoundNumber || currentRoundRef.current;
 
-        const metadataWithRoundNumber = {
-          ...updatedMetadata,
-          roundNumber: finalRoundNumber,
-        };
+        // ✅ STRICT TYPING: mergeParticipantMetadata now requires roundNumber parameter
+        // Returns complete AssistantMessageMetadata with ALL required fields
+        const completeMetadata = mergeParticipantMetadata(
+          data.message,
+          participant,
+          currentIndex,
+          finalRoundNumber, // REQUIRED: Pass round number explicitly
+        );
 
         // Use flushSync to force React to commit metadata update synchronously
         // AI SDK v5 Pattern: Prevents race conditions between sequential participants
@@ -457,27 +455,28 @@ export function useMultiParticipantChat(
           setMessages((prev) => {
             const completeMessage: UIMessage = {
               ...data.message,
-              metadata: metadataWithRoundNumber,
+              metadata: completeMetadata, // ✅ Now uses strictly typed metadata
             };
 
-            // CRITICAL FIX: Check if message exists AND belongs to current participant
-            // AI SDK can reuse message IDs across participants, so we must verify participant ownership
+            // ✅ STRICT TYPING FIX: Check if message exists AND belongs to current participant AND current round
+            // No more loose optional chaining - completeMetadata has ALL required fields
             const existingMessageIndex = prev.findIndex((msg: UIMessage) => {
               if (msg.id !== data.message.id)
                 return false;
 
-              // Check if this message already belongs to a different participant
-              const msgMetadata = msg.metadata as Record<string, unknown> | undefined;
-              const msgParticipantId = msgMetadata?.participantId as string | undefined;
-              const msgParticipantIndex = msgMetadata?.participantIndex as number | undefined;
+              const msgMetadata = msg.metadata as import('@/lib/schemas/message-metadata').AssistantMessageMetadata | undefined;
 
-              // If message has participant metadata, verify it matches current participant
-              if (msgParticipantId || msgParticipantIndex !== undefined) {
-                return msgParticipantId === participant.id || msgParticipantIndex === currentIndex;
-              }
+              // If message has no metadata, it's unclaimed - safe to use
+              if (!msgMetadata)
+                return true;
 
-              // Message has no participant metadata yet - it's safe to claim
-              return true;
+              // ✅ CRITICAL: Must match BOTH participant AND round (no optional chaining!)
+              // This prevents round 3 from overwriting round 2's message
+              const participantMatches = msgMetadata.participantId === participant.id
+                || msgMetadata.participantIndex === currentIndex;
+              const roundMatches = msgMetadata.roundNumber === finalRoundNumber;
+
+              return participantMatches && roundMatches;
             });
 
             if (existingMessageIndex === -1) {

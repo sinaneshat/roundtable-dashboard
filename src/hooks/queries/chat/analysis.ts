@@ -15,7 +15,6 @@ import { useQuery } from '@tanstack/react-query';
 import { useSession } from '@/lib/auth/client';
 import { queryKeys } from '@/lib/data/query-keys';
 import { STALE_TIMES } from '@/lib/data/stale-times';
-import { AnalysisStatusSchema } from '@/lib/schemas/error-schemas';
 import { getThreadAnalysesService } from '@/services/api';
 
 /**
@@ -84,20 +83,27 @@ export function useThreadAnalysesQuery(threadId: string, enabled?: boolean) {
         return serverResponse;
       }
 
-      // Extract cached pending/streaming analyses that aren't on server yet
-      const cachedPendingOrStreaming = cachedData.data.items.filter(
-        item => item.status === AnalysisStatusSchema.enum.pending || item.status === AnalysisStatusSchema.enum.streaming,
+      // ✅ CRITICAL FIX: Extract ALL cached analyses that aren't on server yet
+      // Not just pending/streaming - completed analyses might not be persisted yet!
+      // When analysis streaming completes, client marks it 'completed' but server
+      // is still writing to DB. If we filter out completed, it disappears from UI.
+      const serverRoundNumbers = new Set(
+        serverResponse.data.items.map((item: { roundNumber: number }) => item.roundNumber),
       );
 
-      if (cachedPendingOrStreaming.length === 0) {
+      const cachedNotOnServer = cachedData.data.items.filter(
+        item => !serverRoundNumbers.has(item.roundNumber),
+      );
+
+      if (cachedNotOnServer.length === 0) {
         return serverResponse;
       }
 
-      // ✅ MERGE STRATEGY: Prefer server data, keep cached pending/streaming for other rounds
+      // ✅ MERGE STRATEGY: Prefer server data, keep all cached analyses for rounds not on server
       if (serverResponse.success) {
         // Build final merged list:
-        // 1. Use server data for rounds that exist on server (completed/persisted analyses)
-        // 2. Use cached pending/streaming for rounds not yet on server
+        // 1. Use server data for rounds that exist on server (authoritative/persisted)
+        // 2. Use cached analyses (any status) for rounds not yet on server
         const mergedItems = [];
         const processedRounds = new Set<number>();
 
@@ -108,9 +114,9 @@ export function useThreadAnalysesQuery(threadId: string, enabled?: boolean) {
           processedRounds.add(typedItem.roundNumber);
         }
 
-        // ✅ CRITICAL: Only add cached analyses for rounds that don't exist on server
-        // This prevents duplicate entries and ensures server data takes precedence
-        for (const cachedItem of cachedPendingOrStreaming) {
+        // ✅ CRITICAL: Add ALL cached analyses for rounds not on server (not just pending/streaming)
+        // This preserves recently completed analyses that haven't been persisted yet
+        for (const cachedItem of cachedNotOnServer) {
           if (!processedRounds.has(cachedItem.roundNumber)) {
             mergedItems.push(cachedItem);
             processedRounds.add(cachedItem.roundNumber);

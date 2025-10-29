@@ -17,18 +17,53 @@
 
 import type { UIMessage } from 'ai';
 import { ulid } from 'ulid';
+import { z } from 'zod';
+
+import type { PartialUserMetadata } from '@/lib/schemas/message-metadata';
+import {
+  isAssistantMetadata,
+  MessageMetadataSchema,
+  PartialMessageMetadataSchema,
+} from '@/lib/schemas/message-metadata';
 
 import type { UIMessageMetadata } from './types';
 
 // ============================================================================
-// Database Message Format
+// Database Message Format (Zod-first Pattern)
 // ============================================================================
 
 /**
- * Database message format
+ * Database message schema
  *
  * Represents how messages are stored in the chat_message table.
  * Matches the Drizzle schema in src/db/tables/chat.ts.
+ *
+ * Zod-first pattern: Schema is source of truth for database operations
+ *
+ * METADATA HANDLING:
+ * - During message creation: Uses PartialMessageMetadata (only required fields)
+ * - After streaming completes: Uses MessageMetadata (full metadata with all fields)
+ */
+export const DatabaseMessageSchema = z.object({
+  id: z.string().min(1),
+  threadId: z.string().min(1),
+  role: z.enum(['user', 'assistant']),
+  parts: z.array(
+    z.union([
+      z.object({ type: z.literal('text'), text: z.string() }),
+      z.object({ type: z.literal('reasoning'), text: z.string() }),
+    ]),
+  ),
+  participantId: z.string().nullable().optional(),
+  // ✅ STRICT TYPING: Accept both full and partial metadata
+  // Partial during creation, full after streaming completes
+  metadata: z.union([MessageMetadataSchema, PartialMessageMetadataSchema]).nullable().optional(),
+  roundNumber: z.number().int().positive().nullable().optional(),
+  createdAt: z.date(),
+});
+
+/**
+ * Database message type - inferred from schema
  *
  * @example
  * ```typescript
@@ -38,22 +73,13 @@ import type { UIMessageMetadata } from './types';
  *   role: 'assistant',
  *   parts: [{ type: 'text', text: 'Hello!' }],
  *   participantId: 'part_456',
- *   metadata: { model: 'gpt-4o-mini' },
+ *   metadata: { role: 'assistant', roundNumber: 1, participantId: 'part_456' },
  *   roundNumber: 1,
  *   createdAt: new Date()
  * };
  * ```
  */
-export type DatabaseMessage = {
-  id: string;
-  threadId: string;
-  role: 'user' | 'assistant';
-  parts: Array<{ type: 'text'; text: string } | { type: 'reasoning'; text: string }>;
-  participantId?: string | null;
-  metadata?: UIMessageMetadata | null;
-  roundNumber?: number | null;
-  createdAt: Date;
-};
+export type DatabaseMessage = z.infer<typeof DatabaseMessageSchema>;
 
 /**
  * Message persistence options
@@ -138,6 +164,9 @@ export function convertUIMessageToDatabase(
   // Extract metadata
   const metadata = message.metadata as UIMessageMetadata | undefined;
 
+  // ✅ STRICT TYPING: Only assistant messages have participantId
+  const assistantMetadata = metadata && isAssistantMetadata(metadata) ? metadata : null;
+
   // Generate ID if needed
   const id = message.id || (generateId ? ulid() : undefined);
   if (!id) {
@@ -149,7 +178,7 @@ export function convertUIMessageToDatabase(
     threadId,
     role: message.role as 'user' | 'assistant',
     parts: message.parts as Array<{ type: 'text'; text: string } | { type: 'reasoning'; text: string }>,
-    participantId: metadata?.participantId || null,
+    participantId: assistantMetadata?.participantId || null,
     metadata: includeMetadata ? (metadata || null) : null,
     roundNumber: metadata?.roundNumber || null,
     createdAt,
@@ -218,13 +247,18 @@ export function createUserMessage(
   threadId: string,
   roundNumber?: number,
 ): DatabaseMessage {
+  // ✅ STRICT TYPING: Use PartialUserMetadata type for creation
+  const metadata: PartialUserMetadata | null = roundNumber
+    ? { role: 'user', roundNumber }
+    : null;
+
   return {
     id: ulid(),
     threadId,
     role: 'user',
     parts: [{ type: 'text', text: content }],
     participantId: null,
-    metadata: roundNumber ? { roundNumber } : null,
+    metadata,
     roundNumber: roundNumber || null,
     createdAt: new Date(),
   };
@@ -262,13 +296,16 @@ export function createAssistantMessage(
   metadata?: Partial<UIMessageMetadata>,
   roundNumber?: number,
 ): DatabaseMessage {
-  // If roundNumber is provided, include it in metadata (required by schema)
-  // Otherwise, metadata is null
+  // ✅ STRICT TYPING: Construct PartialAssistantMetadata from Zod schema
+  // Full metadata is added by mergeParticipantMetadata during streaming
+  // Let TypeScript infer the type naturally from the object structure
   const messageMetadata = roundNumber
     ? {
+        role: 'assistant' as const,
         participantId,
         roundNumber,
-        ...(metadata || {}),
+        // Spread remaining metadata fields if provided (filtered to assistant only)
+        ...(metadata && 'role' in metadata && metadata.role === 'assistant' ? metadata : {}),
       }
     : null;
 
@@ -403,7 +440,9 @@ export function filterMessagesForPersistence(
 
     // For assistant messages, check for content
     const metadata = message.metadata as UIMessageMetadata | undefined;
-    const hasError = metadata?.hasError === true;
+    // ✅ STRICT TYPING: Only assistant messages have hasError field
+    const assistantMetadata = metadata && isAssistantMetadata(metadata) ? metadata : null;
+    const hasError = assistantMetadata?.hasError === true;
     const hasContent = message.parts?.some(
       part => part.type === 'text' && 'text' in part && part.text.trim().length > 0,
     );

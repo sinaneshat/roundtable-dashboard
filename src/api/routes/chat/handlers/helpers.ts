@@ -4,7 +4,6 @@ import { validateUIMessages } from 'ai';
 import type * as tables from '@/db/schema';
 import type { ErrorCategory } from '@/lib/schemas/error-schemas';
 import { categorizeErrorMessage, ErrorCategorySchema, FinishReasonSchema } from '@/lib/schemas/error-schemas';
-import { UIMessageMetadataSchema } from '@/lib/schemas/message-metadata';
 
 // ============================================================================
 // ERROR CATEGORIZATION HELPERS
@@ -160,30 +159,64 @@ export async function chatMessagesToUIMessages(
     // Ensure parts is an array and properly typed
     const parts = Array.isArray(msg.parts) ? msg.parts : [];
 
-    return {
+    // ✅ AI SDK V5 PATTERN: metadata is optional (metadata?: METADATA)
+    // When null/undefined in database, we should omit it entirely
+    // Reference: https://sdk.vercel.ai/docs/reference/ai-sdk-core/ui-message
+    const result: {
+      id: string;
+      role: typeof msg.role;
+      parts: typeof parts;
+      metadata?: unknown;
+      createdAt: Date;
+    } = {
       id: msg.id,
       role: msg.role,
       parts,
-      metadata: msg.metadata || null,
       createdAt: msg.createdAt,
     };
+
+    // Only include metadata if it exists in the database
+    // Don't pass null - omit the field entirely when missing
+    if (msg.metadata) {
+      result.metadata = msg.metadata;
+    }
+
+    return result;
   });
 
   // ✅ AI SDK V5 VALIDATION: Use official validateUIMessages() instead of custom Zod
-  // Benefits:
-  // - Official AI SDK validation (more robust than custom schemas)
-  // - Catches format issues early (before streaming)
-  // - Better error messages from AI SDK
-  // - Consistent with streaming handler validation patterns
+  // Reference: https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot-message-persistence
+  //
+  // NOTE: We don't validate metadata here because:
+  // - User messages in DB may not have metadata (e.g., initial thread creation)
+  // - Metadata validation would require ALL messages to have metadata
+  // - UIMessage allows optional metadata (metadata?: METADATA)
+  // - Validation happens later in the streaming handler when metadata is present
   try {
     return await validateUIMessages({
       messages: messages as UIMessage[],
-      metadataSchema: UIMessageMetadataSchema, // Custom metadata validation for participant tracking
+      // Don't validate metadata - allow messages with or without metadata
+      // metadataSchema validation requires all messages to have metadata
     });
   } catch (error) {
-    // ✅ FAIL-FAST: Throw error instead of silent fallback
-    // This ensures invalid database data is caught early rather than causing
-    // downstream issues in message conversion or streaming
+    // ✅ AI SDK V5 PATTERN: Handle TypeValidationError gracefully
+    // Reference: https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot-message-persistence#validating-messages-from-database
+    const { TypeValidationError } = await import('ai');
+
+    if (TypeValidationError.isInstance(error)) {
+      // Log validation error for monitoring
+      console.error('Database messages validation failed:', error);
+      console.error('Problematic messages:', JSON.stringify(messages, null, 2));
+
+      // Re-throw with more context for debugging
+      throw new Error(
+        `Database message validation failed: ${error.message}\n`
+        + `This usually means messages in the database have invalid structure.\n`
+        + `Check the logs above for the problematic messages.`,
+      );
+    }
+
+    // Re-throw non-validation errors
     throw new Error(
       `Invalid message format from database: ${error instanceof Error ? error.message : 'Unknown validation error'}`,
     );

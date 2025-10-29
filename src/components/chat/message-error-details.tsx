@@ -4,6 +4,7 @@ import { useTranslations } from 'next-intl';
 
 import { useBoolean } from '@/hooks/utils';
 import type { UIMessageMetadata } from '@/lib/schemas/message-metadata';
+import { isAssistantMetadata } from '@/lib/schemas/message-metadata';
 
 type MessageErrorDetailsProps = {
   metadata: UIMessageMetadata | null | undefined;
@@ -15,17 +16,26 @@ export function MessageErrorDetails({
 }: MessageErrorDetailsProps) {
   const t = useTranslations('chat.errors');
   const showDetails = useBoolean(false);
-  const hasError = metadata?.hasError || metadata?.error || metadata?.errorMessage;
+
+  // ✅ STRICT TYPING: Only assistant messages have error state
+  // User messages don't have error fields, so check type first
+  if (!metadata || !isAssistantMetadata(metadata)) {
+    return null;
+  }
+
+  // Now metadata is AssistantMessageMetadata with all required + optional fields
+  // No type casting needed - all fields are properly typed
+  const hasError = metadata.hasError || metadata.error || metadata.errorMessage;
   if (!hasError) {
     return null;
   }
-  const providerMessage = metadata?.providerMessage ? String(metadata.providerMessage) : null;
+  const providerMessage = metadata.providerMessage ? String(metadata.providerMessage) : null;
   const errorMessage = providerMessage
-    || String(metadata?.errorMessage || metadata?.error || 'An unexpected error occurred');
-  const errorType = String(metadata?.errorType || 'unknown');
-  const model = String(metadata?.model || t('unknownModel'));
-  const participantIndex = typeof metadata?.participantIndex === 'number' ? metadata.participantIndex : null;
-  const aborted = metadata?.aborted || false;
+    || String(metadata.errorMessage || metadata.error || 'An unexpected error occurred');
+  const errorType = String(metadata.errorType || 'unknown');
+  const model = String(metadata.model || t('unknownModel'));
+  const participantIndex = metadata.participantIndex;
+  const aborted = metadata.aborted || false;
   const getErrorTitle = () => {
     if (aborted)
       return t('generationCancelled');
@@ -78,7 +88,7 @@ export function MessageErrorDetails({
               </span>
             </div>
           )}
-          {metadata?.statusCode && (
+          {metadata.statusCode && (
             <div className="flex gap-2">
               <span className="font-medium min-w-20">{t('statusCode')}</span>
               <span className="font-mono text-destructive">{metadata.statusCode}</span>
@@ -96,7 +106,7 @@ export function MessageErrorDetails({
               <span>{t('requestAborted')}</span>
             </div>
           )}
-          {metadata?.responseBody && process.env.NODE_ENV === 'development' && (
+          {metadata.responseBody && process.env.NODE_ENV === 'development' && (
             <div className="mt-2 pt-2 border-t border-destructive/20">
               <div className="font-medium mb-1">{t('responseFromProvider')}</div>
               <pre className="p-2 bg-destructive/5 rounded text-[10px] overflow-auto max-h-24 font-mono">

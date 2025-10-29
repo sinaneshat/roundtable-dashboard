@@ -43,7 +43,6 @@ import {
 import type { ApiEnv } from '@/api/types';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db/schema';
-import { UIMessageMetadataSchema } from '@/lib/schemas/message-metadata';
 import { extractTextFromParts } from '@/lib/schemas/message-schemas';
 import { filterNonEmptyMessages } from '@/lib/utils/message-transforms';
 
@@ -523,9 +522,15 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
       // - New message validated here
       // - Full conversation history re-validated for safety
       // - AI SDK handles deduplication automatically
+      //
+      // NOTE: We don't validate metadata schema here because:
+      // - Incoming messages have minimal metadata (roundNumber, isParticipantTrigger)
+      // - UIMessageMetadataSchema is a discriminated union requiring 'role' field
+      // - Message.role already provides role information at message level
+      // - Metadata is optional per UIMessage spec
       typedMessages = await validateUIMessages({
         messages: allMessages,
-        metadataSchema: UIMessageMetadataSchema,
+        // Don't validate metadata - allow messages with partial/minimal metadata
       });
     } catch (error) {
       throw createError.badRequest(
@@ -1192,10 +1197,29 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
       // Pre-generating the ID prevents AI SDK's generateId() timestamp collisions
       generateMessageId: () => streamMessageId,
 
-      // ✅ CRITICAL FIX: Inject participant metadata into stream
-      // Reference: AI SDK messageMetadata callback - called on 'start' and 'finish' events
-      // This ensures frontend receives participant info during streaming, not just after completion
-      messageMetadata: () => streamMetadata,
+      // ✅ AI SDK V5 OFFICIAL PATTERN: Inject participant metadata at stream lifecycle events
+      // Reference: https://sdk.vercel.ai/docs/ai-sdk-ui/25-message-metadata
+      // The callback receives { part } with type: 'start' | 'finish' | 'start-step' | 'finish-step'
+      // Send metadata on 'start' to ensure frontend receives participant info immediately
+      // Send additional metadata on 'finish' to include usage stats
+      messageMetadata: ({ part }) => {
+        // Send participant metadata when streaming starts
+        if (part.type === 'start') {
+          return streamMetadata;
+        }
+
+        // Send additional metadata when streaming finishes
+        if (part.type === 'finish') {
+          return {
+            ...streamMetadata,
+            totalTokens: part.totalUsage?.totalTokens ?? 0,
+            finishReason: part.finishReason,
+          };
+        }
+
+        // For 'start-step' and 'finish-step', return undefined (no extra metadata needed)
+        return undefined;
+      },
 
       onError: (error) => {
         // ✅ POSTHOG LLM TRACKING: Track LLM errors with trace linking

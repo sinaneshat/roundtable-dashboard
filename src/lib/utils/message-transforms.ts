@@ -15,8 +15,8 @@ import type { UIMessage } from 'ai';
 import type { ChatMessage } from '@/api/routes/chat/schema';
 import type { ErrorMetadata, UIMessageErrorType } from '@/lib/schemas/error-schemas';
 import { ErrorMetadataSchema, UIMessageErrorTypeSchema } from '@/lib/schemas/error-schemas';
-import type { UIMessageMetadata } from '@/lib/schemas/message-metadata';
-import { UIMessageMetadataSchema } from '@/lib/schemas/message-metadata';
+import type { ErrorType, FinishReason, MessageMetadata } from '@/lib/schemas/message-metadata';
+import { ErrorTypeSchema, FinishReasonSchema, MessageMetadataSchema } from '@/lib/schemas/message-metadata';
 
 // ============================================================================
 // Type Definitions
@@ -42,11 +42,11 @@ export type MessageOrderValidation = {
 /**
  * Safely extract and parse message metadata
  *
- * Validates metadata against UIMessageMetadataSchema and returns typed metadata.
+ * Validates metadata against MessageMetadataSchema and returns typed metadata.
  * Falls back to raw metadata if parsing fails (for backwards compatibility).
  *
  * @param metadata - Raw metadata object from message
- * @returns Parsed UIMessageMetadata or undefined if no metadata
+ * @returns Parsed MessageMetadata or undefined if no metadata
  *
  * @example
  * ```typescript
@@ -56,12 +56,12 @@ export type MessageOrderValidation = {
  * }
  * ```
  */
-export function getMessageMetadata(metadata: unknown): UIMessageMetadata | undefined {
+export function getMessageMetadata(metadata: unknown): MessageMetadata | undefined {
   if (!metadata)
     return undefined;
 
-  const result = UIMessageMetadataSchema.safeParse(metadata);
-  return result.success ? result.data : (metadata as UIMessageMetadata);
+  const result = MessageMetadataSchema.safeParse(metadata);
+  return result.success ? result.data : (metadata as MessageMetadata);
 }
 
 // ============================================================================
@@ -90,12 +90,17 @@ export function chatMessageToUIMessage(
     ? message.createdAt.toISOString()
     : message.createdAt;
 
-  const metadata: UIMessageMetadata = {
-    ...(message.metadata || {}),
-    participantId: message.participantId || undefined,
-    createdAt,
-    roundNumber: message.roundNumber,
-  };
+  // ✅ STRICT TYPING: Build metadata from database fields
+  // Let TypeScript infer the type - it will match PartialMessageMetadata structure
+  const metadata = message.roundNumber
+    ? {
+        ...(message.metadata || {}),
+        role: message.role, // ✅ FIX: Add role discriminator for type guard
+        participantId: message.participantId || undefined,
+        createdAt,
+        roundNumber: message.roundNumber,
+      }
+    : null;
 
   return {
     id: message.id,
@@ -173,6 +178,7 @@ export function chatMessagesToUIMessages(
             ...message,
             metadata: {
               ...msgMetadata,
+              role: message.role, // ✅ FIX: Add role discriminator for type guard
               model: participant.modelId,
               ...(participant.role && { participantRole: participant.role }),
             },
@@ -193,6 +199,7 @@ export function chatMessagesToUIMessages(
     // This makes backend messages "complete" so they don't need participant lookups
     const baseMetadata: Record<string, unknown> = {
       ...(message.metadata || {}),
+      role: message.role, // ✅ FIX: Add role discriminator for type guard
       roundNumber: currentRound || 1, // Default to round 1 if no rounds yet
     };
 
@@ -313,6 +320,7 @@ export function createErrorUIMessage(
     role: 'assistant',
     parts: [{ type: 'text', text: '' }],
     metadata: {
+      role: 'assistant', // ✅ FIX: Add role discriminator for type guard
       participantId: participant.id,
       participantIndex: currentIndex,
       ...(participant.role && { participantRole: participant.role }),
@@ -354,11 +362,24 @@ export function createErrorUIMessage(
  * );
  * ```
  */
+/**
+ * Merge participant metadata - STRICT TYPING - Returns complete required metadata
+ *
+ * @param message - UIMessage from AI SDK
+ * @param participant - Participant that generated the message
+ * @param participant.id - Participant ULID
+ * @param participant.modelId - AI model ID
+ * @param participant.role - Participant role (nullable)
+ * @param currentIndex - Index of current participant
+ * @param roundNumber - REQUIRED round number (no longer optional from metadata)
+ * @returns MessageMetadata with role discriminator and all required fields
+ */
 export function mergeParticipantMetadata(
   message: UIMessage,
   participant: { id: string; modelId: string; role: string | null },
   currentIndex: number,
-): Record<string, unknown> {
+  roundNumber: number,
+): Extract<MessageMetadata, { role: 'assistant' }> {
   const metadata = message.metadata as Record<string, unknown> | undefined;
   const hasBackendError = metadata?.hasError === true || !!metadata?.error || !!metadata?.errorMessage;
 
@@ -372,23 +393,50 @@ export function mergeParticipantMetadata(
 
   let errorMessage = metadata?.errorMessage as string | undefined;
   if (isEmptyResponse && !errorMessage) {
-    errorMessage = `The model (${participant.modelId}) did not generate a response. This can happen due to content filtering, model limitations, or API issues.`;
+    errorMessage = `The model (${participant.modelId}) did not generate a response.`;
   }
 
+  // Extract usage or provide defaults
+  const usageData = metadata?.usage as { promptTokens?: number; completionTokens?: number; totalTokens?: number } | undefined;
+  const usage = {
+    promptTokens: usageData?.promptTokens ?? 0,
+    completionTokens: usageData?.completionTokens ?? 0,
+    totalTokens: usageData?.totalTokens ?? 0,
+  };
+
+  // ✅ STRICT TYPING: Validate finish reason using Zod enum (single source of truth)
+  const finishReasonRaw = metadata?.finishReason ? String(metadata.finishReason) : 'unknown';
+  const finishReasonResult = FinishReasonSchema.safeParse(finishReasonRaw);
+  const safeFinishReason: FinishReason = finishReasonResult.success ? finishReasonResult.data : 'unknown';
+
+  // Extract optional createdAt field
+  const createdAt: string | undefined = metadata?.createdAt
+    ? (typeof metadata.createdAt === 'string' ? metadata.createdAt : undefined)
+    : undefined;
+
+  // ✅ STRICT TYPING: Validate errorType using Zod enum if present
+  const errorTypeRaw = metadata?.errorType || (isEmptyResponse ? 'empty_response' : 'unknown');
+  const errorTypeResult = ErrorTypeSchema.safeParse(errorTypeRaw);
+  const safeErrorType: ErrorType = errorTypeResult.success ? errorTypeResult.data : 'unknown';
+
+  // Return complete metadata with ALL required fields
   return {
-    ...(metadata || {}),
+    role: 'assistant', // ✅ FIX: Add role discriminator for type guard
+    roundNumber,
     participantId: participant.id,
     participantIndex: currentIndex,
-    ...(participant.role && { participantRole: participant.role }),
+    participantRole: participant.role,
     model: participant.modelId,
-    ...(metadata?.roundNumber !== undefined && { roundNumber: metadata.roundNumber }),
+    finishReason: safeFinishReason,
+    usage,
+    hasError,
+    isTransient: metadata?.isTransient === true,
+    isPartialResponse: metadata?.isPartialResponse === true,
     ...(hasError && {
-      hasError: true,
-      errorType: metadata?.errorType || (isEmptyResponse ? UIMessageErrorTypeSchema.enum.empty_response : UIMessageErrorTypeSchema.enum.unknown),
+      errorType: safeErrorType,
       errorMessage,
-      providerMessage: metadata?.providerMessage || metadata?.openRouterError || errorMessage,
-      openRouterError: metadata?.openRouterError,
     }),
+    ...(createdAt && { createdAt }),
   };
 }
 

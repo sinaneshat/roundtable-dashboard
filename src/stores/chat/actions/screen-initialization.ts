@@ -28,7 +28,7 @@
 'use client';
 
 import type { UIMessage } from 'ai';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 
 import { DEFAULT_CHAT_MODE } from '@/api/core/enums';
 import type { ChatParticipant, ChatThread } from '@/api/routes/chat/schema';
@@ -155,12 +155,26 @@ export function useScreenInitialization(options: UseScreenInitializationOptions)
     return () => setScreenMode(null);
   }, [mode, setScreenMode]);
 
-  // Initialize thread when data is available
+  // Initialize thread ONLY ONCE per mount
+  // CRITICAL: After initialization, messages flow ONLY from AI SDK → Provider sync
+  // Never re-initialize with stale initialMessages - causes duplicate messages
+  const hasInitialized = useRef(false);
+
   useEffect(() => {
-    if (thread && participants.length > 0) {
+    if (!hasInitialized.current && thread && participants.length > 0) {
+      hasInitialized.current = true;
       initializeThread(thread, participants, initialMessages);
     }
-  }, [thread, participants, initialMessages, initializeThread]);
+    // Empty deps = run once on mount, never on re-renders
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Reset flag on unmount/thread change to allow re-initialization on next mount
+  useEffect(() => {
+    return () => {
+      hasInitialized.current = false;
+    };
+  }, [thread?.id]);
 
   // ============================================================================
   // ANALYSIS ORCHESTRATION (Thread mode only)
