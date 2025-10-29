@@ -147,10 +147,10 @@ const nextConfig: NextConfig = {
             key: 'Content-Security-Policy',
             value: [
               'default-src \'self\'',
-              'script-src \'self\' \'unsafe-inline\' \'unsafe-eval\'',
+              'script-src \'self\' \'unsafe-inline\' \'unsafe-eval\' https://us-assets.i.posthog.com',
               'style-src \'self\' \'unsafe-inline\'',
               'img-src \'self\' data: https://lh3.googleusercontent.com https://lh4.googleusercontent.com https://lh5.googleusercontent.com https://lh6.googleusercontent.com https://googleusercontent.com',
-              `connect-src 'self' ${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}`,
+              `connect-src 'self' ${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'} https://us.i.posthog.com https://us-assets.i.posthog.com`,
               'frame-ancestors \'none\'',
               'base-uri \'self\'',
               'form-action \'self\'',
