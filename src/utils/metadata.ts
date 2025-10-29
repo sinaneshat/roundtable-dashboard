@@ -309,7 +309,7 @@ export function createMetadata({
         { url: '/apple-touch-icon.png', sizes: '180x180', type: 'image/png' },
       ],
     },
-    manifest: '/manifest.json',
+    manifest: '/manifest.webmanifest',
     other: {
       'theme-color': BRAND.colors.primary,
       'msapplication-TileColor': BRAND.colors.primary,
