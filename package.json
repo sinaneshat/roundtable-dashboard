@@ -1,6 +1,6 @@
 {
   "name": "roundtable",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "packageManager": "pnpm@10.11.0",
   "description": "Roundtable Dashboard - AI collaboration platform. Multiple AI Models Brainstorm Together.",
