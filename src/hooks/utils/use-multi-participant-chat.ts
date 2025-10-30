@@ -8,33 +8,27 @@ import { flushSync } from 'react-dom';
 import { z } from 'zod';
 
 import type { ChatParticipant } from '@/api/routes/chat/schema';
-import { chatParticipantSelectSchema } from '@/db/validation/chat';
-import { ParticipantSettingsSchema } from '@/lib/config/participant-settings';
+import { ErrorMetadataSchema } from '@/lib/schemas/error-schemas';
+import { ParticipantsArraySchema } from '@/lib/schemas/participant-schemas';
 import type { UIMessageErrorType } from '@/lib/utils/message-transforms';
 import { createErrorUIMessage, mergeParticipantMetadata } from '@/lib/utils/message-transforms';
+import { extractMetadataRoundNumber } from '@/lib/utils/metadata-extraction';
 import { deduplicateParticipants } from '@/lib/utils/participant-utils';
 import { calculateNextRoundNumber, getCurrentRoundNumber } from '@/lib/utils/round-utils';
 
 import { useParticipantErrorTracking } from './use-participant-error-tracking';
 
 /**
- * Full ChatParticipant schema with settings
- * Matches the ChatParticipant type from the API routes
- */
-const ChatParticipantSchema = chatParticipantSelectSchema
-  .extend({
-    settings: ParticipantSettingsSchema,
-  });
-
-/**
  * Zod schema for UseMultiParticipantChatOptions validation
  * Validates hook options at entry point to ensure type safety
  * Note: Callbacks are not validated to preserve their type signatures
+ *
+ * ✅ SINGLE SOURCE OF TRUTH: Uses ParticipantsArraySchema from central schemas
  */
 const UseMultiParticipantChatOptionsSchema = z
   .object({
     threadId: z.string(), // Allow empty string for initial state
-    participants: z.array(ChatParticipantSchema).min(0, 'Participants must be an array'),
+    participants: ParticipantsArraySchema,
     messages: z.array(z.custom<UIMessage>()).optional(),
     mode: z.string().optional(),
     regenerateRoundNumber: z.number().int().positive().optional(),
@@ -354,15 +348,19 @@ export function useMultiParticipantChat(
       const currentIndex = currentIndexRef.current;
       const participant = roundParticipantsRef.current[currentIndex];
 
-      // Parse error metadata if present
+      // ✅ SINGLE SOURCE OF TRUTH: Parse and validate error metadata with schema
       let errorMessage = error instanceof Error ? error.message : String(error);
-      let errorMetadata: Record<string, unknown> | undefined;
+      let errorMetadata: z.infer<typeof ErrorMetadataSchema> | undefined;
 
       try {
         if (typeof errorMessage === 'string' && (errorMessage.startsWith('{') || errorMessage.includes('errorCategory'))) {
-          errorMetadata = JSON.parse(errorMessage) as Record<string, unknown>;
-          if (errorMetadata?.errorMessage) {
-            errorMessage = errorMetadata.errorMessage as string;
+          const parsed = JSON.parse(errorMessage);
+          const validated = ErrorMetadataSchema.safeParse(parsed);
+          if (validated.success) {
+            errorMetadata = validated.data;
+            if (errorMetadata.rawErrorMessage) {
+              errorMessage = errorMetadata.rawErrorMessage;
+            }
           }
         }
       } catch {
@@ -435,8 +433,8 @@ export function useMultiParticipantChat(
       // AI SDK v5 Pattern: ALWAYS update message metadata on finish
       // The AI SDK adds the message during streaming; we update it with proper metadata
       if (participant && data.message) {
-        // Prefer backend round number, fallback to current state
-        const backendRoundNumber = (data.message.metadata as Record<string, unknown> | undefined)?.roundNumber as number | undefined;
+        // ✅ SINGLE SOURCE OF TRUTH: Use extraction utility for type-safe metadata access
+        const backendRoundNumber = extractMetadataRoundNumber(data.message.metadata);
         const finalRoundNumber = backendRoundNumber || currentRoundRef.current;
 
         // ✅ STRICT TYPING: mergeParticipantMetadata now requires roundNumber parameter
@@ -693,8 +691,13 @@ export function useMultiParticipantChat(
         return false;
       }
 
-      const metadata = m.metadata as Record<string, unknown> | undefined;
-      if (metadata?.isParticipantTrigger) {
+      // ✅ TYPE-SAFE: Check transient flag with proper validation
+      const isParticipantTrigger = m.metadata
+        && typeof m.metadata === 'object'
+        && 'isParticipantTrigger' in m.metadata
+        && (m.metadata as Record<string, unknown>).isParticipantTrigger === true;
+
+      if (isParticipantTrigger) {
         return false;
       }
 
@@ -730,8 +733,8 @@ export function useMultiParticipantChat(
     // STEP 3: Remove ALL messages from the current round (user + assistant)
     // Find the first message of the current round and remove everything from that point
     const firstMessageIndexOfRound = messages.findIndex((m) => {
-      const metadata = m.metadata as Record<string, unknown> | undefined;
-      const msgRoundNumber = metadata?.roundNumber as number | undefined;
+      // ✅ SINGLE SOURCE OF TRUTH: Use extraction utility for type-safe metadata access
+      const msgRoundNumber = extractMetadataRoundNumber(m.metadata);
       return msgRoundNumber === roundNumber;
     });
 

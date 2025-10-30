@@ -1,8 +1,11 @@
 /**
- * Models Service - Simplified OpenRouter Models API
+ * Models Service - AI Models API Client
  *
- * 100% type-safe RPC service for OpenRouter model operations
- * All types automatically inferred from backend Hono routes
+ * ✅ 100% TYPE-SAFE: RPC service for model operations
+ * ✅ AUTO-INFERRED TYPES: All types automatically derived from backend Hono routes
+ * ✅ ZOD VALIDATION: Backend validates responses, frontend gets type safety
+ *
+ * All model data sourced from models-config.service.ts on backend
  */
 
 import type { InferResponseType } from 'hono/client';
@@ -24,10 +27,13 @@ export type ListModelsResponse = InferResponseType<
 // ============================================================================
 
 /**
- * Get all OpenRouter models (no filtering, returns all models)
+ * Get curated AI models with tier-based access control
  *
- * Returns ALL models from OpenRouter API
- * Cached with infinite stale time (no refetches)
+ * ✅ RETURNS: Top 20 models from models-config.service.ts
+ * ✅ INCLUDES: Tier access info, flagship models, default model
+ * ✅ CACHED: Client-side with infinite stale time (models are static)
+ *
+ * @returns {Promise<ListModelsResponse>} Fully typed model list with tier information
  */
 export async function listModelsService() {
   const client = await createApiClient();

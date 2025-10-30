@@ -15,12 +15,20 @@ import { StandardApiResponses } from '@/api/core/response-schemas';
 import {
   AddParticipantInputSchema,
   CreateThreadInputSchema,
+  GenerateAnalysisInputSchema,
+  GenerateResponsesInputSchema,
+  GetRoundAnalysisInputSchema,
   GetThreadInputSchema,
   ListModelsInputSchema,
+  ListRoundsInputSchema,
   MCPResourcesListResponseSchema,
   MCPToolCallResponseSchema,
   MCPToolsListResponseSchema,
+  RegenerateRoundInputSchema,
+  RemoveParticipantInputSchema,
+  RoundFeedbackInputSchema,
   SendMessageInputSchema,
+  UpdateParticipantInputSchema,
 } from './schema';
 
 // ============================================================================
@@ -290,6 +298,340 @@ export const addParticipantToolRoute = createRoute({
       },
     },
     ...StandardApiResponses.BAD_REQUEST,
+    ...StandardApiResponses.NOT_FOUND,
+    ...StandardApiResponses.UNAUTHORIZED,
+  },
+});
+
+/**
+ * Execute MCP Tool: Generate Responses
+ * Triggers server-side AI response generation for all participants
+ *
+ * @auth API Key (x-api-key header)
+ * @body GenerateResponsesInput - Message content and options
+ * @returns Generated AI responses
+ */
+export const generateResponsesToolRoute = createRoute({
+  method: 'post',
+  path: '/mcp/tools/generate-responses',
+  tags: ['mcp', 'tools'],
+  summary: 'MCP Tool: Generate AI responses',
+  description: 'Triggers sequential AI response generation from all participants (non-streaming)',
+  security: [
+    { ApiKeyAuth: [] },
+  ],
+  request: {
+    body: {
+      required: true,
+      content: {
+        'application/json': {
+          schema: GenerateResponsesInputSchema,
+        },
+      },
+    },
+  },
+  responses: {
+    [HttpStatusCodes.OK]: {
+      description: 'Responses generated successfully',
+      content: {
+        'application/json': {
+          schema: MCPToolCallResponseSchema,
+        },
+      },
+    },
+    ...StandardApiResponses.BAD_REQUEST,
+    ...StandardApiResponses.NOT_FOUND,
+    ...StandardApiResponses.UNAUTHORIZED,
+  },
+});
+
+/**
+ * Execute MCP Tool: Generate Analysis
+ * Creates moderator analysis for a round
+ *
+ * @auth API Key (x-api-key header)
+ * @body GenerateAnalysisInput - Thread and round info
+ * @returns Generated analysis
+ */
+export const generateAnalysisToolRoute = createRoute({
+  method: 'post',
+  path: '/mcp/tools/generate-analysis',
+  tags: ['mcp', 'tools'],
+  summary: 'MCP Tool: Generate round analysis',
+  description: 'Creates AI moderator analysis comparing participant responses',
+  security: [
+    { ApiKeyAuth: [] },
+  ],
+  request: {
+    body: {
+      required: true,
+      content: {
+        'application/json': {
+          schema: GenerateAnalysisInputSchema,
+        },
+      },
+    },
+  },
+  responses: {
+    [HttpStatusCodes.OK]: {
+      description: 'Analysis generated successfully',
+      content: {
+        'application/json': {
+          schema: MCPToolCallResponseSchema,
+        },
+      },
+    },
+    ...StandardApiResponses.BAD_REQUEST,
+    ...StandardApiResponses.NOT_FOUND,
+    ...StandardApiResponses.UNAUTHORIZED,
+  },
+});
+
+/**
+ * Execute MCP Tool: Regenerate Round
+ * Deletes and regenerates AI responses for a round
+ *
+ * @auth API Key (x-api-key header)
+ * @body RegenerateRoundInput - Thread and round info
+ * @returns Regenerated responses
+ */
+export const regenerateRoundToolRoute = createRoute({
+  method: 'post',
+  path: '/mcp/tools/regenerate-round',
+  tags: ['mcp', 'tools'],
+  summary: 'MCP Tool: Regenerate round',
+  description: 'Deletes and regenerates all AI responses for a specific round',
+  security: [
+    { ApiKeyAuth: [] },
+  ],
+  request: {
+    body: {
+      required: true,
+      content: {
+        'application/json': {
+          schema: RegenerateRoundInputSchema,
+        },
+      },
+    },
+  },
+  responses: {
+    [HttpStatusCodes.OK]: {
+      description: 'Round regenerated successfully',
+      content: {
+        'application/json': {
+          schema: MCPToolCallResponseSchema,
+        },
+      },
+    },
+    ...StandardApiResponses.BAD_REQUEST,
+    ...StandardApiResponses.NOT_FOUND,
+    ...StandardApiResponses.UNAUTHORIZED,
+  },
+});
+
+/**
+ * Execute MCP Tool: Round Feedback
+ * Submit like/dislike feedback for a round
+ *
+ * @auth API Key (x-api-key header)
+ * @body RoundFeedbackInput - Feedback data
+ * @returns Feedback saved confirmation
+ */
+export const roundFeedbackToolRoute = createRoute({
+  method: 'post',
+  path: '/mcp/tools/round-feedback',
+  tags: ['mcp', 'tools'],
+  summary: 'MCP Tool: Submit round feedback',
+  description: 'Submit like/dislike feedback for a round',
+  security: [
+    { ApiKeyAuth: [] },
+  ],
+  request: {
+    body: {
+      required: true,
+      content: {
+        'application/json': {
+          schema: RoundFeedbackInputSchema,
+        },
+      },
+    },
+  },
+  responses: {
+    [HttpStatusCodes.OK]: {
+      description: 'Feedback submitted successfully',
+      content: {
+        'application/json': {
+          schema: MCPToolCallResponseSchema,
+        },
+      },
+    },
+    ...StandardApiResponses.BAD_REQUEST,
+    ...StandardApiResponses.NOT_FOUND,
+    ...StandardApiResponses.UNAUTHORIZED,
+  },
+});
+
+/**
+ * Execute MCP Tool: Remove Participant
+ * Removes a participant from a thread
+ *
+ * @auth API Key (x-api-key header)
+ * @body RemoveParticipantInput - Participant ID
+ * @returns Removal confirmation
+ */
+export const removeParticipantToolRoute = createRoute({
+  method: 'post',
+  path: '/mcp/tools/remove-participant',
+  tags: ['mcp', 'tools'],
+  summary: 'MCP Tool: Remove participant',
+  description: 'Removes a participant from a chat thread',
+  security: [
+    { ApiKeyAuth: [] },
+  ],
+  request: {
+    body: {
+      required: true,
+      content: {
+        'application/json': {
+          schema: RemoveParticipantInputSchema,
+        },
+      },
+    },
+  },
+  responses: {
+    [HttpStatusCodes.OK]: {
+      description: 'Participant removed successfully',
+      content: {
+        'application/json': {
+          schema: MCPToolCallResponseSchema,
+        },
+      },
+    },
+    ...StandardApiResponses.BAD_REQUEST,
+    ...StandardApiResponses.NOT_FOUND,
+    ...StandardApiResponses.UNAUTHORIZED,
+  },
+});
+
+/**
+ * Execute MCP Tool: Update Participant
+ * Updates participant settings
+ *
+ * @auth API Key (x-api-key header)
+ * @body UpdateParticipantInput - New settings
+ * @returns Update confirmation
+ */
+export const updateParticipantToolRoute = createRoute({
+  method: 'post',
+  path: '/mcp/tools/update-participant',
+  tags: ['mcp', 'tools'],
+  summary: 'MCP Tool: Update participant',
+  description: 'Updates participant role, system prompt, or priority',
+  security: [
+    { ApiKeyAuth: [] },
+  ],
+  request: {
+    body: {
+      required: true,
+      content: {
+        'application/json': {
+          schema: UpdateParticipantInputSchema,
+        },
+      },
+    },
+  },
+  responses: {
+    [HttpStatusCodes.OK]: {
+      description: 'Participant updated successfully',
+      content: {
+        'application/json': {
+          schema: MCPToolCallResponseSchema,
+        },
+      },
+    },
+    ...StandardApiResponses.BAD_REQUEST,
+    ...StandardApiResponses.NOT_FOUND,
+    ...StandardApiResponses.UNAUTHORIZED,
+  },
+});
+
+/**
+ * Execute MCP Tool: Get Round Analysis
+ * Retrieves moderator analysis for a specific round
+ *
+ * @auth API Key (x-api-key header)
+ * @body GetRoundAnalysisInput - Thread and round info
+ * @returns Round analysis data
+ */
+export const getRoundAnalysisToolRoute = createRoute({
+  method: 'post',
+  path: '/mcp/tools/get-round-analysis',
+  tags: ['mcp', 'tools'],
+  summary: 'MCP Tool: Get round analysis',
+  description: 'Retrieves moderator analysis for a specific round',
+  security: [
+    { ApiKeyAuth: [] },
+  ],
+  request: {
+    body: {
+      required: true,
+      content: {
+        'application/json': {
+          schema: GetRoundAnalysisInputSchema,
+        },
+      },
+    },
+  },
+  responses: {
+    [HttpStatusCodes.OK]: {
+      description: 'Analysis retrieved successfully',
+      content: {
+        'application/json': {
+          schema: MCPToolCallResponseSchema,
+        },
+      },
+    },
+    ...StandardApiResponses.NOT_FOUND,
+    ...StandardApiResponses.UNAUTHORIZED,
+  },
+});
+
+/**
+ * Execute MCP Tool: List Rounds
+ * Lists all rounds in a thread
+ *
+ * @auth API Key (x-api-key header)
+ * @body ListRoundsInput - Thread ID
+ * @returns List of rounds with metadata
+ */
+export const listRoundsToolRoute = createRoute({
+  method: 'post',
+  path: '/mcp/tools/list-rounds',
+  tags: ['mcp', 'tools'],
+  summary: 'MCP Tool: List rounds',
+  description: 'Lists all rounds in a chat thread with metadata',
+  security: [
+    { ApiKeyAuth: [] },
+  ],
+  request: {
+    body: {
+      required: true,
+      content: {
+        'application/json': {
+          schema: ListRoundsInputSchema,
+        },
+      },
+    },
+  },
+  responses: {
+    [HttpStatusCodes.OK]: {
+      description: 'Rounds listed successfully',
+      content: {
+        'application/json': {
+          schema: MCPToolCallResponseSchema,
+        },
+      },
+    },
     ...StandardApiResponses.NOT_FOUND,
     ...StandardApiResponses.UNAUTHORIZED,
   },

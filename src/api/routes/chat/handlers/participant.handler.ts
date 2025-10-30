@@ -7,7 +7,7 @@ import { verifyParticipantOwnership, verifyThreadOwnership } from '@/api/common/
 import { createHandler, createHandlerWithBatch, Responses } from '@/api/core';
 import { ChangelogTypes } from '@/api/core/enums';
 import { IdParamSchema } from '@/api/core/schemas';
-import { extractModeratorModelName } from '@/api/services/openrouter-models.service';
+import { extractModeratorModelName } from '@/api/services/models-config.service';
 import { validateModelAccess, validateTierLimits } from '@/api/services/participant-validation.service';
 import { getUserTier } from '@/api/services/usage-tracking.service';
 import type { ApiEnv } from '@/api/types';

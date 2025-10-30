@@ -121,6 +121,19 @@ export type LLMTrackingOptions = {
     systemPromptTokens?: number;
   };
 
+  // ✅ PostHog Official: Available tools/functions for the LLM
+  tools?: Array<{
+    type: string;
+    function: {
+      name: string;
+      description?: string;
+      parameters?: unknown;
+    };
+  }>;
+
+  // ✅ PostHog Official: Anthropic cache creation tokens (write to cache)
+  cacheCreationInputTokens?: number;
+
   // ✅ AI SDK v5: Total usage across all steps (uses LanguageModelUsage type)
   totalUsage?: LanguageModelUsage;
 
@@ -164,17 +177,24 @@ type LLMGenerationProperties = {
   // Session tracking
   $session_id?: string;
 
+  // ✅ PostHog Official: Span identification for tree-view grouping
+  $ai_span_id?: string; // Unique identifier for this generation
+  $ai_parent_id?: string; // Parent trace/span ID for hierarchical grouping
+
   // Performance metrics
   $ai_temperature?: number;
   $ai_max_tokens?: number;
   $ai_stream?: boolean;
   $ai_cache_read_input_tokens?: number;
+  $ai_cache_creation_input_tokens?: number; // Anthropic cache write tokens
 
   // Cost tracking
   $ai_input_cost_usd?: number;
   $ai_output_cost_usd?: number;
+  $ai_total_cost_usd?: number; // ✅ PostHog Official: Total cost as separate property
 
   // Tool tracking
+  $ai_tools?: Array<{ type: string; function: { name: string; description?: string; parameters?: unknown } }>; // ✅ Available tools
   $ai_tools_count?: number;
   $ai_tool_calls?: Array<{ name: string; arguments: string }>;
   $ai_tool_calls_count?: number;
@@ -432,6 +452,10 @@ export async function trackLLMGeneration(
       $ai_model: context.modelId,
       $ai_provider: provider,
 
+      // ✅ POSTHOG OFFICIAL: Span identification for tree-view grouping
+      $ai_span_id: `span_${ulid()}`, // Unique identifier for this generation
+      $ai_parent_id: traceId, // Parent is the trace (enables tree-view in PostHog UI)
+
       // POSTHOG BEST PRACTICE: Always include input/output for observability
       $ai_input: inputMessages,
       $ai_output_choices: [{
@@ -459,15 +483,22 @@ export async function trackLLMGeneration(
       $ai_http_status: 200, // Successful completion
       $ai_is_error: false,
 
-      // Cost tracking (PostHog analytics)
+      // ✅ POSTHOG OFFICIAL: Cost tracking with separate total_cost_usd
       $ai_input_cost_usd: inputCost,
       $ai_output_cost_usd: outputCost,
+      $ai_total_cost_usd: inputCost + outputCost, // PostHog requires this as separate property
 
       // Model configuration
       $ai_stream: true, // Our implementation always streams
       $ai_max_tokens: options?.modelConfig?.maxTokens,
       ...(options?.modelConfig?.temperature !== undefined && {
         $ai_temperature: options.modelConfig.temperature,
+      }),
+
+      // ✅ POSTHOG OFFICIAL: Available tools for LLM
+      ...(options?.tools && options.tools.length > 0 && {
+        $ai_tools: options.tools,
+        $ai_tools_count: options.tools.length,
       }),
 
       // Tool/function calling tracking
@@ -477,6 +508,11 @@ export async function trackLLMGeneration(
           name: tc.toolName,
           arguments: JSON.stringify(tc.input), // AI SDK v5: uses 'input' not 'args'
         })),
+      }),
+
+      // ✅ POSTHOG OFFICIAL: Anthropic cache creation tokens (write to cache)
+      ...(options?.cacheCreationInputTokens !== undefined && {
+        $ai_cache_creation_input_tokens: options.cacheCreationInputTokens,
       }),
 
       // POSTHOG BEST PRACTICE: Prompt tracking for A/B testing
@@ -678,4 +714,208 @@ function isTransientError(error: Error): boolean {
   }
 
   return false;
+}
+
+// ============================================================================
+// RAG EMBEDDING TRACKING
+// ============================================================================
+
+/**
+ * Track embedding generation event ($ai_embedding)
+ *
+ * ✅ POSTHOG OFFICIAL: Track embedding calls for RAG systems
+ * Reference: https://posthog.com/docs/llm-analytics/embeddings
+ *
+ * Use this when:
+ * - Generating embeddings for user queries (search)
+ * - Generating embeddings for documents (indexing)
+ * - Any text-to-vector conversion operation
+ *
+ * @param context - Basic tracking context (user, session)
+ * @param context.userId - User ID for tracking
+ * @param context.sessionId - Session ID for tracking (optional)
+ * @param params - Embedding parameters
+ * @param params.input - Text to embed (string or array)
+ * @param params.model - Embedding model (e.g., "@cf/baai/bge-base-en-v1.5")
+ * @param params.provider - Provider (e.g., "cloudflare", "openai", "cohere")
+ * @param params.inputTokens - Number of input tokens
+ * @param params.traceId - Trace ID to link with related operations
+ * @param params.spanName - Operation name (e.g., "embed_user_query", "index_document")
+ * @param params.parentId - Parent span/trace ID for tree-view grouping
+ * @param latencyMs - Operation latency in milliseconds
+ * @param options - Optional tracking enrichment
+ * @param options.totalCostUsd - Cost in USD (if applicable)
+ * @param options.additionalProperties - Custom properties
+ */
+export async function trackEmbedding(
+  context: { userId: string; sessionId?: string },
+  params: {
+    input: string | string[];
+    model: string;
+    provider: string;
+    inputTokens: number;
+    traceId: string;
+    spanName?: string;
+    parentId?: string;
+  },
+  latencyMs: number,
+  options?: {
+    totalCostUsd?: number;
+    additionalProperties?: Record<string, unknown>;
+  },
+): Promise<void> {
+  const posthog = getPostHogClient();
+
+  if (!posthog) {
+    return; // PostHog not initialized (non-production env)
+  }
+
+  try {
+    const latencySeconds = latencyMs / 1000;
+
+    posthog.capture({
+      distinctId: context.sessionId || context.userId,
+      event: '$ai_embedding',
+      properties: {
+        // Required properties
+        $ai_trace_id: params.traceId,
+        $ai_span_id: `span_${ulid()}`,
+        $ai_model: params.model,
+        $ai_provider: params.provider,
+        $ai_input: params.input,
+        $ai_input_tokens: params.inputTokens,
+
+        // Session linking
+        ...(context.sessionId && {
+          $session_id: context.sessionId,
+        }),
+
+        // Performance
+        $ai_latency: latencySeconds,
+        $ai_http_status: 200,
+        $ai_is_error: false,
+
+        // Cost tracking (if applicable)
+        ...(options?.totalCostUsd !== undefined && {
+          $ai_total_cost_usd: options.totalCostUsd,
+        }),
+
+        // Metadata
+        ...(params.spanName && {
+          $ai_span_name: params.spanName,
+        }),
+        ...(params.parentId && {
+          $ai_parent_id: params.parentId,
+        }),
+
+        // Additional properties
+        ...options?.additionalProperties,
+      },
+    });
+
+    await posthog.shutdown();
+  } catch {
+    // Silently fail - don't break the application
+  }
+}
+
+// ============================================================================
+// SPAN TRACKING (Tool Calls, RAG Operations, etc.)
+// ============================================================================
+
+/**
+ * Track atomic operations within AI workflows ($ai_span)
+ *
+ * ✅ POSTHOG OFFICIAL: Track discrete operations within traces
+ * Reference: https://posthog.com/docs/llm-analytics/spans
+ *
+ * Use this for:
+ * - Tool/function calls
+ * - Vector search operations
+ * - Data retrieval steps
+ * - Preprocessing/postprocessing operations
+ *
+ * @param context - Basic tracking context
+ * @param context.userId - User ID for tracking
+ * @param context.sessionId - Session ID for tracking (optional)
+ * @param params - Span parameters
+ * @param params.traceId - Trace ID to link with
+ * @param params.spanName - Operation name (e.g., "vector_search", "tool_call")
+ * @param params.inputState - Input state (any JSON-serializable data)
+ * @param params.outputState - Output state (any JSON-serializable data)
+ * @param params.parentId - Parent trace/span ID
+ * @param latencyMs - Operation latency in milliseconds
+ * @param options - Optional tracking enrichment
+ * @param options.isError - Whether operation failed
+ * @param options.error - Error details
+ * @param options.additionalProperties - Custom properties
+ */
+export async function trackSpan(
+  context: { userId: string; sessionId?: string },
+  params: {
+    traceId: string;
+    spanName: string;
+    inputState: unknown;
+    outputState: unknown;
+    parentId?: string;
+  },
+  latencyMs: number,
+  options?: {
+    isError?: boolean;
+    error?: Error;
+    additionalProperties?: Record<string, unknown>;
+  },
+): Promise<void> {
+  const posthog = getPostHogClient();
+
+  if (!posthog) {
+    return; // PostHog not initialized (non-production env)
+  }
+
+  try {
+    const latencySeconds = latencyMs / 1000;
+
+    posthog.capture({
+      distinctId: context.sessionId || context.userId,
+      event: '$ai_span',
+      properties: {
+        // Required properties
+        $ai_trace_id: params.traceId,
+        $ai_span_id: `span_${ulid()}`,
+        $ai_span_name: params.spanName,
+        $ai_input_state: params.inputState,
+        $ai_output_state: params.outputState,
+
+        // Session linking
+        ...(context.sessionId && {
+          $session_id: context.sessionId,
+        }),
+
+        // Performance
+        $ai_latency: latencySeconds,
+        $ai_is_error: options?.isError || false,
+
+        // Error details
+        ...(options?.error && {
+          $ai_error: {
+            message: options.error.message,
+            name: options.error.name,
+            stack: options.error.stack,
+          },
+        }),
+
+        // Tree-view grouping
+        ...(params.parentId && {
+          $ai_parent_id: params.parentId,
+        }),
+
+        // Additional properties
+        ...options?.additionalProperties,
+      },
+    });
+
+    await posthog.shutdown();
+  } catch {
+    // Silently fail - don't break the application
+  }
 }

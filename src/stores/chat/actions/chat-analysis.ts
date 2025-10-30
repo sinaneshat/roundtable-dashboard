@@ -21,19 +21,14 @@ import { z } from 'zod';
 import { AnalysisStatusSchema, ChatModeSchema } from '@/api/core/enums';
 import type { ChatParticipant, ModeratorAnalysisPayload, StoredModeratorAnalysis } from '@/api/routes/chat/schema';
 import { ModeratorAnalysisPayloadSchema } from '@/api/routes/chat/schema';
-import { chatParticipantSelectSchema } from '@/db/validation/chat';
 import { useThreadAnalysesQuery } from '@/hooks/queries/chat';
-import { ParticipantSettingsSchema } from '@/lib/config/participant-settings';
 import { queryKeys } from '@/lib/data/query-keys';
+import { ParticipantsArraySchema } from '@/lib/schemas/participant-schemas';
+import { isCompleteAnalysis } from '@/lib/utils/analysis-utils';
+import { transformModeratorAnalyses } from '@/lib/utils/date-transforms';
+import { getParticipantMessagesWithIds } from '@/lib/utils/message-filtering';
 
-/**
- * Full ChatParticipant schema with settings
- * Matches the ChatParticipant type from the API routes
- */
-const ChatParticipantSchema = chatParticipantSelectSchema
-  .extend({
-    settings: ParticipantSettingsSchema,
-  });
+import { validateAnalysesCache } from './types';
 
 /**
  * Zod schema for UseChatAnalysisOptions validation
@@ -54,10 +49,13 @@ type UseChatAnalysisOptions = z.infer<typeof UseChatAnalysisOptionsSchema>;
 /**
  * Zod schemas for internal function parameters
  */
+/**
+ * ✅ SINGLE SOURCE OF TRUTH: Uses ParticipantsArraySchema from central schemas
+ */
 const CreatePendingAnalysisParamsSchema = z.object({
   roundNumber: z.number().int().positive(),
   messages: z.array(z.custom<UIMessage>()),
-  participants: z.array(ChatParticipantSchema),
+  participants: ParticipantsArraySchema,
   userQuestion: z.string().min(1),
 }).strict();
 
@@ -131,13 +129,8 @@ export function useChatAnalysis(
       } | undefined;
 
       if (cachedData?.success && cachedData.data?.items) {
-        return cachedData.data.items.map(item => ({
-          ...item,
-          createdAt: typeof item.createdAt === 'string' ? new Date(item.createdAt) : item.createdAt as Date,
-          completedAt: item.completedAt
-            ? (typeof item.completedAt === 'string' ? new Date(item.completedAt) : item.completedAt as Date)
-            : null,
-        })) as StoredModeratorAnalysis[];
+        // ✅ SINGLE SOURCE OF TRUTH: Use date transform utility with Zod validation
+        return transformModeratorAnalyses(cachedData.data.items);
       }
 
       return [];
@@ -148,13 +141,8 @@ export function useChatAnalysis(
       return [];
     }
 
-    return analysesResponse.data.items.map(item => ({
-      ...item,
-      createdAt: typeof item.createdAt === 'string' ? new Date(item.createdAt) : item.createdAt as Date,
-      completedAt: item.completedAt
-        ? (typeof item.completedAt === 'string' ? new Date(item.completedAt) : item.completedAt as Date)
-        : null,
-    })) as StoredModeratorAnalysis[];
+    // ✅ SINGLE SOURCE OF TRUTH: Use date transform utility with Zod validation
+    return transformModeratorAnalyses(analysesResponse.data.items);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- cacheVersion intentionally included to force re-computation when cache is manually updated
   }, [analysesResponse, enabled, threadId, queryClient, cacheVersion]);
 
@@ -178,30 +166,14 @@ export function useChatAnalysis(
           participants,
           userQuestion: safeUserQuestion,
         });
-        // ✅ CRITICAL FIX: Extract message IDs from the CURRENT round only
-        // Handle potential type mismatches between stored and parameter roundNumber
-        const roundMessages = validated.messages.filter((m) => {
-          const metadata = m.metadata as Record<string, unknown> | undefined;
 
-          // Ensure we're comparing numbers, not strings
-          const messageRoundNumber = metadata?.roundNumber;
-          const messageRound = typeof messageRoundNumber === 'number'
-            ? messageRoundNumber
-            : (typeof messageRoundNumber === 'string' ? Number(messageRoundNumber) : null);
-
-          const targetRound = typeof validated.roundNumber === 'number'
-            ? validated.roundNumber
-            : Number(validated.roundNumber);
-
-          const isAssistant = m.role === 'assistant';
-          const roundMatches = messageRound === targetRound;
-
-          return roundMatches && isAssistant;
-        });
-
-        // ✅ CRITICAL FIX: Deduplicate message IDs to prevent duplicate submissions
-        // If there are duplicate messages in the array, we'd get duplicate IDs
-        const participantMessageIds = Array.from(new Set(roundMessages.map(m => m.id)));
+        // ✅ SINGLE SOURCE OF TRUTH: Use utility functions for type-safe extraction
+        // Replaces unsafe type assertions and complex type conversions
+        // Handles deduplication automatically via Set internally
+        const { ids: participantMessageIds } = getParticipantMessagesWithIds(
+          validated.messages,
+          validated.roundNumber,
+        );
 
         // ✅ VALIDATION: Check if we have the expected number of participant messages
         const expectedCount = validated.participants.filter(p => p.isEnabled).length;
@@ -232,13 +204,11 @@ export function useChatAnalysis(
         queryClient.setQueryData(
           queryKeys.threads.analyses(threadId),
           (oldData: unknown) => {
-            const typedData = oldData as {
-              success: boolean;
-              data: { items: StoredModeratorAnalysis[] };
-            } | undefined;
+            // ✅ SINGLE SOURCE OF TRUTH: Use validation helper for type-safe cache access
+            const cacheData = validateAnalysesCache(oldData);
 
             // ✅ FIX: Ensure cache structure is always valid
-            if (!typedData?.success || !typedData.data?.items) {
+            if (!cacheData) {
               return {
                 success: true,
                 data: { items: [pendingAnalysis] },
@@ -247,12 +217,12 @@ export function useChatAnalysis(
 
             // ✅ FIX: Only remove pending/streaming analyses for this round
             // Keep completed analyses to prevent them from reverting to streaming state
-            const filteredItems = typedData.data.items.filter(
+            const filteredItems = cacheData.data.items.filter(
               a => a.roundNumber !== validated.roundNumber || a.status === AnalysisStatusSchema.enum.completed,
             );
 
             // Check if any analysis (pending, streaming, or completed) already exists for this round
-            const hasExistingAnalysis = typedData.data.items.some(
+            const hasExistingAnalysis = cacheData.data.items.some(
               a => a.roundNumber === validated.roundNumber
                 && (a.status === AnalysisStatusSchema.enum.completed
                   || a.status === AnalysisStatusSchema.enum.pending
@@ -261,14 +231,14 @@ export function useChatAnalysis(
 
             if (hasExistingAnalysis) {
               // Don't create duplicate analysis for the same round
-              return typedData;
+              return cacheData;
             }
 
             // Add new pending analysis
             return {
-              ...typedData,
+              ...cacheData,
               data: {
-                ...typedData.data,
+                ...cacheData.data,
                 items: [...filteredItems, pendingAnalysis],
               },
             };
@@ -297,18 +267,16 @@ export function useChatAnalysis(
         queryClient.setQueryData(
           queryKeys.threads.analyses(threadId),
           (oldData: unknown) => {
-            const typedData = oldData as {
-              success: boolean;
-              data: { items: StoredModeratorAnalysis[] };
-            } | undefined;
+            // ✅ SINGLE SOURCE OF TRUTH: Use validation helper for type-safe cache access
+            const cacheData = validateAnalysesCache(oldData);
 
-            if (!typedData?.success) {
-              return typedData;
+            if (!cacheData) {
+              return oldData;
             }
 
             // ✅ CRITICAL: Find and update the specific analysis by round number
             // Preserve all other analyses unchanged to prevent cache corruption
-            const updated = typedData.data.items.map((analysis) => {
+            const updated = cacheData.data.items.map((analysis) => {
               if (analysis.roundNumber === validated.roundNumber) {
                 // ✅ CRITICAL FIX: Only update if status is pending or streaming
                 // Don't overwrite already completed analyses (prevents regression)
@@ -327,8 +295,8 @@ export function useChatAnalysis(
             });
 
             return {
-              ...typedData,
-              data: { ...typedData.data, items: updated },
+              ...cacheData,
+              data: { ...cacheData.data, items: updated },
             };
           },
         );
@@ -359,16 +327,14 @@ export function useChatAnalysis(
         queryClient.setQueryData(
           queryKeys.threads.analyses(threadId),
           (oldData: unknown) => {
-            const typedData = oldData as {
-              success: boolean;
-              data: { items: StoredModeratorAnalysis[] };
-            } | undefined;
+            // ✅ SINGLE SOURCE OF TRUTH: Use validation helper for type-safe cache access
+            const cacheData = validateAnalysesCache(oldData);
 
-            if (!typedData?.success) {
-              return typedData;
+            if (!cacheData) {
+              return oldData;
             }
 
-            const updated = typedData.data.items.map((analysis) => {
+            const updated = cacheData.data.items.map((analysis) => {
               if (analysis.roundNumber === validated.roundNumber) {
                 return {
                   ...analysis,
@@ -379,8 +345,8 @@ export function useChatAnalysis(
             });
 
             return {
-              ...typedData,
-              data: { ...typedData.data, items: updated },
+              ...cacheData,
+              data: { ...cacheData.data, items: updated },
             };
           },
         );
@@ -406,23 +372,21 @@ export function useChatAnalysis(
         queryClient.setQueryData(
           queryKeys.threads.analyses(threadId),
           (oldData: unknown) => {
-            const typedData = oldData as {
-              success: boolean;
-              data: { items: StoredModeratorAnalysis[] };
-            } | undefined;
+            // ✅ SINGLE SOURCE OF TRUTH: Use validation helper for type-safe cache access
+            const cacheData = validateAnalysesCache(oldData);
 
-            if (!typedData?.success) {
-              return typedData;
+            if (!cacheData) {
+              return oldData;
             }
 
             // Filter out ALL analyses for this round (including completed, pending, streaming)
-            const filtered = typedData.data.items.filter(
+            const filtered = cacheData.data.items.filter(
               a => a.roundNumber !== validated.roundNumber,
             );
 
             return {
-              ...typedData,
-              data: { ...typedData.data, items: filtered },
+              ...cacheData,
+              data: { ...cacheData.data, items: filtered },
             };
           },
         );
@@ -453,16 +417,14 @@ export function useChatAnalysis(
         queryClient.setQueryData(
           queryKeys.threads.analyses(threadId),
           (oldData: unknown) => {
-            const typedData = oldData as {
-              success: boolean;
-              data: { items: StoredModeratorAnalysis[] };
-            } | undefined;
+            // ✅ SINGLE SOURCE OF TRUTH: Use validation helper for type-safe cache access
+            const cacheData = validateAnalysesCache(oldData);
 
-            if (!typedData?.success) {
-              return typedData;
+            if (!cacheData) {
+              return oldData;
             }
 
-            const updated = typedData.data.items.map((analysis) => {
+            const updated = cacheData.data.items.map((analysis) => {
               if (analysis.roundNumber === validated.roundNumber) {
                 return {
                   ...analysis,
@@ -475,8 +437,8 @@ export function useChatAnalysis(
             });
 
             return {
-              ...typedData,
-              data: { ...typedData.data, items: updated },
+              ...cacheData,
+              data: { ...cacheData.data, items: updated },
             };
           },
         );
@@ -492,11 +454,11 @@ export function useChatAnalysis(
 
   /**
    * Validate analysis data structure
-   * ✅ VALIDATION: Type-safe validation using Zod schema
+   * ✅ SINGLE SOURCE OF TRUTH: Use utility function for schema validation
+   * This ensures consistency across all validation points in the codebase
    */
   const validateAnalysisData = useCallback((data: unknown): data is ModeratorAnalysisPayload => {
-    const result = ModeratorAnalysisPayloadSchema.safeParse(data);
-    return result.success;
+    return isCompleteAnalysis(data);
   }, []);
 
   return {

@@ -16,6 +16,8 @@
 
 import type { UIMessage } from 'ai';
 
+import { extractMetadataRoundNumber } from './metadata-extraction';
+
 /**
  * Helper: Safely extract round number from metadata
  * @internal
@@ -165,15 +167,11 @@ export function groupMessagesByRound(messages: UIMessage[]): Map<number, UIMessa
   const inferredMessages: Array<{ messageId: string; role: string; index: number; inferredRound: number }> = [];
 
   messages.forEach((message, index) => {
-    // Check if message has explicit round number in metadata
-    const hasExplicitRound = message.metadata
-      && typeof message.metadata === 'object'
-      && 'roundNumber' in message.metadata
-      && typeof (message.metadata as Record<string, unknown>).roundNumber === 'number';
+    // ✅ SINGLE SOURCE OF TRUTH: Use extraction utility for type-safe metadata access
+    const explicitRoundNumber = extractMetadataRoundNumber(message.metadata);
 
-    if (hasExplicitRound) {
+    if (explicitRoundNumber !== undefined) {
       // Message has explicit round number in metadata - use it directly
-      const explicitRoundNumber = (message.metadata as Record<string, unknown>).roundNumber as number;
       messageRounds.set(index, explicitRoundNumber);
     } else {
       // No explicit round number - infer from context

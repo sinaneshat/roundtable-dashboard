@@ -105,7 +105,7 @@ export function LeaderboardCard({ leaderboard }: LeaderboardCardProps) {
             transition={{ duration: 0.3, delay: index * 0.05, ease: 'easeOut' }}
             className={cn(
               'group relative rounded-lg border p-3 transition-all duration-200',
-              'hover:shadow-md hover:scale-[1.02]',
+              'hover:shadow-md',
               participant.borderColor,
               participant.bgColor,
             )}

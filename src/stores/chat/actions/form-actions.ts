@@ -10,14 +10,16 @@
 
 'use client';
 
-import type { UIMessage } from 'ai';
 import { useCallback, useMemo } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 
 import { toCreateThreadRequest } from '@/components/chat/chat-form-schemas';
 import { useChatStore } from '@/components/providers/chat-store-provider';
 import { useCreateThreadMutation, useUpdateThreadMutation } from '@/hooks/mutations/chat-mutations';
 import type { ChatModeId } from '@/lib/config/chat-modes';
 import { showApiErrorToast } from '@/lib/toast';
+import { transformChatMessages, transformChatParticipants, transformChatThread } from '@/lib/utils/date-transforms';
+import { chatMessagesToUIMessages } from '@/lib/utils/message-transforms';
 
 export type UseChatFormActionsReturn = {
   /** Submit form to create new thread */
@@ -48,28 +50,34 @@ export type UseChatFormActionsReturn = {
  * await formActions.handleUpdateThreadAndSend(threadId)
  */
 export function useChatFormActions(): UseChatFormActionsReturn {
-  // Store selectors
-  const inputValue = useChatStore(s => s.inputValue);
-  const selectedMode = useChatStore(s => s.selectedMode);
-  const selectedParticipants = useChatStore(s => s.selectedParticipants);
-  const initializeThread = useChatStore(s => s.initializeThread);
-  const updateParticipants = useChatStore(s => s.updateParticipants);
+  // Batch form state selectors with useShallow for performance
+  const formState = useChatStore(useShallow(s => ({
+    inputValue: s.inputValue,
+    selectedMode: s.selectedMode,
+    selectedParticipants: s.selectedParticipants,
+  })));
 
-  // ✅ FIX: Get current thread state for change detection
-  const thread = useChatStore(s => s.thread);
-  const currentParticipants = useChatStore(s => s.participants);
+  // Batch thread state selectors
+  const threadState = useChatStore(useShallow(s => ({
+    thread: s.thread,
+    participants: s.participants,
+  })));
 
-  // Store actions
-  const setInputValue = useChatStore(s => s.setInputValue);
-  const resetForm = useChatStore(s => s.resetForm);
-  const setSelectedMode = useChatStore(s => s.setSelectedMode);
-  const setShowInitialUI = useChatStore(s => s.setShowInitialUI);
-  const setIsCreatingThread = useChatStore(s => s.setIsCreatingThread);
-  const setWaitingToStartStreaming = useChatStore(s => s.setWaitingToStartStreaming);
-  const setCreatedThreadId = useChatStore(s => s.setCreatedThreadId);
-  const setHasPendingConfigChanges = useChatStore(s => s.setHasPendingConfigChanges);
-  const prepareForNewMessage = useChatStore(s => s.prepareForNewMessage);
-  const setExpectedParticipantIds = useChatStore(s => s.setExpectedParticipantIds);
+  // Batch actions selectors (functions are stable, but batching reduces subscriptions)
+  const actions = useChatStore(useShallow(s => ({
+    setInputValue: s.setInputValue,
+    resetForm: s.resetForm,
+    setSelectedMode: s.setSelectedMode,
+    setShowInitialUI: s.setShowInitialUI,
+    setIsCreatingThread: s.setIsCreatingThread,
+    setWaitingToStartStreaming: s.setWaitingToStartStreaming,
+    setCreatedThreadId: s.setCreatedThreadId,
+    setHasPendingConfigChanges: s.setHasPendingConfigChanges,
+    prepareForNewMessage: s.prepareForNewMessage,
+    setExpectedParticipantIds: s.setExpectedParticipantIds,
+    initializeThread: s.initializeThread,
+    updateParticipants: s.updateParticipants,
+  })));
 
   // Mutations
   const createThreadMutation = useCreateThreadMutation();
@@ -77,9 +85,9 @@ export function useChatFormActions(): UseChatFormActionsReturn {
 
   // Form validation
   const isFormValid = Boolean(
-    inputValue.trim()
-    && selectedParticipants.length > 0
-    && selectedMode,
+    formState.inputValue.trim()
+    && formState.selectedParticipants.length > 0
+    && formState.selectedMode,
   );
 
   /**
@@ -87,19 +95,19 @@ export function useChatFormActions(): UseChatFormActionsReturn {
    * Used by ChatOverviewScreen
    */
   const handleCreateThread = useCallback(async () => {
-    const prompt = inputValue.trim();
+    const prompt = formState.inputValue.trim();
 
-    if (!prompt || selectedParticipants.length === 0 || !selectedMode) {
+    if (!prompt || formState.selectedParticipants.length === 0 || !formState.selectedMode) {
       return;
     }
 
     try {
-      setIsCreatingThread(true);
+      actions.setIsCreatingThread(true);
 
       const createThreadRequest = toCreateThreadRequest({
         message: prompt,
-        mode: selectedMode,
-        participants: selectedParticipants,
+        mode: formState.selectedMode,
+        participants: formState.selectedParticipants,
       });
 
       const response = await createThreadMutation.mutateAsync({
@@ -108,64 +116,38 @@ export function useChatFormActions(): UseChatFormActionsReturn {
 
       const { thread, participants, messages: initialMessages } = response.data;
 
-      // Backend provides clean, deduplicated data
-      const threadWithDates = {
-        ...thread,
-        createdAt: new Date(thread.createdAt),
-        updatedAt: new Date(thread.updatedAt),
-        lastMessageAt: thread.lastMessageAt ? new Date(thread.lastMessageAt) : null,
-      };
+      // ✅ SINGLE SOURCE OF TRUTH: Use date transform utilities
+      const threadWithDates = transformChatThread(thread);
+      const participantsWithDates = transformChatParticipants(participants);
+      const messagesWithDates = transformChatMessages(initialMessages);
 
-      const participantsWithDates = participants.map(p => ({
-        ...p,
-        createdAt: new Date(p.createdAt),
-        updatedAt: new Date(p.updatedAt),
-      }));
+      actions.setShowInitialUI(false);
+      actions.setInputValue('');
+      actions.setCreatedThreadId(thread.id);
 
-      // Convert initial messages to UI messages with dates
-      const messagesWithDates = initialMessages.map(m => ({
-        ...m,
-        createdAt: new Date(m.createdAt),
-      }));
+      // ✅ SINGLE SOURCE OF TRUTH: Use utility for type-safe message transformation
+      // Replaces unsafe type assertions with validated conversion
+      const uiMessages = chatMessagesToUIMessages(messagesWithDates);
 
-      setShowInitialUI(false);
-      setInputValue('');
-      setCreatedThreadId(thread.id);
-
-      // AI SDK v5 Pattern: Initialize thread WITH backend messages
-      // Type assertion needed: Backend message parts match AI SDK UIMessage structure
-      // Both use { type: 'text', text: string } format
-      const uiMessages = messagesWithDates.map((m): UIMessage => ({
-        id: m.id,
-        role: m.role as UIMessage['role'],
-        parts: m.parts as UIMessage['parts'],
-        metadata: m.metadata,
-      }));
-
-      initializeThread(threadWithDates, participantsWithDates, uiMessages);
+      actions.initializeThread(threadWithDates, participantsWithDates, uiMessages);
 
       // Set flag to trigger streaming once chat is ready
       // Use queueMicrotask to ensure store updates have propagated
       queueMicrotask(() => {
-        setWaitingToStartStreaming(true);
+        actions.setWaitingToStartStreaming(true);
       });
     } catch (error) {
       showApiErrorToast('Error creating thread', error);
-      setShowInitialUI(true);
+      actions.setShowInitialUI(true);
     } finally {
-      setIsCreatingThread(false);
+      actions.setIsCreatingThread(false);
     }
   }, [
-    inputValue,
-    selectedMode,
-    selectedParticipants,
+    formState.inputValue,
+    formState.selectedMode,
+    formState.selectedParticipants,
     createThreadMutation,
-    initializeThread,
-    setShowInitialUI,
-    setInputValue,
-    setCreatedThreadId,
-    setIsCreatingThread,
-    setWaitingToStartStreaming,
+    actions,
   ]);
 
   /**
@@ -173,36 +155,36 @@ export function useChatFormActions(): UseChatFormActionsReturn {
    * Used by ChatThreadScreen
    */
   const handleUpdateThreadAndSend = useCallback(async (threadId: string) => {
-    const trimmed = inputValue.trim();
+    const trimmed = formState.inputValue.trim();
 
-    if (!trimmed || selectedParticipants.length === 0 || !selectedMode) {
+    if (!trimmed || formState.selectedParticipants.length === 0 || !formState.selectedMode) {
       return;
     }
 
     try {
       // ✅ CRITICAL FIX: Detect if participants or mode actually changed
       // Compare current state with selected state to avoid unnecessary PATCH requests
-      const currentModeId = thread?.mode || null;
-      const hasTemporaryIds = selectedParticipants.some(p => p.id.startsWith('participant-'));
+      const currentModeId = threadState.thread?.mode || null;
+      const hasTemporaryIds = formState.selectedParticipants.some(p => p.id.startsWith('participant-'));
 
       // Compare participants by modelId and priority (ignore temporary IDs and timestamps)
-      const currentParticipantsKey = currentParticipants
+      const currentParticipantsKey = threadState.participants
         .filter(p => p.isEnabled)
         .sort((a, b) => a.priority - b.priority)
         .map(p => `${p.modelId}:${p.priority}:${p.role || 'null'}:${p.customRoleId || 'null'}`)
         .join('|');
 
-      const selectedParticipantsKey = selectedParticipants
+      const selectedParticipantsKey = formState.selectedParticipants
         .sort((a, b) => a.priority - b.priority)
         .map(p => `${p.modelId}:${p.priority}:${p.role || 'null'}:${p.customRoleId || 'null'}`)
         .join('|');
 
       const participantsChanged = currentParticipantsKey !== selectedParticipantsKey;
-      const modeChanged = currentModeId !== selectedMode;
+      const modeChanged = currentModeId !== formState.selectedMode;
       const hasChanges = hasTemporaryIds || participantsChanged || modeChanged;
 
       // Prepare participants for update
-      const participantsForUpdate = selectedParticipants.map(p => ({
+      const participantsForUpdate = formState.selectedParticipants.map(p => ({
         id: p.id.startsWith('participant-') ? '' : p.id,
         modelId: p.modelId,
         role: p.role || null,
@@ -211,7 +193,7 @@ export function useChatFormActions(): UseChatFormActionsReturn {
         isEnabled: true,
       }));
 
-      const optimisticParticipants = selectedParticipants.map((p, index) => ({
+      const optimisticParticipants = formState.selectedParticipants.map((p, index) => ({
         id: p.id,
         threadId,
         modelId: p.modelId,
@@ -226,85 +208,76 @@ export function useChatFormActions(): UseChatFormActionsReturn {
       // ✅ CRITICAL FIX: Only make PATCH request if something actually changed
       if (hasChanges) {
         // Update participants optimistically
-        updateParticipants(optimisticParticipants);
+        actions.updateParticipants(optimisticParticipants);
 
         if (hasTemporaryIds) {
           const response = await updateThreadMutation.mutateAsync({
             param: { id: threadId },
             json: {
               participants: participantsForUpdate,
-              mode: selectedMode,
+              mode: formState.selectedMode,
             },
           });
 
           if (response?.data?.participants) {
-            const participantsWithDates = response.data.participants.map(p => ({
-              ...p,
-              createdAt: new Date(p.createdAt),
-              updatedAt: new Date(p.updatedAt),
-            }));
+            // ✅ SINGLE SOURCE OF TRUTH: Use date transform utility
+            const participantsWithDates = transformChatParticipants(response.data.participants);
 
-            updateParticipants(participantsWithDates);
+            actions.updateParticipants(participantsWithDates);
             await new Promise(resolve => queueMicrotask(resolve));
-            setExpectedParticipantIds(participantsWithDates.map(p => p.modelId));
+            actions.setExpectedParticipantIds(participantsWithDates.map(p => p.modelId));
           } else {
-            setExpectedParticipantIds(optimisticParticipants.map(p => p.modelId));
+            actions.setExpectedParticipantIds(optimisticParticipants.map(p => p.modelId));
           }
         } else {
           updateThreadMutation.mutateAsync({
             param: { id: threadId },
             json: {
               participants: participantsForUpdate,
-              mode: selectedMode,
+              mode: formState.selectedMode,
             },
           }).catch(() => {
             // Silently fail - optimistic update already applied
           });
 
           await new Promise(resolve => queueMicrotask(resolve));
-          setExpectedParticipantIds(optimisticParticipants.map(p => p.modelId));
+          actions.setExpectedParticipantIds(optimisticParticipants.map(p => p.modelId));
         }
       } else {
         // No changes - just use current participants for expected IDs
         await new Promise(resolve => queueMicrotask(resolve));
-        setExpectedParticipantIds(currentParticipants.map(p => p.modelId));
+        actions.setExpectedParticipantIds(threadState.participants.map(p => p.modelId));
       }
 
       // Prepare for new message (sets flags and pending message)
-      prepareForNewMessage(trimmed, []);
+      actions.prepareForNewMessage(trimmed, []);
     } catch (error) {
       showApiErrorToast('Error updating thread', error);
     }
 
-    setInputValue('');
+    actions.setInputValue('');
   }, [
-    inputValue,
-    selectedMode,
-    selectedParticipants,
-    thread,
-    currentParticipants,
+    formState,
+    threadState,
     updateThreadMutation,
-    updateParticipants,
-    prepareForNewMessage,
-    setInputValue,
-    setExpectedParticipantIds,
+    actions,
   ]);
 
   /**
    * Reset form to initial state
    */
   const handleResetForm = useCallback(() => {
-    resetForm();
-  }, [resetForm]);
+    actions.resetForm();
+  }, [actions]);
 
   /**
    * Change mode and mark as having pending changes
    * Used by ChatThreadScreen
    */
   const handleModeChange = useCallback((mode: ChatModeId) => {
-    setSelectedMode(mode);
-    setHasPendingConfigChanges(true);
-  }, [setSelectedMode, setHasPendingConfigChanges]);
+    actions.setSelectedMode(mode);
+    actions.setHasPendingConfigChanges(true);
+  }, [actions]);
 
   // Memoize return object to prevent unnecessary re-renders
   // Even though individual functions are memoized, object literal creates new reference

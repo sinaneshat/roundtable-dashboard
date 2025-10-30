@@ -4,19 +4,22 @@ import { motion } from 'framer-motion';
 import { memo, useEffect } from 'react';
 
 import { AnalysisStatuses } from '@/api/core/enums';
-import type { ModeratorAnalysisPayload, StoredModeratorAnalysis } from '@/api/routes/chat/schema';
+import type { ModeratorAnalysisPayload, RecommendedAction, StoredModeratorAnalysis } from '@/api/routes/chat/schema';
 import { ModeratorAnalysisPayloadSchema } from '@/api/routes/chat/schema';
 import { useBoolean } from '@/hooks/utils';
+import { hasAnalysisData } from '@/lib/utils/analysis-utils';
 
 import { LeaderboardCard } from './leaderboard-card';
 import { ParticipantAnalysisCard } from './participant-analysis-card';
+import { RoundSummarySection } from './round-summary-section';
 import { SkillsComparisonChart } from './skills-comparison-chart';
 
 type ModeratorAnalysisStreamProps = {
   threadId: string;
   analysis: StoredModeratorAnalysis;
-  onStreamComplete?: (completedAnalysisData?: unknown) => void;
+  onStreamComplete?: (completedAnalysisData?: ModeratorAnalysisPayload) => void;
   onStreamStart?: () => void;
+  onActionClick?: (action: RecommendedAction) => void;
 };
 
 // ✅ CRITICAL FIX: Track at TWO levels to prevent duplicate submissions
@@ -54,6 +57,7 @@ function ModeratorAnalysisStreamComponent({
   analysis,
   onStreamComplete,
   onStreamStart,
+  onActionClick,
 }: ModeratorAnalysisStreamProps) {
   const is409Conflict = useBoolean(false);
 
@@ -167,15 +171,15 @@ function ModeratorAnalysisStreamComponent({
       </div>
     );
   }
+  // ✅ SINGLE SOURCE OF TRUTH: Use utility function for data completeness check
+  // This ensures consistency across all components and prevents missing field bugs
   const displayData = (partialAnalysis || analysis.analysisData) as ModeratorAnalysisPayload | undefined;
-  const { leaderboard = [], participantAnalyses = [], overallSummary, conclusion } = displayData || {};
-  const hasAnyData = (leaderboard && leaderboard.length > 0)
-    || (participantAnalyses && participantAnalyses.length > 0)
-    || overallSummary
-    || conclusion;
-  if (!hasAnyData) {
+  if (!hasAnalysisData(displayData)) {
     return null;
   }
+
+  // Destructure for rendering (safe after hasAnalysisData check)
+  const { leaderboard = [], participantAnalyses = [], roundSummary } = displayData;
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -219,31 +223,12 @@ function ModeratorAnalysisStreamComponent({
           ))}
         </motion.div>
       )}
-      {overallSummary && (
-        <motion.div
-          className="space-y-2 pt-2"
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3, delay: 0.3 }}
-        >
-          <h3 className="text-sm font-semibold">Summary</h3>
-          <p className="text-sm text-muted-foreground leading-relaxed">
-            {overallSummary}
-          </p>
-        </motion.div>
-      )}
-      {conclusion && (
-        <motion.div
-          className="space-y-2 pt-2"
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3, delay: 0.4 }}
-        >
-          <h3 className="text-sm font-semibold text-primary">Conclusion</h3>
-          <p className="text-sm leading-relaxed">
-            {conclusion}
-          </p>
-        </motion.div>
+      {roundSummary && (
+        <RoundSummarySection
+          roundSummary={roundSummary}
+          onActionClick={onActionClick}
+          isStreaming
+        />
       )}
     </motion.div>
   );
@@ -254,5 +239,6 @@ export const ModeratorAnalysisStream = memo(ModeratorAnalysisStreamComponent, (p
     && prevProps.analysis.status === nextProps.analysis.status
     && prevProps.analysis.analysisData === nextProps.analysis.analysisData
     && prevProps.threadId === nextProps.threadId
+    && prevProps.onActionClick === nextProps.onActionClick
   );
 });

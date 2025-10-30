@@ -22,7 +22,7 @@ import {
 import type { ChatMode, ThreadStatus } from '@/api/core/enums';
 import { ChangelogTypes, DEFAULT_CHAT_MODE, ThreadStatusSchema } from '@/api/core/enums';
 import { IdParamSchema, ThreadSlugParamSchema } from '@/api/core/schemas';
-import { openRouterModelsService } from '@/api/services/openrouter-models.service';
+import { getModelById } from '@/api/services/models-config.service';
 import {
   canAccessModelByPricing,
   getRequiredTierForModel,
@@ -117,7 +117,7 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
     const db = batch.db;
     const userTier = await getUserTier(user.id);
     for (const participant of body.participants) {
-      const model = await openRouterModelsService.getModelById(participant.modelId);
+      const model = getModelById(participant.modelId);
       if (!model) {
         throw createError.badRequest(
           `Model "${participant.modelId}" not found`,
@@ -248,14 +248,14 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
     await invalidateThreadCache(db, user.id);
     (async () => {
       try {
+        // ✅ FIX: Wait 5 seconds before generating AI title
+        // This allows the first round to complete and analysis to stream before updating URL
+        await new Promise(resolve => setTimeout(resolve, 5000));
+
         const aiTitle = await generateTitleFromMessage(body.firstMessage, c.env);
-        await db
-          .update(tables.chatThread)
-          .set({
-            title: aiTitle,
-            updatedAt: new Date(),
-          })
-          .where(eq(tables.chatThread.id, threadId));
+        // ✅ Update both title AND slug atomically using updateThreadTitleAndSlug
+        const { updateThreadTitleAndSlug } = await import('@/api/services/title-generator.service');
+        await updateThreadTitleAndSlug(threadId, aiTitle);
         await invalidateThreadCache(db, user.id);
       } catch {
       }
@@ -776,6 +776,41 @@ export const getThreadBySlugHandler: RouteHandler<typeof getThreadBySlugRoute, A
         name: user.name,
         image: user.image,
       },
+    });
+  },
+);
+export const getThreadSlugStatusHandler: RouteHandler<typeof import('../route').getThreadSlugStatusRoute, ApiEnv> = createHandler(
+  {
+    auth: 'session',
+    validateParams: IdParamSchema,
+    operationName: 'getThreadSlugStatus',
+  },
+  async (c) => {
+    const { user } = c.auth();
+    const { id } = c.validated.params;
+    const db = await getDbAsync();
+    const thread = await db.query.chatThread.findFirst({
+      where: eq(tables.chatThread.id, id),
+      columns: {
+        slug: true,
+        title: true,
+        isAiGeneratedTitle: true,
+        userId: true,
+      },
+    });
+    if (!thread) {
+      throw createError.notFound('Thread not found', ErrorContextBuilders.resourceNotFound('thread', id));
+    }
+    if (thread.userId !== user.id) {
+      throw createError.unauthorized(
+        'Not authorized to access this thread',
+        ErrorContextBuilders.authorization('thread', id),
+      );
+    }
+    return Responses.ok(c, {
+      slug: thread.slug,
+      title: thread.title,
+      isAiGeneratedTitle: thread.isAiGeneratedTitle,
     });
   },
 );

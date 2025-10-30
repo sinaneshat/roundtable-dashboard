@@ -23,3 +23,5 @@ export { useChatScroll } from './useChatScroll';
 export { useStreamingLoaderState } from './useStreamingLoaderState';
 export type { TimelineItem, UseThreadTimelineOptions } from './useThreadTimeline';
 export { useThreadTimeline } from './useThreadTimeline';
+export type { UseVirtualizedTimelineOptions, UseVirtualizedTimelineResult } from './useVirtualizedTimeline';
+export { useVirtualizedTimeline } from './useVirtualizedTimeline';

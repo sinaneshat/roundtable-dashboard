@@ -71,6 +71,14 @@ export type GetThreadBySlugResponse = InferResponseType<
   ApiClientType['chat']['threads']['slug'][':slug']['$get']
 >;
 
+export type GetThreadSlugStatusRequest = InferRequestType<
+  ApiClientType['chat']['threads'][':id']['slug-status']['$get']
+>;
+
+export type GetThreadSlugStatusResponse = InferResponseType<
+  ApiClientType['chat']['threads'][':id']['slug-status']['$get']
+>;
+
 export type GetThreadMessagesRequest = InferRequestType<
   ApiClientType['chat']['threads'][':id']['messages']['$get']
 >;
@@ -216,6 +224,24 @@ export async function getThreadBySlugService(data: GetThreadBySlugRequest) {
     param: data.param ?? { slug: '' },
   };
   return parseResponse(client.chat.threads.slug[':slug'].$get(params));
+}
+
+/**
+ * Get thread slug status (for polling during AI title generation)
+ * Protected endpoint - requires authentication (ownership check)
+ *
+ * Lightweight endpoint that returns only slug and title.
+ * Used to poll for slug updates while AI generates title in background.
+ *
+ * @param data - Request with param.id for thread ID
+ */
+export async function getThreadSlugStatusService(data: GetThreadSlugStatusRequest) {
+  const client = await createApiClient();
+  // Internal fallback: ensure param exists
+  const params: GetThreadSlugStatusRequest = {
+    param: data.param ?? { id: '' },
+  };
+  return parseResponse(client.chat.threads[':id']['slug-status'].$get(params));
 }
 
 /**

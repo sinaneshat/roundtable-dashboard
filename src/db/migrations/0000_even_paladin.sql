@@ -305,6 +305,7 @@ CREATE TABLE `chat_thread` (
 	`status` text DEFAULT 'active' NOT NULL,
 	`is_favorite` integer DEFAULT false NOT NULL,
 	`is_public` integer DEFAULT false NOT NULL,
+	`is_ai_generated_title` integer DEFAULT false NOT NULL,
 	`metadata` text,
 	`version` integer DEFAULT 1 NOT NULL,
 	`created_at` integer DEFAULT (cast((julianday('now') - 2440587.5)*86400000 as integer)) NOT NULL,

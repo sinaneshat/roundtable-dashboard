@@ -3,7 +3,7 @@ import type { UIMessage } from 'ai';
 import { Bot, Lock } from 'lucide-react';
 import { motion, Reorder } from 'motion/react';
 import { useTranslations } from 'next-intl';
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import type { EnhancedModelResponse } from '@/api/routes/models/schema';
 import type { SubscriptionTier } from '@/api/services/product-logic.service';
@@ -41,6 +41,7 @@ type ChatParticipantsListProps = {
   onParticipantsChange?: (participants: ParticipantConfig[]) => void;
   className?: string;
   isStreaming?: boolean;
+  disabled?: boolean;
 };
 type OrderedModel = {
   model: EnhancedModelResponse;
@@ -52,6 +53,7 @@ export function ChatParticipantsList({
   onParticipantsChange,
   className,
   isStreaming = false,
+  disabled = false,
 }: ChatParticipantsListProps) {
   const tModels = useTranslations('chat.models');
   const [open, setOpen] = useState(false);
@@ -59,6 +61,15 @@ export function ChatParticipantsList({
   const participantIdCounterRef = useRef(0);
   const { data: customRolesData } = useCustomRolesQuery(open && !isStreaming);
   const { data: modelsData } = useModelsQuery();
+
+  // Close popover when disabled using ref pattern to avoid cascading renders
+  const wasDisabledRef = useRef(disabled);
+  useEffect(() => {
+    if (!wasDisabledRef.current && disabled && open) {
+      queueMicrotask(() => setOpen(false));
+    }
+    wasDisabledRef.current = disabled;
+  }, [disabled, open]);
   const customRoles = customRolesData?.pages.flatMap(page =>
     (page?.success && page.data?.items) ? page.data.items : [],
   ) || [];
@@ -224,6 +235,7 @@ export function ChatParticipantsList({
                   type="button"
                   variant="outline"
                   size="sm"
+                  disabled={disabled}
                   className="h-8 sm:h-9 rounded-lg gap-1.5 sm:gap-2 text-xs relative px-3 sm:px-4"
                 >
                   <Bot className="size-3.5 sm:size-4" />

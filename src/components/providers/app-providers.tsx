@@ -1,5 +1,6 @@
 'use client';
 
+import dynamic from 'next/dynamic';
 import type { AbstractIntlMessages } from 'next-intl';
 import { NextIntlClientProvider } from 'next-intl';
 import { NuqsAdapter } from 'nuqs/adapters/next/app';
@@ -10,8 +11,14 @@ import { Toaster } from '@/components/ui/toaster';
 
 import { ChatStoreProvider } from './chat-store-provider';
 import { PostHogPageview } from './posthog-pageview';
-import PostHogProvider from './posthog-provider';
 import QueryClientProvider from './query-client-provider';
+
+// Lazy load PostHog provider - defers loading until after initial render
+// No SSR to avoid hydration issues, no loading state to avoid layout shift
+const PostHogProvider = dynamic(() => import('./posthog-provider'), {
+  ssr: false,
+  loading: () => null,
+});
 
 type AppProvidersProps = {
   children: React.ReactNode;

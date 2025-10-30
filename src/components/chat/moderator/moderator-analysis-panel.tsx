@@ -2,17 +2,21 @@
 import { useTranslations } from 'next-intl';
 
 import { AnalysisStatuses } from '@/api/core/enums';
-import type { ParticipantAnalysis, StoredModeratorAnalysis } from '@/api/routes/chat/schema';
+import type { ParticipantAnalysis, RecommendedAction, StoredModeratorAnalysis } from '@/api/routes/chat/schema';
+import { hasAnalysisData } from '@/lib/utils/analysis-utils';
 
 import { LeaderboardCard } from './leaderboard-card';
 import { ParticipantAnalysisCard } from './participant-analysis-card';
+import { RoundSummarySection } from './round-summary-section';
 import { SkillsComparisonChart } from './skills-comparison-chart';
 
 type ModeratorAnalysisPanelProps = {
   analysis: StoredModeratorAnalysis;
+  onActionClick?: (action: RecommendedAction) => void;
 };
 export function ModeratorAnalysisPanel({
   analysis,
+  onActionClick,
 }: ModeratorAnalysisPanelProps) {
   const t = useTranslations('moderator');
   if (analysis.status === AnalysisStatuses.PENDING || analysis.status === AnalysisStatuses.STREAMING) {
@@ -26,14 +30,15 @@ export function ModeratorAnalysisPanel({
       </div>
     );
   }
-  if (!analysis.analysisData) {
+  // ✅ SINGLE SOURCE OF TRUTH: Use utility function for robust validation
+  if (!hasAnalysisData(analysis.analysisData)) {
     return (
       <div className="py-2 text-sm text-destructive">
         {t('errorAnalyzing')}
       </div>
     );
   }
-  const { leaderboard, participantAnalyses, overallSummary, conclusion } = analysis.analysisData;
+  const { leaderboard, participantAnalyses, roundSummary } = analysis.analysisData;
   const participantData: ParticipantAnalysis[] = participantAnalyses.map(participant => ({
     ...participant,
   }));
@@ -55,21 +60,11 @@ export function ModeratorAnalysisPanel({
           ))}
         </div>
       )}
-      {overallSummary && (
-        <div className="space-y-2 pt-2">
-          <h3 className="text-sm font-semibold">{t('summary')}</h3>
-          <p className="text-sm text-muted-foreground leading-relaxed">
-            {overallSummary}
-          </p>
-        </div>
-      )}
-      {conclusion && (
-        <div className="space-y-2 pt-2">
-          <h3 className="text-sm font-semibold text-primary">{t('conclusion')}</h3>
-          <p className="text-sm leading-relaxed">
-            {conclusion}
-          </p>
-        </div>
+      {roundSummary && (
+        <RoundSummarySection
+          roundSummary={roundSummary}
+          onActionClick={onActionClick}
+        />
       )}
     </div>
   );

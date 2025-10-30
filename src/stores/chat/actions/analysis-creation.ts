@@ -26,6 +26,7 @@ import { startTransition, useCallback, useEffect, useRef } from 'react';
 import type { ChatParticipant } from '@/api/routes/chat/schema';
 import { extractTextFromMessage } from '@/lib/schemas/message-schemas';
 import { checkAllParticipantsFailed, shouldCreateAnalysis } from '@/lib/utils/analysis-utils';
+import { getParticipantMessagesForRound } from '@/lib/utils/message-filtering';
 import { getCurrentRoundNumber } from '@/lib/utils/round-utils';
 
 /**
@@ -283,16 +284,9 @@ export function useAnalysisCreation(
     const currentParticipants = participantsRef.current;
     const roundNumber = getCurrentRoundNumber(currentMessages);
 
-    // CRITICAL: Validate all participant messages synced for THIS ROUND
-    // Filter messages by current round to avoid counting messages from previous rounds
-    const assistantMessagesInRound = currentMessages.filter((m) => {
-      if (m.role !== 'assistant') {
-        return false;
-      }
-      const metadata = m.metadata as Record<string, unknown> | undefined;
-      const msgRoundNumber = metadata?.roundNumber as number | undefined;
-      return msgRoundNumber === roundNumber;
-    });
+    // ✅ SINGLE SOURCE OF TRUTH: Use utility for type-safe message filtering
+    // Replaces unsafe type assertions with centralized filtering logic
+    const assistantMessagesInRound = getParticipantMessagesForRound(currentMessages, roundNumber);
 
     const enabledParticipants = currentParticipants.filter(p => p.isEnabled);
 

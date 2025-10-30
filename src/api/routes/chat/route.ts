@@ -29,6 +29,7 @@ import {
   ThreadDetailResponseSchema,
   ThreadListQuerySchema,
   ThreadListResponseSchema,
+  ThreadSlugStatusResponseSchema,
   UpdateCustomRoleRequestSchema,
   UpdateParticipantRequestSchema,
   UpdateThreadRequestSchema,
@@ -179,6 +180,27 @@ export const getThreadBySlugRoute = createRoute({
       description: 'Thread retrieved successfully',
       content: {
         'application/json': { schema: ThreadDetailResponseSchema },
+      },
+    },
+    ...createProtectedRouteResponses(),
+  },
+});
+export const getThreadSlugStatusRoute = createRoute({
+  method: 'get',
+  path: '/chat/threads/:id/slug-status',
+  tags: ['chat'],
+  summary: 'Get thread slug status',
+  description: 'Lightweight endpoint to check if thread slug has been updated (for polling during AI title generation)',
+  request: {
+    params: IdParamSchema,
+  },
+  responses: {
+    [HttpStatusCodes.OK]: {
+      description: 'Thread slug status retrieved successfully',
+      content: {
+        'application/json': {
+          schema: ThreadSlugStatusResponseSchema,
+        },
       },
     },
     ...createProtectedRouteResponses(),

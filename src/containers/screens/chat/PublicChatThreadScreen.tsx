@@ -5,20 +5,14 @@ import { useTranslations } from 'next-intl';
 import { useMemo } from 'react';
 
 import type { ChatParticipant, RoundFeedback as RoundFeedbackType } from '@/api/routes/chat/schema';
-import { Actions } from '@/components/ai-elements/actions';
-import { ChatMessageList } from '@/components/chat/chat-message-list';
-import { ConfigurationChangesGroup } from '@/components/chat/configuration-changes-group';
-import { RoundAnalysisCard } from '@/components/chat/moderator/round-analysis-card';
-import { RoundFeedback } from '@/components/chat/round-feedback';
+import { ThreadTimeline } from '@/components/chat/thread-timeline';
 import { UnifiedErrorBoundary } from '@/components/chat/unified-error-boundary';
 import { Button } from '@/components/ui/button';
 import { BRAND } from '@/constants';
 import { usePublicThreadQuery } from '@/hooks/queries/chat';
 import type { TimelineItem } from '@/hooks/utils';
 import { useThreadTimeline } from '@/hooks/utils';
-import { messageHasError, MessageMetadataSchema } from '@/lib/schemas/message-metadata';
 import { chatMessagesToUIMessages } from '@/lib/utils/message-transforms';
-import { getRoundNumberFromMetadata } from '@/lib/utils/round-utils';
 
 export default function PublicChatThreadScreen({ slug }: { slug: string }) {
   const t = useTranslations();
@@ -58,7 +52,6 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
     return map;
   }, [rawFeedback]);
 
-  // ✅ Timeline with analyses
   const timeline: TimelineItem[] = useThreadTimeline({
     messages,
     changelog,
@@ -124,7 +117,10 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
     <div className="relative flex flex-1 flex-col min-h-0 h-full">
       <UnifiedErrorBoundary context="chat">
         <div className="flex flex-col min-h-screen relative">
-          <div className="container max-w-3xl mx-auto px-4 sm:px-6 pt-20 pb-32 flex-1">
+          <div
+            id="public-chat-scroll-container"
+            className="container max-w-3xl mx-auto px-4 sm:px-6 pt-20 pb-32 flex-1"
+          >
             {timeline.length === 0
               ? (
                   <div className="flex items-center justify-center min-h-[50vh]">
@@ -143,82 +139,15 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
                 )
               : (
                   <>
-                    {timeline.map((item, itemIndex) => {
-                      if (!item)
-                        return null;
-                      const roundNumber = item.type === 'messages'
-                        ? getRoundNumberFromMetadata(item.data[0]?.metadata, 1)
-                        : item.type === 'analysis'
-                          ? item.data.roundNumber
-                          : item.type === 'changelog'
-                            ? item.data[0]?.roundNumber ?? 1
-                            : 1;
-                      return (
-                        <div key={item.key}>
-                          {item.type === 'changelog' && item.data.length > 0 && (
-                            <div className="mb-6">
-                              <UnifiedErrorBoundary context="configuration">
-                                <ConfigurationChangesGroup
-                                  group={{
-                                    timestamp: new Date(item.data[0]!.createdAt),
-                                    changes: item.data,
-                                  }}
-                                />
-                              </UnifiedErrorBoundary>
-                            </div>
-                          )}
-                          {item.type === 'messages' && (
-                            <div className="space-y-3 pb-2">
-                              <UnifiedErrorBoundary context="message-list">
-                                <ChatMessageList
-                                  messages={item.data}
-                                  user={user || { name: t('user.defaultName'), image: null }}
-                                  participants={participants}
-                                  isStreaming={false}
-                                  currentParticipantIndex={0}
-                                  currentStreamingParticipant={null}
-                                />
-                              </UnifiedErrorBoundary>
-                              {(() => {
-                                const hasRoundError = item.data.some((msg) => {
-                                  const parseResult = MessageMetadataSchema.safeParse(msg.metadata);
-                                  return parseResult.success && messageHasError(parseResult.data);
-                                });
-
-                                return (
-                                  <Actions className="mt-3 mb-2">
-                                    {!hasRoundError && (
-                                      <RoundFeedback
-                                        key={`feedback-${thread.id}-${roundNumber}`}
-                                        threadId={thread.id}
-                                        roundNumber={roundNumber}
-                                        currentFeedback={feedbackByRound.get(roundNumber) ?? null}
-                                        onFeedbackChange={() => {}} // View-only: no-op
-                                        disabled={true} // Always disabled for public view
-                                        isPending={false}
-                                        pendingType={null}
-                                      />
-                                    )}
-                                  </Actions>
-                                );
-                              })()}
-                            </div>
-                          )}
-                          {item.type === 'analysis' && (
-                            <div className="mt-6 mb-4">
-                              <RoundAnalysisCard
-                                analysis={item.data}
-                                threadId={thread.id}
-                                isLatest={itemIndex === timeline.length - 1}
-                                streamingRoundNumber={null}
-                                onStreamStart={() => {}} // View-only: no streaming
-                                onStreamComplete={() => {}} // View-only: no streaming
-                              />
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
+                    <ThreadTimeline
+                      timelineItems={timeline}
+                      scrollContainerId="public-chat-scroll-container"
+                      user={user || { name: t('user.defaultName'), image: null }}
+                      participants={participants}
+                      threadId={thread.id}
+                      feedbackByRound={feedbackByRound}
+                      isReadOnly={true}
+                    />
 
                     <div className="mt-16 mb-8">
                       <div className="rounded-xl border bg-gradient-to-br from-primary/5 via-primary/3 to-background p-8 sm:p-10 text-center space-y-6">

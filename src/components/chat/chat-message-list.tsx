@@ -7,7 +7,7 @@ import { memo, useMemo } from 'react';
 import type { ChatParticipant } from '@/api/routes/chat/schema';
 import { canAccessModelByPricing } from '@/api/services/product-logic.service';
 import { Message, MessageAvatar, MessageContent } from '@/components/ai-elements/message';
-import { Response } from '@/components/ai-elements/response';
+import { VirtualizedResponse } from '@/components/ai-elements/virtualized-response';
 import { ModelMessageCard } from '@/components/chat/model-message-card';
 import { useUsageStatsQuery } from '@/hooks/queries/usage';
 import { useModelLookup } from '@/hooks/utils';
@@ -242,9 +242,13 @@ export const ChatMessageList = memo(
                   {message.parts.map((part) => {
                     if (part.type === 'text') {
                       return (
-                        <Response key={`${message.id}-text-${part.text.substring(0, 20)}`}>
+                        <VirtualizedResponse
+                          key={`${message.id}-text-${part.text.substring(0, 20)}`}
+                          virtualizationThreshold={1000}
+                          chunkSize={800}
+                        >
                           {part.text}
-                        </Response>
+                        </VirtualizedResponse>
                       );
                     }
                     if (part.type === 'file' && part.mediaType?.startsWith('image/')) {

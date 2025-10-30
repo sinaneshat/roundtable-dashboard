@@ -1,7 +1,8 @@
 /**
  * Models API Routes
  *
- * Simplified OpenRouter models endpoint - returns all models
+ * Returns curated top 20 AI models with tier-based access control
+ * All model data sourced from models-config.service.ts (single source of truth)
  */
 
 import { createRoute } from '@hono/zod-openapi';
@@ -15,14 +16,14 @@ import { ListModelsResponseSchema } from './schema';
  * List all models route
  *
  * GET /api/v1/models
- * Returns all available OpenRouter models (no filtering, no parameters)
+ * Returns curated top 20 AI models with user-specific tier access information
  */
 export const listModelsRoute = createRoute({
   method: 'get',
   path: '/models',
   tags: ['models'],
-  summary: 'List all OpenRouter models',
-  description: 'Fetch all available models from OpenRouter. Models are cached for 24 hours.',
+  summary: 'List curated AI models',
+  description: 'Returns top 20 AI models from models-config.service.ts with tier-based access control and flagship model recommendations.',
   responses: {
     [HttpStatusCodes.OK]: {
       description: 'Models retrieved successfully',

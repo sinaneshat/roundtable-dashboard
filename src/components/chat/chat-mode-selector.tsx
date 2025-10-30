@@ -1,6 +1,7 @@
 'use client';
 import { Check } from 'lucide-react';
 import { useTranslations } from 'next-intl';
+import { useEffect, useRef } from 'react';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -42,6 +43,15 @@ export function ChatModeSelector({
   const chatModeOptions = getChatModeOptions();
   const currentMode = getChatModeById(selectedMode);
   const ModeIcon = currentMode?.icon;
+
+  // Close popover when disabled using ref pattern to avoid cascading renders
+  const wasDisabledRef = useRef(disabled);
+  useEffect(() => {
+    if (!wasDisabledRef.current && disabled && open.value) {
+      queueMicrotask(() => open.onFalse());
+    }
+    wasDisabledRef.current = disabled;
+  }, [disabled, open]);
   return (
     <div className={cn('flex items-center gap-1.5', className)}>
       <TooltipProvider>

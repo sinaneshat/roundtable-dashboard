@@ -134,12 +134,13 @@ export async function updateThreadTitleAndSlug(
   // Generate new slug from title (without DB update)
   const newSlug = await generateUniqueSlug(newTitle);
 
-  // ✅ SINGLE ATOMIC UPDATE: Both title and slug in one operation
+  // ✅ SINGLE ATOMIC UPDATE: title, slug, and isAiGeneratedTitle in one operation
   await db
     .update(tables.chatThread)
     .set({
       title: newTitle,
       slug: newSlug,
+      isAiGeneratedTitle: true, // Mark that AI generated this title
       updatedAt: new Date(),
     })
     .where(eq(tables.chatThread.id, threadId));

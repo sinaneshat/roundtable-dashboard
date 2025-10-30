@@ -20,8 +20,14 @@ export type { UseFeedbackActionsOptions, UseFeedbackActionsReturn } from './acti
 export { useFeedbackActions } from './actions/feedback-actions';
 export type { UseChatFormActionsReturn } from './actions/form-actions';
 export { useChatFormActions } from './actions/form-actions';
+export type { UseOverviewActionsReturn } from './actions/overview-actions';
+export { useOverviewActions } from './actions/overview-actions';
+export type { UseRecommendedActionsOptions, UseRecommendedActionsReturn } from './actions/recommended-actions';
+export { useRecommendedActions } from './actions/recommended-actions';
 export type { ScreenMode, UseScreenInitializationOptions } from './actions/screen-initialization';
 export { useScreenInitialization } from './actions/screen-initialization';
+export type { UseThreadActionsOptions, UseThreadActionsReturn } from './actions/thread-actions';
+export { useThreadActions } from './actions/thread-actions';
 
 // Store
 export type { ChatStore, ChatStoreApi } from './store';

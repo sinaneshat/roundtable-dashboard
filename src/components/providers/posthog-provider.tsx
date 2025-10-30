@@ -3,7 +3,7 @@
 import posthog from 'posthog-js';
 import { PostHogProvider as PHProvider } from 'posthog-js/react';
 import type { ReactNode } from 'react';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 
 type PostHogProviderProps = {
   children: ReactNode;
@@ -13,15 +13,17 @@ type PostHogProviderProps = {
 };
 
 /**
- * PostHog Analytics Provider
+ * PostHog Analytics Provider with Lazy Loading
  *
- * Provides PostHog analytics capabilities for the application.
+ * Provides PostHog analytics with optimal performance using dynamic imports.
+ * PostHog initialization is deferred until after initial page render.
+ *
  * Disabled in local environment, enabled in preview and production.
  *
- * Following official PostHog Next.js patterns:
- * - Client-side initialization with useEffect
- * - PostHogProvider wrapper for React hooks
- * - Environment-based conditional initialization
+ * Performance Strategy:
+ * - Component lazy loaded with next/dynamic (see app-providers.tsx)
+ * - Initialization deferred with setTimeout to not block render
+ * - No impact on initial page load or Core Web Vitals
  *
  * Pattern: src/components/providers/posthog-provider.tsx
  * Reference: https://posthog.com/docs/libraries/next-js
@@ -38,14 +40,20 @@ function PostHogProvider({
   apiHost,
   environment,
 }: PostHogProviderProps) {
-  useEffect(() => {
-    // Initialize PostHog in preview and production environments (disabled in local)
-    const shouldInitialize = environment !== 'local';
+  const [isInitialized, setIsInitialized] = useState(false);
 
-    if (shouldInitialize && apiKey && apiHost) {
-      // Initialize PostHog - it handles duplicate initialization internally
-      posthog.init(apiKey, {
-        api_host: apiHost,
+  // Only load PostHog in preview and production environments
+  const shouldInitialize = environment !== 'local' && apiKey && apiHost;
+
+  useEffect(() => {
+    if (!shouldInitialize || isInitialized) {
+      return;
+    }
+
+    // Defer initialization to not block initial render
+    const timeoutId = setTimeout(() => {
+      posthog.init(apiKey!, {
+        api_host: apiHost!,
         // API version date - ensures consistent behavior across PostHog updates
         defaults: '2025-05-24',
         // Only create profiles for identified users
@@ -67,17 +75,23 @@ function PostHogProvider({
           }
         },
       });
-    }
-  }, [apiKey, apiHost, environment]);
+      setIsInitialized(true);
+    }, 0);
 
-  // Wrap children in PostHog provider if not in local environment
-  const shouldInitialize = environment !== 'local';
+    return () => clearTimeout(timeoutId);
+  }, [shouldInitialize, apiKey, apiHost, isInitialized]);
 
-  if (shouldInitialize && apiKey && apiHost) {
+  if (!shouldInitialize) {
+    // In local environment, just return children without PostHog
+    return <>{children}</>;
+  }
+
+  // Wrap children in PostHog provider once initialized
+  if (isInitialized) {
     return <PHProvider client={posthog}>{children}</PHProvider>;
   }
 
-  // In local environment, just return children without PostHog
+  // Return children directly during initialization
   return <>{children}</>;
 }
 

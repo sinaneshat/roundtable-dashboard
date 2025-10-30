@@ -652,8 +652,8 @@ export function getAIParamsForMode(mode: string): { temperature: number; topP: n
 /**
  * Title generation configuration
  *
- * ✅ FULLY DYNAMIC: No hard-coded model preferences
- * Model selection is handled dynamically by openRouterModelsService.getCheapestAvailableModel()
+ * ✅ MODEL SELECTION: Uses cheapest available model from models-config.service.ts
+ * Model selection based on user tier and pricing from the configured model list
  */
 export const TITLE_GENERATION_CONFIG = {
   temperature: 0.3,

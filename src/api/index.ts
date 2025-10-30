@@ -89,6 +89,7 @@ import {
   getThreadFeedbackHandler,
   getThreadHandler,
   getThreadMessagesHandler,
+  getThreadSlugStatusHandler,
   listCustomRolesHandler,
   listThreadsHandler,
   setRoundFeedbackHandler,
@@ -113,6 +114,7 @@ import {
   getThreadFeedbackRoute,
   getThreadMessagesRoute,
   getThreadRoute,
+  getThreadSlugStatusRoute,
   listCustomRolesRoute,
   listThreadsRoute,
   setRoundFeedbackRoute,
@@ -125,20 +127,36 @@ import {
 import {
   addParticipantToolHandler,
   createThreadToolHandler,
+  generateAnalysisToolHandler,
+  generateResponsesToolHandler,
+  getRoundAnalysisToolHandler,
   getThreadToolHandler,
   listModelsToolHandler,
   listResourcesHandler,
+  listRoundsToolHandler,
   listToolsHandler,
+  regenerateRoundToolHandler,
+  removeParticipantToolHandler,
+  roundFeedbackToolHandler,
   sendMessageToolHandler,
+  updateParticipantToolHandler,
 } from './routes/mcp/handler';
 import {
   addParticipantToolRoute,
   createThreadToolRoute,
+  generateAnalysisToolRoute,
+  generateResponsesToolRoute,
+  getRoundAnalysisToolRoute,
   getThreadToolRoute,
   listModelsToolRoute,
   listResourcesRoute,
+  listRoundsToolRoute,
   listToolsRoute,
+  regenerateRoundToolRoute,
+  removeParticipantToolRoute,
+  roundFeedbackToolRoute,
   sendMessageToolRoute,
+  updateParticipantToolRoute,
 } from './routes/mcp/route';
 // Models routes (dynamic OpenRouter models)
 import { listModelsHandler } from './routes/models/handler';
@@ -187,7 +205,10 @@ app.use('*', trimTrailingSlash());
 
 // Core middleware
 app.use('*', contextStorage());
-app.use('*', secureHeaders()); // Use default secure headers - much simpler
+// Use secureHeaders but disable CSP - Next.js handles CSP for PostHog compatibility
+app.use('*', secureHeaders({
+  contentSecurityPolicy: {}, // Empty object disables CSP
+}));
 app.use('*', requestId());
 // IMPORTANT: Compression handled natively by Cloudflare Workers
 // Using Hono's compress() middleware causes binary corruption in OpenNext.js
@@ -388,6 +409,7 @@ const appRoutes = app
   .openapi(createThreadRoute, createThreadHandler) // Create thread with mode and configuration
   .openapi(getThreadRoute, getThreadHandler) // Get thread details with participants
   .openapi(getThreadBySlugRoute, getThreadBySlugHandler) // Get thread by slug (authenticated)
+  .openapi(getThreadSlugStatusRoute, getThreadSlugStatusHandler) // Poll for AI-generated slug updates
   .openapi(updateThreadRoute, updateThreadHandler) // Update thread (title, mode, status, metadata)
   .openapi(deleteThreadRoute, deleteThreadHandler) // Delete thread (soft delete)
   .openapi(getPublicThreadRoute, getPublicThreadHandler) // Get public thread by slug (no auth)
@@ -431,12 +453,24 @@ const appRoutes = app
   // MCP Discovery
   .openapi(listToolsRoute, listToolsHandler) // List available MCP tools
   .openapi(listResourcesRoute, listResourcesHandler) // List accessible MCP resources
-  // MCP Tool Execution
+  // MCP Tool Execution - Thread Management
   .openapi(createThreadToolRoute, createThreadToolHandler) // Tool: Create chat thread
-  .openapi(sendMessageToolRoute, sendMessageToolHandler) // Tool: Send message to thread
   .openapi(getThreadToolRoute, getThreadToolHandler) // Tool: Get thread details
-  .openapi(listModelsToolRoute, listModelsToolHandler) // Tool: List models
+  // MCP Tool Execution - Message & Response Management
+  .openapi(sendMessageToolRoute, sendMessageToolHandler) // Tool: Send message to thread
+  .openapi(generateResponsesToolRoute, generateResponsesToolHandler) // Tool: Generate AI responses (server-side)
+  // MCP Tool Execution - Round Management
+  .openapi(generateAnalysisToolRoute, generateAnalysisToolHandler) // Tool: Generate round analysis
+  .openapi(regenerateRoundToolRoute, regenerateRoundToolHandler) // Tool: Regenerate round
+  .openapi(getRoundAnalysisToolRoute, getRoundAnalysisToolHandler) // Tool: Get round analysis
+  .openapi(listRoundsToolRoute, listRoundsToolHandler) // Tool: List all rounds
+  .openapi(roundFeedbackToolRoute, roundFeedbackToolHandler) // Tool: Submit round feedback
+  // MCP Tool Execution - Participant Management
   .openapi(addParticipantToolRoute, addParticipantToolHandler) // Tool: Add participant to thread
+  .openapi(removeParticipantToolRoute, removeParticipantToolHandler) // Tool: Remove participant
+  .openapi(updateParticipantToolRoute, updateParticipantToolHandler) // Tool: Update participant
+  // MCP Tool Execution - Model Discovery
+  .openapi(listModelsToolRoute, listModelsToolHandler) // Tool: List models
 ;
 
 // ============================================================================

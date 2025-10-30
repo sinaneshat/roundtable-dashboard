@@ -113,7 +113,7 @@ export type OpenRouterModelsResponse = z.infer<typeof OpenRouterModelsResponseSc
  * This is the ENHANCED version with computed fields added to raw OpenRouter data
  */
 export const BaseModelSchema = RawOpenRouterModelSchema.extend({
-  // ✅ COMPUTED ENHANCEMENT FIELDS: Added by openrouter-models.service.ts enhanceModel()
+  // ✅ COMPUTED ENHANCEMENT FIELDS: Defined in models-config.service.ts
   provider: z.string(),
   category: ModelCategorySchema,
   capabilities: z.object({

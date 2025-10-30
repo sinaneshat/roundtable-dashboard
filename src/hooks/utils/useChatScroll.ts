@@ -10,6 +10,11 @@ type UseChatScrollParams = {
   scrollContainerId?: string;
   enableNearBottomDetection?: boolean;
   autoScrollThreshold?: number;
+  /**
+   * Throttle delay for scroll event handler in ms
+   * Default: 100ms
+   */
+  scrollThrottleMs?: number;
 };
 
 type UseChatScrollResult = {
@@ -34,6 +39,7 @@ type UseChatScrollResult = {
  * @param params.scrollContainerId - ID of the scroll container element (default: 'chat-scroll-container')
  * @param params.enableNearBottomDetection - Whether to enable near-bottom detection (default: true)
  * @param params.autoScrollThreshold - Distance from bottom in pixels to consider "near bottom" (default: 200)
+ * @param params.scrollThrottleMs - Throttle time in milliseconds for scroll events (default: 100)
  * @returns Object containing refs and scroll control functions
  *
  * @example
@@ -63,12 +69,16 @@ export function useChatScroll({
   scrollContainerId = 'chat-scroll-container',
   enableNearBottomDetection = true,
   autoScrollThreshold = 200,
+  scrollThrottleMs = 100,
 }: UseChatScrollParams): UseChatScrollResult {
   // Track if user is near bottom of scroll (for auto-scroll opt-out)
   const isNearBottomRef = useRef(true);
 
   // Track which analyses have been scrolled to (prevent duplicate scrolls)
   const scrolledToAnalysesRef = useRef<Set<string>>(new Set());
+
+  // Track last scroll event time for throttling
+  const lastScrollTimeRef = useRef<number>(0);
 
   /**
    * Scroll to bottom of the chat
@@ -108,18 +118,25 @@ export function useChatScroll({
     }
 
     const handleScroll = () => {
+      // Throttle scroll events for better performance
+      const now = Date.now();
+      if (now - lastScrollTimeRef.current < scrollThrottleMs) {
+        return;
+      }
+      lastScrollTimeRef.current = now;
+
       const { scrollTop, scrollHeight, clientHeight } = document.documentElement;
       const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
       isNearBottomRef.current = distanceFromBottom < autoScrollThreshold;
     };
 
-    window.addEventListener('scroll', handleScroll);
+    window.addEventListener('scroll', handleScroll, { passive: true });
 
     // Run once on mount to set initial state
     handleScroll();
 
     return () => window.removeEventListener('scroll', handleScroll);
-  }, [enableNearBottomDetection, autoScrollThreshold]);
+  }, [enableNearBottomDetection, autoScrollThreshold, scrollThrottleMs]);
 
   // Effect 2: Auto-scroll on new analyses or during streaming
   useEffect(() => {

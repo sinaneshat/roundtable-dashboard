@@ -1,7 +1,9 @@
 /**
- * Unified Chat Store - Zustand Vanilla Pattern
+ * Unified Chat Store - Zustand Vanilla Pattern + Performance Optimizations
  *
- * OFFICIAL NEXT.JS PATTERN:
+ * ============================================================================
+ * OFFICIAL NEXT.JS PATTERN
+ * ============================================================================
  * - Uses createStore (vanilla) for per-instance isolation
  * - Factory function for store creation
  * - Context provider for store distribution
@@ -10,6 +12,65 @@
  * CONSOLIDATES:
  * - chat-context.tsx: AI SDK state
  * - chat-thread-state-context.tsx: UI state
+ *
+ * ============================================================================
+ * PERFORMANCE OPTIMIZATIONS (Zustand Best Practices)
+ * ============================================================================
+ *
+ * 1. SEPARATED FLAG SLICES:
+ *    - UIFlagsSlice: Flags that trigger re-renders (loading states, config changes)
+ *    - InternalFlagsSlice: Flags for orchestration logic (use with useStoreRef)
+ *
+ *    WHY: Reduces unnecessary re-renders by only subscribing to UI-relevant flags
+ *    USAGE:
+ *      // UI flags (triggers re-renders)
+ *      const isRegenerating = useChatStore(s => s.isRegenerating)
+ *
+ *      // Internal flags (no re-renders, use refs)
+ *      const store = useChatStoreApi()
+ *      const hasLoadedRef = useStoreRef(store, s => s.hasInitiallyLoaded)
+ *      if (hasLoadedRef.current) { ... } // Access without triggering re-render
+ *
+ * 2. BATCHED SELECTORS WITH useShallow:
+ *    WHY: Multiple individual selectors = multiple store subscriptions
+ *    BEST PRACTICE: Batch related state with useShallow to prevent object reference re-renders
+ *
+ *    BEFORE (causes re-renders on any state change):
+ *      const inputValue = useChatStore(s => s.inputValue)
+ *      const selectedMode = useChatStore(s => s.selectedMode)
+ *      const selectedParticipants = useChatStore(s => s.selectedParticipants)
+ *
+ *    AFTER (only re-renders when these specific values change):
+ *      const formState = useChatStore(useShallow(s => ({
+ *        inputValue: s.inputValue,
+ *        selectedMode: s.selectedMode,
+ *        selectedParticipants: s.selectedParticipants,
+ *      })))
+ *
+ * 3. SUBSCRIBE PATTERN FOR TRANSIENT UPDATES:
+ *    WHY: Frequent updates that don't need UI re-renders
+ *    USE: useStoreRef utility for ref-based access
+ *    SEE: /src/stores/chat/utils/use-store-ref.ts
+ *
+ * 4. AUTO-GENERATED SELECTORS (Future Enhancement):
+ *    SEE: /src/stores/chat/utils/create-selectors.ts
+ *    USAGE: const bears = useStore.use.bears() // Instead of useStore(s => s.bears)
+ *
+ * ============================================================================
+ * SLICE ORGANIZATION
+ * ============================================================================
+ * - ChatFormSlice: Form input, mode, participants
+ * - FeedbackSlice: Round feedback (like/dislike)
+ * - UISlice: Initial UI, thread creation, streaming flags
+ * - AnalysisSlice: Moderator analyses
+ * - ThreadSlice: Thread data, participants, messages, AI SDK methods
+ * - UIFlagsSlice: Loading states that need re-renders
+ * - InternalFlagsSlice: Orchestration flags (use refs)
+ * - DataSlice: Round numbers, pending messages
+ * - TrackingSlice: Deduplication and tracking
+ * - CallbacksSlice: Completion and retry callbacks
+ * - ScreenSlice: Screen mode and readonly state
+ * - OperationsSlice: Composite operations
  *
  * PATTERN: Slices + Vanilla + Context (official Next.js pattern)
  */
@@ -20,9 +81,10 @@ import { devtools } from 'zustand/middleware';
 import { createStore } from 'zustand/vanilla';
 
 import type { ChatMode, FeedbackType } from '@/api/core/enums';
-import type { ChatParticipant, ChatThread, ModeratorAnalysisPayload, StoredModeratorAnalysis } from '@/api/routes/chat/schema';
+import type { ChatParticipant, ChatThread, ModeratorAnalysisPayload, RecommendedAction, StoredModeratorAnalysis } from '@/api/routes/chat/schema';
 import type { ParticipantConfig } from '@/components/chat/chat-form-schemas';
 import type { ChatModeId } from '@/lib/config/chat-modes';
+import { getParticipantMessagesWithIds } from '@/lib/utils/message-filtering';
 
 // ============================================================================
 // TYPE DEFINITIONS
@@ -41,6 +103,7 @@ type ChatFormSlice = {
   updateParticipant: (participantId: string, updates: Partial<ParticipantConfig>) => void;
   reorderParticipants: (fromIndex: number, toIndex: number) => void;
   resetForm: () => void;
+  applyRecommendedAction: (action: RecommendedAction, options?: { maxModels?: number; tierName?: string }) => { success: boolean; error?: string; modelsAdded?: number; modelsSkipped?: number };
 };
 
 type FeedbackSlice = {
@@ -182,6 +245,7 @@ type ScreenSlice = {
 type OperationsSlice = {
   resetThreadState: () => void;
   resetHookState: () => void;
+  resetToOverview: () => void;
   initializeThread: (
     thread: ChatThread,
     participants: ChatParticipant[],
@@ -263,6 +327,113 @@ const createChatFormSlice: StateCreator<
       selectedMode: null, // ✅ Reset to null, component will set DEFAULT_CHAT_MODE
       selectedParticipants: [],
     }, false, 'form/resetForm'),
+
+  applyRecommendedAction: (action, options) => {
+    const maxModels = options?.maxModels;
+    const tierName = options?.tierName;
+
+    // Track results for validation feedback
+    let modelsAdded = 0;
+    let modelsSkipped = 0;
+    let error: string | undefined;
+
+    set((state) => {
+      // 1. Set input value
+      const updates: Partial<ChatFormSlice> = {
+        inputValue: action.action,
+      };
+
+      // 2. Apply mode suggestion if provided
+      if (action.suggestedMode) {
+        updates.selectedMode = action.suggestedMode as ChatModeId;
+      }
+
+      // 3. Apply participant suggestions if provided
+      if (action.suggestedModels && action.suggestedModels.length > 0) {
+        // Validate and deduplicate model IDs
+        const existingModelIds = new Set(state.selectedParticipants.map(p => p.modelId));
+        const currentCount = state.selectedParticipants.length;
+
+        // Filter to only valid model IDs (format: provider/model) that don't already exist
+        const validNewModels = action.suggestedModels.filter((modelId) => {
+          const isValidFormat = modelId.includes('/');
+          const isNotDuplicate = !existingModelIds.has(modelId);
+          return isValidFormat && isNotDuplicate;
+        });
+
+        // Check tier limits if provided
+        if (maxModels !== undefined) {
+          const availableSlots = Math.max(0, maxModels - currentCount);
+
+          if (availableSlots === 0) {
+            error = `Your ${tierName || 'current'} plan allows up to ${maxModels} models per conversation. Remove a model to add another, or upgrade your plan.`;
+            modelsSkipped = validNewModels.length;
+          } else if (validNewModels.length > availableSlots) {
+            // Partial add: only add models that fit
+            const modelsToAdd = validNewModels.slice(0, availableSlots);
+            modelsSkipped = validNewModels.length - availableSlots;
+
+            const newParticipants = modelsToAdd.map((modelId, index) => {
+              const originalIndex = action.suggestedModels.indexOf(modelId);
+              return {
+                id: `participant-${Date.now()}-${index}`,
+                modelId,
+                role: action.suggestedRoles?.[originalIndex] || null,
+                customRoleId: undefined,
+                priority: state.selectedParticipants.length + index,
+              } satisfies ParticipantConfig;
+            });
+
+            updates.selectedParticipants = [...state.selectedParticipants, ...newParticipants];
+            modelsAdded = modelsToAdd.length;
+            error = `Only ${modelsAdded} of ${validNewModels.length} suggested models were added. Your ${tierName || 'current'} plan allows up to ${maxModels} models. Upgrade to add more.`;
+          } else {
+            // All models fit within limit
+            const newParticipants = validNewModels.map((modelId, index) => {
+              const originalIndex = action.suggestedModels.indexOf(modelId);
+              return {
+                id: `participant-${Date.now()}-${index}`,
+                modelId,
+                role: action.suggestedRoles?.[originalIndex] || null,
+                customRoleId: undefined,
+                priority: state.selectedParticipants.length + index,
+              } satisfies ParticipantConfig;
+            });
+
+            updates.selectedParticipants = [...state.selectedParticipants, ...newParticipants];
+            modelsAdded = validNewModels.length;
+          }
+        } else {
+          // No tier limit provided, add all valid models
+          if (validNewModels.length > 0) {
+            const newParticipants = validNewModels.map((modelId, index) => {
+              const originalIndex = action.suggestedModels.indexOf(modelId);
+              return {
+                id: `participant-${Date.now()}-${index}`,
+                modelId,
+                role: action.suggestedRoles?.[originalIndex] || null,
+                customRoleId: undefined,
+                priority: state.selectedParticipants.length + index,
+              } satisfies ParticipantConfig;
+            });
+
+            updates.selectedParticipants = [...state.selectedParticipants, ...newParticipants];
+            modelsAdded = validNewModels.length;
+          }
+        }
+      }
+
+      return updates;
+    }, false, 'form/applyRecommendedAction');
+
+    // Return result object
+    return {
+      success: error === undefined || modelsAdded > 0,
+      error,
+      modelsAdded,
+      modelsSkipped,
+    };
+  },
 });
 
 const createFeedbackSlice: StateCreator<
@@ -374,23 +545,9 @@ const createAnalysisSlice: StateCreator<
   createPendingAnalysis: (params) => {
     const { roundNumber, messages, userQuestion, threadId, mode } = params;
 
-    // ✅ CRITICAL FIX: Extract participant message IDs from current round
-    // Only include messages that have participantId to prevent backend validation errors
-    const participantMessageIds = messages
-      .filter((m) => {
-        const metadata = m.metadata as Record<string, unknown> | undefined;
-        const msgRoundNumber = metadata?.roundNumber as number | undefined;
-        const participantId = metadata?.participantId as string | undefined;
-
-        // Must be assistant message, from current round, AND have participantId
-        return (
-          m.role === 'assistant'
-          && msgRoundNumber === roundNumber
-          && participantId != null
-          && participantId !== ''
-        );
-      })
-      .map(m => m.id);
+    // ✅ SINGLE SOURCE OF TRUTH: Use utility functions for type-safe extraction
+    // Replaces unsafe type assertions with consolidated message filtering logic
+    const { ids: participantMessageIds } = getParticipantMessagesWithIds(messages, roundNumber);
 
     // ✅ SAFETY CHECK: Don't create analysis if no valid participant messages
     if (participantMessageIds.length === 0) {
@@ -610,6 +767,51 @@ const createOperationsSlice: StateCreator<
       isStreaming: false,
       currentParticipantIndex: 0,
     }, false, 'operations/resetHookState'),
+
+  resetToOverview: () =>
+    set({
+      // Form state
+      inputValue: '',
+      selectedMode: null,
+      selectedParticipants: [],
+      // UI state
+      showInitialUI: true,
+      waitingToStartStreaming: false,
+      isCreatingThread: false,
+      createdThreadId: null,
+      // Thread state
+      thread: null,
+      participants: [],
+      messages: [],
+      error: null,
+      isStreaming: false,
+      currentParticipantIndex: 0,
+      // Analyses
+      analyses: [],
+      // Feedback
+      feedbackByRound: new Map(),
+      pendingFeedback: null,
+      hasLoadedFeedback: false,
+      // Flags
+      hasInitiallyLoaded: false,
+      isRegenerating: false,
+      isCreatingAnalysis: false,
+      isWaitingForChangelog: false,
+      hasPendingConfigChanges: false,
+      hasRefetchedMessages: false,
+      // Data
+      regeneratingRoundNumber: null,
+      pendingMessage: null,
+      expectedParticipantIds: null,
+      streamingRoundNumber: null,
+      currentRoundNumber: null,
+      // Tracking
+      hasSentPendingMessage: false,
+      createdAnalysisRounds: new Set<number>(),
+      // Callbacks
+      onComplete: undefined,
+      onRetry: undefined,
+    }, false, 'operations/resetToOverview'),
 
   initializeThread: (thread, participants, initialMessages) => {
     const messagesToSet = initialMessages || [];

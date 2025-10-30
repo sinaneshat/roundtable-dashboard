@@ -26,6 +26,7 @@ import type { StoredModeratorAnalysis } from '@/api/routes/chat/schema';
 import { useChatStore } from '@/components/providers/chat-store-provider';
 import { useThreadAnalysesQuery } from '@/hooks/queries/chat';
 import type { ChatModeId } from '@/lib/config/chat-modes';
+import { transformModeratorAnalyses } from '@/lib/utils/date-transforms';
 
 import { useAnalysisDeduplication } from './analysis-deduplication';
 
@@ -69,24 +70,9 @@ export function useAnalysisOrchestrator(
   // Extract analyses array from response and transform dates
   const rawAnalyses = useMemo((): StoredModeratorAnalysis[] => {
     const items = response?.data?.items || [];
+    // ✅ SINGLE SOURCE OF TRUTH: Use date transform utility with Zod validation
     // Transform server dates (ISO strings from API) to Date objects for client state
-    // Server serializes DB timestamps as ISO strings, client expects Date objects
-    return items.map((item) => {
-      const createdAt = typeof item.createdAt === 'string'
-        ? new Date(item.createdAt)
-        : item.createdAt as Date;
-
-      const completedAt = item.completedAt
-        ? (typeof item.completedAt === 'string' ? new Date(item.completedAt) : item.completedAt as Date)
-        : null;
-
-      // Spread rest of properties with date overrides
-      return {
-        ...item,
-        createdAt,
-        completedAt,
-      } as StoredModeratorAnalysis;
-    });
+    return transformModeratorAnalyses(items);
   }, [response]);
 
   // Deduplicate analyses with regeneration filtering

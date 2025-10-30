@@ -1,10 +1,11 @@
 'use client';
+
 import { Clock, RotateCcw } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { AnalysisStatuses } from '@/api/core/enums';
-import type { StoredModeratorAnalysis } from '@/api/routes/chat/schema';
+import type { ModeratorAnalysisPayload, RecommendedAction, StoredModeratorAnalysis } from '@/api/routes/chat/schema';
 import {
   ChainOfThought,
   ChainOfThoughtContent,
@@ -16,6 +17,7 @@ import { cn } from '@/lib/ui/cn';
 import { LeaderboardCard } from './leaderboard-card';
 import { ModeratorAnalysisStream } from './moderator-analysis-stream';
 import { ParticipantAnalysisCard } from './participant-analysis-card';
+import { RoundSummarySection } from './round-summary-section';
 import { SkillsComparisonChart } from './skills-comparison-chart';
 
 type RoundAnalysisCardProps = {
@@ -24,8 +26,13 @@ type RoundAnalysisCardProps = {
   isLatest?: boolean;
   className?: string;
   onStreamStart?: () => void;
-  onStreamComplete?: (completedAnalysisData?: unknown) => void;
+  onStreamComplete?: (completedAnalysisData?: ModeratorAnalysisPayload) => void;
   streamingRoundNumber?: number | null;
+  onActionClick?: (action: RecommendedAction) => void;
+  /** Callback to regenerate entire round (participants + analysis) */
+  onRetry?: (roundNumber: number) => void;
+  /** Whether round has incomplete participant responses */
+  isRoundIncomplete?: boolean;
 };
 export function RoundAnalysisCard({
   analysis,
@@ -35,6 +42,9 @@ export function RoundAnalysisCard({
   onStreamStart,
   onStreamComplete,
   streamingRoundNumber,
+  onActionClick,
+  onRetry,
+  isRoundIncomplete = false,
 }: RoundAnalysisCardProps) {
   const t = useTranslations('moderator');
   const statusConfig = {
@@ -76,10 +86,18 @@ export function RoundAnalysisCard({
     return undefined;
   }, [streamingRoundNumber, isLatest, analysis.roundNumber, threadId]);
   const isOpen = isManuallyControlled ? manuallyOpen : isLatest;
+
+  // ✅ Disable accordion interaction during streaming
+  const isStreamingOrPending = analysis.status === AnalysisStatuses.PENDING || analysis.status === AnalysisStatuses.STREAMING;
+
   const handleOpenChange = useCallback((open: boolean) => {
+    // Prevent interaction during streaming
+    if (isStreamingOrPending)
+      return;
+
     setIsManuallyControlled(true);
     setManuallyOpen(open);
-  }, []);
+  }, [isStreamingOrPending]);
   const handleRetry = useCallback(async () => {
     if (isRetrying)
       return;
@@ -87,6 +105,17 @@ export function RoundAnalysisCard({
       clearTimeout(retryTimeoutRef.current);
     }
     setIsRetrying(true);
+
+    // If onRetry provided and round is incomplete, regenerate entire round
+    if (onRetry && isRoundIncomplete) {
+      onRetry(analysis.roundNumber);
+      retryTimeoutRef.current = setTimeout(() => {
+        setIsRetrying(false);
+      }, 1000);
+      return;
+    }
+
+    // Otherwise, just retry analysis generation
     try {
       await fetch(`/api/v1/chat/threads/${threadId}/rounds/${analysis.roundNumber}/analyze`, {
         method: 'POST',
@@ -100,7 +129,7 @@ export function RoundAnalysisCard({
     retryTimeoutRef.current = setTimeout(() => {
       setIsRetrying(false);
     }, 2000);
-  }, [threadId, analysis.roundNumber, analysis.participantMessageIds, isRetrying]);
+  }, [threadId, analysis.roundNumber, analysis.participantMessageIds, isRetrying, onRetry, isRoundIncomplete]);
   const containerRef = useRef<HTMLDivElement>(null);
   const previousStatusRef = useRef(analysis.status);
   useEffect(() => {
@@ -135,7 +164,11 @@ export function RoundAnalysisCard({
   }, [analysis.status, isLatest, isOpen]);
   return (
     <div ref={containerRef} className={cn('py-1.5', className)}>
-      <ChainOfThought open={isOpen} onOpenChange={handleOpenChange}>
+      <ChainOfThought
+        open={isOpen}
+        onOpenChange={handleOpenChange}
+        className={cn(isStreamingOrPending && 'cursor-default')}
+      >
         <ChainOfThoughtHeader>
           <div className="flex items-center gap-2.5 w-full">
             <Clock className="size-4 text-muted-foreground flex-shrink-0" />
@@ -149,7 +182,7 @@ export function RoundAnalysisCard({
             <span className="hidden md:inline text-xs text-muted-foreground capitalize">
               {t(`mode.${analysis.mode}`)}
             </span>
-            {analysis.status === AnalysisStatuses.FAILED && (
+            {(analysis.status === AnalysisStatuses.FAILED || isRoundIncomplete) && (
               <button
                 type="button"
                 onClick={(e) => {
@@ -166,7 +199,7 @@ export function RoundAnalysisCard({
                 aria-label={t('retryAnalysis')}
               >
                 <RotateCcw className={cn('size-3.5', isRetrying && 'animate-spin')} />
-                <span className="hidden sm:inline">{t('retryAnalysis')}</span>
+                <span className="hidden sm:inline">{isRoundIncomplete ? t('retryRound') : t('retryAnalysis')}</span>
               </button>
             )}
           </div>
@@ -189,6 +222,7 @@ export function RoundAnalysisCard({
                     analysis={analysis}
                     onStreamStart={onStreamStart}
                     onStreamComplete={onStreamComplete}
+                    onActionClick={onActionClick}
                   />
                 )
               : analysis.status === AnalysisStatuses.COMPLETED && analysis.analysisData
@@ -210,21 +244,11 @@ export function RoundAnalysisCard({
                           </div>
                         </>
                       )}
-                      {analysis.analysisData.overallSummary && (
-                        <div className="space-y-1.5 pt-2">
-                          <h3 className="text-sm font-semibold">{t('summary')}</h3>
-                          <p className="text-sm text-muted-foreground leading-relaxed">
-                            {analysis.analysisData.overallSummary}
-                          </p>
-                        </div>
-                      )}
-                      {analysis.analysisData.conclusion && (
-                        <div className="space-y-1.5 pt-2">
-                          <h3 className="text-sm font-semibold text-primary">{t('conclusion')}</h3>
-                          <p className="text-sm leading-relaxed">
-                            {analysis.analysisData.conclusion}
-                          </p>
-                        </div>
+                      {analysis.analysisData.roundSummary && (
+                        <RoundSummarySection
+                          roundSummary={analysis.analysisData.roundSummary}
+                          onActionClick={onActionClick}
+                        />
                       )}
                     </div>
                   )

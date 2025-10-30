@@ -12,6 +12,7 @@
 
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 
+import type { ThreadSlugStatus } from '@/api/routes/chat/schema';
 import { LIMITS } from '@/constants/limits';
 import { useSession } from '@/lib/auth/client';
 import { queryKeys } from '@/lib/data/query-keys';
@@ -20,6 +21,7 @@ import {
   getPublicThreadService,
   getThreadBySlugService,
   getThreadService,
+  getThreadSlugStatusService,
   listThreadsService,
 } from '@/services/api';
 
@@ -119,5 +121,44 @@ export function useThreadBySlugQuery(slug: string, enabled?: boolean) {
     staleTime: STALE_TIMES.threadDetail, // 10 seconds
     enabled: enabled !== undefined ? enabled : (isAuthenticated && !!slug),
     retry: false,
+  });
+}
+
+/**
+ * Hook to poll thread slug status during AI title generation
+ * Protected endpoint - requires authentication
+ *
+ * Polls every 5 seconds to check if isAiGeneratedTitle flag is set.
+ * Used during first round streaming on overview screen to enable URL replacement without page reload.
+ *
+ * @param threadId - Thread ID
+ * @param enabled - Whether to enable polling (default: false)
+ */
+export function useThreadSlugStatusQuery(
+  threadId: string | null,
+  enabled: boolean = false,
+) {
+  const { data: session, isPending } = useSession();
+  const isAuthenticated = !isPending && !!session?.user?.id;
+
+  return useQuery({
+    queryKey: queryKeys.threads.slugStatus(threadId || 'null'),
+    queryFn: () => {
+      if (!threadId) {
+        throw new Error('Thread ID is required');
+      }
+      return getThreadSlugStatusService({ param: { id: threadId } });
+    },
+    staleTime: 0, // Always fresh - we're polling for updates
+    refetchInterval: enabled ? 5000 : false, // Poll every 5 seconds when enabled
+    enabled: enabled && isAuthenticated && !!threadId,
+    retry: false,
+    select: (response): ThreadSlugStatus | null => {
+      // Extract data from lightweight slug-status endpoint response
+      if (response.success && response.data) {
+        return response.data; // data is already ThreadSlugStatus shape
+      }
+      return null;
+    },
   });
 }

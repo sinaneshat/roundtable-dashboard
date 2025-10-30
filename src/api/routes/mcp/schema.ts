@@ -214,6 +214,142 @@ export const AddParticipantInputSchema = z.object({
   }),
 }).openapi('AddParticipantInput');
 
+/**
+ * Generate Responses Tool Input
+ * Triggers server-side AI response generation (non-streaming)
+ */
+export const GenerateResponsesInputSchema = z.object({
+  threadId: CoreSchemas.id().openapi({
+    description: 'Thread ID to generate responses for',
+    example: 'thread_abc123',
+  }),
+  messageContent: z.string().min(1).max(10000).openapi({
+    description: 'User message content',
+    example: 'What are the key considerations for our product strategy?',
+  }),
+  waitForCompletion: z.boolean().default(true).openapi({
+    description: 'Whether to wait for all AI responses before returning',
+    example: true,
+  }),
+}).openapi('GenerateResponsesInput');
+
+/**
+ * Generate Analysis Tool Input
+ * Creates moderator analysis for a round
+ */
+export const GenerateAnalysisInputSchema = z.object({
+  threadId: CoreSchemas.id().openapi({
+    description: 'Thread ID',
+    example: 'thread_abc123',
+  }),
+  roundNumber: z.number().int().positive().openapi({
+    description: 'Round number to analyze',
+    example: 1,
+  }),
+}).openapi('GenerateAnalysisInput');
+
+/**
+ * Regenerate Round Tool Input
+ * Deletes and regenerates AI responses for a round
+ */
+export const RegenerateRoundInputSchema = z.object({
+  threadId: CoreSchemas.id().openapi({
+    description: 'Thread ID',
+    example: 'thread_abc123',
+  }),
+  roundNumber: z.number().int().positive().openapi({
+    description: 'Round number to regenerate',
+    example: 1,
+  }),
+  waitForCompletion: z.boolean().default(true).openapi({
+    description: 'Whether to wait for regeneration before returning',
+    example: true,
+  }),
+}).openapi('RegenerateRoundInput');
+
+/**
+ * Round Feedback Tool Input
+ * Submit like/dislike for a round
+ */
+export const RoundFeedbackInputSchema = z.object({
+  threadId: CoreSchemas.id().openapi({
+    description: 'Thread ID',
+    example: 'thread_abc123',
+  }),
+  roundNumber: z.number().int().positive().openapi({
+    description: 'Round number',
+    example: 1,
+  }),
+  feedback: z.enum(['like', 'dislike', 'none']).openapi({
+    description: 'Feedback type (none removes feedback)',
+    example: 'like',
+  }),
+}).openapi('RoundFeedbackInput');
+
+/**
+ * Remove Participant Tool Input
+ */
+export const RemoveParticipantInputSchema = z.object({
+  threadId: CoreSchemas.id().openapi({
+    description: 'Thread ID',
+    example: 'thread_abc123',
+  }),
+  participantId: CoreSchemas.id().openapi({
+    description: 'Participant ID to remove',
+    example: 'participant_xyz',
+  }),
+}).openapi('RemoveParticipantInput');
+
+/**
+ * Update Participant Tool Input
+ */
+export const UpdateParticipantInputSchema = z.object({
+  threadId: CoreSchemas.id().openapi({
+    description: 'Thread ID',
+    example: 'thread_abc123',
+  }),
+  participantId: CoreSchemas.id().openapi({
+    description: 'Participant ID to update',
+    example: 'participant_xyz',
+  }),
+  role: z.string().optional().openapi({
+    description: 'New role name',
+    example: 'The Strategist',
+  }),
+  systemPrompt: z.string().optional().openapi({
+    description: 'New system prompt',
+    example: 'You are a strategic thinker...',
+  }),
+  priority: z.number().int().nonnegative().optional().openapi({
+    description: 'New priority',
+    example: 0,
+  }),
+}).openapi('UpdateParticipantInput');
+
+/**
+ * Get Round Analysis Tool Input
+ */
+export const GetRoundAnalysisInputSchema = z.object({
+  threadId: CoreSchemas.id().openapi({
+    description: 'Thread ID',
+    example: 'thread_abc123',
+  }),
+  roundNumber: z.number().int().positive().openapi({
+    description: 'Round number',
+    example: 1,
+  }),
+}).openapi('GetRoundAnalysisInput');
+
+/**
+ * List Rounds Tool Input
+ */
+export const ListRoundsInputSchema = z.object({
+  threadId: CoreSchemas.id().openapi({
+    description: 'Thread ID',
+    example: 'thread_abc123',
+  }),
+}).openapi('ListRoundsInput');
+
 // ============================================================================
 // MCP Response Schemas
 // ============================================================================
@@ -265,3 +401,11 @@ export type SendMessageInput = z.infer<typeof SendMessageInputSchema>;
 export type GetThreadInput = z.infer<typeof GetThreadInputSchema>;
 export type ListModelsInput = z.infer<typeof ListModelsInputSchema>;
 export type AddParticipantInput = z.infer<typeof AddParticipantInputSchema>;
+export type GenerateResponsesInput = z.infer<typeof GenerateResponsesInputSchema>;
+export type GenerateAnalysisInput = z.infer<typeof GenerateAnalysisInputSchema>;
+export type RegenerateRoundInput = z.infer<typeof RegenerateRoundInputSchema>;
+export type RoundFeedbackInput = z.infer<typeof RoundFeedbackInputSchema>;
+export type RemoveParticipantInput = z.infer<typeof RemoveParticipantInputSchema>;
+export type UpdateParticipantInput = z.infer<typeof UpdateParticipantInputSchema>;
+export type GetRoundAnalysisInput = z.infer<typeof GetRoundAnalysisInputSchema>;
+export type ListRoundsInput = z.infer<typeof ListRoundsInputSchema>;

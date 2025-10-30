@@ -13,6 +13,7 @@ src/stores/chat/
 └── actions/                     # Store-specific action hooks
     ├── form-actions.ts          # Form submission orchestration
     ├── feedback-actions.ts      # Round feedback management
+    ├── recommended-actions.ts   # Recommended action handling
     ├── analysis-orchestrator.ts # Analysis server sync
     ├── analysis-creation.ts     # Analysis creation lifecycle
     ├── analysis-deduplication.ts # Analysis deduplication logic
@@ -81,15 +82,20 @@ export function useChatFormActions() {
 ### In Components
 
 ```typescript
-import { useChatFormActions, useFeedbackActions } from '@/stores/chat';
+import { useChatFormActions, useFeedbackActions, useRecommendedActions } from '@/stores/chat';
 
 function ChatScreen() {
   const formActions = useChatFormActions();
   const feedbackActions = useFeedbackActions({ threadId });
+  const recommendedActions = useRecommendedActions({
+    inputContainerRef,
+    enableScroll: true,
+    markConfigChanged: true,
+  });
 
   return (
     <form onSubmit={formActions.handleCreateThread}>
-      {/* ... */}
+      <RoundAnalysisCard onActionClick={recommendedActions.handleActionClick} />
     </form>
   );
 }
@@ -126,6 +132,9 @@ Moved from `hooks/utils/` to `stores/chat/actions/`:
 - `use-analysis-creation.ts` → `actions/analysis-creation.ts`
 - `use-analysis-deduplication.ts` → `actions/analysis-deduplication.ts`
 - `use-chat-analysis.ts` → `actions/chat-analysis.ts`
+
+New action hooks following the same pattern:
+- `actions/recommended-actions.ts` - Recommended action handling with form state integration
 
 True utility hooks remain in `hooks/utils/`:
 - `use-boolean`, `use-mobile`, `use-toast`, etc. (general purpose utilities)

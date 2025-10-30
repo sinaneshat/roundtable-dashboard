@@ -18,6 +18,8 @@ import { ErrorMetadataSchema, UIMessageErrorTypeSchema } from '@/lib/schemas/err
 import type { ErrorType, FinishReason, MessageMetadata } from '@/lib/schemas/message-metadata';
 import { ErrorTypeSchema, FinishReasonSchema, MessageMetadataSchema } from '@/lib/schemas/message-metadata';
 
+import { extractMetadataParticipantId, extractMetadataRoundNumber } from './metadata-extraction';
+
 // ============================================================================
 // Type Definitions
 // ============================================================================
@@ -152,15 +154,12 @@ export function chatMessagesToUIMessages(
   let currentRound = 0;
   const messagesWithRoundNumber = uiMessages.map((message) => {
     // Check if message already has roundNumber in metadata
-    const hasRoundNumber = message.metadata
-      && typeof message.metadata === 'object'
-      && 'roundNumber' in message.metadata
-      && typeof (message.metadata as Record<string, unknown>).roundNumber === 'number'
-      && ((message.metadata as Record<string, unknown>).roundNumber as number) > 0;
+    // ✅ SINGLE SOURCE OF TRUTH: Use extraction utility for type-safe metadata access
+    const explicitRound = extractMetadataRoundNumber(message.metadata);
+    const hasRoundNumber = explicitRound !== undefined && explicitRound > 0;
 
     if (hasRoundNumber) {
       // Update current round tracker
-      const explicitRound = (message.metadata as Record<string, unknown>).roundNumber as number;
       if (message.role === 'user' && explicitRound > currentRound) {
         currentRound = explicitRound;
       }
@@ -168,11 +167,14 @@ export function chatMessagesToUIMessages(
       // ✅ CRITICAL FIX: Still enrich messages that already have roundNumber
       // They might be missing model/role metadata needed for "complete" status
       if (participantMap && message.role === 'assistant') {
-        const msgMetadata = message.metadata as Record<string, unknown>;
-        const participantId = msgMetadata.participantId as string | undefined;
+        // ✅ SINGLE SOURCE OF TRUTH: Use extraction utility for type-safe participant ID access
+        const participantId = extractMetadataParticipantId(message.metadata);
         const participant = participantId ? participantMap.get(participantId) : null;
+        const msgMetadata = message.metadata && typeof message.metadata === 'object'
+          ? message.metadata as Record<string, unknown>
+          : undefined;
 
-        if (participant && !msgMetadata.model) {
+        if (participant && msgMetadata && !msgMetadata.model) {
           // Add model and role to metadata if missing
           return {
             ...message,
@@ -205,7 +207,8 @@ export function chatMessagesToUIMessages(
 
     // If we have participant data and this is an assistant message, enrich it
     if (participantMap && message.role === 'assistant') {
-      const participantId = (message.metadata as Record<string, unknown> | undefined)?.participantId as string | undefined;
+      // ✅ SINGLE SOURCE OF TRUTH: Use extraction utility for type-safe participant ID access
+      const participantId = extractMetadataParticipantId(message.metadata);
       const participant = participantId ? participantMap.get(participantId) : null;
 
       if (participant) {
@@ -380,8 +383,12 @@ export function mergeParticipantMetadata(
   currentIndex: number,
   roundNumber: number,
 ): Extract<MessageMetadata, { role: 'assistant' }> {
-  const metadata = message.metadata as Record<string, unknown> | undefined;
-  const hasBackendError = metadata?.hasError === true || !!metadata?.error || !!metadata?.errorMessage;
+  // Access metadata directly - metadata can contain many fields beyond ErrorMetadata schema
+  const metadata = message.metadata && typeof message.metadata === 'object'
+    ? message.metadata as Record<string, unknown>
+    : undefined;
+
+  const hasBackendError = metadata?.hasError === true || !!metadata?.error || !!metadata?.rawErrorMessage;
 
   const textParts = message.parts?.filter(p => p.type === 'text') || [];
   const hasTextContent = textParts.some(
@@ -391,7 +398,7 @@ export function mergeParticipantMetadata(
   const isEmptyResponse = textParts.length === 0 || !hasTextContent;
   const hasError = hasBackendError || isEmptyResponse;
 
-  let errorMessage = metadata?.errorMessage as string | undefined;
+  let errorMessage = typeof metadata?.rawErrorMessage === 'string' ? metadata.rawErrorMessage : undefined;
   if (isEmptyResponse && !errorMessage) {
     errorMessage = `The model (${participant.modelId}) did not generate a response.`;
   }
@@ -415,7 +422,7 @@ export function mergeParticipantMetadata(
     : undefined;
 
   // ✅ STRICT TYPING: Validate errorType using Zod enum if present
-  const errorTypeRaw = metadata?.errorType || (isEmptyResponse ? 'empty_response' : 'unknown');
+  const errorTypeRaw = typeof metadata?.errorType === 'string' ? metadata.errorType : (isEmptyResponse ? 'empty_response' : 'unknown');
   const errorTypeResult = ErrorTypeSchema.safeParse(errorTypeRaw);
   const safeErrorType: ErrorType = errorTypeResult.success ? errorTypeResult.data : 'unknown';
 
@@ -477,10 +484,8 @@ export function validateMessageOrder(messages: UIMessage[]): MessageOrderValidat
     if (!msg)
       continue;
 
-    const metadata = msg.metadata as Record<string, unknown> | undefined;
-    const round = (metadata && typeof metadata.roundNumber === 'number' && metadata.roundNumber >= 1)
-      ? metadata.roundNumber
-      : 1;
+    // ✅ SINGLE SOURCE OF TRUTH: Use extraction utility for type-safe round number access
+    const round = extractMetadataRoundNumber(msg.metadata) ?? 1;
 
     // Rule 1: Check round progression (no backward jumps)
     if (round < lastRound) {

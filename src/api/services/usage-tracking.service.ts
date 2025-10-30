@@ -95,28 +95,62 @@ export async function ensureUserUsageRecord(userId: string): Promise<typeof tabl
     const periodStart = new Date(now.getFullYear(), now.getMonth(), 1); // First day of current month
     const periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59); // Last day of current month
 
-    const [newUsage] = await db
-      .insert(tables.userChatUsage)
-      .values({
-        id: ulid(),
-        userId,
-        currentPeriodStart: periodStart,
-        currentPeriodEnd: periodEnd,
-        threadsCreated: 0,
-        messagesCreated: 0,
-        customRolesCreated: 0,
-        analysisGenerated: 0,
-        subscriptionTier: 'free',
-        isAnnual: false,
-        createdAt: now,
-        updatedAt: now,
-      })
-      .returning();
+    try {
+      const result = await db
+        .insert(tables.userChatUsage)
+        .values({
+          id: ulid(),
+          userId,
+          currentPeriodStart: periodStart,
+          currentPeriodEnd: periodEnd,
+          threadsCreated: 0,
+          messagesCreated: 0,
+          customRolesCreated: 0,
+          analysisGenerated: 0,
+          subscriptionTier: 'free',
+          isAnnual: false,
+          createdAt: now,
+          updatedAt: now,
+        })
+        .returning();
 
-    usage = newUsage;
+      usage = result[0];
+
+      // If insert succeeded but didn't return a record, query it again
+      if (!usage) {
+        const retryResults = await db
+          .select()
+          .from(tables.userChatUsage)
+          .where(eq(tables.userChatUsage.userId, userId))
+          .limit(1);
+
+        usage = retryResults[0];
+      }
+    } catch (error) {
+      // If insert failed due to unique constraint (race condition), try to fetch the record
+      const retryResults = await db
+        .select()
+        .from(tables.userChatUsage)
+        .where(eq(tables.userChatUsage.userId, userId))
+        .limit(1);
+
+      usage = retryResults[0];
+
+      // If still no record after retry, re-throw the original error
+      if (!usage) {
+        const context: ErrorContext = {
+          errorType: 'database',
+          operation: 'insert',
+          table: 'user_chat_usage',
+          userId,
+        };
+        const errorMsg = error instanceof Error ? error.message : String(error);
+        throw createError.internal(`Failed to create usage record: ${errorMsg}`, context);
+      }
+    }
   }
 
-  // At this point, usage is guaranteed to be defined
+  // At this point, usage should be defined
   if (!usage) {
     const context: ErrorContext = {
       errorType: 'database',
@@ -584,25 +618,31 @@ export async function getUserUsageStats(userId: string): Promise<UsageStats> {
   // ✅ Get all limits from CODE, not database
   const quotas = getTierQuotas(usage.subscriptionTier);
 
-  const threadsRemaining = Math.max(0, quotas.threadsPerMonth - usage.threadsCreated);
-  const messagesRemaining = Math.max(0, quotas.messagesPerMonth - usage.messagesCreated);
-  const customRolesRemaining = Math.max(0, quotas.customRolesPerMonth - usage.customRolesCreated);
-  const analysisRemaining = Math.max(0, quotas.analysisPerMonth - usage.analysisGenerated);
+  // Ensure usage counters are valid numbers (handle null/undefined from DB)
+  const threadsCreated = usage.threadsCreated ?? 0;
+  const messagesCreated = usage.messagesCreated ?? 0;
+  const customRolesCreated = usage.customRolesCreated ?? 0;
+  const analysisGenerated = usage.analysisGenerated ?? 0;
+
+  const threadsRemaining = Math.max(0, quotas.threadsPerMonth - threadsCreated);
+  const messagesRemaining = Math.max(0, quotas.messagesPerMonth - messagesCreated);
+  const customRolesRemaining = Math.max(0, quotas.customRolesPerMonth - customRolesCreated);
+  const analysisRemaining = Math.max(0, quotas.analysisPerMonth - analysisGenerated);
 
   const threadsPercentage = quotas.threadsPerMonth > 0
-    ? Math.round((usage.threadsCreated / quotas.threadsPerMonth) * 100)
+    ? Math.round((threadsCreated / quotas.threadsPerMonth) * 100)
     : 0;
 
   const messagesPercentage = quotas.messagesPerMonth > 0
-    ? Math.round((usage.messagesCreated / quotas.messagesPerMonth) * 100)
+    ? Math.round((messagesCreated / quotas.messagesPerMonth) * 100)
     : 0;
 
   const customRolesPercentage = quotas.customRolesPerMonth > 0
-    ? Math.round((usage.customRolesCreated / quotas.customRolesPerMonth) * 100)
+    ? Math.round((customRolesCreated / quotas.customRolesPerMonth) * 100)
     : 0;
 
   const analysisPercentage = quotas.analysisPerMonth > 0
-    ? Math.round((usage.analysisGenerated / quotas.analysisPerMonth) * 100)
+    ? Math.round((analysisGenerated / quotas.analysisPerMonth) * 100)
     : 0;
 
   // ✅ COMPUTE STATUS: Business logic for warning thresholds (single source of truth)
@@ -611,42 +651,50 @@ export async function getUserUsageStats(userId: string): Promise<UsageStats> {
   const customRolesStatus = computeUsageStatus(customRolesPercentage);
   const analysisStatus = computeUsageStatus(analysisPercentage);
 
-  const daysRemaining = Math.ceil(
-    (usage.currentPeriodEnd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24),
-  );
+  // Ensure dates are properly converted (handle both Date objects and timestamps)
+  const periodEnd = usage.currentPeriodEnd instanceof Date
+    ? usage.currentPeriodEnd
+    : new Date(usage.currentPeriodEnd);
+  const periodStart = usage.currentPeriodStart instanceof Date
+    ? usage.currentPeriodStart
+    : new Date(usage.currentPeriodStart);
+
+  const daysRemaining = Math.max(0, Math.ceil(
+    (periodEnd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24),
+  ));
 
   return {
     threads: {
-      used: usage.threadsCreated,
+      used: threadsCreated,
       limit: quotas.threadsPerMonth,
       remaining: threadsRemaining,
       percentage: threadsPercentage,
       status: threadsStatus, // ✅ NEW: Backend-computed status
     },
     messages: {
-      used: usage.messagesCreated,
+      used: messagesCreated,
       limit: quotas.messagesPerMonth,
       remaining: messagesRemaining,
       percentage: messagesPercentage,
       status: messagesStatus, // ✅ NEW: Backend-computed status
     },
     customRoles: {
-      used: usage.customRolesCreated,
+      used: customRolesCreated,
       limit: quotas.customRolesPerMonth,
       remaining: customRolesRemaining,
       percentage: customRolesPercentage,
       status: customRolesStatus, // ✅ NEW: Backend-computed status
     },
     analysis: {
-      used: usage.analysisGenerated,
+      used: analysisGenerated,
       limit: quotas.analysisPerMonth,
       remaining: analysisRemaining,
       percentage: analysisPercentage,
       status: analysisStatus, // ✅ NEW: Backend-computed status
     },
     period: {
-      start: usage.currentPeriodStart,
-      end: usage.currentPeriodEnd,
+      start: periodStart,
+      end: periodEnd,
       daysRemaining,
     },
     subscription: {

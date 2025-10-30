@@ -1,7 +1,8 @@
 /**
  * Models Query Hooks
  *
- * Simplified TanStack Query hook for OpenRouter models
+ * TanStack Query hook for fetching curated AI models
+ * All model data sourced from models-config.service.ts on backend
  */
 
 'use client';
@@ -13,20 +14,20 @@ import { STALE_TIMES } from '@/lib/data/stale-times';
 import { listModelsService } from '@/services/api/models';
 
 /**
- * Hook to fetch all OpenRouter models
+ * Hook to fetch curated AI models
  *
- * ✅ SERVER-SIDE CACHING: Backend caches models for 24h, client reuses server data
- * ✅ NO REASONING MODELS: Backend filters out all reasoning models
- * ✅ TIER-BASED ACCESS: Model accessibility updates when subscription tier changes
+ * ✅ CURATED LIST: Returns top 20 models from models-config.service.ts
+ * ✅ TIER-BASED ACCESS: Model accessibility computed per user's subscription tier
  * ✅ SMART REFETCHING: Refetches when invalidated (e.g., after plan upgrade) but not on focus
+ * ✅ TYPE SAFETY: Fully typed response inferred from Zod schemas
  */
 export function useModelsQuery() {
   return useQuery({
     queryKey: queryKeys.models.list(),
     queryFn: () => listModelsService(),
-    staleTime: STALE_TIMES.models, // Infinity - server cache is 24h, never refetch on client
-    refetchOnWindowFocus: false, // ✅ PERFORMANCE FIX: Don't refetch on focus (was causing constant RSC requests)
-    // ✅ FIX: Refetch on mount when query is stale (marked by invalidateQueries after plan upgrade)
+    staleTime: STALE_TIMES.models, // Infinity - models are static, only refetch when invalidated
+    refetchOnWindowFocus: false, // Performance: Don't refetch on focus
+    // Refetch on mount when query is stale (marked by invalidateQueries after plan upgrade)
     // Using true (not 'always') means it only refetches if the query is marked as stale/invalid
     // This ensures fresh tier-based model access after subscription changes without wasteful refetching
     refetchOnMount: true,

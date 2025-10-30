@@ -26,12 +26,14 @@
  *
  */
 
+import { useQueryClient } from '@tanstack/react-query';
 import { usePathname } from 'next/navigation';
 import type { ReactNode } from 'react';
 import { createContext, use, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useStore } from 'zustand';
 
 import { useMultiParticipantChat } from '@/hooks/utils';
+import { queryKeys } from '@/lib/data/query-keys';
 import { showApiErrorToast } from '@/lib/toast';
 import type { ChatStore, ChatStoreApi } from '@/stores/chat';
 import { createChatStore } from '@/stores/chat';
@@ -48,6 +50,7 @@ export type ChatStoreProviderProps = {
 
 export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
   const pathname = usePathname();
+  const queryClient = useQueryClient();
   const storeRef = useRef<ChatStoreApi | null>(null);
   const prevPathnameRef = useRef<string | null>(null);
 
@@ -84,13 +87,40 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
     onError: handleError,
   });
 
+  // ✅ QUOTA INVALIDATION: Use refs to capture latest functions and avoid circular deps
+  const sendMessageRef = useRef(chat.sendMessage);
+  const startRoundRef = useRef(chat.startRound);
+
+  // Keep refs in sync
+  useEffect(() => {
+    sendMessageRef.current = chat.sendMessage;
+    startRoundRef.current = chat.startRound;
+  }, [chat.sendMessage, chat.startRound]);
+
+  // ✅ QUOTA INVALIDATION: Wrap functions to invalidate quota immediately when streaming starts
+  const sendMessageWithQuotaInvalidation = useCallback(async (content: string) => {
+    // ✅ Invalidate usage quota immediately when message streaming starts
+    queryClient.invalidateQueries({ queryKey: queryKeys.usage.stats() });
+    queryClient.invalidateQueries({ queryKey: queryKeys.usage.messageQuota() });
+
+    return sendMessageRef.current(content);
+  }, [queryClient]);
+
+  const startRoundWithQuotaInvalidation = useCallback(() => {
+    // ✅ Invalidate usage quota immediately when round starts
+    queryClient.invalidateQueries({ queryKey: queryKeys.usage.stats() });
+    queryClient.invalidateQueries({ queryKey: queryKeys.usage.messageQuota() });
+
+    return startRoundRef.current();
+  }, [queryClient]);
+
   // ✅ OPTIMIZATION: Consolidated sync effect (single effect, batched updates)
   // React batches multiple setState calls in the same effect automatically
   // ✅ FIX: Sync chat.setMessages so refetch can update useChat state directly
   useEffect(() => {
-    store.setState({
-      sendMessage: chat.sendMessage,
-      startRound: chat.startRound,
+    storeRef.current?.setState({
+      sendMessage: sendMessageWithQuotaInvalidation,
+      startRound: startRoundWithQuotaInvalidation,
       retry: chat.retry,
       stop: chat.stop,
       chatSetMessages: chat.setMessages, // ✅ Expose chat's setMessages
@@ -99,9 +129,8 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
       currentParticipantIndex: chat.currentParticipantIndex,
     });
   }, [
-    store,
-    chat.sendMessage,
-    chat.startRound,
+    sendMessageWithQuotaInvalidation,
+    startRoundWithQuotaInvalidation,
     chat.retry,
     chat.stop,
     chat.setMessages,
@@ -128,8 +157,8 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
     }
 
     // Stop any ongoing streaming before navigation
-    const currentState = store.getState();
-    if (currentState.isStreaming) {
+    const currentState = storeRef.current?.getState();
+    if (currentState?.isStreaming) {
       currentState.stop?.();
     }
 
@@ -139,7 +168,7 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
 
     // Update previous pathname
     prevPathnameRef.current = currentPath;
-  }, [pathname, store]);
+  }, [pathname]);
 
   return (
     <ChatStoreContext value={store}>

@@ -1,20 +1,18 @@
 /**
  * Models API Handlers
  *
- * ✅ 100% DYNAMIC ARCHITECTURE WITH PROVIDER DIVERSITY:
- * - 250 top models selected by quality scoring (NO hard-coded providers)
- * - Max 5 models per provider (ensures diversity across OpenAI, Anthropic, Google, etc.)
- * - Scoring based on: context length, recency, capabilities, pricing tier
- * - Fully adaptive to new models and providers from OpenRouter
- * - Uses ONLY OpenRouter API data fields (no pattern matching)
+ * ✅ HARDCODED TOP 20 MODELS - SINGLE SOURCE OF TRUTH:
+ * - Top 20 models from LLM leaderboards (Oct 2025)
+ * - Zod-based enums for type safety
+ * - NO dynamic OpenRouter API calls
+ * - Simplified logic with curated model list
  *
- * ✅ TEXT-CAPABLE: Includes text and multimodal models (excludes pure image/audio/video generation)
- * ✅ PAID MODELS ONLY: Excludes OpenRouter free tier (pricing = "0")
- * ✅ AGGRESSIVE PRICING TIERS: Optimized for Pro tier upselling
- *   - Free: $0.05/M (~15 models) - VERY LIMITED
- *   - Starter: $0.20/M (~35 models)
- *   - Pro: $2.50/M (~180 models) ← MAIN UPSELL TARGET
- *   - Power: Unlimited (~250 models)
+ * ✅ TEXT & MULTIMODAL: Includes best models with text/vision capabilities
+ * ✅ PRICING TIERS: Optimized for Pro tier upselling
+ *   - Free: $0.05/M (~2-3 models) - VERY LIMITED
+ *   - Starter: $0.20/M (~5-6 models)
+ *   - Pro: $2.50/M (~15 models) ← MAIN UPSELL TARGET
+ *   - Power: Unlimited (all 20 models)
  *
  * Pattern: Following src/api/routes/{auth,billing}/handler.ts patterns
  */
@@ -22,7 +20,7 @@
 import type { RouteHandler } from '@hono/zod-openapi';
 
 import { createHandler, Responses } from '@/api/core';
-import { openRouterModelsService } from '@/api/services/openrouter-models.service';
+import { getAllModels } from '@/api/services/models-config.service';
 import { canAccessModelByPricing, getFlagshipScore, getMaxModelsForTier, getRequiredTierForModel, getTierName, getTiersInOrder, SUBSCRIPTION_TIER_NAMES } from '@/api/services/product-logic.service';
 import { getUserTier } from '@/api/services/usage-tracking.service';
 import type { ApiEnv } from '@/api/types';
@@ -35,18 +33,18 @@ import type { TierGroup } from './schema';
 // ============================================================================
 
 /**
- * List top 50 dynamically fetched models with tier-based access control
+ * List top 20 hardcoded models with tier-based access control
  *
  * GET /api/v1/models
  *
- * ✅ REFACTORED ALGORITHM:
- * - Top 5 models from each major provider (Anthropic, OpenAI, Google, DeepSeek, etc.)
- * - Limited to 50 total models across all providers
- * - Provider diversity ensures users see best options from each ecosystem
- * - Models scored within provider by: context length, recency, capabilities
+ * ✅ HARDCODED APPROACH:
+ * - Top 20 models from LLM leaderboards (Oct 2025)
+ * - Curated selection of best performing models
+ * - Provider diversity: Google, OpenAI, Anthropic, xAI, DeepSeek, Qwen, Meta
+ * - Simplified logic with single source of truth
  *
- * ✅ TEXT-ONLY: Automatically filters to text/chat models (no audio/image/video/reasoning)
- * ✅ SOLID PRINCIPLES: Clean separation of concerns, single responsibility
+ * ✅ TEXT & MULTIMODAL: Includes best text and vision models
+ * ✅ SOLID PRINCIPLES: Clean separation of concerns
  * Uses existing subscription tier logic from product-logic.service.ts
  *
  * Returns:
@@ -69,44 +67,35 @@ export const listModelsHandler: RouteHandler<typeof listModelsRoute, ApiEnv> = c
     const userTier = await getUserTier(user.id);
 
     // ============================================================================
-    // ✅ 100% DYNAMIC MODEL SELECTION: Top 250 with provider diversity
+    // ✅ HARDCODED MODEL SELECTION: Top 20 from single source of truth
     // ============================================================================
 
-    // FULLY DYNAMIC ALGORITHM (no hard-coded providers or model names):
-    // 1. Fetch all paid, text-capable models from OpenRouter API
-    // 2. Score each model based on:
-    //    - Context length (35 points)
-    //    - Recency (25 points)
-    //    - Capabilities from API (20 points)
-    //    - Pricing tier (20 points)
-    // 3. Sort by score and apply provider diversity (max 5 per provider)
-    // 4. Return top 250 models total
+    // Get all 20 hardcoded models from the single source of truth
+    // These are the top-performing models as of October 2025:
+    // 1. Gemini 2.5 Pro (#1 on Chatbot Arena)
+    // 2. GPT-5 (OpenAI flagship)
+    // 3. Claude 4.5 Sonnet (best coding)
+    // 4. Grok 4 (xAI)
+    // 5. DeepSeek V3 (best open-weight)
+    // ... and 15 more top models
     //
     // Benefits:
-    // - Automatically adapts to new models and providers
-    // - Uses only OpenRouter API data fields
-    // - No pattern matching or hard-coded preferences
-    // - Provider diversity: Max 5 models from any provider
-    // - Ensures coverage across all pricing tiers
+    // - Simplified, maintainable code
+    // - No dynamic API calls or complex filtering
+    // - Curated list of proven, high-quality models
+    // - Single source of truth with Zod validation
     //
-    // Filtering:
-    // - Text-capable: Uses architecture.modality from API (output must be pure "text")
-    // - Paid only: Excludes models with pricing = "0" (OpenRouter free tier)
-    //
-    // Pricing Tiers (AGGRESSIVE UPSELLING):
-    // - Free: $0.05/M (~15 models) - Very limited for testing
-    // - Starter: $0.20/M (~35 models) - Budget tier
-    // - Pro: $2.50/M (~180 models) - Flagship models ← MAIN UPSELL
-    // - Power: Unlimited (~250 models) - All ultra-premium
-    //
-    // TanStack Query handles client-side caching
-    const enhancedModels = await openRouterModelsService.getTopModelsAcrossProviders();
+    // Pricing Tiers:
+    // - Free: $0.05/M (~2-3 models) - Very limited
+    // - Starter: $0.20/M (~5-6 models) - Budget tier
+    // - Pro: $2.50/M (~15 models) - Flagship models ← MAIN UPSELL
+    // - Power: Unlimited (all 20 models) - Premium
+    const enhancedModels = getAllModels();
 
     // ============================================================================
     // ✅ SERVER-COMPUTED TIER ACCESS: Use existing pricing-based tier detection
     // ============================================================================
     // Uses proven model-pricing logic from product-logic.service.ts
-    // Tiers: free ($0/M), starter (up to $2/M), pro (up to $100/M), power (unlimited)
 
     const modelsWithTierInfo = enhancedModels.map((model) => {
       const requiredTier = getRequiredTierForModel(model);
@@ -122,10 +111,13 @@ export const listModelsHandler: RouteHandler<typeof listModelsRoute, ApiEnv> = c
     });
 
     // ============================================================================
-    // ✅ DEFAULT MODEL: Get dynamic default from OpenRouter
+    // ✅ DEFAULT MODEL: Select best model for user's tier
     // ============================================================================
-    // Selects the best default model based on user's tier
-    const defaultModelId = await openRouterModelsService.getDefaultModelForTier(userTier);
+    // Priority: highest quality accessible model for user's tier
+    const accessibleModels = modelsWithTierInfo.filter(m => m.is_accessible_to_user);
+    const defaultModelId = accessibleModels.length > 0
+      ? accessibleModels[0]!.id // First model (Gemini 2.5 Pro) or best accessible
+      : modelsWithTierInfo[0]!.id; // Fallback to first model (always exists)
 
     // ============================================================================
     // ✅ FLAGSHIP MODELS: Top 10 most popular with max 2 per provider

@@ -9,13 +9,13 @@ import type { ErrorContext } from '@/api/core';
 import { createHandler, Responses } from '@/api/core';
 import { AnalysisStatuses } from '@/api/core/enums';
 import { IdParamSchema, ThreadRoundParamSchema } from '@/api/core/schemas';
+import { extractModeratorModelName } from '@/api/services/models-config.service';
 import type { ModeratorPromptConfig } from '@/api/services/moderator-analysis.service';
 import {
   buildModeratorSystemPrompt,
   buildModeratorUserPrompt,
 } from '@/api/services/moderator-analysis.service';
 import { initializeOpenRouter, openRouterService } from '@/api/services/openrouter.service';
-import { extractModeratorModelName } from '@/api/services/openrouter-models.service';
 import {
   generateTraceId,
   trackLLMError,

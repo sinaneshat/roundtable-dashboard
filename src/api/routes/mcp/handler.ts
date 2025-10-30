@@ -8,45 +8,89 @@
  */
 
 import type { RouteHandler } from '@hono/zod-openapi';
-import { and, desc, eq } from 'drizzle-orm';
+import type { UIMessage } from 'ai';
+import { convertToModelMessages, streamObject, streamText, validateUIMessages } from 'ai';
+import { and, asc, desc, eq } from 'drizzle-orm';
 import { ulid } from 'ulid';
 
 import { ErrorContextBuilders } from '@/api/common/error-contexts';
 import { createError } from '@/api/common/error-handling';
+import { verifyThreadOwnership } from '@/api/common/permissions';
 import { createHandler, createHandlerWithBatch, Responses } from '@/api/core';
-import { DEFAULT_CHAT_MODE } from '@/api/core/enums';
-import { openRouterModelsService } from '@/api/services/openrouter-models.service';
-import { canAccessModelByPricing } from '@/api/services/product-logic.service';
+import { AnalysisStatuses, DEFAULT_CHAT_MODE } from '@/api/core/enums';
+import { saveStreamedMessage } from '@/api/services/message-persistence.service';
+import { getAllModels, getModelById } from '@/api/services/models-config.service';
+import {
+  buildModeratorSystemPrompt,
+  buildModeratorUserPrompt,
+} from '@/api/services/moderator-analysis.service';
+import { initializeOpenRouter, openRouterService } from '@/api/services/openrouter.service';
+import {
+  AI_RETRY_CONFIG,
+  AI_TIMEOUT_CONFIG,
+  canAccessModelByPricing,
+  getSafeMaxOutputTokens,
+} from '@/api/services/product-logic.service';
+import { handleRoundRegeneration } from '@/api/services/regeneration.service';
+import { calculateRoundNumber } from '@/api/services/round.service';
 import { getUserTier } from '@/api/services/usage-tracking.service';
 import type { ApiEnv } from '@/api/types';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db/schema';
+import { extractTextFromParts } from '@/lib/schemas/message-schemas';
+import { filterNonEmptyMessages } from '@/lib/utils/message-transforms';
 
+import { chatMessagesToUIMessages } from '../chat/handlers/helpers';
+import { ModeratorAnalysisPayloadSchema } from '../chat/schema';
 import type {
   addParticipantToolRoute,
   createThreadToolRoute,
+  generateAnalysisToolRoute,
+  generateResponsesToolRoute,
+  getRoundAnalysisToolRoute,
   getThreadToolRoute,
   listModelsToolRoute,
   listResourcesRoute,
+  listRoundsToolRoute,
   listToolsRoute,
+  regenerateRoundToolRoute,
+  removeParticipantToolRoute,
+  roundFeedbackToolRoute,
   sendMessageToolRoute,
+  updateParticipantToolRoute,
 } from './route';
 import type {
   AddParticipantInput,
   CreateThreadInput,
+  GenerateAnalysisInput,
+  GenerateResponsesInput,
+  GetRoundAnalysisInput,
   GetThreadInput,
   ListModelsInput,
+  ListRoundsInput,
   MCPResource,
   MCPServerInfo,
   MCPTool,
+  RegenerateRoundInput,
+  RemoveParticipantInput,
+  RoundFeedbackInput,
   SendMessageInput,
+  UpdateParticipantInput,
 } from './schema';
 import {
   AddParticipantInputSchema,
   CreateThreadInputSchema,
+  GenerateAnalysisInputSchema,
+  GenerateResponsesInputSchema,
+  GetRoundAnalysisInputSchema,
   GetThreadInputSchema,
   ListModelsInputSchema,
+  ListRoundsInputSchema,
+  RegenerateRoundInputSchema,
+  RemoveParticipantInputSchema,
+  RoundFeedbackInputSchema,
   SendMessageInputSchema,
+  UpdateParticipantInputSchema,
 } from './schema';
 
 // ============================================================================
@@ -234,6 +278,180 @@ const MCP_TOOLS: MCPTool[] = [
       required: ['threadId', 'modelId'],
     },
   },
+  {
+    name: 'generate_responses',
+    description: 'Triggers server-side sequential AI response generation for all participants (non-streaming)',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        threadId: {
+          type: 'string',
+          description: 'Thread ID to generate responses for',
+        },
+        messageContent: {
+          type: 'string',
+          description: 'User message content',
+          minLength: 1,
+          maxLength: 10000,
+        },
+        waitForCompletion: {
+          type: 'boolean',
+          description: 'Whether to wait for all AI responses before returning',
+          default: true,
+        },
+      },
+      required: ['threadId', 'messageContent'],
+    },
+  },
+  {
+    name: 'generate_analysis',
+    description: 'Creates AI moderator analysis comparing participant responses for a round',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        threadId: {
+          type: 'string',
+          description: 'Thread ID',
+        },
+        roundNumber: {
+          type: 'integer',
+          description: 'Round number to analyze',
+          minimum: 1,
+        },
+      },
+      required: ['threadId', 'roundNumber'],
+    },
+  },
+  {
+    name: 'regenerate_round',
+    description: 'Deletes and regenerates all AI responses for a specific round',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        threadId: {
+          type: 'string',
+          description: 'Thread ID',
+        },
+        roundNumber: {
+          type: 'integer',
+          description: 'Round number to regenerate',
+          minimum: 1,
+        },
+        waitForCompletion: {
+          type: 'boolean',
+          description: 'Whether to wait for regeneration before returning',
+          default: true,
+        },
+      },
+      required: ['threadId', 'roundNumber'],
+    },
+  },
+  {
+    name: 'round_feedback',
+    description: 'Submit like/dislike feedback for a round',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        threadId: {
+          type: 'string',
+          description: 'Thread ID',
+        },
+        roundNumber: {
+          type: 'integer',
+          description: 'Round number',
+          minimum: 1,
+        },
+        feedback: {
+          type: 'string',
+          enum: ['like', 'dislike', 'none'],
+          description: 'Feedback type (none removes feedback)',
+        },
+      },
+      required: ['threadId', 'roundNumber', 'feedback'],
+    },
+  },
+  {
+    name: 'remove_participant',
+    description: 'Removes a participant from a chat thread',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        threadId: {
+          type: 'string',
+          description: 'Thread ID',
+        },
+        participantId: {
+          type: 'string',
+          description: 'Participant ID to remove',
+        },
+      },
+      required: ['threadId', 'participantId'],
+    },
+  },
+  {
+    name: 'update_participant',
+    description: 'Updates participant role, system prompt, or priority',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        threadId: {
+          type: 'string',
+          description: 'Thread ID',
+        },
+        participantId: {
+          type: 'string',
+          description: 'Participant ID to update',
+        },
+        role: {
+          type: 'string',
+          description: 'New role name',
+        },
+        systemPrompt: {
+          type: 'string',
+          description: 'New system prompt',
+        },
+        priority: {
+          type: 'integer',
+          description: 'New priority',
+          minimum: 0,
+        },
+      },
+      required: ['threadId', 'participantId'],
+    },
+  },
+  {
+    name: 'get_round_analysis',
+    description: 'Retrieves moderator analysis for a specific round',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        threadId: {
+          type: 'string',
+          description: 'Thread ID',
+        },
+        roundNumber: {
+          type: 'integer',
+          description: 'Round number',
+          minimum: 1,
+        },
+      },
+      required: ['threadId', 'roundNumber'],
+    },
+  },
+  {
+    name: 'list_rounds',
+    description: 'Lists all rounds in a chat thread with metadata',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        threadId: {
+          type: 'string',
+          description: 'Thread ID',
+        },
+      },
+      required: ['threadId'],
+    },
+  },
 ];
 
 // ============================================================================
@@ -323,7 +541,7 @@ export const createThreadToolHandler: RouteHandler<typeof createThreadToolRoute,
     const userTier = await getUserTier(user.id);
 
     // Validate all participant models are accessible
-    const allModels = await openRouterModelsService.getTop50Models();
+    const allModels = getAllModels();
     for (const participant of input.participants) {
       const model = allModels.find(m => m.id === participant.modelId);
       if (!model) {
@@ -631,7 +849,7 @@ export const listModelsToolHandler: RouteHandler<typeof listModelsToolRoute, Api
     const userTier = await getUserTier(user.id);
 
     // Fetch all models
-    let allModels = await openRouterModelsService.getTop50Models();
+    let allModels = getAllModels();
 
     // Apply filters
     if (input.provider) {
@@ -718,7 +936,7 @@ export const addParticipantToolHandler: RouteHandler<typeof addParticipantToolRo
 
     // Validate model access
     const userTier = await getUserTier(user.id);
-    const allModels = await openRouterModelsService.getTop50Models();
+    const allModels = getAllModels();
     const model = allModels.find(m => m.id === input.modelId);
 
     if (!model) {
@@ -766,6 +984,932 @@ export const addParticipantToolHandler: RouteHandler<typeof addParticipantToolRo
       metadata: {
         executionTime,
         toolName: 'add_participant',
+      },
+    });
+  },
+);
+
+/**
+ * MCP Tool: Generate Responses
+ * Server-side sequential AI response generation for all participants
+ * Following pattern from streaming.handler.ts streamText implementation
+ */
+export const generateResponsesToolHandler: RouteHandler<typeof generateResponsesToolRoute, ApiEnv> = createHandler(
+  {
+    auth: 'session',
+    validateBody: GenerateResponsesInputSchema,
+    operationName: 'mcpGenerateResponses',
+  },
+  async (c) => {
+    const startTime = Date.now();
+    const { user } = c.auth();
+    const input: GenerateResponsesInput = c.validated.body;
+    const db = await getDbAsync();
+
+    // Verify thread ownership
+    const thread = await verifyThreadOwnership(input.threadId, user.id, db);
+
+    // Load enabled participants
+    const participants = await db.query.chatParticipant.findMany({
+      where: and(
+        eq(tables.chatParticipant.threadId, input.threadId),
+        eq(tables.chatParticipant.isEnabled, true),
+      ),
+      orderBy: [asc(tables.chatParticipant.priority)],
+    });
+
+    if (participants.length === 0) {
+      throw createError.badRequest('No enabled participants in thread');
+    }
+
+    // Calculate round number
+    const roundResult = await calculateRoundNumber({
+      threadId: input.threadId,
+      participantIndex: 0,
+      message: { role: 'user', parts: [{ type: 'text', text: input.messageContent }] } as UIMessage,
+      regenerateRound: undefined,
+      db,
+    });
+
+    // Save user message (participant 0 only)
+    const userMessageId = ulid();
+    await db.insert(tables.chatMessage).values({
+      id: userMessageId,
+      threadId: input.threadId,
+      role: 'user',
+      parts: [{ type: 'text', text: input.messageContent }],
+      participantId: null,
+      roundNumber: roundResult.roundNumber,
+      createdAt: new Date(),
+    });
+
+    // Load previous messages for context
+    const previousDbMessages = await db.query.chatMessage.findMany({
+      where: eq(tables.chatMessage.threadId, input.threadId),
+      orderBy: [
+        asc(tables.chatMessage.roundNumber),
+        asc(tables.chatMessage.createdAt),
+      ],
+    });
+
+    const previousMessages = await chatMessagesToUIMessages(previousDbMessages);
+
+    // Initialize OpenRouter
+    initializeOpenRouter(c.env);
+    const client = openRouterService.getClient();
+    const userTier = await getUserTier(user.id);
+
+    // Generate responses sequentially for each participant
+    const responses: Array<{ participantId: string; messageId: string; content: string }> = [];
+
+    for (let i = 0; i < participants.length; i++) {
+      const participant = participants[i];
+      if (!participant)
+        continue;
+
+      try {
+        // Prepare messages for this participant
+        const allMessages = [...previousMessages, {
+          id: userMessageId,
+          role: 'user' as const,
+          parts: [{ type: 'text' as const, text: input.messageContent }],
+        }];
+
+        const typedMessages = await validateUIMessages({ messages: allMessages });
+        const nonEmptyMessages = filterNonEmptyMessages(typedMessages);
+        const modelMessages = convertToModelMessages(nonEmptyMessages);
+
+        // Get model info for token limits
+        const modelInfo = getModelById(participant.modelId);
+        const modelContextLength = modelInfo?.context_length || 16000;
+
+        const systemPromptTokens = Math.ceil((participant.settings?.systemPrompt || '').length / 4);
+        const messageTokens = typedMessages.length * 200;
+        const estimatedInputTokens = systemPromptTokens + messageTokens + 500;
+
+        const maxOutputTokens = getSafeMaxOutputTokens(
+          modelContextLength,
+          estimatedInputTokens,
+          userTier,
+        );
+
+        // System prompt
+        const systemPrompt = participant.settings?.systemPrompt
+          || (participant.role
+            ? `You're ${participant.role}. Engage naturally in this discussion, sharing your perspective and insights. Be direct, thoughtful, and conversational.`
+            : `Engage naturally in this discussion. Share your thoughts, ask questions, and build on others' ideas. Be direct and conversational.`);
+
+        // Temperature support
+        const modelSupportsTemperature = !participant.modelId.includes('o4-mini') && !participant.modelId.includes('o4-deep');
+        const temperatureValue = modelSupportsTemperature ? (participant.settings?.temperature ?? 0.7) : undefined;
+
+        // Generate response
+        const reasoningDeltas: string[] = [];
+        const streamMessageId = ulid();
+
+        const finishResult = await streamText({
+          model: client(participant.modelId),
+          system: systemPrompt,
+          messages: modelMessages,
+          maxOutputTokens,
+          ...(modelSupportsTemperature && { temperature: temperatureValue }),
+          maxRetries: AI_RETRY_CONFIG.maxAttempts,
+          abortSignal: AbortSignal.timeout(AI_TIMEOUT_CONFIG.perAttemptMs),
+          experimental_telemetry: {
+            isEnabled: true,
+            functionId: `mcp.generate-responses.thread.${input.threadId}.participant.${i}`,
+          },
+        });
+
+        // Collect response text
+        let fullText = '';
+        for await (const chunk of finishResult.textStream) {
+          fullText += chunk;
+        }
+
+        // Await finish result properties
+        const fullTextResult = await finishResult.text;
+        const usageResult = await finishResult.usage;
+        const finishReasonResult = await finishResult.finishReason;
+
+        // Save message using saveStreamedMessage service
+        await saveStreamedMessage({
+          messageId: streamMessageId,
+          threadId: input.threadId,
+          participantId: participant.id,
+          participantIndex: i,
+          participantRole: participant.role,
+          modelId: participant.modelId,
+          roundNumber: roundResult.roundNumber,
+          text: fullText,
+          reasoningDeltas,
+          finishResult: {
+            text: fullTextResult,
+            usage: {
+              inputTokens: usageResult?.inputTokens || 0,
+              outputTokens: usageResult?.outputTokens || 0,
+            },
+            finishReason: finishReasonResult,
+            response: finishResult.response,
+            reasoning: await finishResult.reasoning,
+          },
+          userId: user.id,
+          participants,
+          threadMode: thread.mode,
+          db,
+        });
+
+        responses.push({
+          participantId: participant.id,
+          messageId: streamMessageId,
+          content: fullText,
+        });
+      } catch (error) {
+        // Log error but continue with other participants
+        responses.push({
+          participantId: participant.id,
+          messageId: '',
+          content: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        });
+      }
+    }
+
+    const executionTime = Date.now() - startTime;
+
+    return Responses.ok(c, {
+      result: {
+        roundNumber: roundResult.roundNumber,
+        userMessageId,
+        responses,
+        participantCount: participants.length,
+      },
+      metadata: {
+        executionTime,
+        toolName: 'generate_responses',
+      },
+    });
+  },
+);
+
+/**
+ * MCP Tool: Generate Analysis
+ * Creates moderator analysis for a round
+ * Following pattern from analysis.handler.ts generateModeratorAnalysis
+ */
+export const generateAnalysisToolHandler: RouteHandler<typeof generateAnalysisToolRoute, ApiEnv> = createHandler(
+  {
+    auth: 'session',
+    validateBody: GenerateAnalysisInputSchema,
+    operationName: 'mcpGenerateAnalysis',
+  },
+  async (c) => {
+    const startTime = Date.now();
+    const { user } = c.auth();
+    const input: GenerateAnalysisInput = c.validated.body;
+    const db = await getDbAsync();
+
+    // Verify thread ownership
+    const thread = await verifyThreadOwnership(input.threadId, user.id, db);
+
+    // Fetch round messages
+    const roundMessages = await db.query.chatMessage.findMany({
+      where: and(
+        eq(tables.chatMessage.threadId, input.threadId),
+        eq(tables.chatMessage.role, 'assistant'),
+        eq(tables.chatMessage.roundNumber, input.roundNumber),
+      ),
+      with: {
+        participant: true,
+      },
+      orderBy: [
+        asc(tables.chatMessage.createdAt),
+      ],
+    });
+
+    if (roundMessages.length === 0) {
+      throw createError.badRequest(`No messages found for round ${input.roundNumber}`);
+    }
+
+    // Get user question
+    const userMessages = await db.query.chatMessage.findMany({
+      where: and(
+        eq(tables.chatMessage.threadId, input.threadId),
+        eq(tables.chatMessage.role, 'user'),
+      ),
+      orderBy: [desc(tables.chatMessage.createdAt)],
+      limit: 10,
+    });
+
+    const earliestParticipantTime = Math.min(...roundMessages.map(m => m.createdAt.getTime()));
+    const relevantUserMessage = userMessages.find(
+      m => m.createdAt.getTime() < earliestParticipantTime,
+    );
+    const userQuestion = relevantUserMessage ? extractTextFromParts(relevantUserMessage.parts) : 'N/A';
+
+    // Build participant responses
+    const participantResponses = roundMessages.map((msg, index) => {
+      const participant = msg.participant!;
+      return {
+        participantIndex: index,
+        participantRole: participant.role,
+        modelId: participant.modelId,
+        modelName: participant.modelId.split('/').pop() || participant.modelId,
+        responseContent: extractTextFromParts(msg.parts),
+      };
+    });
+
+    // Get changelog entries
+    const changelogEntries = await db.query.chatThreadChangelog.findMany({
+      where: and(
+        eq(tables.chatThreadChangelog.threadId, input.threadId),
+        eq(tables.chatThreadChangelog.roundNumber, input.roundNumber),
+      ),
+      orderBy: [desc(tables.chatThreadChangelog.createdAt)],
+      limit: 20,
+    });
+
+    // Create analysis record
+    const analysisId = ulid();
+    await db.insert(tables.chatModeratorAnalysis).values({
+      id: analysisId,
+      threadId: input.threadId,
+      roundNumber: input.roundNumber,
+      mode: thread.mode,
+      userQuestion,
+      status: AnalysisStatuses.STREAMING,
+      participantMessageIds: roundMessages.map(m => m.id),
+      createdAt: new Date(),
+    });
+
+    // Generate analysis using AI
+    initializeOpenRouter(c.env);
+    const client = openRouterService.getClient();
+    const analysisModelId = 'openai/gpt-4o';
+
+    const systemPrompt = buildModeratorSystemPrompt({
+      roundNumber: input.roundNumber,
+      mode: thread.mode,
+      userQuestion,
+      participantResponses,
+      changelogEntries: changelogEntries.map(ce => ({
+        changeType: ce.changeType,
+        description: ce.changeSummary,
+        metadata: ce.changeData as Record<string, unknown> | null,
+        createdAt: ce.createdAt,
+      })),
+    });
+
+    const userPrompt = buildModeratorUserPrompt({
+      roundNumber: input.roundNumber,
+      mode: thread.mode,
+      userQuestion,
+      participantResponses,
+      changelogEntries: changelogEntries.map(ce => ({
+        changeType: ce.changeType,
+        description: ce.changeSummary,
+        metadata: ce.changeData as Record<string, unknown> | null,
+        createdAt: ce.createdAt,
+      })),
+    });
+
+    try {
+      // Generate structured analysis
+      const result = await streamObject({
+        model: client.chat(analysisModelId),
+        schema: ModeratorAnalysisPayloadSchema,
+        schemaName: 'ModeratorAnalysis',
+        system: systemPrompt,
+        prompt: userPrompt,
+        mode: 'json',
+        temperature: 0.3,
+      });
+
+      // Update analysis with result
+      await db.update(tables.chatModeratorAnalysis)
+        .set({
+          status: AnalysisStatuses.COMPLETED,
+          analysisData: await result.object,
+          completedAt: new Date(),
+        })
+        .where(eq(tables.chatModeratorAnalysis.id, analysisId));
+
+      const executionTime = Date.now() - startTime;
+
+      return Responses.ok(c, {
+        result: {
+          analysisId,
+          roundNumber: input.roundNumber,
+          analysis: result.object,
+        },
+        metadata: {
+          executionTime,
+          toolName: 'generate_analysis',
+        },
+      });
+    } catch (error) {
+      // Mark analysis as failed
+      await db.update(tables.chatModeratorAnalysis)
+        .set({
+          status: AnalysisStatuses.FAILED,
+          errorMessage: error instanceof Error ? error.message : 'Unknown error',
+        })
+        .where(eq(tables.chatModeratorAnalysis.id, analysisId));
+
+      throw createError.internal(
+        'Failed to generate analysis',
+        { errorType: 'external_service' },
+      );
+    }
+  },
+);
+
+/**
+ * MCP Tool: Regenerate Round
+ * Deletes and regenerates AI responses for a round
+ * Following pattern from regeneration.service.ts handleRoundRegeneration
+ */
+export const regenerateRoundToolHandler: RouteHandler<typeof regenerateRoundToolRoute, ApiEnv> = createHandler(
+  {
+    auth: 'session',
+    validateBody: RegenerateRoundInputSchema,
+    operationName: 'mcpRegenerateRound',
+  },
+  async (c) => {
+    const startTime = Date.now();
+    const { user } = c.auth();
+    const input: RegenerateRoundInput = c.validated.body;
+    const db = await getDbAsync();
+
+    // Verify thread ownership
+    const thread = await verifyThreadOwnership(input.threadId, user.id, db);
+
+    // Handle regeneration (cleanup)
+    const cleanupResult = await handleRoundRegeneration({
+      threadId: input.threadId,
+      regenerateRound: input.roundNumber,
+      participantIndex: 0,
+      db,
+    });
+
+    // If waitForCompletion, regenerate responses
+    const responses: Array<{ participantId: string; messageId: string; content: string }> = [];
+
+    if (input.waitForCompletion) {
+      // Load participants
+      const participants = await db.query.chatParticipant.findMany({
+        where: and(
+          eq(tables.chatParticipant.threadId, input.threadId),
+          eq(tables.chatParticipant.isEnabled, true),
+        ),
+        orderBy: [asc(tables.chatParticipant.priority)],
+      });
+
+      // Get the user message for this round
+      const userMessage = await db.query.chatMessage.findFirst({
+        where: and(
+          eq(tables.chatMessage.threadId, input.threadId),
+          eq(tables.chatMessage.role, 'user'),
+          eq(tables.chatMessage.roundNumber, input.roundNumber),
+        ),
+      });
+
+      if (!userMessage) {
+        throw createError.badRequest('User message not found for regeneration');
+      }
+
+      // Load previous messages
+      const previousDbMessages = await db.query.chatMessage.findMany({
+        where: eq(tables.chatMessage.threadId, input.threadId),
+        orderBy: [
+          asc(tables.chatMessage.roundNumber),
+          asc(tables.chatMessage.createdAt),
+        ],
+      });
+
+      const previousMessages = await chatMessagesToUIMessages(previousDbMessages);
+
+      // Initialize OpenRouter
+      initializeOpenRouter(c.env);
+      const client = openRouterService.getClient();
+      const userTier = await getUserTier(user.id);
+
+      // Regenerate each participant response
+      for (let i = 0; i < participants.length; i++) {
+        const participant = participants[i];
+        if (!participant)
+          continue;
+
+        try {
+          const allMessages = [...previousMessages, {
+            id: userMessage.id,
+            role: 'user' as const,
+            parts: userMessage.parts,
+          }];
+
+          const typedMessages = await validateUIMessages({ messages: allMessages });
+          const nonEmptyMessages = filterNonEmptyMessages(typedMessages);
+          const modelMessages = convertToModelMessages(nonEmptyMessages);
+
+          const modelInfo = getModelById(participant.modelId);
+          const modelContextLength = modelInfo?.context_length || 16000;
+
+          const systemPromptTokens = Math.ceil((participant.settings?.systemPrompt || '').length / 4);
+          const messageTokens = typedMessages.length * 200;
+          const estimatedInputTokens = systemPromptTokens + messageTokens + 500;
+
+          const maxOutputTokens = getSafeMaxOutputTokens(
+            modelContextLength,
+            estimatedInputTokens,
+            userTier,
+          );
+
+          const systemPrompt = participant.settings?.systemPrompt
+            || (participant.role
+              ? `You're ${participant.role}. Engage naturally in this discussion, sharing your perspective and insights. Be direct, thoughtful, and conversational.`
+              : `Engage naturally in this discussion. Share your thoughts, ask questions, and build on others' ideas. Be direct and conversational.`);
+
+          const modelSupportsTemperature = !participant.modelId.includes('o4-mini') && !participant.modelId.includes('o4-deep');
+          const temperatureValue = modelSupportsTemperature ? (participant.settings?.temperature ?? 0.7) : undefined;
+
+          const reasoningDeltas: string[] = [];
+          const streamMessageId = ulid();
+
+          const finishResult = await streamText({
+            model: client(participant.modelId),
+            system: systemPrompt,
+            messages: modelMessages,
+            maxOutputTokens,
+            ...(modelSupportsTemperature && { temperature: temperatureValue }),
+            maxRetries: AI_RETRY_CONFIG.maxAttempts,
+            abortSignal: AbortSignal.timeout(AI_TIMEOUT_CONFIG.perAttemptMs),
+          });
+
+          let fullText = '';
+          for await (const chunk of finishResult.textStream) {
+            fullText += chunk;
+          }
+
+          // Await finish result properties
+          const fullTextResult = await finishResult.text;
+          const usageResult = await finishResult.usage;
+          const finishReasonResult = await finishResult.finishReason;
+
+          await saveStreamedMessage({
+            messageId: streamMessageId,
+            threadId: input.threadId,
+            participantId: participant.id,
+            participantIndex: i,
+            participantRole: participant.role,
+            modelId: participant.modelId,
+            roundNumber: input.roundNumber,
+            text: fullText,
+            reasoningDeltas,
+            finishResult: {
+              text: fullTextResult,
+              usage: {
+                inputTokens: usageResult?.inputTokens || 0,
+                outputTokens: usageResult?.outputTokens || 0,
+              },
+              finishReason: finishReasonResult,
+              response: finishResult.response,
+              reasoning: await finishResult.reasoning,
+            },
+            userId: user.id,
+            participants,
+            threadMode: thread.mode,
+            db,
+          });
+
+          responses.push({
+            participantId: participant.id,
+            messageId: streamMessageId,
+            content: fullText,
+          });
+        } catch (error) {
+          responses.push({
+            participantId: participant.id,
+            messageId: '',
+            content: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          });
+        }
+      }
+    }
+
+    const executionTime = Date.now() - startTime;
+
+    return Responses.ok(c, {
+      result: {
+        roundNumber: input.roundNumber,
+        deletedMessagesCount: cleanupResult.deletedMessagesCount,
+        cleanedEmbeddingsCount: cleanupResult.cleanedEmbeddingsCount,
+        responses,
+        regenerated: input.waitForCompletion,
+      },
+      metadata: {
+        executionTime,
+        toolName: 'regenerate_round',
+      },
+    });
+  },
+);
+
+/**
+ * MCP Tool: Round Feedback
+ * Submit like/dislike feedback for a round
+ */
+export const roundFeedbackToolHandler: RouteHandler<typeof roundFeedbackToolRoute, ApiEnv> = createHandlerWithBatch(
+  {
+    auth: 'session',
+    validateBody: RoundFeedbackInputSchema,
+    operationName: 'mcpRoundFeedback',
+  },
+  async (c, batch) => {
+    const startTime = Date.now();
+    const { user } = c.auth();
+    const input: RoundFeedbackInput = c.validated.body;
+    const db = await getDbAsync();
+
+    // Verify thread ownership
+    await verifyThreadOwnership(input.threadId, user.id, db);
+
+    // Check if feedback exists
+    const existing = await db.query.chatRoundFeedback.findFirst({
+      where: and(
+        eq(tables.chatRoundFeedback.threadId, input.threadId),
+        eq(tables.chatRoundFeedback.userId, user.id),
+        eq(tables.chatRoundFeedback.roundNumber, input.roundNumber),
+      ),
+    });
+
+    if (input.feedback === 'none') {
+      // Remove feedback if exists
+      if (existing) {
+        await batch.db
+          .delete(tables.chatRoundFeedback)
+          .where(eq(tables.chatRoundFeedback.id, existing.id));
+      }
+    } else {
+      // Insert or update feedback
+      if (existing) {
+        await batch.db
+          .update(tables.chatRoundFeedback)
+          .set({
+            feedbackType: input.feedback,
+            updatedAt: new Date(),
+          })
+          .where(eq(tables.chatRoundFeedback.id, existing.id));
+      } else {
+        await batch.db.insert(tables.chatRoundFeedback).values({
+          id: ulid(),
+          threadId: input.threadId,
+          userId: user.id,
+          roundNumber: input.roundNumber,
+          feedbackType: input.feedback,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        });
+      }
+    }
+
+    const executionTime = Date.now() - startTime;
+
+    return Responses.ok(c, {
+      result: {
+        threadId: input.threadId,
+        roundNumber: input.roundNumber,
+        feedback: input.feedback,
+        action: existing ? 'updated' : 'created',
+      },
+      metadata: {
+        executionTime,
+        toolName: 'round_feedback',
+      },
+    });
+  },
+);
+
+/**
+ * MCP Tool: Remove Participant
+ * Removes a participant from a thread (sets isEnabled=false)
+ */
+export const removeParticipantToolHandler: RouteHandler<typeof removeParticipantToolRoute, ApiEnv> = createHandlerWithBatch(
+  {
+    auth: 'session',
+    validateBody: RemoveParticipantInputSchema,
+    operationName: 'mcpRemoveParticipant',
+  },
+  async (c, batch) => {
+    const startTime = Date.now();
+    const { user } = c.auth();
+    const input: RemoveParticipantInput = c.validated.body;
+    const db = await getDbAsync();
+
+    // Verify thread ownership
+    await verifyThreadOwnership(input.threadId, user.id, db);
+
+    // Verify participant exists and belongs to thread
+    const participant = await db.query.chatParticipant.findFirst({
+      where: and(
+        eq(tables.chatParticipant.id, input.participantId),
+        eq(tables.chatParticipant.threadId, input.threadId),
+      ),
+    });
+
+    if (!participant) {
+      throw createError.notFound(
+        'Participant not found',
+        ErrorContextBuilders.resourceNotFound('participant', input.participantId),
+      );
+    }
+
+    // Disable participant
+    await batch.db
+      .update(tables.chatParticipant)
+      .set({
+        isEnabled: false,
+        updatedAt: new Date(),
+      })
+      .where(eq(tables.chatParticipant.id, input.participantId));
+
+    const executionTime = Date.now() - startTime;
+
+    return Responses.ok(c, {
+      result: {
+        participantId: input.participantId,
+        threadId: input.threadId,
+        removed: true,
+      },
+      metadata: {
+        executionTime,
+        toolName: 'remove_participant',
+      },
+    });
+  },
+);
+
+/**
+ * MCP Tool: Update Participant
+ * Updates participant role, system prompt, or priority
+ */
+export const updateParticipantToolHandler: RouteHandler<typeof updateParticipantToolRoute, ApiEnv> = createHandlerWithBatch(
+  {
+    auth: 'session',
+    validateBody: UpdateParticipantInputSchema,
+    operationName: 'mcpUpdateParticipant',
+  },
+  async (c, batch) => {
+    const startTime = Date.now();
+    const { user } = c.auth();
+    const input: UpdateParticipantInput = c.validated.body;
+    const db = await getDbAsync();
+
+    // Verify thread ownership
+    await verifyThreadOwnership(input.threadId, user.id, db);
+
+    // Verify participant exists and belongs to thread
+    const participant = await db.query.chatParticipant.findFirst({
+      where: and(
+        eq(tables.chatParticipant.id, input.participantId),
+        eq(tables.chatParticipant.threadId, input.threadId),
+      ),
+    });
+
+    if (!participant) {
+      throw createError.notFound(
+        'Participant not found',
+        ErrorContextBuilders.resourceNotFound('participant', input.participantId),
+      );
+    }
+
+    // Build update object
+    const updates: Record<string, unknown> = {
+      updatedAt: new Date(),
+    };
+
+    if (input.role !== undefined) {
+      updates.role = input.role;
+    }
+
+    if (input.priority !== undefined) {
+      updates.priority = input.priority;
+    }
+
+    if (input.systemPrompt !== undefined) {
+      updates.settings = {
+        ...participant.settings,
+        systemPrompt: input.systemPrompt,
+      };
+    }
+
+    // Update participant
+    await batch.db
+      .update(tables.chatParticipant)
+      .set(updates)
+      .where(eq(tables.chatParticipant.id, input.participantId));
+
+    // Fetch updated participant
+    const updated = await db.query.chatParticipant.findFirst({
+      where: eq(tables.chatParticipant.id, input.participantId),
+    });
+
+    const executionTime = Date.now() - startTime;
+
+    return Responses.ok(c, {
+      result: {
+        participantId: input.participantId,
+        threadId: input.threadId,
+        updated: {
+          role: updated?.role,
+          priority: updated?.priority,
+          systemPrompt: updated?.settings?.systemPrompt,
+        },
+      },
+      metadata: {
+        executionTime,
+        toolName: 'update_participant',
+      },
+    });
+  },
+);
+
+/**
+ * MCP Tool: Get Round Analysis
+ * Retrieves moderator analysis for a specific round
+ */
+export const getRoundAnalysisToolHandler: RouteHandler<typeof getRoundAnalysisToolRoute, ApiEnv> = createHandler(
+  {
+    auth: 'session',
+    validateBody: GetRoundAnalysisInputSchema,
+    operationName: 'mcpGetRoundAnalysis',
+  },
+  async (c) => {
+    const startTime = Date.now();
+    const { user } = c.auth();
+    const input: GetRoundAnalysisInput = c.validated.body;
+    const db = await getDbAsync();
+
+    // Verify thread ownership
+    await verifyThreadOwnership(input.threadId, user.id, db);
+
+    // Fetch analysis
+    const analysis = await db.query.chatModeratorAnalysis.findFirst({
+      where: and(
+        eq(tables.chatModeratorAnalysis.threadId, input.threadId),
+        eq(tables.chatModeratorAnalysis.roundNumber, input.roundNumber),
+        eq(tables.chatModeratorAnalysis.status, AnalysisStatuses.COMPLETED),
+      ),
+      orderBy: [desc(tables.chatModeratorAnalysis.createdAt)],
+    });
+
+    if (!analysis) {
+      throw createError.notFound(
+        'Analysis not found',
+        ErrorContextBuilders.resourceNotFound('analysis', `${input.threadId}:${input.roundNumber}`),
+      );
+    }
+
+    const executionTime = Date.now() - startTime;
+
+    return Responses.ok(c, {
+      result: {
+        analysisId: analysis.id,
+        roundNumber: analysis.roundNumber,
+        mode: analysis.mode,
+        userQuestion: analysis.userQuestion,
+        status: analysis.status,
+        analysisData: analysis.analysisData,
+        completedAt: analysis.completedAt?.toISOString(),
+        createdAt: analysis.createdAt.toISOString(),
+      },
+      metadata: {
+        executionTime,
+        toolName: 'get_round_analysis',
+      },
+    });
+  },
+);
+
+/**
+ * MCP Tool: List Rounds
+ * Lists all rounds in a thread with metadata
+ */
+export const listRoundsToolHandler: RouteHandler<typeof listRoundsToolRoute, ApiEnv> = createHandler(
+  {
+    auth: 'session',
+    validateBody: ListRoundsInputSchema,
+    operationName: 'mcpListRounds',
+  },
+  async (c) => {
+    const startTime = Date.now();
+    const { user } = c.auth();
+    const input: ListRoundsInput = c.validated.body;
+    const db = await getDbAsync();
+
+    // Verify thread ownership
+    await verifyThreadOwnership(input.threadId, user.id, db);
+
+    // Get all messages for the thread and group by round
+    const allMessages = await db.query.chatMessage.findMany({
+      where: eq(tables.chatMessage.threadId, input.threadId),
+      orderBy: [asc(tables.chatMessage.roundNumber), asc(tables.chatMessage.createdAt)],
+    });
+
+    // Group messages by round number
+    const roundMap = new Map<number, typeof allMessages>();
+    for (const message of allMessages) {
+      const existing = roundMap.get(message.roundNumber) || [];
+      existing.push(message);
+      roundMap.set(message.roundNumber, existing);
+    }
+
+    // Build round metadata
+    const rounds = await Promise.all(
+      Array.from(roundMap.entries())
+        .sort(([a], [b]) => a - b)
+        .map(async ([roundNumber, messages]) => {
+          const analysis = await db.query.chatModeratorAnalysis.findFirst({
+            where: and(
+              eq(tables.chatModeratorAnalysis.threadId, input.threadId),
+              eq(tables.chatModeratorAnalysis.roundNumber, roundNumber),
+              eq(tables.chatModeratorAnalysis.status, AnalysisStatuses.COMPLETED),
+            ),
+          });
+
+          const feedback = await db.query.chatRoundFeedback.findFirst({
+            where: and(
+              eq(tables.chatRoundFeedback.threadId, input.threadId),
+              eq(tables.chatRoundFeedback.userId, user.id),
+              eq(tables.chatRoundFeedback.roundNumber, roundNumber),
+            ),
+          });
+
+          const sortedMessages = messages.sort((a, b) =>
+            a.createdAt.getTime() - b.createdAt.getTime(),
+          );
+
+          return {
+            roundNumber,
+            messageCount: messages.length,
+            firstMessageAt: sortedMessages[0]?.createdAt.toISOString() || new Date().toISOString(),
+            lastMessageAt: sortedMessages[sortedMessages.length - 1]?.createdAt.toISOString() || new Date().toISOString(),
+            hasAnalysis: !!analysis,
+            analysisId: analysis?.id,
+            feedback: feedback?.feedbackType || null,
+          };
+        }),
+    );
+
+    const executionTime = Date.now() - startTime;
+
+    return Responses.ok(c, {
+      result: {
+        threadId: input.threadId,
+        rounds,
+        totalRounds: rounds.length,
+      },
+      metadata: {
+        executionTime,
+        toolName: 'list_rounds',
       },
     });
   },

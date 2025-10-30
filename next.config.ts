@@ -18,6 +18,24 @@ const nextConfig: NextConfig = {
     removeConsole: process.env.NEXT_PUBLIC_WEBAPP_ENV === 'prod',
   },
 
+  // Production optimizations
+  poweredByHeader: false,
+  productionBrowserSourceMaps: false,
+
+  // Stable experimental features (production-ready since Next.js 13.5+)
+  experimental: {
+    // Optimize package imports for better tree-shaking
+    // Battle-tested since 13.5, widely used in production
+    // Reduces module loading by 15-70% depending on library
+    optimizePackageImports: [
+      'lucide-react',
+      'recharts',
+      'date-fns',
+      '@radix-ui/react-icons',
+      'framer-motion',
+    ],
+  },
+
   // External packages for Server Components bundling
   // Required for React Email to work in edge runtime and Cloudflare Workers
   // @see https://github.com/resend/react-email/issues/977

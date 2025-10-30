@@ -34,6 +34,7 @@ export {
   getPublicThreadHandler,
   getThreadBySlugHandler,
   getThreadHandler,
+  getThreadSlugStatusHandler,
   listThreadsHandler,
   updateThreadHandler,
 } from './handlers/thread.handler';

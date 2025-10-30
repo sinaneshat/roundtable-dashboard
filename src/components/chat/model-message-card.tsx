@@ -4,7 +4,7 @@ import { memo } from 'react';
 import type { EnhancedModelResponse } from '@/api/routes/models/schema';
 import { Message, MessageAvatar, MessageContent } from '@/components/ai-elements/message';
 import { Reasoning, ReasoningContent, ReasoningTrigger } from '@/components/ai-elements/reasoning';
-import { Response } from '@/components/ai-elements/response';
+import { VirtualizedResponse } from '@/components/ai-elements/virtualized-response';
 import { CustomDataPart } from '@/components/chat/custom-data-part';
 import { MessageErrorDetails } from '@/components/chat/message-error-details';
 import { ToolCallPart } from '@/components/chat/tool-call-part';
@@ -49,6 +49,7 @@ export const ModelMessageCard = memo(({
   const hasError = isError || assistantMetadata?.hasError || assistantMetadata?.error;
   const modelName = model?.name || assistantMetadata?.model || 'AI Assistant';
   const requiredTierName = model?.required_tier_name;
+
   return (
     <div className={`space-y-1 ${className || ''}`}>
       <Message from="assistant">
@@ -92,9 +93,13 @@ export const ModelMessageCard = memo(({
             {parts.map((part, partIndex) => {
               if (part.type === 'text') {
                 return (
-                  <Response key={messageId ? `${messageId}-text-${partIndex}` : `text-${partIndex}`}>
+                  <VirtualizedResponse
+                    key={messageId ? `${messageId}-text-${partIndex}` : `text-${partIndex}`}
+                    virtualizationThreshold={1000}
+                    chunkSize={800}
+                  >
                     {part.text}
-                  </Response>
+                  </VirtualizedResponse>
                 );
               }
               if (part.type === 'reasoning') {

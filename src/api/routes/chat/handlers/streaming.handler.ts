@@ -18,8 +18,8 @@ import { createError, structureAIProviderError } from '@/api/common/error-handli
 import { createHandler } from '@/api/core';
 import { ChangelogTypes } from '@/api/core/enums';
 import { saveStreamedMessage } from '@/api/services/message-persistence.service';
+import { getModelById } from '@/api/services/models-config.service';
 import { initializeOpenRouter, openRouterService } from '@/api/services/openrouter.service';
-import { openRouterModelsService } from '@/api/services/openrouter-models.service';
 import { validateParticipantUniqueness } from '@/api/services/participant-validation.service';
 import {
   createTrackingContext,
@@ -613,7 +613,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
     // ✅ DYNAMIC TOKEN LIMIT: Fetch model info to get context_length and calculate safe max tokens
     // Direct API call to OpenRouter (no caching needed - browser manages context after load)
     // ✅ DYNAMIC PRICING: Also fetch pricing for PostHog LLM tracking
-    const modelInfo = await openRouterModelsService.getModelById(participant.modelId);
+    const modelInfo = getModelById(participant.modelId);
     const modelContextLength = modelInfo?.context_length || 16000; // Default fallback
 
     // Extract dynamic pricing for PostHog tracking (per 1M tokens)

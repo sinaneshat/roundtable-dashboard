@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "34abf250-1ff2-4cd2-b9bc-b5c8d650f10e",
+  "id": "df6f85b4-f92e-4915-a7c9-42e7c2318bbc",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "account": {
@@ -2145,6 +2145,14 @@
         },
         "is_public": {
           "name": "is_public",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": false
+        },
+        "is_ai_generated_title": {
+          "name": "is_ai_generated_title",
           "type": "integer",
           "primaryKey": false,
           "notNull": true,

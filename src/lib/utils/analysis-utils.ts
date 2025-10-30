@@ -10,8 +10,142 @@
 
 import type { UIMessage } from 'ai';
 
-import type { ChatParticipant, StoredModeratorAnalysis } from '@/api/routes/chat/schema';
+import type { ChatParticipant, ModeratorAnalysisPayload, RoundSummary, StoredModeratorAnalysis } from '@/api/routes/chat/schema';
+import { ModeratorAnalysisPayloadSchema } from '@/api/routes/chat/schema';
 import { messageHasError, MessageMetadataSchema } from '@/lib/schemas/message-metadata';
+
+// ============================================================================
+// ANALYSIS DATA COMPLETENESS - SINGLE SOURCE OF TRUTH
+// ============================================================================
+
+/**
+ * Check if analysis has any displayable data (for rendering control)
+ *
+ * **SINGLE SOURCE OF TRUTH**: Use this function everywhere to check if
+ * analysis should be rendered. Prevents inconsistencies like the bug where
+ * keyInsights/consensusPoints were checked in some places but not others.
+ *
+ * Checks ALL possible data fields that can be displayed:
+ * - leaderboard (participant rankings)
+ * - participantAnalyses (individual participant breakdown)
+ * - roundSummary subfields:
+ *   - keyInsights
+ *   - consensusPoints
+ *   - divergentApproaches
+ *   - comparativeAnalysis
+ *   - decisionFramework
+ *   - overallSummary
+ *   - conclusion
+ *   - recommendedActions
+ *
+ * Returns `true` if ANY field has data (OR logic).
+ * Returns `false` if NO fields have data (component should render null).
+ *
+ * @param data - Analysis data object (can be partial during streaming)
+ * @returns True if analysis has any displayable content
+ *
+ * @example
+ * ```typescript
+ * // In components (streaming or completed)
+ * const displayData = partialAnalysis || analysis.analysisData;
+ * if (!hasAnalysisData(displayData)) {
+ *   return null; // Don't render empty analysis
+ * }
+ * // Render analysis UI...
+ * ```
+ */
+export function hasAnalysisData(
+  data: Partial<ModeratorAnalysisPayload> | null | undefined,
+): data is Pick<ModeratorAnalysisPayload, 'leaderboard' | 'participantAnalyses' | 'roundSummary'> {
+  if (!data) {
+    return false;
+  }
+
+  const { leaderboard = [], participantAnalyses = [], roundSummary } = data;
+
+  // Check top-level arrays
+  const hasLeaderboard = leaderboard.length > 0;
+  const hasParticipantAnalyses = participantAnalyses.length > 0;
+
+  // Check roundSummary fields (all possible sections)
+  const hasRoundSummaryData = hasRoundSummaryContent(roundSummary);
+
+  return hasLeaderboard || hasParticipantAnalyses || hasRoundSummaryData;
+}
+
+/**
+ * Check if roundSummary has any displayable content
+ *
+ * **SINGLE SOURCE OF TRUTH**: Use this to check roundSummary completeness.
+ * Checks ALL fields defined in RoundSummarySchema.
+ *
+ * @param roundSummary - RoundSummary object (can be partial during streaming)
+ * @returns True if roundSummary has any content
+ *
+ * @example
+ * ```typescript
+ * // In RoundSummarySection component
+ * if (!hasRoundSummaryContent(roundSummary)) {
+ *   return null;
+ * }
+ * ```
+ */
+export function hasRoundSummaryContent(
+  roundSummary: Partial<RoundSummary> | null | undefined,
+): boolean {
+  if (!roundSummary) {
+    return false;
+  }
+
+  return Boolean(
+    (roundSummary.keyInsights && roundSummary.keyInsights.length > 0)
+    || (roundSummary.consensusPoints && roundSummary.consensusPoints.length > 0)
+    || (roundSummary.divergentApproaches && roundSummary.divergentApproaches.length > 0)
+    || roundSummary.comparativeAnalysis
+    || roundSummary.decisionFramework
+    || roundSummary.overallSummary
+    || roundSummary.conclusion
+    || (roundSummary.recommendedActions && roundSummary.recommendedActions.length > 0),
+  );
+}
+
+/**
+ * Validate analysis data against schema (strict type checking)
+ *
+ * **SINGLE SOURCE OF TRUTH**: Use this for strict validation that requires
+ * ALL required fields to be present and valid according to schema.
+ *
+ * Schema Requirements (enforced by Zod):
+ * - roundNumber: Required integer ≥ 1
+ * - mode: Required string
+ * - userQuestion: Required string
+ * - participantAnalyses: Required array with ≥ 1 item
+ * - leaderboard: Required array with ≥ 1 item
+ * - roundSummary: Required object
+ *
+ * Use this when:
+ * - Validating API responses
+ * - Type guards for TypeScript
+ * - Ensuring data integrity before persistence
+ *
+ * @param data - Data to validate
+ * @returns True if data matches complete schema, false otherwise
+ *
+ * @example
+ * ```typescript
+ * // In store actions
+ * if (!isCompleteAnalysis(data)) {
+ *   throw new Error('Invalid analysis data');
+ * }
+ * // Safe to use as ModeratorAnalysisPayload
+ * ```
+ */
+export function isCompleteAnalysis(
+  data: unknown,
+): data is ModeratorAnalysisPayload {
+  const result = ModeratorAnalysisPayloadSchema.safeParse(data);
+  return result.success;
+}
 
 // ============================================================================
 // STATUS PRIORITY
@@ -100,6 +234,62 @@ export function checkAllParticipantsFailed(messages: UIMessage[]): boolean {
     const parsed = MessageMetadataSchema.safeParse(m.metadata);
     return parsed.success && messageHasError(parsed.data);
   });
+}
+
+/**
+ * Check if round has incomplete participant responses
+ *
+ * Returns true if:
+ * 1. Round has fewer participant messages than expected participants
+ * 2. OR some participant messages have errors (partial failure)
+ *
+ * Use this to determine if retry button should be shown.
+ *
+ * @param messages - All messages in conversation
+ * @param participants - Expected participants
+ * @param roundNumber - Round number to check
+ * @returns True if round is incomplete or has partial failures
+ *
+ * @example
+ * ```typescript
+ * const isIncomplete = isRoundIncomplete(
+ *   messages,
+ *   participants,
+ *   1
+ * );
+ * if (isIncomplete) {
+ *   // Show retry button
+ * }
+ * ```
+ */
+export function isRoundIncomplete(
+  messages: UIMessage[],
+  participants: ChatParticipant[],
+  roundNumber: number,
+): boolean {
+  // Filter messages by round
+  const assistantMessagesInRound = messages.filter((m) => {
+    if (m.role !== 'assistant') {
+      return false;
+    }
+    const parsed = MessageMetadataSchema.safeParse(m.metadata);
+    return parsed.success && parsed.data?.roundNumber === roundNumber;
+  });
+
+  const enabledParticipants = participants.filter(p => p.isEnabled);
+
+  // Round is incomplete if fewer messages than expected participants
+  if (assistantMessagesInRound.length < enabledParticipants.length) {
+    return true;
+  }
+
+  // Round is incomplete if any participant message has an error
+  const hasErrors = assistantMessagesInRound.some((m) => {
+    const parsed = MessageMetadataSchema.safeParse(m.metadata);
+    return parsed.success && messageHasError(parsed.data);
+  });
+
+  return hasErrors;
 }
 
 /**

@@ -137,7 +137,7 @@ export function ChainOfThoughtContent({
   return (
     <CollapsibleContent
       className={cn(
-        'px-4 pb-4 space-y-3 overflow-x-auto',
+        'px-4 pb-4 space-y-3 overflow-hidden',
         className,
       )}
       {...props}

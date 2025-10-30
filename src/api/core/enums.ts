@@ -522,7 +522,7 @@ export const FEEDBACK_TYPES_ENUM_VALUES = FEEDBACK_TYPES as unknown as [Feedback
  *
  * Used by:
  * - /src/api/routes/models/schema.ts - Model categorization
- * - /src/api/services/openrouter-models.service.ts - Model enhancement
+ * - /src/api/services/models-config.service.ts - Model configuration
  * - Frontend model filtering and display
  */
 export const MODEL_CATEGORIES = ['reasoning', 'general', 'creative', 'research'] as const;

@@ -1,6 +1,8 @@
 // File: src/app/layout.tsx
 import './global.css';
 
+import { GeistMono } from 'geist/font/mono';
+import { GeistSans } from 'geist/font/sans';
 import type { Metadata, Viewport } from 'next';
 import { getMessages, getTranslations } from 'next-intl/server';
 import React from 'react';
@@ -65,7 +67,7 @@ export default async function Layout({ children, modal }: RootLayoutProps) {
     <html
       lang="en"
       dir="ltr"
-      className="dark"
+      className={`dark ${GeistSans.variable} ${GeistMono.variable}`}
     >
       <head>
         {/* 2025 AI Search Optimization - Answer Engine Optimization */}

@@ -1,14 +1,12 @@
 'use client';
 import type { ChatStatus } from 'ai';
-import { ArrowUp, Square, X } from 'lucide-react';
+import { ArrowUp, Square } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import type { FormEvent } from 'react';
 import { useEffect, useRef } from 'react';
 
 import type { ParticipantConfig } from '@/components/chat/chat-form-schemas';
 import { Button } from '@/components/ui/button';
-import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
-import { useModelsQuery } from '@/hooks/queries/models';
 import { cn } from '@/lib/ui/cn';
 
 const EMPTY_PARTICIPANTS: ParticipantConfig[] = [];
@@ -38,13 +36,11 @@ export function ChatInput({
   autoFocus = false,
   toolbar,
   participants = EMPTY_PARTICIPANTS,
-  onRemoveParticipant,
+  onRemoveParticipant: _onRemoveParticipant,
   className,
   currentParticipantIndex,
 }: ChatInputProps) {
   const t = useTranslations();
-  const { data: modelsData } = useModelsQuery();
-  const allModels = modelsData?.data?.items || [];
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const isStreaming = status !== 'ready';
   const streamingProgress = isStreaming && currentParticipantIndex !== undefined && participants.length > 1
@@ -132,58 +128,6 @@ export function ChatInput({
                     </Button>
                   )}
             </div>
-            {participants.length > 0 && (
-              <div className="px-5 pb-3 pt-2">
-                <ScrollArea className="w-full">
-                  <div className="flex items-center gap-2 pb-2">
-                    {participants
-                      .sort((a, b) => a.priority - b.priority)
-                    // Defensive deduplication: Remove duplicates by ID to prevent React key errors
-                      .filter((participant, index, array) => {
-                        return array.findIndex(p => p.id === participant.id) === index;
-                      })
-                      .map((participant) => {
-                        const model = allModels.find(m => m.id === participant.modelId);
-                        if (!model)
-                          return null;
-                        return (
-                          <div
-                            key={participant.id}
-                            className={cn(
-                              'inline-flex items-center gap-1.5',
-                              'px-1 py-1',
-                              'text-sm font-normal text-white/70',
-                              'whitespace-nowrap',
-                              'flex-shrink-0',
-                            )}
-                          >
-                            <span className="text-xs leading-none">
-                              {model.name}
-                            </span>
-                            {onRemoveParticipant && (
-                              <button
-                                type="button"
-                                onClick={() => onRemoveParticipant(participant.id)}
-                                className={cn(
-                                  'shrink-0',
-                                  'rounded-xl',
-                                  'p-0.5',
-                                  'hover:bg-white/10',
-                                  'transition-colors',
-                                )}
-                                aria-label={`Remove ${model.name}`}
-                              >
-                                <X className="size-2.5 text-white/60 hover:text-white/90" />
-                              </button>
-                            )}
-                          </div>
-                        );
-                      })}
-                  </div>
-                  <ScrollBar orientation="horizontal" />
-                </ScrollArea>
-              </div>
-            )}
           </div>
         </form>
       </div>

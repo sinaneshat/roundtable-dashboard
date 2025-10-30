@@ -22,7 +22,7 @@ import type { getDbAsync } from '@/db';
 import * as tables from '@/db/schema';
 
 import type { BaseModelResponse } from '../routes/models/schema';
-import { openRouterModelsService } from './openrouter-models.service';
+import { getModelById } from './models-config.service';
 import type { SubscriptionTier } from './product-logic.service';
 import {
   canAccessModelByPricing,
@@ -153,7 +153,7 @@ export async function validateModelAccess(
   userTier: SubscriptionTier,
 ): Promise<BaseModelResponse> {
   // Fetch model details
-  const model = await openRouterModelsService.getModelById(modelId);
+  const model = getModelById(modelId);
 
   if (!model) {
     throw createError.badRequest(
