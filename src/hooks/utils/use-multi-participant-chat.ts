@@ -9,6 +9,7 @@ import { z } from 'zod';
 
 import type { ChatParticipant } from '@/api/routes/chat/schema';
 import { ErrorMetadataSchema } from '@/lib/schemas/error-schemas';
+import type { AssistantMessageMetadata } from '@/lib/schemas/message-metadata';
 import { ParticipantsArraySchema } from '@/lib/schemas/participant-schemas';
 import type { UIMessageErrorType } from '@/lib/utils/message-transforms';
 import { createErrorUIMessage, mergeParticipantMetadata } from '@/lib/utils/message-transforms';
@@ -462,7 +463,7 @@ export function useMultiParticipantChat(
               if (msg.id !== data.message.id)
                 return false;
 
-              const msgMetadata = msg.metadata as import('@/lib/schemas/message-metadata').AssistantMessageMetadata | undefined;
+              const msgMetadata = msg.metadata as AssistantMessageMetadata | undefined;
 
               // If message has no metadata, it's unclaimed - safe to use
               if (!msgMetadata)

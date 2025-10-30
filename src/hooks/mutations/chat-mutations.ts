@@ -10,6 +10,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { z } from 'zod';
 
+import { revalidatePublicThread } from '@/app/auth/actions';
 import { invalidationPatterns, queryKeys } from '@/lib/data/query-keys';
 import {
   addParticipantService,
@@ -671,7 +672,6 @@ export function useTogglePublicMutation() {
       if (variables.slug) {
         try {
           const action = variables.isPublic ? 'publish' : 'unpublish';
-          const { revalidatePublicThread } = await import('@/app/auth/actions');
           await revalidatePublicThread(variables.slug, action);
         } catch {
           // Don't fail the mutation if revalidation fails

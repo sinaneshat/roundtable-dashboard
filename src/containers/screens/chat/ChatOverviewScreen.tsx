@@ -6,6 +6,7 @@ import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
+import type { ModeratorAnalysisPayload } from '@/api/routes/chat/schema';
 import type { ParticipantConfig } from '@/components/chat/chat-form-schemas';
 import { ChatInput } from '@/components/chat/chat-input';
 import { ChatMessageList } from '@/components/chat/chat-message-list';
@@ -366,7 +367,7 @@ export default function ChatOverviewScreen() {
                           if (completedData) {
                             updateAnalysisData(
                               roundNumber,
-                              completedData as import('@/api/routes/chat/schema').ModeratorAnalysisPayload,
+                              completedData as ModeratorAnalysisPayload,
                             );
                           }
                           // Mark analysis as completed to trigger navigation

@@ -25,6 +25,7 @@ import { AppError } from '@/api/common/error-handling';
 import type { ApiEnv, AuthenticatedContext, AuthMode } from '@/api/types';
 // Database access should be handled by individual handlers
 import { getDbAsync } from '@/db';
+import { auth } from '@/lib/auth/server';
 
 import { HTTPExceptionFactory } from './http-exceptions';
 import { Responses } from './responses';
@@ -159,8 +160,6 @@ export type BatchHandler<
  * Properly implements authentication without incorrect middleware calls
  */
 async function applyAuthentication(c: Context, authMode: AuthMode): Promise<void> {
-  const { auth } = await import('@/lib/auth/server');
-
   switch (authMode) {
     case 'session': {
       // Require valid session - throw error if not authenticated

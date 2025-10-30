@@ -205,10 +205,32 @@ app.use('*', trimTrailingSlash());
 
 // Core middleware
 app.use('*', contextStorage());
-// Use secureHeaders but disable CSP - Next.js handles CSP for PostHog compatibility
+
+// Security headers: CSP disabled in Hono - handled by Next.js
+// ============================================================================
+// ⚠️ IMPORTANT: Content-Security-Policy (CSP) Configuration
+//
+// CSP is DISABLED in Hono middleware and handled exclusively by Next.js.
+// This prevents header conflicts and allows route-specific CSP policies.
+//
+// 📍 CSP Configuration Location: next.config.ts (lines 149-181)
+//   - Default strict CSP for all routes (with PostHog allowlist)
+//   - Permissive CSP for Scalar API docs (/api/v1/scalar)
+//   - Route-specific CSP via headers() function
+//
+// ✅ What Hono's secureHeaders() STILL provides (with CSP disabled):
+//   - X-Content-Type-Options: nosniff
+//   - X-Frame-Options: DENY
+//   - X-XSS-Protection: 1; mode=block
+//   - Referrer-Policy: no-referrer
+//   - Strict-Transport-Security (when HTTPS)
+//
+// 🔧 To modify CSP: Edit next.config.ts headers() function, NOT here
+// ============================================================================
 app.use('*', secureHeaders({
-  contentSecurityPolicy: {}, // Empty object disables CSP
+  contentSecurityPolicy: {}, // Empty object disables CSP - Next.js handles it
 }));
+
 app.use('*', requestId());
 // IMPORTANT: Compression handled natively by Cloudflare Workers
 // Using Hono's compress() middleware causes binary corruption in OpenNext.js

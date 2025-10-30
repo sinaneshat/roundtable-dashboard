@@ -13,6 +13,7 @@
 import { useQuery } from '@tanstack/react-query';
 
 import { useSession } from '@/lib/auth/client';
+import { getQueryClient } from '@/lib/data/query-client';
 import { queryKeys } from '@/lib/data/query-keys';
 import { STALE_TIMES } from '@/lib/data/stale-times';
 import { getThreadAnalysesService } from '@/services/api';
@@ -66,7 +67,6 @@ export function useThreadAnalysesQuery(threadId: string, enabled?: boolean) {
       // 4. Without merge, server's empty array would overwrite pending analysis
       // 5. Solution: Check cache BEFORE fetch, merge server data with cached pending analyses
 
-      const { getQueryClient } = await import('@/lib/data/query-client');
       const queryClient = getQueryClient();
 
       // Get existing cache to check for pending/streaming analyses

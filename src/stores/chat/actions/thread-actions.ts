@@ -16,7 +16,9 @@ import { useShallow } from 'zustand/react/shallow';
 import type { ParticipantConfig } from '@/components/chat/chat-form-schemas';
 import { useChatStore } from '@/components/providers/chat-store-provider';
 import type { ChatModeId } from '@/lib/config/chat-modes';
+import { chatMessagesToUIMessages } from '@/lib/utils/message-transforms';
 import { calculateNextRoundNumber } from '@/lib/utils/round-utils';
+import { getThreadBySlugService } from '@/services/api';
 
 export type UseThreadActionsOptions = {
   /** Thread slug for message refetch */
@@ -161,7 +163,6 @@ export function useThreadActions(options: UseThreadActionsOptions): UseThreadAct
     ) {
       const refetchCallback = async () => {
         try {
-          const { getThreadBySlugService } = await import('@/services/api');
           const result = await getThreadBySlugService({ param: { slug } });
 
           if (result.success && result.data.messages.length > messages.length) {
@@ -170,8 +171,7 @@ export function useThreadActions(options: UseThreadActionsOptions): UseThreadAct
               createdAt: new Date(m.createdAt),
             }));
 
-            const { chatMessagesToUIMessages } = await import('@/lib/utils/message-transforms');
-            const uiMessages = chatMessagesToUIMessages(freshMessages, result.data.participants);
+            const uiMessages = await chatMessagesToUIMessages(freshMessages, result.data.participants);
 
             chatSetMessages?.(uiMessages);
           }

@@ -1,5 +1,5 @@
 import type { UIMessage } from 'ai';
-import { validateUIMessages } from 'ai';
+import { TypeValidationError, validateUIMessages } from 'ai';
 
 import type * as tables from '@/db/schema';
 import type { ErrorCategory } from '@/lib/schemas/error-schemas';
@@ -201,8 +201,6 @@ export async function chatMessagesToUIMessages(
   } catch (error) {
     // ✅ AI SDK V5 PATTERN: Handle TypeValidationError gracefully
     // Reference: https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot-message-persistence#validating-messages-from-database
-    const { TypeValidationError } = await import('ai');
-
     if (TypeValidationError.isInstance(error)) {
       // Log validation error for monitoring
       console.error('Database messages validation failed:', error);

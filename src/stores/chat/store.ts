@@ -86,6 +86,8 @@ import type { ParticipantConfig } from '@/components/chat/chat-form-schemas';
 import type { ChatModeId } from '@/lib/config/chat-modes';
 import { getParticipantMessagesWithIds } from '@/lib/utils/message-filtering';
 
+import type { ScreenMode } from './actions/screen-initialization';
+
 // ============================================================================
 // TYPE DEFINITIONS
 // ============================================================================
@@ -235,10 +237,10 @@ type CallbacksSlice = {
 export type { ScreenMode } from './actions/screen-initialization';
 
 type ScreenSlice = {
-  screenMode: import('./actions/screen-initialization').ScreenMode | null;
+  screenMode: ScreenMode | null;
   isReadOnly: boolean;
 
-  setScreenMode: (mode: import('./actions/screen-initialization').ScreenMode | null) => void;
+  setScreenMode: (mode: ScreenMode | null) => void;
   resetScreenMode: () => void;
 };
 

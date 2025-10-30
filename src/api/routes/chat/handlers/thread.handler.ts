@@ -30,7 +30,7 @@ import {
 } from '@/api/services/product-logic.service';
 import { ragService } from '@/api/services/rag.service';
 import { generateUniqueSlug } from '@/api/services/slug-generator.service';
-import { generateTitleFromMessage } from '@/api/services/title-generator.service';
+import { generateTitleFromMessage, updateThreadTitleAndSlug } from '@/api/services/title-generator.service';
 import {
   enforceMessageQuota,
   enforceThreadQuota,
@@ -48,6 +48,7 @@ import type {
   getPublicThreadRoute,
   getThreadBySlugRoute,
   getThreadRoute,
+  getThreadSlugStatusRoute,
   listThreadsRoute,
   updateThreadRoute,
 } from '../route';
@@ -254,7 +255,6 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
 
         const aiTitle = await generateTitleFromMessage(body.firstMessage, c.env);
         // ✅ Update both title AND slug atomically using updateThreadTitleAndSlug
-        const { updateThreadTitleAndSlug } = await import('@/api/services/title-generator.service');
         await updateThreadTitleAndSlug(threadId, aiTitle);
         await invalidateThreadCache(db, user.id);
       } catch {
@@ -779,7 +779,7 @@ export const getThreadBySlugHandler: RouteHandler<typeof getThreadBySlugRoute, A
     });
   },
 );
-export const getThreadSlugStatusHandler: RouteHandler<typeof import('../route').getThreadSlugStatusRoute, ApiEnv> = createHandler(
+export const getThreadSlugStatusHandler: RouteHandler<typeof getThreadSlugStatusRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
     validateParams: IdParamSchema,

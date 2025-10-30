@@ -5,7 +5,7 @@ import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
-import type { ChatMessage, ChatParticipant, ChatThread } from '@/api/routes/chat/schema';
+import type { ChatMessage, ChatParticipant, ChatThread, ModeratorAnalysisPayload } from '@/api/routes/chat/schema';
 import { ChatDeleteDialog } from '@/components/chat/chat-delete-dialog';
 import { ChatInput } from '@/components/chat/chat-input';
 import { ChatModeSelector } from '@/components/chat/chat-mode-selector';
@@ -415,7 +415,7 @@ export default function ChatThreadScreen({
                 if (completedData) {
                   updateAnalysisData(
                     roundNumber,
-                    completedData as import('@/api/routes/chat/schema').ModeratorAnalysisPayload,
+                    completedData as ModeratorAnalysisPayload,
                   );
                 }
 
