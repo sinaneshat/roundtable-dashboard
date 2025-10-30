@@ -22,7 +22,7 @@ import {
 
 export const listProjectsRoute = createRoute({
   method: 'get',
-  path: '/',
+  path: '/projects',
   tags: ['Projects'],
   summary: 'List user projects',
   description: 'Get all projects for the authenticated user with pagination and search',
@@ -45,7 +45,7 @@ export const listProjectsRoute = createRoute({
 
 export const getProjectRoute = createRoute({
   method: 'get',
-  path: '/:id',
+  path: '/projects/:id',
   tags: ['Projects'],
   summary: 'Get project by ID',
   description: 'Get a single project with file and thread counts',
@@ -69,7 +69,7 @@ export const getProjectRoute = createRoute({
 
 export const createProjectRoute = createRoute({
   method: 'post',
-  path: '/',
+  path: '/projects',
   tags: ['Projects'],
   summary: 'Create project',
   description: 'Create a new project with AutoRAG integration',
@@ -99,7 +99,7 @@ export const createProjectRoute = createRoute({
 
 export const updateProjectRoute = createRoute({
   method: 'patch',
-  path: '/:id',
+  path: '/projects/:id',
   tags: ['Projects'],
   summary: 'Update project',
   description: 'Update project name, description, or settings',
@@ -131,7 +131,7 @@ export const updateProjectRoute = createRoute({
 
 export const deleteProjectRoute = createRoute({
   method: 'delete',
-  path: '/:id',
+  path: '/projects/:id',
   tags: ['Projects'],
   summary: 'Delete project',
   description: 'Delete project and all associated files (CASCADE)',
@@ -159,7 +159,7 @@ export const deleteProjectRoute = createRoute({
 
 export const listKnowledgeFilesRoute = createRoute({
   method: 'get',
-  path: '/:id/knowledge',
+  path: '/projects/:id/knowledge',
   tags: ['Project Knowledge'],
   summary: 'List project files',
   description: 'Get all knowledge files for a project with pagination',
@@ -184,7 +184,7 @@ export const listKnowledgeFilesRoute = createRoute({
 
 export const uploadKnowledgeFileRoute = createRoute({
   method: 'post',
-  path: '/:id/knowledge',
+  path: '/projects/:id/knowledge',
   tags: ['Project Knowledge'],
   summary: 'Upload file',
   description: 'Upload a knowledge file to project (multipart/form-data)',
@@ -234,7 +234,7 @@ export const uploadKnowledgeFileRoute = createRoute({
 
 export const deleteKnowledgeFileRoute = createRoute({
   method: 'delete',
-  path: '/:id/knowledge/:fileId',
+  path: '/projects/:id/knowledge/:fileId',
   tags: ['Project Knowledge'],
   summary: 'Delete file',
   description: 'Delete a knowledge file from project',

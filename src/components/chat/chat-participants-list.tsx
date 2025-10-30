@@ -3,7 +3,7 @@ import type { UIMessage } from 'ai';
 import { Bot, Lock } from 'lucide-react';
 import { motion, Reorder } from 'motion/react';
 import { useTranslations } from 'next-intl';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 
 import type { EnhancedModelResponse } from '@/api/routes/models/schema';
 import type { SubscriptionTier } from '@/api/services/product-logic.service';
@@ -62,14 +62,8 @@ export function ChatParticipantsList({
   const { data: customRolesData } = useCustomRolesQuery(open && !isStreaming);
   const { data: modelsData } = useModelsQuery();
 
-  // Close popover when disabled using ref pattern to avoid cascading renders
-  const wasDisabledRef = useRef(disabled);
-  useEffect(() => {
-    if (!wasDisabledRef.current && disabled && open) {
-      queueMicrotask(() => setOpen(false));
-    }
-    wasDisabledRef.current = disabled;
-  }, [disabled, open]);
+  // Derive popover open state - React 19 pattern: derive state instead of syncing with effects
+  const isPopoverOpen = open && !disabled;
   const customRoles = customRolesData?.pages.flatMap(page =>
     (page?.success && page.data?.items) ? page.data.items : [],
   ) || [];
@@ -227,7 +221,7 @@ export function ChatParticipantsList({
   return (
     <div className={cn('flex items-center gap-1.5', className)}>
       <TooltipProvider>
-        <Popover open={open} onOpenChange={setOpen}>
+        <Popover open={isPopoverOpen} onOpenChange={setOpen}>
           <Tooltip>
             <TooltipTrigger asChild>
               <PopoverTrigger asChild>

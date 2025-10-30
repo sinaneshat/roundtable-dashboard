@@ -174,7 +174,7 @@ export function useOverviewActions(): UseOverviewActionsReturn {
 
   // ✅ STEP 1: Monitor query result and replace URL when AI title is ready
   useEffect(() => {
-    const slugData = slugStatusQuery.data;
+    const slugData = slugStatusQuery.data?.success && slugStatusQuery.data.data ? slugStatusQuery.data.data : null;
 
     if (slugData && slugData.isAiGeneratedTitle && !hasReplacedUrl) {
       aiGeneratedSlugRef.current = slugData.slug;

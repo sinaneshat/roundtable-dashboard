@@ -294,12 +294,6 @@ export function useAnalysisCreation(
     if (assistantMessagesInRound.length < enabledParticipants.length) {
       // Safety: prevent infinite loops
       if (retryCountRef.current >= MAX_RETRIES) {
-        console.error('[analysis-creation] Max retries waiting for message sync', {
-          round: roundNumber,
-          messagesInRound: assistantMessagesInRound.length,
-          expectedParticipants: enabledParticipants.length,
-          retries: retryCountRef.current,
-        });
         retryCountRef.current = 0;
         // Proceed anyway to prevent stuck UI
         createAnalysis(roundNumber);

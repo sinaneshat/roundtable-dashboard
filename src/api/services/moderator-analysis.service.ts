@@ -11,6 +11,8 @@ import { z } from '@hono/zod-openapi';
 import { CHAT_MODES } from '@/api/core/enums';
 import type { ModeratorAnalysisPayload } from '@/api/routes/chat/schema';
 import { getAllModels } from '@/api/services/models-config.service';
+import type { SubscriptionTier } from '@/api/services/product-logic.service';
+import { canAccessModelByPricing } from '@/api/services/product-logic.service';
 import { DEFAULT_ROLES, extractModelName } from '@/lib/utils/ai-display';
 
 export type ModeratorAnalysis = ModeratorAnalysisPayload;
@@ -57,6 +59,8 @@ export const ModeratorPromptConfigSchema = z.object({
   participantResponses: z.array(ParticipantResponseSchema).min(1),
   /** Changelog entries before this round (participant/mode/role changes) */
   changelogEntries: z.array(ChangelogEntrySchema).optional(),
+  /** User's subscription tier for filtering model suggestions */
+  userTier: z.enum(['free', 'starter', 'pro', 'power']).optional(),
 });
 
 export type ModeratorPromptConfig = z.infer<typeof ModeratorPromptConfigSchema>;
@@ -175,15 +179,21 @@ export function buildModeratorSystemPrompt(config: ModeratorPromptConfig): strin
     '',
   );
 
-  // 3. AVAILABLE MODELS AND ROLES
-  const availableModels = getAllModels();
+  // 3. AVAILABLE MODELS AND ROLES (FILTERED BY USER TIER)
+  const allModels = getAllModels();
+
+  // Filter models by user's subscription tier access
+  const availableModels = config.userTier
+    ? allModels.filter(model => canAccessModelByPricing(config.userTier as SubscriptionTier, model))
+    : allModels; // If no tier provided, show all models (backward compatibility)
+
   const modelList = availableModels.map(m => `- ${m.id} (${m.name})`).join('\n');
   const rolesList = DEFAULT_ROLES.map(r => `- ${r}`).join('\n');
 
   sections.push(
     '## Available Models for Suggestions',
     '',
-    'When suggesting new models to add, ONLY use model IDs from this list:',
+    `When suggesting new models to add, ONLY use model IDs from this list (based on user's subscription tier):`,
     '',
     modelList,
     '',

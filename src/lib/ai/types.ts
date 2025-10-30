@@ -169,13 +169,13 @@ export type StreamConfig = {
  * ```typescript
  * const callbacks: StreamCallbacks = {
  *   onStart: async (threadId) => {
- *     console.log('Stream started:', threadId);
+ *     // Stream started
  *   },
  *   onComplete: async (fullText, messageId) => {
  *     await saveMessage(messageId, fullText);
  *   },
  *   onError: async (error) => {
- *     console.error('Stream error:', error);
+ *     // Handle stream error
  *   }
  * };
  * ```
@@ -194,7 +194,7 @@ export type StreamCallbacks = {
  * ```typescript
  * const result = validateMessages(messages);
  * if (!result.valid) {
- *   console.error('Validation errors:', result.errors);
+ *   throw new Error('Validation errors');
  * }
  * ```
  */

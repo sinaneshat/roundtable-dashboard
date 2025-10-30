@@ -136,6 +136,7 @@ export function useThreadAnalysesQuery(threadId: string, enabled?: boolean) {
     placeholderData: previousData => previousData,
     enabled: enabled !== undefined ? enabled : (isAuthenticated && !!threadId),
     retry: false,
+    throwOnError: false,
   });
 
   return query;

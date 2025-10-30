@@ -82,41 +82,49 @@ export const MAX_OUTPUT_TOKENS_BY_TIER: Record<SubscriptionTier, number> = {
  * Maximum model pricing threshold by tier (per 1M tokens input)
  * Used for model access control based on pricing
  *
- * ✅ AGGRESSIVE UPSELLING STRATEGY: Optimized to drive Pro tier upgrades
+ * ✅ BALANCED UPSELLING STRATEGY: Clear value at each tier with fair differentiation
  *
- * Distribution based on OpenRouter API analysis (290+ paid models):
- * - $0.00-$0.05: ~15 models (only cheapest)
- * - $0.05-$0.20: ~35 models (budget tier)
- * - $0.20-$2.50: ~180 models (flagship tier - GPT-4, Claude, Gemini, DeepSeek)
- * - $2.50+: All models (ultra-premium and specialized)
+ * Current distribution (20 hardcoded models):
+ * - Free: 2 models (Gemini Flash - fast, efficient)
+ * - Starter: 6 models (DeepSeek V3 + fast specialized models)
+ * - Pro: 8 models (Claude 4.x, GPT-4o, Grok-4, Gemini Pro, Qwen Max)
+ * - Power: 4 models (GPT-5, Claude Opus, o1-pro, GPT-4 Turbo)
  *
- * Business Logic - Upsell Funnel:
- * 1. **Free Tier ($0.05/M)**: VERY LIMITED - only cheapest 15 models
- *    - Purpose: Let users test the platform with minimal access
- *    - Upsell: "Upgrade to Starter for 20+ more budget models"
+ * Business Logic - Clear Upgrade Funnel:
+ * 1. **Free Tier (≤$0.10/M)**: 2 models - Gemini Flash only
+ *    - Gemini 2.5 Flash, Gemini 2.0 Flash (fast, multimodal)
+ *    - Purpose: Test platform with efficient models
+ *    - Upsell: "Upgrade to Starter for 6 more models including DeepSeek V3 (best open-weight)"
  *
- * 2. **Starter Tier ($0.20/M)**: Budget models - ~35 total models
- *    - Purpose: Give users decent variety at low cost
- *    - Upsell: "Upgrade to Pro for flagship models (GPT-4, Claude, Gemini)"
- *    - This creates strong incentive to upgrade to Pro!
+ * 2. **Starter Tier (≤$0.50/M)**: 6 models - Excellent value
+ *    - DeepSeek V3 series (top open-weight, $0.14/M)
+ *    - Fast specialized: Grok Code Fast, Qwen3 Coder, Grok-4 Fast ($0.50/M)
+ *    - Llama 4 Scout (strong open-source, $0.20/M)
+ *    - Purpose: Budget-conscious users needing quality models
+ *    - Upsell: "Upgrade to Pro for Claude 4, GPT-4o, and flagship models"
  *
- * 3. **Pro Tier ($2.50/M)**: MAIN TARGET - ~180 flagship models
- *    - Purpose: Access to ALL flagship models (GPT-4, Claude Sonnet, Gemini Pro, DeepSeek)
- *    - This is where we want most paying users
- *    - Best value proposition
+ * 3. **Pro Tier (≤$3.00/M)**: 8 models - Flagship tier ← MAIN TARGET
+ *    - Industry leaders: Claude 4.x series (best coding, $3/M)
+ *    - Most popular: GPT-4o ($2.50/M), Grok-4 ($2.50/M)
+ *    - Top performers: Gemini 2.5 Pro (#1 on Arena, $1.25/M), Qwen Max ($2/M)
+ *    - Premium reasoning: o3-mini ($1.10/M)
+ *    - Purpose: Best value for most users - all flagship models
+ *    - Upsell: "Upgrade to Power for ultra-premium models (GPT-5, Claude Opus, o1-pro)"
  *
- * 4. **Power Tier (Unlimited)**: Ultra-premium - all 290+ models
- *    - Purpose: For power users who need cutting-edge/specialized models
- *    - Access to ultra-expensive models (>$2.50/M)
+ * 4. **Power Tier (Unlimited)**: 4 models - Ultra-premium
+ *    - Ultimate models: GPT-5 ($15/M), Claude Opus ($15/M)
+ *    - Advanced reasoning: o1-pro ($15/M) with extended thinking
+ *    - GPT-4 Turbo ($10/M) for reliability
+ *    - Purpose: Power users needing cutting-edge performance
  *
- * This aggressive pricing forces users through a clear upgrade path:
- * Free → Starter ($10/mo) → Pro ($25/mo) ← MAIN TARGET → Power ($50/mo)
+ * This creates a fair upgrade path with clear value at each tier:
+ * Free (2) → Starter (6) → Pro (8) ← MAIN TARGET → Power (4)
  */
 export const MAX_MODEL_PRICING_BY_TIER: Record<SubscriptionTier, number | null> = {
-  free: 0.05, // Up to $0.05/M tokens - VERY LIMITED (~15 cheapest models only)
-  starter: 0.20, // Up to $0.20/M tokens - Budget tier (~35 models total)
-  pro: 2.50, // Up to $2.50/M tokens - Flagship tier (~180 models total) ← MAIN UPSELL
-  power: null, // Unlimited - All ultra-premium models (>$2.50/M)
+  free: 0.10, // Up to $0.10/M tokens - 2 models (Gemini Flash only)
+  starter: 0.50, // Up to $0.50/M tokens - 6 models (DeepSeek + fast models)
+  pro: 3.00, // Up to $3.00/M tokens - 8 models (Claude, GPT-4o, flagships) ← MAIN UPSELL
+  power: null, // Unlimited - 4 models (GPT-5, Claude Opus, ultra-premium)
 } as const;
 
 /**

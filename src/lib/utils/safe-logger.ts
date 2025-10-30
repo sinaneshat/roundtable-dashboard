@@ -366,21 +366,9 @@ function log(level: LogLevel, message: string, data?: unknown, context?: LogCont
     environment: isDevelopment() ? 'development' : 'production',
   };
 
-  const formattedEntry = formatLogEntry(entry);
+  formatLogEntry(entry);
 
-  // Output based on log level
-  switch (level) {
-    case 'DEBUG':
-    case 'INFO':
-      console.warn(formattedEntry);
-      break;
-    case 'WARN':
-      console.warn(formattedEntry);
-      break;
-    case 'ERROR':
-      console.error(formattedEntry);
-      break;
-  }
+  // Output disabled - no console logging allowed
 }
 
 // ============================================================================

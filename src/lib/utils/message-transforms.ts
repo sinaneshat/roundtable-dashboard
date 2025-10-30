@@ -54,7 +54,7 @@ export type MessageOrderValidation = {
  * ```typescript
  * const metadata = getMessageMetadata(message.metadata);
  * if (metadata?.participantId) {
- *   console.log('Participant:', metadata.participantId);
+ *   const participantId = metadata.participantId;
  * }
  * ```
  */
@@ -467,7 +467,7 @@ export function mergeParticipantMetadata(
  * ```typescript
  * const validation = validateMessageOrder(messages);
  * if (!validation.isValid) {
- *   console.error('Message order errors:', validation.errors);
+ *   throw new Error('Message order errors');
  * }
  * ```
  */

@@ -7,6 +7,12 @@ import { useTranslations } from 'next-intl';
 import { CancelSubscriptionDialog } from '@/components/chat/cancel-subscription-dialog';
 import { UsageMetrics } from '@/components/chat/usage-metrics';
 import { ApiKeysModal } from '@/components/modals/api-keys-modal';
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from '@/components/ui/accordion';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
   DropdownMenu,
@@ -139,9 +145,21 @@ export function NavUser() {
                 </div>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <div className="px-2 py-2">
-                <UsageMetrics />
+
+              {/* Usage Metrics - Collapsed by default in Accordion */}
+              <div className="px-2">
+                <Accordion type="single" collapsible>
+                  <AccordionItem value="usage" className="border-none">
+                    <AccordionTrigger className="py-2 text-xs font-medium text-muted-foreground hover:no-underline">
+                      {t('usage.planUsage')}
+                    </AccordionTrigger>
+                    <AccordionContent className="pb-2">
+                      <UsageMetrics />
+                    </AccordionContent>
+                  </AccordionItem>
+                </Accordion>
               </div>
+
               <DropdownMenuSeparator />
               <DropdownMenuGroup>
                 <DropdownMenuItem asChild>

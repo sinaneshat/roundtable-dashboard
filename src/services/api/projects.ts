@@ -184,10 +184,9 @@ export async function listKnowledgeFilesService(data: ListKnowledgeFilesRequest)
  */
 export async function uploadKnowledgeFileService(data: UploadKnowledgeFileRequest) {
   const client = await createApiClient();
-  // Internal fallback: ensure param and form exist
+  // Internal fallback: ensure param exists
   const params: UploadKnowledgeFileRequest = {
     param: data.param ?? { id: '' },
-    form: data.form ?? {},
   };
   return parseResponse(client.projects[':id'].knowledge.$post(params));
 }

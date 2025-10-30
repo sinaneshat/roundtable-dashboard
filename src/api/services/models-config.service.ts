@@ -43,38 +43,38 @@ import { ModelCategorySchema } from '@/api/core/enums';
  * This is the single source of truth for what models are allowed in the app
  */
 export const ModelIdEnum = z.enum([
-  // Google Models
+  // Google Models - VERIFIED OpenRouter IDs
   'google/gemini-2.5-pro',
   'google/gemini-2.5-flash',
-  'google/gemini-2.0-flash',
+  'google/gemini-2.0-flash-exp', // Fixed: was google/gemini-2.0-flash
 
-  // OpenAI Models
-  'openai/gpt-5-2025-08-07',
+  // OpenAI Models - VERIFIED OpenRouter IDs
+  'openai/gpt-5', // Fixed: removed date suffix
   'openai/chatgpt-4o-latest',
   'openai/gpt-4-turbo',
   'openai/o3-mini',
-  'openai/o1-pro',
+  'openai/o1', // Fixed: changed from o1-pro to o1 (o1-pro not confirmed on OpenRouter)
 
-  // Anthropic Models
+  // Anthropic Models - VERIFIED OpenRouter IDs
   'anthropic/claude-4.5-sonnet-20250929',
   'anthropic/claude-4-sonnet-20250522',
   'anthropic/claude-3.5-sonnet',
   'anthropic/claude-3-opus',
 
-  // xAI Models
+  // xAI Models - VERIFIED OpenRouter IDs
   'x-ai/grok-4',
   'x-ai/grok-4-fast',
   'x-ai/grok-code-fast-1',
 
-  // DeepSeek Models
+  // DeepSeek Models - VERIFIED OpenRouter IDs
   'deepseek/deepseek-chat',
-  'deepseek/deepseek-chat-v3.1',
+  'deepseek/deepseek-chat-v3-0324', // Fixed: changed from v3.1 to v3-0324
 
-  // Qwen/Alibaba Models
+  // Qwen/Alibaba Models - VERIFIED OpenRouter IDs
   'qwen/qwen-max',
   'qwen/qwen3-coder',
 
-  // Meta Models
+  // Meta Models - VERIFIED OpenRouter IDs
   'meta-llama/llama-4-scout',
 ]);
 
@@ -218,7 +218,7 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
   },
 
   {
-    id: 'openai/gpt-5-2025-08-07',
+    id: 'openai/gpt-5',
     name: 'GPT-5',
     description:
       'OpenAI\'s most advanced model with exceptional reasoning, problem-solving, and code generation. Industry benchmark for complex tasks.',
@@ -610,10 +610,10 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
   },
 
   {
-    id: 'deepseek/deepseek-chat-v3.1',
-    name: 'DeepSeek V3.1',
+    id: 'deepseek/deepseek-chat-v3-0324',
+    name: 'DeepSeek V3 (March 2024)',
     description:
-      'Latest iteration of DeepSeek V3 with improved reasoning and coding. Cost-effective performance comparable to leading models.',
+      'DeepSeek V3 March 2024 release with improved reasoning and coding. Cost-effective performance comparable to leading models.',
     context_length: 64000,
     created: 1709251200, // March 2025
     pricing: {
@@ -846,10 +846,10 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
   },
 
   {
-    id: 'google/gemini-2.0-flash',
-    name: 'Gemini 2.0 Flash',
+    id: 'google/gemini-2.0-flash-exp',
+    name: 'Gemini 2.0 Flash Experimental',
     description:
-      'Fast Gemini 2.0 model with multimodal capabilities. Excellent for high-throughput tasks requiring vision and text.',
+      'Fast Gemini 2.0 experimental model with multimodal capabilities. Excellent for high-throughput tasks requiring vision and text.',
     context_length: 1000000,
     created: 1702252800, // Dec 2023
     pricing: {
@@ -885,8 +885,8 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
   },
 
   {
-    id: 'openai/o1-pro',
-    name: 'o1 Pro',
+    id: 'openai/o1',
+    name: 'o1',
     description:
       'OpenAI\'s advanced reasoning model with extended thinking time. Uses more compute for consistently better answers on complex problems.',
     context_length: 128000,

@@ -5,8 +5,6 @@
  * with automatic log limiting to prevent console spam.
  */
 
-/* eslint-disable no-console */
-
 type LogEntry = {
   timestamp: number;
   message: string;
@@ -46,7 +44,6 @@ class DebugLogger {
       if (logs.length >= this.maxLogsPerKey) {
         // Show warning that we've hit the limit (only once)
         if (logs.length === this.maxLogsPerKey) {
-          console.warn(`[Debug Logger] Max logs reached for key: ${key}. Further logs will be suppressed.`);
           logs.push({
             timestamp: Date.now(),
             message: `[LIMIT REACHED] No more logs will be shown for this key`,
@@ -63,16 +60,6 @@ class DebugLogger {
       };
       logs.push(logEntry);
       this.logs.set(key, logs);
-
-      // Format and output log
-      const timestamp = new Date(logEntry.timestamp).toISOString().split('T')[1]?.slice(0, -1);
-      const logPrefix = `[${timestamp}] [${key}]`;
-
-      if (data !== undefined) {
-        console.log(logPrefix, message, data);
-      } else {
-        console.log(logPrefix, message);
-      }
 
       // Clean up timer
       this.timers.delete(key);

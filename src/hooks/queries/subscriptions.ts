@@ -25,8 +25,11 @@ import {
  * Protected endpoint - requires authentication
  *
  * Stale time: 2 minutes (subscription data moderately fresh)
+ *
+ * @param options - Optional query options
+ * @param options.forceEnabled - Force enable query regardless of auth state
  */
-export function useSubscriptionsQuery() {
+export function useSubscriptionsQuery(options?: { forceEnabled?: boolean }) {
   const { data: session, isPending } = useSession();
   const isAuthenticated = !isPending && !!session?.user?.id;
 
@@ -35,7 +38,7 @@ export function useSubscriptionsQuery() {
     queryFn: () => getSubscriptionsService(),
     staleTime: STALE_TIMES.subscriptions, // 2 minutes - match server-side prefetch
     retry: false,
-    enabled: isAuthenticated, // Only fetch when authenticated
+    enabled: options?.forceEnabled ?? isAuthenticated, // Only fetch when authenticated
     throwOnError: false,
   });
 }
@@ -62,10 +65,10 @@ export function useSubscriptionQuery(subscriptionId: string) {
 
 /**
  * Hook to get current active subscription
- * Reuses subscriptions list cache with data selection
+ * Reuses subscriptions list cache
  *
- * This pattern prevents making a separate API call by transforming
- * the cached subscriptions data to find the active subscription
+ * Returns the full subscriptions list response.
+ * Components should transform data to find active subscription if needed.
  */
 export function useCurrentSubscriptionQuery() {
   const { data: session } = useSession();
@@ -78,16 +81,5 @@ export function useCurrentSubscriptionQuery() {
     enabled: isAuthenticated,
     retry: false,
     throwOnError: false,
-    // Transform data to get current subscription
-    select: (data) => {
-      if (data.success && data.data && Array.isArray(data.data.items)) {
-        // Find active subscription or return first one
-        return (
-          data.data.items.find(sub => sub.status === 'active')
-          || data.data.items[0]
-        );
-      }
-      return null;
-    },
   });
 }

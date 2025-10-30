@@ -29,13 +29,16 @@ type ChatQuickStartProps = {
 export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartProps) {
   const { data: usageData } = useUsageStatsQuery();
   const userTier = (usageData?.success ? usageData.data.subscription.tier : 'free') as SubscriptionTier;
-  const { data: modelsResponse, isLoading: modelsLoading } = useModelsQuery();
-  const allModels = useMemo(
-    () => (modelsResponse?.success ? modelsResponse.data.items : []),
-    [modelsResponse],
-  );
+  const { data: modelsResponse } = useModelsQuery();
+
+  const allModels = useMemo(() => {
+    const models = modelsResponse?.success ? modelsResponse.data.items : [];
+    return models;
+  }, [modelsResponse]);
+
   const accessibleModels = useMemo(() => {
-    return allModels.filter(model => model.is_accessible_to_user ?? true);
+    const accessible = allModels.filter(model => model.is_accessible_to_user === true);
+    return accessible;
   }, [allModels]);
   const modelsByProvider = useMemo(() => {
     const grouped = new Map<string, typeof accessibleModels>();
@@ -74,157 +77,229 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
     [modelsByProvider],
   );
   const suggestions: QuickStartSuggestion[] = useMemo(() => {
-    if (modelsLoading || accessibleModels.length === 0 || modelsByProvider.size === 0) {
+    // Only show suggestions if we have valid models available
+    const availableModelIds = accessibleModels.map(m => m.id).filter(id => id && id.length > 0);
+
+    // No suggestions if no valid models
+    if (availableModelIds.length === 0) {
       return [];
     }
-    const freeModels = selectUniqueProviderModels(2);
-    const starterModels = selectUniqueProviderModels(3);
-    const proModels = selectUniqueProviderModels(4);
-    const powerModels = selectUniqueProviderModels(6);
-    const freeTierSuggestions: QuickStartSuggestion[] = freeModels.length >= 2
-      ? [
-          {
-            title: 'Is privacy a right or a privilege in the digital age?',
-            prompt: 'Should individuals sacrifice privacy for security, or is surveillance capitalism the new totalitarianism? Where do we draw the line?',
-            mode: 'debating',
-            participants: [
-              { id: 'p1', modelId: freeModels[0] || '', role: 'Privacy Advocate', priority: 0, customRoleId: undefined },
-              { id: 'p2', modelId: freeModels[1] || '', role: 'Security Realist', priority: 1, customRoleId: undefined },
-            ],
-          },
-          {
-            title: 'Should we resurrect extinct species using genetic engineering?',
-            prompt: 'De-extinction: ecological restoration or playing god? Discuss bringing back woolly mammoths, passenger pigeons, and other lost species.',
-            mode: 'analyzing',
-            participants: [
-              { id: 'p1', modelId: freeModels[1] || '', role: 'Conservation Biologist', priority: 0, customRoleId: undefined },
-              { id: 'p2', modelId: freeModels[0] || '', role: 'Bioethicist', priority: 1, customRoleId: undefined },
-            ],
-          },
-          {
-            title: 'Is meritocracy a myth that justifies inequality?',
-            prompt: 'Does hard work truly determine success, or is meritocracy just a comforting lie that masks systemic advantages and inherited privilege?',
-            mode: 'debating',
-            participants: [
-              { id: 'p1', modelId: freeModels[0] || '', role: 'Sociologist', priority: 0, customRoleId: undefined },
-              { id: 'p2', modelId: freeModels[1] || '', role: 'Economist', priority: 1, customRoleId: undefined },
-            ],
-          },
-        ]
-      : [];
-    const starterTierSuggestions: QuickStartSuggestion[] = starterModels.length >= 3
-      ? [
-          {
-            title: 'Should we colonize Mars if it means abandoning Earth\'s problems?',
-            prompt: 'Is Mars colonization humanity\'s backup plan or escapism? Should we fix Earth first, or hedge our bets across multiple planets?',
-            mode: 'debating',
-            participants: [
-              { id: 'p1', modelId: starterModels[0] || '', role: 'Space Futurist', priority: 0, customRoleId: undefined },
-              { id: 'p2', modelId: starterModels[1] || '', role: 'Climate Scientist', priority: 1, customRoleId: undefined },
-              { id: 'p3', modelId: starterModels[2] || '', role: 'Resource Economist', priority: 2, customRoleId: undefined },
-            ],
-          },
-          {
-            title: 'Can we justify eating meat if lab-grown alternatives exist?',
-            prompt: 'With cultured meat becoming viable, is traditional animal agriculture morally defensible? What about cultural traditions and livelihoods?',
-            mode: 'analyzing',
-            participants: [
-              { id: 'p1', modelId: starterModels[1] || '', role: 'Animal Ethicist', priority: 0, customRoleId: undefined },
-              { id: 'p2', modelId: starterModels[0] || '', role: 'Agronomist', priority: 1, customRoleId: undefined },
-              { id: 'p3', modelId: starterModels[2] || '', role: 'Cultural Anthropologist', priority: 2, customRoleId: undefined },
-            ],
-          },
-          {
-            title: 'Is nuclear energy our climate salvation or a ticking time bomb?',
-            prompt: 'Nuclear power could solve climate change but carries catastrophic risks. Can we trust ourselves with this technology long-term?',
-            mode: 'debating',
-            participants: [
-              { id: 'p1', modelId: starterModels[0] || '', role: 'Energy Policy Expert', priority: 0, customRoleId: undefined },
-              { id: 'p2', modelId: starterModels[1] || '', role: 'Nuclear Physicist', priority: 1, customRoleId: undefined },
-              { id: 'p3', modelId: starterModels[2] || '', role: 'Environmental Activist', priority: 2, customRoleId: undefined },
-            ],
-          },
-        ]
-      : [];
-    const proTierSuggestions: QuickStartSuggestion[] = proModels.length >= 3
-      ? [
-          {
-            title: 'Should we edit human embryos to eliminate genetic diseases?',
-            prompt: 'CRISPR germline editing: eliminating suffering or creating designer babies? Where is the line between treatment and enhancement?',
-            mode: 'debating',
-            participants: [
-              { id: 'p1', modelId: proModels[0] || '', role: 'Bioethicist', priority: 0, customRoleId: undefined },
-              { id: 'p2', modelId: proModels[1] || '', role: 'Geneticist', priority: 1, customRoleId: undefined },
-              { id: 'p3', modelId: proModels[2] || '', role: 'Disability Rights Advocate', priority: 2, customRoleId: undefined },
-              ...(proModels[3] ? [{ id: 'p4', modelId: proModels[3] || '', role: 'Medical Ethicist', priority: 3, customRoleId: undefined }] : []),
-            ],
-          },
-          {
-            title: 'Can artificial general intelligence be aligned with human values?',
-            prompt: 'If we create AGI smarter than us, can we ensure it shares our values? Or is catastrophic misalignment inevitable?',
-            mode: 'analyzing',
-            participants: [
-              { id: 'p1', modelId: proModels[1] || '', role: 'AI Safety Researcher', priority: 0, customRoleId: undefined },
-              { id: 'p2', modelId: proModels[0] || '', role: 'Machine Learning Engineer', priority: 1, customRoleId: undefined },
-              { id: 'p3', modelId: proModels[2] || '', role: 'Ethics Philosopher', priority: 2, customRoleId: undefined },
-              ...(proModels[3] ? [{ id: 'p4', modelId: proModels[3] || '', role: 'Systems Architect', priority: 3, customRoleId: undefined }] : []),
-            ],
-          },
-          {
-            title: 'Is infinite economic growth possible on a finite planet?',
-            prompt: 'Capitalism demands perpetual growth, but Earth has limits. Must we choose between prosperity and survival, or can we transcend this paradox?',
-            mode: 'debating',
-            participants: [
-              { id: 'p1', modelId: proModels[2] || '', role: 'Ecological Economist', priority: 0, customRoleId: undefined },
-              { id: 'p2', modelId: proModels[0] || '', role: 'Free Market Theorist', priority: 1, customRoleId: undefined },
-              { id: 'p3', modelId: proModels[1] || '', role: 'Systems Thinker', priority: 2, customRoleId: undefined },
-            ],
-          },
-        ]
-      : [];
-    const powerTierSuggestions: QuickStartSuggestion[] = powerModels.length >= 3
-      ? [
-          {
-            title: 'Should we terraform planets or preserve them as pristine laboratories?',
-            prompt: 'Terraforming Mars could create a second home for humanity, but would we be destroying irreplaceable alien ecosystems before we even discover them?',
-            mode: 'debating',
-            participants: [
-              { id: 'p1', modelId: powerModels[0] || '', role: 'Planetary Scientist', priority: 0, customRoleId: undefined },
-              { id: 'p2', modelId: powerModels[1] || '', role: 'Exobiologist', priority: 1, customRoleId: undefined },
-              { id: 'p3', modelId: powerModels[2] || '', role: 'Space Ethicist', priority: 2, customRoleId: undefined },
-              ...(powerModels[3] ? [{ id: 'p4', modelId: powerModels[3] || '', role: 'Space Policy Expert', priority: 3, customRoleId: undefined }] : []),
-              ...(powerModels[4] ? [{ id: 'p5', modelId: powerModels[4] || '', role: 'Astrogeologist', priority: 4, customRoleId: undefined }] : []),
-              ...(powerModels[5] ? [{ id: 'p6', modelId: powerModels[5] || '', role: 'Astrobiologist', priority: 5, customRoleId: undefined }] : []),
-            ],
-          },
-          {
-            title: 'Is objective morality possible without a higher power?',
-            prompt: 'Can moral truths exist in a purely materialist universe without divine authority? Or are ethics just evolutionary programming and social contracts?',
-            mode: 'analyzing',
-            participants: [
-              { id: 'p1', modelId: powerModels[1] || '', role: 'Moral Philosopher', priority: 0, customRoleId: undefined },
-              { id: 'p2', modelId: powerModels[0] || '', role: 'Evolutionary Psychologist', priority: 1, customRoleId: undefined },
-              { id: 'p3', modelId: powerModels[2] || '', role: 'Theologian', priority: 2, customRoleId: undefined },
-              ...(powerModels[3] ? [{ id: 'p4', modelId: powerModels[3] || '', role: 'Neuroscientist', priority: 3, customRoleId: undefined }] : []),
-              ...(powerModels[4] ? [{ id: 'p5', modelId: powerModels[4] || '', role: 'Cognitive Scientist', priority: 4, customRoleId: undefined }] : []),
-              ...(powerModels[5] ? [{ id: 'p6', modelId: powerModels[5] || '', role: 'Ethics Scholar', priority: 5, customRoleId: undefined }] : []),
-            ],
-          },
-          {
-            title: 'Should we create conscious AI even if we can\'t guarantee their wellbeing?',
-            prompt: 'If we develop sentient AI, do we have moral obligations to them? Could creating digital consciousness be the greatest crime or the greatest gift?',
-            mode: 'debating',
-            participants: [
-              { id: 'p1', modelId: powerModels[0] || '', role: 'AI Consciousness Researcher', priority: 0, customRoleId: undefined },
-              { id: 'p2', modelId: powerModels[1] || '', role: 'Digital Rights Advocate', priority: 1, customRoleId: undefined },
-              { id: 'p3', modelId: powerModels[2] || '', role: 'Bioethicist', priority: 2, customRoleId: undefined },
-              ...(powerModels[3] ? [{ id: 'p4', modelId: powerModels[3] || '', role: 'Philosophy of Mind Expert', priority: 3, customRoleId: undefined }] : []),
-              ...(powerModels[4] ? [{ id: 'p5', modelId: powerModels[4] || '', role: 'Computational Consciousness Expert', priority: 4, customRoleId: undefined }] : []),
-              ...(powerModels[5] ? [{ id: 'p6', modelId: powerModels[5] || '', role: 'AI Ethics Researcher', priority: 5, customRoleId: undefined }] : []),
-            ],
-          },
-        ]
-      : [];
+
+    // Helper to get unique models, ensuring we always return models even if not from unique providers
+    const getModelsForTier = (idealCount: number): string[] => {
+      // Try to get unique provider models first
+      const uniqueProviderModels = selectUniqueProviderModels(idealCount);
+
+      // If we have enough, return them
+      if (uniqueProviderModels.length >= Math.min(idealCount, availableModelIds.length)) {
+        return uniqueProviderModels;
+      }
+
+      // Otherwise, fill with any available models ensuring uniqueness
+      const models = [...uniqueProviderModels];
+      const used = new Set(models);
+
+      for (const modelId of availableModelIds) {
+        if (models.length >= idealCount)
+          break;
+        if (!used.has(modelId)) {
+          models.push(modelId);
+          used.add(modelId);
+        }
+      }
+
+      return models;
+    };
+
+    const freeModels = getModelsForTier(2);
+    const starterModels = getModelsForTier(3);
+    const proModels = getModelsForTier(4);
+    const powerModels = getModelsForTier(6);
+
+    const freeTierSuggestions: QuickStartSuggestion[] = (() => {
+      const models = freeModels;
+      // Always return suggestions, adjust participants based on available models
+      if (models.length === 0) {
+        return [];
+      }
+
+      const buildParticipants = (roles: string[]) => {
+        const participants = roles
+          .slice(0, models.length)
+          .map((role, idx) => {
+            const modelId = models[idx];
+            if (!modelId)
+              return null;
+            return {
+              id: `p${idx + 1}`,
+              modelId,
+              role,
+              priority: idx,
+              customRoleId: undefined,
+            };
+          })
+          .filter((p): p is NonNullable<typeof p> => p !== null);
+        return participants;
+      };
+
+      const suggestions: QuickStartSuggestion[] = [
+        {
+          title: 'Is privacy a right or a privilege in the digital age?',
+          prompt: 'Should individuals sacrifice privacy for security, or is surveillance capitalism the new totalitarianism? Where do we draw the line?',
+          mode: 'debating' as ChatModeId,
+          participants: buildParticipants(['Privacy Advocate', 'Security Realist']),
+        },
+        {
+          title: 'Should we resurrect extinct species using genetic engineering?',
+          prompt: 'De-extinction: ecological restoration or playing god? Discuss bringing back woolly mammoths, passenger pigeons, and other lost species.',
+          mode: 'analyzing' as ChatModeId,
+          participants: buildParticipants(['Conservation Biologist', 'Bioethicist']),
+        },
+        {
+          title: 'Is meritocracy a myth that justifies inequality?',
+          prompt: 'Does hard work truly determine success, or is meritocracy just a comforting lie that masks systemic advantages and inherited privilege?',
+          mode: 'debating' as ChatModeId,
+          participants: buildParticipants(['Sociologist', 'Economist']),
+        },
+      ];
+
+      return suggestions;
+    })();
+    const starterTierSuggestions: QuickStartSuggestion[] = (() => {
+      const models = starterModels;
+      // Always return suggestions, adjust participants based on available models
+      if (models.length === 0)
+        return [];
+
+      const buildParticipants = (roles: string[]) => {
+        return roles
+          .slice(0, models.length)
+          .map((role, idx) => {
+            const modelId = models[idx];
+            if (!modelId)
+              return null;
+            return {
+              id: `p${idx + 1}`,
+              modelId,
+              role,
+              priority: idx,
+              customRoleId: undefined,
+            };
+          })
+          .filter((p): p is NonNullable<typeof p> => p !== null);
+      };
+
+      return [
+        {
+          title: 'Should we colonize Mars if it means abandoning Earth\'s problems?',
+          prompt: 'Is Mars colonization humanity\'s backup plan or escapism? Should we fix Earth first, or hedge our bets across multiple planets?',
+          mode: 'debating',
+          participants: buildParticipants(['Space Futurist', 'Climate Scientist', 'Resource Economist']),
+        },
+        {
+          title: 'Can we justify eating meat if lab-grown alternatives exist?',
+          prompt: 'With cultured meat becoming viable, is traditional animal agriculture morally defensible? What about cultural traditions and livelihoods?',
+          mode: 'analyzing',
+          participants: buildParticipants(['Animal Ethicist', 'Agronomist', 'Cultural Anthropologist']),
+        },
+        {
+          title: 'Is nuclear energy our climate salvation or a ticking time bomb?',
+          prompt: 'Nuclear power could solve climate change but carries catastrophic risks. Can we trust ourselves with this technology long-term?',
+          mode: 'debating',
+          participants: buildParticipants(['Energy Policy Expert', 'Nuclear Physicist', 'Environmental Activist']),
+        },
+      ];
+    })();
+    const proTierSuggestions: QuickStartSuggestion[] = (() => {
+      const models = proModels;
+      // Always return suggestions, adjust participants based on available models
+      if (models.length === 0)
+        return [];
+
+      const buildParticipants = (roles: string[]) => {
+        return roles
+          .slice(0, models.length)
+          .map((role, idx) => {
+            const modelId = models[idx];
+            if (!modelId)
+              return null;
+            return {
+              id: `p${idx + 1}`,
+              modelId,
+              role,
+              priority: idx,
+              customRoleId: undefined,
+            };
+          })
+          .filter((p): p is NonNullable<typeof p> => p !== null);
+      };
+
+      return [
+        {
+          title: 'Should we edit human embryos to eliminate genetic diseases?',
+          prompt: 'CRISPR germline editing: eliminating suffering or creating designer babies? Where is the line between treatment and enhancement?',
+          mode: 'debating',
+          participants: buildParticipants(['Bioethicist', 'Geneticist', 'Disability Rights Advocate', 'Medical Ethicist']),
+        },
+        {
+          title: 'Can artificial general intelligence be aligned with human values?',
+          prompt: 'If we create AGI smarter than us, can we ensure it shares our values? Or is catastrophic misalignment inevitable?',
+          mode: 'analyzing',
+          participants: buildParticipants(['AI Safety Researcher', 'Machine Learning Engineer', 'Ethics Philosopher', 'Systems Architect']),
+        },
+        {
+          title: 'Is infinite economic growth possible on a finite planet?',
+          prompt: 'Capitalism demands perpetual growth, but Earth has limits. Must we choose between prosperity and survival, or can we transcend this paradox?',
+          mode: 'debating',
+          participants: buildParticipants(['Ecological Economist', 'Free Market Theorist', 'Systems Thinker', 'Resource Analyst']),
+        },
+      ];
+    })();
+    const powerTierSuggestions: QuickStartSuggestion[] = (() => {
+      const models = powerModels;
+      // Always return suggestions, adjust participants based on available models
+      if (models.length === 0)
+        return [];
+
+      const buildParticipants = (roles: string[]) => {
+        return roles
+          .slice(0, models.length)
+          .map((role, idx) => {
+            const modelId = models[idx];
+            if (!modelId)
+              return null;
+            return {
+              id: `p${idx + 1}`,
+              modelId,
+              role,
+              priority: idx,
+              customRoleId: undefined,
+            };
+          })
+          .filter((p): p is NonNullable<typeof p> => p !== null);
+      };
+
+      return [
+        {
+          title: 'Should we terraform planets or preserve them as pristine laboratories?',
+          prompt: 'Terraforming Mars could create a second home for humanity, but would we be destroying irreplaceable alien ecosystems before we even discover them?',
+          mode: 'debating',
+          participants: buildParticipants(['Planetary Scientist', 'Exobiologist', 'Space Ethicist', 'Space Policy Expert', 'Astrogeologist', 'Astrobiologist']),
+        },
+        {
+          title: 'Is objective morality possible without a higher power?',
+          prompt: 'Can moral truths exist in a purely materialist universe without divine authority? Or are ethics just evolutionary programming and social contracts?',
+          mode: 'analyzing',
+          participants: buildParticipants(['Moral Philosopher', 'Evolutionary Psychologist', 'Theologian', 'Neuroscientist', 'Cognitive Scientist', 'Ethics Scholar']),
+        },
+        {
+          title: 'Should we create conscious AI even if we can\'t guarantee their wellbeing?',
+          prompt: 'If we develop sentient AI, do we have moral obligations to them? Could creating digital consciousness be the greatest crime or the greatest gift?',
+          mode: 'debating',
+          participants: buildParticipants(['AI Consciousness Researcher', 'Digital Rights Advocate', 'Bioethicist', 'Philosophy of Mind Expert', 'Computational Consciousness Expert', 'AI Ethics Researcher']),
+        },
+      ];
+    })();
     let tierSuggestions: QuickStartSuggestion[];
     if (userTier === 'free') {
       tierSuggestions = freeTierSuggestions;
@@ -235,42 +310,43 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
     } else {
       tierSuggestions = powerTierSuggestions;
     }
+
     return tierSuggestions;
-  }, [userTier, modelsLoading, accessibleModels, modelsByProvider.size, selectUniqueProviderModels]);
+  }, [userTier, accessibleModels, selectUniqueProviderModels]);
   const getModeConfig = (mode: ChatModeId) => {
     switch (mode) {
       case 'debating':
         return {
           icon: Users,
           label: 'Debate',
-          color: 'text-blue-400',
-          bgColor: 'bg-blue-500/10',
-          borderColor: 'border-blue-500/20',
+          color: 'text-white/60',
+          bgColor: 'bg-white/5',
+          borderColor: 'border-white/10',
         };
       case 'analyzing':
         return {
           icon: MessageSquare,
           label: 'Analyze',
-          color: 'text-purple-400',
-          bgColor: 'bg-purple-500/10',
-          borderColor: 'border-purple-500/20',
+          color: 'text-white/60',
+          bgColor: 'bg-white/5',
+          borderColor: 'border-white/10',
         };
       default:
         return {
           icon: MessageSquare,
           label: 'Chat',
-          color: 'text-gray-400',
-          bgColor: 'bg-gray-500/10',
-          borderColor: 'border-gray-500/20',
+          color: 'text-white/60',
+          bgColor: 'bg-white/5',
+          borderColor: 'border-white/10',
         };
     }
   };
   const renderParticipant = (participant: ParticipantConfig) => {
     const model = allModels.find(m => m.id === participant.modelId);
-    if (!model)
-      return null;
-    const isAccessible = model.is_accessible_to_user ?? true;
-    const provider = model.provider || model.id.split('/')[0] || 'unknown';
+    const isAccessible = model?.is_accessible_to_user ?? true;
+    const provider = model?.provider || participant.modelId?.split('/')[0] || 'ai';
+    const modelName = model?.name || participant.modelId || 'AI';
+
     return (
       <div
         key={participant.id}
@@ -280,9 +356,9 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
         )}
       >
         <Avatar className="size-4 shrink-0">
-          <AvatarImage src={getProviderIcon(provider)} alt={model.name} />
+          <AvatarImage src={getProviderIcon(provider)} alt={modelName} />
           <AvatarFallback className="text-[8px] bg-white/10">
-            {model.name.slice(0, 2).toUpperCase()}
+            {modelName.slice(0, 2).toUpperCase()}
           </AvatarFallback>
         </Avatar>
         <span className="text-xs text-white/70 whitespace-nowrap">
@@ -308,7 +384,7 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
                 ease: [0.25, 0.46, 0.45, 0.94],
               }}
               onClick={() => onSuggestionClick(suggestion.prompt, suggestion.mode, suggestion.participants)}
-              className="w-full text-left p-4 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 active:bg-white/15 transition-all duration-200 focus-visible:ring-2 focus-visible:ring-white/20 focus-visible:outline-none"
+              className="w-full text-left p-4 rounded-lg bg-white/5 backdrop-blur-sm hover:bg-white/10 active:bg-white/15 transition-all duration-200 focus-visible:ring-2 focus-visible:ring-white/20 focus-visible:outline-none"
             >
               <div className="flex items-start justify-between gap-3 mb-2">
                 <h3 className="text-sm font-medium text-white/95 leading-snug flex-1">

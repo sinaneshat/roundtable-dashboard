@@ -181,3 +181,15 @@ export const DeleteResponseSchema = createApiResponseSchema(
     deleted: z.boolean(),
   }),
 );
+
+// ============================================================================
+// TYPE EXPORTS
+// ============================================================================
+
+export type ProjectFileStatus = z.infer<typeof ProjectFileStatusSchema>;
+export type ListProjectsQuery = z.infer<typeof ListProjectsQuerySchema>;
+export type ListKnowledgeFilesQuery = z.infer<typeof ListKnowledgeFilesQuerySchema>;
+export type CreateProjectRequest = z.infer<typeof CreateProjectRequestSchema>;
+export type UpdateProjectRequest = z.infer<typeof UpdateProjectRequestSchema>;
+export type KnowledgeFileResponse = z.infer<typeof KnowledgeFileResponseSchema>;
+export type ProjectResponse = z.infer<typeof ProjectResponseSchema>;

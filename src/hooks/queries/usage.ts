@@ -27,8 +27,11 @@ import {
  * Protected endpoint - requires authentication
  *
  * Stale time: 1 minute (usage data should be relatively fresh)
+ *
+ * @param options - Optional query options
+ * @param options.forceEnabled - Force enable query regardless of auth state
  */
-export function useUsageStatsQuery() {
+export function useUsageStatsQuery(options?: { forceEnabled?: boolean }) {
   const { data: session, isPending } = useSession();
   const isAuthenticated = !isPending && !!session?.user?.id;
 
@@ -37,7 +40,7 @@ export function useUsageStatsQuery() {
     queryFn: getUserUsageStatsService,
     staleTime: STALE_TIMES.usage, // 1 minute - match server-side prefetch
     retry: false,
-    enabled: isAuthenticated, // Only fetch when authenticated
+    enabled: options?.forceEnabled ?? isAuthenticated, // Only fetch when authenticated
     throwOnError: false,
   });
 }

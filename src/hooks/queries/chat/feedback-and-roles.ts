@@ -36,24 +36,16 @@ import {
 export function useThreadFeedbackQuery(threadId: string, enabled = true) {
   return useQuery({
     queryKey: queryKeys.threads.feedback(threadId),
-    queryFn: async () => {
-      const response = await getThreadFeedbackService({
-        param: { id: threadId },
-      });
-
-      if (!response.success) {
-        throw new Error('Failed to fetch feedback');
-      }
-
-      return response.data;
-    },
-    staleTime: STALE_TIME_PRESETS.medium,
+    queryFn: () => getThreadFeedbackService({ param: { id: threadId } }),
+    staleTime: STALE_TIME_PRESETS.medium, // 2 minutes - feedback changes occasionally
     // ✅ CRITICAL FIX: Preserve previous data during refetches
     // This prevents feedback buttons from losing state when query is invalidated
     // Without this, feedback temporarily becomes empty during refetch,
     // causing buttons to lose their like/dislike state momentarily
     placeholderData: previousData => previousData,
     enabled,
+    retry: false,
+    throwOnError: false,
   });
 }
 

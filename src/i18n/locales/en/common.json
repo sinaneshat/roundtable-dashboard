@@ -974,6 +974,8 @@
       "saveAnnually": "Save {percent}% annually",
       "subscribe": "Subscribe",
       "switchPlan": "Switch to This Plan",
+      "upgradePlan": "Upgrade plan",
+      "upgradeDescription": "More access to the best models",
       "upgradeToPro": "Upgrade to Pro"
     },
     "free": {

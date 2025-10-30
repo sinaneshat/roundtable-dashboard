@@ -35,5 +35,6 @@ export function useThreadMessagesQuery(threadId: string, enabled?: boolean) {
     staleTime: STALE_TIMES.threadMessages, // 5 seconds
     enabled: enabled !== undefined ? enabled : (isAuthenticated && !!threadId),
     retry: false,
+    throwOnError: false,
   });
 }

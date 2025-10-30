@@ -1,10 +1,10 @@
 'use client';
 import { memo } from 'react';
+import { Streamdown } from 'streamdown';
 
 import type { EnhancedModelResponse } from '@/api/routes/models/schema';
 import { Message, MessageAvatar, MessageContent } from '@/components/ai-elements/message';
 import { Reasoning, ReasoningContent, ReasoningTrigger } from '@/components/ai-elements/reasoning';
-import { VirtualizedResponse } from '@/components/ai-elements/virtualized-response';
 import { CustomDataPart } from '@/components/chat/custom-data-part';
 import { MessageErrorDetails } from '@/components/chat/message-error-details';
 import { ToolCallPart } from '@/components/chat/tool-call-part';
@@ -93,13 +93,12 @@ export const ModelMessageCard = memo(({
             {parts.map((part, partIndex) => {
               if (part.type === 'text') {
                 return (
-                  <VirtualizedResponse
+                  <Streamdown
                     key={messageId ? `${messageId}-text-${partIndex}` : `text-${partIndex}`}
-                    virtualizationThreshold={1000}
-                    chunkSize={800}
+                    className="size-full [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
                   >
                     {part.text}
-                  </VirtualizedResponse>
+                  </Streamdown>
                 );
               }
               if (part.type === 'reasoning') {

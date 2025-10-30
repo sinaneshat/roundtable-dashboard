@@ -310,15 +310,15 @@ export function extractAllTextFromParts(parts: MessagePart[]): string {
  * @example
  * // Get only text parts with type safety
  * const textParts = filterPartsByType(parts, 'text');
- * textParts.forEach(p => console.log(p.text)); // TypeScript knows p.text exists
+ * textParts.forEach(p => { const text = p.text; }); // TypeScript knows p.text exists
  *
  * // Get only reasoning parts with type safety
  * const reasoningParts = filterPartsByType(parts, 'reasoning');
- * reasoningParts.forEach(p => console.log(p.text));
+ * reasoningParts.forEach(p => { const text = p.text; });
  *
  * // Get tool calls
  * const toolCalls = filterPartsByType(parts, 'tool-call');
- * toolCalls.forEach(call => console.log(call.toolName, call.args));
+ * toolCalls.forEach(call => { const toolName = call.toolName; });
  *
  * @see extractTextFromParts - For extracting text content directly
  * @see extractReasoningFromParts - For extracting reasoning content directly
@@ -435,7 +435,7 @@ export function createReasoningPart(text: string): MessagePart {
  *
  * @example
  * if (isToolCallPart(part)) {
- *   console.log(`Calling tool: ${part.toolName}`);
+ *   const toolName = part.toolName;
  * }
  */
 export function isToolCallPart(part: MessagePart): part is Extract<MessagePart, { type: 'tool-call' }> {
@@ -450,7 +450,7 @@ export function isToolCallPart(part: MessagePart): part is Extract<MessagePart, 
  *
  * @example
  * if (isToolResultPart(part)) {
- *   console.log(`Tool result: ${part.result}`);
+ *   const result = part.result;
  * }
  */
 export function isToolResultPart(part: MessagePart): part is Extract<MessagePart, { type: 'tool-result' }> {
@@ -466,7 +466,7 @@ export function isToolResultPart(part: MessagePart): part is Extract<MessagePart
  * @example
  * const toolCalls = extractToolCalls(message.parts);
  * toolCalls.forEach(call => {
- *   console.log(`Tool: ${call.toolName}, Args:`, call.args);
+ *   const toolName = call.toolName;
  * });
  */
 export function extractToolCalls(parts: MessagePart[]): Extract<MessagePart, { type: 'tool-call' }>[] {
@@ -582,7 +582,7 @@ export function hasToolResults(parts: MessagePart[]): boolean {
  * @example
  * const result = findToolResult(message.parts, 'call_123');
  * if (result) {
- *   console.log('Tool result:', result.result);
+ *   const toolResult = result.result;
  * }
  */
 export function findToolResult(

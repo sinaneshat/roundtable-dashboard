@@ -86,7 +86,7 @@ export const NonEmptyParticipantsArraySchema = z.array(ChatParticipantSchema).mi
  * ```typescript
  * if (isChatParticipant(data)) {
  *   // data is ChatParticipantWithSettings
- *   console.log(data.settings);
+ *   const settings = data.settings;
  * }
  * ```
  */

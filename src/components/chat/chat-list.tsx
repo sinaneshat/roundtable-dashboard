@@ -122,12 +122,21 @@ function ChatItem({
   const chatUrl = `/chat/${chat.slug}`;
   return (
     <SidebarMenuItem>
-      <SidebarMenuButton asChild isActive={isActive} disabled={isDeleting}>
+      <SidebarMenuButton
+        asChild
+        isActive={isActive}
+        disabled={isDeleting}
+        className={cn(
+          'group relative transition-all duration-200',
+          'hover:bg-sidebar-accent/70',
+          isActive && 'bg-sidebar-accent font-medium',
+        )}
+      >
         <Link
           href={chatUrl}
           className={cn(
-            'min-w-0',
-            isDeleting && 'pointer-events-none opacity-60',
+            'min-w-0 flex items-center',
+            isDeleting && 'pointer-events-none opacity-50',
           )}
           onClick={() => {
             if (isMobile && onNavigate) {
@@ -135,7 +144,7 @@ function ChatItem({
             }
           }}
         >
-          <span className="truncate block max-w-[180px]">{chat.title}</span>
+          <span className="truncate text-sm">{chat.title}</span>
         </Link>
       </SidebarMenuButton>
       <SidebarMenuAction
@@ -146,13 +155,14 @@ function ChatItem({
           e.stopPropagation();
           onDeleteClick(chat);
         }}
+        className="transition-all duration-200 hover:bg-destructive/10 hover:text-destructive"
       >
         {isDeleting
           ? (
-              <Loader2 className="size-4 animate-spin" />
+              <Loader2 className="size-3.5 animate-spin" />
             )
           : (
-              <Trash2 className="size-4" />
+              <Trash2 className="size-3.5" />
             )}
         <span className="sr-only">{t('chat.deleteChat')}</span>
       </SidebarMenuAction>
@@ -240,7 +250,7 @@ export function ChatList({
         return (
           <SidebarGroup key={group.label} className="group-data-[collapsible=icon]:hidden">
             <StickyHeader zIndex={sectionZIndex}>
-              <SidebarGroupLabel className="py-2.5 px-2">
+              <SidebarGroupLabel className="py-2 px-2 text-[10px] uppercase tracking-wider font-semibold text-muted-foreground/80">
                 <motion.span
                   initial={{ x: -10, opacity: 0 }}
                   animate={{ x: 0, opacity: 1 }}
@@ -250,6 +260,7 @@ export function ChatList({
                     damping: 40,
                     delay: (groupIndex * 0.05) + 0.1,
                   }}
+                  className="block"
                 >
                   {formatGroupLabel(group.label)}
                 </motion.span>

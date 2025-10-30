@@ -8,11 +8,11 @@
  * - Simplified logic with curated model list
  *
  * ✅ TEXT & MULTIMODAL: Includes best models with text/vision capabilities
- * ✅ PRICING TIERS: Optimized for Pro tier upselling
- *   - Free: $0.05/M (~2-3 models) - VERY LIMITED
- *   - Starter: $0.20/M (~5-6 models)
- *   - Pro: $2.50/M (~15 models) ← MAIN UPSELL TARGET
- *   - Power: Unlimited (all 20 models)
+ * ✅ PRICING TIERS: Balanced distribution with clear upgrade value
+ *   - Free: $0.10/M (2 models - Gemini Flash)
+ *   - Starter: $0.50/M (6 models - DeepSeek + fast models)
+ *   - Pro: $3.00/M (8 models - Claude, GPT-4o, flagships) ← MAIN TARGET
+ *   - Power: Unlimited (4 models - GPT-5, Claude Opus, ultra-premium)
  *
  * Pattern: Following src/api/routes/{auth,billing}/handler.ts patterns
  */
@@ -56,15 +56,17 @@ import type { TierGroup } from './schema';
  */
 export const listModelsHandler: RouteHandler<typeof listModelsRoute, ApiEnv> = createHandler(
   {
-    auth: 'session',
+    auth: 'public',
     operationName: 'listModels',
   },
   async (c) => {
-    const { user } = c.auth();
+    // Get user if authenticated, otherwise null for free tier
+    const user = c.var.user || null;
 
     // ✅ SINGLE SOURCE: Get user's subscription tier from centralized service
     // Cached for 5 minutes per user to reduce database load
-    const userTier = await getUserTier(user.id);
+    // Default to 'free' tier for unauthenticated users
+    const userTier = user ? await getUserTier(user.id) : 'free';
 
     // ============================================================================
     // ✅ HARDCODED MODEL SELECTION: Top 20 from single source of truth
@@ -85,11 +87,11 @@ export const listModelsHandler: RouteHandler<typeof listModelsRoute, ApiEnv> = c
     // - Curated list of proven, high-quality models
     // - Single source of truth with Zod validation
     //
-    // Pricing Tiers:
-    // - Free: $0.05/M (~2-3 models) - Very limited
-    // - Starter: $0.20/M (~5-6 models) - Budget tier
-    // - Pro: $2.50/M (~15 models) - Flagship models ← MAIN UPSELL
-    // - Power: Unlimited (all 20 models) - Premium
+    // Balanced Pricing Tiers:
+    // - Free: $0.10/M (2 models) - Gemini Flash only
+    // - Starter: $0.50/M (6 models) - DeepSeek + fast models (excellent value)
+    // - Pro: $3.00/M (8 models) - Claude, GPT-4o, flagships ← MAIN UPSELL
+    // - Power: Unlimited (4 models) - GPT-5, Claude Opus, ultra-premium
     const enhancedModels = getAllModels();
 
     // ============================================================================
@@ -218,15 +220,21 @@ export const listModelsHandler: RouteHandler<typeof listModelsRoute, ApiEnv> = c
       user_tier_config: userTierConfig,
     });
 
-    // ✅ NO EDGE CACHING: Models endpoint returns user-specific data (tier-based access)
-    // User A (free tier) and User B (pro tier) get different `is_accessible_to_user` values
-    // Cloudflare edge cache would serve stale data to wrong users after subscription changes
-    // Instead, rely on:
-    // - Backend Drizzle ORM caching (getUserTier cached 5 min per user)
-    // - OpenRouter service caching (24h model list cache)
-    // - Client-side TanStack Query caching (staleTime: Infinity with invalidation)
-    // Cache is invalidated via query invalidation on subscription changes (checkout.ts, subscription-management.ts)
-    response.headers.set('Cache-Control', 'private, no-cache, must-revalidate');
+    // ✅ AGGRESSIVE CACHING: Models data rarely changes, use long cache times
+    // Strategy:
+    // 1. HTTP Cache: 1 hour client cache, 24 hours CDN cache
+    // 2. Vary by auth state (Cookie header) to serve different versions
+    // 3. Server-side: getUserTier (5min cache), OpenRouter models (24h cache)
+    // 4. Client-side: TanStack Query (staleTime: Infinity with manual invalidation)
+    //
+    // Cache invalidation triggers:
+    // - Subscription changes → TanStack Query invalidation (checkout.ts, subscription-management.ts)
+    // - New model deployments → Manual cache clear or wait for TTL
+    //
+    // Security: Vary header ensures auth/unauth users get correct cached versions
+    response.headers.set('Cache-Control', 'public, max-age=3600, s-maxage=86400, stale-while-revalidate=3600');
+    response.headers.set('Vary', 'Cookie'); // Cache different versions for auth state
+    response.headers.set('CDN-Cache-Control', 'max-age=86400'); // 24h Cloudflare cache
 
     return response;
   },

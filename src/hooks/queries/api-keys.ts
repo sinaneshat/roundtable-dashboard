@@ -32,6 +32,7 @@ export function useApiKeysQuery(enabled = true) {
     refetchOnWindowFocus: false, // Don't refetch on window focus
     enabled, // Only fetch when enabled (e.g., modal is open)
     retry: false,
+    throwOnError: false,
   });
 }
 
@@ -46,5 +47,6 @@ export function useApiKeyQuery(keyId: string) {
     staleTime: 1000 * 60 * 5, // 5 minutes
     refetchOnWindowFocus: false,
     retry: false,
+    throwOnError: false,
   });
 }

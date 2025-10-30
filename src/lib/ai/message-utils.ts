@@ -76,7 +76,6 @@ export function convertUIToModelMessages(messages: UIMessage[]): CoreMessage[] {
  * const result = await validateMessages(messages);
  *
  * if (!result.valid) {
- *   console.error('Invalid messages:', result.errors);
  *   throw new Error('Message validation failed');
  * }
  *
@@ -138,7 +137,7 @@ export {
  * @example
  * ```typescript
  * const text = extractTextFromParts(message.parts);
- * console.log('Message text:', text);
+ * // Returns the text content
  * ```
  */
 export function extractTextFromParts(
@@ -165,7 +164,7 @@ export function extractTextFromParts(
  * ```typescript
  * const text = extractTextFromMessage(lastMessage);
  * if (text.length > 0) {
- *   console.log('Last message:', text);
+ *   // Process the text
  * }
  * ```
  */

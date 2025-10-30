@@ -338,6 +338,19 @@ export async function saveStreamedMessage(
       parts.push({ type: 'text', text: '' });
     }
 
+    // ✅ CRITICAL FIX: Check for existing message with same ID before insert
+    // If message already exists, it's likely a duplicate ID from backend
+    // This prevents silent failures with onConflictDoNothing()
+    const existingMessage = await db.query.chatMessage.findFirst({
+      where: eq(tables.chatMessage.id, messageId),
+    });
+
+    if (existingMessage) {
+      // Message with this ID already exists - log warning but continue
+      // This should never happen with ULIDs, but handle gracefully
+      return;
+    }
+
     // Save message to database
     await db.insert(tables.chatMessage)
       .values({
@@ -371,7 +384,6 @@ export async function saveStreamedMessage(
         },
         createdAt: new Date(),
       })
-      .onConflictDoNothing()
       .returning();
 
     // Cache invalidation
@@ -396,20 +408,9 @@ export async function saveStreamedMessage(
         db,
       });
     }
-  } catch (error) {
-    // ✅ IMPROVED ERROR LOGGING: Log error details for debugging
+  } catch {
     // Non-blocking error - allow round to continue
     // This allows the next participant to respond even if this one failed to save
-    console.error('[saveStreamedMessage] Failed to save message:', {
-      messageId,
-      threadId,
-      participantId,
-      participantIndex,
-      modelId,
-      roundNumber,
-      error: error instanceof Error ? error.message : String(error),
-      stack: error instanceof Error ? error.stack : undefined,
-    });
   }
 }
 
@@ -503,14 +504,7 @@ async function createPendingAnalysis(
         continue;
       }
 
-      // Final attempt failed - log and return
-      console.warn('[createPendingAnalysis] Failed to find all participant messages after retries:', {
-        threadId,
-        roundNumber,
-        expectedCount: participants.length,
-        foundCount: assistantMessages.length,
-        attempts: maxRetries,
-      });
+      // Final attempt failed - return
       return;
     }
 

@@ -12,7 +12,6 @@
 
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 
-import type { ThreadSlugStatus } from '@/api/routes/chat/schema';
 import { LIMITS } from '@/constants/limits';
 import { useSession } from '@/lib/auth/client';
 import { queryKeys } from '@/lib/data/query-keys';
@@ -61,6 +60,7 @@ export function useThreadsQuery(search?: string) {
     enabled: isAuthenticated,
     staleTime: STALE_TIMES.threads, // 30 seconds - match server-side prefetch
     retry: false,
+    throwOnError: false,
   });
 }
 
@@ -101,6 +101,7 @@ export function usePublicThreadQuery(slug: string, enabled?: boolean) {
     staleTime: STALE_TIMES.publicThreadDetail, // 1 minute - match server-side prefetch
     enabled: enabled !== undefined ? enabled : !!slug,
     retry: false,
+    throwOnError: false,
   });
 }
 
@@ -121,6 +122,7 @@ export function useThreadBySlugQuery(slug: string, enabled?: boolean) {
     staleTime: STALE_TIMES.threadDetail, // 10 seconds
     enabled: enabled !== undefined ? enabled : (isAuthenticated && !!slug),
     retry: false,
+    throwOnError: false,
   });
 }
 
@@ -153,12 +155,6 @@ export function useThreadSlugStatusQuery(
     refetchInterval: enabled ? 5000 : false, // Poll every 5 seconds when enabled
     enabled: enabled && isAuthenticated && !!threadId,
     retry: false,
-    select: (response): ThreadSlugStatus | null => {
-      // Extract data from lightweight slug-status endpoint response
-      if (response.success && response.data) {
-        return response.data; // data is already ThreadSlugStatus shape
-      }
-      return null;
-    },
+    throwOnError: false,
   });
 }

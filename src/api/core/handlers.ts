@@ -349,8 +349,8 @@ export function createHandler<
     (c as Context & { set: (key: string, value: unknown) => void }).set('startTime', performance.startTime);
 
     try {
-      // Apply authentication
-      if (config.auth && config.auth !== 'public') {
+      // Apply authentication (including 'public' mode for requestId setup)
+      if (config.auth) {
         await applyAuthentication(c, config.auth);
       }
 
@@ -484,8 +484,8 @@ export function createHandlerWithBatch<
     (c as Context & { set: (key: string, value: unknown) => void }).set('startTime', performance.startTime);
 
     try {
-      // Apply authentication
-      if (config.auth && config.auth !== 'public') {
+      // Apply authentication (including 'public' mode for requestId setup)
+      if (config.auth) {
         await applyAuthentication(c, config.auth);
       }
 

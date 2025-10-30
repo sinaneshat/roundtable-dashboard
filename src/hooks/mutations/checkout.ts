@@ -43,7 +43,7 @@ export function useCreateCheckoutSessionMutation() {
  * Eagerly syncs subscription data from Stripe API immediately after checkout
  * to prevent race conditions with webhooks
  *
- * Invalidates all billing-related queries on success
+ * Invalidates and refetches all billing-related queries on success
  */
 export function useSyncAfterCheckoutMutation() {
   const queryClient = useQueryClient();
@@ -51,16 +51,29 @@ export function useSyncAfterCheckoutMutation() {
   return useMutation({
     mutationFn: syncAfterCheckoutService,
     onSuccess: () => {
-      // Invalidate all billing queries to refetch fresh data
-      queryClient.invalidateQueries({ queryKey: queryKeys.subscriptions.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.products.all });
+      // Invalidate all billing queries and force refetch to ensure fresh data
+      // Using refetch: true to trigger immediate refetch regardless of staleTime
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.subscriptions.all,
+        refetchType: 'active',
+      });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.products.all,
+        refetchType: 'active',
+      });
 
       // Invalidate usage queries to reflect new quota limits from subscription
-      queryClient.invalidateQueries({ queryKey: queryKeys.usage.all });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.usage.all,
+        refetchType: 'active',
+      });
 
       // ✅ FIX: Invalidate models query to refresh tier-based model access after plan upgrade
       // Without this, users must hard refresh to see newly unlocked models in participant selector
-      queryClient.invalidateQueries({ queryKey: queryKeys.models.all });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.models.all,
+        refetchType: 'active',
+      });
     },
     retry: false,
     throwOnError: false,

@@ -61,7 +61,11 @@ function SubscriptionChangedContent() {
 
   const { data: usageStats, isFetching: isUsageStatsFetching } = useUsageStatsQuery();
 
-  const displaySubscription = currentSubscription || subscriptionData?.data?.items?.[0] || null;
+  const displaySubscription
+    = currentSubscription?.data?.items?.find(sub => sub.status === 'active')
+      || currentSubscription?.data?.items?.[0]
+      || subscriptionData?.data?.items?.[0]
+      || null;
 
   const isLoadingData = isSubscriptionsFetching || isCurrentSubscriptionFetching || isUsageStatsFetching;
 

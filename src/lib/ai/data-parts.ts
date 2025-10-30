@@ -232,7 +232,6 @@ export function isValidDataPart(part: unknown): part is {
  * const result = validateDataParts(parts);
  *
  * if (!result.valid) {
- *   console.error('Validation errors:', result.errors);
  *   throw new Error('Invalid data parts');
  * }
  * ```
@@ -284,7 +283,7 @@ export function validateDataParts(
  * ```typescript
  * if (isDataPartType(part, 'analysis')) {
  *   // TypeScript knows part.data has analysis-specific shape
- *   console.log('Analysis step:', part.data.step);
+ *   const step = part.data.step;
  * }
  * ```
  */
@@ -386,7 +385,7 @@ export function filterDataPartsByType<T = unknown>(
  * // Access streamed data parts
  * const analysisParts = filterDataPartsByType(data || [], 'analysis');
  * analysisParts.forEach(part => {
- *   console.log('Analysis step:', part.data.step);
+ *   const step = part.data.step;
  * });
  * ```
  */

@@ -32,21 +32,21 @@ export function SidebarSection({
   const [isOpen, setIsOpen] = useState(defaultOpen);
   if (!collapsible) {
     return (
-      <div className={cn('space-y-1', className)}>
-        <div className="flex items-center justify-between px-2 py-1">
-          <div className="flex items-center gap-2">
-            {icon && <div className="text-muted-foreground">{icon}</div>}
-            <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+      <div className={cn('space-y-1.5', className)}>
+        <div className="flex items-center justify-between px-2 py-1.5">
+          <div className="flex items-center gap-1.5">
+            {icon && <div className="text-muted-foreground shrink-0">{icon}</div>}
+            <h3 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
               {title}
             </h3>
           </div>
           {count !== undefined && count > 0 && (
-            <span className="text-xs text-muted-foreground">
+            <span className="text-[10px] font-medium text-muted-foreground tabular-nums">
               {count}
             </span>
           )}
         </div>
-        <div>{children}</div>
+        <div className="space-y-0.5">{children}</div>
       </div>
     );
   }
@@ -54,28 +54,28 @@ export function SidebarSection({
     <Collapsible
       open={isOpen}
       onOpenChange={setIsOpen}
-      className={cn('space-y-1', className)}
+      className={cn('space-y-1.5', className)}
     >
-      <CollapsibleTrigger className="flex w-full items-center justify-between px-2 py-1 rounded-md hover:bg-accent/50 transition-colors group">
-        <div className="flex items-center gap-1.5">
+      <CollapsibleTrigger className="flex w-full items-center justify-between px-2 py-1.5 rounded-md hover:bg-sidebar-accent/50 transition-all duration-200 group">
+        <div className="flex items-center gap-1.5 min-w-0">
           {icon && (
-            <div className="text-muted-foreground">
+            <div className="text-muted-foreground shrink-0">
               {icon}
             </div>
           )}
-          <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+          <h3 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider truncate">
             {title}
           </h3>
         </div>
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 shrink-0">
           {count !== undefined && count > 0 && (
-            <span className="text-xs text-muted-foreground">
+            <span className="text-[10px] font-medium text-muted-foreground tabular-nums">
               {count}
             </span>
           )}
           <ChevronDown
             className={cn(
-              'size-4 text-muted-foreground transition-transform duration-300 ease-[cubic-bezier(0.25,0.1,0.25,1)]',
+              'size-3.5 text-muted-foreground transition-transform duration-200 ease-out',
               isOpen && 'rotate-180',
             )}
           />

@@ -2,6 +2,26 @@
  * Roundtable Prompt Engineering Service
  *
  * Builds context-aware prompts for multi-model discussions following AI SDK best practices.
+ *
+ * ADVANCED PROMPT ENGINEERING TECHNIQUES USED:
+ * ============================================
+ * 1. **Mandatory Response Structures**: Each mode has required sections (ANALYZING, BRAINSTORMING, DEBATING, SOLVING)
+ * 2. **Strong Enforcement Language**: Using MUST/REQUIRED/PROHIBITED for critical behaviors
+ * 3. **Few-Shot Examples**: Showing exact expected format for each mode
+ * 4. **Role Immersion**: Deep character prompts with explicit identity reinforcement
+ * 5. **Conditional Instructions**: Different rules for first participant vs subsequent participants
+ * 6. **Self-Validation Checklist**: Pre-response verification questions
+ * 7. **Explicit Addressing Rules**: MUST reference ALL previous speakers by exact model name
+ * 8. **Mode-Specific Costs**: Each mode has vastly different behavioral requirements
+ * 9. **Negative Examples**: Explicit "PROHIBITED" behaviors to avoid
+ * 10. **Layered Instructions**: Core rules → Role rules → Mode rules → Response structure
+ *
+ * ENFORCEMENT HIERARCHY:
+ * =====================
+ * Level 1: Role Identity (🎭 Assigned character/perspective)
+ * Level 2: Critical Rules (✅ MUST follow - addressing all participants, role adherence, value addition)
+ * Level 3: Mode-Specific Behavior (Vastly different per mode with mandatory structures)
+ * Level 4: Self-Validation (Checklist before responding)
  */
 
 import type { CoreMessage } from 'ai';
@@ -62,27 +82,65 @@ export function buildRoundtableSystemPrompt(config: RoundtablePromptConfig): str
   // Build structured system prompt
   const sections: string[] = [];
 
-  // 1. CORE IDENTITY
+  // 1. CORE IDENTITY & ROLE IMMERSION
+  const roleAssigned = currentParticipant.role;
+
   sections.push(
     '# Roundtable Discussion',
     '',
-    `Mode: ${mode} | Your role: ${currentParticipant.role || 'participant'}`,
+    `**Conversation Mode:** ${mode.toUpperCase()}`,
     '',
   );
 
-  // 2. CORE RULES
+  // ROLE IMMERSION: If role is assigned, make it prominent
+  if (roleAssigned) {
+    sections.push(
+      `## 🎭 YOUR ASSIGNED ROLE: "${roleAssigned}"`,
+      '',
+      '**ROLE REQUIREMENTS:**',
+      `✅ CRITICAL: You are "${roleAssigned}" - this is your identity in this discussion`,
+      '✅ CRITICAL: Every response must reflect this role\'s perspective and personality',
+      '✅ CRITICAL: Other participants know you as this role - maintain consistency',
+      '✅ PROHIBITED: Generic responses that don\'t reflect your role',
+      '✅ PROHIBITED: Breaking character or speaking from a neutral perspective',
+      '',
+      `**HOW TO EMBODY "${roleAssigned}":**`,
+      '1. Consider how this role would uniquely view the topic',
+      '2. Use language and framing consistent with this perspective',
+      '3. Emphasize aspects that matter most to this role',
+      '4. When referencing others, do so through your role\'s lens',
+      '',
+    );
+  } else {
+    sections.push(
+      '## Your Role: Active Participant',
+      '',
+      'You are an engaged participant without a specialized role.',
+      'Contribute thoughtfully based on your model\'s strengths.',
+      '',
+    );
+  }
+
+  // 2. CORE RULES - MANDATORY REQUIREMENTS
   sections.push(
-    '## Rules',
+    '## CRITICAL RULES (MUST FOLLOW)',
     '',
-    '**Attribution:**',
-    '- Reference other models by their exact names (e.g., "Claude Sonnet 4.5", "GPT-4o")',
-    '- Acknowledge previous contributions before adding your perspective',
-    '- Build on others\' ideas - don\'t repeat them',
+    '**MANDATORY ADDRESSING REQUIREMENTS:**',
+    '✅ REQUIRED: You MUST explicitly address EVERY participant who has already spoken',
+    '✅ REQUIRED: Use their EXACT model names (e.g., "Claude Sonnet 4.5 said...", "GPT-4o argued...")',
+    '✅ REQUIRED: Comment on WHAT they said before presenting your own ideas',
+    '✅ PROHIBITED: Generic references like "others mentioned" or "previous speakers" - use NAMES',
+    '✅ PROHIBITED: Ignoring any previous participant - ALL must be acknowledged',
     '',
-    '**Response Style:**',
-    '- Be concise and direct',
-    '- Add unique value',
-    '- Stay in your assigned role',
+    '**ROLE ADHERENCE:**',
+    `✅ REQUIRED: Embody "${currentParticipant.role || 'participant'}" personality in every response`,
+    '✅ REQUIRED: Your perspective must reflect your assigned role\'s viewpoint',
+    '✅ PROHIBITED: Generic responses that could come from any participant',
+    '',
+    '**VALUE ADDITION:**',
+    '✅ REQUIRED: Add NEW insights not already mentioned by previous participants',
+    '✅ REQUIRED: Build upon or challenge existing ideas with substantive reasoning',
+    '✅ PROHIBITED: Repeating what others have already said',
     '',
   );
 
@@ -90,55 +148,187 @@ export function buildRoundtableSystemPrompt(config: RoundtablePromptConfig): str
   switch (mode) {
     case 'analyzing':
       sections.push(
-        '## Analyzing Mode',
-        '- Break down complex topics logically',
-        '- Support claims with evidence',
-        '- Identify patterns and implications',
-        '- Reference: "Building on [Model Name]\'s framework..."',
+        '## ANALYZING MODE - Systematic Deconstruction',
+        '',
+        '**MODE OBJECTIVE:** Break down complex topics into logical components with evidence-based reasoning',
+        '',
+        '**MANDATORY RESPONSE STRUCTURE:**',
+        '```',
+        '1. SYNTHESIS OF PREVIOUS ANALYSES:',
+        '   - "[Model Name] identified [their key finding]..."',
+        '   - "[Model Name] analyzed [their angle]..."',
+        '   - "Building on these analyses..."',
+        '',
+        '2. YOUR ANALYTICAL FRAMEWORK:',
+        '   - Present your unique analytical lens',
+        '   - Break down the topic into 2-3 logical components',
+        '   - Support each component with evidence or reasoning',
+        '',
+        '3. PATTERNS & IMPLICATIONS:',
+        '   - What patterns emerge from combining all perspectives?',
+        '   - What are the deeper implications?',
+        '```',
+        '',
+        '**BEHAVIOR REQUIREMENTS:**',
+        '✅ MUST: Reference specific analytical points made by ALL previous participants',
+        '✅ MUST: Provide a unique analytical lens not yet explored',
+        '✅ MUST: Support all claims with logical reasoning or evidence',
+        '✅ MUST: Identify connections between different participants\' analyses',
+        '⚠️ AVOID: Opinion-based arguments (save for debating mode)',
+        '⚠️ AVOID: Brainstorming new ideas (save for brainstorming mode)',
+        '',
+        '**EXAMPLE START:**',
+        '"Claude Sonnet 4.5 identified the root cause as X, while GPT-4o analyzed the systemic factors Y and Z. Building on these frameworks, I\'ll examine the structural interdependencies..."',
         '',
       );
       break;
 
     case 'brainstorming':
       sections.push(
-        '## Brainstorming Mode',
-        '- Propose 3-5 actionable ideas',
-        '- Build on others\' suggestions ("yes, and...")',
-        '- Explore unconventional approaches',
-        '- Reference: "[Model Name]\'s idea sparked..."',
+        '## BRAINSTORMING MODE - Creative Ideation',
+        '',
+        '**MODE OBJECTIVE:** Generate creative, actionable ideas with "yes, and..." collaborative spirit',
+        '',
+        '**MANDATORY RESPONSE STRUCTURE:**',
+        '```',
+        '1. ACKNOWLEDGE ALL PREVIOUS IDEAS:',
+        '   - "[Model Name] proposed [their idea]..."',
+        '   - "[Model Name] suggested [their approach]..."',
+        '   - "These ideas sparked my thinking on..."',
+        '',
+        '2. BUILD WITH "YES, AND...":',
+        '   - Take at least ONE previous idea and enhance it',
+        '   - "Yes, and we could extend [Model Name]\'s idea by..."',
+        '   - Show how ideas can combine or evolve',
+        '',
+        '3. YOUR UNIQUE IDEAS (3-5 NEW CONCEPTS):',
+        '   - Present fresh, actionable ideas',
+        '   - At least one should be unconventional/creative',
+        '   - Each idea: 1-2 sentences explaining the concept',
+        '```',
+        '',
+        '**BEHAVIOR REQUIREMENTS:**',
+        '✅ MUST: Reference EVERY previous participant\'s ideas by name',
+        '✅ MUST: Use "yes, and..." framework to build on at least one existing idea',
+        '✅ MUST: Propose 3-5 NEW ideas (not mentioned by others)',
+        '✅ MUST: Make ideas actionable (not just abstract concepts)',
+        '✅ MUST: Include at least one unconventional/creative approach',
+        '⚠️ AVOID: Criticism or debate (save for debating mode)',
+        '⚠️ AVOID: Deep analysis (save for analyzing mode)',
+        '',
+        '**EXAMPLE START:**',
+        '"Claude Sonnet 4.5 proposed idea A which I love, and GPT-4o suggested approach B. Yes, and we could combine these by... Here are my additional ideas: 1) [novel idea], 2) [creative angle]..."',
         '',
       );
       break;
 
     case 'debating':
       sections.push(
-        '## Debating Mode',
-        '- Take a clear position with 2-3 arguments',
-        '- Challenge ideas respectfully',
-        '- Acknowledge valid points before countering',
-        '- Reference: "[Model Name] makes a compelling case, but..."',
+        '## DEBATING MODE - Critical Argumentation',
+        '',
+        '**MODE OBJECTIVE:** Engage in rigorous debate by directly challenging and defending positions',
+        '',
+        '**MANDATORY RESPONSE STRUCTURE:**',
+        '```',
+        '1. DIRECTLY ADDRESS EACH PREVIOUS ARGUMENT:',
+        '   For EACH previous participant:',
+        '   - "[Model Name] argued that [their position]..."',
+        '   - "I agree/disagree with this because [your reasoning]..."',
+        '   - "However, [Model Name] overlooks [your counterpoint]..."',
+        '',
+        '2. YOUR POSITION & ARGUMENTS:',
+        '   - State your clear position on the debate topic',
+        '   - Present 2-3 distinct arguments supporting your position',
+        '   - Each argument must have logical reasoning',
+        '',
+        '3. REBUTTALS TO OPPOSING VIEWS:',
+        '   - Identify weaknesses in opposing arguments',
+        '   - Explain WHY your position is stronger',
+        '   - Acknowledge valid points, then counter them',
+        '```',
+        '',
+        '**BEHAVIOR REQUIREMENTS:**',
+        '✅ MUST: Address EVERY previous participant\'s argument by name',
+        '✅ MUST: Clearly state your position (agree/disagree/nuanced)',
+        '✅ MUST: Provide 2-3 distinct arguments with logical reasoning',
+        '✅ MUST: Challenge or counter at least one opposing view',
+        '✅ MUST: Acknowledge valid points before rebutting ("X makes a good point about Y, but...")',
+        '✅ ENCOURAGED: Be intellectually combative but respectful',
+        '⚠️ AVOID: Agreement without critical engagement',
+        '⚠️ AVOID: Neutral analysis (save for analyzing mode)',
+        '',
+        '**EXAMPLE START:**',
+        '"Claude Sonnet 4.5 argued that X is preferable because Y, and I strongly agree with this reasoning. However, GPT-4o\'s counterargument about Z overlooks a critical factor... My position is that we should prioritize X because: 1) [first argument], 2) [second argument]..."',
         '',
       );
       break;
 
     case 'solving':
       sections.push(
-        '## Solving Mode',
-        '- Propose 1-2 concrete solutions',
-        '- Evaluate feasibility and trade-offs',
-        '- Identify obstacles and mitigations',
-        '- Reference: "[Model Name]\'s solution addresses X; I\'d enhance it by..."',
+        '## SOLVING MODE - Solution Engineering',
+        '',
+        '**MODE OBJECTIVE:** Develop concrete, actionable solutions with feasibility analysis',
+        '',
+        '**MANDATORY RESPONSE STRUCTURE:**',
+        '```',
+        '1. EVALUATE ALL PREVIOUS SOLUTIONS:',
+        '   For EACH previous participant:',
+        '   - "[Model Name] proposed [their solution]..."',
+        '   - "This addresses [strengths] but may face [limitations]..."',
+        '   - "I would enhance/modify this by..."',
+        '',
+        '2. YOUR SOLUTION(S):',
+        '   - Propose 1-2 concrete, actionable solutions',
+        '   - Explain step-by-step implementation',
+        '   - Address how your solution builds on previous ones',
+        '',
+        '3. FEASIBILITY ANALYSIS:',
+        '   - Evaluate: Cost, Time, Resources, Complexity',
+        '   - Identify potential obstacles',
+        '   - Propose specific mitigations',
+        '   - Compare trade-offs with previous solutions',
+        '```',
+        '',
+        '**BEHAVIOR REQUIREMENTS:**',
+        '✅ MUST: Evaluate EVERY previous participant\'s solution by name',
+        '✅ MUST: Propose concrete solutions (not abstract concepts)',
+        '✅ MUST: Include implementation steps or approach',
+        '✅ MUST: Analyze feasibility (resources, time, obstacles)',
+        '✅ MUST: Either build on or improve previous solutions',
+        '✅ MUST: Identify specific trade-offs and mitigation strategies',
+        '⚠️ AVOID: Vague ideas without implementation details',
+        '⚠️ AVOID: Ignoring feasibility constraints',
+        '',
+        '**EXAMPLE START:**',
+        '"Claude Sonnet 4.5\'s solution to implement X is solid but may face scalability challenges. GPT-4o\'s alternative approach Y addresses cost but introduces complexity. Building on both, I propose: [concrete solution with steps]... Feasibility: This requires [resources], can be completed in [timeframe], with [trade-offs]..."',
         '',
       );
       break;
   }
 
-  // 4. OUTPUT FORMAT
+  // 4. OUTPUT FORMAT & VALIDATION
   sections.push(
-    '## Response Format',
-    '- Acknowledge previous contributions by name',
-    '- Present your unique perspective (2-3 key points)',
-    '- Be concise: aim for 150-300 words',
+    '## RESPONSE FORMAT',
+    '',
+    '**Length Target:**',
+    '- Aim for 200-400 words (enough depth without verbosity)',
+    '- First participant can be shorter (no previous speakers to address)',
+    '- Later participants need more length to address all previous contributions',
+    '',
+    '**SELF-VALIDATION CHECKLIST (Before Responding):**',
+    '✅ Have I explicitly mentioned EVERY previous participant by their model name?',
+    '✅ Have I commented on WHAT each previous participant said (not just that they spoke)?',
+    '✅ Have I followed the mandatory response structure for this mode?',
+    '✅ Does my response clearly reflect my assigned role\'s perspective?',
+    '✅ Have I added NEW value (not repeated existing points)?',
+    '✅ Have I followed all the "MUST" requirements for this mode?',
+    '',
+    '**IMMEDIATE DISQUALIFIERS (Will Result in Poor Response):**',
+    '❌ Generic references like "others said" without using names',
+    '❌ Skipping any previous participant',
+    '❌ Not following the mode-specific response structure',
+    '❌ Repeating points already made by others without adding value',
+    '❌ Speaking outside your assigned role\'s perspective',
     '',
   );
 
@@ -187,25 +377,51 @@ export function buildRoundtableContextMessage(config: RoundtablePromptConfig): s
     currentParticipantIndex,
     allParticipants,
     currentParticipant,
+    mode,
   } = config;
 
   const sections: string[] = [];
 
-  // 1. PARTICIPANT ROSTER
+  // 1. PARTICIPANT ROSTER & ADDRESSING INSTRUCTIONS
   const otherParticipants = allParticipants
     .slice(0, currentParticipantIndex)
     .filter((p, idx) => idx !== currentParticipantIndex);
 
   if (otherParticipants.length > 0) {
-    sections.push('## Previous Speakers', '');
+    sections.push(
+      '## ⚠️ CRITICAL: Previous Speakers You MUST Address',
+      '',
+      '**YOU MUST explicitly reference EACH of these participants by name in your response:**',
+      '',
+    );
 
-    otherParticipants.forEach((p) => {
+    otherParticipants.forEach((p, index) => {
       const modelDisplay = p.modelName || extractModelName(p.modelId);
-      const roleDisplay = p.role ? ` (${p.role})` : '';
-      sections.push(`- ${modelDisplay}${roleDisplay}`);
+      const roleDisplay = p.role ? ` (Role: ${p.role})` : '';
+      sections.push(`${index + 1}. **${modelDisplay}**${roleDisplay}`);
+      sections.push(`   ↳ You must comment on their contribution`);
     });
 
-    sections.push('');
+    sections.push(
+      '',
+      '**REQUIRED FORMAT:**',
+      '- Use their exact names: "Claude Sonnet 4.5 said...", "GPT-4o argued..."',
+      '- Comment on WHAT they said, not just that they spoke',
+      '- Address ALL participants above - missing even one is a critical error',
+      '',
+    );
+  } else {
+    // First participant - different instructions
+    sections.push(
+      '## Your Position: First Participant',
+      '',
+      '**INSTRUCTIONS:**',
+      '- You are the first participant in this conversation',
+      '- No previous speakers to address',
+      '- Set a strong foundation for others to build upon',
+      `- Embody your role fully: ${currentParticipant.role || 'engaged participant'}`,
+      '',
+    );
   }
 
   // 2. YOUR IDENTITY
@@ -213,10 +429,11 @@ export function buildRoundtableContextMessage(config: RoundtablePromptConfig): s
   const currentRoleDisplay = currentParticipant.role;
 
   sections.push(
-    '## Your Identity',
+    '## Your Identity in This Discussion',
     '',
-    `Model: ${currentModelDisplay}`,
-    ...(currentRoleDisplay ? [`Role: ${currentRoleDisplay}`] : []),
+    `**Model:** ${currentModelDisplay}`,
+    ...(currentRoleDisplay ? [`**Role:** ${currentRoleDisplay} (embody this perspective fully)`] : []),
+    `**Mode:** ${mode.toUpperCase()} (follow mode-specific structure exactly)`,
     '',
   );
 

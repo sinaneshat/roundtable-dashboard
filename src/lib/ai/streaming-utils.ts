@@ -208,7 +208,6 @@ export async function mergeStreams<TOOLS extends ToolSet = Record<string, never>
 
   // For multiple streams, return first stream
   // TODO: Implement proper stream merging when needed
-  console.warn('Stream merging returning first stream only. Implement full merging if needed.');
   return createUIStreamResponse(streams[0]!);
 }
 

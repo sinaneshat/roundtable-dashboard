@@ -1,5 +1,5 @@
 'use client';
-import { Flame, MessageSquare, MessageSquarePlus, Plus, Search, Star } from 'lucide-react';
+import { FolderKanban, MessageSquarePlus, Plus, Search, Sparkles, Star } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -14,7 +14,7 @@ import {
 } from '@/components/chat/chat-sidebar-skeleton';
 import { CommandSearch } from '@/components/chat/command-search';
 import { NavUser } from '@/components/chat/nav-user';
-import { SidebarSection } from '@/components/chat/sidebar-section';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
   Empty,
@@ -28,18 +28,16 @@ import {
   Sidebar,
   SidebarContent,
   SidebarFooter,
-  SidebarGroup,
   SidebarHeader,
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
   SidebarRail,
+  SidebarTrigger,
   useSidebar,
 } from '@/components/ui/sidebar';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { BRAND } from '@/constants/brand';
 import { useDeleteThreadMutation } from '@/hooks/mutations/chat-mutations';
 import { useThreadsQuery } from '@/hooks/queries/chat';
+import { useUsageStatsQuery } from '@/hooks/queries/usage';
 import { toastManager } from '@/lib/toast/toast-manager';
 
 function AppSidebarComponent({ ...props }: React.ComponentProps<typeof Sidebar>) {
@@ -58,6 +56,7 @@ function AppSidebarComponent({ ...props }: React.ComponentProps<typeof Sidebar>)
     error,
   } = useThreadsQuery();
   const deleteThreadMutation = useDeleteThreadMutation();
+  const { data: usageData } = useUsageStatsQuery();
   const chats: Chat[] = useMemo(() => {
     if (!threadsData?.pages)
       return [];
@@ -128,14 +127,14 @@ function AppSidebarComponent({ ...props }: React.ComponentProps<typeof Sidebar>)
   };
   const favorites = useMemo(() =>
     chats.filter(chat => chat.isFavorite), [chats]);
-  const favoriteGroups = useMemo(() =>
-    groupChatsByPeriod(favorites), [favorites]);
   const nonFavoriteChats = useMemo(() =>
     chats.filter(chat => !chat.isFavorite), [chats]);
   const chatGroups = groupChatsByPeriod(nonFavoriteChats);
   const deletingChatId = deleteThreadMutation.isPending && deleteThreadMutation.variables?.param?.id
     ? deleteThreadMutation.variables.param.id
     : null;
+  const subscriptionTier = usageData?.success ? usageData.data.subscription.tier : 'free';
+  const isFreeUser = subscriptionTier === 'free';
   const handleScroll = useCallback(() => {
     if (!scrollAreaRef.current || !hasNextPage || isFetchingNextPage)
       return;
@@ -156,60 +155,67 @@ function AppSidebarComponent({ ...props }: React.ComponentProps<typeof Sidebar>)
     <>
       <TooltipProvider>
         <Sidebar collapsible="icon" {...props}>
-          <SidebarHeader>
-            <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton size="lg" asChild>
-                  <Link
-                    href="/chat"
-                    onClick={() => {
-                      if (isMobile) {
-                        setOpenMobile(false);
-                      }
-                    }}
-                  >
-                    <div className="flex aspect-square size-8 items-center justify-center rounded-lg">
-                      <Image
-                        src={BRAND.logos.main}
-                        alt={`${BRAND.displayName} Logo`}
-                        width={32}
-                        height={32}
-                        className="size-6 object-contain"
-                        loading="lazy"
-                      />
-                    </div>
-                    <div className="grid flex-1 text-left text-sm leading-tight">
-                      <span className="truncate font-semibold">{BRAND.displayName}</span>
-                      <span className="truncate text-xs">{BRAND.tagline}</span>
-                    </div>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton onClick={handleNewChat} tooltip={t('navigation.newChat')}>
-                  <Plus className="size-4" />
-                  <span>{t('navigation.newChat')}</span>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem className="group-data-[collapsible=icon]:block hidden">
-                <SidebarMenuButton
-                  onClick={() => {
-                    setIsSearchOpen(true);
-                    if (isMobile) {
-                      setOpenMobile(false);
-                    }
-                  }}
-                  tooltip={t('chat.searchChats')}
-                >
-                  <Search className="size-4" />
-                  <span>{t('chat.searchChats')}</span>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            </SidebarMenu>
-            <SidebarGroup className="py-0 group-data-[collapsible=icon]:hidden">
+          <SidebarHeader className="border-b border-sidebar-border">
+            {/* Header - Expanded (logo, brand name, and toggle) */}
+            <div className="flex items-center justify-between px-3 py-3 group-data-[collapsible=icon]:hidden">
+              <Link
+                href="/chat"
+                onClick={() => {
+                  if (isMobile) {
+                    setOpenMobile(false);
+                  }
+                }}
+                className="flex items-center gap-2 hover:opacity-80 transition-opacity"
+              >
+                <Image
+                  src={BRAND.logos.main}
+                  alt={`${BRAND.displayName} Logo`}
+                  width={24}
+                  height={24}
+                  className="size-6 object-contain"
+                  loading="lazy"
+                />
+                <span className="font-semibold text-sm">{BRAND.displayName}</span>
+              </Link>
+              <SidebarTrigger className="size-8 hover:bg-sidebar-accent rounded-md" />
+            </div>
+
+            {/* Header - Collapsed (just logo centered) */}
+            <div className="hidden group-data-[collapsible=icon]:flex items-center justify-center py-3">
+              <Link
+                href="/chat"
+                onClick={() => {
+                  if (isMobile) {
+                    setOpenMobile(false);
+                  }
+                }}
+                className="flex items-center justify-center hover:opacity-80 transition-opacity"
+              >
+                <Image
+                  src={BRAND.logos.main}
+                  alt={`${BRAND.displayName} Logo`}
+                  width={24}
+                  height={24}
+                  className="size-6 object-contain"
+                  loading="lazy"
+                />
+              </Link>
+            </div>
+
+            {/* Action Buttons - Expanded */}
+            <div className="px-2 pb-2 space-y-1 group-data-[collapsible=icon]:hidden">
               <Button
-                variant="outline"
-                className="w-full justify-start text-sm text-muted-foreground h-9"
+                variant="ghost"
+                className="w-full justify-start h-9 font-normal hover:bg-sidebar-accent"
+                onClick={handleNewChat}
+              >
+                <Plus className="size-4 mr-2 shrink-0" />
+                <span>{t('navigation.newChat')}</span>
+              </Button>
+
+              <Button
+                variant="ghost"
+                className="w-full justify-start h-9 font-normal hover:bg-sidebar-accent"
                 onClick={() => {
                   setIsSearchOpen(true);
                   if (isMobile) {
@@ -217,30 +223,82 @@ function AppSidebarComponent({ ...props }: React.ComponentProps<typeof Sidebar>)
                   }
                 }}
               >
-                <Search className="size-4 mr-2" />
-                <span className="flex-1 text-left">{t('chat.searchChats')}</span>
-                <kbd className="pointer-events-none inline-flex h-5 select-none items-center gap-0.5 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground opacity-100">
-                  <span className="text-xs">⌘</span>
-                  K
-                </kbd>
+                <Search className="size-4 mr-2 shrink-0" />
+                <span>{t('chat.searchChats')}</span>
               </Button>
-            </SidebarGroup>
+
+              <Button
+                variant="ghost"
+                className="w-full justify-start h-9 font-normal hover:bg-sidebar-accent"
+                disabled
+              >
+                <FolderKanban className="size-4 mr-2 shrink-0" />
+                <span>Projects</span>
+                <Badge variant="secondary" className="ml-auto text-[10px] px-1.5 py-0">
+                  Soon
+                </Badge>
+              </Button>
+            </div>
+
+            {/* Icon Buttons - Collapsed */}
+            <div className="hidden group-data-[collapsible=icon]:flex flex-col items-center gap-1 pb-2">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-8 hover:bg-sidebar-accent"
+                onClick={handleNewChat}
+                title={t('navigation.newChat')}
+              >
+                <Plus className="size-4" />
+              </Button>
+
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-8 hover:bg-sidebar-accent"
+                onClick={() => {
+                  setIsSearchOpen(true);
+                  if (isMobile) {
+                    setOpenMobile(false);
+                  }
+                }}
+                title={t('chat.searchChats')}
+              >
+                <Search className="size-4" />
+              </Button>
+
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-8 hover:bg-sidebar-accent"
+                disabled
+                title="Projects (Coming Soon)"
+              >
+                <FolderKanban className="size-4" />
+              </Button>
+            </div>
           </SidebarHeader>
           <SidebarContent className="p-0">
             <ScrollArea ref={scrollAreaRef} className="h-full w-full">
-              <div className="px-2 py-2 space-y-2">
+              <div className="px-2 py-3 space-y-3">
+                {/* Favorites Section */}
                 {!isLoading && !isError && favorites.length > 0 && (
-                  <div className="group-data-[collapsible=icon]:hidden">
-                    <SidebarSection
-                      title={t('chat.favorites')}
-                      icon={<Star className="size-3.5" />}
-                      count={favorites.length}
-                      defaultOpen={false}
-                      collapsible
-                    >
+                  <div className="group-data-[collapsible=icon]:hidden space-y-1">
+                    <div className="flex items-center justify-between px-2 py-1.5">
+                      <div className="flex items-center gap-1.5">
+                        <Star className="size-3.5 shrink-0 fill-amber-500 text-amber-500" />
+                        <h3 className="text-sm font-semibold text-foreground">
+                          {t('chat.favorites')}
+                        </h3>
+                      </div>
+                      <span className="text-xs text-muted-foreground tabular-nums">
+                        {favorites.length}
+                      </span>
+                    </div>
+                    <div className="space-y-0.5">
                       <ChatList
-                        chatGroups={favoriteGroups}
-                        favorites={[]}
+                        chatGroups={[]}
+                        favorites={favorites}
                         onDeleteChat={handleDeleteChat}
                         searchTerm=""
                         deletingChatId={deletingChatId}
@@ -251,32 +309,17 @@ function AppSidebarComponent({ ...props }: React.ComponentProps<typeof Sidebar>)
                           }
                         }}
                       />
-                    </SidebarSection>
+                    </div>
                   </div>
                 )}
-                <div className="group-data-[collapsible=icon]:hidden">
-                  <div className="space-y-1 opacity-60 cursor-not-allowed">
-                    <div className="flex items-center justify-between px-2 py-1">
-                      <div className="flex items-center gap-1.5">
-                        <div className="text-orange-500">
-                          <Flame className="size-3.5" />
-                        </div>
-                        <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                          {t('chat.trending')}
-                        </h3>
-                      </div>
-                    </div>
-                    <div className="px-2 py-2">
-                      <p className="text-xs text-muted-foreground italic">
-                        {t('chat.comingSoon')}
-                      </p>
-                    </div>
-                  </div>
-                </div>
+
+                {/* Loading State */}
                 {isLoading && <ChatSidebarSkeleton count={15} showFavorites={false} />}
+
+                {/* Error State */}
                 {isError && (
-                  <div className="px-2 py-4 text-center group-data-[collapsible=icon]:hidden">
-                    <p className="text-sm text-destructive mb-2">
+                  <div className="px-3 py-6 text-center group-data-[collapsible=icon]:hidden">
+                    <p className="text-sm font-medium text-destructive mb-1">
                       {t('states.error.default')}
                     </p>
                     <p className="text-xs text-muted-foreground">
@@ -284,56 +327,80 @@ function AppSidebarComponent({ ...props }: React.ComponentProps<typeof Sidebar>)
                     </p>
                   </div>
                 )}
+
+                {/* Empty State */}
                 {!isLoading && !isError && chats.length === 0 && (
-                  <div className="px-2 py-4 group-data-[collapsible=icon]:hidden">
+                  <div className="group-data-[collapsible=icon]:hidden">
                     <Empty className="border-none p-4">
                       <EmptyHeader>
                         <EmptyMedia variant="icon">
-                          <MessageSquarePlus />
+                          <MessageSquarePlus className="size-8" />
                         </EmptyMedia>
-                        <EmptyTitle className="text-base">{t('chat.noChatsYet')}</EmptyTitle>
-                        <EmptyDescription className="text-xs">
+                        <EmptyTitle className="text-sm font-semibold">{t('chat.noChatsYet')}</EmptyTitle>
+                        <EmptyDescription className="text-xs text-muted-foreground">
                           {t('chat.noChatsDescription')}
                         </EmptyDescription>
                       </EmptyHeader>
                     </Empty>
                   </div>
                 )}
+
+                {/* Main Chat List - Expanded */}
                 {!isLoading && !isError && chatGroups.length > 0 && (
-                  <div className="group-data-[collapsible=icon]:hidden">
-                    <SidebarSection
-                      title={t('navigation.chat')}
-                      icon={<MessageSquare className="size-3.5" />}
-                      count={chats.length}
-                      defaultOpen
-                      collapsible
-                    >
-                      <ChatList
-                        chatGroups={chatGroups}
-                        favorites={[]}
-                        onDeleteChat={handleDeleteChat}
-                        searchTerm=""
-                        deletingChatId={deletingChatId}
-                        isMobile={isMobile}
-                        onNavigate={() => {
-                          if (isMobile) {
-                            setOpenMobile(false);
-                          }
-                        }}
-                      />
-                      {isFetchingNextPage && <ChatSidebarPaginationSkeleton count={20} />}
-                      {!hasNextPage && !isFetchingNextPage && chats.length > 0 && (
-                        <div className="px-2 py-4 text-center text-xs text-muted-foreground">
+                  <div className="group-data-[collapsible=icon]:hidden space-y-2">
+                    <ChatList
+                      chatGroups={chatGroups}
+                      favorites={[]}
+                      onDeleteChat={handleDeleteChat}
+                      searchTerm=""
+                      deletingChatId={deletingChatId}
+                      isMobile={isMobile}
+                      onNavigate={() => {
+                        if (isMobile) {
+                          setOpenMobile(false);
+                        }
+                      }}
+                    />
+                    {isFetchingNextPage && <ChatSidebarPaginationSkeleton count={20} />}
+                    {!hasNextPage && !isFetchingNextPage && chats.length > 0 && (
+                      <div className="px-2 py-4 text-center">
+                        <p className="text-[10px] text-muted-foreground uppercase tracking-wider">
                           {t('chat.noMoreThreads')}
-                        </div>
-                      )}
-                    </SidebarSection>
+                        </p>
+                      </div>
+                    )}
                   </div>
                 )}
+
               </div>
             </ScrollArea>
           </SidebarContent>
           <SidebarFooter>
+            {isFreeUser && (
+              <div className="p-2 group-data-[collapsible=icon]:hidden">
+                <Button
+                  variant="outline"
+                  className="w-full justify-start h-auto py-3 px-3 border-sidebar-border hover:bg-sidebar-accent"
+                  asChild
+                >
+                  <Link href="/chat/pricing">
+                    <div className="flex items-start gap-3 w-full">
+                      <div className="flex-shrink-0 mt-0.5">
+                        <Sparkles className="size-4 text-amber-500" />
+                      </div>
+                      <div className="flex-1 text-left space-y-0.5">
+                        <div className="text-sm font-medium text-foreground">
+                          {t('pricing.card.upgradePlan')}
+                        </div>
+                        <div className="text-xs text-muted-foreground leading-snug">
+                          {t('pricing.card.upgradeDescription')}
+                        </div>
+                      </div>
+                    </div>
+                  </Link>
+                </Button>
+              </div>
+            )}
             <NavUser />
           </SidebarFooter>
           <SidebarRail />

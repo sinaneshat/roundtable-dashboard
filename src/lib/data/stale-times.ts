@@ -36,9 +36,9 @@ export const STALE_TIMES = {
   subscriptions: 2 * 60 * 1000, // 2 minutes - subscription status changes occasionally
 
   // ============================================================================
-  // AI Models (cached on server for 24h, client uses server cache)
+  // AI Models (SSG-like caching: HTTP cache + client cache)
   // ============================================================================
-  models: Infinity, // Never refetch on client - server cache is 24h, models rarely change
+  models: Infinity, // Never auto-refetch - HTTP cache (1h client, 24h CDN) + manual invalidation on tier changes
   modelDetail: 5 * 60 * 1000, // 5 minutes - individual model details can change
   providers: 10 * 60 * 1000, // 10 minutes - provider list changes infrequently
 

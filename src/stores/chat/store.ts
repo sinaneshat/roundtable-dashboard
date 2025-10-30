@@ -82,9 +82,13 @@ import { createStore } from 'zustand/vanilla';
 
 import type { ChatMode, FeedbackType } from '@/api/core/enums';
 import type { ChatParticipant, ChatThread, ModeratorAnalysisPayload, RecommendedAction, RoundFeedbackData, StoredModeratorAnalysis } from '@/api/routes/chat/schema';
+import type { BaseModelResponse } from '@/api/routes/models/schema';
+import type { SubscriptionTier } from '@/api/services/product-logic.service';
+import { canAccessModelByPricing } from '@/api/services/product-logic.service';
 import type { ParticipantConfig } from '@/components/chat/chat-form-schemas';
 import type { ChatModeId } from '@/lib/config/chat-modes';
 import { getParticipantMessagesWithIds } from '@/lib/utils/message-filtering';
+import { getRoundNumberFromMessage } from '@/lib/utils/metadata-extraction';
 
 import type { ScreenMode } from './actions/screen-initialization';
 
@@ -105,7 +109,12 @@ type ChatFormSlice = {
   updateParticipant: (participantId: string, updates: Partial<ParticipantConfig>) => void;
   reorderParticipants: (fromIndex: number, toIndex: number) => void;
   resetForm: () => void;
-  applyRecommendedAction: (action: RecommendedAction, options?: { maxModels?: number; tierName?: string }) => { success: boolean; error?: string; modelsAdded?: number; modelsSkipped?: number };
+  applyRecommendedAction: (action: RecommendedAction, options?: {
+    maxModels?: number;
+    tierName?: string;
+    userTier?: SubscriptionTier;
+    allModels?: BaseModelResponse[];
+  }) => { success: boolean; error?: string; modelsAdded?: number; modelsSkipped?: number };
 };
 
 type FeedbackSlice = {
@@ -333,14 +342,16 @@ const createChatFormSlice: StateCreator<
   applyRecommendedAction: (action, options) => {
     const maxModels = options?.maxModels;
     const tierName = options?.tierName;
+    const userTier = options?.userTier;
+    const allModels = options?.allModels;
 
     // Track results for validation feedback
     let modelsAdded = 0;
     let modelsSkipped = 0;
     let error: string | undefined;
 
-    set((state) => {
-      // 1. Set input value
+    set((_state) => {
+      // 1. Set input from suggestion
       const updates: Partial<ChatFormSlice> = {
         inputValue: action.action,
       };
@@ -350,30 +361,44 @@ const createChatFormSlice: StateCreator<
         updates.selectedMode = action.suggestedMode as ChatModeId;
       }
 
-      // 3. Apply participant suggestions if provided
+      // 3. Apply participant suggestions if provided - ONLY reset participants if models are suggested
       if (action.suggestedModels && action.suggestedModels.length > 0) {
-        // Validate and deduplicate model IDs
-        const existingModelIds = new Set(state.selectedParticipants.map(p => p.modelId));
-        const currentCount = state.selectedParticipants.length;
+        // Reset participants when new models are suggested
+        updates.selectedParticipants = [];
+        // Filter to only valid model IDs (format: provider/model)
+        const validModelIds = action.suggestedModels.filter(modelId => modelId.includes('/'));
 
-        // Filter to only valid model IDs (format: provider/model) that don't already exist
-        const validNewModels = action.suggestedModels.filter((modelId) => {
-          const isValidFormat = modelId.includes('/');
-          const isNotDuplicate = !existingModelIds.has(modelId);
-          return isValidFormat && isNotDuplicate;
-        });
+        // Filter by tier access if tier and models data provided
+        let accessibleModels = validModelIds;
+        if (userTier && allModels && allModels.length > 0) {
+          accessibleModels = validModelIds.filter((modelId) => {
+            const modelData = allModels.find(m => m.id === modelId);
+            if (!modelData) {
+              // Model not found in available models list, skip it
+              return false;
+            }
+            // Check if user can access this model based on their tier
+            return canAccessModelByPricing(userTier, modelData);
+          });
+
+          // Track skipped models due to tier restrictions
+          const tierRestrictedCount = validModelIds.length - accessibleModels.length;
+          if (tierRestrictedCount > 0) {
+            modelsSkipped += tierRestrictedCount;
+          }
+        }
 
         // Check tier limits if provided
         if (maxModels !== undefined) {
-          const availableSlots = Math.max(0, maxModels - currentCount);
+          const availableSlots = maxModels; // All slots available when replacing participants
 
           if (availableSlots === 0) {
             error = `Your ${tierName || 'current'} plan allows up to ${maxModels} models per conversation. Remove a model to add another, or upgrade your plan.`;
-            modelsSkipped = validNewModels.length;
-          } else if (validNewModels.length > availableSlots) {
+            modelsSkipped = accessibleModels.length;
+          } else if (accessibleModels.length > availableSlots) {
             // Partial add: only add models that fit
-            const modelsToAdd = validNewModels.slice(0, availableSlots);
-            modelsSkipped = validNewModels.length - availableSlots;
+            const modelsToAdd = accessibleModels.slice(0, availableSlots);
+            modelsSkipped += accessibleModels.length - availableSlots;
 
             const newParticipants = modelsToAdd.map((modelId, index) => {
               const originalIndex = action.suggestedModels.indexOf(modelId);
@@ -382,45 +407,45 @@ const createChatFormSlice: StateCreator<
                 modelId,
                 role: action.suggestedRoles?.[originalIndex] || null,
                 customRoleId: undefined,
-                priority: state.selectedParticipants.length + index,
+                priority: index,
               } satisfies ParticipantConfig;
             });
 
-            updates.selectedParticipants = [...state.selectedParticipants, ...newParticipants];
+            updates.selectedParticipants = newParticipants;
             modelsAdded = modelsToAdd.length;
-            error = `Only ${modelsAdded} of ${validNewModels.length} suggested models were added. Your ${tierName || 'current'} plan allows up to ${maxModels} models. Upgrade to add more.`;
+            error = `Only ${modelsAdded} of ${accessibleModels.length} suggested models were added. Your ${tierName || 'current'} plan allows up to ${maxModels} models. Upgrade to add more.`;
           } else {
-            // All models fit within limit
-            const newParticipants = validNewModels.map((modelId, index) => {
+            // All accessible models fit within limit
+            const newParticipants = accessibleModels.map((modelId, index) => {
               const originalIndex = action.suggestedModels.indexOf(modelId);
               return {
                 id: `participant-${Date.now()}-${index}`,
                 modelId,
                 role: action.suggestedRoles?.[originalIndex] || null,
                 customRoleId: undefined,
-                priority: state.selectedParticipants.length + index,
+                priority: index,
               } satisfies ParticipantConfig;
             });
 
-            updates.selectedParticipants = [...state.selectedParticipants, ...newParticipants];
-            modelsAdded = validNewModels.length;
+            updates.selectedParticipants = newParticipants;
+            modelsAdded = accessibleModels.length;
           }
         } else {
-          // No tier limit provided, add all valid models
-          if (validNewModels.length > 0) {
-            const newParticipants = validNewModels.map((modelId, index) => {
+          // No tier limit provided, add all accessible models
+          if (accessibleModels.length > 0) {
+            const newParticipants = accessibleModels.map((modelId, index) => {
               const originalIndex = action.suggestedModels.indexOf(modelId);
               return {
                 id: `participant-${Date.now()}-${index}`,
                 modelId,
                 role: action.suggestedRoles?.[originalIndex] || null,
                 customRoleId: undefined,
-                priority: state.selectedParticipants.length + index,
+                priority: index,
               } satisfies ParticipantConfig;
             });
 
-            updates.selectedParticipants = [...state.selectedParticipants, ...newParticipants];
-            modelsAdded = validNewModels.length;
+            updates.selectedParticipants = newParticipants;
+            modelsAdded = accessibleModels.length;
           }
         }
       }
@@ -549,25 +574,48 @@ const createAnalysisSlice: StateCreator<
 
     // ✅ SINGLE SOURCE OF TRUTH: Use utility functions for type-safe extraction
     // Replaces unsafe type assertions with consolidated message filtering logic
-    const { ids: participantMessageIds } = getParticipantMessagesWithIds(messages, roundNumber);
+    const { ids: participantMessageIds, messages: participantMessages } = getParticipantMessagesWithIds(messages, roundNumber);
 
     // ✅ SAFETY CHECK: Don't create analysis if no valid participant messages
     if (participantMessageIds.length === 0) {
-      console.warn(`[createPendingAnalysis] No participant messages with valid participantId found for round ${roundNumber}`);
+      return;
+    }
+
+    // ✅ CRITICAL FIX: Verify all participant messages have unique IDs
+    // Prevents creating analysis with duplicate message IDs from different rounds
+    const uniqueIds = new Set(participantMessageIds);
+    if (uniqueIds.size !== participantMessageIds.length) {
+      // Duplicate IDs detected - skip analysis creation
+      return;
+    }
+
+    // ✅ CRITICAL FIX: Verify all messages have correct round number
+    // Prevents using messages from previous rounds in analysis
+    // ✅ TYPE-SAFE: Use extraction utility instead of type casting
+    const allMessagesFromCorrectRound = participantMessages.every((msg) => {
+      const msgRound = getRoundNumberFromMessage(msg);
+      return msgRound === roundNumber;
+    });
+
+    if (!allMessagesFromCorrectRound) {
+      // Messages from wrong round detected - skip analysis creation
       return;
     }
 
     // Generate unique analysis ID
     const analysisId = `analysis_${threadId}_${roundNumber}_${Date.now()}`;
 
-    // Create pending analysis object
+    // ✅ CRITICAL FIX: Set status to 'streaming' immediately
+    // Analysis will trigger stream via queueMicrotask(), but virtualization needs to see 'streaming'
+    // status BEFORE the async callback runs to prevent component unmounting
+    // This ensures virtualization disables itself and keeps component mounted during stream
     const pendingAnalysis: StoredModeratorAnalysis = {
       id: analysisId,
       threadId,
       roundNumber,
       mode,
       userQuestion,
-      status: 'pending',
+      status: 'streaming',
       participantMessageIds,
       analysisData: null,
       errorMessage: null,

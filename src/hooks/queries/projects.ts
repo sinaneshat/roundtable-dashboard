@@ -9,6 +9,10 @@
 
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 
+import type {
+  ListKnowledgeFilesQuery,
+  ProjectFileStatus,
+} from '@/api/routes/project/schema';
 import { LIMITS } from '@/constants/limits';
 import { useSession } from '@/lib/auth/client';
 import { queryKeys } from '@/lib/data/query-keys';
@@ -55,6 +59,7 @@ export function useProjectsQuery(search?: string) {
     enabled: isAuthenticated,
     staleTime: STALE_TIMES.threads, // 30 seconds - match threads pattern
     retry: false,
+    throwOnError: false,
   });
 }
 
@@ -85,12 +90,12 @@ export function useProjectQuery(projectId: string, enabled?: boolean) {
  * Protected endpoint - requires authentication
  *
  * @param projectId - Project ID
- * @param status - Optional filter by file status (uploaded, indexing, indexed, failed)
+ * @param status - Optional filter by file status
  * @param enabled - Optional control over whether to fetch (default: based on projectId and auth)
  */
 export function useKnowledgeFilesQuery(
   projectId: string,
-  status?: 'uploaded' | 'indexing' | 'indexed' | 'failed',
+  status?: ProjectFileStatus,
   enabled?: boolean,
 ) {
   const { data: session, isPending } = useSession();
@@ -101,15 +106,15 @@ export function useKnowledgeFilesQuery(
     queryFn: async ({ pageParam }) => {
       const limit = pageParam ? LIMITS.STANDARD_PAGE : LIMITS.INITIAL_PAGE;
 
-      const params: { cursor?: string; status?: string; limit: number } = { limit };
-      if (pageParam)
-        params.cursor = pageParam;
-      if (status)
-        params.status = status;
+      const query: ListKnowledgeFilesQuery = {
+        limit,
+        ...(pageParam && { cursor: pageParam }),
+        ...(status && { status }),
+      };
 
       return listKnowledgeFilesService({
         param: { id: projectId },
-        query: params,
+        query,
       });
     },
     initialPageParam: undefined as string | undefined,
@@ -117,5 +122,6 @@ export function useKnowledgeFilesQuery(
     enabled: enabled !== undefined ? enabled : (isAuthenticated && !!projectId),
     staleTime: STALE_TIMES.threadDetail, // 10 seconds
     retry: false,
+    throwOnError: false,
   });
 }

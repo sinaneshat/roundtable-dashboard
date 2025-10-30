@@ -202,10 +202,6 @@ export async function chatMessagesToUIMessages(
     // ✅ AI SDK V5 PATTERN: Handle TypeValidationError gracefully
     // Reference: https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot-message-persistence#validating-messages-from-database
     if (TypeValidationError.isInstance(error)) {
-      // Log validation error for monitoring
-      console.error('Database messages validation failed:', error);
-      console.error('Problematic messages:', JSON.stringify(messages, null, 2));
-
       // Re-throw with more context for debugging
       throw new Error(
         `Database message validation failed: ${error.message}\n`

@@ -20,7 +20,6 @@ import { useCallback, useMemo } from 'react';
 import type { RecommendedAction } from '@/api/routes/chat/schema';
 import { useChatStore } from '@/components/providers/chat-store-provider';
 import { useModelsQuery } from '@/hooks/queries/models';
-import { toastManager } from '@/lib/toast/toast-manager';
 
 export type UseRecommendedActionsOptions = {
   /** Optional ref to input container for scrolling behavior */
@@ -72,9 +71,10 @@ export function useRecommendedActions(
   const applyRecommendedAction = useChatStore(s => s.applyRecommendedAction);
   const setHasPendingConfigChanges = useChatStore(s => s.setHasPendingConfigChanges);
 
-  // Get tier config for validation
+  // Get tier config and models data for filtering by tier access
   const { data: modelsData } = useModelsQuery();
   const userTierConfig = modelsData?.data?.user_tier_config;
+  const allModels = modelsData?.data?.items;
 
   /**
    * Handle recommended action click
@@ -82,23 +82,13 @@ export function useRecommendedActions(
    */
   const handleActionClick = useCallback((action: RecommendedAction) => {
     // ✅ BUSINESS LOGIC: Delegate to store action (single source of truth)
-    // This handles: setting input, applying mode, deduplicating/adding participants
-    const result = applyRecommendedAction(action, {
+    // This handles: full state reset, setting input, applying mode, filtering models by tier, adding participants
+    applyRecommendedAction(action, {
       maxModels: userTierConfig?.max_models,
       tierName: userTierConfig?.tier_name,
+      userTier: userTierConfig?.tier,
+      allModels,
     });
-
-    // ✅ VALIDATION FEEDBACK: Show error if models couldn't be added due to limits
-    if (result.error) {
-      toastManager.error('Model Limit Reached', result.error);
-    } else if (result.modelsAdded && result.modelsAdded > 0) {
-      // Optional: Show success message when models are added
-      const modelText = result.modelsAdded === 1 ? 'model' : 'models';
-      toastManager.success(
-        'Recommendation Applied',
-        `Added ${result.modelsAdded} ${modelText} to your conversation`,
-      );
-    }
 
     // ✅ UI CONCERN: Mark config as changed if enabled (thread screen)
     if (markConfigChanged) {
@@ -126,6 +116,7 @@ export function useRecommendedActions(
     enableScroll,
     inputContainerRef,
     userTierConfig,
+    allModels,
   ]);
 
   // Memoize return object to prevent unnecessary re-renders

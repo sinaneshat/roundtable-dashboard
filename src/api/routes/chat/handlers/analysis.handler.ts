@@ -23,6 +23,7 @@ import {
 } from '@/api/services/posthog-llm-tracking.service';
 import {
   checkAnalysisQuota,
+  getUserTier,
   incrementAnalysisUsage,
 } from '@/api/services/usage-tracking.service';
 import type { ApiEnv } from '@/api/types';
@@ -50,7 +51,7 @@ function generateModeratorAnalysis(
     sessionId?: string; // PostHog session ID for Session Replay linking
   },
 ) {
-  const { roundNumber, mode, userQuestion, participantResponses, changelogEntries, env, analysisId, threadId, userId, sessionId } = config;
+  const { roundNumber, mode, userQuestion, participantResponses, changelogEntries, userTier, env, analysisId, threadId, userId, sessionId } = config;
 
   // ✅ POSTHOG LLM TRACKING: Initialize trace and timing for moderator analysis
   const llmTraceId = generateTraceId();
@@ -65,6 +66,7 @@ function generateModeratorAnalysis(
     userQuestion,
     participantResponses,
     changelogEntries,
+    userTier,
   });
   const userPrompt = buildModeratorUserPrompt({
     roundNumber,
@@ -72,6 +74,7 @@ function generateModeratorAnalysis(
     userQuestion,
     participantResponses,
     changelogEntries,
+    userTier,
   });
 
   return streamObject({
@@ -431,6 +434,10 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
       );
     }
     await incrementAnalysisUsage(user.id);
+
+    // ✅ TIER-AWARE ANALYSIS: Get user's subscription tier for model filtering
+    const userTier = await getUserTier(user.id);
+
     const analysisId = ulid();
     await db.insert(tables.chatModeratorAnalysis).values({
       id: analysisId,
@@ -459,6 +466,7 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
         metadata: c.changeData as Record<string, unknown> | null,
         createdAt: c.createdAt,
       })),
+      userTier,
       analysisId,
       threadId,
       userId: user.id,

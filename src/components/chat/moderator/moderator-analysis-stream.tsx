@@ -65,7 +65,7 @@ function ModeratorAnalysisStreamComponent({
   const isMountedRef = { current: true };
 
   // AI SDK v5 Pattern: useObject hook for streaming structured data
-  const { object: partialAnalysis, error, submit, stop } = useObject({
+  const { object: partialAnalysis, error, submit, stop, isLoading } = useObject({
     api: `/api/v1/chat/threads/${threadId}/rounds/${analysis.roundNumber}/analyze`,
     schema: ModeratorAnalysisPayloadSchema,
     // React 19 Pattern: Use onFinish callback instead of useEffect for completion
@@ -113,12 +113,13 @@ function ModeratorAnalysisStreamComponent({
 
   // ✅ CRITICAL FIX: Prevent duplicate submissions at both analysis ID and round number level
   // React 19 Pattern: Schedule side effects using queueMicrotask instead of useEffect
+  // ✅ UPDATED: Handle both 'pending' and 'streaming' status (analysis now created with 'streaming')
   const roundAlreadyTriggered = triggeredRounds.get(threadId)?.has(analysis.roundNumber) ?? false;
 
   if (
     !triggeredAnalysisIds.has(analysis.id)
     && !roundAlreadyTriggered
-    && analysis.status === AnalysisStatuses.PENDING
+    && (analysis.status === AnalysisStatuses.PENDING || analysis.status === AnalysisStatuses.STREAMING)
   ) {
     // Mark as triggered at BOTH levels BEFORE scheduling to prevent duplicate calls
     triggeredAnalysisIds.set(analysis.id, true);
@@ -171,10 +172,24 @@ function ModeratorAnalysisStreamComponent({
       </div>
     );
   }
-  // ✅ SINGLE SOURCE OF TRUTH: Use utility function for data completeness check
-  // This ensures consistency across all components and prevents missing field bugs
+
+  // ✅ AI SDK v5 Pattern: Handle streaming state properly
+  // During streaming, show loading state if no data yet, otherwise show partial data
   const displayData = (partialAnalysis || analysis.analysisData) as ModeratorAnalysisPayload | undefined;
-  if (!hasAnalysisData(displayData)) {
+  const hasData = hasAnalysisData(displayData);
+
+  // Show loading indicator when streaming with no data yet
+  if (isLoading && !hasData) {
+    return (
+      <div className="flex items-center gap-2 py-4 text-sm text-muted-foreground">
+        <div className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+        <span>Analyzing responses...</span>
+      </div>
+    );
+  }
+
+  // Don't render if not loading and no data
+  if (!hasData) {
     return null;
   }
 

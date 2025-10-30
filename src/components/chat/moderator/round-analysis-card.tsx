@@ -69,22 +69,20 @@ export function RoundAnalysisCard({
   const [isManuallyControlled, setIsManuallyControlled] = useState(false);
   const [manuallyOpen, setManuallyOpen] = useState(false);
   const [isRetrying, setIsRetrying] = useState(false);
-  const prevStreamingRoundRef = useRef<number | null | undefined>(null);
   const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // React 19 Pattern: Effect runs when streamingRoundNumber changes (dependency array handles detection)
+  // No need for ref to track previous value - effect dependencies already do this
   useEffect(() => {
-    if (streamingRoundNumber !== prevStreamingRoundRef.current) {
-      prevStreamingRoundRef.current = streamingRoundNumber;
-      if (streamingRoundNumber != null && !isLatest && streamingRoundNumber > analysis.roundNumber) {
-        // AI SDK v5 Pattern: Use queueMicrotask instead of setTimeout(0)
-        // This schedules state updates in the microtask queue, more efficient than timer queue
-        queueMicrotask(() => {
-          setIsManuallyControlled(false);
-          setManuallyOpen(false);
-        });
-      }
+    if (streamingRoundNumber != null && !isLatest && streamingRoundNumber > analysis.roundNumber) {
+      // AI SDK v5 Pattern: Use queueMicrotask instead of setTimeout(0)
+      // This schedules state updates in the microtask queue, more efficient than timer queue
+      queueMicrotask(() => {
+        setIsManuallyControlled(false);
+        setManuallyOpen(false);
+      });
     }
-    return undefined;
-  }, [streamingRoundNumber, isLatest, analysis.roundNumber, threadId]);
+  }, [streamingRoundNumber, isLatest, analysis.roundNumber]);
   const isOpen = isManuallyControlled ? manuallyOpen : isLatest;
 
   // ✅ Disable accordion interaction during streaming

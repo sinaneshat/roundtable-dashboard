@@ -15,7 +15,7 @@ import {
   BreadcrumbSeparator,
 } from '@/components/ui/breadcrumb';
 import { Separator } from '@/components/ui/separator';
-import { SidebarTrigger } from '@/components/ui/sidebar';
+import { SidebarTrigger, useSidebar } from '@/components/ui/sidebar';
 import { BRAND } from '@/constants/brand';
 import { cn } from '@/lib/ui/cn';
 
@@ -48,6 +48,7 @@ function NavigationHeaderComponent({
   const pathname = usePathname();
   const t = useTranslations();
   const context = useThreadHeaderOptional();
+  const { state } = useSidebar();
   const threadTitle = threadTitleProp ?? (showSidebarTrigger ? context.threadTitle : null);
   const threadParent = threadParentProp ?? '/chat';
   const threadActions = threadActionsProp ?? (showSidebarTrigger ? context.threadActions : null);
@@ -73,7 +74,7 @@ function NavigationHeaderComponent({
       )}
       >
         <div className="flex items-center gap-2 min-w-0 flex-1">
-          {showSidebarTrigger && (
+          {showSidebarTrigger && state === 'collapsed' && (
             <>
               <SidebarTrigger className="-ms-1 flex-shrink-0" />
               <Separator orientation="vertical" className="me-2 h-4 flex-shrink-0" />
@@ -126,6 +127,8 @@ function NavigationHeaderComponent({
 }
 export const NavigationHeader = React.memo(NavigationHeaderComponent);
 function MinimalHeaderComponent({ className }: { className?: string } = {}) {
+  const { state } = useSidebar();
+
   return (
     <header
       className={cn(
@@ -134,7 +137,7 @@ function MinimalHeaderComponent({ className }: { className?: string } = {}) {
       )}
     >
       <div className="flex items-center gap-2 px-4 md:px-6 lg:px-8 h-16">
-        <SidebarTrigger className="-ms-1" />
+        {state === 'collapsed' && <SidebarTrigger className="-ms-1" />}
       </div>
     </header>
   );

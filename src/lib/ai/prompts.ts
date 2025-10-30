@@ -386,7 +386,7 @@ export function buildPromptFromTemplate(
  * });
  *
  * if (!result.valid) {
- *   console.error('Validation errors:', result.errors);
+ *   throw new Error('Validation errors');
  * }
  * ```
  */

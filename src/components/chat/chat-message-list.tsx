@@ -3,11 +3,11 @@ import type { UIMessage } from 'ai';
 import Image from 'next/image';
 import { useTranslations } from 'next-intl';
 import { memo, useMemo } from 'react';
+import { Streamdown } from 'streamdown';
 
 import type { ChatParticipant } from '@/api/routes/chat/schema';
 import { canAccessModelByPricing } from '@/api/services/product-logic.service';
 import { Message, MessageAvatar, MessageContent } from '@/components/ai-elements/message';
-import { VirtualizedResponse } from '@/components/ai-elements/virtualized-response';
 import { ModelMessageCard } from '@/components/chat/model-message-card';
 import { useUsageStatsQuery } from '@/hooks/queries/usage';
 import { useModelLookup } from '@/hooks/utils';
@@ -242,13 +242,12 @@ export const ChatMessageList = memo(
                   {message.parts.map((part) => {
                     if (part.type === 'text') {
                       return (
-                        <VirtualizedResponse
+                        <Streamdown
                           key={`${message.id}-text-${part.text.substring(0, 20)}`}
-                          virtualizationThreshold={1000}
-                          chunkSize={800}
+                          className="size-full [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
                         >
                           {part.text}
-                        </VirtualizedResponse>
+                        </Streamdown>
                       );
                     }
                     if (part.type === 'file' && part.mediaType?.startsWith('image/')) {

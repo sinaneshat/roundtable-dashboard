@@ -113,6 +113,7 @@ export default function ChatThreadScreen({
 
   // ✅ ZUSTAND V5 PATTERN: Use useShallow for actions object to prevent re-renders
   const actions = useChatStore(useShallow(s => ({
+    setShowInitialUI: s.setShowInitialUI,
     setHasInitiallyLoaded: s.setHasInitiallyLoaded,
     setIsRegenerating: s.setIsRegenerating,
     setIsCreatingAnalysis: s.setIsCreatingAnalysis,
@@ -180,7 +181,7 @@ export default function ChatThreadScreen({
   // Load feedback from server once
   useEffect(() => {
     if (!hasLoadedFeedback && feedbackSuccess && feedbackData) {
-      const feedbackArray = Array.isArray(feedbackData) ? feedbackData : [];
+      const feedbackArray = feedbackData.success && Array.isArray(feedbackData.data) ? feedbackData.data : [];
       feedbackActions.loadFeedback(feedbackArray);
     }
   }, [feedbackData, feedbackSuccess, hasLoadedFeedback, feedbackActions]);
@@ -331,6 +332,10 @@ export default function ChatThreadScreen({
       setSelectedMode(thread.mode as ChatModeId);
     }
 
+    // ✅ CRITICAL FIX: Set showInitialUI to false on thread screen
+    // If we navigated from overview screen, showInitialUI would be true
+    // This causes the timeline to not render and analysis requests to get cancelled
+    actions.setShowInitialUI(false);
     actions.setHasInitiallyLoaded(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [thread.id]);
@@ -353,12 +358,8 @@ export default function ChatThreadScreen({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [thread.id]);
 
-  useEffect(() => {
-    const wasStreaming = isStreaming;
-    if (wasStreaming && !isStreaming) {
-      actions.setStreamingRoundNumber(null);
-    }
-  }, [isStreaming, actions]);
+  // ✅ REMOVED: Virtualization removed, so streamingRoundNumber management not needed
+  // Components stay mounted regardless of streaming state
   const handlePromptSubmit = useCallback(
     async (e: React.FormEvent) => {
       e.preventDefault();

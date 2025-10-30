@@ -452,15 +452,47 @@ export function useMultiParticipantChat(
         // eslint-disable-next-line react-dom/no-flush-sync -- Required for multi-participant chat synchronization
         flushSync(() => {
           setMessages((prev) => {
-            const completeMessage: UIMessage = {
+            let completeMessage: UIMessage = {
               ...data.message,
               metadata: completeMetadata, // ✅ Now uses strictly typed metadata
             };
 
+            // ✅ CRITICAL FIX: Check for duplicate message IDs from different rounds
+            // If we find a message with the same ID but different round number,
+            // it's a backend error that should never happen, but we need to handle it gracefully
+            // ✅ TYPE-SAFE: Use utility function instead of type casting
+            const originalMessageId = data.message.id;
+            let idToSearchFor = originalMessageId; // Track which ID to search for when replacing
+            const duplicateIdCheck = prev.findIndex(msg => msg.id === originalMessageId);
+
+            if (duplicateIdCheck !== -1) {
+              const existingMsg = prev[duplicateIdCheck];
+              if (existingMsg) {
+                // ✅ SINGLE SOURCE OF TRUTH: Use extraction utility for type-safe metadata access
+                const existingRound = extractMetadataRoundNumber(existingMsg.metadata);
+
+                // If there's already a message with this ID from a different round, generate a new ID
+                if (existingRound !== undefined && existingRound !== finalRoundNumber) {
+                  // Backend returned a duplicate ID - generate a unique ID on frontend
+                  const newUniqueId = `${originalMessageId}_r${finalRoundNumber}_${Date.now()}`;
+
+                  completeMessage = {
+                    ...completeMessage,
+                    id: newUniqueId,
+                  };
+                  // ✅ CRITICAL FIX: Keep searching for the ORIGINAL ID to replace it
+                  // Don't search for the new ID - it doesn't exist in the array yet
+                  // The AI SDK added the message during streaming with the duplicate ID
+                  idToSearchFor = originalMessageId;
+                }
+              }
+            }
+
             // ✅ STRICT TYPING FIX: Check if message exists AND belongs to current participant AND current round
             // No more loose optional chaining - completeMetadata has ALL required fields
+            // ✅ CRITICAL FIX: Search for idToSearchFor (original ID if we changed it, otherwise the current ID)
             const existingMessageIndex = prev.findIndex((msg: UIMessage) => {
-              if (msg.id !== data.message.id)
+              if (msg.id !== idToSearchFor)
                 return false;
 
               const msgMetadata = msg.metadata as AssistantMessageMetadata | undefined;
@@ -479,6 +511,15 @@ export function useMultiParticipantChat(
             });
 
             if (existingMessageIndex === -1) {
+              // ✅ SAFETY CHECK: Before adding, verify no duplicate IDs exist
+              // This prevents edge cases where messages might have been refetched
+              const hasDuplicateId = prev.some(msg => msg.id === completeMessage.id);
+              if (hasDuplicateId) {
+                // Duplicate ID exists - replace it instead of adding
+                return prev.map((msg: UIMessage) =>
+                  msg.id === completeMessage.id ? completeMessage : msg,
+                );
+              }
               // Message doesn't exist or belongs to different participant - add new message
               return [...prev, completeMessage];
             }

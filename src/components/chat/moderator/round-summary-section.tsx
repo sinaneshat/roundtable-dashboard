@@ -4,73 +4,33 @@ import { motion } from 'framer-motion';
 import {
   ArrowRight,
   CheckCircle2,
+  ChevronRight,
   FileText,
   GitBranch,
   Lightbulb,
   ListChecks,
   Scale,
+  Sparkles,
   Target,
   Users,
 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
 import type { RecommendedAction, RoundSummary } from '@/api/routes/chat/schema';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { extractModelName, getModelIconInfo } from '@/lib/utils/ai-display';
+import { Card, CardContent } from '@/components/ui/card';
+import { Separator } from '@/components/ui/separator';
+import { cn } from '@/lib/ui/cn';
+import { glassCard } from '@/lib/ui/glassmorphism';
+
+import { ModelBadge } from '../model-badge';
+import { AnalysisSection, animationVariants } from './analysis-section';
 
 type RoundSummarySectionProps = {
   roundSummary: Partial<RoundSummary>;
   onActionClick?: (action: RecommendedAction) => void;
   isStreaming?: boolean;
 };
-
-const fadeInUp = {
-  initial: { opacity: 0, y: 20 },
-  animate: { opacity: 1, y: 0 },
-  transition: { duration: 0.4, ease: [0.4, 0, 0.2, 1] as const },
-};
-
-const staggerChildren = {
-  animate: { transition: { staggerChildren: 0.05 } },
-};
-
-const itemFade = {
-  initial: { opacity: 0, x: -10 },
-  animate: { opacity: 1, x: 0, transition: { duration: 0.3 } },
-};
-
-type ModelSuggestionBadgeProps = {
-  modelId: string;
-  role?: string;
-};
-
-function ModelSuggestionBadge({ modelId, role }: ModelSuggestionBadgeProps) {
-  const { icon, providerName } = getModelIconInfo(modelId);
-  const modelName = extractModelName(modelId);
-
-  return (
-    <div className="flex items-center gap-2 rounded-md border border-border/50 bg-muted/30 px-2 py-1.5">
-      <Avatar className="size-5 flex-shrink-0">
-        <AvatarImage src={icon} alt={modelName} />
-        <AvatarFallback className="text-[10px]">
-          {providerName.slice(0, 2).toUpperCase()}
-        </AvatarFallback>
-      </Avatar>
-      <div className="flex flex-col min-w-0 flex-1">
-        <span className="text-xs font-medium truncate">{modelName}</span>
-        {role && (
-          <span className="text-[10px] text-muted-foreground truncate">
-            Role:
-            {' '}
-            {role}
-          </span>
-        )}
-      </div>
-    </div>
-  );
-}
 
 export function RoundSummarySection({
   roundSummary,
@@ -107,258 +67,297 @@ export function RoundSummarySection({
     <div className="space-y-6 pt-4">
       {/* Key Insights */}
       {keyInsights && keyInsights.length > 0 && (
-        <motion.div {...fadeInUp} className="space-y-3">
-          <h3 className="flex items-center gap-2 text-sm font-semibold">
-            <Lightbulb className="size-4" />
-            {t('keyInsights')}
-          </h3>
-          <motion.ul className="space-y-2" variants={staggerChildren} initial="initial" animate="animate">
+        <AnalysisSection title={t('keyInsights')} icon={Lightbulb} enableStagger>
+          <div className="space-y-2">
             {keyInsights.map(insight => (
-              <motion.li
+              <motion.div
                 key={insight}
-                variants={itemFade}
-                className="flex items-start gap-2.5 text-sm leading-relaxed text-muted-foreground"
+                variants={animationVariants.itemFade}
+                className="flex items-start gap-2.5"
               >
-                <CheckCircle2 className="mt-0.5 size-4 shrink-0" />
-                <span>{insight}</span>
-              </motion.li>
+                <CheckCircle2 className="size-4 shrink-0 mt-0.5 text-primary" />
+                <p className="text-sm leading-relaxed text-foreground/90 flex-1">
+                  {insight}
+                </p>
+              </motion.div>
             ))}
-          </motion.ul>
-        </motion.div>
+          </div>
+        </AnalysisSection>
       )}
 
       {/* Consensus Points */}
       {consensusPoints && consensusPoints.length > 0 && (
-        <motion.div {...fadeInUp} className="space-y-3">
-          <h3 className="flex items-center gap-2 text-sm font-semibold">
-            <ListChecks className="size-4" />
-            {t('consensusPoints')}
-          </h3>
-          <motion.ul className="space-y-2" variants={staggerChildren} initial="initial" animate="animate">
+        <AnalysisSection title={t('consensusPoints')} icon={ListChecks} enableStagger>
+          <div className="space-y-2">
             {consensusPoints.map(point => (
-              <motion.li
+              <motion.div
                 key={point}
-                variants={itemFade}
-                className="flex items-start gap-2.5 text-sm leading-relaxed text-muted-foreground"
+                variants={animationVariants.itemFade}
+                className="flex items-start gap-2.5"
               >
-                <CheckCircle2 className="mt-0.5 size-4 shrink-0" />
-                <span>{point}</span>
-              </motion.li>
+                <CheckCircle2 className="size-4 shrink-0 mt-0.5 text-primary" />
+                <p className="text-sm leading-relaxed text-foreground/90 flex-1">
+                  {point}
+                </p>
+              </motion.div>
             ))}
-          </motion.ul>
-        </motion.div>
+          </div>
+        </AnalysisSection>
       )}
 
       {/* Divergent Approaches */}
       {divergentApproaches && divergentApproaches.length > 0 && (
-        <motion.div {...fadeInUp} className="space-y-3">
-          <h3 className="flex items-center gap-2 text-sm font-semibold">
-            <GitBranch className="size-4" />
-            {t('divergentApproaches')}
-          </h3>
-          <div className="space-y-4">
-            {divergentApproaches.map((approach, approachIdx) => (
-              <div key={approach.topic || `approach-${approachIdx}`} className="space-y-2">
-                {approach.topic && (
-                  <h4 className="text-sm font-medium">{approach.topic}</h4>
-                )}
-                {approach.perspectives && approach.perspectives.length > 0 && (
-                  <ul className="space-y-1.5 pl-4">
-                    {approach.perspectives.map(perspective => (
-                      <li key={perspective} className="text-sm leading-relaxed text-muted-foreground">
-                        •
-                        {' '}
-                        {perspective}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            ))}
-          </div>
-        </motion.div>
+        <>
+          {(keyInsights || consensusPoints) && <Separator className="my-6" />}
+          <AnalysisSection title={t('divergentApproaches')} icon={GitBranch}>
+            <div className="space-y-3">
+              {divergentApproaches.map((approach, approachIdx) => (
+                <div key={approach.topic || `approach-${approachIdx}`} className="space-y-2">
+                  {approach.topic && (
+                    <h4 className="text-sm font-semibold text-foreground">{approach.topic}</h4>
+                  )}
+                  {approach.perspectives && approach.perspectives.length > 0 && (
+                    <div className="space-y-1.5 pl-4">
+                      {approach.perspectives.map(perspective => (
+                        <div key={perspective} className="flex items-start gap-2">
+                          <div className="mt-1.5 size-1 rounded-full bg-muted-foreground/60 shrink-0" />
+                          <p className="text-sm leading-relaxed text-muted-foreground flex-1">
+                            {perspective}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </AnalysisSection>
+        </>
       )}
 
       {/* Comparative Analysis */}
       {comparativeAnalysis && (
-        <motion.div {...fadeInUp} className="space-y-3">
-          <h3 className="flex items-center gap-2 text-sm font-semibold">
-            <Scale className="size-4" />
-            {t('comparativeAnalysis')}
-          </h3>
-          <div className="space-y-4">
-            {comparativeAnalysis.strengthsByCategory && comparativeAnalysis.strengthsByCategory.length > 0 && (
-              <div className="space-y-3">
-                <h4 className="text-sm font-medium">{t('strengthsByCategory')}</h4>
+        <>
+          {divergentApproaches && <Separator className="my-6" />}
+          <AnalysisSection title={t('comparativeAnalysis')} icon={Scale}>
+            <div className="space-y-3">
+              {comparativeAnalysis.strengthsByCategory && comparativeAnalysis.strengthsByCategory.length > 0 && (
                 <div className="space-y-2">
-                  {comparativeAnalysis.strengthsByCategory.map((strength, strengthIdx) => (
-                    <div key={strength.category || `strength-${strengthIdx}`} className="flex flex-wrap items-center gap-2">
-                      {strength.category && (
-                        <span className="text-sm font-medium">
-                          {strength.category}
-                          :
-                        </span>
-                      )}
-                      {strength.participants && strength.participants.length > 0 && strength.participants.map(participant => (
-                        <Badge key={participant} variant="outline" className="text-xs">
-                          {participant}
-                        </Badge>
-                      ))}
-                    </div>
-                  ))}
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="size-3.5 text-primary" />
+                    <h4 className="text-sm font-semibold text-foreground">{t('strengthsByCategory')}</h4>
+                  </div>
+                  <div className="space-y-2 pl-4">
+                    {comparativeAnalysis.strengthsByCategory.map((strength, strengthIdx) => (
+                      <div key={strength.category || `strength-${strengthIdx}`} className="space-y-1.5">
+                        {strength.category && (
+                          <p className="text-sm font-medium text-foreground/90">
+                            {strength.category}
+                          </p>
+                        )}
+                        {strength.participants && strength.participants.length > 0 && (
+                          <div className="flex flex-wrap gap-1.5">
+                            {strength.participants.map(participant => (
+                              <Badge key={participant} variant="outline" className="text-xs">
+                                {participant}
+                              </Badge>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            )}
-            {comparativeAnalysis.tradeoffs && comparativeAnalysis.tradeoffs.length > 0 && (
-              <div className="space-y-2">
-                <h4 className="text-sm font-medium">{t('tradeoffs')}</h4>
-                <ul className="space-y-1.5">
-                  {comparativeAnalysis.tradeoffs.map(tradeoff => (
-                    <li key={tradeoff} className="text-sm text-muted-foreground">
-                      •
-                      {' '}
-                      {tradeoff}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </div>
-        </motion.div>
+              )}
+              {comparativeAnalysis.tradeoffs && comparativeAnalysis.tradeoffs.length > 0 && (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Scale className="size-3.5 text-primary" />
+                    <h4 className="text-sm font-semibold text-foreground">{t('tradeoffs')}</h4>
+                  </div>
+                  <div className="space-y-1.5 pl-4">
+                    {comparativeAnalysis.tradeoffs.map(tradeoff => (
+                      <div key={tradeoff} className="flex items-start gap-2">
+                        <div className="mt-1.5 size-1 rounded-full bg-muted-foreground/60 shrink-0" />
+                        <p className="text-sm leading-relaxed text-muted-foreground flex-1">
+                          {tradeoff}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </AnalysisSection>
+        </>
       )}
 
       {/* Decision Framework */}
       {decisionFramework && (
-        <motion.div {...fadeInUp} className="space-y-3">
-          <h3 className="flex items-center gap-2 text-sm font-semibold">
-            <Target className="size-4" />
-            {t('decisionFramework')}
-          </h3>
-          <div className="space-y-4">
-            {decisionFramework.criteriaToConsider && decisionFramework.criteriaToConsider.length > 0 && (
-              <div className="space-y-2">
-                <h4 className="text-sm font-medium">{t('criteriaToConsider')}</h4>
-                <ul className="space-y-1.5">
-                  {decisionFramework.criteriaToConsider.map(criteria => (
-                    <li key={criteria} className="text-sm text-muted-foreground">
-                      •
-                      {' '}
-                      {criteria}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-            {decisionFramework.scenarioRecommendations && decisionFramework.scenarioRecommendations.length > 0 && (
-              <div className="space-y-3">
-                <h4 className="text-sm font-medium">{t('scenarioRecommendations')}</h4>
-                {decisionFramework.scenarioRecommendations.map((scenario, scenarioIdx) => (
-                  <div key={scenario.scenario || `scenario-${scenarioIdx}`} className="space-y-1.5 rounded-lg bg-purple-500/10 p-3">
-                    {scenario.scenario && (
-                      <p className="text-sm font-medium text-purple-400">{scenario.scenario}</p>
-                    )}
-                    {scenario.recommendation && (
-                      <p className="text-sm text-muted-foreground">{scenario.recommendation}</p>
-                    )}
+        <>
+          {comparativeAnalysis && <Separator className="my-6" />}
+          <AnalysisSection title={t('decisionFramework')} icon={Target}>
+            <div className="space-y-3">
+              {decisionFramework.criteriaToConsider && decisionFramework.criteriaToConsider.length > 0 && (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Target className="size-3.5 text-primary" />
+                    <h4 className="text-sm font-semibold text-foreground">{t('criteriaToConsider')}</h4>
                   </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </motion.div>
+                  <div className="space-y-1.5 pl-4">
+                    {decisionFramework.criteriaToConsider.map(criteria => (
+                      <div key={criteria} className="flex items-start gap-2">
+                        <div className="mt-1.5 size-1 rounded-full bg-muted-foreground/60 shrink-0" />
+                        <p className="text-sm leading-relaxed text-muted-foreground flex-1">
+                          {criteria}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {decisionFramework.scenarioRecommendations && decisionFramework.scenarioRecommendations.length > 0 && (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="size-3.5 text-primary" />
+                    <h4 className="text-sm font-semibold text-foreground">{t('scenarioRecommendations')}</h4>
+                  </div>
+                  <div className="space-y-2 pl-4">
+                    {decisionFramework.scenarioRecommendations.map((scenario, scenarioIdx) => (
+                      <div
+                        key={scenario.scenario || `scenario-${scenarioIdx}`}
+                        className="space-y-1"
+                      >
+                        {scenario.scenario && (
+                          <p className="text-sm font-semibold text-foreground">{scenario.scenario}</p>
+                        )}
+                        {scenario.recommendation && (
+                          <p className="text-sm leading-relaxed text-muted-foreground">{scenario.recommendation}</p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </AnalysisSection>
+        </>
       )}
 
       {/* Overall Summary */}
       {overallSummary && (
-        <motion.div {...fadeInUp} className="space-y-3">
-          <h3 className="flex items-center gap-2 text-sm font-semibold">
-            <FileText className="size-4" />
-            {t('summary')}
-          </h3>
-          <p className="whitespace-pre-line text-sm leading-relaxed text-muted-foreground">
-            {overallSummary}
-          </p>
-        </motion.div>
+        <>
+          <Separator className="my-6" />
+          <AnalysisSection title={t('summary')} icon={FileText}>
+            <p className="whitespace-pre-line text-sm leading-relaxed text-foreground/80">
+              {overallSummary}
+            </p>
+          </AnalysisSection>
+        </>
       )}
 
       {/* Conclusion */}
       {conclusion && (
-        <motion.div {...fadeInUp} className="space-y-3">
-          <h3 className="flex items-center gap-2 text-sm font-semibold text-primary">
-            <ArrowRight className="size-4" />
-            {t('conclusion')}
-          </h3>
-          <p className="whitespace-pre-line text-sm leading-relaxed">
-            {conclusion}
-          </p>
-        </motion.div>
+        <>
+          <Separator className="my-6" />
+          <AnalysisSection
+            title={t('conclusion')}
+            icon={ArrowRight}
+            titleClassName="text-primary"
+          >
+            <p className="whitespace-pre-line text-sm leading-relaxed text-foreground font-medium">
+              {conclusion}
+            </p>
+          </AnalysisSection>
+        </>
       )}
 
       {/* Recommended Actions */}
       {recommendedActions && recommendedActions.length > 0 && (
-        <motion.div {...fadeInUp} className="space-y-3">
-          <h3 className="flex items-center gap-2 text-sm font-semibold">
-            <Users className="size-4" />
-            {t('recommendedActions')}
-          </h3>
-          <div className="space-y-2">
-            {recommendedActions.map((action) => {
-              // Skip incomplete actions during streaming
-              if (!action.action || !action.rationale) {
-                return null;
-              }
+        <>
+          <Separator className="my-6" />
+          <AnalysisSection title={t('recommendedActions')} icon={Users}>
+            <div className="space-y-2.5">
+              {recommendedActions.map((action) => {
+                // Skip incomplete actions during streaming
+                if (!action.action || !action.rationale) {
+                  return null;
+                }
 
-              return (
-                <motion.div
-                  key={action.action}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
-                >
-                  <Button
-                    variant="ghost"
-                    className="h-auto w-full justify-start gap-3 p-4 text-left border-0 transition-all hover:bg-muted/50"
-                    onClick={() => onActionClick?.(action)}
-                    disabled={isStreaming}
+                return (
+                  <motion.div
+                    key={action.action}
+                    {...animationVariants.actionFade}
                   >
-                    <div className="flex min-w-0 flex-1 flex-col gap-2">
-                      <p className="text-sm font-medium leading-snug break-words whitespace-normal">
-                        {action.action}
-                      </p>
-                      <p className="text-xs leading-relaxed text-muted-foreground break-words whitespace-normal">
-                        {action.rationale}
-                      </p>
-                      {(action.suggestedMode || (action.suggestedModels && action.suggestedModels.length > 0)) && (
-                        <div className="flex flex-col gap-2 pt-1">
-                          {action.suggestedMode && (
-                            <Badge variant="outline" className="text-xs w-fit">
-                              Mode:
-                              {' '}
-                              {action.suggestedMode}
-                            </Badge>
-                          )}
-                          {action.suggestedModels && action.suggestedModels.length > 0 && (
-                            <div className="flex flex-col gap-1.5">
-                              <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
-                                Suggested Models
-                              </span>
-                              {action.suggestedModels.map((modelId, index) => {
-                                const role = action.suggestedRoles?.[index];
-                                return (
-                                  <ModelSuggestionBadge key={modelId} modelId={modelId} role={role} />
-                                );
-                              })}
-                            </div>
-                          )}
-                        </div>
+                    <Card
+                      className={cn(
+                        glassCard('medium'),
+                        'border cursor-pointer group',
+                        isStreaming && 'opacity-50 cursor-not-allowed',
                       )}
-                    </div>
-                  </Button>
-                </motion.div>
-              );
-            })}
-          </div>
-        </motion.div>
+                      onClick={() => !isStreaming && onActionClick?.(action)}
+                      role="button"
+                      tabIndex={isStreaming ? -1 : 0}
+                      onKeyDown={(e) => {
+                        if (!isStreaming && (e.key === 'Enter' || e.key === ' ')) {
+                          e.preventDefault();
+                          onActionClick?.(action);
+                        }
+                      }}
+                    >
+                      <CardContent className="p-3">
+                        <div className="flex items-start gap-2.5">
+                          <Sparkles className="size-4 shrink-0 mt-0.5 text-primary" />
+                          <div className="flex-1 min-w-0 space-y-2.5">
+                            <div className="space-y-1.5">
+                              <p className="text-sm font-semibold leading-snug text-foreground break-words">
+                                {action.action}
+                              </p>
+                              <p className="text-xs leading-relaxed text-muted-foreground break-words">
+                                {action.rationale}
+                              </p>
+                            </div>
+
+                            {(action.suggestedMode || (action.suggestedModels && action.suggestedModels.length > 0)) && (
+                              <div className="flex flex-col gap-2 pt-1.5 border-t border-border/30">
+                                {action.suggestedMode && (
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
+                                      Mode
+                                    </span>
+                                    <Badge variant="outline" className="text-xs">
+                                      {action.suggestedMode}
+                                    </Badge>
+                                  </div>
+                                )}
+                                {action.suggestedModels && action.suggestedModels.length > 0 && (
+                                  <div className="flex flex-col gap-1.5">
+                                    <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
+                                      Suggested Models
+                                    </span>
+                                    <div className="flex flex-wrap gap-2">
+                                      {action.suggestedModels.map((modelId, index) => {
+                                        const role = action.suggestedRoles?.[index];
+                                        return (
+                                          <ModelBadge key={modelId} modelId={modelId} role={role} />
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                          <ChevronRight className="size-4 shrink-0 text-muted-foreground/50 group-hover:text-muted-foreground group-hover:translate-x-0.5 transition-all" />
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </motion.div>
+                );
+              })}
+            </div>
+          </AnalysisSection>
+        </>
       )}
     </div>
   );
