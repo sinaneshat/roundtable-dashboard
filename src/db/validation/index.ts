@@ -15,5 +15,5 @@ export * from './api-keys';
 export * from './auth';
 export * from './billing';
 export * from './chat';
-export * from './rag';
+export * from './project';
 export * from './usage';

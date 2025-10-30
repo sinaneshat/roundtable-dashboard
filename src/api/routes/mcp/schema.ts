@@ -351,6 +351,29 @@ export const ListRoundsInputSchema = z.object({
 }).openapi('ListRoundsInput');
 
 // ============================================================================
+// MCP Internal Schemas (Handler-Specific)
+// ============================================================================
+
+/**
+ * Participant Response Schema
+ * Used for tracking AI responses during generation
+ */
+export const ParticipantResponseSchema = z.object({
+  participantId: z.string().openapi({
+    description: 'Participant ID who generated response',
+    example: 'participant_xyz',
+  }),
+  messageId: z.string().openapi({
+    description: 'Message ID of generated response',
+    example: 'msg_abc123',
+  }),
+  content: z.string().openapi({
+    description: 'Response content text',
+    example: 'Based on the discussion...',
+  }),
+}).openapi('ParticipantResponse');
+
+// ============================================================================
 // MCP Response Schemas
 // ============================================================================
 
@@ -409,3 +432,4 @@ export type RemoveParticipantInput = z.infer<typeof RemoveParticipantInputSchema
 export type UpdateParticipantInput = z.infer<typeof UpdateParticipantInputSchema>;
 export type GetRoundAnalysisInput = z.infer<typeof GetRoundAnalysisInputSchema>;
 export type ListRoundsInput = z.infer<typeof ListRoundsInputSchema>;
+export type ParticipantResponse = z.infer<typeof ParticipantResponseSchema>;

@@ -105,6 +105,22 @@ export const queryKeys = {
     all: QueryKeyFactory.base('models'),
     list: () => QueryKeyFactory.list('models'),
   },
+
+  // Projects
+  projects: {
+    all: QueryKeyFactory.base('projects'),
+    lists: (search?: string) =>
+      search
+        ? [...queryKeys.projects.all, 'list', 'search', search] as const
+        : [...queryKeys.projects.all, 'list'] as const,
+    list: (cursor?: string) =>
+      cursor
+        ? QueryKeyFactory.action('projects', 'list', cursor)
+        : QueryKeyFactory.list('projects'),
+    details: () => [...queryKeys.projects.all, 'detail'] as const,
+    detail: (id: string) => QueryKeyFactory.detail('projects', id),
+    knowledgeFiles: (id: string) => QueryKeyFactory.action('projects', 'knowledge', id),
+  },
 } as const;
 
 /**
@@ -205,5 +221,22 @@ export const invalidationPatterns = {
   apiKeyDetail: (keyId: string) => [
     queryKeys.apiKeys.detail(keyId),
     queryKeys.apiKeys.lists(),
+  ],
+
+  // Project operations
+  projects: [
+    queryKeys.projects.lists(),
+  ],
+
+  projectDetail: (projectId: string) => [
+    queryKeys.projects.detail(projectId),
+    queryKeys.projects.lists(),
+    queryKeys.projects.knowledgeFiles(projectId),
+  ],
+
+  // Knowledge file operations
+  knowledgeFiles: (projectId: string) => [
+    queryKeys.projects.knowledgeFiles(projectId),
+    queryKeys.projects.detail(projectId), // Update file counts
   ],
 } as const;

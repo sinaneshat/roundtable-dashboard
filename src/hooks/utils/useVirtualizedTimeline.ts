@@ -1,8 +1,11 @@
 import type { VirtualItem, Virtualizer, VirtualizerOptions } from '@tanstack/react-virtual';
 import { useWindowVirtualizer } from '@tanstack/react-virtual';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 
 import type { TimelineItem } from './useThreadTimeline';
+
+// Stable constant for default empty Set to prevent render loop
+const EMPTY_STREAMING_ROUNDS = new Set<number>();
 
 /**
  * Easing function for smooth scroll animations
@@ -33,7 +36,7 @@ export type UseVirtualizedTimelineOptions = {
   /**
    * Number of items to render outside the visible viewport
    * Higher values = smoother scrolling but more DOM elements
-   * Default: 1 (aggressive - renders 1 item above and below viewport)
+   * Default: 5 (conservative - prevents data loss during streaming)
    */
   overscan?: number;
 
@@ -69,6 +72,13 @@ export type UseVirtualizedTimelineOptions = {
    * Default: 200px
    */
   bottomPadding?: number;
+
+  /**
+   * Set of round numbers currently streaming (participants or analysis)
+   * Rounds in this set will always be rendered to prevent data loss
+   * Default: empty set
+   */
+  streamingRounds?: Set<number>;
 };
 
 export type UseVirtualizedTimelineResult = {
@@ -208,36 +218,23 @@ export function useVirtualizedTimeline({
   timelineItems,
   scrollContainerId = 'chat-scroll-container',
   estimateSize = 400,
-  overscan = 1,
+  overscan = 5,
   enabled = true,
   onScrollOffsetChange,
   enableSmoothScroll = true,
   smoothScrollDuration = 1000,
   bottomPadding = 200,
+  streamingRounds = EMPTY_STREAMING_ROUNDS,
 }: UseVirtualizedTimelineOptions): UseVirtualizedTimelineResult {
-  // Track scroll container element for measuring scroll margin
-  const scrollContainerRef = useRef<HTMLElement | null>(null);
   // Track current scroll animation
   const scrollingRef = useRef<number>(0);
 
-  // Update ref when container ID changes
-  useEffect(() => {
-    scrollContainerRef.current = document.getElementById(scrollContainerId);
-  }, [scrollContainerId]);
-
   // Calculate scroll margin (offset from top of viewport to content start)
   // This accounts for headers/toolbars above the scrollable content
-  const [scrollMargin, setScrollMargin] = useState(0);
-
-  // Measure scroll margin when container changes
-  // Using useEffect with setState is acceptable here for DOM measurements
-
-  useEffect(() => {
+  // Uses useMemo to compute value only when container ID changes
+  const scrollMargin = useMemo(() => {
     const container = document.getElementById(scrollContainerId);
-    if (container) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setScrollMargin(container.offsetTop || 0);
-    }
+    return container?.offsetTop || 0;
   }, [scrollContainerId]);
 
   // Custom scroll function with smooth easing animation
@@ -274,12 +271,18 @@ export function useVirtualizedTimeline({
     [enableSmoothScroll, smoothScrollDuration],
   );
 
+  // ✅ STREAMING SAFETY: Disable virtualization when rounds are streaming
+  // This prevents data loss from DOM elements being removed during active streaming
+  // Once streaming completes, virtualization resumes for optimal performance
+  const hasStreamingRounds = streamingRounds.size > 0;
+  const virtualizationEnabled = enabled && !hasStreamingRounds;
+
   // Initialize window virtualizer
   const virtualizer = useWindowVirtualizer({
     count: timelineItems.length,
     estimateSize: () => estimateSize,
     overscan,
-    enabled,
+    enabled: virtualizationEnabled,
     // Use computed scroll margin value
     scrollMargin,
     // Custom scroll function for smooth easing

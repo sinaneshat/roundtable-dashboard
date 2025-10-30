@@ -24,6 +24,7 @@ import {
   updateParticipantService,
   updateThreadService,
 } from '@/services/api';
+import { validateThreadDetailCache, validateThreadsListPages } from '@/stores/chat/actions/types';
 
 // ============================================================================
 // Validation Schemas - Type-safe cache updates
@@ -505,7 +506,9 @@ export function useToggleFavoriteMutation() {
             return old;
           if (!('pages' in old))
             return old;
-          const pages = old.pages as Array<{ success: boolean; data?: { items?: Array<{ id: string; isFavorite?: boolean }> } }>;
+          const pages = validateThreadsListPages(old.pages);
+          if (!pages)
+            return old;
 
           return {
             ...old,
@@ -607,7 +610,9 @@ export function useTogglePublicMutation() {
             return old;
           if (!('pages' in old))
             return old;
-          const pages = old.pages as Array<{ success: boolean; data?: { items?: Array<{ id: string; isPublic?: boolean }> } }>;
+          const pages = validateThreadsListPages(old.pages);
+          if (!pages)
+            return old;
 
           return {
             ...old,
@@ -728,10 +733,10 @@ export function useAddParticipantMutation() {
             return old;
           if (!('data' in old) || !old.data || typeof old.data !== 'object')
             return old;
-          if (!('participants' in old.data) || !Array.isArray((old.data as { participants: unknown }).participants))
-            return old;
 
-          const data = old.data as { participants: Array<Record<string, unknown>> };
+          const data = validateThreadDetailCache(old.data);
+          if (!data)
+            return old;
 
           // Create optimistic participant with temporary ID
           const participantData = variables.json as {
@@ -849,10 +854,10 @@ export function useUpdateParticipantMutation() {
             return old;
           if (!('data' in old) || !old.data || typeof old.data !== 'object')
             return old;
-          if (!('participants' in old.data) || !Array.isArray((old.data as { participants: unknown }).participants))
-            return old;
 
-          const data = old.data as { participants: Array<Record<string, unknown>> };
+          const data = validateThreadDetailCache(old.data);
+          if (!data)
+            return old;
 
           return {
             ...old,
@@ -922,10 +927,10 @@ export function useDeleteParticipantMutation() {
             return old;
           if (!('data' in old) || !old.data || typeof old.data !== 'object')
             return old;
-          if (!('participants' in old.data) || !Array.isArray((old.data as { participants: unknown }).participants))
-            return old;
 
-          const data = old.data as { participants: Array<Record<string, unknown>> };
+          const data = validateThreadDetailCache(old.data);
+          if (!data)
+            return old;
 
           return {
             ...old,

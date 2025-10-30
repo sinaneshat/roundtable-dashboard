@@ -8,22 +8,26 @@
  * - Saving AI assistant messages after streaming completes
  * - Extracting reasoning from multiple sources (deltas, finishResult, providerMetadata)
  * - Creating pending analysis records for completed rounds
- * - RAG embedding storage for semantic search
  */
 
 import { and, asc, eq } from 'drizzle-orm';
 import { revalidateTag } from 'next/cache';
 import { ulid } from 'ulid';
+import type { z } from 'zod';
 
-import { ragService } from '@/api/services/rag.service';
 import {
   checkAnalysisQuota,
   incrementMessageUsage,
 } from '@/api/services/usage-tracking.service';
 import type { getDbAsync } from '@/db';
 import * as tables from '@/db/schema';
+import type { ChatMessage } from '@/db/validation';
 import { ErrorCategorySchema, FinishReasonSchema } from '@/lib/schemas/error-schemas';
+import type { MessagePartSchema } from '@/lib/schemas/message-schemas';
 import { extractTextFromParts } from '@/lib/schemas/message-schemas';
+
+// Type inference from schema
+type MessagePart = z.infer<typeof MessagePartSchema>;
 
 // ============================================================================
 // Type Definitions
@@ -318,7 +322,8 @@ export async function saveStreamedMessage(
     );
 
     // Build parts[] array (AI SDK v5 pattern)
-    const parts: Array<{ type: 'text'; text: string } | { type: 'reasoning'; text: string }> = [];
+    // Using text and reasoning part types from MessagePartSchema
+    const parts: Array<Extract<MessagePart, { type: 'text' } | { type: 'reasoning' }>> = [];
 
     if (text) {
       parts.push({ type: 'text', text });
@@ -334,7 +339,7 @@ export async function saveStreamedMessage(
     }
 
     // Save message to database
-    const [savedMessage] = await db.insert(tables.chatMessage)
+    await db.insert(tables.chatMessage)
       .values({
         id: messageId,
         threadId,
@@ -372,19 +377,8 @@ export async function saveStreamedMessage(
     // Cache invalidation
     revalidateTag(`thread:${threadId}:messages`);
 
-    // Store RAG embedding for semantic search (non-blocking, only for successful messages)
-    if (savedMessage && !errorMetadata.errorMessage && text.trim()) {
-      try {
-        await ragService.storeMessageEmbedding({
-          message: savedMessage,
-          threadId,
-          userId,
-          db,
-        });
-      } catch {
-        // Embedding storage failures should not break the chat flow
-      }
-    }
+    // RAG REMOVED: AutoRAG now handles knowledge indexing from project files
+    // Per-message embeddings are no longer needed - project-based knowledge only
 
     // Increment message usage quota (charged regardless of stream completion)
     await incrementMessageUsage(userId, 1);
@@ -475,8 +469,8 @@ async function createPendingAnalysis(
     // ✅ CRITICAL FIX: Retry logic to ensure all participant messages are visible
     // D1/SQLite has eventual consistency - we need to poll until all messages are found
     // This prevents creating analysis records with incomplete participant message IDs
-    let roundMessages: Array<typeof tables.chatMessage.$inferSelect> = [];
-    let assistantMessages: Array<typeof tables.chatMessage.$inferSelect> = [];
+    let roundMessages: ChatMessage[] = [];
+    let assistantMessages: ChatMessage[] = [];
     const maxRetries = 10;
     const retryDelayMs = 150;
 

@@ -32,6 +32,32 @@ import {
 } from './enums';
 
 // ============================================================================
+// VALIDATION ERROR SCHEMAS
+// ============================================================================
+
+/**
+ * Single validation error structure
+ * Used in error responses and validation logging
+ */
+export const ValidationErrorSchema = z.object({
+  field: z.string(),
+  message: z.string(),
+  code: z.string().optional(),
+}).openapi('ValidationError');
+
+export type ValidationError = z.infer<typeof ValidationErrorSchema>;
+
+/**
+ * Validation error details for error responses
+ * Wraps array of validation errors
+ */
+export const ValidationErrorDetailsSchema = z.object({
+  validationErrors: z.array(ValidationErrorSchema).optional(),
+});
+
+export type ValidationErrorDetails = z.infer<typeof ValidationErrorDetailsSchema>;
+
+// ============================================================================
 // CORE PRIMITIVE SCHEMAS (Context7 Pattern)
 // ============================================================================
 
@@ -126,11 +152,7 @@ export const LoggerDataSchema = z.discriminatedUnion('logType', [
     logType: z.literal('validation'),
     fieldCount: z.number().optional(),
     schemaName: z.string().optional(),
-    validationErrors: z.array(z.object({
-      field: z.string(),
-      message: z.string(),
-      code: z.string().optional(),
-    })).optional(),
+    validationErrors: z.array(ValidationErrorSchema).optional(),
   }),
   z.object({
     logType: z.literal('auth'),
@@ -717,7 +739,7 @@ export type ApiResponse<T> = {
     message: string;
     details?: unknown;
     context?: ErrorContext;
-    validation?: Array<{ field: string; message: string; code?: string }>;
+    validation?: ValidationError[];
   };
   meta?: {
     requestId?: string;

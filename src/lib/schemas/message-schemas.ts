@@ -625,8 +625,11 @@ export function findToolResult(
  * @see extractTextFromParts - Core text extraction function
  * @see extractTextFromMessage - For extracting text from complete UIMessage objects
  */
+// Type for text/reasoning parts only (subset of MessagePart)
+type TextOrReasoningPart = Extract<z.infer<typeof MessagePartSchema>, { type: 'text' } | { type: 'reasoning' }>;
+
 export function convertUIMessagesToText(
-  parts: Array<{ type: 'text'; text: string } | { type: 'reasoning'; text: string }>,
+  parts: TextOrReasoningPart[],
 ): string {
   return parts
     .filter((part): part is { type: 'text'; text: string } => part.type === 'text')

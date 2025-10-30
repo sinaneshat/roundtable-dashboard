@@ -13,6 +13,7 @@ import { z } from 'zod';
 
 import { AnalysisStatusSchema } from '@/api/core/enums';
 import type { StoredModeratorAnalysis } from '@/api/routes/chat/schema';
+import { chatParticipantSelectSchema } from '@/db/validation/chat';
 
 /**
  * Schema for analyses cache data structure
@@ -107,4 +108,76 @@ export function transformAnalysesCache(
       items: transformedItems,
     },
   };
+}
+
+/**
+ * Schema for thread detail cache data structure with participants
+ *
+ * **SINGLE SOURCE OF TRUTH**: Validates React Query cache for thread details.
+ * Replaces unsafe type assertions in chat-mutations.ts (lines 731, 788, 852, 925)
+ *
+ * Used when reading/writing thread detail cache in React Query.
+ */
+export const ThreadDetailCacheDataSchema = z.object({
+  participants: z.array(chatParticipantSelectSchema),
+});
+
+/**
+ * Type for thread detail cache data (inferred from schema)
+ */
+export type ThreadDetailCacheData = z.infer<typeof ThreadDetailCacheDataSchema>;
+
+/**
+ * Helper function to safely cast thread detail cache data with validation
+ *
+ * **USE THIS INSTEAD OF**: `old.data as { participants: Array<Record<string, unknown>> }`
+ *
+ * @param data - Raw cache data from React Query
+ * @returns Validated cache data or undefined if invalid
+ */
+export function validateThreadDetailCache(data: unknown): ThreadDetailCacheData | undefined {
+  const result = ThreadDetailCacheDataSchema.safeParse(data);
+  return result.success ? result.data : undefined;
+}
+
+/**
+ * Schema for threads list cache page structure
+ *
+ * **SINGLE SOURCE OF TRUTH**: Validates paginated threads list cache.
+ * Replaces inline types in chat-mutations.ts (lines 508, 610)
+ */
+export const ThreadsListCachePageSchema = z.object({
+  success: z.boolean(),
+  data: z.object({
+    items: z.array(
+      z.object({
+        id: z.string(),
+        isFavorite: z.boolean().optional(),
+        isPublic: z.boolean().optional(),
+      }).passthrough(), // Allow additional properties
+    ),
+  }).optional(),
+});
+
+/**
+ * Type for threads list cache page (inferred from schema)
+ */
+export type ThreadsListCachePage = z.infer<typeof ThreadsListCachePageSchema>;
+
+/**
+ * Helper to validate threads list cache pages
+ *
+ * **USE THIS INSTEAD OF**: `old.pages as Array<{ success: boolean; data?: { items?: ... } }>`
+ */
+export function validateThreadsListPages(data: unknown): ThreadsListCachePage[] | undefined {
+  if (!Array.isArray(data))
+    return undefined;
+
+  const validated = data.map(page => ThreadsListCachePageSchema.safeParse(page));
+
+  // Return undefined if any page fails validation
+  if (validated.some(result => !result.success))
+    return undefined;
+
+  return validated.map(result => result.data!);
 }

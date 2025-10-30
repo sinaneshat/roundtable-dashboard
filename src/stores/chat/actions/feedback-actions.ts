@@ -13,6 +13,7 @@
 import { useCallback, useMemo } from 'react';
 
 import type { FeedbackType } from '@/api/core/enums';
+import type { RoundFeedbackData } from '@/api/routes/chat/schema';
 import { useChatStore } from '@/components/providers/chat-store-provider';
 import { useSetRoundFeedbackMutation } from '@/hooks/mutations/chat-mutations';
 
@@ -24,7 +25,7 @@ export type UseFeedbackActionsReturn = {
   /** Get feedback handler for a specific round */
   getFeedbackHandler: (roundNumber: number) => (feedbackType: FeedbackType | null) => void;
   /** Load feedback from server (called once on mount) */
-  loadFeedback: (data: Array<{ roundNumber: number; feedbackType: FeedbackType | null }>) => void;
+  loadFeedback: (data: RoundFeedbackData[]) => void;
   /** Clear feedback for a round (used during regeneration) */
   clearRoundFeedback: (roundNumber: number) => void;
 };
@@ -92,7 +93,7 @@ export function useFeedbackActions(options: UseFeedbackActionsOptions): UseFeedb
    * Load feedback from server
    * Called once on mount with server data
    */
-  const loadFeedback = useCallback((data: Array<{ roundNumber: number; feedbackType: 'like' | 'dislike' | null }>) => {
+  const loadFeedback = useCallback((data: RoundFeedbackData[]) => {
     loadFeedbackFromServer(data);
   }, [loadFeedbackFromServer]);
 

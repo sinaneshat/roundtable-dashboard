@@ -21,6 +21,7 @@ import {
 import type { ApiEnv } from '@/api/types';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db/schema';
+import type { ChatCustomRole } from '@/db/validation';
 
 import type {
   createCustomRoleRoute,
@@ -57,7 +58,7 @@ export const listCustomRolesHandler: RouteHandler<typeof listCustomRolesRoute, A
     const { items, pagination } = applyCursorPagination(
       customRoles,
       query.limit,
-      (customRole: typeof tables.chatCustomRole.$inferSelect) => createTimestampCursor(customRole.updatedAt),
+      (customRole: ChatCustomRole) => createTimestampCursor(customRole.updatedAt),
     );
     return Responses.cursorPaginated(c, items, pagination);
   },

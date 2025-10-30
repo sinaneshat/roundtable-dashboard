@@ -12,6 +12,7 @@ import {
 } from '@/api/core/enums';
 
 import { user } from './auth';
+import { chatProject } from './project';
 
 /**
  * Chat Threads
@@ -22,6 +23,11 @@ export const chatThread = sqliteTable('chat_thread', {
   userId: text('user_id')
     .notNull()
     .references(() => user.id, { onDelete: 'cascade' }),
+
+  // Project association (optional - threads can exist without projects)
+  projectId: text('project_id')
+    .references(() => chatProject.id, { onDelete: 'set null' }),
+
   title: text('title').notNull(),
   slug: text('slug').notNull().unique(), // SEO-friendly URL slug (e.g., "product-strategy-abc123")
   mode: text('mode', { enum: CHAT_MODE_ENUM_VALUES })
@@ -56,6 +62,7 @@ export const chatThread = sqliteTable('chat_thread', {
   lastMessageAt: integer('last_message_at', { mode: 'timestamp' }),
 }, table => [
   index('chat_thread_user_idx').on(table.userId),
+  index('chat_thread_project_idx').on(table.projectId),
   index('chat_thread_status_idx').on(table.status),
   index('chat_thread_updated_idx').on(table.updatedAt),
   index('chat_thread_slug_idx').on(table.slug), // Fast lookups by slug for public sharing
@@ -420,6 +427,10 @@ export const chatThreadRelations = relations(chatThread, ({ one, many }) => ({
   user: one(user, {
     fields: [chatThread.userId],
     references: [user.id],
+  }),
+  project: one(chatProject, {
+    fields: [chatThread.projectId],
+    references: [chatProject.id],
   }),
   participants: many(chatParticipant),
   messages: many(chatMessage),

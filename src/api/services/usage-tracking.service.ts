@@ -26,6 +26,7 @@ import type { ErrorContext } from '@/api/core';
 import { getDbAsync } from '@/db';
 import { CustomerCacheTags, PriceCacheTags, SubscriptionCacheTags, UserCacheTags } from '@/db/cache/cache-tags';
 import * as tables from '@/db/schema';
+import type { UserChatUsage } from '@/db/validation';
 
 import type { QuotaCheck, UsageStats, UsageStatus } from '../routes/usage/schema';
 import type { SubscriptionTier } from './product-logic.service';
@@ -69,7 +70,7 @@ export async function getUserTier(userId: string): Promise<SubscriptionTier> {
  * Get or create user usage record
  * Ensures a user has a usage tracking record for the current billing period
  */
-export async function ensureUserUsageRecord(userId: string): Promise<typeof tables.userChatUsage.$inferSelect> {
+export async function ensureUserUsageRecord(userId: string): Promise<UserChatUsage> {
   const db = await getDbAsync();
 
   // Check if user has existing usage record
@@ -209,7 +210,7 @@ export async function ensureUserUsageRecord(userId: string): Promise<typeof tabl
  */
 async function rolloverBillingPeriod(
   userId: string,
-  currentUsage: typeof tables.userChatUsage.$inferSelect,
+  currentUsage: UserChatUsage,
 ): Promise<void> {
   const db = await getDbAsync();
   const now = new Date();

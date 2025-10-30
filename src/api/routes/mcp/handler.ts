@@ -37,6 +37,7 @@ import { getUserTier } from '@/api/services/usage-tracking.service';
 import type { ApiEnv } from '@/api/types';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db/schema';
+import type { ChatMessage } from '@/db/validation';
 import { extractTextFromParts } from '@/lib/schemas/message-schemas';
 import { filterNonEmptyMessages } from '@/lib/utils/message-transforms';
 
@@ -71,6 +72,7 @@ import type {
   MCPResource,
   MCPServerInfo,
   MCPTool,
+  ParticipantResponse,
   RegenerateRoundInput,
   RemoveParticipantInput,
   RoundFeedbackInput,
@@ -779,7 +781,7 @@ export const getThreadToolHandler: RouteHandler<typeof getThreadToolRoute, ApiEn
     }
 
     // Fetch messages if requested
-    let messages: typeof tables.chatMessage.$inferSelect[] = [];
+    let messages: ChatMessage[] = [];
     if (input.includeMessages) {
       messages = await db.query.chatMessage.findMany({
         where: eq(tables.chatMessage.threadId, input.threadId),
@@ -1060,7 +1062,7 @@ export const generateResponsesToolHandler: RouteHandler<typeof generateResponses
     const userTier = await getUserTier(user.id);
 
     // Generate responses sequentially for each participant
-    const responses: Array<{ participantId: string; messageId: string; content: string }> = [];
+    const responses: ParticipantResponse[] = [];
 
     for (let i = 0; i < participants.length; i++) {
       const participant = participants[i];
@@ -1392,7 +1394,7 @@ export const regenerateRoundToolHandler: RouteHandler<typeof regenerateRoundTool
     });
 
     // If waitForCompletion, regenerate responses
-    const responses: Array<{ participantId: string; messageId: string; content: string }> = [];
+    const responses: ParticipantResponse[] = [];
 
     if (input.waitForCompletion) {
       // Load participants

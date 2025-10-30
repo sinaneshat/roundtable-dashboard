@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "df6f85b4-f92e-4915-a7c9-42e7c2318bbc",
+  "id": "0098f7e6-7bc0-4f9a-bfb9-f042a3a12210",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "account": {
@@ -2105,6 +2105,13 @@
           "notNull": true,
           "autoincrement": false
         },
+        "project_id": {
+          "name": "project_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "title": {
           "name": "title",
           "type": "text",
@@ -2213,6 +2220,13 @@
           ],
           "isUnique": false
         },
+        "chat_thread_project_idx": {
+          "name": "chat_thread_project_idx",
+          "columns": [
+            "project_id"
+          ],
+          "isUnique": false
+        },
         "chat_thread_status_idx": {
           "name": "chat_thread_status_idx",
           "columns": [
@@ -2261,6 +2275,19 @@
             "id"
           ],
           "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "chat_thread_project_id_chat_project_id_fk": {
+          "name": "chat_thread_project_id_chat_project_id_fk",
+          "tableFrom": "chat_thread",
+          "tableTo": "chat_project",
+          "columnsFrom": [
+            "project_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
           "onUpdate": "no action"
         }
       },
@@ -2373,20 +2400,13 @@
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
-    "rag_context_stats": {
-      "name": "rag_context_stats",
+    "chat_project": {
+      "name": "chat_project",
       "columns": {
         "id": {
           "name": "id",
           "type": "text",
           "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "thread_id": {
-          "name": "thread_id",
-          "type": "text",
-          "primaryKey": false,
           "notNull": true,
           "autoincrement": false
         },
@@ -2397,37 +2417,51 @@
           "notNull": true,
           "autoincrement": false
         },
-        "query": {
-          "name": "query",
+        "name": {
+          "name": "name",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
         },
-        "results_count": {
-          "name": "results_count",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "top_similarity": {
-          "name": "top_similarity",
-          "type": "real",
+        "description": {
+          "name": "description",
+          "type": "text",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
         },
-        "retrieved_embedding_ids": {
-          "name": "retrieved_embedding_ids",
+        "custom_instructions": {
+          "name": "custom_instructions",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "autorag_instance_id": {
+          "name": "autorag_instance_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "r2_folder_prefix": {
+          "name": "r2_folder_prefix",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
         },
-        "query_time_ms": {
-          "name": "query_time_ms",
-          "type": "integer",
+        "settings": {
+          "name": "settings",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "metadata": {
+          "name": "metadata",
+          "type": "text",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
@@ -2439,48 +2473,43 @@
           "notNull": true,
           "autoincrement": false,
           "default": "(cast((julianday('now') - 2440587.5)*86400000 as integer))"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(cast((julianday('now') - 2440587.5)*86400000 as integer))"
         }
       },
       "indexes": {
-        "rag_context_stats_thread_idx": {
-          "name": "rag_context_stats_thread_idx",
-          "columns": [
-            "thread_id"
-          ],
-          "isUnique": false
-        },
-        "rag_context_stats_user_idx": {
-          "name": "rag_context_stats_user_idx",
+        "chat_project_user_idx": {
+          "name": "chat_project_user_idx",
           "columns": [
             "user_id"
           ],
           "isUnique": false
         },
-        "rag_context_stats_created_idx": {
-          "name": "rag_context_stats_created_idx",
+        "chat_project_created_idx": {
+          "name": "chat_project_created_idx",
           "columns": [
             "created_at"
+          ],
+          "isUnique": false
+        },
+        "chat_project_name_idx": {
+          "name": "chat_project_name_idx",
+          "columns": [
+            "name"
           ],
           "isUnique": false
         }
       },
       "foreignKeys": {
-        "rag_context_stats_thread_id_chat_thread_id_fk": {
-          "name": "rag_context_stats_thread_id_chat_thread_id_fk",
-          "tableFrom": "rag_context_stats",
-          "tableTo": "chat_thread",
-          "columnsFrom": [
-            "thread_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "rag_context_stats_user_id_user_id_fk": {
-          "name": "rag_context_stats_user_id_user_id_fk",
-          "tableFrom": "rag_context_stats",
+        "chat_project_user_id_user_id_fk": {
+          "name": "chat_project_user_id_user_id_fk",
+          "tableFrom": "chat_project",
           "tableTo": "user",
           "columnsFrom": [
             "user_id"
@@ -2496,8 +2525,8 @@
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
-    "rag_embedding": {
-      "name": "rag_embedding",
+    "project_knowledge_file": {
+      "name": "project_knowledge_file",
       "columns": {
         "id": {
           "name": "id",
@@ -2506,40 +2535,55 @@
           "notNull": true,
           "autoincrement": false
         },
-        "message_id": {
-          "name": "message_id",
+        "project_id": {
+          "name": "project_id",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
         },
-        "thread_id": {
-          "name": "thread_id",
+        "filename": {
+          "name": "filename",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
         },
-        "user_id": {
-          "name": "user_id",
+        "r2_key": {
+          "name": "r2_key",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
         },
-        "content": {
-          "name": "content",
+        "uploaded_by": {
+          "name": "uploaded_by",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
         },
-        "vector_id": {
-          "name": "vector_id",
+        "file_size": {
+          "name": "file_size",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "file_type": {
+          "name": "file_type",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'uploaded'"
         },
         "metadata": {
           "name": "metadata",
@@ -2547,22 +2591,6 @@
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
-        },
-        "embedding_model": {
-          "name": "embedding_model",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'@cf/baai/bge-base-en-v1.5'"
-        },
-        "dimensions": {
-          "name": "dimensions",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": 768
         },
         "created_at": {
           "name": "created_at",
@@ -2574,64 +2602,56 @@
         }
       },
       "indexes": {
-        "rag_embedding_vector_id_unique": {
-          "name": "rag_embedding_vector_id_unique",
+        "project_knowledge_file_r2_key_unique": {
+          "name": "project_knowledge_file_r2_key_unique",
           "columns": [
-            "vector_id"
+            "r2_key"
           ],
           "isUnique": true
         },
-        "rag_embedding_message_idx": {
-          "name": "rag_embedding_message_idx",
+        "project_knowledge_file_project_idx": {
+          "name": "project_knowledge_file_project_idx",
           "columns": [
-            "message_id"
+            "project_id"
           ],
           "isUnique": false
         },
-        "rag_embedding_thread_idx": {
-          "name": "rag_embedding_thread_idx",
+        "project_knowledge_file_status_idx": {
+          "name": "project_knowledge_file_status_idx",
           "columns": [
-            "thread_id"
+            "status"
           ],
           "isUnique": false
         },
-        "rag_embedding_user_idx": {
-          "name": "rag_embedding_user_idx",
+        "project_knowledge_file_uploaded_by_idx": {
+          "name": "project_knowledge_file_uploaded_by_idx",
           "columns": [
-            "user_id"
+            "uploaded_by"
           ],
           "isUnique": false
         },
-        "rag_embedding_vector_idx": {
-          "name": "rag_embedding_vector_idx",
-          "columns": [
-            "vector_id"
-          ],
-          "isUnique": false
-        },
-        "rag_embedding_created_idx": {
-          "name": "rag_embedding_created_idx",
+        "project_knowledge_file_created_idx": {
+          "name": "project_knowledge_file_created_idx",
           "columns": [
             "created_at"
           ],
           "isUnique": false
         },
-        "rag_embedding_thread_created_idx": {
-          "name": "rag_embedding_thread_created_idx",
+        "project_knowledge_file_r2_key_idx": {
+          "name": "project_knowledge_file_r2_key_idx",
           "columns": [
-            "thread_id",
-            "created_at"
+            "r2_key"
           ],
           "isUnique": false
         }
       },
       "foreignKeys": {
-        "rag_embedding_message_id_chat_message_id_fk": {
-          "name": "rag_embedding_message_id_chat_message_id_fk",
-          "tableFrom": "rag_embedding",
-          "tableTo": "chat_message",
+        "project_knowledge_file_project_id_chat_project_id_fk": {
+          "name": "project_knowledge_file_project_id_chat_project_id_fk",
+          "tableFrom": "project_knowledge_file",
+          "tableTo": "chat_project",
           "columnsFrom": [
-            "message_id"
+            "project_id"
           ],
           "columnsTo": [
             "id"
@@ -2639,25 +2659,12 @@
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "rag_embedding_thread_id_chat_thread_id_fk": {
-          "name": "rag_embedding_thread_id_chat_thread_id_fk",
-          "tableFrom": "rag_embedding",
-          "tableTo": "chat_thread",
-          "columnsFrom": [
-            "thread_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "rag_embedding_user_id_user_id_fk": {
-          "name": "rag_embedding_user_id_user_id_fk",
-          "tableFrom": "rag_embedding",
+        "project_knowledge_file_uploaded_by_user_id_fk": {
+          "name": "project_knowledge_file_uploaded_by_user_id_fk",
+          "tableFrom": "project_knowledge_file",
           "tableTo": "user",
           "columnsFrom": [
-            "user_id"
+            "uploaded_by"
           ],
           "columnsTo": [
             "id"

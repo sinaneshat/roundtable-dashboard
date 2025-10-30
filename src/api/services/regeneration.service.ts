@@ -17,7 +17,6 @@ import { executeBatch } from '@/api/common/batch-operations';
 import type { getDbAsync } from '@/db';
 import * as tables from '@/db/schema';
 
-import { ragService } from './rag.service';
 import { validateRegenerateRound } from './round.service';
 
 // ============================================================================
@@ -74,7 +73,7 @@ export async function handleRoundRegeneration(
   await validateRegenerateRound(threadId, regenerateRound, db);
 
   let deletedMessagesCount = 0;
-  let cleanedEmbeddingsCount = 0;
+  const cleanedEmbeddingsCount = 0;
 
   try {
     // =========================================================================
@@ -95,25 +94,7 @@ export async function handleRoundRegeneration(
     deletedMessagesCount = deletedMessages.length;
 
     // =========================================================================
-    // STEP 3: Clean up RAG embeddings for deleted messages
-    // =========================================================================
-    // Non-blocking: RAG cleanup failures should not prevent regeneration
-    if (deletedMessages.length > 0) {
-      for (const deletedMessage of deletedMessages) {
-        try {
-          await ragService.deleteMessageEmbeddings({
-            messageId: deletedMessage.id,
-            db,
-          });
-          cleanedEmbeddingsCount++;
-        } catch {
-          // Non-blocking error - continue with other deletions
-        }
-      }
-    }
-
-    // =========================================================================
-    // STEP 4: Delete analysis, feedback, and changelog entries
+    // STEP 3: Delete analysis, feedback, and changelog entries
     // =========================================================================
     // Use batch operations for atomicity
     await executeBatch(db, [

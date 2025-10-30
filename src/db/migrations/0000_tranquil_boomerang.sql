@@ -299,6 +299,7 @@ CREATE INDEX `chat_round_feedback_round_idx` ON `chat_round_feedback` (`thread_i
 CREATE TABLE `chat_thread` (
 	`id` text PRIMARY KEY NOT NULL,
 	`user_id` text NOT NULL,
+	`project_id` text,
 	`title` text NOT NULL,
 	`slug` text NOT NULL,
 	`mode` text DEFAULT 'debating' NOT NULL,
@@ -311,11 +312,13 @@ CREATE TABLE `chat_thread` (
 	`created_at` integer DEFAULT (cast((julianday('now') - 2440587.5)*86400000 as integer)) NOT NULL,
 	`updated_at` integer DEFAULT (cast((julianday('now') - 2440587.5)*86400000 as integer)) NOT NULL,
 	`last_message_at` integer,
-	FOREIGN KEY (`user_id`) REFERENCES `user`(`id`) ON UPDATE no action ON DELETE cascade
+	FOREIGN KEY (`user_id`) REFERENCES `user`(`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`project_id`) REFERENCES `chat_project`(`id`) ON UPDATE no action ON DELETE set null
 );
 --> statement-breakpoint
 CREATE UNIQUE INDEX `chat_thread_slug_unique` ON `chat_thread` (`slug`);--> statement-breakpoint
 CREATE INDEX `chat_thread_user_idx` ON `chat_thread` (`user_id`);--> statement-breakpoint
+CREATE INDEX `chat_thread_project_idx` ON `chat_thread` (`project_id`);--> statement-breakpoint
 CREATE INDEX `chat_thread_status_idx` ON `chat_thread` (`status`);--> statement-breakpoint
 CREATE INDEX `chat_thread_updated_idx` ON `chat_thread` (`updated_at`);--> statement-breakpoint
 CREATE INDEX `chat_thread_slug_idx` ON `chat_thread` (`slug`);--> statement-breakpoint
@@ -336,46 +339,45 @@ CREATE INDEX `chat_thread_changelog_thread_idx` ON `chat_thread_changelog` (`thr
 CREATE INDEX `chat_thread_changelog_type_idx` ON `chat_thread_changelog` (`change_type`);--> statement-breakpoint
 CREATE INDEX `chat_thread_changelog_created_idx` ON `chat_thread_changelog` (`created_at`);--> statement-breakpoint
 CREATE INDEX `chat_thread_changelog_thread_round_idx` ON `chat_thread_changelog` (`thread_id`,`round_number`);--> statement-breakpoint
-CREATE TABLE `rag_context_stats` (
+CREATE TABLE `chat_project` (
 	`id` text PRIMARY KEY NOT NULL,
-	`thread_id` text NOT NULL,
 	`user_id` text NOT NULL,
-	`query` text NOT NULL,
-	`results_count` integer NOT NULL,
-	`top_similarity` real,
-	`retrieved_embedding_ids` text NOT NULL,
-	`query_time_ms` integer,
-	`created_at` integer DEFAULT (cast((julianday('now') - 2440587.5)*86400000 as integer)) NOT NULL,
-	FOREIGN KEY (`thread_id`) REFERENCES `chat_thread`(`id`) ON UPDATE no action ON DELETE cascade,
-	FOREIGN KEY (`user_id`) REFERENCES `user`(`id`) ON UPDATE no action ON DELETE cascade
-);
---> statement-breakpoint
-CREATE INDEX `rag_context_stats_thread_idx` ON `rag_context_stats` (`thread_id`);--> statement-breakpoint
-CREATE INDEX `rag_context_stats_user_idx` ON `rag_context_stats` (`user_id`);--> statement-breakpoint
-CREATE INDEX `rag_context_stats_created_idx` ON `rag_context_stats` (`created_at`);--> statement-breakpoint
-CREATE TABLE `rag_embedding` (
-	`id` text PRIMARY KEY NOT NULL,
-	`message_id` text NOT NULL,
-	`thread_id` text NOT NULL,
-	`user_id` text NOT NULL,
-	`content` text NOT NULL,
-	`vector_id` text NOT NULL,
+	`name` text NOT NULL,
+	`description` text,
+	`custom_instructions` text,
+	`autorag_instance_id` text,
+	`r2_folder_prefix` text NOT NULL,
+	`settings` text,
 	`metadata` text,
-	`embedding_model` text DEFAULT '@cf/baai/bge-base-en-v1.5' NOT NULL,
-	`dimensions` integer DEFAULT 768 NOT NULL,
 	`created_at` integer DEFAULT (cast((julianday('now') - 2440587.5)*86400000 as integer)) NOT NULL,
-	FOREIGN KEY (`message_id`) REFERENCES `chat_message`(`id`) ON UPDATE no action ON DELETE cascade,
-	FOREIGN KEY (`thread_id`) REFERENCES `chat_thread`(`id`) ON UPDATE no action ON DELETE cascade,
+	`updated_at` integer DEFAULT (cast((julianday('now') - 2440587.5)*86400000 as integer)) NOT NULL,
 	FOREIGN KEY (`user_id`) REFERENCES `user`(`id`) ON UPDATE no action ON DELETE cascade
 );
 --> statement-breakpoint
-CREATE UNIQUE INDEX `rag_embedding_vector_id_unique` ON `rag_embedding` (`vector_id`);--> statement-breakpoint
-CREATE INDEX `rag_embedding_message_idx` ON `rag_embedding` (`message_id`);--> statement-breakpoint
-CREATE INDEX `rag_embedding_thread_idx` ON `rag_embedding` (`thread_id`);--> statement-breakpoint
-CREATE INDEX `rag_embedding_user_idx` ON `rag_embedding` (`user_id`);--> statement-breakpoint
-CREATE INDEX `rag_embedding_vector_idx` ON `rag_embedding` (`vector_id`);--> statement-breakpoint
-CREATE INDEX `rag_embedding_created_idx` ON `rag_embedding` (`created_at`);--> statement-breakpoint
-CREATE INDEX `rag_embedding_thread_created_idx` ON `rag_embedding` (`thread_id`,`created_at`);--> statement-breakpoint
+CREATE INDEX `chat_project_user_idx` ON `chat_project` (`user_id`);--> statement-breakpoint
+CREATE INDEX `chat_project_created_idx` ON `chat_project` (`created_at`);--> statement-breakpoint
+CREATE INDEX `chat_project_name_idx` ON `chat_project` (`name`);--> statement-breakpoint
+CREATE TABLE `project_knowledge_file` (
+	`id` text PRIMARY KEY NOT NULL,
+	`project_id` text NOT NULL,
+	`filename` text NOT NULL,
+	`r2_key` text NOT NULL,
+	`uploaded_by` text NOT NULL,
+	`file_size` integer NOT NULL,
+	`file_type` text NOT NULL,
+	`status` text DEFAULT 'uploaded' NOT NULL,
+	`metadata` text,
+	`created_at` integer DEFAULT (cast((julianday('now') - 2440587.5)*86400000 as integer)) NOT NULL,
+	FOREIGN KEY (`project_id`) REFERENCES `chat_project`(`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`uploaded_by`) REFERENCES `user`(`id`) ON UPDATE no action ON DELETE cascade
+);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `project_knowledge_file_r2_key_unique` ON `project_knowledge_file` (`r2_key`);--> statement-breakpoint
+CREATE INDEX `project_knowledge_file_project_idx` ON `project_knowledge_file` (`project_id`);--> statement-breakpoint
+CREATE INDEX `project_knowledge_file_status_idx` ON `project_knowledge_file` (`status`);--> statement-breakpoint
+CREATE INDEX `project_knowledge_file_uploaded_by_idx` ON `project_knowledge_file` (`uploaded_by`);--> statement-breakpoint
+CREATE INDEX `project_knowledge_file_created_idx` ON `project_knowledge_file` (`created_at`);--> statement-breakpoint
+CREATE INDEX `project_knowledge_file_r2_key_idx` ON `project_knowledge_file` (`r2_key`);--> statement-breakpoint
 CREATE TABLE `user_chat_usage` (
 	`id` text PRIMARY KEY NOT NULL,
 	`user_id` text NOT NULL,

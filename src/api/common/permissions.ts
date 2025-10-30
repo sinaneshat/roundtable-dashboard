@@ -26,6 +26,7 @@ import { ErrorContextBuilders } from '@/api/common/error-contexts';
 import { createError } from '@/api/common/error-handling';
 import type { getDbAsync } from '@/db';
 import * as tables from '@/db/schema';
+import type { ChatCustomRole, ChatParticipant, ChatProject, ChatThread } from '@/db/validation';
 
 // ============================================================================
 // THREAD OWNERSHIP VERIFICATION
@@ -60,14 +61,14 @@ export async function verifyThreadOwnership(
   threadId: string,
   userId: string,
   db: Awaited<ReturnType<typeof getDbAsync>>,
-): Promise<typeof tables.chatThread.$inferSelect>;
+): Promise<ChatThread>;
 export async function verifyThreadOwnership(
   threadId: string,
   userId: string,
   db: Awaited<ReturnType<typeof getDbAsync>>,
   options: { includeParticipants: true },
-): Promise<typeof tables.chatThread.$inferSelect & {
-  participants: Array<typeof tables.chatParticipant.$inferSelect>;
+): Promise<ChatThread & {
+  participants: Array<ChatParticipant>;
 }>;
 export async function verifyThreadOwnership(
   threadId: string,
@@ -100,7 +101,7 @@ export async function verifyThreadOwnership(
 
   if (options?.includeParticipants) {
     const threadWithParticipants = thread as typeof thread & {
-      participants: Array<typeof tables.chatParticipant.$inferSelect>;
+      participants: Array<ChatParticipant>;
     };
     if (threadWithParticipants.participants.length === 0) {
       throw createError.badRequest(
@@ -135,8 +136,8 @@ export async function verifyParticipantOwnership(
   participantId: string,
   userId: string,
   db: Awaited<ReturnType<typeof getDbAsync>>,
-): Promise<typeof tables.chatParticipant.$inferSelect & {
-  thread: typeof tables.chatThread.$inferSelect;
+): Promise<ChatParticipant & {
+  thread: ChatThread;
 }> {
   const participant = await db.query.chatParticipant.findFirst({
     where: eq(tables.chatParticipant.id, participantId),
@@ -181,7 +182,7 @@ export async function verifyCustomRoleOwnership(
   customRoleId: string,
   userId: string,
   db: Awaited<ReturnType<typeof getDbAsync>>,
-): Promise<typeof tables.chatCustomRole.$inferSelect> {
+): Promise<ChatCustomRole> {
   const customRole = await db.query.chatCustomRole.findFirst({
     where: (fields, { and, eq: eqOp }) => and(
       eqOp(fields.id, customRoleId),
@@ -197,4 +198,45 @@ export async function verifyCustomRoleOwnership(
   }
 
   return customRole;
+}
+
+// ============================================================================
+// PROJECT OWNERSHIP VERIFICATION
+// ============================================================================
+
+/**
+ * Verify project ownership
+ *
+ * @throws NotFoundError if project doesn't exist
+ * @throws UnauthorizedError if user doesn't own the project
+ *
+ * @example
+ * ```ts
+ * const project = await verifyProjectOwnership(projectId, userId, db);
+ * ```
+ */
+export async function verifyProjectOwnership(
+  projectId: string,
+  userId: string,
+  db?: Awaited<ReturnType<typeof getDbAsync>>,
+): Promise<ChatProject> {
+  // Import getDbAsync here to avoid circular dependency
+  const { getDbAsync: getDb } = await import('@/db');
+  const database = db || await getDb();
+
+  const project = await database.query.chatProject.findFirst({
+    where: (fields, { and, eq: eqOp }) => and(
+      eqOp(fields.id, projectId),
+      eqOp(fields.userId, userId),
+    ),
+  });
+
+  if (!project) {
+    throw createError.notFound(
+      'Project not found',
+      ErrorContextBuilders.resourceNotFound('project', projectId),
+    );
+  }
+
+  return project;
 }

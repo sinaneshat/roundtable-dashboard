@@ -68,6 +68,22 @@ export const UserMessageMetadataSchema = z.object({
 export type UserMessageMetadata = z.infer<typeof UserMessageMetadataSchema>;
 
 // ============================================================================
+// Usage Tracking Schema (Reusable)
+// ============================================================================
+
+/**
+ * Token usage schema - reusable across message metadata and API responses
+ * Single source of truth for usage tracking structure
+ */
+export const UsageSchema = z.object({
+  promptTokens: z.number().int().nonnegative(),
+  completionTokens: z.number().int().nonnegative(),
+  totalTokens: z.number().int().nonnegative(),
+});
+
+export type Usage = z.infer<typeof UsageSchema>;
+
+// ============================================================================
 // Assistant Message Metadata Schema (Strict Requirements)
 // ============================================================================
 
@@ -89,11 +105,7 @@ const AssistantMessageMetadataCoreSchema = z.object({
   finishReason: FinishReasonSchema, // Zod enum - single source of truth
 
   // Usage tracking - REQUIRED for cost/performance monitoring
-  usage: z.object({
-    promptTokens: z.number().int().nonnegative(),
-    completionTokens: z.number().int().nonnegative(),
-    totalTokens: z.number().int().nonnegative(),
-  }),
+  usage: UsageSchema,
 
   // Error state - REQUIRED booleans (no optional)
   hasError: z.boolean(),
@@ -272,11 +284,7 @@ export const PartialAssistantMetadataSchema = z.object({
   participantRole: z.string().nullable().optional(),
   model: z.string().min(1).optional(),
   finishReason: FinishReasonSchema.optional(), // Zod enum - reused
-  usage: z.object({
-    promptTokens: z.number().int().nonnegative(),
-    completionTokens: z.number().int().nonnegative(),
-    totalTokens: z.number().int().nonnegative(),
-  }).optional(),
+  usage: UsageSchema.optional(),
   hasError: z.boolean().optional(),
   isTransient: z.boolean().optional(),
   isPartialResponse: z.boolean().optional(),

@@ -81,7 +81,7 @@ import { devtools } from 'zustand/middleware';
 import { createStore } from 'zustand/vanilla';
 
 import type { ChatMode, FeedbackType } from '@/api/core/enums';
-import type { ChatParticipant, ChatThread, ModeratorAnalysisPayload, RecommendedAction, StoredModeratorAnalysis } from '@/api/routes/chat/schema';
+import type { ChatParticipant, ChatThread, ModeratorAnalysisPayload, RecommendedAction, RoundFeedbackData, StoredModeratorAnalysis } from '@/api/routes/chat/schema';
 import type { ParticipantConfig } from '@/components/chat/chat-form-schemas';
 import type { ChatModeId } from '@/lib/config/chat-modes';
 import { getParticipantMessagesWithIds } from '@/lib/utils/message-filtering';
@@ -116,7 +116,7 @@ type FeedbackSlice = {
   setFeedback: (roundNumber: number, type: FeedbackType | null) => void;
   setPendingFeedback: (feedback: { roundNumber: number; type: FeedbackType } | null) => void;
   clearFeedback: (roundNumber: number) => void;
-  loadFeedbackFromServer: (data: Array<{ roundNumber: number; feedbackType: FeedbackType | null }>) => void;
+  loadFeedbackFromServer: (data: RoundFeedbackData[]) => void;
   resetFeedback: () => void;
 };
 

@@ -26,7 +26,6 @@ import onError from 'stoker/middlewares/on-error';
 import { createOpenApiApp } from './core/app';
 import { attachSession, csrfProtection, protectMutations, requireSession } from './middleware';
 import { ensureOpenRouterInitialized } from './middleware/openrouter';
-import { ensureRAGInitialized } from './middleware/rag';
 import { RateLimiterFactory } from './middleware/rate-limiter-factory';
 import { ensureStripeInitialized } from './middleware/stripe';
 // API Keys routes
@@ -161,6 +160,27 @@ import {
 // Models routes (dynamic OpenRouter models)
 import { listModelsHandler } from './routes/models/handler';
 import { listModelsRoute } from './routes/models/route';
+// Project routes
+import {
+  createProjectHandler,
+  deleteKnowledgeFileHandler,
+  deleteProjectHandler,
+  getProjectHandler,
+  listKnowledgeFilesHandler,
+  listProjectsHandler,
+  updateProjectHandler,
+  uploadKnowledgeFileHandler,
+} from './routes/project/handler';
+import {
+  createProjectRoute,
+  deleteKnowledgeFileRoute,
+  deleteProjectRoute,
+  getProjectRoute,
+  listKnowledgeFilesRoute,
+  listProjectsRoute,
+  updateProjectRoute,
+  uploadKnowledgeFileRoute,
+} from './routes/project/route';
 // ============================================================================
 // Route and Handler Imports (organized to match registration order below)
 // ============================================================================
@@ -314,9 +334,6 @@ app.use('/chat/*', ensureOpenRouterInitialized);
 // OpenRouter initialization for MCP routes (uses models and chat functionality)
 app.use('/mcp/*', ensureOpenRouterInitialized);
 
-// RAG initialization for all chat routes
-app.use('/chat/*', ensureRAGInitialized);
-
 // Global rate limiting
 app.use('*', RateLimiterFactory.create('api'));
 
@@ -378,6 +395,12 @@ app.use('/chat/custom-roles/:id', csrfProtection, requireSession);
 // Moderator analysis routes (protected)
 app.use('/chat/threads/:threadId/rounds/:roundNumber/analyze', csrfProtection, requireSession);
 app.use('/chat/threads/:id/analyses', requireSession); // GET analyses for thread
+
+// Project routes (protected)
+app.use('/projects', csrfProtection, requireSession);
+app.use('/projects/:id', protectMutations);
+app.use('/projects/:id/knowledge', csrfProtection, requireSession);
+app.use('/projects/:id/knowledge/:fileId', csrfProtection, requireSession);
 
 // Register all routes directly on the app
 const appRoutes = app
@@ -457,6 +480,20 @@ const appRoutes = app
   .openapi(getThreadFeedbackRoute, getThreadFeedbackHandler) // Get all round feedback for a thread
 
   // ============================================================================
+  // Project Routes - Project-based knowledge base management (protected)
+  // ============================================================================
+  // Project CRUD
+  .openapi(listProjectsRoute, listProjectsHandler) // List user projects with search
+  .openapi(createProjectRoute, createProjectHandler) // Create new project
+  .openapi(getProjectRoute, getProjectHandler) // Get project details
+  .openapi(updateProjectRoute, updateProjectHandler) // Update project name/description/settings
+  .openapi(deleteProjectRoute, deleteProjectHandler) // Delete project (CASCADE)
+  // Knowledge Base
+  .openapi(listKnowledgeFilesRoute, listKnowledgeFilesHandler) // List project knowledge files
+  .openapi(uploadKnowledgeFileRoute, uploadKnowledgeFileHandler) // Upload file to project
+  .openapi(deleteKnowledgeFileRoute, deleteKnowledgeFileHandler) // Delete knowledge file
+
+  // ============================================================================
   // Usage Routes - Usage tracking and quota management (protected)
   // ============================================================================
   .openapi(getUserUsageStatsRoute, getUserUsageStatsHandler) // Get user usage statistics
@@ -523,6 +560,8 @@ appRoutes.doc('/doc', c => ({
     { name: 'api-keys', description: 'API key management and authentication' },
     { name: 'billing', description: 'Stripe billing, subscriptions, and payments' },
     { name: 'chat', description: 'Multi-model AI chat threads and messages' },
+    { name: 'projects', description: 'Project-based knowledge base management with AutoRAG' },
+    { name: 'knowledge-base', description: 'Knowledge file upload and management' },
     { name: 'usage', description: 'Usage tracking and quota management' },
     { name: 'models', description: 'Dynamic OpenRouter AI models discovery and management' },
     { name: 'mcp', description: 'Model Context Protocol server implementation' },

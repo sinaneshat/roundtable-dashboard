@@ -16,7 +16,7 @@ import type { ChatMessage } from '@/api/routes/chat/schema';
 import type { ErrorMetadata, UIMessageErrorType } from '@/lib/schemas/error-schemas';
 import { ErrorMetadataSchema, UIMessageErrorTypeSchema } from '@/lib/schemas/error-schemas';
 import type { ErrorType, FinishReason, MessageMetadata } from '@/lib/schemas/message-metadata';
-import { ErrorTypeSchema, FinishReasonSchema, MessageMetadataSchema } from '@/lib/schemas/message-metadata';
+import { ErrorTypeSchema, FinishReasonSchema, MessageMetadataSchema, UsageSchema } from '@/lib/schemas/message-metadata';
 
 import { extractMetadataParticipantId, extractMetadataRoundNumber } from './metadata-extraction';
 
@@ -404,11 +404,11 @@ export function mergeParticipantMetadata(
   }
 
   // Extract usage or provide defaults
-  const usageData = metadata?.usage as { promptTokens?: number; completionTokens?: number; totalTokens?: number } | undefined;
+  const usageResult = UsageSchema.partial().safeParse(metadata?.usage);
   const usage = {
-    promptTokens: usageData?.promptTokens ?? 0,
-    completionTokens: usageData?.completionTokens ?? 0,
-    totalTokens: usageData?.totalTokens ?? 0,
+    promptTokens: usageResult.success ? (usageResult.data.promptTokens ?? 0) : 0,
+    completionTokens: usageResult.success ? (usageResult.data.completionTokens ?? 0) : 0,
+    totalTokens: usageResult.success ? (usageResult.data.totalTokens ?? 0) : 0,
   };
 
   // ✅ STRICT TYPING: Validate finish reason using Zod enum (single source of truth)

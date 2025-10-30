@@ -22,6 +22,9 @@ import { RoundAnalysisCard } from './moderator/round-analysis-card';
 import { RoundFeedback } from './round-feedback';
 import { UnifiedErrorBoundary } from './unified-error-boundary';
 
+// Stable constant for default empty Map to prevent render loop
+const EMPTY_FEEDBACK_MAP = new Map<number, 'like' | 'dislike'>();
+
 type ThreadTimelineProps = {
   timelineItems: TimelineItem[];
   scrollContainerId: string;
@@ -65,7 +68,7 @@ export function ThreadTimeline({
   currentParticipantIndex = 0,
   currentStreamingParticipant = null,
   streamingRoundNumber = null,
-  feedbackByRound = new Map(),
+  feedbackByRound = EMPTY_FEEDBACK_MAP,
   pendingFeedback = null,
   getFeedbackHandler,
   onAnalysisStreamStart,
@@ -74,13 +77,30 @@ export function ThreadTimeline({
   onRetry,
   isReadOnly = false,
 }: ThreadTimelineProps) {
-  // Virtualization for timeline items
+  // ✅ STREAMING SAFETY: Calculate which rounds are currently streaming
+  // Prevents virtualization from removing DOM elements during active streaming
+  const streamingRounds = new Set<number>();
+
+  // Add participant streaming rounds
+  if (isStreaming && streamingRoundNumber !== null) {
+    streamingRounds.add(streamingRoundNumber);
+  }
+
+  // Add analysis streaming rounds (check for 'streaming' status in timeline items)
+  timelineItems.forEach((item) => {
+    if (item.type === 'analysis' && item.data.status === 'streaming') {
+      streamingRounds.add(item.data.roundNumber);
+    }
+  });
+
+  // Virtualization for timeline items with streaming awareness
   const { virtualItems, totalSizeWithPadding, measureElement } = useVirtualizedTimeline({
     timelineItems,
     scrollContainerId,
     estimateSize: 400,
-    overscan: 1,
+    overscan: 5,
     bottomPadding: 200,
+    streamingRounds,
   });
 
   return (

@@ -60,12 +60,6 @@
       "preview_bucket_name": "roundtable-dashboard-r2-uploads-local"
     }
   ],
-  "vectorize": [
-    {
-      "binding": "VECTORIZE",
-      "index_name": "roundtable-context-index-local"
-    }
-  ],
   "ai": {
     "binding": "AI"
   },
@@ -155,12 +149,6 @@
           "preview_bucket_name": "roundtable-dashboard-r2-uploads-preview"
         }
       ],
-      "vectorize": [
-        {
-          "binding": "VECTORIZE",
-          "index_name": "roundtable-context-index-preview"
-        }
-      ],
       "ai": {
         "binding": "AI"
       },
@@ -242,12 +230,6 @@
           "binding": "UPLOADS_R2_BUCKET",
           "bucket_name": "roundtable-dashboard-r2-uploads-prod",
           "preview_bucket_name": "roundtable-dashboard-r2-uploads-prod"
-        }
-      ],
-      "vectorize": [
-        {
-          "binding": "VECTORIZE",
-          "index_name": "roundtable-context-index-prod"
         }
       ],
       "ai": {

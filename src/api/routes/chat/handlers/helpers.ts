@@ -1,7 +1,7 @@
 import type { UIMessage } from 'ai';
 import { TypeValidationError, validateUIMessages } from 'ai';
 
-import type * as tables from '@/db/schema';
+import type { ChatMessage } from '@/db/validation';
 import type { ErrorCategory } from '@/lib/schemas/error-schemas';
 import { categorizeErrorMessage, ErrorCategorySchema, FinishReasonSchema } from '@/lib/schemas/error-schemas';
 
@@ -152,7 +152,7 @@ export function extractOpenRouterError(
  * ```
  */
 export async function chatMessagesToUIMessages(
-  dbMessages: Array<typeof tables.chatMessage.$inferSelect>,
+  dbMessages: ChatMessage[],
 ): Promise<UIMessage[]> {
   // Transform database messages to UIMessage format
   const messages = dbMessages.map((msg) => {

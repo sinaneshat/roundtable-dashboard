@@ -28,7 +28,6 @@ import {
   getRequiredTierForModel,
   SUBSCRIPTION_TIER_NAMES,
 } from '@/api/services/product-logic.service';
-import { ragService } from '@/api/services/rag.service';
 import { generateUniqueSlug } from '@/api/services/slug-generator.service';
 import { generateTitleFromMessage, updateThreadTitleAndSlug } from '@/api/services/title-generator.service';
 import {
@@ -41,6 +40,9 @@ import {
 import type { ApiEnv } from '@/api/types';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db/schema';
+import type {
+  ChatCustomRole,
+} from '@/db/validation';
 
 import type {
   createThreadRoute,
@@ -52,7 +54,6 @@ import type {
   listThreadsRoute,
   updateThreadRoute,
 } from '../route';
-import type { ChangeData } from '../schema';
 import {
   CreateThreadRequestSchema,
   ThreadListQuerySchema,
@@ -165,7 +166,7 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
     const customRoleIds = body.participants
       .map(p => p.customRoleId)
       .filter((id): id is string => !!id);
-    const customRolesMap = new Map<string, typeof tables.chatCustomRole.$inferSelect>();
+    const customRolesMap = new Map<string, ChatCustomRole>();
     if (customRoleIds.length > 0) {
       const customRoles = await db.query.chatCustomRole.findMany({
         where: and(
@@ -370,8 +371,10 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
       });
       const currentMap = new Map(currentParticipants.map(p => [p.id, p]));
       const newMap = new Map(body.participants.filter(p => p.id).map(p => [p.id!, p]));
-      const participantsToInsert: Array<typeof tables.chatParticipant.$inferInsert> = [];
-      const participantsToUpdate: Array<{ id: string; updates: Partial<typeof tables.chatParticipant.$inferSelect> }> = [];
+      // Follow established pattern from createThreadHandler (lines 196-229)
+      // Construct values inline with TypeScript type inference
+      const participantsToInsert = [];
+      const participantsToUpdate = [];
       for (const newP of body.participants) {
         if (!newP.id) {
           const participantId = ulid();
@@ -379,8 +382,8 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
             id: participantId,
             threadId: id,
             modelId: newP.modelId,
-            role: newP.role || null,
-            customRoleId: newP.customRoleId || null,
+            role: newP.role,
+            customRoleId: newP.customRoleId,
             priority: newP.priority,
             isEnabled: newP.isEnabled ?? true,
             settings: null,
@@ -402,8 +405,8 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
               id: newP.id,
               updates: {
                 modelId: newP.modelId,
-                role: newP.role || null,
-                customRoleId: newP.customRoleId || null,
+                role: newP.role,
+                customRoleId: newP.customRoleId,
                 priority: newP.priority,
                 isEnabled: newP.isEnabled ?? true,
                 updatedAt: now,
@@ -451,8 +454,9 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
         limit: 1,
       });
 
-      const currentRoundNumber = latestMessages.length > 0 && latestMessages[0]?.metadata
-        ? ((latestMessages[0].metadata as { roundNumber?: number }).roundNumber ?? 1)
+      // roundNumber is a column, not in metadata
+      const currentRoundNumber = latestMessages.length > 0 && latestMessages[0]
+        ? latestMessages[0].roundNumber
         : 1;
 
       // ✅ CRITICAL FIX: Changelog should appear BEFORE the next round
@@ -460,19 +464,15 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
       // This ensures changelog appears between round N and round N+1 messages
       const nextRoundNumber = currentRoundNumber + 1;
 
-      const changelogEntries: Array<{
-        id: string;
-        threadId: string;
-        roundNumber: number;
-        changeType: typeof ChangelogTypes[keyof typeof ChangelogTypes];
-        changeSummary: string;
-        changeData: ChangeData;
-        createdAt: Date;
-      }> = [];
+      const changelogEntries = [];
 
       // Get current enabled participants before the update (for changelog comparison)
       const oldParticipantsMap = new Map(currentParticipants.map(p => [p.modelId, p]));
-      const newParticipantsMap = new Map(body.participants.filter(p => p.isEnabled !== false).map(p => [p.modelId, p]));
+      const newParticipantsMap = new Map(
+        body.participants
+          .filter(p => p.isEnabled !== false)
+          .map(p => [p.modelId, p]),
+      );
 
       // Helper to extract model name from modelId
       const extractModelName = (modelId: string) => {
@@ -492,7 +492,7 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
             changeType: ChangelogTypes.ADDED,
             changeSummary: `Added ${displayName}`,
             changeData: {
-              type: 'participant',
+              type: 'participant' as const,
               modelId: newP.modelId,
               role: newP.role || null,
             },
@@ -513,7 +513,7 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
             changeType: ChangelogTypes.REMOVED,
             changeSummary: `Removed ${displayName}`,
             changeData: {
-              type: 'participant',
+              type: 'participant' as const,
               participantId: current.id,
               modelId: current.modelId,
               role: current.role,
@@ -538,23 +538,16 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
         limit: 1,
       });
 
-      const currentRoundNumber = latestMessagesForMode.length > 0 && latestMessagesForMode[0]?.metadata
-        ? ((latestMessagesForMode[0].metadata as { roundNumber?: number }).roundNumber ?? 1)
+      // roundNumber is a column, not in metadata
+      const currentRoundNumber = latestMessagesForMode.length > 0 && latestMessagesForMode[0]
+        ? latestMessagesForMode[0].roundNumber
         : 1;
 
       // ✅ CRITICAL FIX: Changelog should appear BEFORE the next round
       // Mode change applies to the next round, not the current one
       const nextRoundNumber = currentRoundNumber + 1;
 
-      const changelogForModeChange: {
-        id: string;
-        threadId: string;
-        roundNumber: number;
-        changeType: typeof ChangelogTypes[keyof typeof ChangelogTypes];
-        changeSummary: string;
-        changeData: ChangeData;
-        createdAt: Date;
-      } = {
+      await db.insert(tables.chatThreadChangelog).values({
         id: ulid(),
         threadId: id,
         roundNumber: nextRoundNumber,
@@ -566,9 +559,7 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
           newMode: body.mode,
         },
         createdAt: now,
-      };
-
-      await db.insert(tables.chatThreadChangelog).values(changelogForModeChange);
+      });
     }
 
     const updateData: {
@@ -636,13 +627,7 @@ export const deleteThreadHandler: RouteHandler<typeof deleteThreadRoute, ApiEnv>
         updatedAt: new Date(),
       })
       .where(eq(tables.chatThread.id, id));
-    try {
-      await ragService.deleteThreadEmbeddings({
-        threadId: id,
-        db,
-      });
-    } catch {
-    }
+
     await invalidateThreadCache(db, user.id, id, thread.slug);
     return Responses.ok(c, {
       deleted: true,

@@ -181,6 +181,37 @@ export {
 // ============================================================================
 
 export {
+  type CreateProjectRequest,
+  type CreateProjectResponse,
+  createProjectService,
+  type DeleteKnowledgeFileRequest,
+  type DeleteKnowledgeFileResponse,
+  deleteKnowledgeFileService,
+  type DeleteProjectRequest,
+  type DeleteProjectResponse,
+  deleteProjectService,
+  type GetProjectRequest,
+  type GetProjectResponse,
+  getProjectService,
+  type ListKnowledgeFilesRequest,
+  type ListKnowledgeFilesResponse,
+  listKnowledgeFilesService,
+  type ListProjectsRequest,
+  type ListProjectsResponse,
+  listProjectsService,
+  type UpdateProjectRequest,
+  type UpdateProjectResponse,
+  updateProjectService,
+  type UploadKnowledgeFileRequest,
+  type UploadKnowledgeFileResponse,
+  uploadKnowledgeFileService,
+} from './projects';
+
+// ============================================================================
+// Chat Custom Roles Service Exports
+// ============================================================================
+
+export {
   type CancelSubscriptionRequest,
   type CancelSubscriptionResponse,
   cancelSubscriptionService,
@@ -190,7 +221,7 @@ export {
 } from './subscription-management';
 
 // ============================================================================
-// Chat Custom Roles Service Exports
+// Projects Service Exports
 // ============================================================================
 
 export {
@@ -203,7 +234,7 @@ export {
 } from './subscriptions';
 
 // ============================================================================
-// Models Service Exports (Dynamic OpenRouter Models)
+// Usage Service Exports
 // ============================================================================
 
 export {

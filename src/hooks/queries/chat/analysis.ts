@@ -17,6 +17,7 @@ import { getQueryClient } from '@/lib/data/query-client';
 import { queryKeys } from '@/lib/data/query-keys';
 import { STALE_TIMES } from '@/lib/data/stale-times';
 import { getThreadAnalysesService } from '@/services/api';
+import { validateAnalysesCache } from '@/stores/chat/actions/types';
 
 /**
  * Hook to fetch thread moderator analyses
@@ -70,10 +71,7 @@ export function useThreadAnalysesQuery(threadId: string, enabled?: boolean) {
       const queryClient = getQueryClient();
 
       // Get existing cache to check for pending/streaming analyses
-      const cachedData = queryClient.getQueryData(queryKey) as {
-        success: boolean;
-        data: { items: Array<{ status: string; roundNumber: number; [key: string]: unknown }> };
-      } | undefined;
+      const cachedData = validateAnalysesCache(queryClient.getQueryData(queryKey));
 
       // Fetch from server
       const serverResponse = await getThreadAnalysesService({ param: { id: threadId } });
@@ -88,7 +86,7 @@ export function useThreadAnalysesQuery(threadId: string, enabled?: boolean) {
       // When analysis streaming completes, client marks it 'completed' but server
       // is still writing to DB. If we filter out completed, it disappears from UI.
       const serverRoundNumbers = new Set(
-        serverResponse.data.items.map((item: { roundNumber: number }) => item.roundNumber),
+        serverResponse.data.items.map(item => item.roundNumber),
       );
 
       const cachedNotOnServer = cachedData.data.items.filter(
@@ -109,9 +107,8 @@ export function useThreadAnalysesQuery(threadId: string, enabled?: boolean) {
 
         // ✅ CRITICAL: Add all server analyses first (these are authoritative/completed)
         for (const serverItem of serverResponse.data.items) {
-          const typedItem = serverItem as { roundNumber: number; status?: string; [key: string]: unknown };
           mergedItems.push(serverItem);
-          processedRounds.add(typedItem.roundNumber);
+          processedRounds.add(serverItem.roundNumber);
         }
 
         // ✅ CRITICAL: Add ALL cached analyses for rounds not on server (not just pending/streaming)

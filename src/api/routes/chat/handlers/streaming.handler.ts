@@ -32,7 +32,6 @@ import {
   AI_TIMEOUT_CONFIG,
   getSafeMaxOutputTokens,
 } from '@/api/services/product-logic.service';
-import { ragService } from '@/api/services/rag.service';
 import { handleRoundRegeneration } from '@/api/services/regeneration.service';
 import { calculateRoundNumber } from '@/api/services/round.service';
 import {
@@ -43,6 +42,7 @@ import {
 import type { ApiEnv } from '@/api/types';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db/schema';
+import type { ChatParticipant } from '@/db/validation';
 import { extractTextFromParts } from '@/lib/schemas/message-schemas';
 import { filterNonEmptyMessages } from '@/lib/utils/message-transforms';
 
@@ -423,7 +423,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
     //
     // Performance Impact: Saves 25-50ms per subsequent participant request
 
-    let participants: Array<typeof tables.chatParticipant.$inferSelect>;
+    let participants: ChatParticipant[];
 
     if (providedParticipants && participantIndex === 0) {
       // ✅ PARTICIPANT 0 ONLY: Reload from database after persistence
@@ -661,7 +661,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
     // Retrieve relevant context from previous messages using semantic search
     // This enhances AI responses with relevant information from conversation history
     let systemPrompt = baseSystemPrompt;
-    const startRetrievalTime = performance.now();
+    // const startRetrievalTime = performance.now(); // Unused - would track RAG retrieval time
 
     try {
       // Extract query from last user message
@@ -672,35 +672,47 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
 
       // Only retrieve context if we have a valid query
       if (userQuery.trim()) {
-        // ✅ DIRECT RAG RETRIEVAL: No caching (browser manages context after load)
-        // Following FLOW_DOCUMENTATION: Data managed in browser, server provides initial load
-        const ragContexts = await ragService.retrieveContext({
-          query: userQuery,
-          threadId,
-          userId: user.id,
-          topK: 5,
-          minSimilarity: 0.7,
-          db,
-        });
-
-        const retrievalTimeMs = performance.now() - startRetrievalTime;
-
-        // If we found relevant context, inject it into the system prompt
-        if (ragContexts.length > 0) {
-          const contextPrompt = ragService.formatContextForPrompt(ragContexts);
-          systemPrompt = `${baseSystemPrompt}\n\n${contextPrompt}`;
-
-          // Track RAG usage for analytics (non-blocking)
-          ragService.trackContextRetrieval({
-            threadId,
-            userId: user.id,
-            query: userQuery,
-            contexts: ragContexts,
-            queryTimeMs: retrievalTimeMs,
-            db,
-          }).catch(() => {
-            // Intentionally suppressed
+        // ✅ AUTORAG RETRIEVAL: Project-based knowledge base
+        // Check if thread is associated with a project
+        if (thread.projectId) {
+          const project = await db.query.chatProject.findFirst({
+            where: eq(tables.chatProject.id, thread.projectId),
           });
+
+          // If project exists, apply custom instructions (OpenAI Projects pattern)
+          if (project) {
+            // Add custom instructions to system prompt if provided
+            if (project.customInstructions) {
+              systemPrompt = `${baseSystemPrompt}\n\n## Project Instructions\n\n${project.customInstructions}`;
+            }
+
+            // If project has AutoRAG configured, retrieve context
+            if (project.autoragInstanceId) {
+              try {
+                const ragResponse = await c.env.AI.autorag(project.autoragInstanceId).aiSearch({
+                  query: userQuery,
+                  max_num_results: 5,
+                  rewrite_query: true,
+                  stream: false,
+                  filters: {
+                    type: 'and',
+                    filters: [
+                      { key: 'folder', type: 'gte', value: project.r2FolderPrefix },
+                      { key: 'folder', type: 'lte', value: `${project.r2FolderPrefix}~` },
+                    ],
+                  },
+                });
+
+                // If we got a response, inject it into the system prompt
+                if (ragResponse.response) {
+                  systemPrompt = `${systemPrompt}\n\n## Project Knowledge\n\n${ragResponse.response}\n\n---\n\nUse the above knowledge from the project when relevant to the conversation. Provide natural, coherent responses.`;
+                }
+              } catch {
+                // AutoRAG failures should not break the chat flow
+                // Continue with base system prompt
+              }
+            }
+          }
         }
       }
     } catch {

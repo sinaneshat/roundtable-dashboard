@@ -123,10 +123,7 @@ export function useChatAnalysis(
     // ✅ CRITICAL FIX: When query is disabled, read directly from cache
     // This allows pending analyses created via createPendingAnalysis to be visible
     if (!enabled && threadId) {
-      const cachedData = queryClient.getQueryData(queryKeys.threads.analyses(threadId)) as {
-        success: boolean;
-        data: { items: StoredModeratorAnalysis[] };
-      } | undefined;
+      const cachedData = validateAnalysesCache(queryClient.getQueryData(queryKeys.threads.analyses(threadId)));
 
       if (cachedData?.success && cachedData.data?.items) {
         // ✅ SINGLE SOURCE OF TRUTH: Use date transform utility with Zod validation

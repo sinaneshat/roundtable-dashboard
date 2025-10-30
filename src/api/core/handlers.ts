@@ -36,6 +36,7 @@ import {
   SearchQuerySchema,
   SortingQuerySchema,
   UuidParamSchema,
+  ValidationErrorDetailsSchema,
 } from './schemas';
 import { validateWithSchema } from './validation';
 
@@ -389,14 +390,14 @@ export function createHandler<
         if (error.status === HttpStatusCodes.UNPROCESSABLE_ENTITY) {
           // Check for EnhancedHTTPException with details
           if ('details' in error && error.details && typeof error.details === 'object') {
-            const details = error.details as { validationErrors?: Array<{ field: string; message: string; code?: string }> };
-            if (details.validationErrors) {
-              return Responses.validationError(c, details.validationErrors, error.message);
+            const detailsResult = ValidationErrorDetailsSchema.safeParse(error.details);
+            if (detailsResult.success && detailsResult.data.validationErrors) {
+              return Responses.validationError(c, detailsResult.data.validationErrors, error.message);
             }
           } else if (error.cause && typeof error.cause === 'object') {
-            const cause = error.cause as { validationErrors?: Array<{ field: string; message: string; code?: string }> };
-            if (cause.validationErrors) {
-              return Responses.validationError(c, cause.validationErrors, error.message);
+            const causeResult = ValidationErrorDetailsSchema.safeParse(error.cause);
+            if (causeResult.success && causeResult.data.validationErrors) {
+              return Responses.validationError(c, causeResult.data.validationErrors, error.message);
             }
           }
         }
@@ -599,9 +600,9 @@ export function createHandlerWithBatch<
       if (error instanceof HTTPException) {
         if (error.status === HttpStatusCodes.UNPROCESSABLE_ENTITY) {
           if ('details' in error && error.details && typeof error.details === 'object') {
-            const details = error.details as { validationErrors?: Array<{ field: string; message: string; code?: string }> };
-            if (details.validationErrors) {
-              return Responses.validationError(c, details.validationErrors, error.message);
+            const detailsResult = ValidationErrorDetailsSchema.safeParse(error.details);
+            if (detailsResult.success && detailsResult.data.validationErrors) {
+              return Responses.validationError(c, detailsResult.data.validationErrors, error.message);
             }
           }
         }

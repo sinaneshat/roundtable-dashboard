@@ -10,6 +10,7 @@ import { ChangelogTypes } from '@/api/core/enums';
 import type { CreateChangelogParams } from '@/api/routes/chat/schema';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db/schema';
+import type { ChatThreadChangelog } from '@/db/validation';
 
 /**
  * Create a changelog entry for thread configuration change
@@ -78,7 +79,7 @@ export async function createChangelogEntry(params: CreateChangelogParams): Promi
 export async function getThreadChangelog(
   threadId: string,
   limit?: number,
-): Promise<Array<typeof tables.chatThreadChangelog.$inferSelect>> {
+): Promise<Array<ChatThreadChangelog>> {
   const db = await getDbAsync();
 
   const changelog = await db.query.chatThreadChangelog.findMany({

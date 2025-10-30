@@ -523,6 +523,7 @@ export const ModeratorAnalysisListResponseSchema = createApiResponseSchema(Moder
 export type ChatThread = z.infer<typeof ChatThreadSchema>;
 export type CreateThreadRequest = z.infer<typeof CreateThreadRequestSchema>;
 export type UpdateThreadRequest = z.infer<typeof UpdateThreadRequestSchema>;
+export type UpdateThreadParticipant = z.infer<typeof UpdateParticipantSchema>;
 export type ChatParticipant = z.infer<typeof ChatParticipantSchema>;
 export type AddParticipantRequest = z.infer<typeof AddParticipantRequestSchema>;
 export type UpdateParticipantRequest = z.infer<typeof UpdateParticipantRequestSchema>;
@@ -615,6 +616,19 @@ export const SetRoundFeedbackResponseSchema = createApiResponseSchema(
 export const GetThreadFeedbackResponseSchema = createApiResponseSchema(
   z.array(ChatRoundFeedbackSchema),
 ).openapi('GetThreadFeedbackResponse');
+
+/**
+ * Round Feedback Data Schema (Store/Client-Specific)
+ * Minimal feedback data for store state management
+ */
+export const RoundFeedbackDataSchema = chatRoundFeedbackSelectSchema
+  .pick({
+    roundNumber: true,
+    feedbackType: true,
+  })
+  .openapi('RoundFeedbackData');
+
+export type RoundFeedbackData = z.infer<typeof RoundFeedbackDataSchema>;
 
 // ============================================================================
 // DATABASE QUERY RESULT SCHEMAS
