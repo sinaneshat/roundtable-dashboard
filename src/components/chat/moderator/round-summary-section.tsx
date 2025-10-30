@@ -18,10 +18,8 @@ import { useTranslations } from 'next-intl';
 
 import type { RecommendedAction, RoundSummary } from '@/api/routes/chat/schema';
 import { Badge } from '@/components/ui/badge';
-import { Card, CardContent } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/ui/cn';
-import { glassCard } from '@/lib/ui/glassmorphism';
 
 import { ModelBadge } from '../model-badge';
 import { AnalysisSection, animationVariants } from './analysis-section';
@@ -285,74 +283,66 @@ export function RoundSummarySection({
                 }
 
                 return (
-                  <motion.div
+                  <motion.button
                     key={action.action}
                     {...animationVariants.actionFade}
+                    onClick={() => !isStreaming && onActionClick?.(action)}
+                    disabled={isStreaming}
+                    className={cn(
+                      'w-full text-left p-4 rounded-lg',
+                      'bg-white/5 backdrop-blur-sm',
+                      'hover:bg-white/10 active:bg-white/15',
+                      'transition-all duration-200',
+                      'focus-visible:ring-2 focus-visible:ring-white/20 focus-visible:outline-none',
+                      'group',
+                      isStreaming && 'opacity-50 cursor-not-allowed',
+                    )}
                   >
-                    <Card
-                      className={cn(
-                        glassCard('medium'),
-                        'border cursor-pointer group',
-                        isStreaming && 'opacity-50 cursor-not-allowed',
-                      )}
-                      onClick={() => !isStreaming && onActionClick?.(action)}
-                      role="button"
-                      tabIndex={isStreaming ? -1 : 0}
-                      onKeyDown={(e) => {
-                        if (!isStreaming && (e.key === 'Enter' || e.key === ' ')) {
-                          e.preventDefault();
-                          onActionClick?.(action);
-                        }
-                      }}
-                    >
-                      <CardContent className="p-3">
-                        <div className="flex items-start gap-2.5">
-                          <Sparkles className="size-4 shrink-0 mt-0.5 text-primary" />
-                          <div className="flex-1 min-w-0 space-y-2.5">
-                            <div className="space-y-1.5">
-                              <p className="text-sm font-semibold leading-snug text-foreground break-words">
-                                {action.action}
-                              </p>
-                              <p className="text-xs leading-relaxed text-muted-foreground break-words">
-                                {action.rationale}
-                              </p>
-                            </div>
+                    <div className="flex items-start gap-3">
+                      <Sparkles className="size-4 shrink-0 mt-0.5 text-primary" />
+                      <div className="flex-1 min-w-0 space-y-2.5">
+                        <div className="space-y-1.5">
+                          <p className="text-sm font-semibold leading-snug text-foreground break-words">
+                            {action.action}
+                          </p>
+                          <p className="text-xs leading-relaxed text-muted-foreground break-words">
+                            {action.rationale}
+                          </p>
+                        </div>
 
-                            {(action.suggestedMode || (action.suggestedModels && action.suggestedModels.length > 0)) && (
-                              <div className="flex flex-col gap-2 pt-1.5 border-t border-border/30">
-                                {action.suggestedMode && (
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
-                                      Mode
-                                    </span>
-                                    <Badge variant="outline" className="text-xs">
-                                      {action.suggestedMode}
-                                    </Badge>
-                                  </div>
-                                )}
-                                {action.suggestedModels && action.suggestedModels.length > 0 && (
-                                  <div className="flex flex-col gap-1.5">
-                                    <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
-                                      Suggested Models
-                                    </span>
-                                    <div className="flex flex-wrap gap-2">
-                                      {action.suggestedModels.map((modelId, index) => {
-                                        const role = action.suggestedRoles?.[index];
-                                        return (
-                                          <ModelBadge key={modelId} modelId={modelId} role={role} />
-                                        );
-                                      })}
-                                    </div>
-                                  </div>
-                                )}
+                        {(action.suggestedMode || (action.suggestedModels && action.suggestedModels.length > 0)) && (
+                          <div className="flex flex-col gap-2.5 pt-2">
+                            {action.suggestedMode && (
+                              <div className="flex items-center gap-2">
+                                <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
+                                  Mode
+                                </span>
+                                <Badge variant="outline" className="text-xs">
+                                  {action.suggestedMode}
+                                </Badge>
+                              </div>
+                            )}
+                            {action.suggestedModels && action.suggestedModels.length > 0 && (
+                              <div className="flex flex-col gap-2">
+                                <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
+                                  Suggested Models
+                                </span>
+                                <div className="flex flex-wrap gap-2">
+                                  {action.suggestedModels.map((modelId, index) => {
+                                    const role = action.suggestedRoles?.[index];
+                                    return (
+                                      <ModelBadge key={modelId} modelId={modelId} role={role} />
+                                    );
+                                  })}
+                                </div>
                               </div>
                             )}
                           </div>
-                          <ChevronRight className="size-4 shrink-0 text-muted-foreground/50 group-hover:text-muted-foreground group-hover:translate-x-0.5 transition-all" />
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </motion.div>
+                        )}
+                      </div>
+                      <ChevronRight className="size-4 shrink-0 text-muted-foreground/50 group-hover:text-muted-foreground group-hover:translate-x-0.5 transition-all" />
+                    </div>
+                  </motion.button>
                 );
               })}
             </div>
