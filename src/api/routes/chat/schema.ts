@@ -4,6 +4,7 @@ import {
   ChangelogTypeSchema,
   ChatModeSchema,
   DEFAULT_CHAT_MODE,
+  PreSearchQueryStatusSchema,
 } from '@/api/core/enums';
 import {
   CoreSchemas,
@@ -11,6 +12,7 @@ import {
   createCursorPaginatedResponseSchema,
   CursorPaginationQuerySchema,
 } from '@/api/core/schemas';
+import { WebSearchResultSchema } from '@/api/services/web-search-schemas';
 import { userSelectSchema } from '@/db/validation/auth';
 import {
   chatCustomRoleInsertSchema,
@@ -21,6 +23,7 @@ import {
   chatParticipantInsertSchema,
   chatParticipantSelectSchema,
   chatParticipantUpdateSchema,
+  chatPreSearchSelectSchema,
   chatRoundFeedbackSelectSchema,
   chatRoundFeedbackUpdateSchema,
   chatThreadChangelogSelectSchema,
@@ -180,6 +183,7 @@ export const CreateThreadRequestSchema = chatThreadInsertSchema
   .pick({
     title: true,
     mode: true,
+    enableWebSearch: true,
     metadata: true,
   })
   .extend({
@@ -190,6 +194,10 @@ export const CreateThreadRequestSchema = chatThreadInsertSchema
     mode: ChatModeSchema.optional().default(DEFAULT_CHAT_MODE).openapi({
       description: 'Conversation mode',
       example: 'brainstorming',
+    }),
+    enableWebSearch: z.boolean().optional().default(false).openapi({
+      description: 'Allow participants to browse web for information',
+      example: false,
     }),
     participants: z.array(CreateParticipantSchema)
       .min(1)
@@ -210,6 +218,7 @@ export const UpdateThreadRequestSchema = chatThreadUpdateSchema
     status: true,
     isFavorite: true,
     isPublic: true,
+    enableWebSearch: true,
     metadata: true,
   })
   .extend({
@@ -334,6 +343,75 @@ const UIMessageSchema = z.object({
     description: 'Optional message metadata',
   }),
 }).openapi('UIMessage');
+
+// ============================================================================
+// PRE-SEARCH API SCHEMAS
+// ============================================================================
+
+/**
+ * Pre-search request schema (unified with analysis pattern)
+ * ✅ FOLLOWS: Moderator analysis request pattern
+ * Executes web search BEFORE participant streaming
+ */
+export const PreSearchRequestSchema = z.object({
+  userQuery: z.string().min(1).max(5000).openapi({
+    description: 'User query for web search',
+    example: 'What is the current Bitcoin price?',
+  }),
+}).openapi('PreSearchRequest');
+
+export type PreSearchRequest = z.infer<typeof PreSearchRequestSchema>;
+
+/**
+ * Pre-search data payload schema
+ * ✅ ZOD-FIRST: Matches database searchData JSON column type
+ */
+export const PreSearchDataPayloadSchema = z.object({
+  queries: z.array(z.object({
+    query: z.string(),
+    rationale: z.string(),
+    searchDepth: z.enum(['basic', 'advanced']),
+    index: z.number(),
+    total: z.number(),
+  })),
+  results: z.array(z.object({
+    query: z.string(),
+    answer: z.string().nullable(),
+    results: z.array(WebSearchResultSchema),
+    responseTime: z.number(),
+  })),
+  analysis: z.string(),
+  successCount: z.number(),
+  failureCount: z.number(),
+  totalResults: z.number(),
+  totalTime: z.number(),
+}).openapi('PreSearchDataPayload');
+
+export type PreSearchDataPayload = z.infer<typeof PreSearchDataPayloadSchema>;
+
+/**
+ * Stored pre-search schema (from database)
+ * ✅ FOLLOWS: StoredModeratorAnalysisSchema pattern
+ */
+export const StoredPreSearchSchema = chatPreSearchSelectSchema
+  .extend({
+    searchData: PreSearchDataPayloadSchema.nullable().optional(),
+  })
+  .openapi('StoredPreSearch');
+
+export type StoredPreSearch = z.infer<typeof StoredPreSearchSchema>;
+
+/**
+ * Pre-search response schema (API response wrapper)
+ * ✅ CONSISTENT: Uses createApiResponseSchema like analysis
+ */
+export const PreSearchResponseSchema = createApiResponseSchema(StoredPreSearchSchema).openapi('PreSearchResponse');
+
+export type PreSearchResponse = z.infer<typeof PreSearchResponseSchema>;
+
+// ============================================================================
+// CHAT STREAMING SCHEMAS
+// ============================================================================
 
 export const StreamChatRequestSchema = z.object({
   message: UIMessageSchema.openapi({
@@ -629,6 +707,168 @@ export const RoundFeedbackDataSchema = chatRoundFeedbackSelectSchema
   .openapi('RoundFeedbackData');
 
 export type RoundFeedbackData = z.infer<typeof RoundFeedbackDataSchema>;
+
+// ============================================================================
+// WEB SEARCH QUERY GENERATION SCHEMAS
+// ============================================================================
+
+/**
+ * Single search query schema for AI-generated web searches
+ */
+export const SearchQuerySchema = z.object({
+  query: z.string().min(1).max(200).describe('Search query optimized for web search engines'),
+  rationale: z.string().min(1).max(300).describe('Brief explanation of what this query will help find'),
+  searchDepth: z.enum(['basic', 'advanced']).describe('Search depth - basic for quick facts, advanced for comprehensive research'),
+}).openapi('SearchQuery');
+
+export type SearchQuery = z.infer<typeof SearchQuerySchema>;
+
+/**
+ * Generated search queries schema
+ */
+export const GeneratedSearchQueriesSchema = z.object({
+  queries: z.array(SearchQuerySchema).min(1).max(5).describe('Array of diverse search queries (1-5 queries)'),
+  analysis: z.string().min(50).max(500).describe('Brief analysis of the user question and search strategy'),
+}).openapi('GeneratedSearchQueries');
+
+export type GeneratedSearchQueries = z.infer<typeof GeneratedSearchQueriesSchema>;
+
+// ============================================================================
+// PRE-SEARCH STREAMING DATA SCHEMAS
+// ============================================================================
+// Following AI SDK v5 pattern for custom data streaming
+// Reference: ai-sdk-v5-crash-course exercises 07.01, 07.02, 99.04, 99.05
+
+/**
+ * Pre-search phase start event
+ * Sent when initial web search phase begins
+ */
+export const PreSearchStartDataSchema = z.object({
+  type: z.literal('pre_search_start'),
+  timestamp: z.number(),
+  userQuery: z.string(),
+  totalQueries: z.number().int().min(1).max(5),
+}).openapi('PreSearchStartData');
+
+export type PreSearchStartData = z.infer<typeof PreSearchStartDataSchema>;
+
+/**
+ * Pre-search query generation event
+ * Sent when AI generates a search query (streaming object phase)
+ */
+export const PreSearchQueryGeneratedDataSchema = z.object({
+  type: z.literal('pre_search_query_generated'),
+  timestamp: z.number(),
+  query: z.string(),
+  rationale: z.string(),
+  searchDepth: z.enum(['basic', 'advanced']),
+  index: z.number().int().min(0),
+  total: z.number().int().min(1),
+}).openapi('PreSearchQueryGeneratedData');
+
+export type PreSearchQueryGeneratedData = z.infer<typeof PreSearchQueryGeneratedDataSchema>;
+
+/**
+ * Pre-search query execution event
+ * Sent when individual search query is being executed
+ */
+export const PreSearchQueryDataSchema = z.object({
+  type: z.literal('pre_search_query'),
+  timestamp: z.number(),
+  query: z.string(),
+  rationale: z.string(),
+  searchDepth: z.enum(['basic', 'advanced']),
+  index: z.number().int().min(0),
+  total: z.number().int().min(1),
+}).openapi('PreSearchQueryData');
+
+export type PreSearchQueryData = z.infer<typeof PreSearchQueryDataSchema>;
+
+/**
+ * Pre-search result event
+ * Sent when individual search completes
+ */
+export const PreSearchResultDataSchema = z.object({
+  type: z.literal('pre_search_result'),
+  timestamp: z.number(),
+  query: z.string(),
+  answer: z.string().nullable(),
+  resultCount: z.number().int().min(0),
+  responseTime: z.number(),
+  index: z.number().int().min(0),
+}).openapi('PreSearchResultData');
+
+export type PreSearchResultData = z.infer<typeof PreSearchResultDataSchema>;
+
+/**
+ * Pre-search complete event
+ * Sent when all initial searches complete
+ */
+export const PreSearchCompleteDataSchema = z.object({
+  type: z.literal('pre_search_complete'),
+  timestamp: z.number(),
+  totalSearches: z.number().int().min(0),
+  successfulSearches: z.number().int().min(0),
+  failedSearches: z.number().int().min(0),
+  totalResults: z.number().int().min(0),
+}).openapi('PreSearchCompleteData');
+
+export type PreSearchCompleteData = z.infer<typeof PreSearchCompleteDataSchema>;
+
+/**
+ * Pre-search error event
+ * Sent when pre-search phase fails
+ */
+export const PreSearchErrorDataSchema = z.object({
+  type: z.literal('pre_search_error'),
+  timestamp: z.number(),
+  error: z.string(),
+}).openapi('PreSearchErrorData');
+
+export type PreSearchErrorData = z.infer<typeof PreSearchErrorDataSchema>;
+
+/**
+ * Discriminated union of all pre-search data events
+ * Used for type-safe streaming data handling
+ */
+export const PreSearchStreamDataSchema = z.discriminatedUnion('type', [
+  PreSearchStartDataSchema,
+  PreSearchQueryGeneratedDataSchema,
+  PreSearchQueryDataSchema,
+  PreSearchResultDataSchema,
+  PreSearchCompleteDataSchema,
+  PreSearchErrorDataSchema,
+]);
+
+export type PreSearchStreamData = z.infer<typeof PreSearchStreamDataSchema>;
+
+// ============================================================================
+// PRE-SEARCH STATE SCHEMAS (Store Types)
+// ============================================================================
+// Following Single Source of Truth pattern - schemas defined here, types inferred
+
+/**
+ * Pre-search status and query status schemas
+ * ✅ FULLY MIGRATED: Import PreSearchStatusSchema and PreSearchQueryStatusSchema from @/api/core/enums
+ */
+// Note: PreSearchStatus schemas moved to @/api/core/enums for consistency with other status enums
+
+/**
+ * Pre-search query state schema
+ * Represents a single search query in the store
+ */
+export const PreSearchQuerySchema = z.object({
+  query: z.string(),
+  rationale: z.string(),
+  searchDepth: z.enum(['basic', 'advanced']),
+  index: z.number().int().min(0),
+  total: z.number().int().min(1),
+  status: PreSearchQueryStatusSchema,
+  result: WebSearchResultSchema.optional(),
+  timestamp: z.number(),
+}).openapi('PreSearchQuery');
+
+export type PreSearchQuery = z.infer<typeof PreSearchQuerySchema>;
 
 // ============================================================================
 // DATABASE QUERY RESULT SCHEMAS

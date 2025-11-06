@@ -1,15 +1,16 @@
 'use client';
 import type { UIMessage } from 'ai';
 import { Bot, Lock } from 'lucide-react';
-import { motion, Reorder } from 'motion/react';
+import { Reorder } from 'motion/react';
 import { useTranslations } from 'next-intl';
 import { useMemo, useRef, useState } from 'react';
 
 import type { EnhancedModelResponse } from '@/api/routes/models/schema';
 import type { SubscriptionTier } from '@/api/services/product-logic.service';
+import { AvatarGroup } from '@/components/chat/avatar-group';
 import type { ParticipantConfig } from '@/components/chat/chat-form-schemas';
 import { ModelItem } from '@/components/chat/model-item';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Avatar, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -219,7 +220,7 @@ export function ChatParticipantsList({
     return allUnselected;
   }, [modelSearchQuery, searchFilteredIds, flagshipModels, tierGroups, selectedModelIds]);
   return (
-    <div className={cn('flex items-center gap-1.5', className)}>
+    <div className={cn('flex items-center gap-2', className)}>
       <TooltipProvider>
         <Popover open={isPopoverOpen} onOpenChange={setOpen}>
           <Tooltip>
@@ -230,14 +231,20 @@ export function ChatParticipantsList({
                   variant="outline"
                   size="sm"
                   disabled={disabled}
-                  className="h-8 sm:h-9 rounded-lg gap-1.5 sm:gap-2 text-xs relative px-3 sm:px-4"
+                  className="h-8 sm:h-9 rounded-lg gap-1.5 sm:gap-2 text-xs relative px-2.5 sm:px-3"
                 >
                   <Bot className="size-3.5 sm:size-4" />
                   <span className="hidden xs:inline sm:inline">{tModels('aiModels')}</span>
+
+                  {/* Overlapping Avatars inside button */}
                   {participants.length > 0 && (
-                    <Badge variant="default" className="ml-1 sm:ml-1.5 size-5 sm:size-6 flex items-center justify-center p-0 text-[10px] sm:text-xs">
-                      {participants.length}
-                    </Badge>
+                    <AvatarGroup
+                      participants={participants}
+                      allModels={allEnabledModels}
+                      maxVisible={3}
+                      size="sm"
+                      className="ml-1"
+                    />
                   )}
                 </Button>
               </PopoverTrigger>
@@ -532,42 +539,23 @@ export function ParticipantsPreview({
     return null;
   }
   return (
-    <div className={cn('w-full overflow-x-auto', className)}>
-      <div className="flex items-center gap-2 pb-2">
-        {participants
-          .sort((a, b) => a.priority - b.priority)
-          .map((participant, index) => {
-            const model = allModels.find(m => m.id === participant.modelId);
-            if (!model)
-              return null;
-            const isWaitingInQueue = isStreaming && currentParticipantIndex !== undefined && index > currentParticipantIndex;
-            return (
-              <motion.div
-                key={participant.id}
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{
-                  duration: 0.3,
-                  ease: [0.25, 0.1, 0.25, 1],
-                }}
-                className={cn(
-                  'relative flex items-center gap-1.5 sm:gap-2 shrink-0',
-                  isWaitingInQueue && 'opacity-60',
-                )}
-              >
-                <div className="flex items-center gap-1.5 sm:gap-2">
-                  <Avatar className="size-6 sm:size-7 shrink-0">
-                    <AvatarImage src={getProviderIcon(model.provider)} alt={model.name} />
-                    <AvatarFallback className="text-[10px] sm:text-xs">
-                      {model.name.slice(0, 2).toUpperCase()}
-                    </AvatarFallback>
-                  </Avatar>
-                  <span className="text-xs sm:text-sm font-medium text-foreground/90">{model.name}</span>
-                </div>
-              </motion.div>
-            );
-          })}
-      </div>
+    <div className={cn('flex items-center gap-2', className)}>
+      {/* Overlapping Circular Avatars */}
+      <AvatarGroup
+        participants={participants}
+        allModels={allModels}
+        maxVisible={3}
+        size="sm"
+      />
+      {/* Count Badge */}
+      {participants.length > 0 && (
+        <Badge
+          variant="secondary"
+          className="rounded-full font-semibold tabular-nums h-6 min-w-[24px] text-xs px-2 shrink-0"
+        >
+          {participants.length}
+        </Badge>
+      )}
     </div>
   );
 }

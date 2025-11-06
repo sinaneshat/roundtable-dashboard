@@ -187,6 +187,92 @@ export const MessageStatusSchema = z.enum(MESSAGE_STATUSES).openapi({
  */
 export type MessageStatus = z.infer<typeof MessageStatusSchema>;
 
+/**
+ * Message status constants for clear usage
+ * ✅ RECOMMENDED PATTERN: Use MessageStatuses.STREAMING instead of 'streaming'
+ *
+ * @example
+ * // ❌ WRONG: Hardcoded string
+ * status === 'streaming'
+ *
+ * // ✅ CORRECT: Type-safe constant
+ * status === MessageStatuses.STREAMING
+ */
+export const MessageStatuses = {
+  THINKING: 'thinking' as const,
+  STREAMING: 'streaming' as const,
+  COMPLETED: 'completed' as const,
+  ERROR: 'error' as const,
+} as const satisfies Record<string, MessageStatus>;
+
+// ============================================================================
+// PRE-SEARCH STATUS ENUMS
+// ============================================================================
+
+/**
+ * Pre-search operation status tuple
+ * ✅ SINGLE SOURCE: All pre-search status values defined here
+ *
+ * Used by:
+ * - Frontend components - Pre-search UI state rendering
+ * - Store - Pre-search status tracking
+ */
+export const PRE_SEARCH_STATUSES = ['idle', 'generating_queries', 'searching', 'complete', 'error'] as const;
+
+/**
+ * Pre-search status Zod schema
+ * ✅ RUNTIME VALIDATION: Validates pre-search status values
+ */
+export const PreSearchStatusSchema = z.enum(PRE_SEARCH_STATUSES).openapi({
+  description: 'Pre-search operation status',
+  example: 'searching',
+});
+
+/**
+ * Pre-search status TypeScript type
+ * ✅ ZOD INFERENCE: Type automatically derived from schema
+ */
+export type PreSearchStatus = z.infer<typeof PreSearchStatusSchema>;
+
+/**
+ * Pre-search status constants for clear usage
+ * ✅ RECOMMENDED PATTERN: Use PreSearchStatuses.SEARCHING instead of 'searching'
+ */
+export const PreSearchStatuses = {
+  IDLE: 'idle' as const,
+  GENERATING_QUERIES: 'generating_queries' as const,
+  SEARCHING: 'searching' as const,
+  COMPLETE: 'complete' as const,
+  ERROR: 'error' as const,
+} as const satisfies Record<string, PreSearchStatus>;
+
+/**
+ * Pre-search query status tuple
+ * Tracks individual query execution state
+ */
+export const PRE_SEARCH_QUERY_STATUSES = ['searching', 'complete'] as const;
+
+/**
+ * Pre-search query status Zod schema
+ */
+export const PreSearchQueryStatusSchema = z.enum(PRE_SEARCH_QUERY_STATUSES).openapi({
+  description: 'Individual pre-search query status',
+  example: 'searching',
+});
+
+/**
+ * Pre-search query status TypeScript type
+ */
+export type PreSearchQueryStatus = z.infer<typeof PreSearchQueryStatusSchema>;
+
+/**
+ * Pre-search query status constants
+ */
+export const PreSearchQueryStatuses = {
+  SEARCHING: 'searching' as const,
+  COMPLETE: 'complete' as const,
+} as const satisfies Record<string, PreSearchQueryStatus>;
+
 // ============================================================================
 // MESSAGE ROLE ENUMS
 // ============================================================================
@@ -200,15 +286,16 @@ export type MessageStatus = z.infer<typeof MessageStatusSchema>;
  * - /src/db/tables/chat.ts - Database enum definition
  * - /src/api/routes/chat/schema.ts - Message schemas
  * - Frontend message rendering
+ * - AI SDK v5 tool calling (tool role for tool results)
  */
-export const MESSAGE_ROLES = ['user', 'assistant'] as const;
+export const MESSAGE_ROLES = ['user', 'assistant', 'tool'] as const;
 
 /**
  * Message role Zod schema
  * ✅ RUNTIME VALIDATION: Validates message role values
  */
 export const MessageRoleSchema = z.enum(MESSAGE_ROLES).openapi({
-  description: 'Message role (user input or AI response)',
+  description: 'Message role (user input, AI response, or tool result)',
   example: 'assistant',
 });
 
@@ -571,6 +658,82 @@ export const UsageStatusSchema = z.enum(USAGE_STATUSES).openapi({
  * ✅ ZOD INFERENCE: Type automatically derived from schema
  */
 export type UsageStatus = z.infer<typeof UsageStatusSchema>;
+
+// ============================================================================
+// WEB SEARCH DEPTH ENUMS
+// ============================================================================
+
+/**
+ * Web search depth tuple for controlling search thoroughness
+ * ✅ SINGLE SOURCE: All search depth values defined here
+ *
+ * Used by:
+ * - /src/api/services/web-search-presearch.service.ts - Search depth control
+ * - /src/api/services/web-search-query-generation.service.ts - Query generation
+ * - Frontend search configuration
+ */
+export const WEB_SEARCH_DEPTHS = ['basic', 'advanced'] as const;
+
+/**
+ * Web search depth Zod schema
+ * ✅ RUNTIME VALIDATION: Validates search depth values
+ */
+export const WebSearchDepthSchema = z.enum(WEB_SEARCH_DEPTHS).openapi({
+  description: 'Web search thoroughness level (basic or advanced)',
+  example: 'basic',
+});
+
+/**
+ * Web search depth TypeScript type
+ * ✅ ZOD INFERENCE: Type automatically derived from schema
+ */
+export type WebSearchDepth = z.infer<typeof WebSearchDepthSchema>;
+
+/**
+ * Web search depth constants for clear usage
+ * ✅ RECOMMENDED PATTERN: Use WebSearchDepths.ADVANCED instead of 'advanced'
+ *
+ * @example
+ * // ❌ WRONG: Hardcoded string
+ * searchDepth === 'advanced'
+ *
+ * // ✅ CORRECT: Type-safe constant
+ * searchDepth === WebSearchDepths.ADVANCED
+ */
+export const WebSearchDepths = {
+  BASIC: 'basic' as const,
+  ADVANCED: 'advanced' as const,
+} as const satisfies Record<string, WebSearchDepth>;
+
+// ============================================================================
+// WEB SEARCH CONTENT TYPE ENUMS
+// ============================================================================
+
+/**
+ * Web search content type tuple for categorizing search results
+ * ✅ SINGLE SOURCE: All content type values defined here
+ *
+ * Used by:
+ * - /src/api/services/web-search-schemas.ts - Result item schema
+ * - /src/api/services/web-search-puppeteer.service.ts - Content extraction
+ * - Frontend search result display with type badges
+ */
+export const WEB_SEARCH_CONTENT_TYPES = ['article', 'comparison', 'guide', 'data', 'news', 'general'] as const;
+
+/**
+ * Web search content type Zod schema
+ * ✅ RUNTIME VALIDATION: Validates content type values
+ */
+export const WebSearchContentTypeSchema = z.enum(WEB_SEARCH_CONTENT_TYPES).openapi({
+  description: 'Content type classification for search results',
+  example: 'article',
+});
+
+/**
+ * Web search content type TypeScript type
+ * ✅ ZOD INFERENCE: Type automatically derived from schema
+ */
+export type WebSearchContentType = z.infer<typeof WebSearchContentTypeSchema>;
 
 // ============================================================================
 // NOTE: All exports are done inline above where each enum is defined

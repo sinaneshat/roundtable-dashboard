@@ -21,6 +21,7 @@ export const ChatInputFormSchema = z.object({
   message: MessageContentSchema,
   mode: ChatModeSchema,
   participants: z.array(ParticipantConfigSchema).min(1, 'At least one participant is required'),
+  enableWebSearch: z.boolean().optional(),
 });
 export type ChatInputFormData = z.infer<typeof ChatInputFormSchema>;
 export const ThreadInputFormSchema = z.object({
@@ -33,6 +34,7 @@ export function toCreateThreadRequest(
   return {
     title: 'New Chat',
     mode: data.mode,
+    enableWebSearch: data.enableWebSearch ?? false,
     participants: data.participants.map((p, index) => ({
       modelId: p.modelId,
       role: p.role || undefined,

@@ -18,6 +18,7 @@ import { createError, structureAIProviderError } from '@/api/common/error-handli
 import { createHandler } from '@/api/core';
 import { ChangelogTypes } from '@/api/core/enums';
 import { saveStreamedMessage } from '@/api/services/message-persistence.service';
+import { filterDbToConversationMessages } from '@/api/services/message-type-guards';
 import { getModelById } from '@/api/services/models-config.service';
 import { initializeOpenRouter, openRouterService } from '@/api/services/openrouter.service';
 import { validateParticipantUniqueness } from '@/api/services/participant-validation.service';
@@ -34,6 +35,7 @@ import {
 } from '@/api/services/product-logic.service';
 import { handleRoundRegeneration } from '@/api/services/regeneration.service';
 import { calculateRoundNumber } from '@/api/services/round.service';
+import { buildSearchContext } from '@/api/services/search-context-builder';
 import {
   enforceMessageQuota,
   getUserTier,
@@ -487,9 +489,20 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
       ],
     });
 
+    // ✅ TYPE-SAFE FILTERING: Use consolidated utility for conversation message filtering
+    // Replaces inline logic with Zod-validated type guard from message-type-guards.ts
+    // Filters out pre-search messages to ensure clean conversation history for LLM
+    //
+    // WHY THIS MATTERS FOR PARTICIPANT IDs:
+    // - Pre-search messages have role='assistant' but NO participantId
+    // - They're search result summaries, NOT participant responses
+    // - Filtering ensures participant count/indexing remains correct
+    // - Analysis handler uses same utilities to ensure consistency
+    const conversationDbMessages = filterDbToConversationMessages(previousDbMessages);
+
     // ✅ AI SDK V5 VALIDATION: Convert and validate database messages
     // chatMessagesToUIMessages() now uses AI SDK validateUIMessages() internally
-    const previousMessages = await chatMessagesToUIMessages(previousDbMessages);
+    const previousMessages = await chatMessagesToUIMessages(conversationDbMessages);
 
     // =========================================================================
     // STEP 3.5: ✅ AI SDK V5 MESSAGE VALIDATION - Validate incoming messages
@@ -807,6 +820,55 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
     }
 
     // =========================================================================
+    // STEP 6.6: ✅ WEB SEARCH PRE-SEARCH CONTEXT LOADING
+    // =========================================================================
+    // Pre-search is now executed via separate /chat/pre-search endpoint BEFORE streaming
+    // This section loads existing pre-search results from database to add to system prompt
+    //
+    // ✅ CONSOLIDATED SERVICE: Uses search-context-builder.ts for type-safe context generation
+    // ✅ CRITICAL FIX: ALL participants should receive search context, not just participant 0
+    // ✅ CONTEXT STRATEGY:
+    //    - Current round: Full search results with all website contents
+    //    - Previous rounds: Summary/analysis only (to avoid context bloat)
+    //
+    // ✅ HISTORY CONSTRUCTION:
+    //    1. Conversation history (conversationDbMessages) excludes pre-search messages
+    //       - These are filtered out above using filterDbToConversationMessages()
+    //       - History shows: user messages + participant responses only
+    //    2. Search context (searchContext) is added to system prompt separately
+    //       - Current round: Full details (query, summary, sources, content)
+    //       - Previous rounds: Analysis summary only
+    //    3. ALL participants see complete history:
+    //       - All previous user messages
+    //       - All previous participant responses
+    //       - Current round search results (if web search enabled)
+    //       - Previous round search summaries
+    //
+    // This ensures participants have full context while keeping the conversation
+    // history clean and focused on actual participant interactions.
+
+    let searchContext = '';
+
+    if (thread.enableWebSearch) {
+      try {
+        // ✅ CONSOLIDATED: Use buildSearchContext() from search-context-builder.ts
+        // Replaces 60+ lines of inline context building logic
+        // Type-safe with Zod validation, handles current vs previous round strategies
+        searchContext = buildSearchContext(previousDbMessages, {
+          currentRoundNumber,
+          includeFullResults: true, // Full details for current round
+        });
+      } catch {
+        // Ignore error - don't fail the request
+      }
+    }
+
+    // Add search context to system prompt if available
+    if (searchContext) {
+      systemPrompt = `${systemPrompt}${searchContext}`;
+    }
+
+    // =========================================================================
     // STEP 7: ✅ OFFICIAL AI SDK v5 STREAMING PATTERN
     // Reference: https://sdk.vercel.ai/docs/ai-sdk-core/generating-text#stream-text
     // Reference: https://sdk.vercel.ai/docs/ai-sdk-core/error-handling
@@ -945,6 +1007,12 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
     // CRITICAL FIX: Pre-generate ID using ulid() to avoid AI SDK's generateId() collisions
     // AI SDK's generateId() uses timestamps and can generate identical IDs when multiple
     // participants process simultaneously, causing database conflicts and missing messages
+    //
+    // ✅ PARTICIPANT ID CONSISTENCY: This ID is STABLE regardless of web search
+    // - Pre-search messages use separate IDs (format: `pre-search-${roundNumber}-${ulid()}`)
+    // - Participant messages use this ID (format: ulid())
+    // - Pre-search does NOT affect participant indexing or ID generation
+    // - Analysis receives correct participant message IDs (filtered to exclude pre-search)
     const streamMessageId = ulid();
 
     // =========================================================================
@@ -1191,8 +1259,8 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
     // The onFinish callback will run when the stream completes successfully or on error.
     // Client disconnects are handled by the Response stream - onFinish will still fire.
 
-    // Return stream response
-    return finalResult.toUIMessageStreamResponse({
+    // Get the base stream response
+    const baseStreamResponse = finalResult.toUIMessageStreamResponse({
       sendReasoning: true, // Stream reasoning for o1/o3/DeepSeek models
 
       // ✅ OFFICIAL PATTERN: Pass original messages for type-safe metadata
@@ -1282,5 +1350,10 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
         return JSON.stringify(errorMetadata);
       },
     });
+
+    // =========================================================================
+    // Return the stream - Pre-search now handled by separate /chat/pre-search endpoint
+    // =========================================================================
+    return baseStreamResponse;
   },
 );

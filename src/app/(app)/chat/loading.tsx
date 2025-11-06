@@ -22,7 +22,7 @@ import { chatGlass } from '@/lib/ui/glassmorphism';
  */
 export default function ChatOverviewLoading() {
   return (
-    <div className="relative min-h-full">
+    <div className="relative min-h-svh flex flex-col">
       {/* Background - fixed behind all content */}
       <div className="fixed inset-0 -z-10 overflow-hidden">
         <WavyBackground containerClassName="h-full w-full" />
@@ -30,7 +30,7 @@ export default function ChatOverviewLoading() {
 
       {/* Main content - flows naturally, page scrolls */}
       {/* ✅ MATCHES ChatOverviewScreen.tsx:403 - pb-32 for consistent spacing */}
-      <div className="container max-w-3xl mx-auto px-4 sm:px-6 pt-12 pb-32">
+      <div className="container max-w-3xl mx-auto px-4 sm:px-6 pt-12 pb-32 flex-1">
         {/* Hero Section */}
         <div className="py-6 sm:py-8">
           <div className="flex flex-col items-center gap-4 sm:gap-5 md:gap-6 text-center">

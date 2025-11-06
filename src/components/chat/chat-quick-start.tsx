@@ -4,13 +4,12 @@ import { motion } from 'motion/react';
 import { useCallback, useMemo } from 'react';
 
 import type { SubscriptionTier } from '@/api/services/product-logic.service';
+import { AvatarGroup } from '@/components/chat/avatar-group';
 import type { ParticipantConfig } from '@/components/chat/chat-form-schemas';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useModelsQuery } from '@/hooks/queries/models';
 import { useUsageStatsQuery } from '@/hooks/queries/usage';
 import type { ChatModeId } from '@/lib/config/chat-modes';
 import { cn } from '@/lib/ui/cn';
-import { getProviderIcon } from '@/lib/utils/ai-display';
 
 type QuickStartSuggestion = {
   title: string;
@@ -318,58 +317,32 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
       case 'debating':
         return {
           icon: Users,
-          label: 'Debate',
-          color: 'text-white/60',
-          bgColor: 'bg-white/5',
-          borderColor: 'border-white/10',
+          label: 'Debating',
+          color: 'text-white/80',
+          bgColor: 'bg-white/10',
+          borderColor: 'border-white/20',
         };
       case 'analyzing':
         return {
           icon: MessageSquare,
-          label: 'Analyze',
-          color: 'text-white/60',
-          bgColor: 'bg-white/5',
-          borderColor: 'border-white/10',
+          label: 'Analyzing',
+          color: 'text-white/80',
+          bgColor: 'bg-white/10',
+          borderColor: 'border-white/20',
         };
       default:
         return {
           icon: MessageSquare,
-          label: 'Chat',
-          color: 'text-white/60',
-          bgColor: 'bg-white/5',
-          borderColor: 'border-white/10',
+          label: 'Chatting',
+          color: 'text-white/80',
+          bgColor: 'bg-white/10',
+          borderColor: 'border-white/20',
         };
     }
   };
-  const renderParticipant = (participant: ParticipantConfig) => {
-    const model = allModels.find(m => m.id === participant.modelId);
-    const isAccessible = model?.is_accessible_to_user ?? true;
-    const provider = model?.provider || participant.modelId?.split('/')[0] || 'ai';
-    const modelName = model?.name || participant.modelId || 'AI';
-
-    return (
-      <div
-        key={participant.id}
-        className={cn(
-          'flex items-center gap-1.5 shrink-0',
-          !isAccessible && 'opacity-50',
-        )}
-      >
-        <Avatar className="size-4 shrink-0">
-          <AvatarImage src={getProviderIcon(provider)} alt={modelName} />
-          <AvatarFallback className="text-[8px] bg-white/10">
-            {modelName.slice(0, 2).toUpperCase()}
-          </AvatarFallback>
-        </Avatar>
-        <span className="text-xs text-white/70 whitespace-nowrap">
-          {participant.role}
-        </span>
-      </div>
-    );
-  };
   return (
     <div className={cn('w-full relative z-20', className)}>
-      <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-2">
         {suggestions.map((suggestion, index) => {
           const modeConfig = getModeConfig(suggestion.mode);
           const ModeIcon = modeConfig.icon;
@@ -384,25 +357,31 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
                 ease: [0.25, 0.46, 0.45, 0.94],
               }}
               onClick={() => onSuggestionClick(suggestion.prompt, suggestion.mode, suggestion.participants)}
-              className="w-full text-left p-4 rounded-lg bg-white/5 backdrop-blur-sm hover:bg-white/10 active:bg-white/15 transition-all duration-200 focus-visible:ring-2 focus-visible:ring-white/20 focus-visible:outline-none"
+              className="w-full text-left p-3.5 sm:p-4 rounded-xl sm:rounded-lg hover:bg-white/10 active:bg-white/15 hover:backdrop-blur-sm transition-all duration-200 focus-visible:ring-2 focus-visible:ring-white/20 focus-visible:outline-none touch-manipulation active:scale-[0.98] min-h-[60px] sm:min-h-[64px]"
             >
-              <div className="flex items-start justify-between gap-3 mb-2">
-                <h3 className="text-sm font-medium text-white/95 leading-snug flex-1">
+              <div className="flex items-center justify-between gap-3 sm:gap-4 h-full">
+                {/* Left: Question */}
+                <h3 className="text-base sm:text-lg font-medium text-white/95 leading-snug flex-1 min-w-0">
                   {suggestion.title}
                 </h3>
-                <div className={cn(
-                  'flex items-center gap-1 text-xs shrink-0',
-                  modeConfig.color,
-                )}
-                >
-                  <ModeIcon className="size-3" />
-                  <span>{modeConfig.label}</span>
+
+                {/* Right: Mode and avatars */}
+                <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+                  <div className="flex items-center gap-1.5">
+                    <ModeIcon className={cn('size-3.5', modeConfig.color)} />
+                    <span className={cn('text-xs font-medium whitespace-nowrap', modeConfig.color)}>
+                      {modeConfig.label}
+                    </span>
+                  </div>
+
+                  {/* Overlapping Avatars */}
+                  <AvatarGroup
+                    participants={suggestion.participants}
+                    allModels={allModels}
+                    maxVisible={3}
+                    size="sm"
+                  />
                 </div>
-              </div>
-              <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide">
-                {suggestion.participants
-                  .sort((a, b) => a.priority - b.priority)
-                  .map(participant => renderParticipant(participant))}
               </div>
             </motion.button>
           );

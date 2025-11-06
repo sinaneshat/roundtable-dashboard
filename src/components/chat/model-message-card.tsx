@@ -2,6 +2,7 @@
 import { memo } from 'react';
 import { Streamdown } from 'streamdown';
 
+import { MessageStatuses } from '@/api/core/enums';
 import type { EnhancedModelResponse } from '@/api/routes/models/schema';
 import { Message, MessageAvatar, MessageContent } from '@/components/ai-elements/message';
 import { Reasoning, ReasoningContent, ReasoningTrigger } from '@/components/ai-elements/reasoning';
@@ -25,6 +26,8 @@ type ModelMessageCardProps = {
   messageId?: string;
   metadata?: UIMessageMetadata | null;
   isAccessible?: boolean;
+  hideInlineHeader?: boolean;
+  hideAvatar?: boolean;
 };
 const DEFAULT_PARTS: MessagePart[] = [];
 export const ModelMessageCard = memo(({
@@ -39,10 +42,12 @@ export const ModelMessageCard = memo(({
   messageId,
   metadata,
   isAccessible,
+  hideInlineHeader = false,
+  hideAvatar = false,
 }: ModelMessageCardProps) => {
   const modelIsAccessible = model ? (isAccessible ?? model.is_accessible_to_user) : true;
-  const showStatusIndicator = status === 'thinking' || status === 'streaming';
-  const isError = status === 'error';
+  const showStatusIndicator = status === MessageStatuses.THINKING || status === MessageStatuses.STREAMING;
+  const isError = status === MessageStatuses.ERROR;
 
   // ✅ STRICT TYPING: Only assistant messages have error fields
   const assistantMetadata = metadata && isAssistantMetadata(metadata) ? metadata : null;
@@ -55,35 +60,37 @@ export const ModelMessageCard = memo(({
       <Message from="assistant">
         <MessageContent className={hasError ? 'text-destructive' : undefined}>
           <>
-            <div className="flex items-center gap-2 mb-2 -mt-1 flex-wrap">
-              <span className="text-sm font-medium text-foreground/90">
-                {modelName}
-              </span>
-              {role && (
-                <>
-                  <span className="text-muted-foreground/50 text-xs">•</span>
-                  <span className="text-muted-foreground/70 text-xs">
-                    {String(role)}
-                  </span>
-                </>
-              )}
-              {!modelIsAccessible && requiredTierName && (
-                <>
-                  <span className="text-muted-foreground/50 text-xs">•</span>
-                  <span className="text-muted-foreground/70 text-xs">
-                    {requiredTierName}
-                    {' '}
-                    required
-                  </span>
-                </>
-              )}
-              {showStatusIndicator && (
-                <span className="ml-1 size-1.5 rounded-full bg-primary/60 animate-pulse" />
-              )}
-              {hasError && (
-                <span className="ml-1 size-1.5 rounded-full bg-destructive/80" />
-              )}
-            </div>
+            {!hideInlineHeader && (
+              <div className="flex items-center gap-2 mb-2 -mt-1 flex-wrap">
+                <span className="text-sm font-medium text-foreground/90">
+                  {modelName}
+                </span>
+                {role && (
+                  <>
+                    <span className="text-muted-foreground/50 text-xs">•</span>
+                    <span className="text-muted-foreground/70 text-xs">
+                      {String(role)}
+                    </span>
+                  </>
+                )}
+                {!modelIsAccessible && requiredTierName && (
+                  <>
+                    <span className="text-muted-foreground/50 text-xs">•</span>
+                    <span className="text-muted-foreground/70 text-xs">
+                      {requiredTierName}
+                      {' '}
+                      required
+                    </span>
+                  </>
+                )}
+                {showStatusIndicator && (
+                  <span className="ml-1 size-1.5 rounded-full bg-primary/60 animate-pulse" />
+                )}
+                {hasError && (
+                  <span className="ml-1 size-1.5 rounded-full bg-destructive/80" />
+                )}
+              </div>
+            )}
             {hasError && (
               <MessageErrorDetails
                 metadata={metadata}
@@ -105,7 +112,7 @@ export const ModelMessageCard = memo(({
                 return (
                   <Reasoning
                     key={messageId ? `${messageId}-reasoning-${partIndex}` : `reasoning-${partIndex}`}
-                    isStreaming={status === 'streaming'}
+                    isStreaming={status === MessageStatuses.STREAMING}
                     className="w-full"
                   >
                     <ReasoningTrigger />
@@ -153,7 +160,7 @@ export const ModelMessageCard = memo(({
             })}
           </>
         </MessageContent>
-        <MessageAvatar src={avatarSrc} name={avatarName} />
+        {!hideAvatar && <MessageAvatar src={avatarSrc} name={avatarName} />}
       </Message>
     </div>
   );

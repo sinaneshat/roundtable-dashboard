@@ -1,6 +1,6 @@
 'use client';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import type { ReactNode } from 'react';
 import React from 'react';
@@ -15,7 +15,7 @@ import {
   BreadcrumbSeparator,
 } from '@/components/ui/breadcrumb';
 import { Separator } from '@/components/ui/separator';
-import { SidebarTrigger, useSidebar } from '@/components/ui/sidebar';
+import { SidebarTrigger } from '@/components/ui/sidebar';
 import { BRAND } from '@/constants/brand';
 import { cn } from '@/lib/ui/cn';
 
@@ -35,6 +35,7 @@ type NavigationHeaderProps = {
   showSidebarTrigger?: boolean;
   showLogo?: boolean;
   maxWidth?: boolean;
+  showScrollButton?: boolean;
 };
 function NavigationHeaderComponent({
   className,
@@ -44,11 +45,12 @@ function NavigationHeaderComponent({
   showSidebarTrigger = true,
   showLogo = false,
   maxWidth = false,
+  showScrollButton = false,
 }: NavigationHeaderProps = {}) {
   const pathname = usePathname();
+  const router = useRouter();
   const t = useTranslations();
   const context = useThreadHeaderOptional();
-  const { state } = useSidebar();
   const threadTitle = threadTitleProp ?? (showSidebarTrigger ? context.threadTitle : null);
   const threadParent = threadParentProp ?? '/chat';
   const threadActions = threadActionsProp ?? (showSidebarTrigger ? context.threadActions : null);
@@ -56,6 +58,7 @@ function NavigationHeaderComponent({
     (pathname?.startsWith('/chat/') && pathname !== '/chat' && pathname !== '/chat/pricing')
     || pathname?.startsWith('/public/chat/')
   );
+  const isOverviewPage = pathname === '/chat';
   const currentPage = isThreadPage && threadTitle
     ? { titleKey: threadTitle, parent: threadParent, isDynamic: true }
     : pathname ? breadcrumbMap[pathname] : undefined;
@@ -63,51 +66,58 @@ function NavigationHeaderComponent({
   return (
     <header
       className={cn(
-        'sticky top-0 left-0 right-0 z-50 flex h-16 shrink-0 items-center gap-2 transition-all duration-200 ease-in-out',
-        'border-b border-border/40 backdrop-blur-xl bg-background/60 supports-[backdrop-filter]:bg-background/60 w-full',
+        'sticky top-0 left-0 right-0 z-50 flex h-14 sm:h-16 shrink-0 items-center gap-2 transition-all duration-200 ease-in-out',
+        !isOverviewPage && 'border-b border-border/40 backdrop-blur-xl bg-background/60 supports-[backdrop-filter]:bg-background/60 w-full',
         className,
       )}
     >
       <div className={cn(
-        'flex items-center justify-between gap-2 px-3 sm:px-4 md:px-6 lg:px-8 h-16 w-full',
+        'flex items-center justify-between gap-2 px-3 sm:px-4 md:px-6 lg:px-8 h-14 sm:h-16 w-full',
         maxWidth && 'max-w-full sm:max-w-3xl lg:max-w-4xl mx-auto',
       )}
       >
-        <div className="flex items-center gap-2 min-w-0 flex-1">
-          {showSidebarTrigger && state === 'collapsed' && (
+        <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 flex-1">
+          {showSidebarTrigger && (
             <>
-              <SidebarTrigger className="-ms-1 flex-shrink-0" />
-              <Separator orientation="vertical" className="me-2 h-4 flex-shrink-0" />
+              <SidebarTrigger className="-ms-1 flex-shrink-0 size-9 sm:size-auto touch-manipulation" />
+              {!isOverviewPage && <Separator orientation="vertical" className="me-1 sm:me-2 h-3.5 sm:h-4 flex-shrink-0" />}
             </>
           )}
-          {showLogo && (
+          {showLogo && !isOverviewPage && (
             <>
-              <Link href="/" className="flex items-center gap-2 flex-shrink-0">
+              <Link href="/" className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0 touch-manipulation">
                 <Logo size="sm" variant="icon" />
-                <span className="text-base font-semibold tracking-tight">
+                <span className="text-sm sm:text-base font-semibold tracking-tight hidden xs:inline">
                   {BRAND.displayName}
                 </span>
               </Link>
-              <Separator orientation="vertical" className="me-2 h-4 flex-shrink-0" />
+              <Separator orientation="vertical" className="me-1 sm:me-2 h-3.5 sm:h-4 flex-shrink-0" />
             </>
           )}
-          {currentPage && (
+          {!isOverviewPage && currentPage && (
             <Breadcrumb className="min-w-0 flex-1">
               <BreadcrumbList>
                 {parentPage && (
                   <>
                     <BreadcrumbItem className="hidden md:block">
                       <BreadcrumbLink asChild>
-                        <Link href={currentPage.parent!}>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            router.push(currentPage.parent!);
+                          }}
+                          className="cursor-pointer"
+                        >
                           {t(parentPage.titleKey)}
-                        </Link>
+                        </button>
                       </BreadcrumbLink>
                     </BreadcrumbItem>
                     <BreadcrumbSeparator className="hidden md:block" />
                   </>
                 )}
-                <BreadcrumbItem className="min-w-0 max-w-md">
-                  <BreadcrumbPage className="line-clamp-1 truncate max-w-full" title={'isDynamic' in currentPage && currentPage.isDynamic ? currentPage.titleKey : t(currentPage.titleKey)}>
+                <BreadcrumbItem className="min-w-0 max-w-[200px] sm:max-w-md">
+                  <BreadcrumbPage className="line-clamp-1 truncate max-w-full text-sm sm:text-base" title={'isDynamic' in currentPage && currentPage.isDynamic ? currentPage.titleKey : t(currentPage.titleKey)}>
                     {'isDynamic' in currentPage && currentPage.isDynamic
                       ? currentPage.titleKey
                       : t(currentPage.titleKey)}
@@ -117,27 +127,28 @@ function NavigationHeaderComponent({
             </Breadcrumb>
           )}
         </div>
-        <div className="flex items-center gap-2 flex-shrink-0">
-          <ChatScrollButton variant="header" />
-          {threadActions}
-        </div>
+        {!isOverviewPage && (
+          <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
+            {showScrollButton && <ChatScrollButton variant="header" />}
+            {threadActions}
+          </div>
+        )}
       </div>
     </header>
   );
 }
 export const NavigationHeader = React.memo(NavigationHeaderComponent);
 function MinimalHeaderComponent({ className }: { className?: string } = {}) {
-  const { state } = useSidebar();
-
   return (
     <header
       className={cn(
-        'sticky top-0 left-0 right-0 z-50 flex h-16 shrink-0 items-center',
+        'sticky top-0 left-0 right-0 z-50 flex h-14 sm:h-16 shrink-0 items-center',
+        'border-b border-border/40 backdrop-blur-xl bg-background/60 supports-[backdrop-filter]:bg-background/60',
         className,
       )}
     >
-      <div className="flex items-center gap-2 px-4 md:px-6 lg:px-8 h-16">
-        {state === 'collapsed' && <SidebarTrigger className="-ms-1" />}
+      <div className="flex items-center gap-2 px-3 sm:px-4 md:px-6 lg:px-8 h-14 sm:h-16">
+        <SidebarTrigger className="-ms-1 size-9 sm:size-auto touch-manipulation" />
       </div>
     </header>
   );

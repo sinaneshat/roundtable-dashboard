@@ -19,6 +19,10 @@ export {
   updateParticipantHandler,
 } from './handlers/participant.handler';
 export {
+  executePreSearchHandler,
+  getPreSearchHandler,
+} from './handlers/pre-search-unified.handler';
+export {
   createCustomRoleHandler,
   deleteCustomRoleHandler,
   getCustomRoleHandler,

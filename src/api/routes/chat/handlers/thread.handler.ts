@@ -157,6 +157,7 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
         status: ThreadStatusSchema.enum.active,
         isFavorite: false,
         isPublic: false,
+        enableWebSearch: body.enableWebSearch ?? false,
         metadata: body.metadata,
         createdAt: now,
         updatedAt: now,
@@ -248,12 +249,11 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
     await incrementMessageUsage(user.id, 1);
     await incrementThreadUsage(user.id);
     await invalidateThreadCache(db, user.id);
+    // ✅ START TITLE GENERATION IMMEDIATELY
+    // Title generation only depends on the first user message, not on streaming/searches/CoT
+    // Can start as soon as thread is created without waiting for AI responses
     (async () => {
       try {
-        // ✅ FIX: Wait 5 seconds before generating AI title
-        // This allows the first round to complete and analysis to stream before updating URL
-        await new Promise(resolve => setTimeout(resolve, 5000));
-
         const aiTitle = await generateTitleFromMessage(body.firstMessage, c.env);
         // ✅ Update both title AND slug atomically using updateThreadTitleAndSlug
         await updateThreadTitleAndSlug(threadId, aiTitle);
@@ -568,6 +568,7 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
       status?: ThreadStatus;
       isFavorite?: boolean;
       isPublic?: boolean;
+      enableWebSearch?: boolean;
       metadata?: Record<string, unknown>;
       updatedAt: Date;
     } = {
@@ -583,6 +584,8 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
       updateData.isFavorite = body.isFavorite;
     if (body.isPublic !== undefined)
       updateData.isPublic = body.isPublic;
+    if (body.enableWebSearch !== undefined)
+      updateData.enableWebSearch = body.enableWebSearch;
     if (body.metadata !== undefined)
       updateData.metadata = body.metadata ?? undefined;
     await db.update(tables.chatThread)

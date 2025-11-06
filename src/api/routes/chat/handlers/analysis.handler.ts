@@ -9,6 +9,7 @@ import type { ErrorContext } from '@/api/core';
 import { createHandler, Responses } from '@/api/core';
 import { AnalysisStatuses } from '@/api/core/enums';
 import { IdParamSchema, ThreadRoundParamSchema } from '@/api/core/schemas';
+import { filterDbToParticipantMessages } from '@/api/services/message-type-guards';
 import { extractModeratorModelName } from '@/api/services/models-config.service';
 import type { ModeratorPromptConfig } from '@/api/services/moderator-analysis.service';
 import {
@@ -310,9 +311,14 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
         ],
       });
 
+      // ✅ TYPE-SAFE FILTERING: Use consolidated utility for participant message filtering
+      // Replaces inline logic with Zod-validated type guard
+      // Protects against frontend accidentally including pre-search message IDs
+      const participantOnlyFoundMessages = filterDbToParticipantMessages(foundMessages);
+
       // Validate query results with Zod schema
-      if (foundMessages.length === messageIds.length) {
-        const validationResult = MessageWithParticipantSchema.array().safeParse(foundMessages);
+      if (participantOnlyFoundMessages.length === messageIds.length) {
+        const validationResult = MessageWithParticipantSchema.array().safeParse(participantOnlyFoundMessages);
         if (validationResult.success) {
           participantMessages = validationResult.data;
         } else {
@@ -323,6 +329,12 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
               field: 'participantMessageIds',
             },
           );
+        }
+      } else if (participantOnlyFoundMessages.length > 0 && participantOnlyFoundMessages.length < messageIds.length) {
+        // ✅ RECOVERY: Some IDs were pre-search messages - continue with valid participant messages only
+        const validationResult = MessageWithParticipantSchema.array().safeParse(participantOnlyFoundMessages);
+        if (validationResult.success) {
+          participantMessages = validationResult.data;
         }
       }
     }
@@ -343,9 +355,23 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
           asc(tables.chatMessage.id),
         ],
       });
-      if (roundMessages.length === 0) {
+
+      // ✅ TYPE-SAFE FILTERING: Use consolidated utility for participant message filtering
+      // Replaces 20+ lines of inline filtering logic with single function call
+      // Uses Zod validation to ensure only valid participant messages are analyzed
+      //
+      // PRE-SEARCH MESSAGES (EXCLUDED):
+      // - role: 'assistant' but metadata.isPreSearch: true
+      // - NO participantId (not from specific participant)
+      //
+      // PARTICIPANT MESSAGES (INCLUDED):
+      // - role: 'assistant' with valid ParticipantMessageMetadata
+      // - metadata.participantId: string (links to chatParticipant table)
+      // - participant: { ... } (joined from chatParticipant)
+      const participantOnlyMessages = filterDbToParticipantMessages(roundMessages);
+      if (participantOnlyMessages.length === 0) {
         throw createError.badRequest(
-          `No messages found for round ${roundNum}. This round may not exist yet.`,
+          `No participant messages found for round ${roundNum}. This round may not have participant responses yet.`,
           {
             errorType: 'validation',
             field: 'roundNumber',
@@ -353,16 +379,16 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
         );
       }
 
-      // Validate query results with Zod schema
-      const validationResult = MessageWithParticipantSchema.array().safeParse(roundMessages);
+      // Validate query results with Zod schema (using filtered messages)
+      const validationResult = MessageWithParticipantSchema.array().safeParse(participantOnlyMessages);
       if (validationResult.success) {
         participantMessages = validationResult.data;
       } else {
         throw createError.internal(
-          'Failed to validate round messages',
+          'Failed to validate participant messages',
           {
             errorType: 'validation',
-            field: 'roundMessages',
+            field: 'participantMessages',
           },
         );
       }

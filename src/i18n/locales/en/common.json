@@ -351,6 +351,52 @@
       "currentMode": "Current Mode:",
       "chatModes": "Chat Modes"
     },
+    "webSearch": {
+      "title": "Web Search",
+      "enabled": "Search On",
+      "disabled": "Search Off",
+      "description": {
+        "enabled": "Participants can browse the web for information",
+        "disabled": "Click to enable web browsing for participants"
+      }
+    },
+    "preSearch": {
+      "title": "Initial Web Research",
+      "searching": "Searching",
+      "error": "Error",
+      "searchStrategy": "Search Strategy",
+      "queriesExecuted": "Queries Executed",
+      "summary": {
+        "searches": "{count, plural, =1 {# search} other {# searches}}",
+        "results": "{count, plural, =1 {# result} other {# results}}",
+        "failed": "{count} failed",
+        "successful": "{successCount}/{totalCount} searches successful",
+        "sourcesFound": "{count} sources found"
+      },
+      "searchDepth": {
+        "basic": "basic",
+        "advanced": "advanced"
+      },
+      "show": "Show",
+      "hide": "Hide",
+      "details": "details"
+    },
+    "tools": {
+      "webSearch": {
+        "title": "Web Search Results",
+        "source": {
+          "singular": "source",
+          "plural": "sources"
+        },
+        "failed": "failed",
+        "show": "Show",
+        "hide": "Hide",
+        "details": "details",
+        "error": {
+          "failedToLoad": "{count, plural, =1 {# page could not be loaded} other {# pages could not be loaded}}"
+        }
+      }
+    },
     "messages": {
       "tokens": "tokens",
       "error": "Error",
@@ -483,6 +529,7 @@
       "submit": "Send message",
       "threadPlaceholder": "Continue the conversation..."
     },
+    "disclaimer": "AI can make mistakes. Please double-check responses.",
     "sources": {
       "title": "Sources",
       "document": "Document"
@@ -499,6 +546,7 @@
     "makingPublic": "Making public...",
     "makePublicConfirmDescription": "Anyone with the link will be able to view this thread and its messages.",
     "makePublicConfirmTitle": "Make this thread public?",
+    "moreOptions": "More options",
     "noMessages": "No messages",
     "noMoreThreads": "That's all your chats for now",
     "noResults": "No chats found",

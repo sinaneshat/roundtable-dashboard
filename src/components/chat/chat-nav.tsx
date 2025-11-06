@@ -17,6 +17,13 @@ import { NavUser } from '@/components/chat/nav-user';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import {
   Empty,
   EmptyDescription,
   EmptyHeader,
@@ -28,9 +35,12 @@ import {
   Sidebar,
   SidebarContent,
   SidebarFooter,
+  SidebarGroup,
   SidebarHeader,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
   SidebarRail,
-  SidebarTrigger,
   useSidebar,
 } from '@/components/ui/sidebar';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -44,7 +54,7 @@ function AppSidebarComponent({ ...props }: React.ComponentProps<typeof Sidebar>)
   const router = useRouter();
   const t = useTranslations();
   const [isSearchOpen, setIsSearchOpen] = useState(false);
-  const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const sidebarContentRef = useRef<HTMLDivElement>(null);
   const { isMobile, setOpenMobile } = useSidebar();
   const {
     data: threadsData,
@@ -100,7 +110,6 @@ function AppSidebarComponent({ ...props }: React.ComponentProps<typeof Sidebar>)
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []); // No dependencies - ref always has latest callback
   const handleNewChat = () => {
-    router.push('/chat');
     if (isMobile) {
       setOpenMobile(false);
     }
@@ -136,202 +145,216 @@ function AppSidebarComponent({ ...props }: React.ComponentProps<typeof Sidebar>)
   const subscriptionTier = usageData?.success ? usageData.data.subscription.tier : 'free';
   const isFreeUser = subscriptionTier === 'free';
   const handleScroll = useCallback(() => {
-    if (!scrollAreaRef.current || !hasNextPage || isFetchingNextPage)
+    if (!sidebarContentRef.current || !hasNextPage || isFetchingNextPage)
       return;
-    const { scrollTop, scrollHeight, clientHeight } = scrollAreaRef.current;
+    const { scrollTop, scrollHeight, clientHeight } = sidebarContentRef.current;
     const scrollPercentage = (scrollTop + clientHeight) / scrollHeight;
     if (scrollPercentage > 0.8) {
       fetchNextPage();
     }
   }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
   useEffect(() => {
-    const scrollArea = scrollAreaRef.current;
-    if (!scrollArea)
+    const viewport = sidebarContentRef.current;
+    if (!viewport)
       return;
-    scrollArea.addEventListener('scroll', handleScroll);
-    return () => scrollArea.removeEventListener('scroll', handleScroll);
+    viewport.addEventListener('scroll', handleScroll);
+    return () => viewport.removeEventListener('scroll', handleScroll);
   }, [handleScroll]);
   return (
     <>
       <TooltipProvider>
         <Sidebar collapsible="icon" {...props}>
           <SidebarHeader className="border-b border-sidebar-border">
-            {/* Header - Expanded (logo, brand name, and toggle) */}
-            <div className="flex items-center justify-between px-3 py-3 group-data-[collapsible=icon]:hidden">
-              <Link
-                href="/chat"
-                onClick={() => {
-                  if (isMobile) {
-                    setOpenMobile(false);
-                  }
-                }}
-                className="flex items-center gap-2 hover:opacity-80 transition-opacity"
-              >
-                <Image
-                  src={BRAND.logos.main}
-                  alt={`${BRAND.displayName} Logo`}
-                  width={24}
-                  height={24}
-                  className="size-6 object-contain"
-                  loading="lazy"
-                />
-                <span className="font-semibold text-sm">{BRAND.displayName}</span>
-              </Link>
-              <SidebarTrigger className="size-8 hover:bg-sidebar-accent rounded-md" />
-            </div>
+            <SidebarMenu className="gap-1">
+              {/* Logo/Brand */}
+              <SidebarMenuItem className="group-data-[collapsible=icon]:hidden mb-2">
+                <SidebarMenuButton size="lg" asChild className="hover:bg-transparent">
+                  <Link
+                    href="/chat"
+                    onClick={() => {
+                      if (isMobile) {
+                        setOpenMobile(false);
+                      }
+                    }}
+                  >
+                    <Image
+                      src={BRAND.logos.main}
+                      alt={`${BRAND.displayName} Logo`}
+                      width={40}
+                      height={40}
+                      className="size-10 object-contain shrink-0"
+                      loading="lazy"
+                    />
+                    <span className="truncate min-w-0">
+                      {BRAND.displayName}
+                    </span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
 
-            {/* Header - Collapsed (just logo centered) */}
-            <div className="hidden group-data-[collapsible=icon]:flex items-center justify-center py-3">
-              <Link
-                href="/chat"
-                onClick={() => {
-                  if (isMobile) {
-                    setOpenMobile(false);
-                  }
-                }}
-                className="flex items-center justify-center hover:opacity-80 transition-opacity"
-              >
-                <Image
-                  src={BRAND.logos.main}
-                  alt={`${BRAND.displayName} Logo`}
-                  width={24}
-                  height={24}
-                  className="size-6 object-contain"
-                  loading="lazy"
-                />
-              </Link>
-            </div>
+              {/* Logo - Collapsed */}
+              <SidebarMenuItem className="hidden group-data-[collapsible=icon]:flex justify-center mb-2">
+                <SidebarMenuButton size="lg" asChild className="hover:bg-transparent" tooltip={BRAND.displayName}>
+                  <Link
+                    href="/chat"
+                    onClick={() => {
+                      if (isMobile) {
+                        setOpenMobile(false);
+                      }
+                    }}
+                  >
+                    <Image
+                      src={BRAND.logos.main}
+                      alt={`${BRAND.displayName} Logo`}
+                      width={40}
+                      height={40}
+                      className="size-10 object-contain shrink-0"
+                      loading="lazy"
+                    />
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
 
-            {/* Action Buttons - Expanded */}
-            <div className="px-2 pb-2 space-y-1 group-data-[collapsible=icon]:hidden">
-              <Button
-                variant="ghost"
-                className="w-full justify-start h-9 font-normal hover:bg-sidebar-accent"
-                onClick={handleNewChat}
-              >
-                <Plus className="size-4 mr-2 shrink-0" />
-                <span>{t('navigation.newChat')}</span>
-              </Button>
+              {/* Action Buttons - Expanded */}
+              <SidebarMenuItem className="group-data-[collapsible=icon]:hidden">
+                <SidebarMenuButton asChild>
+                  <Link
+                    href="/chat"
+                    onClick={handleNewChat}
+                  >
+                    <Plus className="size-4 shrink-0" />
+                    <span className="truncate min-w-0">
+                      {t('navigation.newChat')}
+                    </span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
 
-              <Button
-                variant="ghost"
-                className="w-full justify-start h-9 font-normal hover:bg-sidebar-accent"
-                onClick={() => {
-                  setIsSearchOpen(true);
-                  if (isMobile) {
-                    setOpenMobile(false);
-                  }
-                }}
-              >
-                <Search className="size-4 mr-2 shrink-0" />
-                <span>{t('chat.searchChats')}</span>
-              </Button>
+              <SidebarMenuItem className="group-data-[collapsible=icon]:hidden">
+                <SidebarMenuButton
+                  onClick={() => {
+                    setIsSearchOpen(true);
+                    if (isMobile) {
+                      setOpenMobile(false);
+                    }
+                  }}
+                >
+                  <Search className="size-4 shrink-0" />
+                  <span className="truncate min-w-0">
+                    {t('chat.searchChats')}
+                  </span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
 
-              <Button
-                variant="ghost"
-                className="w-full justify-start h-9 font-normal hover:bg-sidebar-accent"
-                disabled
-              >
-                <FolderKanban className="size-4 mr-2 shrink-0" />
-                <span>Projects</span>
-                <Badge variant="secondary" className="ml-auto text-[10px] px-1.5 py-0">
-                  Soon
-                </Badge>
-              </Button>
-            </div>
+              <SidebarMenuItem className="group-data-[collapsible=icon]:hidden">
+                <SidebarMenuButton disabled>
+                  <FolderKanban className="size-4 shrink-0" />
+                  <span className="truncate min-w-0">
+                    Projects
+                  </span>
+                  <Badge variant="secondary" className="ml-auto text-[10px] px-1.5 py-0 shrink-0">
+                    Soon
+                  </Badge>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
 
-            {/* Icon Buttons - Collapsed */}
-            <div className="hidden group-data-[collapsible=icon]:flex flex-col items-center gap-1 pb-2">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="size-8 hover:bg-sidebar-accent"
-                onClick={handleNewChat}
-                title={t('navigation.newChat')}
-              >
-                <Plus className="size-4" />
-              </Button>
+              {/* Icon Buttons - Collapsed */}
+              <SidebarMenuItem className="hidden group-data-[collapsible=icon]:flex justify-center">
+                <SidebarMenuButton
+                  asChild
+                  tooltip={t('navigation.newChat')}
+                >
+                  <Link
+                    href="/chat"
+                    onClick={handleNewChat}
+                  >
+                    <Plus className="size-4" />
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
 
-              <Button
-                variant="ghost"
-                size="icon"
-                className="size-8 hover:bg-sidebar-accent"
-                onClick={() => {
-                  setIsSearchOpen(true);
-                  if (isMobile) {
-                    setOpenMobile(false);
-                  }
-                }}
-                title={t('chat.searchChats')}
-              >
-                <Search className="size-4" />
-              </Button>
+              <SidebarMenuItem className="hidden group-data-[collapsible=icon]:flex justify-center">
+                <SidebarMenuButton
+                  onClick={() => {
+                    setIsSearchOpen(true);
+                    if (isMobile) {
+                      setOpenMobile(false);
+                    }
+                  }}
+                  tooltip={t('chat.searchChats')}
+                >
+                  <Search className="size-4" />
+                </SidebarMenuButton>
+              </SidebarMenuItem>
 
-              <Button
-                variant="ghost"
-                size="icon"
-                className="size-8 hover:bg-sidebar-accent"
-                disabled
-                title="Projects (Coming Soon)"
-              >
-                <FolderKanban className="size-4" />
-              </Button>
-            </div>
+              <SidebarMenuItem className="hidden group-data-[collapsible=icon]:flex justify-center">
+                <SidebarMenuButton
+                  disabled
+                  tooltip="Projects (Coming Soon)"
+                >
+                  <FolderKanban className="size-4" />
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
           </SidebarHeader>
-          <SidebarContent className="p-0">
-            <ScrollArea ref={scrollAreaRef} className="h-full w-full">
-              <div className="px-2 py-3 space-y-3">
+          <SidebarContent className="overflow-hidden p-0 w-full min-w-0">
+            <ScrollArea ref={sidebarContentRef} className="w-full h-full">
+              <div className="flex flex-col w-full">
                 {/* Favorites Section */}
                 {!isLoading && !isError && favorites.length > 0 && (
-                  <div className="group-data-[collapsible=icon]:hidden space-y-1">
-                    <div className="flex items-center justify-between px-2 py-1.5">
-                      <div className="flex items-center gap-1.5">
-                        <Star className="size-3.5 shrink-0 fill-amber-500 text-amber-500" />
-                        <h3 className="text-sm font-semibold text-foreground">
+                  <>
+                    <div className="flex items-center justify-between px-2 pt-2 pb-1 w-full min-w-0 group-data-[collapsible=icon]:hidden">
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                        <Star className="size-4 shrink-0 fill-amber-500 text-amber-500" />
+                        <span className="text-sm font-medium text-foreground truncate min-w-0">
                           {t('chat.favorites')}
-                        </h3>
+                        </span>
                       </div>
-                      <span className="text-xs text-muted-foreground tabular-nums">
+                      <span className="text-xs text-muted-foreground tabular-nums shrink-0">
                         {favorites.length}
                       </span>
                     </div>
-                    <div className="space-y-0.5">
-                      <ChatList
-                        chatGroups={[]}
-                        favorites={favorites}
-                        onDeleteChat={handleDeleteChat}
-                        searchTerm=""
-                        deletingChatId={deletingChatId}
-                        isMobile={isMobile}
-                        onNavigate={() => {
-                          if (isMobile) {
-                            setOpenMobile(false);
-                          }
-                        }}
-                      />
-                    </div>
-                  </div>
+                    <ChatList
+                      chatGroups={[]}
+                      favorites={favorites}
+                      onDeleteChat={handleDeleteChat}
+                      searchTerm=""
+                      deletingChatId={deletingChatId}
+                      isMobile={isMobile}
+                      onNavigate={() => {
+                        if (isMobile) {
+                          setOpenMobile(false);
+                        }
+                      }}
+                    />
+                  </>
                 )}
 
                 {/* Loading State */}
-                {isLoading && <ChatSidebarSkeleton count={15} showFavorites={false} />}
+                {isLoading && (
+                  <SidebarGroup className="group-data-[collapsible=icon]:hidden">
+                    <ChatSidebarSkeleton count={15} showFavorites={false} />
+                  </SidebarGroup>
+                )}
 
                 {/* Error State */}
                 {isError && (
-                  <div className="px-3 py-6 text-center group-data-[collapsible=icon]:hidden">
-                    <p className="text-sm font-medium text-destructive mb-1">
-                      {t('states.error.default')}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {error?.message || t('states.error.description')}
-                    </p>
-                  </div>
+                  <SidebarGroup className="group-data-[collapsible=icon]:hidden">
+                    <div className="py-6 text-center">
+                      <p className="text-sm font-medium text-destructive mb-1">
+                        {t('states.error.default')}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {error?.message || t('states.error.description')}
+                      </p>
+                    </div>
+                  </SidebarGroup>
                 )}
 
                 {/* Empty State */}
                 {!isLoading && !isError && chats.length === 0 && (
-                  <div className="group-data-[collapsible=icon]:hidden">
-                    <Empty className="border-none p-4">
+                  <SidebarGroup className="group-data-[collapsible=icon]:hidden">
+                    <Empty className="border-none">
                       <EmptyHeader>
                         <EmptyMedia variant="icon">
                           <MessageSquarePlus className="size-8" />
@@ -342,12 +365,12 @@ function AppSidebarComponent({ ...props }: React.ComponentProps<typeof Sidebar>)
                         </EmptyDescription>
                       </EmptyHeader>
                     </Empty>
-                  </div>
+                  </SidebarGroup>
                 )}
 
-                {/* Main Chat List - Expanded */}
+                {/* Main Chat List */}
                 {!isLoading && !isError && chatGroups.length > 0 && (
-                  <div className="group-data-[collapsible=icon]:hidden space-y-2">
+                  <>
                     <ChatList
                       chatGroups={chatGroups}
                       favorites={[]}
@@ -361,44 +384,44 @@ function AppSidebarComponent({ ...props }: React.ComponentProps<typeof Sidebar>)
                         }
                       }}
                     />
-                    {isFetchingNextPage && <ChatSidebarPaginationSkeleton count={20} />}
-                    {!hasNextPage && !isFetchingNextPage && chats.length > 0 && (
-                      <div className="px-2 py-4 text-center">
-                        <p className="text-[10px] text-muted-foreground uppercase tracking-wider">
-                          {t('chat.noMoreThreads')}
-                        </p>
-                      </div>
+                    {isFetchingNextPage && (
+                      <SidebarGroup className="group-data-[collapsible=icon]:hidden">
+                        <ChatSidebarPaginationSkeleton count={20} />
+                      </SidebarGroup>
                     )}
-                  </div>
+                  </>
                 )}
-
               </div>
             </ScrollArea>
           </SidebarContent>
           <SidebarFooter>
             {isFreeUser && (
-              <div className="p-2 group-data-[collapsible=icon]:hidden">
-                <Button
-                  variant="outline"
-                  className="w-full justify-start h-auto py-3 px-3 border-sidebar-border hover:bg-sidebar-accent"
-                  asChild
-                >
-                  <Link href="/chat/pricing">
-                    <div className="flex items-start gap-3 w-full">
-                      <div className="flex-shrink-0 mt-0.5">
-                        <Sparkles className="size-4 text-amber-500" />
-                      </div>
-                      <div className="flex-1 text-left space-y-0.5">
-                        <div className="text-sm font-medium text-foreground">
-                          {t('pricing.card.upgradePlan')}
-                        </div>
-                        <div className="text-xs text-muted-foreground leading-snug">
-                          {t('pricing.card.upgradeDescription')}
-                        </div>
-                      </div>
+              <div className="group-data-[collapsible=icon]:hidden">
+                <Card variant="glass-subtle" className="border-sidebar-border">
+                  <CardHeader className="p-3 pb-2">
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="size-4 text-amber-500 shrink-0" />
+                      <CardTitle className="text-sm">
+                        {t('pricing.card.upgradePlan')}
+                      </CardTitle>
                     </div>
-                  </Link>
-                </Button>
+                    <CardDescription className="text-xs leading-relaxed">
+                      {t('pricing.card.upgradeDescription')}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="p-3 pt-0">
+                    <Button
+                      variant="outline"
+                      className="w-full justify-center border-sidebar-border hover:bg-sidebar-accent"
+                      size="sm"
+                      asChild
+                    >
+                      <Link href="/chat/pricing">
+                        {t('pricing.card.upgradeToPro')}
+                      </Link>
+                    </Button>
+                  </CardContent>
+                </Card>
               </div>
             )}
             <NavUser />

@@ -63,6 +63,9 @@
   "ai": {
     "binding": "AI"
   },
+  "browser": {
+    "binding": "BROWSER"
+  },
   "durable_objects": {
     "bindings": [
       {
@@ -95,7 +98,7 @@
     "NEXT_PUBLIC_SES_REPLY_TO_EMAIL": "support@roundtable.now",
     "NEXT_PUBLIC_SES_VERIFIED_EMAIL": "noreply@roundtable.now",
     "NEXT_PUBLIC_STRIPE_CUSTOMER_PORTAL_CONFIG_ID": "bpc_1SEHsHGx4IA5m8QeAu2ukAY9",
-    "NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY": "pk_test_51Rw8lgGx4IA5m8QeqPP5J0dmOfwWWW7aVof4An0u5xCZ0zwct30Lqb47urMNPUXSPaNO3Gz0reNsTAVua6hmjZiW00wqf4BTPI",
+    "NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY": "pk_test_51SPXN852vWNZ3v8wCfrjOoFGG1RFsCq8LC7vJcVJGOEpjJOjmNU4eofpw7ulsSh6LET81iBtYomVYaoHrf8RyPqE00mdMsc6Oy",
     "AUTH_GOOGLE_ID": "440441347001-9k39tnfr8sahuf1i3n82utfutefp879b.apps.googleusercontent.com",
     "BETTER_AUTH_URL": "http://localhost:3000",
     "OPEN_NEXT_DEBUG": "true",
@@ -152,6 +155,9 @@
       "ai": {
         "binding": "AI"
       },
+      "browser": {
+        "binding": "BROWSER"
+      },
       "durable_objects": {
         "bindings": [
           {
@@ -178,7 +184,7 @@
         "NEXT_PUBLIC_SES_REPLY_TO_EMAIL": "noreply@roundtable.now",
         "NEXT_PUBLIC_SES_VERIFIED_EMAIL": "noreply@roundtable.now",
         "NEXT_PUBLIC_STRIPE_CUSTOMER_PORTAL_CONFIG_ID": "bpc_1SEHsHGx4IA5m8QeAu2ukAY9",
-        "NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY": "pk_test_51Rw8lgGx4IA5m8QeqPP5J0dmOfwWWW7aVof4An0u5xCZ0zwct30Lqb47urMNPUXSPaNO3Gz0reNsTAVua6hmjZiW00wqf4BTPI",
+        "NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY": "pk_test_51SPXN852vWNZ3v8wCfrjOoFGG1RFsCq8LC7vJcVJGOEpjJOjmNU4eofpw7ulsSh6LET81iBtYomVYaoHrf8RyPqE00mdMsc6Oy",
         "AUTH_GOOGLE_ID": "440441347001-9k39tnfr8sahuf1i3n82utfutefp879b.apps.googleusercontent.com",
         "BETTER_AUTH_URL": "https://app-preview.roundtable.now",
         "OPEN_NEXT_DEBUG": "false",
@@ -235,6 +241,9 @@
       "ai": {
         "binding": "AI"
       },
+      "browser": {
+        "binding": "BROWSER"
+      },
       "durable_objects": {
         "bindings": [
           {
@@ -261,7 +270,7 @@
         "NEXT_PUBLIC_SES_REPLY_TO_EMAIL": "support@roundtable.now",
         "NEXT_PUBLIC_SES_VERIFIED_EMAIL": "noreply@roundtable.now",
         "NEXT_PUBLIC_STRIPE_CUSTOMER_PORTAL_CONFIG_ID": "bpc_1SEHsHGx4IA5m8QeAu2ukAY9",
-        "NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY": "pk_test_51Rw8lgGx4IA5m8QeqPP5J0dmOfwWWW7aVof4An0u5xCZ0zwct30Lqb47urMNPUXSPaNO3Gz0reNsTAVua6hmjZiW00wqf4BTPI",
+        "NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY": "pk_live_51SPXN852vWNZ3v8w0JKMpuzcvZHMyvFLy0SRfadVpFXtIhfYwty1hNfmxSlyTFRfbTbpcOOKuPepnUUayr0Owy9v006fE9vdeS",
         "AUTH_GOOGLE_ID": "440441347001-9k39tnfr8sahuf1i3n82utfutefp879b.apps.googleusercontent.com",
         "BETTER_AUTH_URL": "https://app.roundtable.now",
         "OPEN_NEXT_DEBUG": "false",

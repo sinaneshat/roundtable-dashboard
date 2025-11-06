@@ -45,12 +45,14 @@ type ChainOfThoughtProps = ComponentProps<'div'> & {
   open?: boolean;
   defaultOpen?: boolean;
   onOpenChange?: (open: boolean) => void;
+  disabled?: boolean;
 };
 
 export function ChainOfThought({
   open: controlledOpen,
   defaultOpen = false,
   onOpenChange,
+  disabled = false,
   className,
   children,
   ...props
@@ -59,11 +61,13 @@ export function ChainOfThought({
   const open = controlledOpen !== undefined ? controlledOpen : uncontrolledOpen;
 
   const handleOpenChange = useCallback((newOpen: boolean) => {
+    if (disabled)
+      return;
     if (controlledOpen === undefined) {
       setUncontrolledOpen(newOpen);
     }
     onOpenChange?.(newOpen);
-  }, [controlledOpen, onOpenChange]);
+  }, [controlledOpen, onOpenChange, disabled]);
 
   const contextValue = useMemo(
     () => ({ open, setOpen: handleOpenChange }),
@@ -72,10 +76,11 @@ export function ChainOfThought({
 
   return (
     <ChainOfThoughtContext value={contextValue}>
-      <Collapsible open={open} onOpenChange={handleOpenChange}>
+      <Collapsible open={open} onOpenChange={handleOpenChange} disabled={disabled}>
         <div
           className={cn(
             'rounded-lg border border-border/50 bg-muted/30',
+            disabled && 'opacity-100',
             className,
           )}
           {...props}
@@ -98,6 +103,7 @@ type ChainOfThoughtHeaderProps = ComponentProps<typeof CollapsibleTrigger> & {
 export function ChainOfThoughtHeader({
   children = 'Chain of Thought',
   className,
+  disabled,
   ...props
 }: ChainOfThoughtHeaderProps) {
   const { open } = useChainOfThought();
@@ -108,8 +114,10 @@ export function ChainOfThoughtHeader({
         'flex w-full items-center justify-between px-4 py-3 text-sm font-medium',
         'text-muted-foreground hover:text-foreground transition-colors',
         'focus:outline-none focus-visible:outline-none',
+        disabled && 'cursor-not-allowed opacity-60',
         className,
       )}
+      disabled={disabled}
       {...props}
     >
       <span>{children}</span>
@@ -117,6 +125,7 @@ export function ChainOfThoughtHeader({
         className={cn(
           'size-4 transition-transform duration-200',
           open && 'rotate-180',
+          disabled && 'opacity-50',
         )}
       />
     </CollapsibleTrigger>

@@ -42,8 +42,11 @@ function getBaseUrl() {
  * - Client-side: Uses credentials: 'include' for automatic cookie handling
  * - Server-side: Dynamically imports cookies() and manually forwards them to overcome
  *   the limitation where credentials: 'include' doesn't work in server contexts
+ *
+ * @param options - Client options
+ * @param options.bypassCache - If true, adds cache-busting headers to bypass HTTP cache
  */
-export async function createApiClient() {
+export async function createApiClient(options?: { bypassCache?: boolean }) {
   // Check if we're on server-side (Next.js server component or API route)
   if (typeof window === 'undefined') {
     // Server-side: Dynamically import cookies to avoid client-side bundling issues
@@ -52,21 +55,39 @@ export async function createApiClient() {
     const cookieStore = await cookies();
     const cookieHeader = cookieStore.toString();
 
-    return hc<AppType>(getBaseUrl(), {
-      headers: {
-        Accept: 'application/json',
-        ...(cookieHeader && { Cookie: cookieHeader }),
-      },
-    });
+    const headers: Record<string, string> = {
+      Accept: 'application/json',
+    };
+
+    if (options?.bypassCache) {
+      headers['Cache-Control'] = 'no-cache';
+      // eslint-disable-next-line dot-notation
+      headers['Pragma'] = 'no-cache';
+    }
+
+    if (cookieHeader) {
+      headers.Cookie = cookieHeader;
+    }
+
+    return hc<AppType>(getBaseUrl(), { headers });
   }
 
   // Client-side: Use standard credentials approach
+  const headers: Record<string, string> = {
+    Accept: 'application/json',
+  };
+
+  if (options?.bypassCache) {
+    headers['Cache-Control'] = 'no-cache';
+    // eslint-disable-next-line dot-notation
+    headers['Pragma'] = 'no-cache';
+  }
+
   return hc<AppType>(getBaseUrl(), {
-    headers: {
-      Accept: 'application/json',
-    },
+    headers,
     init: {
       credentials: 'include',
+      ...(options?.bypassCache && { cache: 'no-cache' as RequestCache }),
     },
   });
 }

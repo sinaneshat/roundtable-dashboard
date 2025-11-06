@@ -364,16 +364,22 @@ export function buildModeratorSystemPrompt(config: ModeratorPromptConfig): strin
  *
  * ✅ AI SDK PATTERN: Separates system instructions from dynamic content
  * ✅ STRUCTURED INPUT: Provides clear context for AI SDK's streamObject()
+ * ✅ PARTICIPANT RESPONSES ONLY: Pre-search messages are filtered out before reaching this function
  *
  * This function creates a structured user prompt that includes:
  * - Round number and discussion mode
  * - Original user question
  * - All participant responses with their roles and models
  *
+ * IMPORTANT: participantResponses parameter contains ONLY actual participant responses,
+ * NOT web search results. Pre-search messages are filtered at the analysis handler level
+ * (analysis.handler.ts) before being passed to this function. This ensures the analysis
+ * evaluates participant contributions, not search result summaries.
+ *
  * Used in conjunction with buildModeratorSystemPrompt() to provide complete
  * context for AI-powered moderator analysis.
  *
- * @param config - Moderator configuration with participant responses
+ * @param config - Moderator configuration with participant responses (pre-search already filtered)
  * @returns Formatted user prompt containing all response data for analysis
  *
  * @example

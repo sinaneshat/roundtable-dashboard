@@ -75,14 +75,15 @@ export function ChatInput({
     <div className="w-full">
       <div className={cn(
         'relative flex flex-col overflow-hidden',
-        'rounded-xl',
+        'rounded-2xl sm:rounded-xl',
         'border border-white/10',
         'bg-white/5 backdrop-blur-xl',
+        'shadow-lg sm:shadow-md',
         className,
       )}
       >
         <form onSubmit={onSubmit} className="flex flex-col">
-          <div className="relative flex items-end px-5 py-4">
+          <div className="relative flex items-end px-4 sm:px-5 py-3 sm:py-4">
             <textarea
               ref={textareaRef}
               value={value}
@@ -90,13 +91,12 @@ export function ChatInput({
               onKeyDown={handleKeyDown}
               disabled={isDisabled}
               placeholder={placeholder || t('chat.input.placeholder')}
-              rows={1}
-              className="flex-1 bg-transparent border-0 text-base focus:outline-none focus:ring-0 placeholder:text-muted-foreground/60 disabled:opacity-50 resize-none min-h-[44px] max-h-[200px]"
-              style={{ fieldSizing: 'content' } as React.CSSProperties}
+              rows={4}
+              className="flex-1 bg-transparent border-0 text-base focus:outline-none focus:ring-0 placeholder:text-muted-foreground/60 disabled:opacity-50 resize-none overflow-y-auto min-h-[80px] max-h-[120px]"
             />
           </div>
           <div className="border-t border-white/5">
-            <div className="px-5 py-3 flex items-center gap-2">
+            <div className="px-4 sm:px-5 py-2.5 sm:py-3 flex items-center gap-2">
               {toolbar}
               <div className="flex-1" />
               {isStreaming && onStop
@@ -106,11 +106,11 @@ export function ChatInput({
                       size="icon"
                       onClick={onStop}
                       variant="outline"
-                      className="size-8 rounded-xl shrink-0 relative"
+                      className="size-9 sm:size-8 rounded-xl shrink-0 relative touch-manipulation active:scale-95 transition-transform"
                     >
-                      <Square className="size-4" />
+                      <Square className="size-4.5 sm:size-4" />
                       {streamingProgress && (
-                        <span className="absolute -top-1 -right-1 text-[10px] font-medium bg-primary text-primary-foreground rounded-full px-1 min-w-[20px] text-center">
+                        <span className="absolute -top-1 -right-1 text-[10px] font-medium bg-primary text-primary-foreground rounded-full px-1.5 min-w-[22px] text-center">
                           {streamingProgress}
                         </span>
                       )}
@@ -122,9 +122,9 @@ export function ChatInput({
                       size="icon"
                       disabled={isDisabled || !hasValidInput}
                       variant="outline"
-                      className="size-8 rounded-xl shrink-0"
+                      className="size-9 sm:size-8 rounded-xl shrink-0 touch-manipulation active:scale-95 transition-transform disabled:active:scale-100"
                     >
-                      <ArrowUp className="size-4" />
+                      <ArrowUp className="size-4.5 sm:size-4" />
                     </Button>
                   )}
             </div>

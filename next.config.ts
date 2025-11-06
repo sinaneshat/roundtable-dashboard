@@ -221,6 +221,11 @@ const nextConfig: NextConfig = {
         protocol: 'https',
         hostname: 'googleusercontent.com',
       },
+      {
+        protocol: 'https',
+        hostname: 'www.google.com',
+        pathname: '/s2/favicons**',
+      },
     ],
   },
 

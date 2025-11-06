@@ -22,6 +22,8 @@ import {
   ModeratorAnalysisPayloadSchema,
   ModeratorAnalysisRequestSchema,
   ParticipantDetailResponseSchema,
+  PreSearchRequestSchema,
+  PreSearchResponseSchema,
   RoundFeedbackParamSchema,
   RoundFeedbackRequestSchema,
   SetRoundFeedbackResponseSchema,
@@ -321,6 +323,78 @@ export const getThreadChangelogRoute = createRoute({
     ...createProtectedRouteResponses(),
   },
 });
+
+/**
+ * GET Pre-Search Route - Retrieve existing search results
+ * ✅ FOLLOWS: getThreadAnalysesRoute pattern
+ */
+export const getPreSearchRoute = createRoute({
+  method: 'get',
+  path: '/chat/threads/:threadId/rounds/:roundNumber/pre-search',
+  tags: ['chat'],
+  summary: 'Get pre-search results for conversation round',
+  description: 'Retrieve web search results executed before participant streaming for a specific round. Returns completed search data if exists.',
+  request: {
+    params: ThreadRoundParamSchema,
+  },
+  responses: {
+    [HttpStatusCodes.OK]: {
+      description: 'Pre-search results retrieved successfully',
+      content: {
+        'application/json': { schema: PreSearchResponseSchema },
+      },
+    },
+    ...createProtectedRouteResponses(),
+  },
+});
+
+/**
+ * POST Pre-Search Route - Execute or return existing search
+ * ✅ FOLLOWS: analyzeRoundRoute pattern exactly
+ * ✅ IDEMPOTENT: Returns existing if already completed
+ * ✅ DATABASE-FIRST: Creates record before streaming
+ */
+export const executePreSearchRoute = createRoute({
+  method: 'post',
+  path: '/chat/threads/:threadId/rounds/:roundNumber/pre-search',
+  tags: ['chat'],
+  summary: 'Execute pre-search for conversation round (streaming)',
+  description: 'Generate and execute web search queries before participant streaming. Streams search progress in real-time using SSE. Returns completed search immediately if already exists. Follows same architectural pattern as moderator analysis.',
+  request: {
+    params: ThreadRoundParamSchema,
+    body: {
+      required: true,
+      content: {
+        'application/json': {
+          schema: PreSearchRequestSchema,
+        },
+      },
+    },
+  },
+  responses: {
+    [HttpStatusCodes.OK]: {
+      description: 'Pre-search streaming in progress OR completed search returned (if already exists). Content-Type: text/plain for streaming, application/json for completed.',
+      content: {
+        'text/plain': {
+          schema: z.string().describe('Streaming SSE data'),
+        },
+        'application/json': {
+          schema: PreSearchResponseSchema.describe('Completed search (if already exists)'),
+        },
+      },
+    },
+    [HttpStatusCodes.CONFLICT]: {
+      description: 'Pre-search already in progress for this round',
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+    },
+    ...createMutationRouteResponses(),
+  },
+});
+
 export const streamChatRoute = createRoute({
   method: 'post',
   path: '/chat',

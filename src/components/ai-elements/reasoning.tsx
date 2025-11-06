@@ -85,7 +85,7 @@ export function Reasoning({
       <Collapsible open={open} onOpenChange={setOpen}>
         <div
           className={cn(
-            'rounded-lg border border-border bg-muted/30 overflow-hidden',
+            'overflow-hidden',
             className,
           )}
           {...props}
@@ -115,7 +115,7 @@ export function ReasoningTrigger({
   return (
     <CollapsibleTrigger
       className={cn(
-        'flex w-full items-center justify-between gap-2 px-3 py-2 text-sm',
+        'flex w-full items-center justify-between gap-2 py-1.5 text-sm',
         'text-muted-foreground hover:text-foreground transition-colors',
         'focus:outline-none',
         className,
@@ -154,7 +154,7 @@ export function ReasoningContent({
   return (
     <CollapsibleContent
       className={cn(
-        'px-3 pb-2.5 pt-1',
+        'pb-2 pt-1',
         className,
       )}
       {...props}

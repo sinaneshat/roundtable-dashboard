@@ -80,7 +80,9 @@ import {
   deleteCustomRoleHandler,
   deleteParticipantHandler,
   deleteThreadHandler,
+  executePreSearchHandler,
   getCustomRoleHandler,
+  getPreSearchHandler,
   getPublicThreadHandler,
   getThreadAnalysesHandler,
   getThreadBySlugHandler,
@@ -105,7 +107,9 @@ import {
   deleteCustomRoleRoute,
   deleteParticipantRoute,
   deleteThreadRoute,
+  executePreSearchRoute,
   getCustomRoleRoute,
+  getPreSearchRoute,
   getPublicThreadRoute,
   getThreadAnalysesRoute,
   getThreadBySlugRoute,
@@ -373,6 +377,9 @@ app.use('/chat/threads', csrfProtection, requireSession);
 // This is the OFFICIAL AI SDK endpoint for streaming chat responses
 app.use('/chat', csrfProtection, requireSession);
 
+// POST /chat/pre-search - execute web search before streaming (requires auth + CSRF)
+app.use('/chat/pre-search', csrfProtection, requireSession);
+
 // /chat/threads/:id - mixed access pattern
 // GET: public access for public threads (handler checks ownership/public status)
 // PATCH/DELETE: protected mutations (requires auth + CSRF)
@@ -462,6 +469,8 @@ const appRoutes = app
   .openapi(getThreadMessagesRoute, getThreadMessagesHandler) // Get thread messages
   .openapi(getThreadChangelogRoute, getThreadChangelogHandler) // Get configuration changelog
   .openapi(streamChatRoute, streamChatHandler) // Stream AI responses via SSE
+  .openapi(getPreSearchRoute, getPreSearchHandler) // Get pre-search results
+  .openapi(executePreSearchRoute, executePreSearchHandler) // Execute pre-search web research
   // Participant Management (protected)
   .openapi(addParticipantRoute, addParticipantHandler) // Add AI model participant to thread
   .openapi(updateParticipantRoute, updateParticipantHandler) // Update participant role/priority/settings

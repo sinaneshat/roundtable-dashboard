@@ -281,6 +281,24 @@ CREATE TABLE `chat_participant` (
 CREATE INDEX `chat_participant_thread_idx` ON `chat_participant` (`thread_id`);--> statement-breakpoint
 CREATE INDEX `chat_participant_priority_idx` ON `chat_participant` (`priority`);--> statement-breakpoint
 CREATE INDEX `chat_participant_custom_role_idx` ON `chat_participant` (`custom_role_id`);--> statement-breakpoint
+CREATE TABLE `chat_pre_search` (
+	`id` text PRIMARY KEY NOT NULL,
+	`thread_id` text NOT NULL,
+	`round_number` integer NOT NULL,
+	`user_query` text NOT NULL,
+	`status` text DEFAULT 'pending' NOT NULL,
+	`search_data` text,
+	`error_message` text,
+	`completed_at` integer,
+	`created_at` integer DEFAULT (cast((julianday('now') - 2440587.5)*86400000 as integer)) NOT NULL,
+	FOREIGN KEY (`thread_id`) REFERENCES `chat_thread`(`id`) ON UPDATE no action ON DELETE cascade
+);
+--> statement-breakpoint
+CREATE INDEX `chat_pre_search_thread_idx` ON `chat_pre_search` (`thread_id`);--> statement-breakpoint
+CREATE INDEX `chat_pre_search_round_idx` ON `chat_pre_search` (`thread_id`,`round_number`);--> statement-breakpoint
+CREATE INDEX `chat_pre_search_created_idx` ON `chat_pre_search` (`created_at`);--> statement-breakpoint
+CREATE INDEX `chat_pre_search_status_idx` ON `chat_pre_search` (`status`);--> statement-breakpoint
+CREATE UNIQUE INDEX `chat_pre_search_thread_round_unique` ON `chat_pre_search` (`thread_id`,`round_number`);--> statement-breakpoint
 CREATE TABLE `chat_round_feedback` (
 	`id` text PRIMARY KEY NOT NULL,
 	`thread_id` text NOT NULL,
@@ -307,6 +325,7 @@ CREATE TABLE `chat_thread` (
 	`is_favorite` integer DEFAULT false NOT NULL,
 	`is_public` integer DEFAULT false NOT NULL,
 	`is_ai_generated_title` integer DEFAULT false NOT NULL,
+	`enable_web_search` integer DEFAULT false NOT NULL,
 	`metadata` text,
 	`version` integer DEFAULT 1 NOT NULL,
 	`created_at` integer DEFAULT (cast((julianday('now') - 2440587.5)*86400000 as integer)) NOT NULL,

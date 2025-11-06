@@ -275,6 +275,25 @@ export const SyncedSubscriptionStateSchema = z.object({
   }),
 }).openapi('SyncedSubscriptionState');
 
+const TierChangeSchema = z.object({
+  previousTier: z.enum(['free', 'starter', 'pro', 'power']).openapi({
+    description: 'Previous subscription tier before sync',
+    example: 'free',
+  }),
+  newTier: z.enum(['free', 'starter', 'pro', 'power']).openapi({
+    description: 'New subscription tier after sync',
+    example: 'starter',
+  }),
+  previousPriceId: z.string().nullable().openapi({
+    description: 'Previous Stripe price ID (null for free tier)',
+    example: null,
+  }),
+  newPriceId: z.string().nullable().openapi({
+    description: 'New Stripe price ID (null for free tier)',
+    example: 'price_1ABC123',
+  }),
+}).openapi('TierChange');
+
 export const SyncAfterCheckoutPayloadSchema = z.object({
   synced: z.boolean().openapi({
     description: 'Whether sync was successful',
@@ -282,6 +301,9 @@ export const SyncAfterCheckoutPayloadSchema = z.object({
   }),
   subscription: SyncedSubscriptionStateSchema.nullable().openapi({
     description: 'Synced subscription state',
+  }),
+  tierChange: TierChangeSchema.openapi({
+    description: 'Tier change information for comparison UI',
   }),
 }).openapi('SyncAfterCheckoutPayload');
 

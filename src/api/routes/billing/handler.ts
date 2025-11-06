@@ -513,6 +513,8 @@ export const syncAfterCheckoutHandler: RouteHandler<typeof syncAfterCheckoutRout
     const { user } = c.auth();
 
     try {
+      const db = await getDbAsync();
+
       // Get customer ID from user ID
       const customerId = await getCustomerIdByUserId(user.id);
 
@@ -520,8 +522,20 @@ export const syncAfterCheckoutHandler: RouteHandler<typeof syncAfterCheckoutRout
         throw createError.notFound('No Stripe customer found for user', ErrorContextBuilders.resourceNotFound('customer', undefined, user.id));
       }
 
+      // Capture previous tier BEFORE sync (for comparison UI)
+      const previousUsage = await db.query.userChatUsage.findFirst({
+        where: eq(tables.userChatUsage.userId, user.id),
+      });
+      const previousTier = previousUsage?.subscriptionTier || 'free';
+
       // Eagerly sync data from Stripe API (Theo's pattern)
       const syncedState = await syncStripeDataFromStripe(customerId);
+
+      // Get new tier AFTER sync
+      const newUsage = await db.query.userChatUsage.findFirst({
+        where: eq(tables.userChatUsage.userId, user.id),
+      });
+      const newTier = newUsage?.subscriptionTier || 'free';
 
       return Responses.ok(c, {
         synced: true,
@@ -531,6 +545,12 @@ export const syncAfterCheckoutHandler: RouteHandler<typeof syncAfterCheckoutRout
               subscriptionId: syncedState.subscriptionId,
             }
           : null,
+        tierChange: {
+          previousTier,
+          newTier,
+          previousPriceId: null, // Not needed for comparison UI, can be fetched from subscriptions if needed
+          newPriceId: null, // Not needed for comparison UI, can be fetched from subscriptions if needed
+        },
       });
     } catch {
       throw createError.internal('Failed to sync Stripe data', ErrorContextBuilders.stripe('sync_data'));
