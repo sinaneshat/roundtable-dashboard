@@ -57,9 +57,9 @@ export function ChatModeSelector({
                   variant="outline"
                   size="sm"
                   disabled={disabled}
-                  className="h-8 sm:h-9 rounded-lg gap-1.5 sm:gap-2 text-xs relative px-3 sm:px-4"
+                  className="h-9 rounded-2xl gap-1.5 text-xs relative px-3"
                 >
-                  {ModeIcon && <ModeIcon className="size-3.5 sm:size-4" />}
+                  {ModeIcon && <ModeIcon className="size-4" />}
                   <span className="hidden xs:inline sm:inline">
                     {currentMode?.label || t('mode')}
                   </span>

@@ -163,35 +163,12 @@ function validateTranslations(): ValidationResult {
   return result;
 }
 
-// Run validation
-console.log('🔍 Validating translation file...\n');
-
 const result = validateTranslations();
 
-// Print results
-console.log('📊 Statistics:');
-console.log(`  Total keys: ${result.stats.totalKeys}`);
-console.log(`  Nested keys: ${result.stats.nestedKeys}`);
-console.log(`  Top-level keys: ${result.stats.flatKeys}`);
-console.log(`  Duplicate value groups: ${result.stats.duplicates}`);
-
-if (result.errors.length > 0) {
-  console.log('\n❌ Errors:');
-  result.errors.forEach(error => console.log(`  ${error}`));
-}
-
-if (result.warnings.length > 0) {
-  console.log('\n⚠️  Warnings:');
-  result.warnings.forEach(warning => console.log(warning));
-}
-
 if (result.isValid && result.warnings.length === 0) {
-  console.log('\n✅ Translation file is valid with no issues!');
   process.exit(0);
 } else if (result.isValid) {
-  console.log('\n✅ Translation file is valid, but has warnings to review.');
   process.exit(0);
 } else {
-  console.log('\n❌ Translation file validation failed!');
   process.exit(1);
 }

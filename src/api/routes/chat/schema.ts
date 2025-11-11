@@ -5,6 +5,9 @@ import {
   ChatModeSchema,
   DEFAULT_CHAT_MODE,
   PreSearchQueryStatusSchema,
+  WebSearchComplexitySchema,
+  WebSearchContentTypeSchema,
+  WebSearchDepthSchema,
 } from '@/api/core/enums';
 import {
   CoreSchemas,
@@ -12,7 +15,6 @@ import {
   createCursorPaginatedResponseSchema,
   CursorPaginationQuerySchema,
 } from '@/api/core/schemas';
-import { WebSearchResultSchema } from '@/api/services/web-search-schemas';
 import { userSelectSchema } from '@/db/validation/auth';
 import {
   chatCustomRoleInsertSchema,
@@ -345,6 +347,100 @@ const UIMessageSchema = z.object({
 }).openapi('UIMessage');
 
 // ============================================================================
+// WEB SEARCH SCHEMAS (Domain-Specific)
+// ============================================================================
+
+/**
+ * Web search parameters schema
+ */
+export const WebSearchParametersSchema = z.object({
+  query: z.string().min(1).describe('Search query to find information on the web'),
+  maxResults: z.number().int().positive().max(5).optional().default(3).describe('Maximum number of search results to return (1-5, default 3)'),
+  searchDepth: WebSearchDepthSchema.optional().default('basic').describe('Search depth: basic for fast results, advanced for comprehensive search'),
+  includeAnswer: z.boolean().optional().default(true).describe('Whether to include an AI-generated answer summary'),
+}).openapi('WebSearchParameters');
+
+export type WebSearchParameters = z.infer<typeof WebSearchParametersSchema>;
+
+/**
+ * Individual search result schema
+ */
+export const WebSearchResultItemSchema = z.object({
+  title: z.string().describe('Title of the search result'),
+  // ✅ FIX: More lenient URL validation - some search APIs return malformed URLs
+  // Use string().min(1) instead of url() to avoid validation failures on relative/malformed URLs
+  url: z.string().min(1).describe('URL of the search result'),
+  content: z.string().describe('Content snippet from the page'),
+  excerpt: z.string().optional().describe('Short snippet from search results'),
+  fullContent: z.string().optional().describe('Full scraped content from actual page (up to 10000 chars)'),
+  score: z.number().min(0).max(1).describe('Relevance score (0-1)'),
+  publishedDate: z.string().nullable().optional().describe('Publication date if available'),
+  domain: z.string().optional().describe('Domain extracted from URL'),
+  metadata: z.object({
+    author: z.string().optional().describe('Article/page author'),
+    readingTime: z.number().optional().describe('Estimated reading time in minutes'),
+    wordCount: z.number().optional().describe('Word count of extracted content'),
+    description: z.string().optional().describe('Meta description or summary'),
+    imageUrl: z.string().optional().describe('Main image URL from the page'),
+    faviconUrl: z.string().optional().describe('Favicon URL for the website'),
+  }).optional().describe('Additional metadata extracted from the page'),
+  contentType: WebSearchContentTypeSchema.optional().describe('Content type classification'),
+  keyPoints: z.array(z.string()).optional().describe('Key points extracted from content'),
+}).openapi('WebSearchResultItem');
+
+export type WebSearchResultItem = z.infer<typeof WebSearchResultItemSchema>;
+
+/**
+ * Search result metadata schema
+ */
+export const WebSearchResultMetaSchema = z.object({
+  cached: z.boolean().optional().describe('Whether result was retrieved from cache'),
+  limitReached: z.boolean().optional().describe('Whether participant has reached search limit'),
+  searchesUsed: z.number().int().min(0).optional().describe('Number of searches used by participant'),
+  maxSearches: z.number().int().positive().optional().describe('Maximum searches allowed per participant'),
+  remainingSearches: z.number().int().min(0).optional().describe('Remaining searches for participant'),
+  error: z.boolean().optional().describe('Whether search encountered an error'),
+  message: z.string().optional().describe('Additional message or error description'),
+  complexity: WebSearchComplexitySchema.optional().describe('Search complexity level used'),
+}).openapi('WebSearchResultMeta');
+
+export type WebSearchResultMeta = z.infer<typeof WebSearchResultMetaSchema>;
+
+/**
+ * Complete web search result schema
+ */
+export const WebSearchResultSchema = z.object({
+  query: z.string().describe('The search query that was executed'),
+  answer: z.string().nullable().describe('AI-generated answer summary'),
+  results: z.array(WebSearchResultItemSchema).describe('Array of search results'),
+  responseTime: z.number().describe('API response time in milliseconds'),
+  _meta: WebSearchResultMetaSchema.optional().describe('Search metadata (cache status, limits, etc.)'),
+}).openapi('WebSearchResult');
+
+export type WebSearchResult = z.infer<typeof WebSearchResultSchema>;
+
+/**
+ * Generated search query schema
+ */
+export const GeneratedSearchQuerySchema = z.object({
+  query: z.string().describe('The generated search query'),
+  rationale: z.string().describe('Explanation for why this query will help answer the user question'),
+  searchDepth: WebSearchDepthSchema.describe('Recommended search depth for this query'),
+}).openapi('GeneratedSearchQuery');
+
+export type GeneratedSearchQuery = z.infer<typeof GeneratedSearchQuerySchema>;
+
+/**
+ * Generated search queries collection schema
+ */
+export const GeneratedSearchQueriesSchema = z.object({
+  queries: z.array(GeneratedSearchQuerySchema).min(1).max(5).describe('1-5 generated search queries'),
+  analysis: z.string().describe('Brief analysis of the user question and search strategy'),
+}).openapi('GeneratedSearchQueries');
+
+export type GeneratedSearchQueries = z.infer<typeof GeneratedSearchQueriesSchema>;
+
+// ============================================================================
 // PRE-SEARCH API SCHEMAS
 // ============================================================================
 
@@ -377,7 +473,7 @@ export const PreSearchDataPayloadSchema = z.object({
   results: z.array(z.object({
     query: z.string(),
     answer: z.string().nullable(),
-    results: z.array(WebSearchResultSchema),
+    results: z.array(WebSearchResultItemSchema),
     responseTime: z.number(),
   })),
   analysis: z.string(),
@@ -392,10 +488,14 @@ export type PreSearchDataPayload = z.infer<typeof PreSearchDataPayloadSchema>;
 /**
  * Stored pre-search schema (from database)
  * ✅ FOLLOWS: StoredModeratorAnalysisSchema pattern
+ * ✅ FIX: Accept both string and Date for timestamps (API returns strings, transform converts to Date)
  */
 export const StoredPreSearchSchema = chatPreSearchSelectSchema
   .extend({
     searchData: PreSearchDataPayloadSchema.nullable().optional(),
+    // Override date fields to accept both string and Date (transform handles conversion)
+    createdAt: z.union([z.string(), z.date()]),
+    completedAt: z.union([z.string(), z.date()]).nullable(),
   })
   .openapi('StoredPreSearch');
 
@@ -408,6 +508,17 @@ export type StoredPreSearch = z.infer<typeof StoredPreSearchSchema>;
 export const PreSearchResponseSchema = createApiResponseSchema(StoredPreSearchSchema).openapi('PreSearchResponse');
 
 export type PreSearchResponse = z.infer<typeof PreSearchResponseSchema>;
+
+/**
+ * Pre-search list payload and response schemas
+ * ✅ FOLLOWS: ModeratorAnalysisListPayloadSchema pattern
+ */
+const PreSearchListPayloadSchema = z.object({
+  items: z.array(StoredPreSearchSchema),
+  count: z.number().int().nonnegative(),
+}).openapi('PreSearchListPayload');
+
+export const PreSearchListResponseSchema = createApiResponseSchema(PreSearchListPayloadSchema).openapi('PreSearchListResponse');
 
 // ============================================================================
 // CHAT STREAMING SCHEMAS
@@ -722,16 +833,6 @@ export const SearchQuerySchema = z.object({
 }).openapi('SearchQuery');
 
 export type SearchQuery = z.infer<typeof SearchQuerySchema>;
-
-/**
- * Generated search queries schema
- */
-export const GeneratedSearchQueriesSchema = z.object({
-  queries: z.array(SearchQuerySchema).min(1).max(5).describe('Array of diverse search queries (1-5 queries)'),
-  analysis: z.string().min(50).max(500).describe('Brief analysis of the user question and search strategy'),
-}).openapi('GeneratedSearchQueries');
-
-export type GeneratedSearchQueries = z.infer<typeof GeneratedSearchQueriesSchema>;
 
 // ============================================================================
 // PRE-SEARCH STREAMING DATA SCHEMAS

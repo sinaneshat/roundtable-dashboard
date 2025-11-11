@@ -20,8 +20,8 @@ export {
 } from './handlers/participant.handler';
 export {
   executePreSearchHandler,
-  getPreSearchHandler,
-} from './handlers/pre-search-unified.handler';
+  getThreadPreSearchesHandler,
+} from './handlers/pre-search.handler';
 export {
   createCustomRoleHandler,
   deleteCustomRoleHandler,

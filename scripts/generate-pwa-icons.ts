@@ -29,40 +29,29 @@ const SOURCE_LOGO = path.join(process.cwd(), 'public/static/logo.png');
 const OUTPUT_DIR = path.join(process.cwd(), 'public/icons');
 
 async function generateIcons() {
-  console.log('🎨 Generating PWA icons...\n');
-
-  // Ensure output directory exists
   if (!fs.existsSync(OUTPUT_DIR)) {
     fs.mkdirSync(OUTPUT_DIR, { recursive: true });
   }
 
-  // Check if source logo exists
   if (!fs.existsSync(SOURCE_LOGO)) {
-    console.error(`❌ Source logo not found at: ${SOURCE_LOGO}`);
     process.exit(1);
   }
 
   try {
-    // Generate standard icons with transparent backgrounds
-    console.log('📱 Generating standard icons with transparent backgrounds...');
     for (const { size, name } of ICON_SIZES) {
       const outputPath = path.join(OUTPUT_DIR, name);
       await sharp(SOURCE_LOGO)
         .resize(size, size, {
           fit: 'contain',
-          background: { r: 0, g: 0, b: 0, alpha: 0 }, // Transparent background
+          background: { r: 0, g: 0, b: 0, alpha: 0 },
         })
         .png()
         .toFile(outputPath);
-
-      console.log(`  ✓ Generated ${name} (${size}x${size})`);
     }
 
-    // Generate maskable icons (with padding for safe area and opaque background)
-    console.log('\n🎭 Generating maskable icons with safe area padding...');
     for (const { size, name } of MASKABLE_SIZES) {
       const outputPath = path.join(OUTPUT_DIR, name);
-      const padding = Math.floor(size * 0.1); // 10% padding for safe area
+      const padding = Math.floor(size * 0.1);
 
       await sharp(SOURCE_LOGO)
         .resize(size - padding * 2, size - padding * 2, {
@@ -74,18 +63,12 @@ async function generateIcons() {
           bottom: padding,
           left: padding,
           right: padding,
-          background: { r: 15, g: 23, b: 42, alpha: 1 }, // Opaque for maskable
+          background: { r: 15, g: 23, b: 42, alpha: 1 },
         })
         .png()
         .toFile(outputPath);
-
-      console.log(`  ✓ Generated ${name} (${size}x${size} with safe area)`);
     }
-
-    console.log('\n✅ All PWA icons generated successfully!');
-    console.log(`📂 Icons saved to: ${OUTPUT_DIR}`);
   } catch (error) {
-    console.error('❌ Error generating icons:', error);
     process.exit(1);
   }
 }

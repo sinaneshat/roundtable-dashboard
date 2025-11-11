@@ -16,9 +16,11 @@ export function ModeratorRoundTrigger({
   startExpanded,
 }: ModeratorRoundTriggerProps) {
   const t = useTranslations('moderator');
-  const defaultOpen = startExpanded ?? (analysis.status === AnalysisStatuses.PENDING || analysis.status === AnalysisStatuses.STREAMING);
+  const isStreaming = analysis.status === AnalysisStatuses.PENDING || analysis.status === AnalysisStatuses.STREAMING;
+  const defaultOpen = startExpanded ?? isStreaming;
+
   return (
-    <ChainOfThought defaultOpen={defaultOpen}>
+    <ChainOfThought defaultOpen={defaultOpen} disabled={isStreaming}>
       <ChainOfThoughtHeader>
         <span className="font-medium">
           {t('roundAnalysis', { number: analysis.roundNumber })}

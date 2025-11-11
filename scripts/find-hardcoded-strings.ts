@@ -143,7 +143,6 @@ function findHardcodedStringsInFile(filePath: string): HardcodedString[] {
 
 async function findHardcodedStrings(): Promise<HardcodedStringsResult> {
   const files = await getAllComponentFiles();
-  console.log(`📂 Scanning ${files.length} component files...\n`);
   
   const allHardcoded: HardcodedString[] = [];
   const filesWithIssues = new Set<string>();
@@ -165,52 +164,6 @@ async function findHardcodedStrings(): Promise<HardcodedStringsResult> {
   };
 }
 
-// Run the analysis
-console.log('🔍 Finding hardcoded strings in components...\n');
-
-findHardcodedStrings().then(result => {
-  console.log('📊 Results:');
-  console.log(`  Total files scanned: ${result.totalFiles}`);
-  console.log(`  Files with issues: ${result.filesWithIssues}`);
-  console.log(`  Hardcoded strings found: ${result.hardcodedStrings.length}`);
-  
-  if (result.hardcodedStrings.length > 0) {
-    console.log('\n⚠️  Hardcoded strings that should be in translation file:\n');
-    
-    // Group by file
-    const byFile: Record<string, HardcodedString[]> = {};
-    result.hardcodedStrings.forEach(item => {
-      if (!byFile[item.file]) {
-        byFile[item.file] = [];
-      }
-      byFile[item.file].push(item);
-    });
-    
-    // Print results grouped by file
-    let shown = 0;
-    const maxToShow = 50;
-    
-    for (const [file, strings] of Object.entries(byFile).sort()) {
-      if (shown >= maxToShow) {
-        console.log(`\n... and ${result.hardcodedStrings.length - shown} more strings in other files`);
-        break;
-      }
-      
-      console.log(`\n📄 ${file}:`);
-      strings.forEach(item => {
-        if (shown >= maxToShow) return;
-        console.log(`  Line ${item.line}: "${item.string}"`);
-        console.log(`    Context: ${item.context.substring(0, 100)}${item.context.length > 100 ? '...' : ''}`);
-        shown++;
-      });
-    }
-    
-    console.log('\n💡 These strings should be moved to src/i18n/locales/en/common.json');
-    console.log('   and replaced with t() calls.');
-  } else {
-    console.log('\n✅ No hardcoded strings found! All text is properly translated.');
-  }
-}).catch(error => {
-  console.error('❌ Error:', error);
+findHardcodedStrings().catch(error => {
   process.exit(1);
 });

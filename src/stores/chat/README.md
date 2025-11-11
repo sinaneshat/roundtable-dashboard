@@ -9,13 +9,12 @@ Following official Zustand v5 best practices for Next.js App Router.
 ```
 src/stores/chat/
 ├── index.ts                     # Public API - all exports
-├── store.ts                     # Store factory with slices
+├── store.ts                     # Store factory with slices + automatic subscriptions
 └── actions/                     # Store-specific action hooks
     ├── form-actions.ts          # Form submission orchestration
     ├── feedback-actions.ts      # Round feedback management
     ├── recommended-actions.ts   # Recommended action handling
     ├── analysis-orchestrator.ts # Analysis server sync
-    ├── analysis-creation.ts     # Analysis creation lifecycle
     ├── analysis-deduplication.ts # Analysis deduplication logic
     └── chat-analysis.ts         # Analysis cache management
 ```
@@ -129,9 +128,13 @@ Moved from `hooks/utils/` to `stores/chat/actions/`:
 - `use-chat-form-actions.ts` → `actions/form-actions.ts`
 - `use-feedback-actions.ts` → `actions/feedback-actions.ts`
 - `use-analysis-orchestrator.ts` → `actions/analysis-orchestrator.ts`
-- `use-analysis-creation.ts` → `actions/analysis-creation.ts`
 - `use-analysis-deduplication.ts` → `actions/analysis-deduplication.ts`
 - `use-chat-analysis.ts` → `actions/chat-analysis.ts`
+
+Consolidated to store subscriptions (deleted):
+- `use-analysis-creation.ts` → Automatic analysis triggering in store.ts
+- Streaming trigger effect → Automatic streaming trigger in store.ts
+- Pending message orchestration → Automatic message sending in store.ts
 
 New action hooks following the same pattern:
 - `actions/recommended-actions.ts` - Recommended action handling with form state integration

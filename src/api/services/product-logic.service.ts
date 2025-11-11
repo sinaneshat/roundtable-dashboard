@@ -17,6 +17,7 @@ import { z as zOpenAPI } from '@hono/zod-openapi';
 import { z } from 'zod';
 
 import type { BaseModelResponse } from '@/api/routes/models/schema';
+import { TITLE_GENERATION_PROMPT } from '@/lib/ai/prompts';
 
 // ============================================================================
 // SUBSCRIPTION TIER CONSTANTS - SINGLE SOURCE OF TRUTH
@@ -661,13 +662,14 @@ export function getAIParamsForMode(mode: string): { temperature: number; topP: n
  * Title generation configuration
  *
  * ✅ MODEL SELECTION: Uses cheapest available model from models-config.service.ts
+ * ✅ PROMPT: Uses centralized prompt from lib/ai/prompts.ts
  * Model selection based on user tier and pricing from the configured model list
  */
 export const TITLE_GENERATION_CONFIG = {
   temperature: 0.3,
   maxTokens: 15,
   topP: 0.7,
-  systemPrompt: 'Generate a concise, descriptive title (5 words max) for this conversation. Output only the title, no quotes or extra text.',
+  systemPrompt: TITLE_GENERATION_PROMPT,
 } as const;
 
 /**

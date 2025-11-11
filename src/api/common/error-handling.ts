@@ -478,6 +478,7 @@ export type AIProviderErrorMetadata = {
   rawErrorMessage: string;
   responseBody?: string;
   cause?: string;
+  traceId?: string; // ✅ LLM trace ID for PostHog/debugging correlation
 
   // Retry decision
   isTransient: boolean;
@@ -528,6 +529,7 @@ export type AIProviderErrorMetadata = {
 export function structureAIProviderError(
   error: unknown,
   participantContext?: { id: string; modelId: string; role: string | null },
+  traceId?: string,
 ): AIProviderErrorMetadata {
   // ✅ STEP 1: Extract base error fields from AI SDK error object
   const err = error as Error & {
@@ -694,6 +696,7 @@ export function structureAIProviderError(
     rawErrorMessage: errorMessage,
     responseBody: responseBody?.substring(0, 1000),
     cause: cause ? String(cause) : undefined,
+    traceId, // ✅ Include LLM trace ID for debugging correlation
     isTransient: errorIsTransient,
     shouldRetry,
     participantId: participantContext?.id,

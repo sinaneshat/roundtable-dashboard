@@ -94,17 +94,12 @@ function extractTranslationKeys(content: string): string[] {
 }
 
 async function checkMissingTranslations(): Promise<MissingTranslationsResult> {
-  // Read translation file
   const translationContent = fs.readFileSync(TRANSLATION_FILE, 'utf-8');
   const translations = JSON.parse(translationContent);
-  
-  // Get all existing translation keys
+
   const existingKeys = flattenObject(translations);
-  console.log(`📝 Found ${existingKeys.size} existing translation keys`);
-  
-  // Get all source files
+
   const sourceFiles = await getAllSourceFiles();
-  console.log(`📂 Scanning ${sourceFiles.length} source files...\n`);
   
   // Track keys used in code
   const usedKeys = new Map<string, Array<{ file: string; line: number; context: string }>>();
@@ -158,38 +153,6 @@ async function checkMissingTranslations(): Promise<MissingTranslationsResult> {
   };
 }
 
-// Run the analysis
-console.log('🔍 Checking for missing translation keys...\n');
-
-checkMissingTranslations().then(result => {
-  console.log('📊 Results:');
-  console.log(`  Total keys used in code: ${result.totalKeys}`);
-  console.log(`  Missing keys: ${result.missingKeys.length}`);
-  
-  if (result.missingKeys.length > 0) {
-    console.log('\n❌ Missing translation keys (used in code but not defined):');
-    
-    // Sort by number of usages
-    const sorted = result.missingKeys.sort((a, b) => b.files.length - a.files.length);
-    
-    sorted.forEach(item => {
-      console.log(`\n  ⚠️  "${item.key}" (used in ${item.files.length} location${item.files.length > 1 ? 's' : ''}):`);
-      
-      item.files.slice(0, 3).forEach(location => {
-        console.log(`      ${location.file}:${location.line}`);
-        console.log(`        ${location.context.substring(0, 80)}${location.context.length > 80 ? '...' : ''}`);
-      });
-      
-      if (item.files.length > 3) {
-        console.log(`      ... and ${item.files.length - 3} more locations`);
-      }
-    });
-    
-    console.log('\n💡 Add these keys to src/i18n/locales/en/common.json');
-  } else {
-    console.log('\n✅ All translation keys used in code are properly defined!');
-  }
-}).catch(error => {
-  console.error('❌ Error:', error);
+checkMissingTranslations().catch(error => {
   process.exit(1);
 });

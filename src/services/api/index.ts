@@ -68,6 +68,21 @@ export {
 } from './chat-participants';
 
 // ============================================================================
+// Chat Pre-Search Service Exports
+// ============================================================================
+
+export {
+  type PreSearchCompleteEvent,
+  type PreSearchDoneData,
+  type PreSearchErrorEvent,
+  type PreSearchQueryEvent,
+  type PreSearchRequest,
+  type PreSearchResultEvent,
+  type PreSearchStartEvent,
+  preSearchStreamService,
+} from './chat-pre-search';
+
+// ============================================================================
 // Subscription Management Service Exports (Switch/Cancel)
 // ============================================================================
 

@@ -33,9 +33,11 @@ export type ListModelsResponse = InferResponseType<
  * ✅ INCLUDES: Tier access info, flagship models, default model
  * ✅ CACHED: Client-side with infinite stale time (models are static)
  *
+ * @param options - Service options
+ * @param options.bypassCache - If true, bypasses HTTP cache to get fresh data
  * @returns {Promise<ListModelsResponse>} Fully typed model list with tier information
  */
-export async function listModelsService() {
-  const client = await createApiClient();
+export async function listModelsService(options?: { bypassCache?: boolean }) {
+  const client = await createApiClient({ bypassCache: options?.bypassCache });
   return parseResponse(client.models.$get());
 }

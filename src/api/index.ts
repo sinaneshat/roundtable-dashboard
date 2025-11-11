@@ -82,7 +82,6 @@ import {
   deleteThreadHandler,
   executePreSearchHandler,
   getCustomRoleHandler,
-  getPreSearchHandler,
   getPublicThreadHandler,
   getThreadAnalysesHandler,
   getThreadBySlugHandler,
@@ -90,6 +89,7 @@ import {
   getThreadFeedbackHandler,
   getThreadHandler,
   getThreadMessagesHandler,
+  getThreadPreSearchesHandler,
   getThreadSlugStatusHandler,
   listCustomRolesHandler,
   listThreadsHandler,
@@ -109,13 +109,13 @@ import {
   deleteThreadRoute,
   executePreSearchRoute,
   getCustomRoleRoute,
-  getPreSearchRoute,
   getPublicThreadRoute,
   getThreadAnalysesRoute,
   getThreadBySlugRoute,
   getThreadChangelogRoute,
   getThreadFeedbackRoute,
   getThreadMessagesRoute,
+  getThreadPreSearchesRoute,
   getThreadRoute,
   getThreadSlugStatusRoute,
   listCustomRolesRoute,
@@ -469,8 +469,6 @@ const appRoutes = app
   .openapi(getThreadMessagesRoute, getThreadMessagesHandler) // Get thread messages
   .openapi(getThreadChangelogRoute, getThreadChangelogHandler) // Get configuration changelog
   .openapi(streamChatRoute, streamChatHandler) // Stream AI responses via SSE
-  .openapi(getPreSearchRoute, getPreSearchHandler) // Get pre-search results
-  .openapi(executePreSearchRoute, executePreSearchHandler) // Execute pre-search web research
   // Participant Management (protected)
   .openapi(addParticipantRoute, addParticipantHandler) // Add AI model participant to thread
   .openapi(updateParticipantRoute, updateParticipantHandler) // Update participant role/priority/settings
@@ -481,6 +479,9 @@ const appRoutes = app
   .openapi(getCustomRoleRoute, getCustomRoleHandler) // Get custom role details
   .openapi(updateCustomRoleRoute, updateCustomRoleHandler) // Update custom role template
   .openapi(deleteCustomRoleRoute, deleteCustomRoleHandler) // Delete custom role template
+  // Pre-search (protected, web search results)
+  .openapi(getThreadPreSearchesRoute, getThreadPreSearchesHandler) // Get all pre-search results for thread
+  .openapi(executePreSearchRoute, executePreSearchHandler) // Stream pre-search execution
   // Moderator Analysis (protected, backend-triggered only)
   .openapi(getThreadAnalysesRoute, getThreadAnalysesHandler) // Get persisted moderator analyses (read-only)
   .openapi(analyzeRoundRoute, analyzeRoundHandler) // Stream moderator analysis for a round

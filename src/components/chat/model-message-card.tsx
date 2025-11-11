@@ -46,8 +46,8 @@ export const ModelMessageCard = memo(({
   hideAvatar = false,
 }: ModelMessageCardProps) => {
   const modelIsAccessible = model ? (isAccessible ?? model.is_accessible_to_user) : true;
-  const showStatusIndicator = status === MessageStatuses.THINKING || status === MessageStatuses.STREAMING;
-  const isError = status === MessageStatuses.ERROR;
+  const showStatusIndicator = status === MessageStatuses.PENDING || status === MessageStatuses.STREAMING;
+  const isError = status === MessageStatuses.FAILED;
 
   // ✅ STRICT TYPING: Only assistant messages have error fields
   const assistantMetadata = metadata && isAssistantMetadata(metadata) ? metadata : null;
@@ -58,7 +58,7 @@ export const ModelMessageCard = memo(({
   return (
     <div className={`space-y-1 ${className || ''}`}>
       <Message from="assistant">
-        <MessageContent className={hasError ? 'text-destructive' : undefined}>
+        <MessageContent variant="flat" className={hasError ? 'text-destructive' : undefined}>
           <>
             {!hideInlineHeader && (
               <div className="flex items-center gap-2 mb-2 -mt-1 flex-wrap">

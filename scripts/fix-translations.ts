@@ -131,22 +131,14 @@ function generateTranslationValue(key: string): string {
 }
 
 async function fixTranslations(removeUnused: boolean = true, addMissing: boolean = true): Promise<FixResults> {
-  console.log('📝 Reading translation file...');
-  
-  // Create backup
   const originalContent = fs.readFileSync(TRANSLATION_FILE, 'utf-8');
   fs.writeFileSync(BACKUP_FILE, originalContent, 'utf-8');
-  console.log(`✅ Backup created: ${path.relative(process.cwd(), BACKUP_FILE)}`);
-  
+
   const translations = JSON.parse(originalContent);
   const flatTranslations = flattenObject(translations);
   const originalKeyCount = Object.keys(flatTranslations).length;
-  
-  console.log(`📊 Original key count: ${originalKeyCount}`);
-  
-  // Get all source files
+
   const sourceFiles = await getAllSourceFiles();
-  console.log(`📂 Scanning ${sourceFiles.length} source files...\n`);
   
   // Find used keys
   const usedKeys = new Set<string>();
@@ -181,42 +173,33 @@ async function fixTranslations(removeUnused: boolean = true, addMissing: boolean
     finalKeyCount: 0,
   };
   
-  // Remove unused keys
   if (removeUnused) {
-    console.log('🧹 Removing unused keys...');
     for (const key of Object.keys(flatTranslations)) {
       if (!usedKeys.has(key)) {
-        // Check if it's a namespace (has children that are used)
-        const isNamespace = Array.from(usedKeys).some(usedKey => 
+        const isNamespace = Array.from(usedKeys).some(usedKey =>
           usedKey.startsWith(key + '.')
         );
-        
+
         if (!isNamespace) {
           delete flatTranslations[key];
           results.removedKeys.push(key);
         }
       }
     }
-    console.log(`✅ Removed ${results.removedKeys.length} unused keys`);
   }
-  
-  // Add missing keys
+
   if (addMissing) {
-    console.log('\n📝 Adding missing keys...');
     for (const key of allUsedKeys) {
-      // Check if key exists (exact match or as a namespace)
-      const keyExists = flatTranslations[key] !== undefined || 
-                       Object.keys(flatTranslations).some(existingKey => 
+      const keyExists = flatTranslations[key] !== undefined ||
+                       Object.keys(flatTranslations).some(existingKey =>
                          existingKey.startsWith(key + '.')
                        );
-      
+
       if (!keyExists) {
-        // Generate a placeholder value
         flatTranslations[key] = generateTranslationValue(key);
         results.addedKeys.push(key);
       }
     }
-    console.log(`✅ Added ${results.addedKeys.length} missing keys`);
   }
   
   // Convert back to nested structure
@@ -252,42 +235,11 @@ function sortObjectKeys(obj: any): any {
   return sorted;
 }
 
-// Main execution
-console.log('🔧 Starting translation fixes...\n');
-
-// Check for flags
 const args = process.argv.slice(2);
 const dryRun = args.includes('--dry-run');
 const onlyRemove = args.includes('--only-remove');
 const onlyAdd = args.includes('--only-add');
 
-if (dryRun) {
-  console.log('🔍 DRY RUN MODE - No changes will be made\n');
-}
-
-fixTranslations(!onlyAdd, !onlyRemove).then(results => {
-  console.log('\n📊 Summary:');
-  console.log(`  Original keys: ${results.originalKeyCount}`);
-  console.log(`  Removed keys: ${results.removedKeys.length}`);
-  console.log(`  Added keys: ${results.addedKeys.length}`);
-  console.log(`  Final keys: ${results.finalKeyCount}`);
-  console.log(`  Net change: ${results.finalKeyCount - results.originalKeyCount > 0 ? '+' : ''}${results.finalKeyCount - results.originalKeyCount}`);
-  
-  if (results.addedKeys.length > 0) {
-    console.log('\n✨ Added keys (review and update values as needed):');
-    results.addedKeys.slice(0, 10).forEach(key => {
-      console.log(`  - ${key}`);
-    });
-    if (results.addedKeys.length > 10) {
-      console.log(`  ... and ${results.addedKeys.length - 10} more`);
-    }
-  }
-  
-  console.log('\n✅ Translation file has been updated!');
-  console.log(`📦 Backup saved to: ${path.relative(process.cwd(), BACKUP_FILE)}`);
-  console.log('\n💡 To restore from backup:');
-  console.log(`   cp ${path.relative(process.cwd(), BACKUP_FILE)} ${path.relative(process.cwd(), TRANSLATION_FILE)}`);
-}).catch(error => {
-  console.error('❌ Error:', error);
+fixTranslations(!onlyAdd, !onlyRemove).catch(error => {
   process.exit(1);
 });

@@ -12,6 +12,7 @@ import type { ApiEnv } from '@/api/types';
 import { getDbAsync } from '@/db';
 import { PriceCacheTags, ProductCacheTags, STATIC_CACHE_TAGS } from '@/db/cache/cache-tags';
 import * as tables from '@/db/schema';
+import { isObject } from '@/lib/utils/type-guards';
 
 import type {
   cancelSubscriptionRoute,
@@ -854,10 +855,13 @@ export const handleWebhookHandler: RouteHandler<typeof handleWebhookRoute, ApiEn
       }
 
       // Insert webhook event using batch.db for atomic operation
+      // ✅ TYPE-SAFE: Validate event.data.object is a proper object before storing
+      const eventData = isObject(event.data.object) ? event.data.object : {};
+
       await batch.db.insert(tables.stripeWebhookEvent).values({
         id: event.id,
         type: event.type,
-        data: event.data.object as unknown as Record<string, unknown>,
+        data: eventData,
         processed: false,
         createdAt: new Date(event.created * 1000),
       }).onConflictDoNothing();

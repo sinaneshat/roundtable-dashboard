@@ -68,7 +68,7 @@ export type NavItem = {
 } & FormOption;
 
 // Zod enum instead of static TypeScript enum for consistency
-export const aiHistoryStatusSchema = z.enum(['aborted', 'success', 'error']);
+export const aiHistoryStatusSchema = z.enum(['aborted', 'success', 'failed']);
 export type AIHistoryStatus = z.infer<typeof aiHistoryStatusSchema>;
 
 // UPDATED: Use core schemas from @/api/core/schemas for API-related types

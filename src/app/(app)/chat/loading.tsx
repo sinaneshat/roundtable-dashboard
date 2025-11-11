@@ -1,8 +1,8 @@
 import Image from 'next/image';
 
 import { Card } from '@/components/ui/card';
+import { RadialGlow } from '@/components/ui/radial-glow';
 import { Skeleton } from '@/components/ui/skeleton';
-import { WavyBackground } from '@/components/ui/wavy-background';
 import { BRAND } from '@/constants/brand';
 import { cn } from '@/lib/ui/cn';
 import { chatGlass } from '@/lib/ui/glassmorphism';
@@ -11,7 +11,7 @@ import { chatGlass } from '@/lib/ui/glassmorphism';
  * Loading State for Chat Overview Page
  *
  * Matches ChatOverviewScreen.tsx page-level scrolling pattern:
- * - WavyBackground fixed behind all content
+ * - Spotlight effect behind logo
  * - Actual logo shown
  * - Simple white/transparent skeletons (no heavy borders)
  * - Glass variant cards with border-0
@@ -22,26 +22,28 @@ import { chatGlass } from '@/lib/ui/glassmorphism';
  */
 export default function ChatOverviewLoading() {
   return (
-    <div className="relative min-h-svh flex flex-col">
-      {/* Background - fixed behind all content */}
-      <div className="fixed inset-0 -z-10 overflow-hidden">
-        <WavyBackground containerClassName="h-full w-full" />
-      </div>
-
+    <div className="relative min-h-svh flex flex-col overflow-x-hidden">
       {/* Main content - flows naturally, page scrolls */}
       {/* ✅ MATCHES ChatOverviewScreen.tsx:403 - pb-32 for consistent spacing */}
-      <div className="container max-w-3xl mx-auto px-4 sm:px-6 pt-12 pb-32 flex-1">
+      <div className="container max-w-3xl mx-auto px-4 sm:px-6 pt-12 pb-32 flex-1 relative">
         {/* Hero Section */}
         <div className="py-6 sm:py-8">
-          <div className="flex flex-col items-center gap-4 sm:gap-5 md:gap-6 text-center">
-            {/* Logo - EXACT match to ChatOverviewScreen.tsx:427 */}
-            <div className="relative h-20 w-20 xs:h-24 xs:w-24 sm:h-28 sm:w-28 md:h-32 md:w-32 lg:h-36 lg:w-36">
+          <div className="flex flex-col items-center gap-4 sm:gap-5 md:gap-6 text-center relative">
+
+            {/* Logo */}
+            <div className="relative h-20 w-20 xs:h-24 xs:w-24 sm:h-28 sm:w-28 md:h-32 md:w-32 lg:h-36 lg:w-36 z-10" style={{ overflow: 'visible' }}>
+              <RadialGlow
+                size={2400}
+                offsetY={40}
+                duration={15}
+                animate
+              />
               <Image
                 src={BRAND.logos.main}
                 alt={`${BRAND.displayName} Logo`}
                 fill
                 sizes="(max-width: 480px) 80px, (max-width: 640px) 96px, (max-width: 768px) 112px, (max-width: 1024px) 128px, 144px"
-                className="object-contain drop-shadow-2xl"
+                className="object-contain drop-shadow-2xl relative z-10"
                 priority
               />
             </div>

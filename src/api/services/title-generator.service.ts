@@ -11,6 +11,7 @@ import { eq } from 'drizzle-orm';
 
 import { createError } from '@/api/common/error-handling';
 import type { ErrorContext } from '@/api/core';
+import { AIModels } from '@/api/core/ai-models';
 import { TITLE_GENERATION_CONFIG } from '@/api/services/product-logic.service';
 import type { ApiEnv } from '@/api/types';
 import { getDbAsync } from '@/db';
@@ -21,21 +22,15 @@ import { generateUniqueSlug } from './slug-generator.service';
 
 /**
  * Get the model for title generation
- * ✅ FIXED MODEL: Uses Google Gemini 2.5 Flash for reliability
+ * ✅ SINGLE SOURCE: Uses centralized constant from ai-models.ts
+ * ✅ FIXED MODEL: Google Gemini 2.5 Flash for reliability
  * - Very fast response times (< 1 second)
  * - Cheap (cost-effective for high-volume operations)
  * - Smart enough for title generation
  * - Highly reliable and available
  */
 function getTitleGenerationModel(): string {
-  // ✅ RELIABLE MODEL: Google Gemini 2.5 Flash
-  // Verified model ID from OpenRouter API (2025-10-19)
-  // This model is:
-  // - Fast: Optimized for low latency
-  // - Cheap: Cost-effective for high-volume operations
-  // - Smart: Capable of understanding context and generating concise titles
-  // - Available: High uptime and availability on OpenRouter
-  return 'google/gemini-2.5-flash';
+  return AIModels.TITLE_GENERATION;
 }
 
 /**

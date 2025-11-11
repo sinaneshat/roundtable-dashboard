@@ -660,6 +660,55 @@ export const UsageStatusSchema = z.enum(USAGE_STATUSES).openapi({
 export type UsageStatus = z.infer<typeof UsageStatusSchema>;
 
 // ============================================================================
+// WEB SEARCH COMPLEXITY ENUMS
+// ============================================================================
+
+/**
+ * Web search complexity tuple for determining search thoroughness
+ * ✅ SINGLE SOURCE: All search complexity levels defined here
+ * ✅ REPLACES: Hard-coded 'basic' | 'moderate' | 'deep' strings
+ *
+ * Used by:
+ * - /src/api/services/web-search.service.ts - Search complexity determination
+ * - /src/api/routes/chat/handlers/pre-search.handler.ts - Pre-search execution
+ * - /src/components/chat/web-search-flat-display.tsx - UI complexity badges
+ * - /src/api/routes/chat/schema.ts - WebSearchResultMetaSchema
+ */
+export const WEB_SEARCH_COMPLEXITIES = ['basic', 'moderate', 'deep'] as const;
+
+/**
+ * Web search complexity Zod schema
+ * ✅ RUNTIME VALIDATION: Validates search complexity values
+ */
+export const WebSearchComplexitySchema = z.enum(WEB_SEARCH_COMPLEXITIES).openapi({
+  description: 'Web search complexity level determining source count and depth',
+  example: 'moderate',
+});
+
+/**
+ * Web search complexity TypeScript type
+ * ✅ ZOD INFERENCE: Type automatically derived from schema
+ */
+export type WebSearchComplexity = z.infer<typeof WebSearchComplexitySchema>;
+
+/**
+ * Web search complexity constants for clear usage
+ * ✅ RECOMMENDED PATTERN: Use WebSearchComplexities.DEEP instead of 'deep'
+ *
+ * @example
+ * // ❌ WRONG: Hardcoded string
+ * complexity === 'deep'
+ *
+ * // ✅ CORRECT: Type-safe constant
+ * complexity === WebSearchComplexities.DEEP
+ */
+export const WebSearchComplexities = {
+  BASIC: 'basic' as const,
+  MODERATE: 'moderate' as const,
+  DEEP: 'deep' as const,
+} as const satisfies Record<string, WebSearchComplexity>;
+
+// ============================================================================
 // WEB SEARCH DEPTH ENUMS
 // ============================================================================
 
@@ -734,6 +783,56 @@ export const WebSearchContentTypeSchema = z.enum(WEB_SEARCH_CONTENT_TYPES).opena
  * ✅ ZOD INFERENCE: Type automatically derived from schema
  */
 export type WebSearchContentType = z.infer<typeof WebSearchContentTypeSchema>;
+
+// ============================================================================
+// AI SDK STATUS ENUMS (Frontend Hook State)
+// ============================================================================
+
+/**
+ * AI SDK useChat status tuple
+ * ✅ SINGLE SOURCE: All AI SDK status values defined here
+ * ✅ NO HARDCODED STRINGS: Replaces 'ready' | 'streaming' | 'awaiting_message' literals
+ *
+ * Reference: @ai-sdk/react useChat hook status return value
+ * Used by:
+ * - /src/hooks/utils/use-multi-participant-chat.ts - Chat hook streaming state
+ * - Frontend components - Hook status checks
+ *
+ * States:
+ * - ready: No active streaming, ready to send message
+ * - streaming: Currently streaming a response
+ * - awaiting_message: Waiting for user input (after tool call)
+ */
+export const AI_SDK_STATUSES = ['ready', 'streaming', 'awaiting_message'] as const;
+
+/**
+ * AI SDK status Zod schema
+ * ✅ RUNTIME VALIDATION: Validates AI SDK status values
+ */
+export const AiSdkStatusSchema = z.enum(AI_SDK_STATUSES);
+
+/**
+ * AI SDK status TypeScript type
+ * ✅ ZOD INFERENCE: Type automatically derived from schema
+ */
+export type AiSdkStatus = z.infer<typeof AiSdkStatusSchema>;
+
+/**
+ * AI SDK status constants for clear usage
+ * ✅ RECOMMENDED PATTERN: Use AiSdkStatuses.READY instead of 'ready'
+ *
+ * @example
+ * // ❌ WRONG: Hardcoded string
+ * if (status !== 'ready') return
+ *
+ * // ✅ CORRECT: Type-safe constant
+ * if (status !== AiSdkStatuses.READY) return
+ */
+export const AiSdkStatuses = {
+  READY: 'ready' as const,
+  STREAMING: 'streaming' as const,
+  AWAITING_MESSAGE: 'awaiting_message' as const,
+} as const satisfies Record<string, AiSdkStatus>;
 
 // ============================================================================
 // NOTE: All exports are done inline above where each enum is defined

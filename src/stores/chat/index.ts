@@ -10,9 +10,13 @@
  * - useFeedbackActions: Round feedback management
  *
  * INTERNAL (not exported):
- * - useAnalysisCreation, useAnalysisDeduplication, useAnalysisOrchestrator
- * - useChatInitialization, useChatAnalysis
+ * - useAnalysisDeduplication, useAnalysisOrchestrator, useChatAnalysis
  * These are used internally by useScreenInitialization and other composed hooks
+ *
+ * STORE SUBSCRIPTIONS (automatic):
+ * - Analysis triggering: Monitors isStreaming → false (all participants done)
+ * - Streaming trigger: Monitors waitingToStartStreaming → true (thread ready)
+ * - Pending message send: Monitors participant match + changelog ready
  */
 
 // Primary Screen Hooks

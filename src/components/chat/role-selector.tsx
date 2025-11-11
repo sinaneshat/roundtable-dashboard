@@ -21,6 +21,7 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover';
 import { useCreateCustomRoleMutation, useDeleteCustomRoleMutation } from '@/hooks/mutations/chat-mutations';
+import { createRoleSystemPrompt } from '@/lib/ai/prompts';
 import { toastManager } from '@/lib/toast/toast-manager';
 import { cn } from '@/lib/ui/cn';
 import { DEFAULT_ROLES } from '@/lib/utils/ai-display';
@@ -94,7 +95,7 @@ export function RoleSelector({
         json: {
           name: roleName,
           description: null,
-          systemPrompt: `You are a ${roleName} assistant.`,
+          systemPrompt: createRoleSystemPrompt(roleName),
         },
       });
       if (result.success && result.data?.customRole) {

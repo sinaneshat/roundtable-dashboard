@@ -8,6 +8,7 @@ import { getQueryClient } from '@/lib/data/query-client';
 import { queryKeys } from '@/lib/data/query-keys';
 import { STALE_TIME_PRESETS, STALE_TIMES } from '@/lib/data/stale-times';
 import { getThreadAnalysesService, getThreadBySlugService, getThreadChangelogService, getThreadFeedbackService } from '@/services/api';
+import { getThreadPreSearchesService } from '@/services/api/chat-pre-search';
 import { createMetadata } from '@/utils/metadata';
 
 // Force dynamic rendering for user-specific thread data
@@ -48,6 +49,7 @@ export async function generateMetadata({
  * ✅ Thread data: Direct fetch (includes participants, messages)
  * ✅ Changelog: Pre-fetched (30s stale time)
  * ✅ Analyses: Pre-fetched (30s stale time)
+ * ✅ Pre-search: Pre-fetched (30s stale time) - for web search results
  * ✅ Feedback: Pre-fetched (2min stale time) - for like/dislike buttons
  * ✅ Thread detail: Cache populated with thread data - for useThreadQuery
  * ✅ Models: Pre-fetched at layout level (Infinity stale time)
@@ -90,7 +92,20 @@ export default async function ChatThreadPage({
       staleTime: STALE_TIMES.analyses, // 30 seconds - matches client-side query
     }),
 
-    // 3. ✅ NEW: Prefetch thread feedback - like/dislike button states
+    // 3. Prefetch all pre-search results - web search results (LIST endpoint)
+    // ✅ UNIFIED PATTERN: Prefetch all pre-searches via LIST endpoint (matches analysis pattern)
+    // Frontend uses orchestrator to sync to store, components receive from store
+    ...(thread.enableWebSearch
+      ? [
+          queryClient.prefetchQuery({
+            queryKey: queryKeys.threads.preSearches(thread.id),
+            queryFn: () => getThreadPreSearchesService({ param: { id: thread.id } }),
+            staleTime: STALE_TIMES.preSearch, // 30 seconds - matches client-side query
+          }),
+        ]
+      : []),
+
+    // 4. ✅ NEW: Prefetch thread feedback - like/dislike button states
     // This eliminates loading state for feedback buttons
     // CRITICAL: Must extract response.data to match what useThreadFeedbackQuery returns
     queryClient.prefetchQuery({

@@ -342,10 +342,10 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
   };
   return (
     <div className={cn('w-full relative z-20', className)}>
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-0">
         {suggestions.map((suggestion, index) => {
           const modeConfig = getModeConfig(suggestion.mode);
-          const ModeIcon = modeConfig.icon;
+          const isLast = index === suggestions.length - 1;
           return (
             <motion.button
               key={suggestion.title}
@@ -357,19 +357,25 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
                 ease: [0.25, 0.46, 0.45, 0.94],
               }}
               onClick={() => onSuggestionClick(suggestion.prompt, suggestion.mode, suggestion.participants)}
-              className="w-full text-left p-3.5 sm:p-4 rounded-xl sm:rounded-lg hover:bg-white/10 active:bg-white/15 hover:backdrop-blur-sm transition-all duration-200 focus-visible:ring-2 focus-visible:ring-white/20 focus-visible:outline-none touch-manipulation active:scale-[0.98] min-h-[60px] sm:min-h-[64px]"
+              className={cn(
+                'group/suggestion w-full text-left p-3 sm:p-4 md:p-5 rounded-2xl cursor-pointer focus-visible:ring-2 focus-visible:ring-white/20 focus-visible:outline-none touch-manipulation',
+                // Glass effect only on hover
+                'hover:bg-white/10 hover:backdrop-blur-sm',
+                'active:bg-white/15 active:scale-[0.998]',
+                'transition-all duration-200',
+                !isLast && 'border-b border-white/[0.06]',
+              )}
             >
-              <div className="flex items-center justify-between gap-3 sm:gap-4 h-full">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4 md:gap-6">
                 {/* Left: Question */}
-                <h3 className="text-base sm:text-lg font-medium text-white/95 leading-snug flex-1 min-w-0">
+                <h3 className="text-sm sm:text-[15px] md:text-base font-medium text-white/90 leading-snug line-clamp-2 flex-1 min-w-0">
                   {suggestion.title}
                 </h3>
 
                 {/* Right: Mode and avatars */}
-                <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-                  <div className="flex items-center gap-1.5">
-                    <ModeIcon className={cn('size-3.5', modeConfig.color)} />
-                    <span className={cn('text-xs font-medium whitespace-nowrap', modeConfig.color)}>
+                <div className="flex items-center gap-2 sm:gap-3 md:gap-4 shrink-0">
+                  <div className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1 sm:py-1.5 rounded-full bg-white/5 border border-white/10">
+                    <span className={cn('text-[10px] sm:text-xs font-medium whitespace-nowrap', modeConfig.color)}>
                       {modeConfig.label}
                     </span>
                   </div>

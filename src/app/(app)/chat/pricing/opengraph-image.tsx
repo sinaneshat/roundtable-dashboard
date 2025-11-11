@@ -15,7 +15,7 @@ import {
   createGradient,
   getLogoBase64,
   OG_COLORS,
-} from '@/lib/utils/og-image-helpers';
+} from '@/lib/ui';
 
 export const revalidate = 3600; // ISR: Revalidate every hour
 export const size = {

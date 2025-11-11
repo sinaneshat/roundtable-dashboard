@@ -2,7 +2,7 @@
 import { useTranslations } from 'next-intl';
 
 import { AnalysisStatuses } from '@/api/core/enums';
-import type { ParticipantAnalysis, RecommendedAction, StoredModeratorAnalysis } from '@/api/routes/chat/schema';
+import type { RecommendedAction, StoredModeratorAnalysis } from '@/api/routes/chat/schema';
 import { hasAnalysisData } from '@/lib/utils/analysis-utils';
 
 import { LeaderboardCard } from './leaderboard-card';
@@ -38,21 +38,21 @@ export function ModeratorAnalysisPanel({
       </div>
     );
   }
+
+  // Type-safe destructuring: analysisData is validated and narrowed by hasAnalysisData type guard
   const { leaderboard, participantAnalyses, roundSummary } = analysis.analysisData;
-  const participantData: ParticipantAnalysis[] = participantAnalyses.map(participant => ({
-    ...participant,
-  }));
+
   return (
     <div className="space-y-4">
       {leaderboard.length > 0 && (
         <LeaderboardCard leaderboard={leaderboard} />
       )}
-      {participantData.length > 0 && (
-        <SkillsComparisonChart participants={participantData} />
+      {participantAnalyses.length > 0 && (
+        <SkillsComparisonChart participants={participantAnalyses} />
       )}
-      {participantData.length > 0 && (
+      {participantAnalyses.length > 0 && (
         <div className="space-y-3">
-          {participantData.map(participant => (
+          {participantAnalyses.map(participant => (
             <ParticipantAnalysisCard
               key={`${participant.participantIndex}-${participant.modelId}`}
               analysis={participant}

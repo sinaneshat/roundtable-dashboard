@@ -2,125 +2,13 @@ import type { UIMessage } from 'ai';
 import { TypeValidationError, validateUIMessages } from 'ai';
 
 import type { ChatMessage } from '@/db/validation';
-import type { ErrorCategory } from '@/lib/schemas/error-schemas';
-import { categorizeErrorMessage, ErrorCategorySchema, FinishReasonSchema } from '@/lib/schemas/error-schemas';
 
 // ============================================================================
-// ERROR CATEGORIZATION HELPERS
+// NOTE: Dead code removed
+// - buildStreamErrorMessage → structureAIProviderError (error-handling.ts:528-706)
+// - extractOpenRouterError → structureAIProviderError (error-handling.ts:528-706)
+// - categorizeError → categorizeErrorMessage (error-schemas.ts:205)
 // ============================================================================
-
-/**
- * Categorize error based on error message content
- * ✅ Now using Zod-inferred ErrorCategory type from error-schemas
- */
-export function categorizeError(errorMessage: string): ErrorCategory {
-  return categorizeErrorMessage(errorMessage);
-}
-
-/**
- * Build structured error message from streaming response
- * ✅ Now using ErrorCategory type from error-schemas
- */
-export function buildStreamErrorMessage(options: {
-  openRouterError?: string;
-  outputTokens: number;
-  inputTokens: number;
-  finishReason: string;
-  modelId: string;
-}): { errorMessage: string; providerMessage: string; errorCategory: ErrorCategory } | null {
-  const { openRouterError, outputTokens, inputTokens, finishReason, modelId } = options;
-
-  if (openRouterError) {
-    const errorCategory = categorizeError(openRouterError);
-    return {
-      providerMessage: openRouterError,
-      errorMessage: `OpenRouter Error for ${modelId}: ${openRouterError}`,
-      errorCategory,
-    };
-  }
-
-  if (outputTokens === 0) {
-    const baseStats = `Input: ${inputTokens} tokens, Output: 0 tokens, Status: ${finishReason}`;
-
-    if (finishReason === FinishReasonSchema.enum.stop) {
-      return {
-        providerMessage: `Model completed but returned no content. ${baseStats}. This may indicate content filtering, safety constraints, or the model chose not to respond.`,
-        errorMessage: `${modelId} returned empty response - possible content filtering or safety block`,
-        errorCategory: ErrorCategorySchema.enum.content_filter,
-      };
-    }
-    if (finishReason === FinishReasonSchema.enum.length) {
-      return {
-        providerMessage: `Model hit token limit before generating content. ${baseStats}. Try reducing the conversation history or input length.`,
-        errorMessage: `${modelId} exceeded token limit without generating content`,
-        errorCategory: ErrorCategorySchema.enum.provider_error,
-      };
-    }
-    if (finishReason === FinishReasonSchema.enum['content-filter']) {
-      return {
-        providerMessage: `Content was filtered by safety systems. ${baseStats}`,
-        errorMessage: `${modelId} blocked by content filter`,
-        errorCategory: ErrorCategorySchema.enum.content_filter,
-      };
-    }
-    if (finishReason === FinishReasonSchema.enum.error || finishReason === FinishReasonSchema.enum.other) {
-      return {
-        providerMessage: `Provider error prevented response generation. ${baseStats}. This may be a temporary issue with the model provider.`,
-        errorMessage: `${modelId} encountered a provider error`,
-        errorCategory: ErrorCategorySchema.enum.provider_error,
-      };
-    }
-
-    return {
-      providerMessage: `Model returned empty response. ${baseStats}`,
-      errorMessage: `${modelId} returned empty response (reason: ${finishReason})`,
-      errorCategory: ErrorCategorySchema.enum.empty_response,
-    };
-  }
-
-  return null;
-}
-
-/**
- * Extract OpenRouter error details from provider metadata or response
- * ✅ Now using ErrorCategory type from error-schemas
- */
-export function extractOpenRouterError(
-  providerMetadata: unknown,
-  response: unknown,
-): { openRouterError?: string; errorCategory?: ErrorCategory } {
-  let openRouterError: string | undefined;
-  let errorCategory: ErrorCategory | undefined;
-
-  // Check providerMetadata
-  if (providerMetadata && typeof providerMetadata === 'object') {
-    const metadata = providerMetadata as Record<string, unknown>;
-    if (metadata.error) {
-      openRouterError = typeof metadata.error === 'string'
-        ? metadata.error
-        : JSON.stringify(metadata.error);
-    }
-    if (!openRouterError && metadata.errorMessage) {
-      openRouterError = String(metadata.errorMessage);
-    }
-    if (metadata.moderation || metadata.contentFilter) {
-      errorCategory = ErrorCategorySchema.enum.content_filter;
-      openRouterError = openRouterError || 'Content was filtered by safety systems';
-    }
-  }
-
-  // Check response object
-  if (!openRouterError && response && typeof response === 'object') {
-    const resp = response as Record<string, unknown>;
-    if (resp.error) {
-      openRouterError = typeof resp.error === 'string'
-        ? resp.error
-        : JSON.stringify(resp.error);
-    }
-  }
-
-  return { openRouterError, errorCategory };
-}
 
 /**
  * Convert database chat messages to UI Message format

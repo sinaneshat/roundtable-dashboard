@@ -33,15 +33,15 @@ export function SidebarSection({
   if (!collapsible) {
     return (
       <div className={cn('space-y-1.5', className)}>
-        <div className="flex items-center justify-between px-2 py-1.5">
-          <div className="flex items-center gap-1.5">
+        <div className="flex items-center justify-between px-2 py-1.5 w-full min-w-0">
+          <div className="flex items-center gap-1.5 min-w-0 flex-1">
             {icon && <div className="text-muted-foreground shrink-0">{icon}</div>}
-            <h3 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+            <h3 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider truncate min-w-0">
               {title}
             </h3>
           </div>
           {count !== undefined && count > 0 && (
-            <span className="text-[10px] font-medium text-muted-foreground tabular-nums">
+            <span className="text-[10px] font-medium text-muted-foreground tabular-nums shrink-0">
               {count}
             </span>
           )}
@@ -56,14 +56,14 @@ export function SidebarSection({
       onOpenChange={setIsOpen}
       className={cn('space-y-1.5', className)}
     >
-      <CollapsibleTrigger className="flex w-full items-center justify-between px-2 py-1.5 rounded-md hover:bg-sidebar-accent/50 transition-all duration-200 group">
-        <div className="flex items-center gap-1.5 min-w-0">
+      <CollapsibleTrigger className="flex w-full items-center justify-between px-2 py-1.5 rounded-md transition-all duration-200 group min-w-0">
+        <div className="flex items-center gap-1.5 min-w-0 flex-1">
           {icon && (
             <div className="text-muted-foreground shrink-0">
               {icon}
             </div>
           )}
-          <h3 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider truncate">
+          <h3 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider truncate min-w-0">
             {title}
           </h3>
         </div>

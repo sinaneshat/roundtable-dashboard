@@ -60,11 +60,11 @@
       "preview_bucket_name": "roundtable-dashboard-r2-uploads-local"
     }
   ],
-  "ai": {
-    "binding": "AI"
-  },
   "browser": {
     "binding": "BROWSER"
+  },
+  "ai": {
+    "binding": "AI"
   },
   "durable_objects": {
     "bindings": [
@@ -152,11 +152,11 @@
           "preview_bucket_name": "roundtable-dashboard-r2-uploads-preview"
         }
       ],
-      "ai": {
-        "binding": "AI"
-      },
       "browser": {
         "binding": "BROWSER"
+      },
+      "ai": {
+        "binding": "AI"
       },
       "durable_objects": {
         "bindings": [
@@ -238,11 +238,11 @@
           "preview_bucket_name": "roundtable-dashboard-r2-uploads-prod"
         }
       ],
-      "ai": {
-        "binding": "AI"
-      },
       "browser": {
         "binding": "BROWSER"
+      },
+      "ai": {
+        "binding": "AI"
       },
       "durable_objects": {
         "bindings": [

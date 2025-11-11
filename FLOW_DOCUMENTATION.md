@@ -53,7 +53,8 @@ Roundtable enables users to create conversations where multiple AI models collab
 2. Welcome screen fades out
 3. User's message appears at top
 4. First AI starts responding (text streams word-by-word)
-5. **URL updates**: `/chat` → `/chat/[unique-slug]` after moderator analysis completes (without page refresh)
+5. **URL stays at `/chat`** during entire first round
+6. **After analysis completes**: Automatic navigation to `/chat/[unique-slug]` (full page transition)
 
 **Behind the Scenes:**
 - System creates conversation record in database
@@ -65,7 +66,113 @@ Roundtable enables users to create conversations where multiple AI models collab
 
 ---
 
-## PART 2: AI RESPONSES STREAMING
+## PART 2: PRE-SEARCH FUNCTIONALITY (WEB SEARCH)
+
+### Pre-Search Overview
+
+**When Enabled:** Users can enable "Web Search" toggle before submitting questions
+**Purpose:** Execute web search BEFORE AI participants respond, providing search results as context
+**Impact:** Adds 8-12 second delay before participant streaming begins
+
+### Pre-Search Flow
+
+**What User Sees:**
+1. User enables "Web Search" toggle in chat interface
+2. User types question and clicks send
+3. Loading indicator shows "Searching the web..." or "Gathering information..."
+4. Pre-search card appears showing:
+   - Generated search query with rationale
+   - Individual search results streaming in (title, URL, snippet)
+   - Search statistics (number of results, time taken)
+5. After pre-search completes, participant streaming begins
+
+**Behind the Scenes:**
+1. **Thread creation** creates PENDING pre-search record in database (Round 1)
+2. **Frontend detects** PENDING status via orchestrator
+3. **Pre-search endpoint** receives request, updates status to STREAMING
+4. **AI generates** optimized search query from user's question
+5. **Web search executes** with AI-determined parameters
+6. **Results stream** to frontend via Server-Sent Events (SSE)
+7. **Database updated** with search results, status → COMPLETED
+8. **Pre-search message created** with search results for AI context
+9. **Participant streaming begins** (all AIs receive search context)
+
+### Critical Timing Behavior
+
+**🚨 BLOCKING OPERATION:**
+- Pre-search MUST complete before participant streaming starts
+- Store subscription checks pre-search status before allowing streaming
+- If pre-search status is PENDING or STREAMING, participant streaming is blocked
+- Only when status is COMPLETED or FAILED will participant streaming proceed
+
+**Status Transitions:**
+```
+PENDING (created during thread creation)
+  ↓
+STREAMING (when pre-search endpoint called)
+  ↓
+COMPLETED (search results saved) OR FAILED (error occurred)
+  ↓
+Participant streaming allowed to start
+```
+
+**Timeout Protection:**
+- ✅ ADDED: 10-second timeout for changelog/pre-search waiting
+- If pre-search hangs, system proceeds after timeout to prevent permanent blocking
+
+### Search Context Distribution
+
+**Current Round (where pre-search executed):**
+- ALL participants receive full search results with website content
+- Search context included in system prompt before AI responses
+
+**Previous Rounds:**
+- Summary/analysis of search results only (prevents context bloat)
+- Full website content NOT included for historical rounds
+
+### Pre-Search in Subsequent Rounds
+
+**When user submits additional messages with web search enabled:**
+1. Calculate next round number
+2. Execute new pre-search for that round
+3. Block participant streaming until new pre-search completes
+4. Each round gets independent pre-search results
+
+**Round Number Calculation:**
+- ✅ FIXED: Uses `getCurrentRoundNumber(messages) + 1` (single source of truth)
+- Previously had mismatch between provider and store calculations
+
+### Error Handling
+
+**Pre-Search Failures:**
+- Status updates to FAILED
+- Error message stored in database
+- Participant streaming proceeds anyway (search failure non-blocking after completion)
+- Users see error message but conversation continues
+
+**Network Issues:**
+- Pre-search timeout prevents permanent blocking
+- User can continue without search results if timeout reached
+
+### Database Records
+
+**Pre-Search Table:**
+- `id` - Unique identifier
+- `threadId` - Associated conversation
+- `roundNumber` - Which round the search belongs to
+- `userQuery` - Original user question
+- `status` - PENDING | STREAMING | COMPLETED | FAILED
+- `searchData` - JSON with query, results, statistics
+- `createdAt` - Timestamp
+
+**Pre-Search Message:**
+- Created with role='assistant' but NO participantId
+- Contains search results for AI context
+- Filtered out from participant message counts in analysis
+
+---
+
+## PART 3: AI RESPONSES STREAMING
 
 ### Sequential Response Flow
 
@@ -101,7 +208,7 @@ Roundtable enables users to create conversations where multiple AI models collab
 
 ---
 
-## PART 3: ROUND ANALYSIS
+## PART 4: ROUND ANALYSIS
 
 ### Analysis Trigger
 
@@ -148,11 +255,11 @@ Roundtable enables users to create conversations where multiple AI models collab
 
 ### After First Round Completes
 
-**No navigation required** - the URL has already updated to `/chat/[slug]` after the moderator analysis completed (see Part 1). The user remains on the thread detail page and can immediately continue the conversation by typing another message.
+**Automatic Navigation** - Once the moderator analysis completes and AI-generated title is ready, the page automatically navigates from `/chat` to `/chat/[slug]`. This transitions from ChatOverviewScreen to ChatThreadScreen, where the user can continue the conversation by typing another message.
 
 ---
 
-## PART 4: THREAD DETAIL PAGE (CONTINUING CONVERSATION)
+## PART 5: THREAD DETAIL PAGE (CONTINUING CONVERSATION)
 
 ### Initial Page Load
 
@@ -202,7 +309,7 @@ Round 2:
 
 ---
 
-## PART 5: CONFIGURATION CHANGES MID-CONVERSATION
+## PART 6: CONFIGURATION CHANGES MID-CONVERSATION
 
 ### Making Changes Between Rounds
 
@@ -236,7 +343,7 @@ Changes save when user submits next message (not immediately).
 
 ---
 
-## PART 6: REGENERATING A ROUND
+## PART 7: REGENERATING A ROUND
 
 ### When Available
 
@@ -266,7 +373,7 @@ Changes save when user submits next message (not immediately).
 
 ---
 
-## PART 7: KEY BEHAVIORAL PATTERNS
+## PART 8: KEY BEHAVIORAL PATTERNS
 
 ### Round Number System
 
@@ -298,7 +405,7 @@ Changes save when user submits next message (not immediately).
 
 ---
 
-## PART 8: TIMING AND PERFORMANCE
+## PART 9: TIMING AND PERFORMANCE
 
 ### Typical Round Duration
 - Each AI response: 5-15 seconds
@@ -312,7 +419,7 @@ Changes save when user submits next message (not immediately).
 
 ---
 
-## PART 9: ERROR HANDLING USERS SEE
+## PART 10: ERROR HANDLING USERS SEE
 
 ### AI Response Errors
 
@@ -341,7 +448,7 @@ Changes save when user submits next message (not immediately).
 
 ---
 
-## PART 10: SUBSCRIPTION TIER IMPACTS
+## PART 11: SUBSCRIPTION TIER IMPACTS
 
 ### Free Tier
 - 2 AI models max per conversation
@@ -368,29 +475,118 @@ Changes save when user submits next message (not immediately).
 
 ---
 
-## PART 11: URL PATTERNS
+## PART 12: URL PATTERNS
 
 ### URL Transitions During Chat Journey
 
+**✅ ACTUAL IMPLEMENTATION (January 2025):**
+
 ```
-1. User lands on overview: /chat
+1. User lands on overview: /chat (ChatOverviewScreen)
 
-2. User submits first message: /chat → /chat/[slug]
-   (URL changes WITHOUT page refresh)
+2. User submits first message:
+   - Thread created with auto-generated slug from message text
+   - ChatOverviewScreen REMAINS MOUNTED during streaming
+   - URL stays at /chat while streaming
 
-3. Analysis completes: /chat/[slug] (stays same)
-   (Auto-navigation to thread detail page)
+3. Participant streaming happens:
+   - All selected AI models respond sequentially
+   - User sees responses streaming in real-time
+   - Still on /chat, still ChatOverviewScreen
 
-4. Subsequent rounds: /chat/[slug] (stays same)
-   (All activity on same persistent page)
+4. Analysis completes:
+   - Moderator analysis finishes
+   - Analysis status: COMPLETED
+   - Streaming finishes completely
+
+5. Slug polling (starts IMMEDIATELY on thread creation):
+   - Frontend polls /api/v1/chat/threads/{id}/slug-status every 3s
+   - Polling begins as soon as thread created (during streaming)
+   - Checks isAiGeneratedTitle flag in background
+
+6. When AI title ready (DURING or AFTER streaming):
+   - Frontend uses window.history.replaceState to update URL - NO NAVIGATION
+   - ChatOverviewScreen STAYS MOUNTED (no component unmount/mount)
+   - URL bar updates to /chat/[ai-generated-slug] in background
+   - User continues viewing streaming/first round
+   - Sidebar updates with AI-generated title
+
+7. When first analysis completes:
+   - Frontend does router.push to /chat/[ai-generated-slug]
+   - ChatOverviewScreen UNMOUNTS
+   - ChatThreadScreen MOUNTS
+   - Full navigation to thread detail page
+
+8. Subsequent rounds: /chat/[slug] (ChatThreadScreen)
+   - All future activity on thread detail page
+   - No more URL changes
 ```
 
-**Slug Format:** Permanent URL created from first message keywords
-**Example:** "product-strategy-discussion-2024"
+**Critical Implementation Details:**
+
+**Slug Generation:**
+1. **Initial Slug** - Created immediately from first message text
+   - Generated during thread creation
+   - Used for thread record in database
+   - Format: sanitized-user-question-text + random suffix
+   - Example: "say-hi-1-word-only-nzj311"
+
+2. **AI-Generated Title & Slug** - Created asynchronously after analysis
+   - Backend generates AI title after moderator analysis completes
+   - Creates new slug from AI title
+   - Updates database atomically (both title AND slug)
+   - Timing: Typically 8-15 seconds (after analysis completes)
+
+**URL Update Mechanism:**
+```typescript
+// Frontend implementation (overview-actions.ts:176)
+window.history.replaceState(
+  window.history.state,
+  '',
+  `/chat/${slugData.slug}`,
+);
+```
+
+**Why This Approach:**
+- Updates URL without triggering route change
+- User stays on ChatOverviewScreen viewing first round
+- No component unmount/mount - smooth experience
+- URL reflects AI-generated title for sharing/bookmarking
+
+**Polling Pattern:**
+- Frontend polls `/api/v1/chat/threads/{id}/slug-status` every 3 seconds
+- Polling starts IMMEDIATELY after thread creation:
+  - Chat has started (showInitialUI = false)
+  - Thread ID exists (createdThreadId)
+  - Haven't detected AI title yet (hasUpdatedThreadRef = false)
+- Checks `isAiGeneratedTitle: boolean` flag
+- **Two-step process:**
+  1. When AI title ready → Replace URL with window.history.replaceState (stay on overview) + **STOP POLLING**
+  2. When analysis completes → Do router.push to thread detail page
+- Polling stops immediately when AI title detected (not waiting for navigation)
+
+**Timing Sequence:**
+```
+Thread created → Polling starts immediately →
+Streaming (20-30s) → AI title ready (background) → URL replaced →
+Analysis streaming (8-12s) → Analysis complete →
+router.push to /chat/[slug]
+```
+
+**Edge Cases:**
+- If title generation fails, keeps "New Chat" title and initial slug
+- Silent failure (no error shown to user)
+- User can continue conversation even without AI title
+- Navigation happens automatically when title ready
+
+**Slug Format:**
+- Permanent URL created from AI-generated title
+- Example: "debugging-react-state-issues"
+- Sanitized, URL-safe, unique format
 
 ---
 
-## PART 12: MOBILE VS DESKTOP
+## PART 13: MOBILE VS DESKTOP
 
 **Mobile:** Vertical chip stacking, horizontal scrolling, touch-friendly targets (44x44px), simplified metadata
 
@@ -425,14 +621,15 @@ Changes save when user submits next message (not immediately).
 ### Critical Test Scenarios
 
 **Scenario 1: First Round Creation**
-1. Land on `/chat` overview screen
+1. Land on `/chat` overview screen (ChatOverviewScreen)
 2. Select 2-3 AI models with roles
 3. Choose conversation mode
 4. Submit first message
-5. Verify URL changes to `/chat/[slug]`
+5. Verify URL stays at `/chat` during streaming
 6. Verify all participants respond sequentially
 7. Verify analysis generates after last participant
-8. Verify navigation to thread detail page
+8. Verify automatic navigation to `/chat/[slug]` after analysis + AI title ready
+9. Verify ChatThreadScreen loads at new URL
 
 **Scenario 2: Multi-Round Conversation**
 1. Complete Round 1 on thread detail page
@@ -477,6 +674,14 @@ Changes save when user submits next message (not immediately).
 ---
 
 ## VERSION HISTORY
+
+**Version 2.1** - URL Pattern Corrections
+**Last Updated:** January 10, 2025
+**Changes:**
+- Fixed Part 12 (URL Patterns) to match actual implementation
+- Updated navigation flow: router.push (not window.history.replaceState)
+- Clarified polling behavior: starts AFTER streaming + analysis complete
+- Updated test scenarios to reflect two-screen architecture
 
 **Version 2.0** - Focused Chat Journey Documentation
 **Last Updated:** January 2025

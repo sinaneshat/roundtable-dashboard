@@ -364,22 +364,18 @@
       "title": "Initial Web Research",
       "searching": "Searching",
       "error": "Error",
-      "searchStrategy": "Search Strategy",
-      "queriesExecuted": "Queries Executed",
-      "summary": {
-        "searches": "{count, plural, =1 {# search} other {# searches}}",
-        "results": "{count, plural, =1 {# result} other {# results}}",
-        "failed": "{count} failed",
-        "successful": "{successCount}/{totalCount} searches successful",
-        "sourcesFound": "{count} sources found"
-      },
       "searchDepth": {
         "basic": "basic",
         "advanced": "advanced"
       },
-      "show": "Show",
-      "hide": "Hide",
-      "details": "details"
+      "steps": {
+        "understanding": "Understanding query",
+        "searching": "Searching web sources",
+        "searchComplete": "Web sources found",
+        "searchingDesc": "Finding relevant sources...",
+        "results": "Analysis & Results",
+        "sources": "Sources"
+      }
     },
     "tools": {
       "webSearch": {
@@ -527,7 +523,8 @@
       "placeholderStreaming": "AI participants are responding...",
       "streamingPlaceholder": "Waiting for AI response...",
       "submit": "Send message",
-      "threadPlaceholder": "Continue the conversation..."
+      "threadPlaceholder": "Continue the conversation...",
+      "voiceInput": "Voice input"
     },
     "disclaimer": "AI can make mistakes. Please double-check responses.",
     "sources": {

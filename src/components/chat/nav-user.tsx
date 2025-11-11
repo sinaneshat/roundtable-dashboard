@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 
+import type { SubscriptionTier } from '@/api/services/product-logic.service';
 import { CancelSubscriptionDialog } from '@/components/chat/cancel-subscription-dialog';
 import { UsageMetrics } from '@/components/chat/usage-metrics';
 import { ApiKeysModal } from '@/components/modals/api-keys-modal';
@@ -95,7 +96,7 @@ export function NavUser() {
       showApiErrorToast('Cancellation Failed', error);
     }
   };
-  const subscriptionTier = usageData?.success ? usageData.data.subscription.tier : 'free';
+  const subscriptionTier = (usageData?.success ? usageData.data.subscription.tier : 'free') as SubscriptionTier;
   const isPremium = subscriptionTier !== 'free';
   return (
     <>

@@ -67,7 +67,7 @@ function NavigationHeaderComponent({
     <header
       className={cn(
         'sticky top-0 left-0 right-0 z-50 flex h-14 sm:h-16 shrink-0 items-center gap-2 transition-all duration-200 ease-in-out',
-        !isOverviewPage && 'border-b border-border/40 backdrop-blur-xl bg-background/60 supports-[backdrop-filter]:bg-background/60 w-full',
+        !isOverviewPage && 'backdrop-blur-xl bg-background/60 supports-[backdrop-filter]:bg-background/60 w-full',
         className,
       )}
     >
@@ -79,8 +79,8 @@ function NavigationHeaderComponent({
         <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 flex-1">
           {showSidebarTrigger && (
             <>
-              <SidebarTrigger className="-ms-1 flex-shrink-0 size-9 sm:size-auto touch-manipulation" />
-              {!isOverviewPage && <Separator orientation="vertical" className="me-1 sm:me-2 h-3.5 sm:h-4 flex-shrink-0" />}
+              <SidebarTrigger className="flex-shrink-0 touch-manipulation" />
+              {!isOverviewPage && <Separator orientation="vertical" className="me-1 sm:me-2 h-3.5 sm:h-4 flex-shrink-0 opacity-30" />}
             </>
           )}
           {showLogo && !isOverviewPage && (
@@ -91,7 +91,7 @@ function NavigationHeaderComponent({
                   {BRAND.displayName}
                 </span>
               </Link>
-              <Separator orientation="vertical" className="me-1 sm:me-2 h-3.5 sm:h-4 flex-shrink-0" />
+              <Separator orientation="vertical" className="me-1 sm:me-2 h-3.5 sm:h-4 flex-shrink-0 opacity-30" />
             </>
           )}
           {!isOverviewPage && currentPage && (
@@ -143,12 +143,11 @@ function MinimalHeaderComponent({ className }: { className?: string } = {}) {
     <header
       className={cn(
         'sticky top-0 left-0 right-0 z-50 flex h-14 sm:h-16 shrink-0 items-center',
-        'border-b border-border/40 backdrop-blur-xl bg-background/60 supports-[backdrop-filter]:bg-background/60',
         className,
       )}
     >
       <div className="flex items-center gap-2 px-3 sm:px-4 md:px-6 lg:px-8 h-14 sm:h-16">
-        <SidebarTrigger className="-ms-1 size-9 sm:size-auto touch-manipulation" />
+        <SidebarTrigger className="touch-manipulation" />
       </div>
     </header>
   );

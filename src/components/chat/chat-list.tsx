@@ -4,7 +4,7 @@ import { motion } from 'motion/react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 
 import {
   AlertDialog,
@@ -24,7 +24,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from '@/components/ui/sidebar';
-import { cn } from '@/lib/ui/cn';
+import { StickyHeader } from '@/components/ui/sticky-header';
 
 export type Chat = {
   id: string;
@@ -80,29 +80,7 @@ type ChatListProps = {
   onNavigate?: () => void;
 };
 const EMPTY_FAVORITES: Chat[] = [];
-function StickyHeader({ children, zIndex = 10 }: { children: React.ReactNode; zIndex?: number }) {
-  const headerRef = useRef<HTMLDivElement>(null);
-  return (
-    <motion.div
-      ref={headerRef}
-      initial={{ opacity: 0, y: -8 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{
-        type: 'spring',
-        stiffness: 500,
-        damping: 40,
-      }}
-      style={{
-        position: 'sticky',
-        top: 0,
-        zIndex,
-      }}
-      className="bg-sidebar"
-    >
-      {children}
-    </motion.div>
-  );
-}
+
 function ChatItem({
   chat,
   isActive,
@@ -126,25 +104,18 @@ function ChatItem({
         asChild
         isActive={isActive}
         disabled={isDeleting}
-        className={cn(
-          'group relative transition-all duration-200',
-          'hover:bg-sidebar-accent/70',
-          isActive && 'bg-sidebar-accent font-medium',
-        )}
       >
         <Link
           href={chatUrl}
-          className={cn(
-            'min-w-0 flex items-center',
-            isDeleting && 'pointer-events-none opacity-50',
-          )}
           onClick={() => {
             if (isMobile && onNavigate) {
               onNavigate();
             }
           }}
         >
-          <span className="truncate text-sm">{chat.title}</span>
+          <span className="truncate min-w-0 flex-1">
+            {chat.title}
+          </span>
         </Link>
       </SidebarMenuButton>
       <SidebarMenuAction
@@ -155,15 +126,8 @@ function ChatItem({
           e.stopPropagation();
           onDeleteClick(chat);
         }}
-        className="transition-all duration-200 hover:bg-destructive/10 hover:text-destructive"
       >
-        {isDeleting
-          ? (
-              <Loader2 className="size-3.5 animate-spin" />
-            )
-          : (
-              <Trash2 className="size-3.5" />
-            )}
+        {isDeleting ? <Loader2 className="size-3.5 animate-spin" /> : <Trash2 className="size-3.5" />}
         <span className="sr-only">{t('chat.deleteChat')}</span>
       </SidebarMenuAction>
     </SidebarMenuItem>
@@ -249,9 +213,10 @@ export function ChatList({
         const sectionZIndex = baseZIndex + groupIndex;
         return (
           <SidebarGroup key={group.label} className="group-data-[collapsible=icon]:hidden">
-            <StickyHeader zIndex={sectionZIndex}>
-              <SidebarGroupLabel className="py-2 px-2 text-[10px] uppercase tracking-wider font-semibold text-muted-foreground/80">
+            <StickyHeader zIndex={sectionZIndex} className="backdrop-blur-xl pb-1">
+              <SidebarGroupLabel className="h-9 px-2 text-xs uppercase tracking-wider font-medium text-muted-foreground">
                 <motion.span
+                  className="truncate block min-w-0"
                   initial={{ x: -10, opacity: 0 }}
                   animate={{ x: 0, opacity: 1 }}
                   transition={{
@@ -260,7 +225,6 @@ export function ChatList({
                     damping: 40,
                     delay: (groupIndex * 0.05) + 0.1,
                   }}
-                  className="block"
                 >
                   {formatGroupLabel(group.label)}
                 </motion.span>

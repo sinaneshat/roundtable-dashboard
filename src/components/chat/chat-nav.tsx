@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
+import type { SubscriptionTier } from '@/api/services/product-logic.service';
 import type { Chat } from '@/components/chat/chat-list';
 import { ChatList, groupChatsByPeriod } from '@/components/chat/chat-list';
 import {
@@ -142,7 +143,7 @@ function AppSidebarComponent({ ...props }: React.ComponentProps<typeof Sidebar>)
   const deletingChatId = deleteThreadMutation.isPending && deleteThreadMutation.variables?.param?.id
     ? deleteThreadMutation.variables.param.id
     : null;
-  const subscriptionTier = usageData?.success ? usageData.data.subscription.tier : 'free';
+  const subscriptionTier = (usageData?.success ? usageData.data.subscription.tier : 'free') as SubscriptionTier;
   const isFreeUser = subscriptionTier === 'free';
   const handleScroll = useCallback(() => {
     if (!sidebarContentRef.current || !hasNextPage || isFetchingNextPage)
@@ -163,8 +164,8 @@ function AppSidebarComponent({ ...props }: React.ComponentProps<typeof Sidebar>)
   return (
     <>
       <TooltipProvider>
-        <Sidebar collapsible="icon" {...props}>
-          <SidebarHeader className="border-b border-sidebar-border">
+        <Sidebar collapsible="icon" variant="floating" {...props}>
+          <SidebarHeader>
             <SidebarMenu className="gap-1">
               {/* Logo/Brand */}
               <SidebarMenuItem className="group-data-[collapsible=icon]:hidden mb-2">
@@ -193,7 +194,7 @@ function AppSidebarComponent({ ...props }: React.ComponentProps<typeof Sidebar>)
               </SidebarMenuItem>
 
               {/* Logo - Collapsed */}
-              <SidebarMenuItem className="hidden group-data-[collapsible=icon]:flex justify-center mb-2">
+              <SidebarMenuItem className="hidden group-data-[collapsible=icon]:flex group-data-[collapsible=icon]:items-center group-data-[collapsible=icon]:justify-center mb-2">
                 <SidebarMenuButton size="lg" asChild className="hover:bg-transparent" tooltip={BRAND.displayName}>
                   <Link
                     href="/chat"
@@ -259,10 +260,11 @@ function AppSidebarComponent({ ...props }: React.ComponentProps<typeof Sidebar>)
               </SidebarMenuItem>
 
               {/* Icon Buttons - Collapsed */}
-              <SidebarMenuItem className="hidden group-data-[collapsible=icon]:flex justify-center">
+              <SidebarMenuItem className="hidden group-data-[collapsible=icon]:flex">
                 <SidebarMenuButton
                   asChild
                   tooltip={t('navigation.newChat')}
+                  className="group-data-[collapsible=icon]:w-full"
                 >
                   <Link
                     href="/chat"
@@ -273,7 +275,7 @@ function AppSidebarComponent({ ...props }: React.ComponentProps<typeof Sidebar>)
                 </SidebarMenuButton>
               </SidebarMenuItem>
 
-              <SidebarMenuItem className="hidden group-data-[collapsible=icon]:flex justify-center">
+              <SidebarMenuItem className="hidden group-data-[collapsible=icon]:flex">
                 <SidebarMenuButton
                   onClick={() => {
                     setIsSearchOpen(true);
@@ -282,15 +284,17 @@ function AppSidebarComponent({ ...props }: React.ComponentProps<typeof Sidebar>)
                     }
                   }}
                   tooltip={t('chat.searchChats')}
+                  className="group-data-[collapsible=icon]:w-full"
                 >
                   <Search className="size-4" />
                 </SidebarMenuButton>
               </SidebarMenuItem>
 
-              <SidebarMenuItem className="hidden group-data-[collapsible=icon]:flex justify-center">
+              <SidebarMenuItem className="hidden group-data-[collapsible=icon]:flex">
                 <SidebarMenuButton
                   disabled
                   tooltip="Projects (Coming Soon)"
+                  className="group-data-[collapsible=icon]:w-full"
                 >
                   <FolderKanban className="size-4" />
                 </SidebarMenuButton>

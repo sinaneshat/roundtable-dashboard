@@ -37,6 +37,7 @@ export const AnalysesCacheDataSchema = z.object({
         mode: z.string(),
         userQuestion: z.string(),
         createdAt: z.union([z.date(), z.string()]),
+        completedAt: z.union([z.date(), z.string()]).nullable().optional(),
         errorMessage: z.string().nullable().optional(),
       }),
     ),
@@ -85,7 +86,7 @@ export function validateAnalysesCache(data: unknown): AnalysesCacheData | undefi
  * queryClient.setQueryData(queryKey, (oldData) =>
  *   transformAnalysesCache(oldData, (items) =>
  *     items.map(item =>
- *       item.id === analysisId ? { ...item, status: 'completed' } : item
+ *       item.id === analysisId ? { ...item, status: 'complete' } : item
  *     )
  *   )
  * );

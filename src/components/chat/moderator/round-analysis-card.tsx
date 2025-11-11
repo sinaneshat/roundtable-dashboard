@@ -138,33 +138,18 @@ export function RoundAnalysisCard({
     };
   }, []);
   useEffect(() => {
-    const justCompleted = (previousStatusRef.current === AnalysisStatuses.PENDING || previousStatusRef.current === AnalysisStatuses.STREAMING)
-      && analysis.status === AnalysisStatuses.COMPLETED;
-    const cleanup = (() => {
-      if (justCompleted && isLatest && isOpen && containerRef.current) {
-        // AI SDK v5 Pattern: Use requestAnimationFrame instead of setTimeout for scroll
-        // This ensures scroll happens after browser completes rendering and layout
-        const rafId = requestAnimationFrame(() => {
-          requestAnimationFrame(() => {
-            containerRef.current?.scrollIntoView({
-              behavior: 'smooth',
-              block: 'nearest',
-              inline: 'nearest',
-            });
-          });
-        });
-        return () => cancelAnimationFrame(rafId);
-      }
-      return undefined;
-    })();
+    // ✅ FIX: REMOVED forced scrollIntoView on analysis completion
+    // Previously: Forced scroll to analysis card when it completed, overriding user position
+    // Now: Respects user scroll position - only auto-scrolls if user is near bottom (via useChatScroll)
+    // User maintains scroll control during object stream generation
     previousStatusRef.current = analysis.status;
-    return cleanup;
-  }, [analysis.status, isLatest, isOpen]);
+  }, [analysis.status]);
   return (
     <div ref={containerRef} className={cn('py-1.5', className)}>
       <ChainOfThought
         open={isOpen}
         onOpenChange={handleOpenChange}
+        disabled={isStreamingOrPending}
         className={cn(isStreamingOrPending && 'cursor-default')}
       >
         <ChainOfThoughtHeader>
@@ -223,7 +208,7 @@ export function RoundAnalysisCard({
                     onActionClick={onActionClick}
                   />
                 )
-              : analysis.status === AnalysisStatuses.COMPLETED && analysis.analysisData
+              : analysis.status === AnalysisStatuses.COMPLETE && analysis.analysisData
                 ? (
                     <div className="space-y-4">
                       {analysis.analysisData.leaderboard && analysis.analysisData.leaderboard.length > 0 && (

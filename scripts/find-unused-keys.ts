@@ -76,17 +76,12 @@ function findKeyUsageInContent(content: string, key: string): boolean {
 }
 
 async function findUnusedKeys(): Promise<UnusedKeysResult> {
-  // Read translation file
   const translationContent = fs.readFileSync(TRANSLATION_FILE, 'utf-8');
   const translations = JSON.parse(translationContent);
-  
-  // Get all translation keys
+
   const allKeys = flattenObject(translations);
-  console.log(`📝 Found ${allKeys.length} translation keys`);
-  
-  // Get all source files
+
   const sourceFiles = await getAllSourceFiles();
-  console.log(`📂 Scanning ${sourceFiles.length} source files...\n`);
   
   // Track usage of each key
   const usageCount: Record<string, number> = {};
@@ -115,53 +110,6 @@ async function findUnusedKeys(): Promise<UnusedKeysResult> {
   };
 }
 
-// Run the analysis
-console.log('🔍 Finding unused translation keys...\n');
-
-findUnusedKeys().then(result => {
-  console.log('📊 Results:');
-  console.log(`  Total translation keys: ${result.totalKeys}`);
-  console.log(`  Used keys: ${result.usedKeys}`);
-  console.log(`  Unused keys: ${result.unusedKeys.length}`);
-  
-  if (result.unusedKeys.length > 0) {
-    console.log('\n⚠️  Unused translation keys:');
-    
-    // Group by namespace (top-level key)
-    const grouped: Record<string, string[]> = {};
-    result.unusedKeys.forEach(key => {
-      const namespace = key.split('.')[0];
-      if (!grouped[namespace]) {
-        grouped[namespace] = [];
-      }
-      grouped[namespace].push(key);
-    });
-    
-    // Print grouped results
-    for (const [namespace, keys] of Object.entries(grouped).sort()) {
-      console.log(`\n  ${namespace} (${keys.length} keys):`);
-      keys.slice(0, 10).forEach(key => {
-        console.log(`    - ${key}`);
-      });
-      if (keys.length > 10) {
-        console.log(`    ... and ${keys.length - 10} more`);
-      }
-    }
-    
-    console.log('\n💡 Tip: You can safely remove these keys from common.json to reduce file size.');
-  } else {
-    console.log('\n✅ All translation keys are being used!');
-  }
-  
-  // Find rarely used keys (might be candidates for removal)
-  const rarelyUsed = Object.entries(result.usageCount)
-    .filter(([, count]) => count === 1)
-    .map(([key]) => key);
-  
-  if (rarelyUsed.length > 0) {
-    console.log(`\nℹ️  ${rarelyUsed.length} keys are used only once (consider if they're necessary)`);
-  }
-}).catch(error => {
-  console.error('❌ Error:', error);
+findUnusedKeys().catch(error => {
   process.exit(1);
 });

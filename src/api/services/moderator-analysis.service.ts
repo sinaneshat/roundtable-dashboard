@@ -68,6 +68,7 @@ export type ModeratorPromptConfig = z.infer<typeof ModeratorPromptConfigSchema>;
 /**
  * Builds structured system prompt for AI moderator analysis of roundtable discussions.
  *
+ * ✅ SINGLE SOURCE OF TRUTH: This is THE centralized moderator prompt builder
  * ✅ AI SDK BEST PRACTICE: System prompt defines moderator's analytical framework
  * ✅ STRUCTURED OUTPUT: Designed for use with AI SDK's streamObject() pattern
  *

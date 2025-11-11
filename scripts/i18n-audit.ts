@@ -41,7 +41,6 @@ interface AuditResults {
 }
 
 async function runValidation(): Promise<any> {
-  console.log('1️⃣  Validating translation file structure...\n');
   try {
     execSync('tsx scripts/validate-translations.ts', { stdio: 'inherit' });
     return { isValid: true, errors: [], warnings: [], totalKeys: 0 };
@@ -51,7 +50,6 @@ async function runValidation(): Promise<any> {
 }
 
 async function runUnusedKeysCheck(): Promise<any> {
-  console.log('\n2️⃣  Finding unused translation keys...\n');
   try {
     execSync('tsx scripts/find-unused-keys.ts', { stdio: 'inherit' });
     return { count: 0, keys: [] };
@@ -61,7 +59,6 @@ async function runUnusedKeysCheck(): Promise<any> {
 }
 
 async function runHardcodedStringsCheck(): Promise<any> {
-  console.log('\n3️⃣  Finding hardcoded strings...\n');
   try {
     execSync('tsx scripts/find-hardcoded-strings.ts', { stdio: 'inherit' });
     return { count: 0, filesAffected: 0 };
@@ -71,7 +68,6 @@ async function runHardcodedStringsCheck(): Promise<any> {
 }
 
 async function runMissingKeysCheck(): Promise<any> {
-  console.log('\n4️⃣  Checking for missing translations...\n');
   try {
     execSync('tsx scripts/check-missing-translations.ts', { stdio: 'inherit' });
     return { count: 0, keys: [] };
@@ -270,41 +266,21 @@ function generateMarkdownReport(results: AuditResults): string {
 }
 
 async function runAudit() {
-  console.log('🔍 Starting comprehensive i18n audit...\n');
-  console.log('═'.repeat(60));
-  console.log('');
-  
   const results: Partial<AuditResults> = {
     timestamp: new Date().toISOString(),
   };
-  
-  // Run all checks
+
   results.validation = await runValidation();
   results.unusedKeys = await runUnusedKeysCheck();
   results.hardcodedStrings = await runHardcodedStringsCheck();
   results.missingKeys = await runMissingKeysCheck();
-  
-  // Generate recommendations
+
   results.recommendations = generateRecommendations(results);
-  
-  console.log('\n');
-  console.log('═'.repeat(60));
-  console.log('\n📋 Generating report...\n');
-  
-  // Generate and save report
+
   const report = generateMarkdownReport(results as AuditResults);
   fs.writeFileSync(REPORT_FILE, report, 'utf-8');
-  
-  console.log(`✅ Report saved to: ${path.relative(process.cwd(), REPORT_FILE)}`);
-  console.log('');
-  console.log('🎯 Summary:');
-  results.recommendations?.forEach(rec => {
-    console.log(`  ${rec}`);
-  });
-  console.log('');
 }
 
 runAudit().catch(error => {
-  console.error('❌ Audit failed:', error);
   process.exit(1);
 });

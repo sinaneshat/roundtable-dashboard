@@ -33,7 +33,7 @@ import {
   getUIIconBase64,
   OG_COLORS,
   truncateText,
-} from '@/lib/utils/og-image-helpers';
+} from '@/lib/ui';
 import { getPublicThreadService } from '@/services/api';
 
 // Open Graph Image metadata - must be direct exports (not re-exported)

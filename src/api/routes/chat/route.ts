@@ -22,6 +22,7 @@ import {
   ModeratorAnalysisPayloadSchema,
   ModeratorAnalysisRequestSchema,
   ParticipantDetailResponseSchema,
+  PreSearchListResponseSchema,
   PreSearchRequestSchema,
   PreSearchResponseSchema,
   RoundFeedbackParamSchema,
@@ -77,6 +78,18 @@ export const createThreadRoute = createRoute({
       description: 'Thread created successfully',
       content: {
         'application/json': { schema: ThreadDetailResponseSchema },
+      },
+    },
+    [HttpStatusCodes.FORBIDDEN]: {
+      description: 'Model access denied - subscription tier insufficient for selected model(s)',
+      content: {
+        'application/json': { schema: ApiErrorResponseSchema },
+      },
+    },
+    [HttpStatusCodes.TOO_MANY_REQUESTS]: {
+      description: 'Thread quota exceeded - upgrade subscription or wait for quota reset',
+      content: {
+        'application/json': { schema: ApiErrorResponseSchema },
       },
     },
     ...createMutationRouteResponses(),
@@ -325,30 +338,6 @@ export const getThreadChangelogRoute = createRoute({
 });
 
 /**
- * GET Pre-Search Route - Retrieve existing search results
- * ✅ FOLLOWS: getThreadAnalysesRoute pattern
- */
-export const getPreSearchRoute = createRoute({
-  method: 'get',
-  path: '/chat/threads/:threadId/rounds/:roundNumber/pre-search',
-  tags: ['chat'],
-  summary: 'Get pre-search results for conversation round',
-  description: 'Retrieve web search results executed before participant streaming for a specific round. Returns completed search data if exists.',
-  request: {
-    params: ThreadRoundParamSchema,
-  },
-  responses: {
-    [HttpStatusCodes.OK]: {
-      description: 'Pre-search results retrieved successfully',
-      content: {
-        'application/json': { schema: PreSearchResponseSchema },
-      },
-    },
-    ...createProtectedRouteResponses(),
-  },
-});
-
-/**
  * POST Pre-Search Route - Execute or return existing search
  * ✅ FOLLOWS: analyzeRoundRoute pattern exactly
  * ✅ IDEMPOTENT: Returns existing if already completed
@@ -520,6 +509,18 @@ See [API Streaming Guide](/docs/api-streaming-guide.md) for complete implementat
         },
       },
     },
+    [HttpStatusCodes.FORBIDDEN]: {
+      description: 'Model access denied - subscription tier insufficient for selected model(s)',
+      content: {
+        'application/json': { schema: ApiErrorResponseSchema },
+      },
+    },
+    [HttpStatusCodes.TOO_MANY_REQUESTS]: {
+      description: 'Message quota exceeded - upgrade subscription or wait for quota reset',
+      content: {
+        'application/json': { schema: ApiErrorResponseSchema },
+      },
+    },
     ...createMutationRouteResponses(),
   },
 });
@@ -677,6 +678,30 @@ export const analyzeRoundRoute = createRoute({
     ...createMutationRouteResponses(),
   },
 });
+/**
+ * GET Thread Pre-Searches Route - List all pre-searches for thread
+ * ✅ FOLLOWS: getThreadAnalysesRoute pattern
+ */
+export const getThreadPreSearchesRoute = createRoute({
+  method: 'get',
+  path: '/chat/threads/:id/pre-searches',
+  tags: ['chat'],
+  summary: 'Get pre-search results for thread',
+  description: 'Retrieve all pre-search results for a thread, showing past search results for each round',
+  request: {
+    params: IdParamSchema,
+  },
+  responses: {
+    [HttpStatusCodes.OK]: {
+      description: 'Pre-searches retrieved successfully',
+      content: {
+        'application/json': { schema: PreSearchListResponseSchema },
+      },
+    },
+    ...createProtectedRouteResponses(),
+  },
+});
+
 export const getThreadAnalysesRoute = createRoute({
   method: 'get',
   path: '/chat/threads/:id/analyses',
