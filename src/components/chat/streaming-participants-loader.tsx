@@ -1,9 +1,10 @@
 'use client';
-import { AnimatePresence, motion } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { useTranslations } from 'next-intl';
 import { useEffect, useMemo, useState } from 'react';
 
 import type { ParticipantConfig } from '@/components/chat/chat-form-schemas';
+import { EncryptedText } from '@/components/ui/encrypted-text';
 import { cn } from '@/lib/ui/cn';
 
 export type StreamingParticipantsLoaderProps = {
@@ -26,12 +27,12 @@ export function StreamingParticipantsLoader({
         : (t.raw('thinkingMessages') as string[]),
     [isAnalyzing, t],
   );
-  const [thinkingMessage, setThinkingMessage] = useState(thinkingMessages[0]);
+  const [thinkingMessage, setThinkingMessage] = useState(thinkingMessages[0] || 'Thinking...');
   useEffect(() => {
     let index = 0;
     const interval = setInterval(() => {
       index = (index + 1) % thinkingMessages.length;
-      setThinkingMessage(thinkingMessages[index]);
+      setThinkingMessage(thinkingMessages[index] || 'Thinking...');
     }, 2500);
     return () => clearInterval(interval);
   }, [thinkingMessages]);
@@ -60,18 +61,16 @@ export function StreamingParticipantsLoader({
           />
         ))}
       </div>
-      <AnimatePresence mode="wait">
-        <motion.span
-          key={thinkingMessage}
-          initial={{ opacity: 0, y: 5 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -5 }}
-          transition={{ duration: 0.3 }}
-          className="font-medium"
-        >
-          {thinkingMessage}
-        </motion.span>
-      </AnimatePresence>
+      <EncryptedText
+        key={thinkingMessage}
+        text={thinkingMessage}
+        className="font-medium"
+        revealDelayMs={30}
+        flipDelayMs={40}
+        encryptedClassName="text-muted-foreground/40"
+        revealedClassName="text-muted-foreground"
+        continuous
+      />
     </motion.div>
   );
 }

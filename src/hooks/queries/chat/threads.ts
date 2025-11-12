@@ -130,19 +130,16 @@ export function useThreadBySlugQuery(slug: string, enabled?: boolean) {
  * Hook to poll thread slug status during AI title generation
  * Protected endpoint - requires authentication
  *
- * Polls every 5 seconds to check if isAiGeneratedTitle flag is set.
+ * Polls every 3 seconds to check if isAiGeneratedTitle flag is set.
  * Used during first round streaming on overview screen to enable URL replacement without page reload.
  *
  * @param threadId - Thread ID
- * @param enabled - Whether to enable polling (default: false)
+ * @param enabled - Control whether polling should be active (default: true if threadId exists)
  */
 export function useThreadSlugStatusQuery(
   threadId: string | null,
-  enabled: boolean = false,
+  enabled: boolean = true,
 ) {
-  const { data: session, isPending } = useSession();
-  const isAuthenticated = !isPending && !!session?.user?.id;
-
   return useQuery({
     queryKey: queryKeys.threads.slugStatus(threadId || 'null'),
     queryFn: () => {
@@ -152,8 +149,8 @@ export function useThreadSlugStatusQuery(
       return getThreadSlugStatusService({ param: { id: threadId } });
     },
     staleTime: 0, // Always fresh - we're polling for updates
-    refetchInterval: enabled ? 5000 : false, // Poll every 5 seconds when enabled
-    enabled: enabled && isAuthenticated && !!threadId,
+    refetchInterval: enabled && threadId ? 3000 : false, // Poll every 3s when enabled
+    enabled: enabled && !!threadId, // Enable polling when threadId exists and not disabled by caller
     retry: false,
     throwOnError: false,
   });

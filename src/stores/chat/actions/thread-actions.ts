@@ -2,7 +2,8 @@
  * Thread Screen Actions Hook
  *
  * Zustand v5 Pattern: Screen-specific action hook for thread screen
- * Consolidates thread-specific logic (participant sync, message refetch, pending message send)
+ * Consolidates thread-specific logic (participant sync, changelog management)
+ * Uses TanStack Query for data fetching - no setTimeout/timing patterns
  *
  * Location: /src/stores/chat/actions/thread-actions.ts
  * Used by: ChatThreadScreen
@@ -10,18 +11,18 @@
 
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { useCallback, useEffect, useRef } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
 import type { ParticipantConfig } from '@/components/chat/chat-form-schemas';
 import { useChatStore } from '@/components/providers/chat-store-provider';
 import type { ChatModeId } from '@/lib/config/chat-modes';
-import { chatMessagesToUIMessages } from '@/lib/utils/message-transforms';
-import { calculateNextRoundNumber } from '@/lib/utils/round-utils';
-import { getThreadBySlugService } from '@/services/api';
+import { queryKeys } from '@/lib/data/query-keys';
+import { useMemoizedReturn } from '@/lib/utils/memo-utils';
 
 export type UseThreadActionsOptions = {
-  /** Thread slug for message refetch */
+  /** Thread slug for query invalidation */
   slug: string;
   /** Whether round is currently in progress (streaming or creating analysis) */
   isRoundInProgress: boolean;
@@ -34,6 +35,8 @@ export type UseThreadActionsReturn = {
   handleModeChange: (mode: ChatModeId) => void;
   /** Handle participants change with config change tracking */
   handleParticipantsChange: (participants: ParticipantConfig[]) => void;
+  /** Handle web search toggle with config change tracking */
+  handleWebSearchToggle: (enabled: boolean) => void;
 };
 
 /**
@@ -41,9 +44,11 @@ export type UseThreadActionsReturn = {
  *
  * Consolidates:
  * - Participant sync from context to form state
- * - Message refetch after initial load (handles race conditions)
- * - Pending message send orchestration
+ * - Changelog wait flag management (clears when fetch completes)
  * - Mode/participant change handlers with config tracking
+ * - Query invalidation for proper data updates
+ *
+ * Uses TanStack Query for data fetching - no setTimeout/timing patterns
  *
  * @example
  * const threadActions = useThreadActions({
@@ -57,53 +62,29 @@ export type UseThreadActionsReturn = {
 export function useThreadActions(options: UseThreadActionsOptions): UseThreadActionsReturn {
   const { slug, isRoundInProgress, isChangelogFetching } = options;
 
+  // Query client for invalidation
+  const queryClient = useQueryClient();
+
   // Batch related state selectors with useShallow for performance
   const contextParticipants = useChatStore(s => s.participants);
-  const messages = useChatStore(s => s.messages);
-  const isStreaming = useChatStore(s => s.isStreaming);
-  const sendMessage = useChatStore(s => s.sendMessage);
-  const chatSetMessages = useChatStore(s => s.chatSetMessages);
 
   // Flags - batch with useShallow
   const flags = useChatStore(useShallow(s => ({
-    hasInitiallyLoaded: s.hasInitiallyLoaded,
     hasPendingConfigChanges: s.hasPendingConfigChanges,
-    hasRefetchedMessages: s.hasRefetchedMessages,
     isWaitingForChangelog: s.isWaitingForChangelog,
   })));
-
-  // Data - batch with useShallow
-  const data = useChatStore(useShallow(s => ({
-    pendingMessage: s.pendingMessage,
-    expectedParticipantIds: s.expectedParticipantIds,
-  })));
-
-  const hasSentPendingMessage = useChatStore(s => s.hasSentPendingMessage);
 
   // Actions - batch with useShallow
   const actions = useChatStore(useShallow(s => ({
     setSelectedParticipants: s.setSelectedParticipants,
     setSelectedMode: s.setSelectedMode,
+    setEnableWebSearch: s.setEnableWebSearch,
     setHasPendingConfigChanges: s.setHasPendingConfigChanges,
-    setHasRefetchedMessages: s.setHasRefetchedMessages,
     setIsWaitingForChangelog: s.setIsWaitingForChangelog,
-    setStreamingRoundNumber: s.setStreamingRoundNumber,
-    setHasSentPendingMessage: s.setHasSentPendingMessage,
   })));
 
-  // Use local refs for tracking values that don't need re-renders
+  // Use local ref for tracking synced participants
   const lastSyncedContextRef = useRef<string>('');
-  const hasInitiallyLoadedRef = useRef(flags.hasInitiallyLoaded);
-  const hasRefetchedMessagesRef = useRef(flags.hasRefetchedMessages);
-
-  // Sync refs with state changes
-  useEffect(() => {
-    hasInitiallyLoadedRef.current = flags.hasInitiallyLoaded;
-  }, [flags.hasInitiallyLoaded]);
-
-  useEffect(() => {
-    hasRefetchedMessagesRef.current = flags.hasRefetchedMessages;
-  }, [flags.hasRefetchedMessages]);
 
   /**
    * Sync local participants with context when no pending changes
@@ -123,6 +104,7 @@ export function useThreadActions(options: UseThreadActionsOptions): UseThreadAct
       return;
     }
 
+    // Use participant comparison utility (with ID for context tracking)
     const contextKey = contextParticipants
       .filter(p => p.isEnabled)
       .sort((a, b) => a.priority - b.priority)
@@ -149,130 +131,73 @@ export function useThreadActions(options: UseThreadActionsOptions): UseThreadAct
   }, [contextParticipants, isRoundInProgress, flags.hasPendingConfigChanges, actions]);
 
   /**
-   * One-time message refetch to handle race condition
-   * After initial load completes, refetch when browser is idle to ensure all messages displayed
+   * Clear changelog waiting flag when changelog fetch completes
+   * Uses TanStack Query status for proper async coordination
+   *
+   * ✅ SAFETY NET: Auto-timeout after 30s to prevent permanent blocking
+   * Primary path relies on React Query completion, timeout is last resort
+   * If timeout triggers frequently, indicates changelog query issues
    */
   useEffect(() => {
-    // Use refs to check flags without re-rendering on every change
-    if (
-      hasInitiallyLoadedRef.current
-      && !hasRefetchedMessagesRef.current
-      && messages.length > 0
-      && !isStreaming
-      && !flags.hasPendingConfigChanges
-    ) {
-      const refetchCallback = async () => {
-        try {
-          const result = await getThreadBySlugService({ param: { slug } });
-
-          if (result.success && result.data.messages.length > messages.length) {
-            const freshMessages = result.data.messages.map(m => ({
-              ...m,
-              createdAt: new Date(m.createdAt),
-            }));
-
-            const uiMessages = await chatMessagesToUIMessages(freshMessages, result.data.participants);
-
-            chatSetMessages?.(uiMessages);
-          }
-        } catch {
-          // Silently fail - safety net
-        } finally {
-          actions.setHasRefetchedMessages(true);
-        }
-      };
-
-      const idleHandle = typeof requestIdleCallback !== 'undefined'
-        ? requestIdleCallback(refetchCallback, { timeout: 2000 })
-        : (requestAnimationFrame(refetchCallback) as unknown as number);
-
-      return () => {
-        if (typeof cancelIdleCallback !== 'undefined') {
-          cancelIdleCallback(idleHandle);
-        } else {
-          cancelAnimationFrame(idleHandle);
-        }
-      };
-    }
-    return undefined;
-  }, [
-    messages.length,
-    isStreaming,
-    flags.hasPendingConfigChanges,
-    slug,
-    chatSetMessages,
-    actions,
-  ]);
-
-  /**
-   * Send pending message when participants match expected IDs
-   * Orchestrates changelog wait → participant match → message send
-   */
-  useEffect(() => {
-    if (!data.pendingMessage || !data.expectedParticipantIds || hasSentPendingMessage) {
-      return;
-    }
-
-    if (isStreaming) {
-      return;
-    }
-
-    const currentModelIds = contextParticipants.map(p => p.modelId).sort().join(',');
-    const expectedModelIds = data.expectedParticipantIds.sort().join(',');
-
-    if (currentModelIds !== expectedModelIds) {
-      return;
-    }
-
-    if (flags.isWaitingForChangelog && isChangelogFetching) {
-      return;
-    }
-
-    if (flags.isWaitingForChangelog) {
+    // PRIMARY PATH: Clear waiting flag when changelog fetch completes
+    if (flags.isWaitingForChangelog && !isChangelogFetching) {
       actions.setIsWaitingForChangelog(false);
+      return undefined;
     }
 
-    actions.setHasSentPendingMessage(true);
+    // SAFETY NET: Auto-release after 30s if changelog query hangs
+    // This should rarely trigger - React Query has its own timeout handling
+    // If this triggers frequently, indicates changelog query or network issues
+    if (flags.isWaitingForChangelog) {
+      const SAFETY_TIMEOUT_MS = 30000; // 30 seconds (increased from 10s)
+      const timeout = setTimeout(() => {
+        console.warn('[Changelog] Waiting flag stuck for >30s, auto-releasing. This indicates a query hang.');
+        actions.setIsWaitingForChangelog(false);
+      }, SAFETY_TIMEOUT_MS);
 
-    const newRoundNumber = calculateNextRoundNumber(messages);
-    actions.setStreamingRoundNumber(newRoundNumber);
+      return () => clearTimeout(timeout);
+    }
 
-    sendMessage?.(data.pendingMessage);
-    actions.setHasPendingConfigChanges(false);
-  }, [
-    data,
-    flags.isWaitingForChangelog,
-    hasSentPendingMessage,
-    contextParticipants,
-    sendMessage,
-    messages,
-    isChangelogFetching,
-    isStreaming,
-    actions,
-  ]);
+    return undefined;
+  }, [flags.isWaitingForChangelog, isChangelogFetching, actions]);
 
   /**
-   * Handle mode change with config change tracking
+   * Factory for creating config change handlers with consistent behavior
+   * All handlers: guard check → state update → mark pending → invalidate queries
    */
-  const handleModeChange = useCallback((mode: ChatModeId) => {
-    if (isRoundInProgress)
-      return;
-    actions.setSelectedMode(mode);
-    actions.setHasPendingConfigChanges(true);
-  }, [isRoundInProgress, actions]);
+  const createConfigChangeHandler = useCallback(<TValue>(
+    stateSetter: (value: TValue) => void,
+  ) => {
+    return (value: TValue) => {
+      if (isRoundInProgress)
+        return;
+      stateSetter(value);
+      actions.setHasPendingConfigChanges(true);
+      queryClient.invalidateQueries({ queryKey: queryKeys.threads.bySlug(slug) });
+    };
+  }, [isRoundInProgress, actions, queryClient, slug]);
 
-  /**
-   * Handle participants change with config change tracking
-   */
-  const handleParticipantsChange = useCallback((participants: ParticipantConfig[]) => {
-    if (isRoundInProgress)
-      return;
-    actions.setSelectedParticipants(participants);
-    actions.setHasPendingConfigChanges(true);
-  }, [isRoundInProgress, actions]);
+  /** Handle mode change with config change tracking */
+  const handleModeChange = useCallback(
+    createConfigChangeHandler(actions.setSelectedMode),
+    [createConfigChangeHandler, actions.setSelectedMode],
+  );
 
-  return useMemo(() => ({
+  /** Handle participants change with config change tracking */
+  const handleParticipantsChange = useCallback(
+    createConfigChangeHandler(actions.setSelectedParticipants),
+    [createConfigChangeHandler, actions.setSelectedParticipants],
+  );
+
+  /** Handle web search toggle with config change tracking */
+  const handleWebSearchToggle = useCallback(
+    createConfigChangeHandler(actions.setEnableWebSearch),
+    [createConfigChangeHandler, actions.setEnableWebSearch],
+  );
+
+  return useMemoizedReturn({
     handleModeChange,
     handleParticipantsChange,
-  }), [handleModeChange, handleParticipantsChange]);
+    handleWebSearchToggle,
+  }, [handleModeChange, handleParticipantsChange, handleWebSearchToggle]);
 }

@@ -3,6 +3,7 @@
 import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 
+import { StripeSubscriptionStatuses, SubscriptionChangeTypes } from '@/api/core/enums';
 import { ChatPageHeader } from '@/components/chat/chat-header';
 import { ChatPage } from '@/components/chat/chat-states';
 import { PricingContent } from '@/components/pricing/pricing-content';
@@ -33,7 +34,7 @@ export default function PricingScreen() {
   const subscriptions = subscriptionsData?.success ? subscriptionsData.data?.items || [] : [];
 
   const activeSubscription = subscriptions.find(
-    sub => (sub.status === 'active' || sub.status === 'trialing') && !sub.cancelAtPeriodEnd,
+    sub => (sub.status === StripeSubscriptionStatuses.ACTIVE || sub.status === StripeSubscriptionStatuses.TRIALING) && !sub.cancelAtPeriodEnd,
   );
 
   const handleSubscribe = async (priceId: string) => {
@@ -49,7 +50,7 @@ export default function PricingScreen() {
           const changeDetails = result.data?.changeDetails;
 
           if (changeDetails) {
-            const changeType = changeDetails.isUpgrade ? 'upgrade' : changeDetails.isDowngrade ? 'downgrade' : 'change';
+            const changeType = changeDetails.isUpgrade ? SubscriptionChangeTypes.UPGRADE : changeDetails.isDowngrade ? SubscriptionChangeTypes.DOWNGRADE : SubscriptionChangeTypes.CHANGE;
 
             const params = new URLSearchParams({
               changeType,

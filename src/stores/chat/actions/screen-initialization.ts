@@ -16,10 +16,8 @@
  * 2. Initialize thread with participants and messages (if provided)
  * 3. Enable analysis orchestrator (thread mode only, when enabled)
  *    └─> useAnalysisOrchestrator syncs server analyses to store
- * 4. Register analysis callbacks via useChatInitialization
- *    └─> useChatInitialization creates stable callback wrapper
- *        └─> useAnalysisCreation handles analysis lifecycle
- *            └─> Calls createPendingAnalysis when all participants finish
+ * 4. Register analysis callbacks
+ *    └─> Analysis triggering now handled by store subscriptions
  *
  * Location: /src/stores/chat/actions/screen-initialization.ts
  * Used by: ChatOverviewScreen, ChatThreadScreen
@@ -30,15 +28,16 @@
 import type { UIMessage } from 'ai';
 import { useEffect, useRef } from 'react';
 
-import { DEFAULT_CHAT_MODE } from '@/api/core/enums';
+import type { ScreenMode } from '@/api/core/enums';
 import type { ChatParticipant, ChatThread } from '@/api/routes/chat/schema';
 import { useChatStore } from '@/components/providers/chat-store-provider';
 import type { ChatModeId } from '@/lib/config/chat-modes';
 
 import { useAnalysisOrchestrator } from './analysis-orchestrator';
-import { useChatInitialization } from './chat-initialization';
+import { usePreSearchOrchestrator } from './pre-search-orchestrator';
 
-export type ScreenMode = 'overview' | 'thread' | 'public';
+// Re-export ScreenMode for other modules
+export type { ScreenMode } from '@/api/core/enums';
 
 export type UseScreenInitializationOptions = {
   /**
@@ -80,13 +79,6 @@ export type UseScreenInitializationOptions = {
    * Screens can control when orchestrator is enabled based on their state
    */
   enableOrchestrator?: boolean;
-
-  /**
-   * Callbacks for screen-specific logic
-   */
-  onBeforeAnalysisCreate?: (roundNumber: number) => void;
-  onAfterAnalysisCreate?: (roundNumber: number) => void;
-  onAllParticipantsFailed?: (roundNumber: number) => void;
 };
 
 /**
@@ -136,18 +128,12 @@ export function useScreenInitialization(options: UseScreenInitializationOptions)
     participants = [],
     initialMessages,
     chatMode,
-    isRegeneration = false,
-    regeneratingRoundNumber = null,
     enableOrchestrator = true,
-    onBeforeAnalysisCreate,
-    onAfterAnalysisCreate,
-    onAllParticipantsFailed,
   } = options;
 
   // Store actions
   const setScreenMode = useChatStore(s => s.setScreenMode);
   const initializeThread = useChatStore(s => s.initializeThread);
-  const createdThreadId = useChatStore(s => s.createdThreadId);
 
   // Set screen mode on mount
   useEffect(() => {
@@ -163,6 +149,8 @@ export function useScreenInitialization(options: UseScreenInitializationOptions)
   useEffect(() => {
     if (!hasInitialized.current && thread && participants.length > 0) {
       hasInitialized.current = true;
+      // Initialize thread with participants and messages
+      // Pre-search data is fetched by PreSearchCard component via TanStack Query
       initializeThread(thread, participants, initialMessages);
     }
     // Empty deps = run once on mount, never on re-renders
@@ -177,28 +165,42 @@ export function useScreenInitialization(options: UseScreenInitializationOptions)
   }, [thread?.id]);
 
   // ============================================================================
-  // ANALYSIS ORCHESTRATION (Thread mode only)
+  // ANALYSIS ORCHESTRATION (Thread & Overview modes)
   // ============================================================================
+  // ✅ FIX: Enable orchestrator on overview screen when thread is created
+  // The orchestrator fetches analyses from server, which triggers backend cleanup
+  // of orphaned/stuck analyses. Without this, stuck 'streaming' analyses never recover.
+  // Overview mode needs this for first round analysis, thread mode needs it for all rounds.
 
-  const shouldEnableOrchestrator = mode === 'thread' && Boolean(thread?.id) && enableOrchestrator;
+  const shouldEnableOrchestrator = Boolean(thread?.id) && enableOrchestrator;
 
+  // Type assertion needed because useAnalysisOrchestrator extends OrchestratorOptions with mode
+  // but the factory doesn't know about domain-specific extensions
   useAnalysisOrchestrator({
     threadId: thread?.id || '',
-    mode: chatMode || thread?.mode || DEFAULT_CHAT_MODE,
     enabled: shouldEnableOrchestrator,
+  } as Parameters<typeof useAnalysisOrchestrator>[0]);
+
+  // ============================================================================
+  // PRE-SEARCH ORCHESTRATION (Thread mode only)
+  // ============================================================================
+  // ✅ FIX: Disable orchestrator in overview mode
+  // In overview mode, backend creates PENDING record automatically
+  // PreSearchStream handles SSE streaming directly, no need to query list
+  // Orchestrator only needed in thread mode to hydrate existing pre-searches
+
+  const shouldEnablePreSearchOrchestrator
+    = mode === 'thread'
+      && Boolean(thread?.id)
+      && Boolean(thread?.enableWebSearch);
+
+  usePreSearchOrchestrator({
+    threadId: thread?.id || '',
+    enabled: shouldEnablePreSearchOrchestrator,
   });
 
   // ============================================================================
   // ANALYSIS CALLBACKS (Overview & Thread modes)
   // ============================================================================
-
-  useChatInitialization({
-    threadId: thread?.id || createdThreadId || null,
-    mode: chatMode || thread?.mode || null,
-    isRegeneration,
-    regeneratingRoundNumber,
-    onBeforeCreate: onBeforeAnalysisCreate,
-    onAfterCreate: onAfterAnalysisCreate,
-    onAllParticipantsFailed,
-  });
+  // Analysis creation now handled automatically by store subscription
 }

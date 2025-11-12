@@ -97,11 +97,11 @@ export type ErrorSeverity = z.infer<typeof ErrorSeveritySchema>;
  * Error severity constant for easy access (derived from schema)
  */
 export const ERROR_SEVERITY = {
-  LOW: 'low' as const,
-  MEDIUM: 'medium' as const,
-  HIGH: 'high' as const,
-  CRITICAL: 'critical' as const,
-} satisfies Record<string, ErrorSeverity>;
+  LOW: 'low',
+  MEDIUM: 'medium',
+  HIGH: 'high',
+  CRITICAL: 'critical',
+} as const;
 
 // ============================================================================
 // ERROR CONFIGURATION SCHEMA

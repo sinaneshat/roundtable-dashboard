@@ -5,6 +5,7 @@ import { motion } from 'motion/react';
 import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 
+import { StripeSubscriptionStatuses } from '@/api/core/enums';
 import type { Product } from '@/api/routes/billing/schema';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -13,7 +14,8 @@ import { PricingCard } from '@/components/ui/pricing-card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import type { Subscription } from '@/types/billing';
 
-type BillingInterval = 'month' | 'year';
+// UI-specific billing interval (subset of BillingInterval from API)
+type UIBillingInterval = 'month' | 'year';
 
 type PricingContentProps = {
   products: Product[];
@@ -49,22 +51,22 @@ export function PricingContent({
   showSubscriptionBanner = false,
 }: PricingContentProps) {
   const t = useTranslations();
-  const [selectedInterval, setSelectedInterval] = useState<BillingInterval>('month');
+  const [selectedInterval, setSelectedInterval] = useState<UIBillingInterval>('month');
 
   // Get active subscription (excluding canceled or scheduled for cancellation)
   const activeSubscription = subscriptions.find(
-    sub => (sub.status === 'active' || sub.status === 'trialing') && !sub.cancelAtPeriodEnd,
+    sub => (sub.status === StripeSubscriptionStatuses.ACTIVE || sub.status === StripeSubscriptionStatuses.TRIALING) && !sub.cancelAtPeriodEnd,
   );
 
   // Check if user has ANY active subscription (excluding canceled or scheduled for cancellation)
   const hasAnyActiveSubscription = subscriptions.some(
-    sub => (sub.status === 'active' || sub.status === 'trialing') && !sub.cancelAtPeriodEnd,
+    sub => (sub.status === StripeSubscriptionStatuses.ACTIVE || sub.status === StripeSubscriptionStatuses.TRIALING) && !sub.cancelAtPeriodEnd,
   );
 
   // Get subscription for a specific price (differentiates monthly vs annual, excluding canceled)
   const getSubscriptionForPrice = (priceId: string) => {
     return subscriptions.find(
-      sub => sub.priceId === priceId && (sub.status === 'active' || sub.status === 'trialing') && !sub.cancelAtPeriodEnd,
+      sub => sub.priceId === priceId && (sub.status === StripeSubscriptionStatuses.ACTIVE || sub.status === StripeSubscriptionStatuses.TRIALING) && !sub.cancelAtPeriodEnd,
     );
   };
 
@@ -74,7 +76,7 @@ export function PricingContent({
   };
 
   // Filter products by interval
-  const getProductsForInterval = (interval: BillingInterval) => {
+  const getProductsForInterval = (interval: UIBillingInterval) => {
     return products
       .map((product) => {
         const filteredPrices = product.prices?.filter(price => price.interval === interval) || [];
@@ -158,7 +160,7 @@ export function PricingContent({
         {/* Pricing Content */}
         <Tabs
           value={selectedInterval}
-          onValueChange={value => setSelectedInterval(value as BillingInterval)}
+          onValueChange={value => setSelectedInterval(value as UIBillingInterval)}
           className="space-y-8"
         >
           {/* Billing Interval Toggle */}
@@ -219,7 +221,7 @@ export function PricingContent({
 // Product Grid Component
 type ProductGridProps = {
   products: Product[];
-  interval: BillingInterval;
+  interval: UIBillingInterval;
   hasActiveSubscription: (priceId: string) => boolean;
   getSubscriptionForPrice: (priceId: string) => Subscription | undefined;
   hasAnyActiveSubscription: boolean;

@@ -14,6 +14,7 @@ import { and, desc, eq } from 'drizzle-orm';
 
 import type { getDbAsync } from '@/db';
 import * as tables from '@/db/schema';
+import { isTextPart } from '@/lib/utils/type-guards';
 
 // ============================================================================
 // Type Definitions
@@ -92,11 +93,9 @@ export async function calculateRoundNumber(
     }
 
     // Fallback to backend calculation if frontend didn't provide
-    // Extract text content to check if empty
-    const textParts = messageWithProps.parts?.filter(
-      (p: { type: string }) => p.type === 'text',
-    ) as Array<{ type: 'text'; text: string }> | undefined;
-    const textContent = (textParts || [])
+    // ✅ TYPE GUARD: Extract text parts with runtime validation
+    const textParts = messageWithProps.parts?.filter(isTextPart) ?? [];
+    const textContent = textParts
       .map(p => p.text)
       .join('')
       .trim();

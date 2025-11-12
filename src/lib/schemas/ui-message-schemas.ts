@@ -13,7 +13,7 @@ import { z } from 'zod';
 
 import { MessageRoleSchema } from '@/api/core/enums';
 
-import { UIMessageMetadataSchema } from './message-metadata';
+import { MessageMetadataSchema } from './message-metadata';
 import { MessagePartSchema } from './message-schemas';
 
 // ============================================================================
@@ -34,9 +34,8 @@ import { MessagePartSchema } from './message-schemas';
 export const UIMessageSchema = z.object({
   id: z.string(),
   role: MessageRoleSchema.or(z.literal('system')), // ✅ Uses MESSAGE_ROLES from enums + system for AI SDK
-  content: z.string().optional(), // Legacy text content
   parts: z.array(MessagePartSchema).optional(), // Modern message parts
-  metadata: UIMessageMetadataSchema,
+  metadata: MessageMetadataSchema,
   createdAt: z.union([z.string().datetime(), z.date()]).optional(),
   toolInvocations: z.array(z.unknown()).optional(), // Tool invocation data
   annotations: z.array(z.unknown()).optional(), // Additional annotations
@@ -108,7 +107,6 @@ export function isUIMessagesArray(value: unknown): value is UIMessages {
 export function createUIMessage(data: {
   id: string;
   role: 'user' | 'assistant' | 'system';
-  content?: string;
   parts?: unknown[];
   metadata?: unknown;
   createdAt?: string | Date;
@@ -120,13 +118,12 @@ export function createUIMessage(data: {
 
   // Validate metadata if provided
   const validatedMetadata = data.metadata
-    ? UIMessageMetadataSchema.parse(data.metadata)
+    ? MessageMetadataSchema.parse(data.metadata)
     : null;
 
   return UIMessageSchema.parse({
     id: data.id,
     role: data.role,
-    content: data.content,
     parts: validatedParts,
     metadata: validatedMetadata,
     createdAt: data.createdAt,
@@ -135,7 +132,6 @@ export function createUIMessage(data: {
 
 /**
  * ✅ CONVERTER: Convert text content to message parts format
- * Migrates legacy content field to modern parts array
  */
 export function contentToParts(content: string): Array<{ type: 'text'; text: string }> {
   if (!content) {
@@ -146,7 +142,6 @@ export function contentToParts(content: string): Array<{ type: 'text'; text: str
 
 /**
  * ✅ CONVERTER: Extract content from message parts
- * Converts modern parts array back to legacy content string
  */
 export function partsToContent(parts: unknown[]): string {
   if (!Array.isArray(parts)) {

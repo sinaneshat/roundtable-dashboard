@@ -2,6 +2,8 @@
 import { ArrowRight, Clock, Minus, Pencil, Plus } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
+import type { ChangelogType } from '@/api/core/enums';
+import { ChangelogTypes } from '@/api/core/enums';
 import type { ChatThreadChangelog } from '@/api/routes/chat/schema';
 import {
   ChainOfThought,
@@ -22,23 +24,20 @@ type ConfigurationChangesGroupProps = {
   className?: string;
 };
 
-// Simplified type definition - now matches the backend 1:1
-type ChangeAction = 'added' | 'modified' | 'removed';
-
 // No conversion needed - changeType IS the action
-function getChangeAction(changeType: ChatThreadChangelog['changeType']): ChangeAction {
+function getChangeAction(changeType: ChatThreadChangelog['changeType']): ChangelogType {
   return changeType;
 }
-const actionConfig: Record<ChangeAction, { icon: typeof Plus; color: string }> = {
-  added: {
+const actionConfig: Record<ChangelogType, { icon: typeof Plus; color: string }> = {
+  [ChangelogTypes.ADDED]: {
     icon: Plus,
     color: 'text-green-500',
   },
-  modified: {
+  [ChangelogTypes.MODIFIED]: {
     icon: Pencil,
     color: 'text-blue-500',
   },
-  removed: {
+  [ChangelogTypes.REMOVED]: {
     icon: Minus,
     color: 'text-red-500',
   },
@@ -58,19 +57,19 @@ export function ConfigurationChangesGroup({ group, className }: ConfigurationCha
       acc[action].push(change);
       return acc;
     },
-    {} as Record<ChangeAction, (ChatThreadChangelog | (Omit<ChatThreadChangelog, 'createdAt'> & { createdAt: string | Date }))[]>,
+    {} as Record<ChangelogType, (ChatThreadChangelog | (Omit<ChatThreadChangelog, 'createdAt'> & { createdAt: string | Date }))[]>,
   );
-  const actionOrder: ChangeAction[] = ['added', 'modified', 'removed'];
+  const actionOrder: ChangelogType[] = [ChangelogTypes.ADDED, ChangelogTypes.MODIFIED, ChangelogTypes.REMOVED];
   const sortedActions = actionOrder.filter(action => changesByAction[action]);
   const actionSummaries: string[] = [];
-  if (changesByAction.added?.length) {
-    actionSummaries.push(`${changesByAction.added.length} ${tActionSummary('added')}`);
+  if (changesByAction[ChangelogTypes.ADDED]?.length) {
+    actionSummaries.push(`${changesByAction[ChangelogTypes.ADDED].length} ${tActionSummary('added')}`);
   }
-  if (changesByAction.modified?.length) {
-    actionSummaries.push(`${changesByAction.modified.length} ${tActionSummary('modified')}`);
+  if (changesByAction[ChangelogTypes.MODIFIED]?.length) {
+    actionSummaries.push(`${changesByAction[ChangelogTypes.MODIFIED].length} ${tActionSummary('modified')}`);
   }
-  if (changesByAction.removed?.length) {
-    actionSummaries.push(`${changesByAction.removed.length} ${tActionSummary('removed')}`);
+  if (changesByAction[ChangelogTypes.REMOVED]?.length) {
+    actionSummaries.push(`${changesByAction[ChangelogTypes.REMOVED].length} ${tActionSummary('removed')}`);
   }
   return (
     <div className={cn('py-2', className)}>
@@ -171,7 +170,7 @@ function ChangeItem({ change }: { change: ChatThreadChangelog | (Omit<ChatThread
   const newMode = isModeChange ? (changeData as ModeChangeData).newMode : undefined;
 
   const model = modelId ? allModels.find(m => m.id === modelId) : undefined;
-  const showMissingModelFallback = (change.changeType === 'added' || change.changeType === 'removed') && modelId && !model;
+  const showMissingModelFallback = (change.changeType === ChangelogTypes.ADDED || change.changeType === ChangelogTypes.REMOVED) && modelId && !model;
   // Simplified rendering - single pattern for participants, simpler mode display
   return (
     <>
@@ -199,7 +198,7 @@ function ChangeItem({ change }: { change: ChatThreadChangelog | (Omit<ChatThread
             'relative flex items-center gap-1.5 sm:gap-2 px-2 sm:px-2.5 py-1 sm:py-1.5 shrink-0',
             'backdrop-blur-md border rounded-lg shadow-md',
             'bg-background/10 border-white/30 dark:border-white/20',
-            change.changeType === 'removed' && 'opacity-60',
+            change.changeType === ChangelogTypes.REMOVED && 'opacity-60',
           )}
         >
           <Avatar className="size-4 sm:size-5 shrink-0">
@@ -211,7 +210,7 @@ function ChangeItem({ change }: { change: ChatThreadChangelog | (Omit<ChatThread
           <div className="flex flex-col gap-0.5 min-w-0">
             <span className={cn(
               'text-[10px] sm:text-xs font-medium truncate whitespace-nowrap text-foreground/90',
-              change.changeType === 'removed' && 'line-through',
+              change.changeType === ChangelogTypes.REMOVED && 'line-through',
             )}
             >
               {model.name}

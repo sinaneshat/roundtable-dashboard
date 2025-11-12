@@ -2,13 +2,15 @@ import type { RouteHandler } from '@hono/zod-openapi';
 import { and, desc, eq } from 'drizzle-orm';
 import { ulid } from 'ulid';
 
-import { executeBatch } from '@/api/common/batch-operations';
 import { verifyParticipantOwnership, verifyThreadOwnership } from '@/api/common/permissions';
 import { createHandler, createHandlerWithBatch, Responses } from '@/api/core';
-import { ChangelogTypes } from '@/api/core/enums';
 import { IdParamSchema } from '@/api/core/schemas';
-import { extractModeratorModelName } from '@/api/services/models-config.service';
 import { validateModelAccess, validateTierLimits } from '@/api/services/participant-validation.service';
+import {
+  logParticipantAdded,
+  logParticipantRemoved,
+  logParticipantUpdated,
+} from '@/api/services/thread-changelog.service';
 import { getUserTier } from '@/api/services/usage-tracking.service';
 import type { ApiEnv } from '@/api/types';
 import { getDbAsync } from '@/db';
@@ -70,22 +72,16 @@ export const addParticipantHandler: RouteHandler<typeof addParticipantRoute, Api
       limit: 1,
     });
     const nextRoundNumber = (existingUserMessages[0]?.roundNumber || 0) + 1;
-    const modelName = extractModeratorModelName(body.modelId as string);
-    const changelogId = ulid();
-    await db.insert(tables.chatThreadChangelog).values({
-      id: changelogId,
-      threadId: id,
-      roundNumber: nextRoundNumber,
-      changeType: ChangelogTypes.ADDED,
-      changeSummary: `Added ${modelName}${body.role ? ` as "${body.role}"` : ''}`,
-      changeData: {
-        type: 'participant',
-        participantId,
-        modelId: body.modelId as string,
-        role: body.role as string | null,
-      },
-      createdAt: now,
-    });
+
+    // ✅ SERVICE LAYER: Use thread-changelog.service for changelog creation
+    await logParticipantAdded(
+      id,
+      nextRoundNumber,
+      participantId,
+      body.modelId as string,
+      body.role as string | null,
+    );
+
     return Responses.ok(c, {
       participant,
     });
@@ -126,23 +122,16 @@ export const updateParticipantHandler: RouteHandler<typeof updateParticipantRout
         limit: 1,
       });
       const nextRoundNumber = (existingUserMessages[0]?.roundNumber || 0) + 1;
-      const modelName = extractModeratorModelName(participant.modelId);
-      const changelogId = ulid();
-      await db.insert(tables.chatThreadChangelog).values({
-        id: changelogId,
-        threadId: participant.threadId,
-        roundNumber: nextRoundNumber,
-        changeType: ChangelogTypes.MODIFIED,
-        changeSummary: `Updated ${modelName} role from "${participant.role || 'none'}" to "${body.role || 'none'}"`,
-        changeData: {
-          type: 'participant_role',
-          participantId: id,
-          modelId: participant.modelId,
-          oldRole: participant.role,
-          newRole: body.role as string | null,
-        },
-        createdAt: new Date(),
-      });
+
+      // ✅ SERVICE LAYER: Use thread-changelog.service for changelog creation
+      await logParticipantUpdated(
+        participant.threadId,
+        nextRoundNumber,
+        id,
+        participant.modelId,
+        participant.role,
+        body.role as string | null,
+      );
     }
     return Responses.ok(c, {
       participant: updatedParticipant,
@@ -170,25 +159,19 @@ export const deleteParticipantHandler: RouteHandler<typeof deleteParticipantRout
       limit: 1,
     });
     const nextRoundNumber = (existingUserMessages[0]?.roundNumber || 0) + 1;
-    const modelName = extractModeratorModelName(participant.modelId);
-    const changelogId = ulid();
-    await executeBatch(db, [
-      db.insert(tables.chatThreadChangelog).values({
-        id: changelogId,
-        threadId: participant.threadId,
-        roundNumber: nextRoundNumber,
-        changeType: ChangelogTypes.REMOVED,
-        changeSummary: `Removed ${modelName}${participant.role ? ` ("${participant.role}")` : ''}`,
-        changeData: {
-          type: 'participant',
-          participantId: id,
-          modelId: participant.modelId,
-          role: participant.role,
-        },
-        createdAt: new Date(),
-      }),
-      db.delete(tables.chatParticipant).where(eq(tables.chatParticipant.id, id)),
-    ]);
+
+    // ✅ SERVICE LAYER: Use thread-changelog.service for changelog creation
+    await logParticipantRemoved(
+      participant.threadId,
+      nextRoundNumber,
+      id,
+      participant.modelId,
+      participant.role,
+    );
+
+    // Delete participant
+    await db.delete(tables.chatParticipant).where(eq(tables.chatParticipant.id, id));
+
     return Responses.ok(c, {
       deleted: true,
     });

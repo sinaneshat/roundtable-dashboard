@@ -24,7 +24,7 @@ export const PROJECT_FILE_STATUS_ENUM_VALUES = [
   'uploaded', // File uploaded to R2, awaiting indexing
   'indexing', // AutoRAG is processing the file
   'indexed', // Successfully indexed and queryable
-  'error', // Indexing failed
+  'failed', // Indexing failed
 ] as const;
 
 export type ProjectFileStatus = typeof PROJECT_FILE_STATUS_ENUM_VALUES[number];

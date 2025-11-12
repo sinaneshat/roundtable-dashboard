@@ -4,6 +4,7 @@ import { Check, Plus, Trash2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 
+import { createRoleSystemPrompt } from '@/api/services/prompts.service';
 import type { ParticipantConfig } from '@/components/chat/chat-form-schemas';
 import { Button } from '@/components/ui/button';
 import {
@@ -21,7 +22,6 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover';
 import { useCreateCustomRoleMutation, useDeleteCustomRoleMutation } from '@/hooks/mutations/chat-mutations';
-import { createRoleSystemPrompt } from '@/lib/ai/prompts';
 import { toastManager } from '@/lib/toast/toast-manager';
 import { cn } from '@/lib/ui/cn';
 import { DEFAULT_ROLES } from '@/lib/utils/ai-display';

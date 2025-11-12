@@ -6,6 +6,8 @@
 // import { AlertCircle, AlertTriangle, CheckCircle, Info, Loader2 } from 'lucide-react';
 import React from 'react';
 
+import type { ToastVariant } from '@/api/core/enums';
+import { ToastVariants } from '@/api/core/enums';
 import type { ToastActionElement } from '@/components/ui/toast';
 import { ToastAction } from '@/components/ui/toast';
 import { toast as baseToast } from '@/hooks/utils';
@@ -28,7 +30,7 @@ let maxConcurrentToasts = 3;
 //   loading: Loader2,
 // };
 
-export type ToastVariant = 'default' | 'destructive' | 'success' | 'warning' | 'info' | 'loading';
+// ToastVariant type now imported from @/api/core/enums
 
 export type ToastOptions = {
   id?: string;
@@ -94,8 +96,8 @@ function showToastInternal(options: ToastOptions): void {
     id,
     title = '',
     description = '',
-    variant = 'default',
-    duration = variant === 'loading' ? 0 : 5000,
+    variant = ToastVariants.DEFAULT,
+    duration = variant === ToastVariants.LOADING ? 0 : 5000,
     preventDuplicates = true,
     action,
     icon: _icon,
@@ -122,8 +124,8 @@ function showToastInternal(options: ToastOptions): void {
   const toastConfig: Parameters<typeof baseToast>[0] = {
     title,
     description,
-    variant: variant === 'success' || variant === 'warning' || variant === 'info' || variant === 'loading'
-      ? 'default'
+    variant: variant === ToastVariants.SUCCESS || variant === ToastVariants.WARNING || variant === ToastVariants.INFO || variant === ToastVariants.LOADING
+      ? ToastVariants.DEFAULT
       : variant,
     duration,
     action: action
@@ -184,7 +186,7 @@ export function createProgressToast(options: ProgressToastOptions): {
   showToastInternal({
     ...options,
     id: toastId,
-    variant: 'loading',
+    variant: ToastVariants.LOADING,
     duration: 0, // Persistent until manually dismissed
     dismissible: false,
   });
@@ -200,7 +202,7 @@ export function createProgressToast(options: ProgressToastOptions): {
           ...options,
           id: toastId,
           description: `${options.description} (${Math.round(progress)}%)`,
-          variant: 'loading',
+          variant: ToastVariants.LOADING,
           duration: 0,
           dismissible: false,
         });
@@ -214,7 +216,7 @@ export function createProgressToast(options: ProgressToastOptions): {
       toast({
         title: options.title,
         description: `${options.description} - Completed`,
-        variant: 'success',
+        variant: ToastVariants.SUCCESS,
         duration: 3000,
       });
     },
@@ -226,7 +228,7 @@ export function createProgressToast(options: ProgressToastOptions): {
       toast({
         title: options.title,
         description: error.message,
-        variant: 'destructive',
+        variant: ToastVariants.DESTRUCTIVE,
         duration: 5000,
       });
     },
@@ -260,7 +262,7 @@ export const toastManager = {
     return toast({
       title: message,
       description,
-      variant: 'success',
+      variant: ToastVariants.SUCCESS,
       preventDuplicates: true,
       ...options,
     });
@@ -270,7 +272,7 @@ export const toastManager = {
     return toast({
       title: message,
       description,
-      variant: 'destructive',
+      variant: ToastVariants.DESTRUCTIVE,
       preventDuplicates: true,
       duration: 8000, // Longer duration for errors
       ...options,
@@ -281,7 +283,7 @@ export const toastManager = {
     return toast({
       title: message,
       description,
-      variant: 'warning',
+      variant: ToastVariants.WARNING,
       preventDuplicates: true,
       ...options,
     });
@@ -291,7 +293,7 @@ export const toastManager = {
     return toast({
       title: message,
       description,
-      variant: 'info',
+      variant: ToastVariants.INFO,
       preventDuplicates: true,
       ...options,
     });
@@ -301,7 +303,7 @@ export const toastManager = {
     return toast({
       title: message,
       description,
-      variant: 'loading',
+      variant: ToastVariants.LOADING,
       duration: 0, // Persistent until dismissed
       dismissible: false,
       preventDuplicates: true,
@@ -342,7 +344,7 @@ export const toastManager = {
   action: (message: string, actionLabel: string, actionFn: () => void, options?: Partial<ToastOptions>) => {
     return toast({
       title: message,
-      variant: 'info',
+      variant: ToastVariants.INFO,
       action: {
         label: actionLabel,
         onClick: actionFn,
@@ -355,7 +357,7 @@ export const toastManager = {
   // Undo toast pattern
   undo: (message: string, undoFn: () => void, options?: Partial<ToastOptions>) => {
     return toastManager.action(message, 'Undo', undoFn, {
-      variant: 'warning',
+      variant: ToastVariants.WARNING,
       ...options,
     });
   },
@@ -363,7 +365,7 @@ export const toastManager = {
   // Retry toast pattern
   retry: (message: string, retryFn: () => void, options?: Partial<ToastOptions>) => {
     return toastManager.action(message, 'Retry', retryFn, {
-      variant: 'destructive',
+      variant: ToastVariants.DESTRUCTIVE,
       ...options,
     });
   },
@@ -373,7 +375,7 @@ export const toastManager = {
     return toast({
       title: message,
       description,
-      variant: 'info',
+      variant: ToastVariants.INFO,
       duration: 0,
       dismissible: true,
       ...options,

@@ -10,12 +10,13 @@
 
 'use client';
 
-import { useCallback, useMemo } from 'react';
+import { useCallback } from 'react';
 
 import type { FeedbackType } from '@/api/core/enums';
 import type { RoundFeedbackData } from '@/api/routes/chat/schema';
 import { useChatStore } from '@/components/providers/chat-store-provider';
 import { useSetRoundFeedbackMutation } from '@/hooks/mutations/chat-mutations';
+import { useMemoizedReturn } from '@/lib/utils/memo-utils';
 
 export type UseFeedbackActionsOptions = {
   threadId: string;
@@ -63,7 +64,7 @@ export function useFeedbackActions(options: UseFeedbackActionsOptions): UseFeedb
    * Returns a stable callback that updates store and triggers mutation
    */
   const getFeedbackHandler = useCallback((roundNumber: number) => {
-    return (feedbackType: 'like' | 'dislike' | null) => {
+    return (feedbackType: FeedbackType | null) => {
       // Update store immediately (optimistic)
       setFeedback(roundNumber, feedbackType);
 
@@ -106,10 +107,9 @@ export function useFeedbackActions(options: UseFeedbackActionsOptions): UseFeedb
   }, [clearFeedback]);
 
   // Memoize return object to prevent unnecessary re-renders
-  // Even though individual functions are memoized, object literal creates new reference
-  return useMemo(() => ({
+  return useMemoizedReturn({
     getFeedbackHandler,
     loadFeedback,
     clearRoundFeedback,
-  }), [getFeedbackHandler, loadFeedback, clearRoundFeedback]);
+  }, [getFeedbackHandler, loadFeedback, clearRoundFeedback]);
 }

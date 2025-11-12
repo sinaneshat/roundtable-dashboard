@@ -17,8 +17,6 @@ export {
 } from './api-key-mutations';
 
 // Chat mutations (protected) - All chat-related operations
-// NOTE: useSendMessageMutation removed - use AI SDK v5 useChat hook for all message operations
-// NOTE: useTriggerAnalysisMutation removed - use AI SDK v5 useObject hook for streaming analysis
 export {
   useAddParticipantMutation,
   useCreateCustomRoleMutation,

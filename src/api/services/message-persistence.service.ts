@@ -13,8 +13,12 @@
 import { and, asc, eq } from 'drizzle-orm';
 import { revalidateTag } from 'next/cache';
 import { ulid } from 'ulid';
-import type { z } from 'zod';
+import { z } from 'zod';
 
+import { MessageRoles } from '@/api/core/enums';
+import type { ErrorMetadata } from '@/api/services/error-metadata.service';
+import ErrorMetadataService from '@/api/services/error-metadata.service';
+import { filterDbToParticipantMessages } from '@/api/services/message-type-guards';
 import {
   checkAnalysisQuota,
   incrementMessageUsage,
@@ -22,9 +26,9 @@ import {
 import type { getDbAsync } from '@/db';
 import * as tables from '@/db/schema';
 import type { ChatMessage } from '@/db/validation';
-import { ErrorCategorySchema, FinishReasonSchema } from '@/lib/schemas/error-schemas';
 import type { MessagePartSchema } from '@/lib/schemas/message-schemas';
 import { extractTextFromParts } from '@/lib/schemas/message-schemas';
+import { isObject, isTextPart, safeParse } from '@/lib/utils/type-guards';
 
 // Type inference from schema
 type MessagePart = z.infer<typeof MessagePartSchema>;
@@ -59,15 +63,6 @@ export type SaveMessageParams = {
   participants: Array<{ id: string }>;
   threadMode: string;
   db: Awaited<ReturnType<typeof getDbAsync>>;
-};
-
-type ErrorMetadata = {
-  openRouterError?: string;
-  errorCategory?: string;
-  errorMessage?: string;
-  providerMessage?: string;
-  isTransientError: boolean;
-  isPartialResponse: boolean;
 };
 
 // ============================================================================
@@ -105,43 +100,46 @@ function extractReasoning(
     return null;
   }
 
-  const meta = metadata as Record<string, unknown>;
+  // ✅ TYPE-SAFE: Use type guard from @/lib/utils
+  if (!isObject(metadata)) {
+    return null;
+  }
 
   // Helper to safely navigate nested paths
   const getNested = (obj: unknown, path: string[]): unknown => {
     let current = obj;
     for (const key of path) {
-      if (!current || typeof current !== 'object') {
+      if (!isObject(current)) {
         return undefined;
       }
-      current = (current as Record<string, unknown>)[key];
+      current = current[key];
     }
     return current;
   };
 
   // Check all possible reasoning field locations
   const fields = [
-    getNested(meta, ['openai', 'reasoning']), // OpenAI o1/o3
-    meta.reasoning,
-    meta.thinking,
-    meta.thought,
-    meta.thoughts,
-    meta.chain_of_thought,
-    meta.internal_reasoning,
-    meta.scratchpad,
+    getNested(metadata, ['openai', 'reasoning']), // OpenAI o1/o3
+    metadata.reasoning,
+    metadata.thinking,
+    metadata.thought,
+    metadata.thoughts,
+    metadata.chain_of_thought,
+    metadata.internal_reasoning,
+    metadata.scratchpad,
   ];
 
   for (const field of fields) {
     if (typeof field === 'string' && field.trim()) {
       return field.trim();
     }
-    if (field && typeof field === 'object') {
-      const obj = field as Record<string, unknown>;
-      if (typeof obj.content === 'string' && obj.content.trim()) {
-        return obj.content.trim();
+    // ✅ TYPE-SAFE: Use type guard instead of cast
+    if (isObject(field)) {
+      if (typeof field.content === 'string' && field.content.trim()) {
+        return field.content.trim();
       }
-      if (typeof obj.text === 'string' && obj.text.trim()) {
-        return obj.text.trim();
+      if (typeof field.text === 'string' && field.text.trim()) {
+        return field.text.trim();
       }
     }
   }
@@ -154,9 +152,16 @@ function extractReasoning(
 // ============================================================================
 
 /**
- * Extract OpenRouter error details from provider metadata and response
+ * Extract error metadata from AI provider response
  *
- * Reference: streaming.handler.ts lines 1209-1239
+ * ✅ DELEGATED: Uses ErrorMetadataService for all error detection and categorization
+ * ✅ SINGLE SOURCE OF TRUTH: No duplicate error handling logic
+ *
+ * This function maintains the original signature for backward compatibility
+ * but delegates to the centralized error metadata service.
+ *
+ * @see ErrorMetadataService.extractErrorMetadata - Service implementation
+ * @see /docs/backend-patterns.md - Service delegation pattern
  */
 function extractErrorMetadata(
   providerMetadata: unknown,
@@ -165,110 +170,13 @@ function extractErrorMetadata(
   usage?: { inputTokens?: number; outputTokens?: number },
   text?: string,
 ): ErrorMetadata {
-  let openRouterError: string | undefined;
-  let errorCategory: string | undefined;
-
-  // Check providerMetadata for OpenRouter-specific errors
-  if (providerMetadata && typeof providerMetadata === 'object') {
-    const metadata = providerMetadata as Record<string, unknown>;
-    if (metadata.error) {
-      openRouterError = typeof metadata.error === 'string'
-        ? metadata.error
-        : JSON.stringify(metadata.error);
-    }
-    if (!openRouterError && metadata.errorMessage) {
-      openRouterError = String(metadata.errorMessage);
-    }
-    // Check for moderation/content filter errors
-    if (metadata.moderation || metadata.contentFilter) {
-      errorCategory = ErrorCategorySchema.enum.content_filter;
-      openRouterError = openRouterError || 'Content was filtered by safety systems';
-    }
-  }
-
-  // Check response object for errors
-  if (!openRouterError && response && typeof response === 'object') {
-    const resp = response as Record<string, unknown>;
-    if (resp.error) {
-      openRouterError = typeof resp.error === 'string'
-        ? resp.error
-        : JSON.stringify(resp.error);
-    }
-  }
-
-  const outputTokens = usage?.outputTokens || 0;
-  const inputTokens = usage?.inputTokens || 0;
-  const isEmptyResponse = outputTokens === 0;
-  const hasError = isEmptyResponse || !!openRouterError;
-
-  let errorMessage: string | undefined;
-  let providerMessage: string | undefined;
-
-  if (hasError) {
-    if (openRouterError) {
-      providerMessage = openRouterError;
-      errorMessage = openRouterError;
-
-      // Categorize based on error content
-      const errorLower = openRouterError.toLowerCase();
-      if (errorLower.includes('not found') || errorLower.includes('does not exist')) {
-        errorCategory = ErrorCategorySchema.enum.model_not_found;
-      } else if (errorLower.includes('filter') || errorLower.includes('safety') || errorLower.includes('moderation')) {
-        errorCategory = ErrorCategorySchema.enum.content_filter;
-      } else if (errorLower.includes('rate limit') || errorLower.includes('quota')) {
-        errorCategory = ErrorCategorySchema.enum.rate_limit;
-      } else if (errorLower.includes('timeout') || errorLower.includes('connection')) {
-        errorCategory = ErrorCategorySchema.enum.network;
-      } else {
-        errorCategory = errorCategory || ErrorCategorySchema.enum.provider_error;
-      }
-    } else if (outputTokens === 0) {
-      // Build context-aware error messages
-      const baseStats = `Input: ${inputTokens} tokens, Output: 0 tokens, Status: ${finishReason}`;
-
-      if (finishReason === FinishReasonSchema.enum.stop) {
-        providerMessage = `Model completed but returned no content. ${baseStats}. This may indicate content filtering, safety constraints, or the model chose not to respond.`;
-        errorMessage = 'Returned empty response - possible content filtering or safety block';
-        errorCategory = ErrorCategorySchema.enum.content_filter;
-      } else if (finishReason === FinishReasonSchema.enum.length) {
-        providerMessage = `Model hit token limit before generating content. ${baseStats}. Try reducing the conversation history or input length.`;
-        errorMessage = 'Exceeded token limit without generating content';
-        errorCategory = ErrorCategorySchema.enum.provider_error;
-      } else if (finishReason === FinishReasonSchema.enum['content-filter']) {
-        providerMessage = `Content was filtered by safety systems. ${baseStats}`;
-        errorMessage = 'Blocked by content filter';
-        errorCategory = ErrorCategorySchema.enum.content_filter;
-      } else if (finishReason === FinishReasonSchema.enum.error || finishReason === FinishReasonSchema.enum.other) {
-        providerMessage = `Provider error prevented response generation. ${baseStats}. This may be a temporary issue with the model provider.`;
-        errorMessage = 'Encountered a provider error';
-        errorCategory = ErrorCategorySchema.enum.provider_error;
-      } else {
-        providerMessage = `Model returned empty response. ${baseStats}`;
-        errorMessage = `Returned empty response (reason: ${finishReason})`;
-        errorCategory = ErrorCategorySchema.enum.empty_response;
-      }
-    }
-  }
-
-  // Detect partial response: error occurred but some content was generated
-  const isPartialResponse = hasError && ((text?.length || 0) > 0 || outputTokens > 0);
-
-  // Determine if error is transient (worth retrying)
-  const isTransientError = hasError && (
-    errorCategory === ErrorCategorySchema.enum.provider_error
-    || errorCategory === ErrorCategorySchema.enum.network
-    || errorCategory === ErrorCategorySchema.enum.rate_limit
-    || (errorCategory === ErrorCategorySchema.enum.empty_response && finishReason !== FinishReasonSchema.enum.stop)
-  );
-
-  return {
-    openRouterError,
-    errorCategory,
-    errorMessage,
-    providerMessage,
-    isTransientError,
-    isPartialResponse,
-  };
+  return ErrorMetadataService.extractErrorMetadata({
+    providerMetadata,
+    response,
+    finishReason,
+    usage,
+    text,
+  });
 }
 
 // ============================================================================
@@ -312,18 +220,25 @@ export async function saveStreamedMessage(
     // Extract reasoning from multiple sources
     const reasoningText = extractReasoning(reasoningDeltas, finishResult);
 
+    // ✅ CRITICAL FIX: Use totalUsage as fallback for usage
+    // AI SDK v5 provides both usage (final step) and totalUsage (cumulative across all steps)
+    // Some models (DeepSeek) only populate totalUsage, not usage
+    // Reference: https://sdk.vercel.ai/docs/ai-sdk-core/generating-text#onFinish
+    const usageData = finishResult.usage || (finishResult as { totalUsage?: { inputTokens?: number; outputTokens?: number } }).totalUsage;
+
     // Extract error metadata
     const errorMetadata = extractErrorMetadata(
       finishResult.providerMetadata,
       finishResult.response,
       finishResult.finishReason,
-      finishResult.usage,
+      usageData,
       text,
     );
 
     // Build parts[] array (AI SDK v5 pattern)
-    // Using text and reasoning part types from MessagePartSchema
-    const parts: Array<Extract<MessagePart, { type: 'text' } | { type: 'reasoning' }>> = [];
+    // ✅ CRITICAL: AI SDK v5 requires tool results in separate tool messages
+    // Using text, reasoning, tool-call part types for assistant message
+    const parts: MessagePart[] = [];
 
     if (text) {
       parts.push({ type: 'text', text });
@@ -332,6 +247,25 @@ export async function saveStreamedMessage(
     if (reasoningText) {
       parts.push({ type: 'reasoning', text: reasoningText });
     }
+
+    // Add tool calls if present (from AI SDK v5 finishResult)
+    const toolCalls = finishResult.toolCalls && Array.isArray(finishResult.toolCalls)
+      ? finishResult.toolCalls
+      : [];
+
+    for (const toolCall of toolCalls) {
+      parts.push({
+        type: 'tool-call',
+        toolCallId: toolCall.toolCallId,
+        toolName: toolCall.toolName,
+        args: toolCall.args,
+      });
+    }
+
+    // Collect tool results for separate tool message (AI SDK v5 pattern)
+    const toolResults = finishResult.toolResults && Array.isArray(finishResult.toolResults)
+      ? finishResult.toolResults
+      : [];
 
     // Ensure at least one part exists (empty text for error messages)
     if (parts.length === 0) {
@@ -351,30 +285,46 @@ export async function saveStreamedMessage(
       return;
     }
 
+    // ✅ FIX: Create usage metadata with fallback when usage data is missing
+    // Uses usageData which already checks totalUsage as fallback
+    // If both are missing, estimate from text length (1 token ≈ 4 characters)
+    const usageMetadata = usageData
+      ? {
+          promptTokens: usageData.inputTokens,
+          completionTokens: usageData.outputTokens,
+          totalTokens: (usageData.inputTokens ?? 0) + (usageData.outputTokens ?? 0),
+        }
+      : text.trim().length > 0
+        ? {
+            promptTokens: 0, // Can't estimate input without usage data
+            completionTokens: Math.ceil(text.length / 4), // Rough estimate
+            totalTokens: Math.ceil(text.length / 4),
+          }
+        : {
+            promptTokens: 0,
+            completionTokens: 0,
+            totalTokens: 0,
+          };
+
     // Save message to database
     await db.insert(tables.chatMessage)
       .values({
         id: messageId,
         threadId,
         participantId,
-        role: 'assistant' as const,
+        role: MessageRoles.ASSISTANT,
         parts,
         roundNumber,
         metadata: {
+          role: MessageRoles.ASSISTANT, // ✅ FIX: Add role discriminator for type guard
           roundNumber,
           model: modelId,
           participantId,
           participantIndex,
           participantRole,
-          usage: finishResult.usage
-            ? {
-                promptTokens: finishResult.usage.inputTokens,
-                completionTokens: finishResult.usage.outputTokens,
-                totalTokens: (finishResult.usage.inputTokens ?? 0) + (finishResult.usage.outputTokens ?? 0),
-              }
-            : undefined,
+          usage: usageMetadata,
           finishReason: finishResult.finishReason,
-          hasError: !!(errorMetadata.errorMessage || errorMetadata.openRouterError),
+          hasError: errorMetadata.hasError, // ✅ CRITICAL FIX: Use hasError from extractErrorMetadata (single source of truth)
           errorType: errorMetadata.errorCategory,
           errorMessage: errorMetadata.errorMessage,
           providerMessage: errorMetadata.providerMessage,
@@ -385,6 +335,43 @@ export async function saveStreamedMessage(
         createdAt: new Date(),
       })
       .returning();
+
+    // ✅ AI SDK v5 PATTERN: Save tool results in separate tool message
+    // Tool results must be in their own message with role='tool'
+    if (toolResults.length > 0) {
+      const toolMessageId = ulid();
+      const toolParts: MessagePart[] = toolResults.map(toolResult => ({
+        type: 'tool-result',
+        toolCallId: toolResult.toolCallId,
+        toolName: toolResult.toolName,
+        result: toolResult.result,
+        isError: toolResult.isError,
+      }));
+
+      // Check for existing tool message
+      const existingToolMessage = await db.query.chatMessage.findFirst({
+        where: eq(tables.chatMessage.id, toolMessageId),
+      });
+
+      if (!existingToolMessage) {
+        await db.insert(tables.chatMessage)
+          .values({
+            id: toolMessageId,
+            threadId,
+            participantId,
+            role: MessageRoles.TOOL,
+            parts: toolParts,
+            roundNumber,
+            metadata: {
+              roundNumber,
+              participantId,
+              participantIndex,
+              relatedMessageId: messageId, // Link to assistant message with tool calls
+            },
+            createdAt: new Date(),
+          });
+      }
+    }
 
     // Cache invalidation
     revalidateTag(`thread:${threadId}:messages`);
@@ -492,7 +479,11 @@ async function createPendingAnalysis(
         ],
       });
 
-      assistantMessages = roundMessages.filter(msg => msg.role === 'assistant');
+      // ✅ TYPE-SAFE FILTERING: Use consolidated utility for participant message filtering
+      // Replaces inline logic with Zod-validated type guard from message-type-guards.ts
+      // Pre-search messages have role: 'assistant' but are NOT actual participant responses
+      // They should be excluded from analysis to prevent ID inconsistency when web search is enabled
+      assistantMessages = filterDbToParticipantMessages(roundMessages);
 
       // Check if we have all expected participant messages
       if (assistantMessages.length >= participants.length) {
@@ -525,10 +516,24 @@ async function createPendingAnalysis(
     }
 
     // Get user question from this round
-    const userMessage = roundMessages.find(m => m.role === 'user');
-    const userQuestion = userMessage
-      ? extractTextFromParts(userMessage.parts as Array<{ type: 'text'; text: string }>)
+    const userMessage = roundMessages.find(m => m.role === MessageRoles.USER);
+
+    // ✅ TYPE GUARD: Validate and extract text parts from message
+    const textParts = userMessage?.parts?.filter(isTextPart) ?? [];
+    const userQuestion = textParts.length > 0
+      ? extractTextFromParts(textParts)
       : 'No user question found';
+
+    // ✅ TYPE GUARD: Validate thread mode with Zod
+    const validatedMode = safeParse(
+      z.enum(['analyzing', 'brainstorming', 'debating', 'solving']),
+      threadMode,
+    );
+
+    if (!validatedMode) {
+      // Invalid mode - skip analysis creation
+      return;
+    }
 
     // Create pending analysis record
     const analysisId = ulid();
@@ -538,9 +543,9 @@ async function createPendingAnalysis(
         id: analysisId,
         threadId,
         roundNumber,
-        mode: threadMode as 'analyzing' | 'brainstorming' | 'debating' | 'solving',
+        mode: validatedMode,
         userQuestion,
-        status: 'pending' as const,
+        status: 'pending',
         participantMessageIds,
         analysisData: null,
         completedAt: null,

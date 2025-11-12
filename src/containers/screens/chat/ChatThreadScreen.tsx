@@ -1,10 +1,10 @@
 'use client';
 import { useQueryClient } from '@tanstack/react-query';
-import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
+import type { FeedbackType } from '@/api/core/enums';
 import type { ChatMessage, ChatParticipant, ChatThread, ModeratorAnalysisPayload } from '@/api/routes/chat/schema';
 import { ChatDeleteDialog } from '@/components/chat/chat-delete-dialog';
 import { ChatInput } from '@/components/chat/chat-input';
@@ -16,13 +16,14 @@ import { StreamingParticipantsLoader } from '@/components/chat/streaming-partici
 import { useThreadHeader } from '@/components/chat/thread-header-context';
 import { ThreadTimeline } from '@/components/chat/thread-timeline';
 import { UnifiedErrorBoundary } from '@/components/chat/unified-error-boundary';
+import { WebSearchToggle } from '@/components/chat/web-search-toggle';
 import { useChatStore } from '@/components/providers/chat-store-provider';
 import { useThreadChangelogQuery, useThreadFeedbackQuery } from '@/hooks/queries/chat';
 import type { TimelineItem } from '@/hooks/utils';
 import {
   useBoolean,
   useChatScroll,
-  useStreamingLoaderState,
+  useFlowLoading,
   useThreadTimeline,
 } from '@/hooks/utils';
 import type { ChatModeId } from '@/lib/config/chat-modes';
@@ -46,6 +47,16 @@ type ChatThreadScreenProps = {
     image: string | null;
   };
 };
+
+/**
+ * ✅ FIX: Memoize ChatThreadActions JSX to prevent infinite render loops
+ *
+ * Problem: page.tsx creates new Date objects every render → thread object always new reference →
+ * useEffect runs constantly → setThreadActions() with new JSX → Button refs reset → infinite loop
+ *
+ * Solution: Only depend on primitive values that ChatThreadActions actually needs
+ * ChatThreadActions needs: thread.id, thread.title, thread.isPublic, slug
+ */
 function useThreadHeaderUpdater({
   thread,
   slug,
@@ -56,17 +67,35 @@ function useThreadHeaderUpdater({
   onDeleteClick: () => void;
 }) {
   const { setThreadActions, setThreadTitle } = useThreadHeader();
-  useEffect(() => {
-    setThreadTitle(thread.title);
-    setThreadActions(
+
+  // ✅ Extract only the primitive values needed by ChatThreadActions
+  // This prevents recreation when Date objects change but data doesn't
+  const threadId = thread.id;
+  const threadTitle = thread.title;
+  const isPublic = thread.isPublic;
+
+  // ✅ Memoize the actions JSX with only primitive deps
+  const threadActions = useMemo(
+    () => (
       <ChatThreadActions
         thread={thread}
         slug={slug}
         onDeleteClick={onDeleteClick}
-      />,
-    );
-  }, [thread, slug, onDeleteClick, setThreadTitle, setThreadActions]);
+      />
+    ),
+    // Only depend on primitive values that actually change
+    // thread object excluded: Date objects recreated each render but data unchanged
+    // threadId/threadTitle/isPublic track the actual changes we care about
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [threadId, threadTitle, isPublic, slug, onDeleteClick],
+  );
+
+  useEffect(() => {
+    setThreadTitle(threadTitle);
+    setThreadActions(threadActions);
+  }, [threadTitle, threadActions, setThreadTitle, setThreadActions]);
 }
+
 export default function ChatThreadScreen({
   thread,
   participants,
@@ -74,10 +103,11 @@ export default function ChatThreadScreen({
   slug,
   user,
 }: ChatThreadScreenProps) {
-  const router = useRouter();
   const queryClient = useQueryClient();
   const t = useTranslations('chat');
   const isDeleteDialogOpen = useBoolean(false);
+
+  // ✅ useBoolean now returns stable callbacks via useCallback
   useThreadHeaderUpdater({
     thread,
     slug,
@@ -90,6 +120,7 @@ export default function ChatThreadScreen({
   const stopStreaming = useChatStore(s => s.stop);
   const setOnRetry = useChatStore(s => s.setOnRetry);
   const contextParticipants = useChatStore(s => s.participants);
+  const preSearches = useChatStore(s => s.preSearches);
 
   // ✅ ZUSTAND V5 PATTERN: Use useShallow for object selectors to prevent re-renders
   // Object selectors without useShallow create new references each render causing infinite loops
@@ -100,7 +131,6 @@ export default function ChatThreadScreen({
       isCreatingAnalysis: s.isCreatingAnalysis,
       isWaitingForChangelog: s.isWaitingForChangelog,
       hasPendingConfigChanges: s.hasPendingConfigChanges,
-      hasRefetchedMessages: s.hasRefetchedMessages,
     }))),
     data: useChatStore(useShallow(s => ({
       regeneratingRoundNumber: s.regeneratingRoundNumber,
@@ -119,7 +149,6 @@ export default function ChatThreadScreen({
     setIsCreatingAnalysis: s.setIsCreatingAnalysis,
     setIsWaitingForChangelog: s.setIsWaitingForChangelog,
     setHasPendingConfigChanges: s.setHasPendingConfigChanges,
-    setHasRefetchedMessages: s.setHasRefetchedMessages,
     setRegeneratingRoundNumber: s.setRegeneratingRoundNumber,
     setPendingMessage: s.setPendingMessage,
     setExpectedParticipantIds: s.setExpectedParticipantIds,
@@ -127,7 +156,6 @@ export default function ChatThreadScreen({
     setCurrentRoundNumber: s.setCurrentRoundNumber,
     setHasSentPendingMessage: s.setHasSentPendingMessage,
     resetThreadState: s.resetThreadState,
-    resetHookState: s.resetHookState,
     updateParticipants: s.updateParticipants,
     prepareForNewMessage: s.prepareForNewMessage,
     completeStreaming: s.completeStreaming,
@@ -165,6 +193,12 @@ export default function ChatThreadScreen({
 
   // Refs for input container (used by recommended actions hook)
   const inputContainerRef = useRef<HTMLDivElement | null>(null);
+
+  // ✅ FIX: Track initial mount to prevent state reset on page refresh
+  // resetThreadState() clears flags and tracking state (but preserves analyses/messages)
+  // We only want to reset when navigating between threads, not on initial hydration
+  // The orchestrator now runs immediately on mount to sync prefetched analyses
+  const isInitialMount = useRef(true);
 
   // Recommended actions hook (with scroll + config change tracking)
   const recommendedActions = useRecommendedActions({
@@ -208,12 +242,10 @@ export default function ChatThreadScreen({
   // ✅ FIX: Declare selectedMode early so it can be used in useScreenInitialization
   const selectedMode = useChatStore(s => s.selectedMode);
 
-  useEffect(() => {
-    if (!state.flags.hasInitiallyLoaded && changelogResponse && feedbackSuccess) {
-      // ✅ REACT 19 PATTERN: Use actions helper for semantic state updates
-      actions.setHasInitiallyLoaded(true);
-    }
-  }, [changelogResponse, feedbackSuccess, state.flags.hasInitiallyLoaded, actions]);
+  // ✅ REMOVED: Redundant hasInitiallyLoaded effect
+  // Previously set hasInitiallyLoaded when changelog + feedback queries completed
+  // Now set unconditionally in thread.id effect (line 331) to enable orchestrator immediately
+  // Orchestrator's enablement no longer depends on hasInitiallyLoaded, allowing prefetch hydration
 
   // Message refetch and pending message send now handled by useThreadActions hook
 
@@ -228,41 +260,17 @@ export default function ChatThreadScreen({
     chatMode: selectedMode || (thread.mode as ChatModeId),
     isRegeneration: state.data.regeneratingRoundNumber !== null,
     regeneratingRoundNumber: state.data.regeneratingRoundNumber,
-    // ✅ CRITICAL FIX: Don't disable orchestrator during isCreatingAnalysis
-    // Orchestrator must stay enabled to complete analysis streaming
-    // Previously: disabling during analysis creation caused circular dependency where:
-    // 1. Analysis starts → isCreatingAnalysis = true → orchestrator disabled
-    // 2. Orchestrator can't complete streaming while disabled
-    // 3. isCreatingAnalysis stuck at true → input permanently disabled after refresh
-    enableOrchestrator: state.flags.hasInitiallyLoaded && !isStreaming && !state.flags.isRegenerating,
-    onBeforeAnalysisCreate: () => {
-      actions.setIsCreatingAnalysis(true);
-    },
-    onAfterAnalysisCreate: (roundNumber) => {
-      // Router refresh for "New Conversation" threads (updates title in header)
-      if (thread.title === 'New Conversation') {
-        router.refresh();
-      }
-
-      // Complete regeneration if active
-      if (state.data.regeneratingRoundNumber === roundNumber) {
-        actions.completeRegeneration(roundNumber);
-      }
-      actions.setStreamingRoundNumber(null);
-      actions.setIsCreatingAnalysis(false);
-
-      // ✅ CRITICAL FIX: Do NOT invalidate query here!
-      // Query invalidation moved to onStreamComplete to avoid race conditions.
-      // Invalidating here causes refetch BEFORE analysis streaming completes,
-      // leading to "Controller is already closed" errors and data loss.
-    },
-    onAllParticipantsFailed: (roundNumber) => {
-      // Complete regeneration if active
-      if (state.data.regeneratingRoundNumber === roundNumber) {
-        actions.completeRegeneration(roundNumber);
-      }
-      actions.setStreamingRoundNumber(null);
-    },
+    // ✅ CRITICAL FIX: Enable orchestrator immediately on mount to hydrate prefetched analyses
+    // Previously: Waiting for hasInitiallyLoaded prevented prefetched data from syncing to store
+    // On page refresh: Server prefetches analyses → query cache populated → orchestrator disabled
+    // Result: Prefetched analyses never appeared in UI until orchestrator enabled later
+    // Solution: Enable orchestrator immediately, only disable during active streaming/regeneration
+    // The orchestrator's merge logic (analysis-orchestrator.ts) handles both:
+    // 1. Initial hydration: Syncs prefetched analyses from query cache to store
+    // 2. Real-time updates: Syncs new analyses as they're created/completed
+    enableOrchestrator: !isStreaming && !state.flags.isRegenerating,
+    // ✅ REMOVED: Analysis callbacks (onBeforeAnalysisCreate, onAfterAnalysisCreate, onAllParticipantsFailed)
+    // These are now handled automatically by store subscriptions in store.ts
   });
 
   /**
@@ -302,21 +310,15 @@ export default function ChatThreadScreen({
   });
 
   // Streaming loader state calculation
-  // Use contextParticipants (actual thread participants) not selectedParticipants (form state)
-  const { showLoader, isAnalyzing } = useStreamingLoaderState({
-    analyses,
-    isStreaming,
-    messages,
-    selectedParticipants: contextParticipants.map(p => ({
-      id: p.id,
-      modelId: p.modelId,
-      role: p.role,
-      priority: p.priority,
-    })),
-  });
+  const { showLoader, loadingDetails } = useFlowLoading({ mode: 'thread' });
+  const isAnalyzing = loadingDetails.isStreamingAnalysis;
 
-  // Get setSelectedMode for thread initialization
+  // Get setSelectedMode and setEnableWebSearch for thread initialization
   const setSelectedMode = useChatStore(s => s.setSelectedMode);
+  const setEnableWebSearch = useChatStore(s => s.setEnableWebSearch);
+
+  // Get web search toggle state from store (form state, not DB)
+  const enableWebSearch = useChatStore(s => s.enableWebSearch);
 
   // AI SDK v5 Pattern: Initialize thread on mount and when thread ID changes
   // Following crash course Exercise 01.07, 04.02, 04.03:
@@ -325,12 +327,22 @@ export default function ChatThreadScreen({
   // - useChat handles state management from there
   // Reset state on thread change
   useEffect(() => {
-    actions.resetThreadState();
+    // ✅ FIX: Don't reset on initial mount to preserve orchestrator state
+    // Only reset when navigating between different threads
+    // resetThreadState() clears flags and tracking (preserves analyses/messages)
+    // Orchestrator runs immediately on mount to sync prefetched analyses from query cache
+    if (!isInitialMount.current) {
+      actions.resetThreadState();
+    }
+    isInitialMount.current = false;
+
     scrolledToAnalysesRef.current.clear();
 
     if (thread?.mode) {
       setSelectedMode(thread.mode as ChatModeId);
     }
+
+    setEnableWebSearch(thread.enableWebSearch || false);
 
     // ✅ CRITICAL FIX: Set showInitialUI to false on thread screen
     // If we navigated from overview screen, showInitialUI would be true
@@ -370,7 +382,6 @@ export default function ChatThreadScreen({
     },
     [inputValue, selectedParticipants, formActions, thread.id],
   );
-  const activeParticipants = contextParticipants;
 
   // Timeline grouping
   const messagesWithAnalysesAndChangelog: TimelineItem[] = useThreadTimeline({
@@ -387,23 +398,23 @@ export default function ChatThreadScreen({
         <div className="flex flex-col min-h-screen relative">
           <div
             id="chat-scroll-container"
-            className="container max-w-3xl mx-auto px-4 sm:px-6 pt-0 pb-32 flex-1"
+            className="container max-w-3xl mx-auto px-3 sm:px-4 md:px-6 pt-0 pb-32 sm:pb-36 flex-1"
           >
             <ThreadTimeline
               timelineItems={messagesWithAnalysesAndChangelog}
               scrollContainerId="chat-scroll-container"
               user={user}
-              participants={activeParticipants}
+              participants={contextParticipants}
               threadId={thread.id}
               isStreaming={isStreaming}
               currentParticipantIndex={currentParticipantIndex}
               currentStreamingParticipant={
-                isStreaming && activeParticipants[currentParticipantIndex]
-                  ? activeParticipants[currentParticipantIndex]
+                isStreaming && contextParticipants[currentParticipantIndex]
+                  ? contextParticipants[currentParticipantIndex]
                   : null
               }
               streamingRoundNumber={streamingRoundNumber}
-              feedbackByRound={new Map([...feedbackByRound].filter(([, value]) => value !== null) as [number, 'like' | 'dislike'][])}
+              feedbackByRound={new Map([...feedbackByRound].filter(([, value]) => value !== null) as [number, FeedbackType][])}
               pendingFeedback={pendingFeedback}
               getFeedbackHandler={getFeedbackHandler}
               onAnalysisStreamStart={(roundNumber) => {
@@ -413,6 +424,7 @@ export default function ChatThreadScreen({
                 queryClient.invalidateQueries({ queryKey: queryKeys.usage.stats() });
               }}
               onAnalysisStreamComplete={(roundNumber, completedData) => {
+                // ✅ FIX: Update store with completed analysis (includes status update to 'complete')
                 if (completedData) {
                   updateAnalysisData(
                     roundNumber,
@@ -420,22 +432,27 @@ export default function ChatThreadScreen({
                   );
                 }
 
-                queryClient.invalidateQueries({
-                  queryKey: queryKeys.threads.analyses(thread.id),
-                });
+                // ✅ PROPER FIX: Don't invalidate immediately - let orchestrator handle merge
+                // The orchestrator's merge logic prefers higher-priority client status
+                // ('complete' priority 3 > 'streaming' priority 2)
+                // Re-enabling the orchestrator below will trigger natural data refresh
+                // This eliminates race condition with server DB commit
               }}
               onActionClick={recommendedActions.handleActionClick}
               onRetry={retryRound}
+              preSearches={preSearches}
             />
 
             {showLoader && (
-              <div className="mt-12">
+              <div className="mt-8 sm:mt-12">
                 <StreamingParticipantsLoader
                   participants={contextParticipants.map(p => ({
                     id: p.id,
                     modelId: p.modelId,
                     role: p.role,
+                    customRoleId: p.customRoleId ?? undefined,
                     priority: p.priority,
+                    settings: p.settings ?? undefined,
                   }))}
                   currentParticipantIndex={currentParticipantIndex}
                   isAnalyzing={isAnalyzing}
@@ -445,9 +462,9 @@ export default function ChatThreadScreen({
           </div>
           <div
             ref={inputContainerRef}
-            className="sticky bottom-0 z-50 bg-gradient-to-t from-background via-background to-transparent pt-6 pb-4 mt-auto"
+            className="sticky bottom-0 z-50 bg-gradient-to-t from-background via-background to-transparent pt-4 sm:pt-6 pb-3 sm:pb-4 mt-auto"
           >
-            <div className="container max-w-3xl mx-auto px-4 sm:px-6">
+            <div className="container max-w-3xl mx-auto px-3 sm:px-4 md:px-6">
               <ChatInput
                 value={inputValue}
                 onChange={setInputValue}
@@ -477,6 +494,11 @@ export default function ChatThreadScreen({
                     <ChatModeSelector
                       selectedMode={selectedMode || (thread.mode as ChatModeId)}
                       onModeChange={threadActions.handleModeChange}
+                      disabled={isRoundInProgress}
+                    />
+                    <WebSearchToggle
+                      enabled={enableWebSearch}
+                      onToggle={threadActions.handleWebSearchToggle}
                       disabled={isRoundInProgress}
                     />
                   </>

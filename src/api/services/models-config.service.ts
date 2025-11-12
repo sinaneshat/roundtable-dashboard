@@ -47,6 +47,7 @@ export const ModelIdEnum = z.enum([
   'google/gemini-2.5-pro',
   'google/gemini-2.5-flash',
   'google/gemini-2.0-flash-exp', // Fixed: was google/gemini-2.0-flash
+  'google/gemini-2.0-flash-exp:free', // Free tier version
 
   // OpenAI Models - VERIFIED OpenRouter IDs
   'openai/gpt-5', // Fixed: removed date suffix
@@ -69,6 +70,8 @@ export const ModelIdEnum = z.enum([
   // DeepSeek Models - VERIFIED OpenRouter IDs
   'deepseek/deepseek-chat',
   'deepseek/deepseek-chat-v3-0324', // Fixed: changed from v3.1 to v3-0324
+  'deepseek/deepseek-chat-v3-0324:free', // Free tier version
+  'deepseek/deepseek-r1:free', // Reasoning model (free)
 
   // Qwen/Alibaba Models - VERIFIED OpenRouter IDs
   'qwen/qwen-max',
@@ -76,6 +79,7 @@ export const ModelIdEnum = z.enum([
 
   // Meta Models - VERIFIED OpenRouter IDs
   'meta-llama/llama-4-scout',
+  'meta-llama/llama-3.3-70b-instruct:free', // High-quality 70B model (free)
 ]);
 
 export type ModelId = z.infer<typeof ModelIdEnum>;
@@ -648,6 +652,123 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
     is_reasoning_model: false,
   },
 
+  {
+    id: 'deepseek/deepseek-chat-v3-0324:free',
+    name: 'DeepSeek V3 (Free)',
+    description:
+      'Free tier DeepSeek V3 with excellent coding capabilities. Rate-limited but perfect for development and testing.',
+    context_length: 64000,
+    created: 1709251200, // March 2025
+    pricing: {
+      prompt: '0', // Free
+      completion: '0', // Free
+    },
+    top_provider: {
+      context_length: 64000,
+      max_completion_tokens: 8192,
+      is_moderated: false,
+    },
+    per_request_limits: null,
+    architecture: {
+      modality: 'text->text',
+      tokenizer: 'DeepSeek',
+      instruct_type: 'chatml',
+    },
+    provider: 'deepseek',
+    category: 'general',
+    capabilities: {
+      vision: false,
+      reasoning: true,
+      streaming: true,
+      tools: true,
+    },
+    pricing_display: {
+      input: 'Free',
+      output: 'Free',
+    },
+    is_free: true,
+    supports_vision: false,
+    is_reasoning_model: false,
+  },
+
+  {
+    id: 'deepseek/deepseek-r1:free',
+    name: 'DeepSeek R1 (Free)',
+    description:
+      'Free tier DeepSeek R1 reasoning model with advanced problem-solving capabilities. Excellent for complex reasoning tasks.',
+    context_length: 64000,
+    created: 1736640000, // Jan 2025
+    pricing: {
+      prompt: '0', // Free
+      completion: '0', // Free
+    },
+    top_provider: {
+      context_length: 64000,
+      max_completion_tokens: 8192,
+      is_moderated: false,
+    },
+    per_request_limits: null,
+    architecture: {
+      modality: 'text->text',
+      tokenizer: 'DeepSeek',
+      instruct_type: 'chatml',
+    },
+    provider: 'deepseek',
+    category: 'general',
+    capabilities: {
+      vision: false,
+      reasoning: true,
+      streaming: true,
+      tools: true,
+    },
+    pricing_display: {
+      input: 'Free',
+      output: 'Free',
+    },
+    is_free: true,
+    supports_vision: false,
+    is_reasoning_model: true,
+  },
+
+  {
+    id: 'meta-llama/llama-3.3-70b-instruct:free',
+    name: 'Llama 3.3 70B (Free)',
+    description:
+      'Free tier Meta Llama 3.3 70B instruction-tuned model. High-quality open-source model with strong general capabilities.',
+    context_length: 128000,
+    created: 1733097600, // Dec 2024
+    pricing: {
+      prompt: '0', // Free
+      completion: '0', // Free
+    },
+    top_provider: {
+      context_length: 128000,
+      max_completion_tokens: 8192,
+      is_moderated: false,
+    },
+    per_request_limits: null,
+    architecture: {
+      modality: 'text->text',
+      tokenizer: 'Llama',
+      instruct_type: 'llama3',
+    },
+    provider: 'meta-llama',
+    category: 'general',
+    capabilities: {
+      vision: false,
+      reasoning: true,
+      streaming: true,
+      tools: true,
+    },
+    pricing_display: {
+      input: 'Free',
+      output: 'Free',
+    },
+    is_free: true,
+    supports_vision: false,
+    is_reasoning_model: false,
+  },
+
   // ========== SPECIALIZED MODELS (Rank 13-20) ==========
 
   {
@@ -880,6 +1001,45 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
       output: '$0.40/1M tokens',
     },
     is_free: false,
+    supports_vision: true,
+    is_reasoning_model: false,
+  },
+
+  {
+    id: 'google/gemini-2.0-flash-exp:free',
+    name: 'Gemini 2.0 Flash (Free)',
+    description:
+      'Free tier Gemini 2.0 Flash with multimodal capabilities. Rate-limited but perfect for development and testing.',
+    context_length: 1000000,
+    created: 1702252800, // Dec 2023
+    pricing: {
+      prompt: '0', // Free
+      completion: '0', // Free
+    },
+    top_provider: {
+      context_length: 1000000,
+      max_completion_tokens: 8192,
+      is_moderated: false,
+    },
+    per_request_limits: null,
+    architecture: {
+      modality: 'text+image->text',
+      tokenizer: 'Gemini',
+      instruct_type: 'gemini',
+    },
+    provider: 'google',
+    category: 'general',
+    capabilities: {
+      vision: true,
+      reasoning: true,
+      streaming: true,
+      tools: true,
+    },
+    pricing_display: {
+      input: 'Free',
+      output: 'Free',
+    },
+    is_free: true,
     supports_vision: true,
     is_reasoning_model: false,
   },

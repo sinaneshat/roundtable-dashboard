@@ -28,6 +28,9 @@
  * ```
  */
 
+import type { ToastVariant } from '@/api/core/enums';
+import { ToastVariants } from '@/api/core/enums';
+
 /**
  * Extracted error information from API responses
  */
@@ -278,7 +281,7 @@ export function formatValidationErrors(
  */
 export function showErrorToast(
   toast: (options: {
-    variant?: 'default' | 'destructive';
+    variant?: ToastVariant;
     title?: string;
     description?: string;
   }) => void,
@@ -288,7 +291,7 @@ export function showErrorToast(
 ): void {
   const errorMessage = getApiErrorMessage(error, fallbackMessage);
   toast({
-    variant: 'destructive',
+    variant: ToastVariants.DESTRUCTIVE,
     title,
     description: errorMessage,
   });

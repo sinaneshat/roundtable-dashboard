@@ -10,6 +10,7 @@
  * Used by:
  * - ChatOverviewScreen: Sync messages, participants for onComplete callback
  * - ChatThreadScreen: Sync messages, participants, createPendingAnalysis
+ * - useMultiParticipantChat: Sync callbacks and state values to prevent stale closures
  *
  * @module hooks/utils/use-synced-message-refs
  */

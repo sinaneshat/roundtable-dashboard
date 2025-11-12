@@ -1,18 +1,38 @@
 'use client';
+import { WebSearchResultSchema } from '@/api/routes/chat/schema';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import type { MessagePart } from '@/lib/schemas/message-schemas';
+
+import { WebSearchDisplay } from './web-search-display';
 
 type ToolResultPartProps = {
   part: Extract<MessagePart, { type: 'tool-result' }>;
   className?: string;
 };
+
 export function ToolResultPart({ part, className }: ToolResultPartProps) {
   const isError = part.isError ?? false;
   const statusColor = isError ? 'destructive' : 'success';
   const bgColor = isError ? 'bg-destructive/5' : 'bg-green-500/5';
   const borderColor = isError ? 'border-destructive/20' : 'border-green-500/20';
   const statusText = isError ? 'Error' : 'Success';
+
+  // Special handling for web_search tool results with Zod validation
+  if (part.toolName === 'web_search' && !isError) {
+    const parseResult = WebSearchResultSchema.safeParse(part.result);
+    if (parseResult.success) {
+      return (
+        <WebSearchDisplay
+          results={parseResult.data.results}
+          meta={parseResult.data._meta}
+          complexity={parseResult.data._meta?.complexity}
+          className={className}
+        />
+      );
+    }
+  }
+
   return (
     <Card className={`${borderColor} ${bgColor} ${className || ''}`}>
       <CardHeader className="pb-2">

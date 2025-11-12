@@ -9,7 +9,9 @@
 
 'use client';
 
-import type { ChatParticipant, ModeratorAnalysisPayload, RecommendedAction } from '@/api/routes/chat/schema';
+import type { FeedbackType } from '@/api/core/enums';
+import { AnalysisStatuses } from '@/api/core/enums';
+import type { ChatParticipant, ModeratorAnalysisPayload, RecommendedAction, StoredPreSearch } from '@/api/routes/chat/schema';
 import { Actions } from '@/components/ai-elements/actions';
 import type { TimelineItem } from '@/hooks/utils';
 import { useVirtualizedTimeline } from '@/hooks/utils';
@@ -19,11 +21,13 @@ import { getRoundNumberFromMetadata } from '@/lib/utils/round-utils';
 import { ChatMessageList } from './chat-message-list';
 import { ConfigurationChangesGroup } from './configuration-changes-group';
 import { RoundAnalysisCard } from './moderator/round-analysis-card';
+import { PreSearchCard } from './pre-search-card';
 import { RoundFeedback } from './round-feedback';
 import { UnifiedErrorBoundary } from './unified-error-boundary';
 
 // Stable constant for default empty Map to prevent render loop
-const EMPTY_FEEDBACK_MAP = new Map<number, 'like' | 'dislike'>();
+const EMPTY_FEEDBACK_MAP = new Map<number, FeedbackType>();
+const EMPTY_PRE_SEARCHES: StoredPreSearch[] = [];
 
 type ThreadTimelineProps = {
   timelineItems: TimelineItem[];
@@ -42,9 +46,9 @@ type ThreadTimelineProps = {
   streamingRoundNumber?: number | null;
 
   // Feedback handlers (optional - view-only for public)
-  feedbackByRound?: Map<number, 'like' | 'dislike'>;
-  pendingFeedback?: { roundNumber: number; type: 'like' | 'dislike' } | null;
-  getFeedbackHandler?: (roundNumber: number) => (type: 'like' | 'dislike' | null) => void;
+  feedbackByRound?: Map<number, FeedbackType>;
+  pendingFeedback?: { roundNumber: number; type: FeedbackType } | null;
+  getFeedbackHandler?: (roundNumber: number) => (type: FeedbackType | null) => void;
 
   // Analysis handlers (optional - view-only for public)
   onAnalysisStreamStart?: (roundNumber: number) => void;
@@ -56,6 +60,9 @@ type ThreadTimelineProps = {
 
   // View mode
   isReadOnly?: boolean;
+
+  // Pre-search state (from store)
+  preSearches?: StoredPreSearch[];
 };
 
 export function ThreadTimeline({
@@ -76,6 +83,7 @@ export function ThreadTimeline({
   onActionClick,
   onRetry,
   isReadOnly = false,
+  preSearches = EMPTY_PRE_SEARCHES,
 }: ThreadTimelineProps) {
   // ✅ STREAMING SAFETY: Calculate which rounds are currently streaming
   // Prevents virtualization from removing DOM elements during active streaming
@@ -86,9 +94,21 @@ export function ThreadTimeline({
     streamingRounds.add(streamingRoundNumber);
   }
 
-  // Add analysis streaming rounds (check for 'streaming' status in timeline items)
+  // ✅ ENUM PATTERN: Use AnalysisStatuses constants instead of hardcoded strings
+  // Add pre-search active rounds (protect rounds with active web search)
+  preSearches.forEach((ps) => {
+    if (ps.status === AnalysisStatuses.STREAMING || ps.status === AnalysisStatuses.PENDING) {
+      streamingRounds.add(ps.roundNumber);
+    }
+  });
+
+  // Add analysis streaming rounds (check for streaming/pending status in timeline items)
+  // Include PENDING state to protect analyses that are about to stream
   timelineItems.forEach((item) => {
-    if (item.type === 'analysis' && item.data.status === 'streaming') {
+    if (
+      item.type === 'analysis'
+      && (item.data.status === AnalysisStatuses.STREAMING || item.data.status === AnalysisStatuses.PENDING)
+    ) {
       streamingRounds.add(item.data.roundNumber);
     }
   });
@@ -161,8 +181,26 @@ export function ThreadTimeline({
                     isStreaming={isStreaming}
                     currentParticipantIndex={currentParticipantIndex}
                     currentStreamingParticipant={currentStreamingParticipant}
+                    threadId={threadId}
+                    preSearches={preSearches}
                   />
                 </UnifiedErrorBoundary>
+
+                {/* Render pre-search after user message if exists in store */}
+                {(() => {
+                  const preSearch = preSearches.find(ps => ps.roundNumber === roundNumber);
+                  return preSearch
+                    ? (
+                        <PreSearchCard
+                          key={`pre-search-${roundNumber}`}
+                          threadId={threadId}
+                          preSearch={preSearch}
+                          isLatest={roundNumber === (timelineItems[timelineItems.length - 1]?.roundNumber || 0)}
+                          streamingRoundNumber={streamingRoundNumber}
+                        />
+                      )
+                    : null;
+                })()}
 
                 {!isStreaming && (() => {
                   const hasRoundError = item.data.some((msg) => {

@@ -23,6 +23,8 @@ import { ulid } from 'ulid';
 import { executeBatch } from '@/api/common/batch-operations';
 import { createError } from '@/api/common/error-handling';
 import type { ErrorContext } from '@/api/core';
+import type { StripeSubscriptionStatus } from '@/api/core/enums';
+import { StripeSubscriptionStatuses } from '@/api/core/enums';
 import { getDbAsync } from '@/db';
 import { CustomerCacheTags, PriceCacheTags, SubscriptionCacheTags, UserCacheTags } from '@/db/cache/cache-tags';
 import * as tables from '@/db/schema';
@@ -255,7 +257,7 @@ async function rolloverBillingPeriod(
         .from(tables.stripeSubscription)
         .where(and(
           eq(tables.stripeSubscription.customerId, stripeCustomer.id),
-          eq(tables.stripeSubscription.status, 'active'),
+          eq(tables.stripeSubscription.status, StripeSubscriptionStatuses.ACTIVE),
         ))
         .limit(1)
         .$withCache({
@@ -811,7 +813,7 @@ export async function enforceAnalysisQuota(userId: string): Promise<void> {
 export async function syncUserQuotaFromSubscription(
   userId: string,
   priceId: string,
-  subscriptionStatus: 'active' | 'trialing' | 'canceled' | 'past_due' | 'unpaid' | 'paused' | 'none',
+  subscriptionStatus: StripeSubscriptionStatus | 'none',
   currentPeriodStart: Date,
   currentPeriodEnd: Date,
 ): Promise<void> {
@@ -840,8 +842,13 @@ export async function syncUserQuotaFromSubscription(
     throw createError.notFound(`Price not found: ${priceId}`, context);
   }
 
-  // Extract tier and billing period from price metadata
-  const tier = price.metadata?.tier as SubscriptionTier | undefined;
+  // ✅ TYPE GUARD: Validate tier from price metadata
+  const tierValue = price.metadata?.tier;
+  const validTiers: SubscriptionTier[] = ['free', 'starter', 'pro', 'power'];
+  const tier = typeof tierValue === 'string' && validTiers.includes(tierValue as SubscriptionTier)
+    ? (tierValue as SubscriptionTier)
+    : undefined;
+
   const isAnnual = price.interval === 'year';
 
   if (!tier) {
@@ -852,7 +859,7 @@ export async function syncUserQuotaFromSubscription(
   const currentUsage = await ensureUserUsageRecord(userId);
 
   // Determine if subscription is active (including trialing)
-  const isActive = subscriptionStatus === 'active' || subscriptionStatus === 'trialing';
+  const isActive = subscriptionStatus === StripeSubscriptionStatuses.ACTIVE || subscriptionStatus === StripeSubscriptionStatuses.TRIALING;
 
   // Check if billing period has changed (new period started)
   const hasPeriodChanged = currentUsage.currentPeriodEnd.getTime() !== currentPeriodEnd.getTime();

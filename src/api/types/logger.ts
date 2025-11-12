@@ -5,6 +5,8 @@
 
 import { z } from 'zod';
 
+import { AuthActionSchema, DatabaseOperationSchema, HttpMethodSchema, ValidationTypeSchema } from '@/api/core/enums';
+
 /**
  * Flexible log contexts with discriminated union support (Context7 Pattern)
  * Uses passthrough() for additional properties while maintaining core type safety
@@ -14,7 +16,7 @@ export const LogContextSchema = z.discriminatedUnion('logType', [
     logType: z.literal('request'),
     requestId: z.string(),
     userId: z.string().optional(),
-    method: z.enum(['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS']),
+    method: HttpMethodSchema,
     path: z.string(),
     operation: z.string().optional(),
     statusCode: z.number().int().optional(),
@@ -24,7 +26,7 @@ export const LogContextSchema = z.discriminatedUnion('logType', [
   z.object({
     logType: z.literal('database'),
     table: z.string().optional(),
-    operation: z.enum(['select', 'insert', 'update', 'delete', 'batch']),
+    operation: DatabaseOperationSchema,
     duration: z.number().positive().optional(),
     affectedRows: z.number().int().nonnegative().optional(),
     queryId: z.string().optional(),
@@ -33,7 +35,7 @@ export const LogContextSchema = z.discriminatedUnion('logType', [
   z.object({
     logType: z.literal('auth'),
     userId: z.string(),
-    action: z.enum(['login', 'logout', 'token_refresh', 'permission_check', 'registration']),
+    action: AuthActionSchema,
     success: z.boolean(),
     ipAddress: z.string().optional(),
     sessionId: z.string().optional(),
@@ -42,7 +44,7 @@ export const LogContextSchema = z.discriminatedUnion('logType', [
   z.object({
     logType: z.literal('validation'),
     fieldCount: z.number().int().nonnegative(),
-    validationType: z.enum(['body', 'query', 'params', 'headers']),
+    validationType: ValidationTypeSchema,
     schemaName: z.string().optional(),
     errors: z.array(z.object({
       field: z.string(),
@@ -62,7 +64,7 @@ export const LogContextSchema = z.discriminatedUnion('logType', [
   }).passthrough(),
   z.object({
     logType: z.literal('api'),
-    method: z.enum(['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS']),
+    method: HttpMethodSchema,
     path: z.string(),
     statusCode: z.number().int().optional(),
     duration: z.number().positive().optional(),
@@ -92,21 +94,21 @@ export function validateLogContext(context: unknown): LogContext | null {
 export const LogHelpers = {
   request: (data: Record<string, unknown> & {
     requestId: string;
-    method: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH' | 'HEAD' | 'OPTIONS';
+    method: import('@/api/core/enums').HttpMethod;
     path: string;
   }): LogContext => ({
     logType: 'request' as const,
     ...data,
   }),
   database: (data: Record<string, unknown> & {
-    operation: 'select' | 'insert' | 'update' | 'delete' | 'batch';
+    operation: import('@/api/core/enums').DatabaseOperation;
   }): LogContext => ({
     logType: 'database' as const,
     ...data,
   }),
   auth: (data: Record<string, unknown> & {
     userId: string;
-    action: 'login' | 'logout' | 'token_refresh' | 'permission_check' | 'registration';
+    action: import('@/api/core/enums').AuthAction;
     success: boolean;
   }): LogContext => ({
     logType: 'auth' as const,
@@ -114,7 +116,7 @@ export const LogHelpers = {
   }),
   validation: (data: Record<string, unknown> & {
     fieldCount: number;
-    validationType: 'body' | 'query' | 'params' | 'headers';
+    validationType: import('@/api/core/enums').ValidationType;
   }): LogContext => ({
     logType: 'validation' as const,
     ...data,
@@ -126,7 +128,7 @@ export const LogHelpers = {
     ...data,
   }),
   api: (data: Record<string, unknown> & {
-    method: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH' | 'HEAD' | 'OPTIONS';
+    method: import('@/api/core/enums').HttpMethod;
     path: string;
   }): LogContext => ({
     logType: 'api' as const,

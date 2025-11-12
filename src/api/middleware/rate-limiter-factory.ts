@@ -8,6 +8,7 @@ import { createMiddleware } from 'hono/factory';
 import { HTTPException } from 'hono/http-exception';
 import * as HttpStatusCodes from 'stoker/http-status-codes';
 
+import { HttpMethods } from '@/api/core/enums';
 import type { ApiEnv } from '@/api/types';
 
 export type RateLimitConfig = {
@@ -339,12 +340,12 @@ export class RateLimiterFactory {
       const method = c.req.method;
 
       switch (method) {
-        case 'PUT':
-        case 'POST':
+        case HttpMethods.PUT:
+        case HttpMethods.POST:
           return 'upload';
-        case 'DELETE':
+        case HttpMethods.DELETE:
           return 'delete';
-        case 'GET':
+        case HttpMethods.GET:
           return 'read';
         default:
           return 'api';

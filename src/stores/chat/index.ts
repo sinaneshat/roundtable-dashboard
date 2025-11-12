@@ -22,6 +22,10 @@
 // Primary Screen Hooks
 export type { UseFeedbackActionsOptions, UseFeedbackActionsReturn } from './actions/feedback-actions';
 export { useFeedbackActions } from './actions/feedback-actions';
+export type { UseFlowControllerOptions } from './actions/flow-controller';
+export { useFlowController } from './actions/flow-controller';
+export type { FlowAction, FlowContext, FlowState, UseFlowOrchestratorOptions, UseFlowOrchestratorReturn } from './actions/flow-state-machine';
+export { useFlowStateMachine } from './actions/flow-state-machine';
 export type { UseChatFormActionsReturn } from './actions/form-actions';
 export { useChatFormActions } from './actions/form-actions';
 export type { UseOverviewActionsReturn } from './actions/overview-actions';

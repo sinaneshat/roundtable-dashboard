@@ -61,7 +61,8 @@ export const UIMessageErrorTypeSchema = z.enum([
   'validation',
   'silent_failure',
   'empty_response',
-  'error',
+  'backend_inconsistency', // Backend ID/metadata mismatch errors
+  'failed',
   'unknown',
 ]);
 
@@ -95,26 +96,6 @@ export const ErrorMetadataSchema = z.object({
 });
 
 export type ErrorMetadata = z.infer<typeof ErrorMetadataSchema>;
-
-// ============================================================================
-// FINISH REASON ENUM
-// ============================================================================
-
-/**
- * ✅ Finish reason enum - AI SDK finish reasons
- * Standardizes finish reason strings used in streaming responses
- */
-export const FinishReasonSchema = z.enum([
-  'stop',
-  'length',
-  'content-filter',
-  'tool-calls',
-  'error',
-  'other',
-  'unknown',
-]);
-
-export type FinishReason = z.infer<typeof FinishReasonSchema>;
 
 // ============================================================================
 // ANALYSIS STATUS ENUM
@@ -152,13 +133,6 @@ export function isUIMessageErrorType(value: unknown): value is UIMessageErrorTyp
 }
 
 /**
- * ✅ TYPE GUARD: Check if a value is a valid FinishReason
- */
-export function isFinishReason(value: unknown): value is FinishReason {
-  return FinishReasonSchema.safeParse(value).success;
-}
-
-/**
  * ✅ MAPPER: Map error category to UI message error type
  * Provides consistent mapping between backend categories and frontend display types
  */
@@ -168,7 +142,7 @@ export function errorCategoryToUIType(category: ErrorCategory): UIMessageErrorTy
     content_filter: 'model_content_filter',
     rate_limit: 'provider_rate_limit',
     network: 'provider_network',
-    provider_error: 'error',
+    provider_error: 'failed',
     validation: 'validation',
     authentication: 'authentication',
     silent_failure: 'silent_failure',

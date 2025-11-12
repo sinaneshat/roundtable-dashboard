@@ -17,7 +17,8 @@ import { z as zOpenAPI } from '@hono/zod-openapi';
 import { z } from 'zod';
 
 import type { BaseModelResponse } from '@/api/routes/models/schema';
-import { TITLE_GENERATION_PROMPT } from '@/lib/ai/prompts';
+import { TITLE_GENERATION_PROMPT } from '@/api/services/prompts.service';
+import { isTransientErrorFromObject } from '@/lib/utils/error-metadata-builders';
 
 // ============================================================================
 // SUBSCRIPTION TIER CONSTANTS - SINGLE SOURCE OF TRUTH
@@ -32,6 +33,11 @@ export const SUBSCRIPTION_TIERS = ['free', 'starter', 'pro', 'power'] as const;
  * ✅ SINGLE SOURCE OF TRUTH: Subscription tier type
  */
 export type SubscriptionTier = typeof SUBSCRIPTION_TIERS[number];
+
+/**
+ * Re-export SubscriptionChangeType from core enums for convenience
+ */
+export type { SubscriptionChangeType } from '@/api/core/enums';
 
 /**
  * ✅ SINGLE SOURCE OF TRUTH: Human-readable tier names
@@ -736,36 +742,8 @@ export function getExponentialBackoff(attempt: number): number {
  *
  * @param error Error to check
  * @returns True if error is transient and should be retried
+ * @see isTransientErrorFromObject in error-metadata-builders (consolidated implementation)
  */
 export function isTransientError(error: unknown): boolean {
-  if (!error)
-    return true;
-
-  const errorMessage = error instanceof Error ? error.message : String(error);
-  const errorLower = errorMessage.toLowerCase();
-
-  // Permanent errors - don't retry (user action required)
-  const permanentErrorPatterns = [
-    'model not found',
-    'invalid api key',
-    'invalid model',
-    'unauthorized',
-    'forbidden',
-    'model does not exist',
-    'data policy', // OpenRouter data policy errors
-    'no endpoints found', // OpenRouter endpoint configuration errors
-    'payment required', // Insufficient credits
-    'quota exceeded', // API quota exceeded (need to upgrade)
-    'invalid request', // Malformed request
-    'unsupported', // Feature not supported by model
-  ];
-
-  for (const pattern of permanentErrorPatterns) {
-    if (errorLower.includes(pattern)) {
-      return false; // Don't retry permanent errors
-    }
-  }
-
-  // All other errors are considered transient - retry
-  return true;
+  return isTransientErrorFromObject(error);
 }

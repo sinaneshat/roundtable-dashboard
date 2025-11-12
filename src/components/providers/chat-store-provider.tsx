@@ -27,14 +27,17 @@
  */
 
 import { useQueryClient } from '@tanstack/react-query';
+import type { UIMessage } from 'ai';
 import { usePathname } from 'next/navigation';
 import type { ReactNode } from 'react';
-import { createContext, use, useCallback, useEffect, useMemo, useRef } from 'react';
+import { createContext, use, useCallback, useEffect, useRef } from 'react';
 import { useStore } from 'zustand';
 
+import { MessagePartTypes, MessageRoles } from '@/api/core/enums';
 import { useMultiParticipantChat } from '@/hooks/utils';
 import { queryKeys } from '@/lib/data/query-keys';
 import { showApiErrorToast } from '@/lib/toast';
+import { getCurrentRoundNumber } from '@/lib/utils/round-utils';
 import type { ChatStore, ChatStoreApi } from '@/stores/chat';
 import { createChatStore } from '@/stores/chat';
 
@@ -54,37 +57,176 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
   const storeRef = useRef<ChatStoreApi | null>(null);
   const prevPathnameRef = useRef<string | null>(null);
 
-  // Official Pattern: Initialize store once per provider
+  // Official Zustand Pattern: Initialize store once per provider
+  // Store ref initialization during render is intentional and safe
   if (storeRef.current === null) {
     storeRef.current = createChatStore();
   }
 
-  // eslint-disable-next-line react-hooks/refs -- Official Zustand pattern: store ref accessed during render
+  // eslint-disable-next-line react-hooks/refs -- Zustand pattern: read ref during render for initialization
   const store = storeRef.current;
-
-  // ✅ OPTIMIZATION: Callbacks as refs (no reactivity needed, prevents re-renders)
-  const onCompleteRef = useRef<(() => void) | undefined>(undefined);
-  const onRetryRef = useRef<((roundNumber: number) => void) | undefined>(undefined);
 
   // Get current state for AI SDK hook initialization (minimal subscriptions)
   const thread = useStore(store, s => s.thread);
   const participants = useStore(store, s => s.participants);
   const messages = useStore(store, s => s.messages);
+  const enableWebSearch = useStore(store, s => s.enableWebSearch);
+  const createdThreadId = useStore(store, s => s.createdThreadId);
 
   // ✅ OPTIMIZATION: Error handling via callback (not store state)
   const handleError = useCallback((error: Error) => {
     showApiErrorToast('Chat error', error);
   }, []);
 
+  // ✅ AI SDK v5 PATTERN: onComplete orchestration  // Called AFTER each round completes (all participants finished streaming)
+  // Handles two critical tasks:
+  // 1. Analysis trigger: Create pending analysis for moderator review
+  // 2. Pending message check: Send next message if waiting for changelog/pre-search
+
+  // ✅ CRITICAL FIX: Create ref to hold latest SDK messages
+  // This allows handleComplete to access fresh messages with metadata
+  const sdkMessagesRef = useRef<UIMessage[]>([]);
+
+  const handleComplete = useCallback(() => {
+    const currentState = store.getState();
+
+    // ============================================================================
+    // TASK 1: ANALYSIS TRIGGER (after participant streaming)
+    // ============================================================================
+    // Moved from store subscription (store.ts:865-963)
+    // Provider has direct access to chat hook state without stale closures
+
+    // ✅ CRITICAL FIX: Use messages from AI SDK ref, not store
+    // Store messages might not have updated metadata yet due to React batching
+    // AI SDK hook has the latest messages with complete metadata
+    const sdkMessages = sdkMessagesRef.current;
+
+    if (currentState.thread || currentState.createdThreadId) {
+      const { thread: storeThread, participants: storeParticipants, selectedMode, createdThreadId: storeCreatedThreadId } = currentState;
+      const threadId = storeThread?.id || storeCreatedThreadId;
+      const mode = storeThread?.mode || selectedMode;
+
+      // Use SDK messages instead of store messages for freshness
+      if (threadId && mode && sdkMessages.length > 0) {
+        try {
+          const roundNumber = getCurrentRoundNumber(sdkMessages);
+          const userMessage = sdkMessages.findLast(m => m.role === MessageRoles.USER);
+          const userQuestion = userMessage?.parts?.find(p => p.type === MessagePartTypes.TEXT && 'text' in p)?.text || '';
+
+          // Mark as created first (prevents race conditions)
+          currentState.markAnalysisCreated(roundNumber);
+
+          // ✅ CRITICAL FIX: Pass SDK messages which have fresh metadata
+          currentState.createPendingAnalysis({
+            roundNumber,
+            messages: sdkMessages,
+            participants: storeParticipants,
+            userQuestion,
+            threadId,
+            mode,
+          });
+
+          // ✅ CRITICAL FIX: Clear streaming flags after analysis creation
+          // This prevents orphaned flags like streamingRoundNumber, isCreatingAnalysis
+          // from remaining set and blocking navigation/loading indicators
+          currentState.completeStreaming();
+        } catch {
+          // Silent failure - analysis creation is non-blocking
+        }
+      }
+    }
+
+    // ============================================================================
+    // TASK 2: PENDING MESSAGE SEND (after changelog + pre-search)
+    // ============================================================================
+    // Moved from store subscription (store.ts:991-1072)
+    // Provider can directly call sendMessage when conditions are met
+
+    const {
+      pendingMessage,
+      expectedParticipantIds,
+      hasSentPendingMessage,
+      isStreaming,
+      participants: storeParticipants,
+      sendMessage,
+      messages: storeMessages,
+      isWaitingForChangelog,
+      setHasSentPendingMessage,
+      setStreamingRoundNumber,
+      setHasPendingConfigChanges,
+      screenMode,
+      thread: storeThread,
+      enableWebSearch,
+      preSearches,
+    } = currentState;
+
+    // Guard: Only send on overview/thread screens (not public)
+    if (screenMode === 'public') {
+      return;
+    }
+
+    // Check if we should send pending message
+    if (!pendingMessage || !expectedParticipantIds || hasSentPendingMessage || isStreaming) {
+      return;
+    }
+
+    // Compare participant model IDs
+    const currentModelIds = storeParticipants
+      .filter(p => p.isEnabled)
+      .map(p => p.modelId)
+      .sort()
+      .join(',');
+    const expectedModelIds = expectedParticipantIds.sort().join(',');
+
+    if (currentModelIds !== expectedModelIds) {
+      return;
+    }
+
+    // Check changelog wait state
+    if (isWaitingForChangelog) {
+      return;
+    }
+
+    // Calculate next round number (using shared utility for consistency)
+    const currentRound = getCurrentRoundNumber(storeMessages);
+    const newRoundNumber = currentRound + 1;
+
+    // Check if pre-search is needed for this round
+    const webSearchEnabled = storeThread?.enableWebSearch ?? enableWebSearch;
+    const preSearchForRound = preSearches.find(ps => ps.roundNumber === newRoundNumber);
+
+    // If web search is enabled and pre-search hasn't completed, wait
+    if (webSearchEnabled && (!preSearchForRound || preSearchForRound.status !== 'complete')) {
+      return; // Don't send message yet - wait for pre-search to complete
+    }
+
+    // All conditions met - send the message
+    setHasSentPendingMessage(true);
+    setStreamingRoundNumber(newRoundNumber);
+    setHasPendingConfigChanges(false);
+
+    // Send message in next tick (prevents blocking)
+    queueMicrotask(() => {
+      sendMessage?.(pendingMessage);
+    });
+  }, [store]);
+
   // Initialize AI SDK hook with store state
+  // ✅ CRITICAL FIX: Pass onComplete callback for immediate analysis triggering
+  // ✅ CRITICAL FIX: Use createdThreadId as fallback for new threads
+  // For new threads, thread object doesn't exist yet but createdThreadId is set
+  // Without this, pre-search is skipped for new threads because threadId is ''
+  // ✅ CRITICAL FIX: Only initialize hook when we have a valid threadId
+  // This prevents hook from initializing with empty string, which causes startRound to never be available
+  const effectiveThreadId = thread?.id || createdThreadId || '';
   const chat = useMultiParticipantChat({
-    threadId: thread?.id || '',
+    threadId: effectiveThreadId,
     participants,
     messages,
     mode: thread?.mode,
-    onComplete: () => onCompleteRef.current?.(),
-    onRetry: (roundNumber: number) => onRetryRef.current?.(roundNumber),
+    enableWebSearch: (thread?.enableWebSearch ?? enableWebSearch) || false,
     onError: handleError,
+    onComplete: handleComplete,
   });
 
   // ✅ QUOTA INVALIDATION: Use refs to capture latest functions and avoid circular deps
@@ -95,13 +237,54 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
   useEffect(() => {
     sendMessageRef.current = chat.sendMessage;
     startRoundRef.current = chat.startRound;
-  }, [chat.sendMessage, chat.startRound]);
+    // ✅ CRITICAL FIX: Update SDK messages ref with latest messages
+    sdkMessagesRef.current = chat.messages || [];
+  }, [chat.sendMessage, chat.startRound, chat.messages]);
+
+  // ✅ ARCHITECTURAL FIX: Provider-side streaming trigger
+  // Watches waitingToStartStreaming and calls FRESH startRound
+  // Avoids stale closure issues from store subscription
+  // ✅ PRE-SEARCH BLOCKING: Waits for pre-search completion before triggering participants
+  const waitingToStart = useStore(store, s => s.waitingToStartStreaming);
+  const storeParticipants = useStore(store, s => s.participants);
+  const storeMessages = useStore(store, s => s.messages);
+  const storePreSearches = useStore(store, s => s.preSearches);
+  const storeThread = useStore(store, s => s.thread);
+
+  useEffect(() => {
+    if (!waitingToStart || !chat.startRound || storeParticipants.length === 0 || storeMessages.length === 0) {
+      return;
+    }
+
+    // ✅ CRITICAL FIX: Wait for pre-search completion before streaming participants
+    // If web search enabled, check pre-search status for round 1
+    const webSearchEnabled = storeThread?.enableWebSearch ?? false;
+    if (webSearchEnabled) {
+      const round1PreSearch = storePreSearches.find(ps => ps.roundNumber === 1);
+
+      // If pre-search exists and is still pending or streaming, wait
+      if (round1PreSearch && (round1PreSearch.status === 'pending' || round1PreSearch.status === 'streaming')) {
+        return; // Don't trigger participants yet - pre-search still running
+      }
+
+      // Pre-search completed, failed, or doesn't exist - safe to proceed
+    }
+
+    // Call fresh startRound with current participants from store
+    chat.startRound(storeParticipants);
+    store.getState().setWaitingToStartStreaming(false);
+  }, [waitingToStart, chat, storeParticipants, storeMessages, storePreSearches, storeThread, store]);
 
   // ✅ QUOTA INVALIDATION: Wrap functions to invalidate quota immediately when streaming starts
+  // ✅ QUOTA INVALIDATION: Invalidate usage quota when message streaming starts
   const sendMessageWithQuotaInvalidation = useCallback(async (content: string) => {
     // ✅ Invalidate usage quota immediately when message streaming starts
     queryClient.invalidateQueries({ queryKey: queryKeys.usage.stats() });
     queryClient.invalidateQueries({ queryKey: queryKeys.usage.messageQuota() });
+
+    // ✅ PRE-SEARCH: Handled server-side in streaming handler
+    // Backend automatically triggers pre-search if enableWebSearch is true
+    // Results are saved to DB and included in participant conversation context
 
     return sendMessageRef.current(content);
   }, [queryClient]);
@@ -114,16 +297,13 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
     return startRoundRef.current();
   }, [queryClient]);
 
-  // ✅ OPTIMIZATION: Consolidated sync effect (single effect, batched updates)
-  // React batches multiple setState calls in the same effect automatically
-  // ✅ FIX: Sync chat.setMessages so refetch can update useChat state directly
   useEffect(() => {
     storeRef.current?.setState({
       sendMessage: sendMessageWithQuotaInvalidation,
       startRound: startRoundWithQuotaInvalidation,
       retry: chat.retry,
       stop: chat.stop,
-      chatSetMessages: chat.setMessages, // ✅ Expose chat's setMessages
+      chatSetMessages: chat.setMessages,
       messages: chat.messages,
       isStreaming: chat.isStreaming,
       currentParticipantIndex: chat.currentParticipantIndex,
@@ -139,20 +319,23 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
     chat.currentParticipantIndex,
   ]);
 
+  // ✅ REMOVED: Duplicate streaming trigger - store subscription (store.ts:1076-1163) handles this
+  // The subscription has proper guard protection and identical pre-search waiting logic
+  // Keeping this effect created race conditions where both paths could trigger startRound()
+
   // ✅ CLEANUP: Only stop streaming on navigation, don't reset state
   // Screen components manage their own state via useScreenInitialization and thread.id changes
   useEffect(() => {
     const prevPath = prevPathnameRef.current;
-    const currentPath = pathname;
 
     // Skip on initial mount
     if (prevPath === null) {
-      prevPathnameRef.current = currentPath;
+      prevPathnameRef.current = pathname;
       return;
     }
 
     // Only cleanup if pathname actually changed (navigation between different pages)
-    if (prevPath === currentPath) {
+    if (prevPath === pathname) {
       return;
     }
 
@@ -162,76 +345,15 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
       currentState.stop?.();
     }
 
-    // Clear callbacks
-    onCompleteRef.current = undefined;
-    onRetryRef.current = undefined;
-
     // Update previous pathname
-    prevPathnameRef.current = currentPath;
+    prevPathnameRef.current = pathname;
   }, [pathname]);
 
   return (
     <ChatStoreContext value={store}>
-      <CallbackProvider onCompleteRef={onCompleteRef} onRetryRef={onRetryRef}>
-        {children}
-      </CallbackProvider>
+      {children}
     </ChatStoreContext>
   );
-}
-
-// ============================================================================
-// CALLBACK CONTEXT (Refs-based, no re-renders)
-// ============================================================================
-
-type CallbackContextValue = {
-  registerOnComplete: (callback: (() => void) | undefined) => void;
-  registerOnRetry: (callback: ((roundNumber: number) => void) | undefined) => void;
-};
-
-const CallbackContext = createContext<CallbackContextValue | undefined>(undefined);
-
-function CallbackProvider({
-  children,
-  onCompleteRef,
-  onRetryRef,
-}: {
-  children: ReactNode;
-  onCompleteRef: React.MutableRefObject<(() => void) | undefined>;
-  onRetryRef: React.MutableRefObject<((roundNumber: number) => void) | undefined>;
-}) {
-  // ✅ Stable callbacks that update refs (no dependencies, never change)
-  const registerOnComplete = useCallback((callback: (() => void) | undefined) => {
-    onCompleteRef.current = callback;
-  }, [onCompleteRef]);
-
-  const registerOnRetry = useCallback((callback: ((roundNumber: number) => void) | undefined) => {
-    onRetryRef.current = callback;
-  }, [onRetryRef]);
-
-  const value = useMemo(() => ({
-    registerOnComplete,
-    registerOnRetry,
-  }), [registerOnComplete, registerOnRetry]);
-
-  return (
-    <CallbackContext value={value}>
-      {children}
-    </CallbackContext>
-  );
-}
-
-/**
- * Hook to register callbacks (used by useChatInitialization)
- */
-// eslint-disable-next-line react-refresh/only-export-components -- Utility hook export
-export function useChatCallbacks() {
-  const context = use(CallbackContext);
-
-  if (!context) {
-    throw new Error('useChatCallbacks must be used within ChatStoreProvider');
-  }
-
-  return context;
 }
 
 // ============================================================================

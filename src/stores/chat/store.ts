@@ -1,13 +1,15 @@
 /**
- * Unified Chat Store - Zustand Vanilla Pattern + Performance Optimizations
+ * Unified Chat Store - Zustand v5 Best Practices
  *
  * ============================================================================
- * OFFICIAL NEXT.JS PATTERN
+ * ZUSTAND V5 PATTERN - OFFICIAL NEXT.JS BEST PRACTICES
  * ============================================================================
- * - Uses createStore (vanilla) for per-instance isolation
- * - Factory function for store creation
- * - Context provider for store distribution
- * - Type-safe with full inference
+ * ✅ Vanilla store (createStore) for per-instance isolation
+ * ✅ Factory function for SSR-safe store creation
+ * ✅ Context provider for store distribution
+ * ✅ Complete type inference from Zod schemas
+ * ✅ StateCreator with proper middleware typing
+ * ✅ Slice pattern for logical organization
  *
  * CONSOLIDATES:
  * - chat-context.tsx: AI SDK state
@@ -18,18 +20,12 @@
  * ============================================================================
  *
  * 1. SEPARATED FLAG SLICES:
- *    - UIFlagsSlice: Flags that trigger re-renders (loading states, config changes)
- *    - InternalFlagsSlice: Flags for orchestration logic (use with useStoreRef)
+ *    - FlagsSlice: Flags that trigger re-renders (loading states, config changes)
  *
  *    WHY: Reduces unnecessary re-renders by only subscribing to UI-relevant flags
  *    USAGE:
  *      // UI flags (triggers re-renders)
  *      const isRegenerating = useChatStore(s => s.isRegenerating)
- *
- *      // Internal flags (no re-renders, use refs)
- *      const store = useChatStoreApi()
- *      const hasLoadedRef = useStoreRef(store, s => s.hasInitiallyLoaded)
- *      if (hasLoadedRef.current) { ... } // Access without triggering re-render
  *
  * 2. BATCHED SELECTORS WITH useShallow:
  *    WHY: Multiple individual selectors = multiple store subscriptions
@@ -49,23 +45,18 @@
  *
  * 3. SUBSCRIBE PATTERN FOR TRANSIENT UPDATES:
  *    WHY: Frequent updates that don't need UI re-renders
- *    USE: useStoreRef utility for ref-based access
- *    SEE: /src/stores/chat/utils/use-store-ref.ts
- *
- * 4. AUTO-GENERATED SELECTORS (Future Enhancement):
- *    SEE: /src/stores/chat/utils/create-selectors.ts
- *    USAGE: const bears = useStore.use.bears() // Instead of useStore(s => s.bears)
+ *    USE: store.subscribe() for ref-based access
  *
  * ============================================================================
  * SLICE ORGANIZATION
  * ============================================================================
- * - ChatFormSlice: Form input, mode, participants
+ * - FormSlice: Form input, mode, participants
  * - FeedbackSlice: Round feedback (like/dislike)
  * - UISlice: Initial UI, thread creation, streaming flags
  * - AnalysisSlice: Moderator analyses
+ * - PreSearchSlice: Pre-search results
  * - ThreadSlice: Thread data, participants, messages, AI SDK methods
- * - UIFlagsSlice: Loading states that need re-renders
- * - InternalFlagsSlice: Orchestration flags (use refs)
+ * - FlagsSlice: Loading states that need re-renders
  * - DataSlice: Round numbers, pending messages
  * - TrackingSlice: Deduplication and tracking
  * - CallbacksSlice: Completion and retry callbacks
@@ -73,229 +64,71 @@
  * - OperationsSlice: Composite operations
  *
  * PATTERN: Slices + Vanilla + Context (official Next.js pattern)
+ * TYPES: All inferred from Zod schemas in store-schemas.ts
  */
 
-import type { UIMessage } from 'ai';
 import type { StateCreator } from 'zustand';
 import { devtools } from 'zustand/middleware';
 import { createStore } from 'zustand/vanilla';
 
-import type { ChatMode, FeedbackType } from '@/api/core/enums';
-import type { ChatParticipant, ChatThread, ModeratorAnalysisPayload, RecommendedAction, RoundFeedbackData, StoredModeratorAnalysis } from '@/api/routes/chat/schema';
-import type { BaseModelResponse } from '@/api/routes/models/schema';
-import type { SubscriptionTier } from '@/api/services/product-logic.service';
-import { canAccessModelByPricing } from '@/api/services/product-logic.service';
-import type { ParticipantConfig } from '@/components/chat/chat-form-schemas';
-import type { ChatModeId } from '@/lib/config/chat-modes';
-import { getParticipantMessagesWithIds } from '@/lib/utils/message-filtering';
-import { getRoundNumberFromMessage } from '@/lib/utils/metadata-extraction';
+import { AnalysisStatuses, ChatModeSchema } from '@/api/core/enums';
+import { filterToParticipantMessages, getParticipantMessagesWithIds } from '@/lib/utils/message-filtering';
+import { getRoundNumber } from '@/lib/utils/metadata';
 
-import type { ScreenMode } from './actions/screen-initialization';
+import { applyRecommendedAction as applyRecommendedActionLogic } from './actions/recommended-action-application';
+import {
+  ANALYSIS_DEFAULTS,
+  CALLBACKS_DEFAULTS,
+  COMPLETE_RESET_STATE,
+  DATA_DEFAULTS,
+  FEEDBACK_DEFAULTS,
+  FLAGS_DEFAULTS,
+  FORM_DEFAULTS,
+  PRESEARCH_DEFAULTS,
+  SCREEN_DEFAULTS,
+  THREAD_DEFAULTS,
+  THREAD_RESET_STATE,
+  TRACKING_DEFAULTS,
+  UI_DEFAULTS,
+} from './store-defaults';
+import type {
+  AnalysisSlice,
+  CallbacksSlice,
+  ChatStore,
+  DataSlice,
+  FeedbackSlice,
+  FlagsSlice,
+  FormSlice,
+  OperationsSlice,
+  PreSearchSlice,
+  ScreenSlice,
+  ThreadSlice,
+  TrackingSlice,
+  UISlice,
+} from './store-schemas';
 
 // ============================================================================
-// TYPE DEFINITIONS
+// RE-EXPORT TYPES FROM SCHEMAS (Single Source of Truth)
 // ============================================================================
 
-type ChatFormSlice = {
-  inputValue: string;
-  selectedMode: ChatModeId | null;
-  selectedParticipants: ParticipantConfig[];
+export type { ScreenMode as ScreenModeExport } from './actions/screen-initialization';
+export type { ChatStore, ScreenMode } from './store-schemas';
 
-  setInputValue: (value: string) => void;
-  setSelectedMode: (mode: ChatModeId) => void;
-  setSelectedParticipants: (participants: ParticipantConfig[]) => void;
-  addParticipant: (participant: ParticipantConfig) => void;
-  removeParticipant: (participantId: string) => void;
-  updateParticipant: (participantId: string, updates: Partial<ParticipantConfig>) => void;
-  reorderParticipants: (fromIndex: number, toIndex: number) => void;
-  resetForm: () => void;
-  applyRecommendedAction: (action: RecommendedAction, options?: {
-    maxModels?: number;
-    tierName?: string;
-    userTier?: SubscriptionTier;
-    allModels?: BaseModelResponse[];
-  }) => { success: boolean; error?: string; modelsAdded?: number; modelsSkipped?: number };
-};
-
-type FeedbackSlice = {
-  feedbackByRound: Map<number, FeedbackType | null>;
-  pendingFeedback: { roundNumber: number; type: FeedbackType } | null;
-  hasLoadedFeedback: boolean;
-
-  setFeedback: (roundNumber: number, type: FeedbackType | null) => void;
-  setPendingFeedback: (feedback: { roundNumber: number; type: FeedbackType } | null) => void;
-  clearFeedback: (roundNumber: number) => void;
-  loadFeedbackFromServer: (data: RoundFeedbackData[]) => void;
-  resetFeedback: () => void;
-};
-
-type UISlice = {
-  showInitialUI: boolean;
-  waitingToStartStreaming: boolean;
-  isCreatingThread: boolean;
-  createdThreadId: string | null;
-
-  setShowInitialUI: (show: boolean) => void;
-  setWaitingToStartStreaming: (waiting: boolean) => void;
-  setIsCreatingThread: (creating: boolean) => void;
-  setCreatedThreadId: (id: string | null) => void;
-  resetUI: () => void;
-};
-
-type AnalysisSlice = {
-  analyses: StoredModeratorAnalysis[];
-
-  setAnalyses: (analyses: StoredModeratorAnalysis[]) => void;
-  addAnalysis: (analysis: StoredModeratorAnalysis) => void;
-  updateAnalysisData: (roundNumber: number, data: ModeratorAnalysisPayload) => void;
-  updateAnalysisStatus: (roundNumber: number, status: 'pending' | 'streaming' | 'completed' | 'failed') => void;
-  removeAnalysis: (roundNumber: number) => void;
-  clearAllAnalyses: () => void;
-  createPendingAnalysis: (params: {
-    roundNumber: number;
-    messages: UIMessage[];
-    participants: ChatParticipant[];
-    userQuestion: string;
-    threadId: string;
-    mode: ChatModeId;
-  }) => void;
-};
-
-type ThreadSlice = {
-  thread: ChatThread | null;
-  participants: ChatParticipant[];
-  messages: UIMessage[];
-  isStreaming: boolean;
-  currentParticipantIndex: number;
-  error: Error | null;
-
-  // AI SDK methods (set by provider)
-  sendMessage: ((content: string) => Promise<void>) | undefined;
-  startRound: (() => void) | undefined;
-  retry: (() => void) | undefined;
-  stop: (() => void) | undefined;
-  // ✅ FIX: Expose chat.setMessages to allow refetch to update useChat's state
-  chatSetMessages: ((messages: UIMessage[] | ((messages: UIMessage[]) => UIMessage[])) => void) | undefined;
-
-  setThread: (thread: ChatThread | null) => void;
-  setParticipants: (participants: ChatParticipant[]) => void;
-  setMessages: (messages: UIMessage[] | ((prev: UIMessage[]) => UIMessage[])) => void;
-  setIsStreaming: (streaming: boolean) => void;
-  setCurrentParticipantIndex: (index: number) => void;
-  setError: (error: Error | null) => void;
-  setSendMessage: (fn: ((content: string) => Promise<void>) | undefined) => void;
-  setStartRound: (fn: (() => void) | undefined) => void;
-  setRetry: (fn: (() => void) | undefined) => void;
-  setStop: (fn: (() => void) | undefined) => void;
-  setChatSetMessages: (fn: ((messages: UIMessage[] | ((messages: UIMessage[]) => UIMessage[])) => void) | undefined) => void;
-};
-
-type FlagsSlice = {
-  hasInitiallyLoaded: boolean;
-  isRegenerating: boolean;
-  isCreatingAnalysis: boolean;
-  isWaitingForChangelog: boolean;
-  hasPendingConfigChanges: boolean;
-  hasRefetchedMessages: boolean;
-
-  setHasInitiallyLoaded: (value: boolean) => void;
-  setIsRegenerating: (value: boolean) => void;
-  setIsCreatingAnalysis: (value: boolean) => void;
-  setIsWaitingForChangelog: (value: boolean) => void;
-  setHasPendingConfigChanges: (value: boolean) => void;
-  setHasRefetchedMessages: (value: boolean) => void;
-};
-
-type DataSlice = {
-  regeneratingRoundNumber: number | null;
-  pendingMessage: string | null;
-  expectedParticipantIds: string[] | null;
-  streamingRoundNumber: number | null;
-  currentRoundNumber: number | null;
-
-  setRegeneratingRoundNumber: (value: number | null) => void;
-  setPendingMessage: (value: string | null) => void;
-  setExpectedParticipantIds: (value: string[] | null) => void;
-  setStreamingRoundNumber: (value: number | null) => void;
-  setCurrentRoundNumber: (value: number | null) => void;
-};
-
-type TrackingSlice = {
-  hasSentPendingMessage: boolean;
-  createdAnalysisRounds: Set<number>;
-
-  setHasSentPendingMessage: (value: boolean) => void;
-  markAnalysisCreated: (roundNumber: number) => void;
-  hasAnalysisBeenCreated: (roundNumber: number) => boolean;
-  clearAnalysisTracking: (roundNumber: number) => void;
-};
-
-type CallbacksSlice = {
-  onComplete?: () => void;
-  onRetry?: (roundNumber: number) => void;
-
-  setOnComplete: (callback: (() => void) | undefined) => void;
-  setOnRetry: (callback: ((roundNumber: number) => void) | undefined) => void;
-};
+// ============================================================================
+// SLICE IMPLEMENTATIONS - Using Zustand v5 StateCreator Pattern
+// ============================================================================
 
 /**
- * Screen Mode Type
- * Imported from screen-initialization to avoid duplication
- * @see src/stores/chat/actions/screen-initialization.ts
+ * Form Slice - Chat form state and actions
+ * Handles user input, mode selection, participant management
  */
-export type { ScreenMode } from './actions/screen-initialization';
-
-type ScreenSlice = {
-  screenMode: ScreenMode | null;
-  isReadOnly: boolean;
-
-  setScreenMode: (mode: ScreenMode | null) => void;
-  resetScreenMode: () => void;
-};
-
-type OperationsSlice = {
-  resetThreadState: () => void;
-  resetHookState: () => void;
-  resetToOverview: () => void;
-  initializeThread: (
-    thread: ChatThread,
-    participants: ChatParticipant[],
-    initialMessages?: UIMessage[],
-  ) => void;
-  clearThread: () => void;
-  updateParticipants: (participants: ChatParticipant[]) => void;
-  prepareForNewMessage: (message: string, participantIds: string[]) => void;
-  completeStreaming: () => void;
-  startRegeneration: (roundNumber: number) => void;
-  completeRegeneration: (roundNumber: number) => void;
-};
-
-export type ChatStore
-  = & ChatFormSlice
-    & FeedbackSlice
-    & UISlice
-    & AnalysisSlice
-    & ThreadSlice
-    & FlagsSlice
-    & DataSlice
-    & TrackingSlice
-    & CallbacksSlice
-    & ScreenSlice
-    & OperationsSlice;
-
-// ============================================================================
-// SLICE IMPLEMENTATIONS
-// ============================================================================
-
-const createChatFormSlice: StateCreator<
+const createFormSlice: StateCreator<
   ChatStore,
   [['zustand/devtools', never]],
   [],
-  ChatFormSlice
+  FormSlice
 > = set => ({
-  inputValue: '',
-  selectedMode: null, // ✅ null on init, set to DEFAULT_CHAT_MODE by component
-  selectedParticipants: [],
+  ...FORM_DEFAULTS,
 
   setInputValue: value =>
     set({ inputValue: value }, false, 'form/setInputValue'),
@@ -303,6 +136,8 @@ const createChatFormSlice: StateCreator<
     set({ selectedMode: mode }, false, 'form/setSelectedMode'),
   setSelectedParticipants: participants =>
     set({ selectedParticipants: participants }, false, 'form/setSelectedParticipants'),
+  setEnableWebSearch: enabled =>
+    set({ enableWebSearch: enabled }, false, 'form/setEnableWebSearch'),
   addParticipant: participant =>
     set(state => ({
       selectedParticipants: state.selectedParticipants.some(p => p.modelId === participant.modelId)
@@ -333,145 +168,36 @@ const createChatFormSlice: StateCreator<
       };
     }, false, 'form/reorderParticipants'),
   resetForm: () =>
-    set({
-      inputValue: '',
-      selectedMode: null, // ✅ Reset to null, component will set DEFAULT_CHAT_MODE
-      selectedParticipants: [],
-    }, false, 'form/resetForm'),
+    set(FORM_DEFAULTS, false, 'form/resetForm'),
 
   applyRecommendedAction: (action, options) => {
-    const maxModels = options?.maxModels;
-    const tierName = options?.tierName;
-    const userTier = options?.userTier;
-    const allModels = options?.allModels;
+    // ✅ EXTRACTED: Business logic moved to actions/recommended-action-application.ts
+    // Thin wrapper applies updates returned from pure function
+    const result = applyRecommendedActionLogic(action, options);
 
-    // Track results for validation feedback
-    let modelsAdded = 0;
-    let modelsSkipped = 0;
-    let error: string | undefined;
+    set(result.updates, false, 'form/applyRecommendedAction');
 
-    set((_state) => {
-      // 1. Set input from suggestion
-      const updates: Partial<ChatFormSlice> = {
-        inputValue: action.action,
-      };
-
-      // 2. Apply mode suggestion if provided
-      if (action.suggestedMode) {
-        updates.selectedMode = action.suggestedMode as ChatModeId;
-      }
-
-      // 3. Apply participant suggestions if provided - ONLY reset participants if models are suggested
-      if (action.suggestedModels && action.suggestedModels.length > 0) {
-        // Reset participants when new models are suggested
-        updates.selectedParticipants = [];
-        // Filter to only valid model IDs (format: provider/model)
-        const validModelIds = action.suggestedModels.filter(modelId => modelId.includes('/'));
-
-        // Filter by tier access if tier and models data provided
-        let accessibleModels = validModelIds;
-        if (userTier && allModels && allModels.length > 0) {
-          accessibleModels = validModelIds.filter((modelId) => {
-            const modelData = allModels.find(m => m.id === modelId);
-            if (!modelData) {
-              // Model not found in available models list, skip it
-              return false;
-            }
-            // Check if user can access this model based on their tier
-            return canAccessModelByPricing(userTier, modelData);
-          });
-
-          // Track skipped models due to tier restrictions
-          const tierRestrictedCount = validModelIds.length - accessibleModels.length;
-          if (tierRestrictedCount > 0) {
-            modelsSkipped += tierRestrictedCount;
-          }
-        }
-
-        // Check tier limits if provided
-        if (maxModels !== undefined) {
-          const availableSlots = maxModels; // All slots available when replacing participants
-
-          if (availableSlots === 0) {
-            error = `Your ${tierName || 'current'} plan allows up to ${maxModels} models per conversation. Remove a model to add another, or upgrade your plan.`;
-            modelsSkipped = accessibleModels.length;
-          } else if (accessibleModels.length > availableSlots) {
-            // Partial add: only add models that fit
-            const modelsToAdd = accessibleModels.slice(0, availableSlots);
-            modelsSkipped += accessibleModels.length - availableSlots;
-
-            const newParticipants = modelsToAdd.map((modelId, index) => {
-              const originalIndex = action.suggestedModels.indexOf(modelId);
-              return {
-                id: `participant-${Date.now()}-${index}`,
-                modelId,
-                role: action.suggestedRoles?.[originalIndex] || null,
-                customRoleId: undefined,
-                priority: index,
-              } satisfies ParticipantConfig;
-            });
-
-            updates.selectedParticipants = newParticipants;
-            modelsAdded = modelsToAdd.length;
-            error = `Only ${modelsAdded} of ${accessibleModels.length} suggested models were added. Your ${tierName || 'current'} plan allows up to ${maxModels} models. Upgrade to add more.`;
-          } else {
-            // All accessible models fit within limit
-            const newParticipants = accessibleModels.map((modelId, index) => {
-              const originalIndex = action.suggestedModels.indexOf(modelId);
-              return {
-                id: `participant-${Date.now()}-${index}`,
-                modelId,
-                role: action.suggestedRoles?.[originalIndex] || null,
-                customRoleId: undefined,
-                priority: index,
-              } satisfies ParticipantConfig;
-            });
-
-            updates.selectedParticipants = newParticipants;
-            modelsAdded = accessibleModels.length;
-          }
-        } else {
-          // No tier limit provided, add all accessible models
-          if (accessibleModels.length > 0) {
-            const newParticipants = accessibleModels.map((modelId, index) => {
-              const originalIndex = action.suggestedModels.indexOf(modelId);
-              return {
-                id: `participant-${Date.now()}-${index}`,
-                modelId,
-                role: action.suggestedRoles?.[originalIndex] || null,
-                customRoleId: undefined,
-                priority: index,
-              } satisfies ParticipantConfig;
-            });
-
-            updates.selectedParticipants = newParticipants;
-            modelsAdded = accessibleModels.length;
-          }
-        }
-      }
-
-      return updates;
-    }, false, 'form/applyRecommendedAction');
-
-    // Return result object
+    // Return result object (without updates property for backwards compatibility)
     return {
-      success: error === undefined || modelsAdded > 0,
-      error,
-      modelsAdded,
-      modelsSkipped,
+      success: result.success,
+      error: result.error,
+      modelsAdded: result.modelsAdded,
+      modelsSkipped: result.modelsSkipped,
     };
   },
 });
 
+/**
+ * Feedback Slice - Round feedback state
+ * Manages like/dislike feedback for chat rounds
+ */
 const createFeedbackSlice: StateCreator<
   ChatStore,
   [['zustand/devtools', never]],
   [],
   FeedbackSlice
 > = set => ({
-  feedbackByRound: new Map(),
-  pendingFeedback: null,
-  hasLoadedFeedback: false,
+  ...FEEDBACK_DEFAULTS,
 
   setFeedback: (roundNumber, type) =>
     set((state) => {
@@ -493,23 +219,20 @@ const createFeedbackSlice: StateCreator<
       hasLoadedFeedback: true,
     }, false, 'feedback/loadFeedbackFromServer'),
   resetFeedback: () =>
-    set({
-      feedbackByRound: new Map(),
-      pendingFeedback: null,
-      hasLoadedFeedback: false,
-    }, false, 'feedback/resetFeedback'),
+    set(FEEDBACK_DEFAULTS, false, 'feedback/resetFeedback'),
 });
 
+/**
+ * UI Slice - UI state flags
+ * Controls initial UI display, thread creation, and streaming states
+ */
 const createUISlice: StateCreator<
   ChatStore,
   [['zustand/devtools', never]],
   [],
   UISlice
 > = set => ({
-  showInitialUI: true,
-  waitingToStartStreaming: false,
-  isCreatingThread: false,
-  createdThreadId: null,
+  ...UI_DEFAULTS,
 
   setShowInitialUI: show =>
     set({ showInitialUI: show }, false, 'ui/setShowInitialUI'),
@@ -520,21 +243,20 @@ const createUISlice: StateCreator<
   setCreatedThreadId: id =>
     set({ createdThreadId: id }, false, 'ui/setCreatedThreadId'),
   resetUI: () =>
-    set({
-      showInitialUI: true,
-      waitingToStartStreaming: false,
-      isCreatingThread: false,
-      createdThreadId: null,
-    }, false, 'ui/resetUI'),
+    set(UI_DEFAULTS, false, 'ui/resetUI'),
 });
 
+/**
+ * Analysis Slice - Moderator analysis state
+ * Manages pending, streaming, and completed moderator analyses
+ */
 const createAnalysisSlice: StateCreator<
   ChatStore,
   [['zustand/devtools', never]],
   [],
   AnalysisSlice
 > = set => ({
-  analyses: [],
+  ...ANALYSIS_DEFAULTS,
 
   setAnalyses: analyses =>
     set({ analyses }, false, 'analysis/setAnalyses'),
@@ -544,16 +266,22 @@ const createAnalysisSlice: StateCreator<
     }), false, 'analysis/addAnalysis'),
   updateAnalysisData: (roundNumber, data) =>
     set(state => ({
-      analyses: state.analyses.map(a =>
-        a.roundNumber === roundNumber
-          ? {
-              ...a,
-              ...data,
-              mode: data.mode as ChatMode,
-              status: 'completed' as const,
-            }
-          : a,
-      ),
+      analyses: state.analyses.map((a) => {
+        if (a.roundNumber !== roundNumber) {
+          return a;
+        }
+
+        // Validate mode from analysis payload (comes as string from backend)
+        const modeResult = ChatModeSchema.safeParse(data.mode);
+        const mode = modeResult.success ? modeResult.data : a.mode; // Fallback to existing mode
+
+        return {
+          ...a,
+          ...data,
+          mode,
+          status: AnalysisStatuses.COMPLETE,
+        };
+      }),
     }), false, 'analysis/updateAnalysisData'),
   updateAnalysisStatus: (roundNumber, status) =>
     set(state => ({
@@ -568,12 +296,13 @@ const createAnalysisSlice: StateCreator<
       analyses: state.analyses.filter(a => a.roundNumber !== roundNumber),
     }), false, 'analysis/removeAnalysis'),
   clearAllAnalyses: () =>
-    set({ analyses: [] }, false, 'analysis/clearAllAnalyses'),
+    set(ANALYSIS_DEFAULTS, false, 'analysis/clearAllAnalyses'),
   createPendingAnalysis: (params) => {
     const { roundNumber, messages, userQuestion, threadId, mode } = params;
 
-    // ✅ SINGLE SOURCE OF TRUTH: Use utility functions for type-safe extraction
-    // Replaces unsafe type assertions with consolidated message filtering logic
+    // ✅ TYPE-SAFE EXTRACTION: Use consolidated utility from message-filtering.ts
+    // Replaces unsafe type assertions with Zod-validated filtering
+    // getParticipantMessagesWithIds() uses isParticipantMessage() type guard internally
     const { ids: participantMessageIds, messages: participantMessages } = getParticipantMessagesWithIds(messages, roundNumber);
 
     // ✅ SAFETY CHECK: Don't create analysis if no valid participant messages
@@ -581,19 +310,35 @@ const createAnalysisSlice: StateCreator<
       return;
     }
 
-    // ✅ CRITICAL FIX: Verify all participant messages have unique IDs
-    // Prevents creating analysis with duplicate message IDs from different rounds
+    // ✅ CRITICAL FIX: Deduplicate message IDs and keep only unique messages
+    // Backend bug can cause duplicate message IDs for different participants
+    // Instead of failing, deduplicate by participantId to ensure analysis proceeds
     const uniqueIds = new Set(participantMessageIds);
     if (uniqueIds.size !== participantMessageIds.length) {
-      // Duplicate IDs detected - skip analysis creation
-      return;
+      // ✅ TYPE-SAFE: Use type guard to ensure messages have valid participant metadata
+      // Deduplicate by participantId - keep last message per participant
+      const validParticipantMessages = filterToParticipantMessages(participantMessages);
+      const messagesByParticipant = new Map<string, string>();
+
+      validParticipantMessages.forEach((msg) => {
+        // ✅ NO UNSAFE CAST: Type guard narrows metadata to ParticipantMessageMetadata
+        // participantId is guaranteed to exist (Zod-validated, no optional chaining needed)
+        messagesByParticipant.set(msg.metadata.participantId, msg.id);
+      });
+
+      // Use deduplicated IDs
+      const deduplicatedIds = Array.from(messagesByParticipant.values());
+
+      // Update participantMessageIds to use deduplicated set
+      participantMessageIds.length = 0;
+      participantMessageIds.push(...deduplicatedIds);
     }
 
     // ✅ CRITICAL FIX: Verify all messages have correct round number
     // Prevents using messages from previous rounds in analysis
     // ✅ TYPE-SAFE: Use extraction utility instead of type casting
     const allMessagesFromCorrectRound = participantMessages.every((msg) => {
-      const msgRound = getRoundNumberFromMessage(msg);
+      const msgRound = getRoundNumber(msg.metadata);
       return msgRound === roundNumber;
     });
 
@@ -605,17 +350,16 @@ const createAnalysisSlice: StateCreator<
     // Generate unique analysis ID
     const analysisId = `analysis_${threadId}_${roundNumber}_${Date.now()}`;
 
-    // ✅ CRITICAL FIX: Set status to 'streaming' immediately
-    // Analysis will trigger stream via queueMicrotask(), but virtualization needs to see 'streaming'
-    // status BEFORE the async callback runs to prevent component unmounting
-    // This ensures virtualization disables itself and keeps component mounted during stream
+    // ✅ Set status to pending - component will update to streaming when POST starts
+    // Virtualization checks for BOTH pending and streaming to prevent unmounting
+    // This ensures accurate status: pending → streaming (when POST starts) → completed/failed
     const pendingAnalysis: StoredModeratorAnalysis = {
       id: analysisId,
       threadId,
       roundNumber,
       mode,
       userQuestion,
-      status: 'streaming',
+      status: AnalysisStatuses.PENDING,
       participantMessageIds,
       analysisData: null,
       errorMessage: null,
@@ -623,30 +367,82 @@ const createAnalysisSlice: StateCreator<
       createdAt: new Date(),
     };
 
-    // Add to store
-    set(state => ({
-      analyses: [...state.analyses, pendingAnalysis],
-    }), false, 'analysis/createPendingAnalysis');
+    // ✅ CRITICAL FIX: Add to store with deduplication
+    // Check if analysis already exists before adding (defense-in-depth)
+    // Even with markAnalysisCreated() called first, React state batching
+    // can cause this to be called twice before state propagates
+    set((state) => {
+      // Check if analysis already exists for this thread+round
+      const exists = state.analyses.some(
+        a => a.threadId === threadId && a.roundNumber === roundNumber,
+      );
+
+      if (exists) {
+        // Analysis already exists - return unchanged state
+        return state;
+      }
+
+      // Safe to add new analysis
+      return {
+        analyses: [...state.analyses, pendingAnalysis],
+      };
+    }, false, 'analysis/createPendingAnalysis');
   },
 });
 
+/**
+ * PreSearch Slice - Pre-search state
+ * Manages web search results that precede participant responses
+ */
+const createPreSearchSlice: StateCreator<
+  ChatStore,
+  [['zustand/devtools', never]],
+  [],
+  PreSearchSlice
+> = set => ({
+  ...PRESEARCH_DEFAULTS,
+
+  setPreSearches: preSearches =>
+    set({ preSearches }, false, 'preSearch/setPreSearches'),
+  addPreSearch: preSearch =>
+    set(state => ({
+      preSearches: [...state.preSearches, preSearch],
+    }), false, 'preSearch/addPreSearch'),
+  updatePreSearchData: (roundNumber, data) =>
+    set(state => ({
+      preSearches: state.preSearches.map(ps =>
+        ps.roundNumber === roundNumber
+          ? { ...ps, searchData: data, status: AnalysisStatuses.COMPLETE }
+          : ps,
+      ),
+    }), false, 'preSearch/updatePreSearchData'),
+  updatePreSearchStatus: (roundNumber, status) =>
+    set(state => ({
+      preSearches: state.preSearches.map(ps =>
+        ps.roundNumber === roundNumber
+          ? { ...ps, status }
+          : ps,
+      ),
+    }), false, 'preSearch/updatePreSearchStatus'),
+  removePreSearch: roundNumber =>
+    set(state => ({
+      preSearches: state.preSearches.filter(ps => ps.roundNumber !== roundNumber),
+    }), false, 'preSearch/removePreSearch'),
+  clearAllPreSearches: () =>
+    set(PRESEARCH_DEFAULTS, false, 'preSearch/clearAllPreSearches'),
+});
+
+/**
+ * Thread Slice - Chat thread data
+ * Manages thread, participants, messages, and AI SDK method bindings
+ */
 const createThreadSlice: StateCreator<
   ChatStore,
   [['zustand/devtools', never]],
   [],
   ThreadSlice
 > = set => ({
-  thread: null,
-  participants: [],
-  messages: [],
-  isStreaming: false,
-  currentParticipantIndex: 0,
-  error: null,
-  sendMessage: undefined,
-  startRound: undefined,
-  retry: undefined,
-  stop: undefined,
-  chatSetMessages: undefined,
+  ...THREAD_DEFAULTS,
 
   setThread: thread =>
     set({ thread }, false, 'thread/setThread'),
@@ -674,18 +470,17 @@ const createThreadSlice: StateCreator<
     set({ chatSetMessages: fn }, false, 'thread/setChatSetMessages'),
 });
 
+/**
+ * Flags Slice - Loading and processing flags
+ * Boolean flags that trigger UI re-renders (loading states, config changes)
+ */
 const createFlagsSlice: StateCreator<
   ChatStore,
   [['zustand/devtools', never]],
   [],
   FlagsSlice
 > = set => ({
-  hasInitiallyLoaded: false,
-  isRegenerating: false,
-  isCreatingAnalysis: false,
-  isWaitingForChangelog: false,
-  hasPendingConfigChanges: false,
-  hasRefetchedMessages: false,
+  ...FLAGS_DEFAULTS,
 
   setHasInitiallyLoaded: value =>
     set({ hasInitiallyLoaded: value }, false, 'flags/setHasInitiallyLoaded'),
@@ -697,21 +492,19 @@ const createFlagsSlice: StateCreator<
     set({ isWaitingForChangelog: value }, false, 'flags/setIsWaitingForChangelog'),
   setHasPendingConfigChanges: value =>
     set({ hasPendingConfigChanges: value }, false, 'flags/setHasPendingConfigChanges'),
-  setHasRefetchedMessages: value =>
-    set({ hasRefetchedMessages: value }, false, 'flags/setHasRefetchedMessages'),
 });
 
+/**
+ * Data Slice - Transient data state
+ * Round numbers, pending messages, and expected participant IDs
+ */
 const createDataSlice: StateCreator<
   ChatStore,
   [['zustand/devtools', never]],
   [],
   DataSlice
 > = set => ({
-  regeneratingRoundNumber: null,
-  pendingMessage: null,
-  expectedParticipantIds: null,
-  streamingRoundNumber: null,
-  currentRoundNumber: null,
+  ...DATA_DEFAULTS,
 
   setRegeneratingRoundNumber: value =>
     set({ regeneratingRoundNumber: value }, false, 'data/setRegeneratingRoundNumber'),
@@ -725,14 +518,17 @@ const createDataSlice: StateCreator<
     set({ currentRoundNumber: value }, false, 'data/setCurrentRoundNumber'),
 });
 
+/**
+ * Tracking Slice - Deduplication tracking
+ * Tracks which rounds have had analyses/pre-searches created to prevent duplicates
+ */
 const createTrackingSlice: StateCreator<
   ChatStore,
   [['zustand/devtools', never]],
   [],
   TrackingSlice
 > = (set, get) => ({
-  hasSentPendingMessage: false,
-  createdAnalysisRounds: new Set<number>(),
+  ...TRACKING_DEFAULTS,
 
   setHasSentPendingMessage: value =>
     set({ hasSentPendingMessage: value }, false, 'tracking/setHasSentPendingMessage'),
@@ -750,16 +546,33 @@ const createTrackingSlice: StateCreator<
       newSet.delete(roundNumber);
       return { createdAnalysisRounds: newSet };
     }, false, 'tracking/clearAnalysisTracking'),
+  markPreSearchTriggered: roundNumber =>
+    set((state) => {
+      const newSet = new Set(state.triggeredPreSearchRounds);
+      newSet.add(roundNumber);
+      return { triggeredPreSearchRounds: newSet };
+    }, false, 'tracking/markPreSearchTriggered'),
+  hasPreSearchBeenTriggered: roundNumber =>
+    get().triggeredPreSearchRounds.has(roundNumber),
+  clearPreSearchTracking: roundNumber =>
+    set((state) => {
+      const newSet = new Set(state.triggeredPreSearchRounds);
+      newSet.delete(roundNumber);
+      return { triggeredPreSearchRounds: newSet };
+    }, false, 'tracking/clearPreSearchTracking'),
 });
 
+/**
+ * Callbacks Slice - Event callbacks
+ * Completion and retry callbacks for streaming events
+ */
 const createCallbacksSlice: StateCreator<
   ChatStore,
   [['zustand/devtools', never]],
   [],
   CallbacksSlice
 > = set => ({
-  onComplete: undefined,
-  onRetry: undefined,
+  ...CALLBACKS_DEFAULTS,
 
   setOnComplete: callback =>
     set({ onComplete: callback }, false, 'callbacks/setOnComplete'),
@@ -767,14 +580,17 @@ const createCallbacksSlice: StateCreator<
     set({ onRetry: callback }, false, 'callbacks/setOnRetry'),
 });
 
+/**
+ * Screen Slice - Screen mode state
+ * Tracks current screen mode (overview/thread/public) and read-only state
+ */
 const createScreenSlice: StateCreator<
   ChatStore,
   [['zustand/devtools', never]],
   [],
   ScreenSlice
 > = set => ({
-  screenMode: null,
-  isReadOnly: false,
+  ...SCREEN_DEFAULTS,
 
   setScreenMode: mode =>
     set({
@@ -782,12 +598,13 @@ const createScreenSlice: StateCreator<
       isReadOnly: mode === 'public',
     }, false, 'screen/setScreenMode'),
   resetScreenMode: () =>
-    set({
-      screenMode: null,
-      isReadOnly: false,
-    }, false, 'screen/resetScreenMode'),
+    set(SCREEN_DEFAULTS, false, 'screen/resetScreenMode'),
 });
 
+/**
+ * Operations Slice - Composite operations
+ * Complex multi-slice operations (reset, initialization, streaming lifecycle)
+ */
 const createOperationsSlice: StateCreator<
   ChatStore,
   [['zustand/devtools', never]],
@@ -795,76 +612,17 @@ const createOperationsSlice: StateCreator<
   OperationsSlice
 > = (set, get) => ({
   resetThreadState: () =>
-    set({
-      hasInitiallyLoaded: false,
-      isRegenerating: false,
-      isCreatingAnalysis: false,
-      isWaitingForChangelog: false,
-      hasPendingConfigChanges: false,
-      hasRefetchedMessages: false,
-      regeneratingRoundNumber: null,
-      pendingMessage: null,
-      expectedParticipantIds: null,
-      streamingRoundNumber: null,
-      currentRoundNumber: null,
-      hasSentPendingMessage: false,
-      createdAnalysisRounds: new Set<number>(),
-    }, false, 'operations/resetThreadState'),
-
-  resetHookState: () =>
-    set({
-      error: null,
-      isStreaming: false,
-      currentParticipantIndex: 0,
-    }, false, 'operations/resetHookState'),
+    set(THREAD_RESET_STATE, false, 'operations/resetThreadState'),
 
   resetToOverview: () =>
-    set({
-      // Form state
-      inputValue: '',
-      selectedMode: null,
-      selectedParticipants: [],
-      // UI state
-      showInitialUI: true,
-      waitingToStartStreaming: false,
-      isCreatingThread: false,
-      createdThreadId: null,
-      // Thread state
-      thread: null,
-      participants: [],
-      messages: [],
-      error: null,
-      isStreaming: false,
-      currentParticipantIndex: 0,
-      // Analyses
-      analyses: [],
-      // Feedback
-      feedbackByRound: new Map(),
-      pendingFeedback: null,
-      hasLoadedFeedback: false,
-      // Flags
-      hasInitiallyLoaded: false,
-      isRegenerating: false,
-      isCreatingAnalysis: false,
-      isWaitingForChangelog: false,
-      hasPendingConfigChanges: false,
-      hasRefetchedMessages: false,
-      // Data
-      regeneratingRoundNumber: null,
-      pendingMessage: null,
-      expectedParticipantIds: null,
-      streamingRoundNumber: null,
-      currentRoundNumber: null,
-      // Tracking
-      hasSentPendingMessage: false,
-      createdAnalysisRounds: new Set<number>(),
-      // Callbacks
-      onComplete: undefined,
-      onRetry: undefined,
-    }, false, 'operations/resetToOverview'),
+    set(COMPLETE_RESET_STATE, false, 'operations/resetToOverview'),
 
   initializeThread: (thread, participants, initialMessages) => {
     const messagesToSet = initialMessages || [];
+
+    // ✅ UNIFIED PATTERN: Pre-search data is fetched by PreSearchCard component
+    // Components use TanStack Query to fetch completed pre-search from DB
+    // No store hydration needed
 
     set({
       thread,
@@ -874,15 +632,6 @@ const createOperationsSlice: StateCreator<
       isStreaming: false,
     }, false, 'operations/initializeThread');
   },
-
-  clearThread: () =>
-    set({
-      thread: null,
-      participants: [],
-      messages: [],
-      onComplete: undefined,
-      onRetry: undefined,
-    }, false, 'operations/clearThread'),
 
   updateParticipants: participants =>
     set({ participants }, false, 'operations/updateParticipants'),
@@ -927,17 +676,29 @@ const createOperationsSlice: StateCreator<
 });
 
 // ============================================================================
-// STORE FACTORY (Official Next.js Pattern)
+// STORE FACTORY - Zustand v5 Vanilla Pattern (Official Next.js)
 // ============================================================================
 
+/**
+ * Creates a new chat store instance using Zustand v5 patterns
+ *
+ * ✅ PATTERN: Vanilla store (createStore) for per-instance isolation
+ * ✅ MIDDLEWARE: Devtools for Redux DevTools integration
+ * ✅ SLICES: Logical grouping of related state and actions
+ * ✅ TYPE-SAFE: Full type inference from Zod schemas
+ *
+ * @returns Vanilla Zustand store instance (not a React hook)
+ * @see chat-store-provider.tsx - React Context provider
+ */
 export function createChatStore() {
-  return createStore<ChatStore>()(
+  const store = createStore<ChatStore>()(
     devtools(
       (...args) => ({
-        ...createChatFormSlice(...args),
+        ...createFormSlice(...args),
         ...createFeedbackSlice(...args),
         ...createUISlice(...args),
         ...createAnalysisSlice(...args),
+        ...createPreSearchSlice(...args),
         ...createThreadSlice(...args),
         ...createFlagsSlice(...args),
         ...createDataSlice(...args),
@@ -949,6 +710,19 @@ export function createChatStore() {
       { name: 'ChatStore' },
     ),
   );
+
+  // ============================================================================
+  // Store Subscriptions (Removed)
+  // ============================================================================
+  // Analysis triggering, streaming orchestration, and message sending moved to
+  // AI SDK v5 onComplete callbacks in chat-store-provider.tsx:79-198
+  // This provides direct access to fresh chat hook state and eliminates stale closures.
+
+  return store;
 }
 
+/**
+ * Type of the vanilla store instance
+ * Used by ChatStoreProvider to type the context value
+ */
 export type ChatStoreApi = ReturnType<typeof createChatStore>;

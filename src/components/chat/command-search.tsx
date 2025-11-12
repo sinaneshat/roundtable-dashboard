@@ -42,9 +42,14 @@ function SearchResultItem({
         onSelect(index);
       }}
     >
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium truncate">{thread.title}</p>
-        <p className="text-xs text-muted-foreground truncate">
+      <div className="flex-1 min-w-0 overflow-hidden" style={{ maxWidth: '36rem' }}>
+        <p
+          className="text-sm font-medium truncate overflow-hidden text-ellipsis whitespace-nowrap"
+          style={{ maxWidth: '36rem' }}
+        >
+          {thread.title}
+        </p>
+        <p className="text-xs text-muted-foreground truncate overflow-hidden text-ellipsis whitespace-nowrap">
           {new Date(thread.updatedAt).toLocaleDateString()}
         </p>
       </div>

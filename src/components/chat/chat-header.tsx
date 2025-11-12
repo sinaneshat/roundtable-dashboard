@@ -116,8 +116,12 @@ function NavigationHeaderComponent({
                     <BreadcrumbSeparator className="hidden md:block" />
                   </>
                 )}
-                <BreadcrumbItem className="min-w-0 max-w-[200px] sm:max-w-md">
-                  <BreadcrumbPage className="line-clamp-1 truncate max-w-full text-sm sm:text-base" title={'isDynamic' in currentPage && currentPage.isDynamic ? currentPage.titleKey : t(currentPage.titleKey)}>
+                <BreadcrumbItem className="min-w-0 overflow-hidden" style={{ maxWidth: '20rem' }}>
+                  <BreadcrumbPage
+                    className="line-clamp-1 truncate overflow-hidden text-ellipsis whitespace-nowrap text-sm sm:text-base"
+                    style={{ maxWidth: '20rem' }}
+                    title={'isDynamic' in currentPage && currentPage.isDynamic ? currentPage.titleKey : t(currentPage.titleKey)}
+                  >
                     {'isDynamic' in currentPage && currentPage.isDynamic
                       ? currentPage.titleKey
                       : t(currentPage.titleKey)}

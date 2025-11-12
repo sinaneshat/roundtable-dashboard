@@ -3,20 +3,21 @@ import { z } from 'zod';
 import { ChatModeSchema } from '@/api/core/enums';
 import type { CreateThreadRequestSchema } from '@/api/routes/chat/schema';
 import { MessageContentSchema } from '@/api/routes/chat/schema';
+import { ParticipantConfigSchema } from '@/lib/schemas/participant-schemas';
 
-export const ParticipantConfigSchema = z.object({
-  id: z.string(),
-  modelId: z.string().min(1, 'Model ID is required'),
-  role: z.string().nullable(),
-  customRoleId: z.string().optional(),
-  priority: z.number().int().nonnegative(),
-  settings: z.object({
-    temperature: z.number().min(0).max(2).optional(),
-    maxTokens: z.number().int().positive().optional(),
-    systemPrompt: z.string().optional(),
-  }).optional(),
-});
-export type ParticipantConfig = z.infer<typeof ParticipantConfigSchema>;
+// ============================================================================
+// RE-EXPORT: ParticipantConfig from unified schemas
+// ============================================================================
+/**
+ * ✅ RE-EXPORT: ParticipantConfig type from unified schemas
+ *
+ * MIGRATED: Schema definition moved to /src/lib/schemas/participant-schemas.ts
+ * This re-export maintains backward compatibility for form components.
+ *
+ * @see /src/lib/schemas/participant-schemas.ts - Single source of truth
+ */
+export type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
+export { ParticipantConfigSchema };
 export const ChatInputFormSchema = z.object({
   message: MessageContentSchema,
   mode: ChatModeSchema,

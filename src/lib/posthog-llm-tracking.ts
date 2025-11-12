@@ -18,6 +18,8 @@
 
 import { ulid } from 'ulid';
 
+import { isTransientErrorFromObject } from '@/lib/utils/error-metadata-builders';
+
 import { getDistinctIdFromCookie, getPostHogClient } from './posthog-server';
 
 // ============================================================================
@@ -630,39 +632,11 @@ export async function trackLLMError(
 
 /**
  * Determine if an error is transient (retriable)
+ * @see isTransientErrorFromObject in error-metadata-builders
  */
 function isTransientError(error: Error): boolean {
-  const httpError = error as Error & { statusCode?: number };
-  const statusCode = httpError.statusCode;
-
-  // Rate limits and server errors are transient
-  if (statusCode === 429 || statusCode === 503 || statusCode === 502) {
-    return true;
-  }
-
-  // Network errors are transient
-  if (error.message.includes('network') || error.message.includes('timeout')) {
-    return true;
-  }
-
-  return false;
+  return isTransientErrorFromObject(error);
 }
-
-// ============================================================================
-// UNUSED FUNCTIONS REMOVED
-// ============================================================================
-//
-// The following functions were removed as they are never called in the codebase:
-// - trackTraceCompletion() - High-level trace completion tracking
-// - trackConversationStart() - Conversation session start
-// - trackConversationEnd() - Conversation session end
-// - trackConversationRound() - Round completion with aggregated metrics
-// - trackRAGEmbedding() - RAG embedding generation events
-//
-// These were excessive and not aligned with PostHog's recommended patterns.
-// The core $ai_generation event captures all necessary information.
-//
-// If you need these in the future, reference: https://posthog.com/docs/llm-analytics
 
 // ============================================================================
 // HELPER FUNCTIONS

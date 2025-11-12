@@ -20,7 +20,7 @@ import {
   Responses,
 } from '@/api/core';
 import type { ChatMode, ThreadStatus } from '@/api/core/enums';
-import { ChangelogTypes, DEFAULT_CHAT_MODE, ThreadStatusSchema } from '@/api/core/enums';
+import { AnalysisStatuses, ChangelogTypes, DEFAULT_CHAT_MODE, ThreadStatusSchema } from '@/api/core/enums';
 import { IdParamSchema, ThreadSlugParamSchema } from '@/api/core/schemas';
 import { getModelById } from '@/api/services/models-config.service';
 import {
@@ -29,6 +29,7 @@ import {
   SUBSCRIPTION_TIER_NAMES,
 } from '@/api/services/product-logic.service';
 import { generateUniqueSlug } from '@/api/services/slug-generator.service';
+import { logModeChange } from '@/api/services/thread-changelog.service';
 import { generateTitleFromMessage, updateThreadTitleAndSlug } from '@/api/services/title-generator.service';
 import {
   enforceMessageQuota,
@@ -249,15 +250,42 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
     await incrementMessageUsage(user.id, 1);
     await incrementThreadUsage(user.id);
     await invalidateThreadCache(db, user.id);
+
+    // ✅ DATABASE-FIRST PATTERN: Create PENDING pre-search record if web search enabled
+    // This ensures the record exists BEFORE any frontend streaming requests
+    // Frontend should NEVER create database records - that's backend's responsibility
+    //
+    // FLOW:
+    // 1. Thread creation → Create PENDING pre-search record here
+    // 2. Frontend detects PENDING via orchestrator → PreSearchStream calls POST endpoint
+    // 3. POST endpoint updates status to STREAMING → Executes SSE streaming
+    // 4. POST endpoint updates status to COMPLETED → Stores results
+    //
+    // Matches moderator analysis pattern: database record created upfront
+    if (body.enableWebSearch) {
+      await db.insert(tables.chatPreSearch).values({
+        id: ulid(),
+        threadId,
+        roundNumber: 1,
+        userQuery: body.firstMessage,
+        status: AnalysisStatuses.PENDING,
+        createdAt: now,
+      });
+    }
+
     // ✅ START TITLE GENERATION IMMEDIATELY
     // Title generation only depends on the first user message, not on streaming/searches/CoT
     // Can start as soon as thread is created without waiting for AI responses
+    // ✅ CRITICAL FIX: Use getDbAsync() instead of batch.db for fire-and-forget async operations
+    // batch.db is only valid within the handler scope, but this async block runs after handler returns
     (async () => {
       try {
         const aiTitle = await generateTitleFromMessage(body.firstMessage, c.env);
         // ✅ Update both title AND slug atomically using updateThreadTitleAndSlug
         await updateThreadTitleAndSlug(threadId, aiTitle);
-        await invalidateThreadCache(db, user.id);
+        // Get fresh db connection for cache invalidation (batch.db no longer valid here)
+        const freshDb = await getDbAsync();
+        await invalidateThreadCache(freshDb, user.id);
       } catch {
       }
     })().catch(() => {
@@ -547,19 +575,8 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
       // Mode change applies to the next round, not the current one
       const nextRoundNumber = currentRoundNumber + 1;
 
-      await db.insert(tables.chatThreadChangelog).values({
-        id: ulid(),
-        threadId: id,
-        roundNumber: nextRoundNumber,
-        changeType: ChangelogTypes.MODIFIED,
-        changeSummary: `Changed mode from ${thread.mode} to ${body.mode}`,
-        changeData: {
-          type: 'mode_change',
-          oldMode: thread.mode,
-          newMode: body.mode,
-        },
-        createdAt: now,
-      });
+      // ✅ SERVICE LAYER: Use thread-changelog.service for changelog creation
+      await logModeChange(id, nextRoundNumber, thread.mode, body.mode);
     }
 
     const updateData: {

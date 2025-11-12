@@ -37,33 +37,19 @@ import * as HttpStatusCodes from 'stoker/http-status-codes';
 import { ErrorContextBuilders } from '@/api/common/error-contexts';
 import { AppError, createError, ERROR_CODES } from '@/api/common/error-handling';
 import type { ErrorContext } from '@/api/core';
+import type { DatabaseOperation } from '@/api/core/enums';
 
-export { ErrorContextBuilders } from '@/api/common/error-contexts';
-// Re-export from existing modules to maintain compatibility
-export type {
-  AIProviderErrorCategory,
-  AIProviderErrorMetadata,
-  AppErrorConfig,
-  ErrorCode,
-  ErrorSeverity,
-} from '@/api/common/error-handling';
-export { createError, normalizeError } from '@/api/common/error-handling';
-export {
-  AppError,
-  ERROR_CODES,
-  ERROR_SEVERITY,
-  ErrorCodeSchema,
-  ErrorSeveritySchema,
-  ExternalServiceError,
-  structureAIProviderError,
-} from '@/api/common/error-handling';
-export type { HTTPExceptionFactoryOptions } from '@/api/core/http-exceptions';
-export {
-  createHTTPException,
-  EnhancedHTTPException,
-  HTTPExceptionFactory,
-  HttpExceptions,
-} from '@/api/core/http-exceptions';
+// ============================================================================
+// ❌ NO RE-EXPORTS FROM @/api/common/* - Import directly from source
+// ============================================================================
+// POLICY: Only barrel exports from modules within the same directory.
+// For @/api/common/* utilities, import directly from their canonical source.
+//
+// ✓ CORRECT: import { createError } from '@/api/common/error-handling';
+// ✗ WRONG:   import { createError } from '@/api/core';
+//
+// This ensures single source of truth and prevents circular dependencies.
+// ============================================================================
 
 /**
  * Consolidated API Error Factory
@@ -161,7 +147,7 @@ export const ApiErrors = {
    * throw ApiErrors.databaseError('batch', 'stripeCustomer');
    */
   databaseError: (
-    operation: 'select' | 'insert' | 'update' | 'delete' | 'batch',
+    operation: DatabaseOperation,
     table?: string,
     userId?: string,
   ) => {

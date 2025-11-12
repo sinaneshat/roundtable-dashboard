@@ -204,9 +204,10 @@ export const dashboardGlass = {
     'border-b',
   ),
 
-  // Navigation sidebars - solid background matching Shadcn's design
+  // Navigation sidebars - glassmorphism design matching chat input
   sidebar: cn(
-    'bg-sidebar',
-    'border-r border-sidebar-border',
+    'backdrop-blur-xl',
+    'bg-white/5',
+    'border border-white/10',
   ),
 } as const;

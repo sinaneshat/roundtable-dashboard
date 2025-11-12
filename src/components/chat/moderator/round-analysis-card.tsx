@@ -56,7 +56,7 @@ export function RoundAnalysisCard({
       label: t('analyzing'),
       color: 'bg-blue-500/10 text-blue-500 border-blue-500/20',
     },
-    completed: {
+    complete: {
       label: t('completed'),
       color: 'bg-green-500/10 text-green-500 border-green-500/20',
     },

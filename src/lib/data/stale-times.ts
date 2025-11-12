@@ -56,6 +56,7 @@ export const STALE_TIMES = {
   threadMessages: 5 * 1000, // 5 seconds - messages added in real-time
   threadChangelog: Infinity, // Never stale - ONE-WAY DATA FLOW pattern (FLOW_DOCUMENTATION.md:32)
   threadAnalyses: Infinity, // Never stale - ONE-WAY DATA FLOW pattern (FLOW_DOCUMENTATION.md:32)
+  preSearch: Infinity, // Never stale - ONE-WAY DATA FLOW pattern (same as analyses)
   messages: 10 * 1000, // 10 seconds - messages can be added in real-time
   publicThreadDetail: 5 * 60 * 1000, // 5 minutes - public threads change less frequently
 

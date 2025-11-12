@@ -9,6 +9,8 @@
  * @see @/api/routes/chat/schema - Model ID validation and extraction
  */
 
+import { MessageRoles } from '@/api/core/enums';
+
 // ============================================================================
 // MODEL DISPLAY HELPERS
 // ============================================================================
@@ -90,60 +92,16 @@ const PROVIDER_ICON_MAP: Record<string, string> = {
   // Only map providers we actually have icon files for
   // If a provider is not in this list, it automatically gets the OpenRouter fallback icon
 
-  // Major AI Providers
+  // Supported Providers (from models-config.service.ts)
   'anthropic': 'anthropic.png',
   'openai': 'openai.png',
   'google': 'google.png',
-  'microsoft': 'microsoft.png',
   'meta': 'meta.png',
   'meta-llama': 'meta.png',
-  'nvidia': 'nvidia.png',
-  'cohere': 'cohere.png',
-  'inflection': 'inflection.png',
-  'ai21': 'ai21.png',
-
-  // Cloud Providers
-  'amazon': 'aws.png',
-  'aws': 'aws.png',
-  'azure': 'azure.png',
-
-  // Chinese AI Providers
-  'alibaba': 'alibaba.png',
-  'baidu': 'baidu.png',
-  'bytedance': 'bytedance.png',
-  'tencent': 'bytedance.png',
-  'baichuan': 'baichuan.png',
-  'zhipu': 'zhipu.png',
-  'moonshot': 'moonshot.png',
-  'moonshotai': 'moonshot.png',
-  'qwen': 'qwen.png',
-  'deepseek': 'deepseek.png',
-  'yi': 'yi.png',
-  '01-ai': 'yi.png',
-  '01ai': 'yi.png',
-  'minimax': 'minimax.png',
-  'hunyuan': 'hunyuan.png',
-  'kimi': 'kimi.png',
-
-  // Other AI Providers
-  'perplexity': 'perplexity.png',
   'x-ai': 'xai.png',
   'xai': 'xai.png',
-  'mistral': 'mistral.png',
-  'mistralai': 'mistral.png',
-  'liquid': 'liquid.png',
-  'groq': 'groq.png',
-  'replicate': 'replicate.png',
-  'together': 'together.png',
-  'togetherai': 'together.png',
-
-  // Enterprise/Developer AI
-  'databricks': 'databricks.png',
-  'ibm': 'ibm.png',
-  'stabilityai': 'stabilityai.png',
-  'stability': 'stabilityai.png',
-  'stability-ai': 'stabilityai.png',
-  'huggingface': 'huggingface.png',
+  'deepseek': 'deepseek.png',
+  'qwen': 'qwen.png',
 
   // Model name aliases (for backward compatibility)
   'claude': 'anthropic.png',
@@ -170,13 +128,8 @@ const PROVIDER_ICON_MAP: Record<string, string> = {
 const PROVIDER_NAME_OVERRIDES: Record<string, string> = {
   // Only include providers that need special capitalization/branding
   'openai': 'OpenAI',
-  'nvidia': 'NVIDIA',
-  'ai21': 'AI21 Labs',
-  'aws': 'AWS',
   'xai': 'xAI',
   'x-ai': 'xAI',
-  '01-ai': '01.AI',
-  '01ai': '01.AI',
   'openrouter': 'OpenRouter',
 };
 
@@ -264,6 +217,51 @@ export function getModelIconInfo(modelId: string): {
 }
 
 // ============================================================================
+// MODEL COLOR THEMING (Tailwind Color Classes)
+// ============================================================================
+
+/**
+ * Map model providers to Tailwind color classes for consistent theming
+ * Uses theme-aware colors that adapt to light/dark mode automatically
+ *
+ * @param avatarSrc - Avatar source URL (provider extracted from path)
+ * @param isUser - Whether this is a user message (uses primary blue)
+ * @returns Tailwind color class name (e.g., 'blue-500', 'emerald-500')
+ *
+ * @example
+ * getModelColorClass('/icons/anthropic.png', false) // returns 'orange-500'
+ * getModelColorClass('', true) // returns 'blue-500'
+ */
+export function getModelColorClass(avatarSrc: string, isUser: boolean = false): string {
+  if (isUser)
+    return 'blue-500';
+
+  const lowerSrc = avatarSrc.toLowerCase();
+
+  // Model-specific Tailwind color classes matching brand colors
+  if (lowerSrc.includes('claude') || lowerSrc.includes('anthropic'))
+    return 'orange-500';
+  if (lowerSrc.includes('gpt') || lowerSrc.includes('openai'))
+    return 'emerald-500';
+  if (lowerSrc.includes('gemini') || lowerSrc.includes('google'))
+    return 'purple-500';
+  if (lowerSrc.includes('llama') || lowerSrc.includes('meta'))
+    return 'blue-600';
+  if (lowerSrc.includes('mistral'))
+    return 'orange-600';
+  if (lowerSrc.includes('cohere'))
+    return 'violet-500';
+  if (lowerSrc.includes('deepseek'))
+    return 'cyan-500';
+  if (lowerSrc.includes('qwen'))
+    return 'red-500';
+  if (lowerSrc.includes('xai'))
+    return 'slate-400';
+
+  return 'muted-foreground';
+}
+
+// ============================================================================
 // AVATAR HELPERS
 // ============================================================================
 
@@ -288,12 +286,12 @@ export type AvatarProps = {
  * @returns Avatar props with src and name
  */
 export function getAvatarPropsFromModelId(
-  role: 'user' | 'assistant',
+  role: typeof MessageRoles.USER | typeof MessageRoles.ASSISTANT,
   modelId?: string,
   userImage?: string | null,
   userName?: string | null,
 ): AvatarProps {
-  if (role === 'user') {
+  if (role === MessageRoles.USER) {
     return {
       src: userImage || '/static/icons/user-avatar.png',
       name: userName || 'User',
@@ -312,8 +310,9 @@ export function getAvatarPropsFromModelId(
   }
 
   // Fallback for assistant messages without model info
+  // Use OpenRouter icon as a generic AI icon fallback
   return {
-    src: '/static/icons/ai-models/default.png',
+    src: '/static/icons/ai-models/openrouter.png',
     name: 'AI',
   };
 }

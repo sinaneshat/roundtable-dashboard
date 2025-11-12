@@ -76,6 +76,8 @@ export const queryKeys = {
     messages: (id: string) => QueryKeyFactory.action('threads', 'messages', id),
     changelog: (id: string) => QueryKeyFactory.action('threads', 'changelog', id),
     analyses: (id: string) => QueryKeyFactory.action('threads', 'analyses', id),
+    // ❌ REMOVED: preSearch (single round) - frontend uses preSearches (list) via orchestrator
+    preSearches: (id: string) => QueryKeyFactory.action('threads', 'pre-searches', id),
     feedback: (id: string) => QueryKeyFactory.action('threads', 'feedback', id),
   },
 

@@ -1,10 +1,13 @@
 'use client';
 
+import { cva } from 'class-variance-authority';
 import type { LucideIcon } from 'lucide-react';
 import { ChevronDown } from 'lucide-react';
 import type { ComponentProps, ReactNode } from 'react';
 import { createContext, use, useCallback, useMemo, useState } from 'react';
 
+import type { ChainOfThoughtStepStatus } from '@/api/core/enums';
+import { ChainOfThoughtStepStatuses } from '@/api/core/enums';
 import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { cn } from '@/lib/ui/cn';
@@ -160,66 +163,104 @@ export function ChainOfThoughtContent({
 // Step
 // ============================================================================
 
-type StepStatus = 'complete' | 'active' | 'pending';
+/**
+ * CVA variants for step icon colors
+ * Values correspond to CHAIN_OF_THOUGHT_STEP_STATUSES enum
+ * @see ChainOfThoughtStepStatuses in @/api/core/enums
+ */
+const stepIconVariants = cva(
+  'mt-0.5 flex-shrink-0',
+  {
+    variants: {
+      status: {
+        [ChainOfThoughtStepStatuses.PENDING]: 'text-muted-foreground',
+        [ChainOfThoughtStepStatuses.ACTIVE]: 'text-blue-500',
+        [ChainOfThoughtStepStatuses.COMPLETE]: 'text-green-500',
+      },
+    },
+    defaultVariants: {
+      status: ChainOfThoughtStepStatuses.COMPLETE,
+    },
+  },
+);
+
+/**
+ * CVA variants for step label colors
+ * Values correspond to CHAIN_OF_THOUGHT_STEP_STATUSES enum
+ * @see ChainOfThoughtStepStatuses in @/api/core/enums
+ */
+const stepLabelVariants = cva(
+  'text-sm font-medium',
+  {
+    variants: {
+      status: {
+        [ChainOfThoughtStepStatuses.PENDING]: 'text-muted-foreground',
+        [ChainOfThoughtStepStatuses.ACTIVE]: 'text-foreground',
+        [ChainOfThoughtStepStatuses.COMPLETE]: 'text-foreground',
+      },
+    },
+    defaultVariants: {
+      status: ChainOfThoughtStepStatuses.COMPLETE,
+    },
+  },
+);
 
 type ChainOfThoughtStepProps = ComponentProps<'div'> & {
+  /** Step status from Zod schema - single source of truth */
+  status?: ChainOfThoughtStepStatus;
   icon?: LucideIcon;
   label: string;
-  description?: string;
-  status?: StepStatus;
+  description?: ReactNode;
+  badge?: ReactNode;
+  metadata?: ReactNode;
 };
 
 export function ChainOfThoughtStep({
   icon: Icon,
   label,
   description,
-  status = 'complete',
+  status = ChainOfThoughtStepStatuses.COMPLETE,
+  badge,
+  metadata,
   className,
   children,
   ...props
 }: ChainOfThoughtStepProps) {
-  const statusConfig = {
-    complete: {
-      iconColor: 'text-green-500',
-      labelColor: 'text-foreground',
-    },
-    active: {
-      iconColor: 'text-primary',
-      labelColor: 'text-foreground',
-    },
-    pending: {
-      iconColor: 'text-muted-foreground',
-      labelColor: 'text-muted-foreground',
-    },
-  };
-
-  const config = statusConfig[status];
+  const shouldAnimate = status === ChainOfThoughtStepStatuses.ACTIVE;
 
   return (
     <div className={cn('space-y-2', className)} {...props}>
-      <div className="flex items-start gap-2">
+      <div className="flex items-start gap-2.5">
         {Icon && (
-          <div className={cn('mt-0.5 flex-shrink-0', config.iconColor)}>
-            <Icon className="size-4" />
+          <div className={stepIconVariants({ status })}>
+            <Icon className={cn('size-4', shouldAnimate && 'animate-pulse')} />
           </div>
         )}
-        <div className="flex-1 min-w-0">
-          <div className={cn('text-sm font-medium', config.labelColor)}>
-            {label}
+        <div className="flex-1 min-w-0 space-y-1.5">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className={stepLabelVariants({ status })}>
+              {label}
+            </span>
+            {badge}
           </div>
           {description && (
-            <div className="text-xs text-muted-foreground mt-0.5">
+            <div className="text-xs text-muted-foreground leading-relaxed">
               {description}
             </div>
           )}
+          {metadata && (
+            <div className="flex items-center gap-2 flex-wrap">
+              {metadata}
+            </div>
+          )}
         </div>
-        {status === 'active' && (
-          <div className="flex-shrink-0">
-            <div className="size-2 rounded-full bg-primary animate-pulse" />
+        {status === ChainOfThoughtStepStatuses.ACTIVE && (
+          <div className="flex-shrink-0 mt-1">
+            <div className="size-2 rounded-full bg-blue-500 animate-pulse" />
           </div>
         )}
       </div>
-      {children && <div className="ml-6 space-y-2">{children}</div>}
+      {children && <div className="ml-6 space-y-3">{children}</div>}
     </div>
   );
 }

@@ -16,6 +16,7 @@
  */
 
 import type { ErrorContext } from '@/api/core';
+import type { DatabaseOperation } from '@/api/core/enums';
 
 export const ErrorContextBuilders = {
   /**
@@ -71,7 +72,7 @@ export const ErrorContextBuilders = {
    * Used when database operations fail
    */
   database: (
-    operation: 'select' | 'insert' | 'update' | 'delete' | 'batch',
+    operation: DatabaseOperation,
     table?: string,
   ): ErrorContext => ({
     errorType: 'database',

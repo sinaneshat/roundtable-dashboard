@@ -3,11 +3,11 @@ import { AlertCircle } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
 import { useBoolean } from '@/hooks/utils';
-import type { UIMessageMetadata } from '@/lib/schemas/message-metadata';
+import type { MessageMetadata } from '@/lib/schemas/message-metadata';
 import { isAssistantMetadata } from '@/lib/schemas/message-metadata';
 
 type MessageErrorDetailsProps = {
-  metadata: UIMessageMetadata | null | undefined;
+  metadata: MessageMetadata | null | undefined;
   className?: string;
 };
 export function MessageErrorDetails({
@@ -25,13 +25,13 @@ export function MessageErrorDetails({
 
   // Now metadata is AssistantMessageMetadata with all required + optional fields
   // No type casting needed - all fields are properly typed
-  const hasError = metadata.hasError || metadata.error || metadata.errorMessage;
+  const hasError = metadata.hasError || metadata.errorMessage;
   if (!hasError) {
     return null;
   }
   const providerMessage = metadata.providerMessage ? String(metadata.providerMessage) : null;
   const errorMessage = providerMessage
-    || String(metadata.errorMessage || metadata.error || 'An unexpected error occurred');
+    || String(metadata.errorMessage || 'An unexpected error occurred');
   const errorType = String(metadata.errorType || 'unknown');
   const model = String(metadata.model || t('unknownModel'));
   const participantIndex = metadata.participantIndex;

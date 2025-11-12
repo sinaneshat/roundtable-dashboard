@@ -53,7 +53,7 @@ function AuthFormContent() {
 
     if (toastType && message) {
       // Display appropriate toast based on type
-      if (toastType === 'error') {
+      if (toastType === 'failed') {
         showApiErrorToast(t('auth.errors.threadNotFound'), new Error(message));
       } else if (toastType === 'info') {
         showApiInfoToast(t('auth.errors.threadUnavailable'), message);

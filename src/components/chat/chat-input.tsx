@@ -61,7 +61,7 @@ export function ChatInput({
     = isStreaming && currentParticipantIndex !== undefined && participants.length > 1
       ? `${currentParticipantIndex}/${participants.length}`
       : null;
-  const isDisabled = disabled || status === 'error';
+  const isDisabled = disabled || isStreaming;
   const hasValidInput = value.trim().length > 0 && participants.length > 0;
 
   // Auto-resizing textarea

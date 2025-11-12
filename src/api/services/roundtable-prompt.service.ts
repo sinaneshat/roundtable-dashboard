@@ -24,8 +24,6 @@
  * Level 4: Self-Validation (Checklist before responding)
  */
 
-import type { CoreMessage } from 'ai';
-
 import type {
   ParticipantInfo,
   RoundtablePromptConfig,
@@ -489,12 +487,10 @@ export function buildRoundtableContextMessage(config: RoundtablePromptConfig): s
  * ```
  *
  * @param config - Roundtable prompt configuration
- * @param _messageHistory - Existing conversation history (currently unused)
  * @returns Complete prompt setup ready for AI SDK
  */
 export function buildRoundtablePrompt(
   config: RoundtablePromptConfig,
-  _messageHistory: CoreMessage[] = [],
 ): {
   /** System prompt defining behavior (for AI SDK 'system' parameter) */
   systemPrompt: string;

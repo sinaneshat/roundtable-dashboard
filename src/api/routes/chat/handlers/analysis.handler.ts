@@ -6,7 +6,8 @@ import { ulid } from 'ulid';
 import { createError } from '@/api/common/error-handling';
 import { verifyThreadOwnership } from '@/api/common/permissions';
 import type { ErrorContext } from '@/api/core';
-import { createHandler, Responses } from '@/api/core';
+import { createHandler, Responses, STREAMING_CONFIG } from '@/api/core';
+import { AIModels } from '@/api/core/ai-models';
 import { AnalysisStatuses } from '@/api/core/enums';
 import { IdParamSchema, ThreadRoundParamSchema } from '@/api/core/schemas';
 import { filterDbToParticipantMessages } from '@/api/services/message-type-guards';
@@ -22,6 +23,7 @@ import {
   trackLLMError,
   trackLLMGeneration,
 } from '@/api/services/posthog-llm-tracking.service';
+import { buildModeratorAnalysisEnhancedPrompt } from '@/api/services/prompts.service';
 import {
   checkAnalysisQuota,
   getUserTier,
@@ -31,6 +33,8 @@ import type { ApiEnv } from '@/api/types';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db/schema';
 import { extractTextFromParts } from '@/lib/schemas/message-schemas';
+import { requireParticipantMetadata } from '@/lib/utils/metadata';
+import { isObject } from '@/lib/utils/type-guards';
 
 import type {
   analyzeRoundRoute,
@@ -60,7 +64,8 @@ function generateModeratorAnalysis(
 
   initializeOpenRouter(env);
   const client = openRouterService.getClient();
-  const analysisModelId = 'openai/gpt-4o';
+  const analysisModelId = AIModels.ANALYSIS;
+  const analysisModelName = extractModeratorModelName(analysisModelId);
   const systemPrompt = buildModeratorSystemPrompt({
     roundNumber,
     mode,
@@ -78,18 +83,18 @@ function generateModeratorAnalysis(
     userTier,
   });
 
+  // ✅ AI SDK v5: streamObject with mode:'json' (OpenRouter compatibility)
+  // mode:'json' uses response_format: {type: 'json_object'} instead of json_schema
+  // This prevents "json_schema not supported" errors on OpenAI/DeepSeek/Groq via OpenRouter
+  const enhancedUserPrompt = buildModeratorAnalysisEnhancedPrompt(userPrompt);
+
   return streamObject({
-    model: client.chat(analysisModelId),
+    model: client.chat(AIModels.ANALYSIS),
     schema: ModeratorAnalysisPayloadSchema,
-    schemaName: 'ModeratorAnalysis',
+    mode: 'json', // ✅ CRITICAL: Force JSON mode instead of json_schema
     system: systemPrompt,
-    prompt: userPrompt,
-    mode: 'json',
+    prompt: enhancedUserPrompt,
     temperature: 0.3,
-    experimental_telemetry: {
-      isEnabled: true,
-      functionId: `moderator-analysis-round-${roundNumber}`,
-    },
     onFinish: async ({ object: finalObject, error: finishError, usage }) => {
       if (finishError) {
         try {
@@ -112,7 +117,7 @@ function generateModeratorAnalysis(
               participantIndex: -1, // Moderator is not a participant
               participantRole: 'AI Moderator',
               modelId: analysisModelId,
-              modelName: 'GPT-4o (Moderator)',
+              modelName: analysisModelName,
               threadMode: mode,
             },
             finishError as Error,
@@ -126,13 +131,18 @@ function generateModeratorAnalysis(
         return;
       }
 
+      // ✅ AI SDK v5: finalObject is already validated by schema during streaming
+      // No need for manual validation since we use mode:'json' with schema
       if (finalObject) {
         try {
+          // AI SDK guarantees this matches ModeratorAnalysisPayloadSchema
+          const validatedObject = finalObject;
+
           const db = await getDbAsync();
           await db.update(tables.chatModeratorAnalysis)
             .set({
-              status: AnalysisStatuses.COMPLETED,
-              analysisData: finalObject,
+              status: AnalysisStatuses.COMPLETE,
+              analysisData: validatedObject,
               completedAt: new Date(),
             })
             .where(eq(tables.chatModeratorAnalysis.id, analysisId));
@@ -140,9 +150,9 @@ function generateModeratorAnalysis(
           // =========================================================================
           // ✅ POSTHOG LLM TRACKING: Track successful moderator analysis
           // =========================================================================
-          // Convert streamObject usage to FinishResult-compatible format (AI SDK v5)
+          // ✅ AI SDK v5 USAGE: streamObject usage object has inputTokens/outputTokens/totalTokens
           const finishResult = {
-            text: JSON.stringify(finalObject),
+            text: JSON.stringify(validatedObject),
             finishReason: 'stop' as const,
             usage: usage
               ? {
@@ -169,7 +179,7 @@ function generateModeratorAnalysis(
               participantIndex: -1, // Moderator is not a participant
               participantRole: 'AI Moderator',
               modelId: analysisModelId,
-              modelName: 'GPT-4o (Moderator)',
+              modelName: analysisModelName,
               threadMode: mode,
             },
             finishResult,
@@ -246,7 +256,7 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
       orderBy: [desc(tables.chatModeratorAnalysis.createdAt)],
     });
     if (existingAnalyses.length > 1) {
-      const completedAnalysis = existingAnalyses.find(a => a.status === AnalysisStatuses.COMPLETED);
+      const completedAnalysis = existingAnalyses.find(a => a.status === AnalysisStatuses.COMPLETE);
       const analysesToDelete = existingAnalyses.filter(a =>
         a.id !== completedAnalysis?.id,
       );
@@ -259,9 +269,9 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
     }
     const existingAnalysis = existingAnalyses.length === 1
       ? existingAnalyses[0]
-      : existingAnalyses.find(a => a.status === AnalysisStatuses.COMPLETED);
+      : existingAnalyses.find(a => a.status === AnalysisStatuses.COMPLETE);
     if (existingAnalysis) {
-      if (existingAnalysis.status === AnalysisStatuses.COMPLETED && existingAnalysis.analysisData) {
+      if (existingAnalysis.status === AnalysisStatuses.COMPLETE && existingAnalysis.analysisData) {
         return Responses.ok(c, {
           object: {
             ...existingAnalysis.analysisData,
@@ -273,27 +283,153 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
       }
       if (existingAnalysis.status === AnalysisStatuses.STREAMING) {
         const ageMs = Date.now() - existingAnalysis.createdAt.getTime();
-        throw createError.conflict(
-          `Analysis is already being generated (age: ${Math.round(ageMs / 1000)}s). Please wait for it to complete.`,
-          {
-            errorType: 'resource',
-            resource: 'moderator_analysis',
-            resourceId: existingAnalysis.id,
-          },
-        );
+
+        // ✅ TIMEOUT PROTECTION: If stream has been running > threshold, consider it failed
+        // SSE connections can get interrupted (navigation, network issues) without backend knowing
+        // Mark stale streaming analyses as failed so new streams can start
+        if (ageMs > STREAMING_CONFIG.STREAM_TIMEOUT_MS) {
+          await db.update(tables.chatModeratorAnalysis)
+            .set({
+              status: AnalysisStatuses.FAILED,
+              errorMessage: `Stream timeout after ${Math.round(ageMs / 1000)}s - SSE connection likely interrupted`,
+            })
+            .where(eq(tables.chatModeratorAnalysis.id, existingAnalysis.id));
+
+          // Continue to create new analysis below
+        } else {
+          // Still within timeout window - reject duplicate request
+          throw createError.conflict(
+            `Analysis is already being generated (age: ${Math.round(ageMs / 1000)}s). Please wait for it to complete.`,
+            {
+              errorType: 'resource',
+              resource: 'moderator_analysis',
+              resourceId: existingAnalysis.id,
+            },
+          );
+        }
       }
       if (existingAnalysis.status === AnalysisStatuses.FAILED) {
         await db.delete(tables.chatModeratorAnalysis)
           .where(eq(tables.chatModeratorAnalysis.id, existingAnalysis.id));
       }
       if (existingAnalysis.status === AnalysisStatuses.PENDING) {
-        await db.delete(tables.chatModeratorAnalysis)
-          .where(eq(tables.chatModeratorAnalysis.id, existingAnalysis.id));
+        // ✅ IDEMPOTENT FIX: Update pending analysis to streaming and start stream
+        // This handles the race condition where message-persistence creates 'pending' analysis
+        // and frontend immediately calls analyze endpoint
+        // Reuse the existing analysis ID to maintain consistency
+
+        // Fetch participant messages using the provided IDs
+        const messageIds = body.participantMessageIds || existingAnalysis.participantMessageIds;
+        const foundMessages = await db.query.chatMessage.findMany({
+          where: (fields, { inArray, eq: eqOp, and: andOp }) =>
+            andOp(
+              inArray(fields.id, messageIds),
+              eqOp(fields.threadId, threadId),
+              eqOp(fields.role, 'assistant'),
+            ),
+          with: {
+            participant: true,
+          },
+          orderBy: [
+            asc(tables.chatMessage.roundNumber),
+            asc(tables.chatMessage.createdAt),
+            asc(tables.chatMessage.id),
+          ],
+        });
+
+        if (foundMessages.length === 0) {
+          throw createError.badRequest(
+            'No participant messages found for analysis',
+            {
+              errorType: 'validation',
+              field: 'participantMessageIds',
+            },
+          );
+        }
+
+        const validatedMessages = foundMessages.map((msg) => {
+          const parsed = MessageWithParticipantSchema.safeParse(msg);
+          if (!parsed.success) {
+            throw createError.internal(
+              `Invalid message format for ID ${msg.id}`,
+              {
+                errorType: 'validation',
+                field: 'message',
+              },
+            );
+          }
+          return parsed.data;
+        });
+
+        // Transform messages to participant responses format
+        const participantResponses = validatedMessages
+          .map((msg) => {
+            const participant = msg.participant!;
+            const modelName = extractModeratorModelName(participant.modelId);
+            const metadata = requireParticipantMetadata(msg.metadata);
+
+            return {
+              participantIndex: metadata.participantIndex,
+              participantRole: participant.role,
+              modelId: participant.modelId,
+              modelName,
+              responseContent: extractTextFromParts(msg.parts),
+            };
+          })
+          .sort((a, b) => a.participantIndex - b.participantIndex);
+
+        const changelogEntries = await db.query.chatThreadChangelog.findMany({
+          where: eq(tables.chatThreadChangelog.threadId, threadId),
+          orderBy: [
+            asc(tables.chatThreadChangelog.roundNumber),
+            asc(tables.chatThreadChangelog.createdAt),
+          ],
+          limit: 20,
+        });
+
+        const analysisId = existingAnalysis.id;
+        await db.update(tables.chatModeratorAnalysis)
+          .set({
+            status: AnalysisStatuses.STREAMING,
+            participantMessageIds: messageIds,
+          })
+          .where(eq(tables.chatModeratorAnalysis.id, analysisId));
+
+        const userTier = await getUserTier(user.id);
+        const { session } = c.auth();
+
+        const result = generateModeratorAnalysis({
+          roundNumber: roundNum,
+          mode: thread.mode,
+          userQuestion: existingAnalysis.userQuestion,
+          participantResponses,
+          changelogEntries: changelogEntries.map(c => ({
+            changeType: c.changeType,
+            description: c.changeSummary,
+            metadata: isObject(c.changeData) ? c.changeData : null,
+            createdAt: c.createdAt,
+          })),
+          userTier,
+          env: c.env,
+          analysisId,
+          threadId,
+          userId: user.id,
+          sessionId: session?.id,
+        });
+
+        return result.toTextStreamResponse();
       }
     }
     let participantMessages: MessageWithParticipant[] | null = null;
     if (body.participantMessageIds && body.participantMessageIds.length > 0) {
       const messageIds = body.participantMessageIds;
+
+      // ✅ DETERMINISTIC IDs: Simple direct query
+      // Backend generates IDs using format: {threadId}_r{roundNumber}_p{participantId}
+      // No client suffix handling needed - collisions are impossible
+      // Format is consistent across all participants
+
+      // Query messages directly by deterministic IDs
       const foundMessages = await db.query.chatMessage.findMany({
         where: (fields, { inArray, eq: eqOp, and: andOp }) =>
           andOp(
@@ -435,17 +571,24 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
       orderBy: [desc(tables.chatThreadChangelog.createdAt)],
       limit: 20,
     });
-    const participantResponses = participantMessages.map((msg, index) => {
-      const participant = msg.participant!;
-      const modelName = extractModeratorModelName(participant.modelId);
-      return {
-        participantIndex: index,
-        participantRole: participant.role,
-        modelId: participant.modelId,
-        modelName,
-        responseContent: extractTextFromParts(msg.parts),
-      };
-    });
+    const participantResponses = participantMessages
+      .map((msg) => {
+        const participant = msg.participant!;
+        const modelName = extractModeratorModelName(participant.modelId);
+
+        // ✅ TYPE-SAFE METADATA EXTRACTION: Use utility that validates with Zod
+        // Throws if metadata is invalid - replaces inline Record<string, unknown> cast
+        const metadata = requireParticipantMetadata(msg.metadata);
+
+        return {
+          participantIndex: metadata.participantIndex,
+          participantRole: participant.role,
+          modelId: participant.modelId,
+          modelName,
+          responseContent: extractTextFromParts(msg.parts),
+        };
+      })
+      .sort((a, b) => a.participantIndex - b.participantIndex);
     const analysisQuota = await checkAnalysisQuota(user.id);
     if (!analysisQuota.canCreate) {
       const context: ErrorContext = {
@@ -471,7 +614,7 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
       roundNumber: roundNum,
       mode: thread.mode,
       userQuestion,
-      status: AnalysisStatuses.STREAMING,
+      status: AnalysisStatuses.STREAMING, // ✅ Set to STREAMING since stream starts immediately after
       participantMessageIds: participantMessages.map(m => m.id),
       createdAt: new Date(),
     });
@@ -489,7 +632,8 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
       changelogEntries: changelogEntries.map(c => ({
         changeType: c.changeType,
         description: c.changeSummary,
-        metadata: c.changeData as Record<string, unknown> | null,
+        // ✅ TYPE-SAFE: changeData is JSON from database, validate with type guard
+        metadata: isObject(c.changeData) ? c.changeData : null,
         createdAt: c.createdAt,
       })),
       userTier,
@@ -517,13 +661,12 @@ export const getThreadAnalysesHandler: RouteHandler<typeof getThreadAnalysesRout
       where: eq(tables.chatModeratorAnalysis.threadId, threadId),
       orderBy: [desc(tables.chatModeratorAnalysis.roundNumber), desc(tables.chatModeratorAnalysis.createdAt)],
     });
-    const TWO_MINUTES_MS = 2 * 60 * 1000;
     const now = Date.now();
     const orphanedAnalyses = allAnalyses.filter((analysis) => {
       if (analysis.status !== AnalysisStatuses.STREAMING && analysis.status !== AnalysisStatuses.PENDING)
         return false;
       const ageMs = now - analysis.createdAt.getTime();
-      return ageMs > TWO_MINUTES_MS;
+      return ageMs > STREAMING_CONFIG.ORPHAN_CLEANUP_TIMEOUT_MS;
     });
     if (orphanedAnalyses.length > 0) {
       for (const analysis of orphanedAnalyses) {

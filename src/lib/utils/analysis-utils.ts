@@ -8,11 +8,15 @@
  * @module lib/utils/analysis-utils
  */
 
-import type { UIMessage } from 'ai';
+import type { DeepPartial, UIMessage } from 'ai';
 
-import type { ChatParticipant, ModeratorAnalysisPayload, RoundSummary, StoredModeratorAnalysis } from '@/api/routes/chat/schema';
+import { MessageRoles } from '@/api/core/enums';
+import type { ChatParticipant, ModeratorAnalysisPayload, StoredModeratorAnalysis } from '@/api/routes/chat/schema';
 import { ModeratorAnalysisPayloadSchema } from '@/api/routes/chat/schema';
 import { messageHasError, MessageMetadataSchema } from '@/lib/schemas/message-metadata';
+import { getStatusPriority } from '@/stores/chat/store-constants';
+
+import { isObject } from './type-guards';
 
 // ============================================================================
 // ANALYSIS DATA COMPLETENESS - SINGLE SOURCE OF TRUTH
@@ -54,18 +58,72 @@ import { messageHasError, MessageMetadataSchema } from '@/lib/schemas/message-me
  * // Render analysis UI...
  * ```
  */
+/**
+ * Analysis data input type
+ * Accepts both complete data and AI SDK streaming partial data
+ *
+ * DeepPartial<T> from AI SDK makes all properties recursively optional,
+ * including array elements, which differs from TypeScript's Partial<T>
+ */
+type AnalysisDataInput
+  = | ModeratorAnalysisPayload
+    | DeepPartial<ModeratorAnalysisPayload>
+    | null
+    | undefined;
+
+/**
+ * Check if analysis data has displayable content
+ *
+ * Type guard that narrows the input type from nullable to non-nullable.
+ * Handles both complete analysis data (ModeratorAnalysisPayload) and
+ * partial streaming data (AI SDK's DeepPartial<ModeratorAnalysisPayload>).
+ *
+ * Runtime checks ensure type safety for both scenarios:
+ * - Complete data: All fields present and validated
+ * - Partial data: Checks array lengths and field existence
+ *
+ * @param data - Analysis data (complete or streaming partial)
+ * @returns True if data has displayable content, with type narrowing
+ *
+ * @example
+ * ```typescript
+ * // Complete data
+ * const complete: ModeratorAnalysisPayload | null = {...};
+ * if (hasAnalysisData(complete)) {
+ *   // TypeScript knows complete is non-null here
+ *   complete.leaderboard // OK
+ * }
+ *
+ * // Streaming partial data from AI SDK
+ * const partial: DeepPartial<ModeratorAnalysisPayload> | undefined = {...};
+ * if (hasAnalysisData(partial)) {
+ *   // TypeScript knows partial is defined here
+ *   partial.leaderboard // OK (might be undefined at runtime)
+ * }
+ * ```
+ */
 export function hasAnalysisData(
-  data: Partial<ModeratorAnalysisPayload> | null | undefined,
-): data is Pick<ModeratorAnalysisPayload, 'leaderboard' | 'participantAnalyses' | 'roundSummary'> {
+  data: AnalysisDataInput,
+): data is ModeratorAnalysisPayload | DeepPartial<ModeratorAnalysisPayload> {
+  // Null/undefined check
   if (!data) {
     return false;
   }
 
-  const { leaderboard = [], participantAnalyses = [], roundSummary } = data;
+  // Type-safe access to properties
+  // Both ModeratorAnalysisPayload and PartialObject<ModeratorAnalysisPayload> have these properties
+  const { leaderboard, participantAnalyses, roundSummary } = data;
 
-  // Check top-level arrays
-  const hasLeaderboard = leaderboard.length > 0;
-  const hasParticipantAnalyses = participantAnalyses.length > 0;
+  // Check arrays: handle both complete arrays and partial arrays with undefined elements
+  const leaderboardArray = leaderboard ?? [];
+  const participantAnalysesArray = participantAnalyses ?? [];
+
+  // Check if arrays have content (filter undefined elements from PartialObject)
+  const hasLeaderboard = Array.isArray(leaderboardArray)
+    && leaderboardArray.length > 0;
+
+  const hasParticipantAnalyses = Array.isArray(participantAnalysesArray)
+    && participantAnalysesArray.length > 0;
 
   // Check roundSummary fields (all possible sections)
   const hasRoundSummaryData = hasRoundSummaryContent(roundSummary);
@@ -91,21 +149,26 @@ export function hasAnalysisData(
  * ```
  */
 export function hasRoundSummaryContent(
-  roundSummary: Partial<RoundSummary> | null | undefined,
+  roundSummary: unknown,
 ): boolean {
-  if (!roundSummary) {
+  // ✅ TYPE-SAFE: Use type guard instead of force cast
+  if (!isObject(roundSummary)) {
     return false;
   }
 
+  // TypeScript now knows roundSummary is Record<string, unknown>
+  const summary = roundSummary;
+  const hasProperty = (key: string): boolean => key in summary;
+
   return Boolean(
-    (roundSummary.keyInsights && roundSummary.keyInsights.length > 0)
-    || (roundSummary.consensusPoints && roundSummary.consensusPoints.length > 0)
-    || (roundSummary.divergentApproaches && roundSummary.divergentApproaches.length > 0)
-    || roundSummary.comparativeAnalysis
-    || roundSummary.decisionFramework
-    || roundSummary.overallSummary
-    || roundSummary.conclusion
-    || (roundSummary.recommendedActions && roundSummary.recommendedActions.length > 0),
+    (hasProperty('keyInsights') && Array.isArray(summary.keyInsights) && summary.keyInsights.length > 0)
+    || (hasProperty('consensusPoints') && Array.isArray(summary.consensusPoints) && summary.consensusPoints.length > 0)
+    || (hasProperty('divergentApproaches') && Array.isArray(summary.divergentApproaches) && summary.divergentApproaches.length > 0)
+    || (hasProperty('comparativeAnalysis') && summary.comparativeAnalysis)
+    || (hasProperty('decisionFramework') && summary.decisionFramework)
+    || (hasProperty('overallSummary') && summary.overallSummary)
+    || (hasProperty('conclusion') && summary.conclusion)
+    || (hasProperty('recommendedActions') && Array.isArray(summary.recommendedActions) && summary.recommendedActions.length > 0),
   );
 }
 
@@ -148,45 +211,35 @@ export function isCompleteAnalysis(
 }
 
 // ============================================================================
-// STATUS PRIORITY
+// STATUS PRIORITY - Imported from Single Source of Truth
 // ============================================================================
 
 /**
- * Get priority value for analysis status
+ * Status priority for analysis deduplication
  *
- * Used for deduplication when multiple analyses exist for the same round.
- * Higher priority status wins when choosing which analysis to display.
+ * SINGLE SOURCE OF TRUTH: Imported from @/stores/chat/store-constants
+ * See store-constants.ts for implementation and priority values.
  *
- * Priority Order:
- * - completed (3): Analysis fully generated and saved
+ * Priority Order (from ANALYSIS_STATUS_PRIORITY constant):
+ * - complete (3): Analysis fully generated and saved
  * - streaming (2): Analysis actively being generated
  * - pending (1): Analysis queued but not started
- * - unknown (0): Invalid or unrecognized status
+ * - failed (0): Analysis generation failed
  *
- * @param status - Analysis status string
- * @returns Priority number (higher = more important)
+ * Used by deduplicateAnalyses() to choose which analysis to keep
+ * when multiple analyses exist for the same round.
  *
  * @example
  * ```typescript
- * const priority1 = getStatusPriority('completed'); // 3
+ * const priority1 = getStatusPriority('complete'); // 3
  * const priority2 = getStatusPriority('streaming');  // 2
  * if (priority1 > priority2) {
- *   // Keep completed analysis
+ *   // Keep complete analysis
  * }
  * ```
  */
-export function getStatusPriority(status: string): number {
-  switch (status) {
-    case 'completed':
-      return 3;
-    case 'streaming':
-      return 2;
-    case 'pending':
-      return 1;
-    default:
-      return 0;
-  }
-}
+// Re-export getStatusPriority from store-constants for use in deduplicateAnalyses()
+// No local implementation - uses centralized ANALYSIS_STATUS_PRIORITY constant
 
 // ============================================================================
 // ANALYSIS VALIDATION
@@ -222,7 +275,7 @@ export function getStatusPriority(status: string): number {
  * ```
  */
 export function checkAllParticipantsFailed(messages: UIMessage[]): boolean {
-  const assistantMessages = messages.filter(m => m.role === 'assistant');
+  const assistantMessages = messages.filter(m => m.role === MessageRoles.ASSISTANT);
 
   // No assistant messages means no failures (just no responses yet)
   if (assistantMessages.length === 0) {
@@ -269,7 +322,7 @@ export function isRoundIncomplete(
 ): boolean {
   // Filter messages by round
   const assistantMessagesInRound = messages.filter((m) => {
-    if (m.role !== 'assistant') {
+    if (m.role !== MessageRoles.ASSISTANT) {
       return false;
     }
     const parsed = MessageMetadataSchema.safeParse(m.metadata);
@@ -337,7 +390,7 @@ export function shouldCreateAnalysis(
   // CRITICAL FIX: Filter assistant messages BY CURRENT ROUND ONLY
   // Previous bug: counted messages from ALL rounds, causing validation failures
   const assistantMessagesInRound = messages.filter((m) => {
-    if (m.role !== 'assistant') {
+    if (m.role !== MessageRoles.ASSISTANT) {
       return false;
     }
 
@@ -382,7 +435,7 @@ export function shouldCreateAnalysis(
  *
  * Step 3: Deduplicate by round number
  * - One analysis per round (keeps highest priority)
- * - Priority: completed > streaming > pending
+ * - Priority: complete > streaming > pending
  * - If same priority, keeps most recent (by createdAt)
  *
  * Step 4: Sort by round number (ascending)
@@ -424,10 +477,27 @@ export function deduplicateAnalyses(
   });
 
   // Step 2: Filter out invalid analyses
+  const ANALYSIS_TIMEOUT_MS = 60000; // 60 seconds
+  const now = Date.now();
+
   const validAnalyses = uniqueById.filter((item) => {
     // Exclude failed analyses
     if (excludeFailed && item.status === 'failed') {
       return false;
+    }
+
+    // ✅ TIMEOUT PROTECTION: Exclude stuck streaming analyses
+    // If analysis has been 'streaming' or 'pending' for >60 seconds, treat as failed
+    // This prevents infinite loading when SSE streams fail
+    if ((item.status === 'streaming' || item.status === 'pending') && item.createdAt) {
+      const createdTime = item.createdAt instanceof Date
+        ? item.createdAt.getTime()
+        : new Date(item.createdAt).getTime();
+      const elapsed = now - createdTime;
+
+      if (elapsed > ANALYSIS_TIMEOUT_MS) {
+        return false; // Exclude stuck analyses
+      }
     }
 
     // Exclude analysis for the round being regenerated
@@ -448,7 +518,7 @@ export function deduplicateAnalyses(
       return acc;
     }
 
-    // Priority: completed > streaming > pending
+    // Priority: complete > streaming > pending (via ANALYSIS_STATUS_PRIORITY)
     const itemPriority = getStatusPriority(item.status);
     const existingPriority = getStatusPriority(existing.status);
 

@@ -88,7 +88,7 @@ export type HandlerConfig<
 
   // Observability
   operationName?: string;
-  logLevel?: 'debug' | 'info' | 'warn' | 'error';
+  logLevel?: 'debug' | 'info' | 'warn' | 'failed';
 
 };
 

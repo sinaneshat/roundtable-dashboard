@@ -4,6 +4,7 @@ import { useTranslations } from 'next-intl';
 import { memo } from 'react';
 
 import type { FeedbackType } from '@/api/core/enums';
+import { FeedbackTypes } from '@/api/core/enums';
 import { Button } from '@/components/ui/button';
 import {
   Tooltip,
@@ -32,13 +33,13 @@ function RoundFeedbackComponent({
 }: RoundFeedbackProps) {
   const t = useTranslations('chat.feedback');
   const handleLike = () => {
-    onFeedbackChange(currentFeedback === 'like' ? null : 'like');
+    onFeedbackChange(currentFeedback === FeedbackTypes.LIKE ? null : FeedbackTypes.LIKE);
   };
   const handleDislike = () => {
-    onFeedbackChange(currentFeedback === 'dislike' ? null : 'dislike');
+    onFeedbackChange(currentFeedback === FeedbackTypes.DISLIKE ? null : FeedbackTypes.DISLIKE);
   };
-  const isLikePending = isPending && pendingType === 'like';
-  const isDislikePending = isPending && pendingType === 'dislike';
+  const isLikePending = isPending && pendingType === FeedbackTypes.LIKE;
+  const isDislikePending = isPending && pendingType === FeedbackTypes.DISLIKE;
   return (
     <>
       <Tooltip>
@@ -50,7 +51,7 @@ function RoundFeedbackComponent({
             disabled={disabled || isPending}
             className={cn(
               'h-7 w-7 p-0 rounded-md transition-colors',
-              currentFeedback === 'like'
+              currentFeedback === FeedbackTypes.LIKE
                 ? 'bg-green-500/20 text-green-600 hover:bg-green-500/30 hover:text-green-700'
                 : 'text-muted-foreground hover:text-green-600 hover:bg-green-500/10',
               className,
@@ -61,7 +62,7 @@ function RoundFeedbackComponent({
                   <Loader2 className="size-3 animate-spin" />
                 )
               : (
-                  <ThumbsUp className={cn('size-3', currentFeedback === 'like' && 'fill-current')} />
+                  <ThumbsUp className={cn('size-3', currentFeedback === FeedbackTypes.LIKE && 'fill-current')} />
                 )}
           </Button>
         </TooltipTrigger>
@@ -78,7 +79,7 @@ function RoundFeedbackComponent({
             disabled={disabled || isPending}
             className={cn(
               'h-7 w-7 p-0 rounded-md transition-colors',
-              currentFeedback === 'dislike'
+              currentFeedback === FeedbackTypes.DISLIKE
                 ? 'bg-red-500/20 text-red-600 hover:bg-red-500/30 hover:text-red-700'
                 : 'text-muted-foreground hover:text-red-600 hover:bg-red-500/10',
               className,
@@ -89,7 +90,7 @@ function RoundFeedbackComponent({
                   <Loader2 className="size-3 animate-spin" />
                 )
               : (
-                  <ThumbsDown className={cn('size-3', currentFeedback === 'dislike' && 'fill-current')} />
+                  <ThumbsDown className={cn('size-3', currentFeedback === FeedbackTypes.DISLIKE && 'fill-current')} />
                 )}
           </Button>
         </TooltipTrigger>

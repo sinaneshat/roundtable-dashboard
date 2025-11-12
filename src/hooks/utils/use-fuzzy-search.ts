@@ -28,7 +28,9 @@ export function useFuzzySearch<T>(
   searchQuery: string,
   options: IFuseOptions<T>,
 ): T[] {
-  // Create Fuse instance with items
+  // Create Fuse instance with items and options
+  // Note: options object may change reference but that's acceptable for this use case
+  // Callers should useMemo their options if they want to prevent recreation
   const fuse = useMemo(() => new Fuse(items, {
     // Default options - can be overridden
     threshold: 0.3, // 0.0 = perfect match, 1.0 = match anything

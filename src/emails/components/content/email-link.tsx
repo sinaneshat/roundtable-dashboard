@@ -1,13 +1,14 @@
 import { Link } from '@react-email/components';
 import type { CSSProperties, ReactNode } from 'react';
 
+import type { EmailColor } from '@/api/core/enums';
 import { colors } from '@/emails/design-tokens';
 
 type EmailLinkProps = {
   children: ReactNode;
   href: string;
   target?: '_blank' | '_self';
-  color?: 'primary' | 'secondary' | 'dark' | 'muted';
+  color?: EmailColor;
   style?: CSSProperties;
 };
 

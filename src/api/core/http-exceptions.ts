@@ -109,7 +109,6 @@ function isValidContentfulStatusCode(status: number): status is ContentfulStatus
 
 /**
  * Type guard to check if a number is a valid ContentfulStatusCode
- * Maintained for backward compatibility
  */
 function isContentfulStatusCode(status: number): status is ContentfulStatusCode {
   return isValidContentfulStatusCode(status);

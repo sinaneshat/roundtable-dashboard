@@ -28,7 +28,7 @@ import {
   DatabaseOperationSchema,
   HttpMethodSchema,
   ResourceUnavailableReasonSchema,
-  SortOrderSchema,
+  SortDirectionSchema,
 } from './enums';
 
 // ============================================================================
@@ -117,7 +117,7 @@ export const CoreSchemas = {
   }),
 
   // Common enums
-  sortOrder: () => SortOrderSchema.openapi({
+  sortOrder: () => SortDirectionSchema.openapi({
     example: 'desc',
     description: 'Sort order',
   }),
@@ -449,7 +449,6 @@ export const PaginationQuerySchema = z.object({
 
 /**
  * Cursor-based pagination query parameters
- * Re-exported from pagination.ts for backwards compatibility
  */
 export { type CursorPaginationQuery, CursorPaginationQuerySchema } from './pagination';
 
@@ -689,7 +688,7 @@ export const StreamingEventSchema = z.discriminatedUnion('type', [
     }),
   }),
   z.object({
-    type: z.literal('error'),
+    type: z.literal('failed'),
     error: z.string().openapi({
       description: 'Error message',
     }),

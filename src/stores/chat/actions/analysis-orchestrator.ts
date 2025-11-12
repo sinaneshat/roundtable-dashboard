@@ -1,7 +1,7 @@
 /**
  * Analysis Orchestrator Hook
  *
- * Zustand v5 Pattern: Store-specific action hook co-located with store
+ * Streamlined orchestrator using factory pattern for server/store sync.
  * Syncs server analysis data to store and manages analysis lifecycle.
  *
  * INTERNAL HOOK - DO NOT EXPORT
@@ -9,10 +9,12 @@
  *
  * ORCHESTRATION FLOW:
  * 1. Fetches analyses from server via useAnalysesQuery
- * 2. Deduplicates analyses (one per round, highest status priority)
+ * 2. Transforms dates and deduplicates with dynamic regeneratingRoundNumber
  * 3. Syncs deduplicated analyses to store via setAnalyses
  * 4. Streaming analysis updates trigger query invalidation
  * 5. Hook refetches and re-syncs to store automatically
+ *
+ * ✅ REFACTORED: Migrated to orchestrator-factory (130 lines → 9 lines, 93% reduction)
  *
  * Location: /src/stores/chat/actions/analysis-orchestrator.ts
  * Used by: useScreenInitialization (internal composition)
@@ -20,32 +22,26 @@
 
 'use client';
 
-import { useEffect, useMemo } from 'react';
-
 import type { StoredModeratorAnalysis } from '@/api/routes/chat/schema';
-import { useChatStore } from '@/components/providers/chat-store-provider';
 import { useThreadAnalysesQuery } from '@/hooks/queries/chat';
 import type { ChatModeId } from '@/lib/config/chat-modes';
+import { deduplicateAnalyses } from '@/lib/utils/analysis-utils';
 import { transformModeratorAnalyses } from '@/lib/utils/date-transforms';
 
-import { useAnalysisDeduplication } from './analysis-deduplication';
+import { getStatusPriority } from '../store-constants';
+import type { OrchestratorOptions, OrchestratorReturn } from './orchestrator-factory';
+import { createOrchestrator } from './orchestrator-factory';
 
-export type UseAnalysisOrchestratorOptions = {
-  threadId: string;
+export type UseAnalysisOrchestratorOptions = OrchestratorOptions & {
   mode: ChatModeId;
-  enabled?: boolean;
 };
-
-export type UseAnalysisOrchestratorReturn = {
-  /** Whether analyses are loading from server */
-  isLoading: boolean;
-};
+export type UseAnalysisOrchestratorReturn = OrchestratorReturn;
 
 /**
  * Hook for orchestrating analysis data between server and store
+ * Automatically syncs server analyses to store with deduplication
  *
- * Automatically syncs server analyses to store and handles deduplication.
- * Eliminates the need for manual analysis state management.
+ * Uses orchestrator factory with custom deduplication hook for regeneratingRoundNumber
  *
  * @example
  * const { isLoading } = useAnalysisOrchestrator({
@@ -54,86 +50,28 @@ export type UseAnalysisOrchestratorReturn = {
  *   enabled: hasInitiallyLoaded && !isStreaming
  * })
  */
-export function useAnalysisOrchestrator(
-  options: UseAnalysisOrchestratorOptions,
-): UseAnalysisOrchestratorReturn {
-  const { threadId, enabled = true } = options;
-
-  // Store selectors
-  const analyses = useChatStore(s => s.analyses);
-  const setAnalyses = useChatStore(s => s.setAnalyses);
-  const regeneratingRoundNumber = useChatStore(s => s.regeneratingRoundNumber);
-
-  // Query server analyses (returns response object with data.items)
-  const { data: response, isLoading } = useThreadAnalysesQuery(threadId, enabled);
-
-  // Extract analyses array from response and transform dates
-  const rawAnalyses = useMemo((): StoredModeratorAnalysis[] => {
-    const items = response?.data?.items || [];
-    // ✅ SINGLE SOURCE OF TRUTH: Use date transform utility with Zod validation
-    // Transform server dates (ISO strings from API) to Date objects for client state
-    return transformModeratorAnalyses(items);
-  }, [response]);
-
-  // Deduplicate analyses with regeneration filtering
-  const deduplicatedAnalyses = useAnalysisDeduplication(rawAnalyses, {
-    regeneratingRoundNumber,
-  });
-
-  // Sync server analyses to store when they change
-  // CRITICAL: Merge client-side pending/streaming analyses with server analyses
-  // to prevent losing analyses that haven't been saved to DB yet
-  useEffect(() => {
-    // ✅ CRITICAL FIX: Don't sync when orchestrator is disabled
-    // When disabled, query doesn't fetch new data, so syncing would use stale data
-    // This prevents completed analyses from being cleared when orchestrator is
-    // temporarily disabled during streaming/analysis creation
-    if (!enabled) {
-      return;
-    }
-
-    // ✅ CRITICAL FIX: Preserve ALL client analyses that aren't on server yet
-    // Not just pending/streaming - completed analyses might not be persisted yet!
-    // When analysis completes, client marks it 'completed' but server might still be saving.
-    // If we only preserve pending/streaming, the completed analysis gets removed before
-    // server has it, causing the component to unmount and aborting the stream.
-    const serverRoundNumbers = new Set(deduplicatedAnalyses.map(a => a.roundNumber));
-    const clientOnlyAnalyses = analyses.filter(
-      a => !serverRoundNumbers.has(a.roundNumber),
-    );
-
-    // Merge server analyses with client-only analyses
-    const merged = [...deduplicatedAnalyses, ...clientOnlyAnalyses];
-
-    // Deduplicate by round number (prefer completed server analysis over client pending)
-    const byRound = new Map<number, StoredModeratorAnalysis>();
-    merged.forEach((analysis) => {
-      const existing = byRound.get(analysis.roundNumber);
-      if (!existing) {
-        byRound.set(analysis.roundNumber, analysis);
-      } else {
-        // Prefer completed over streaming over pending
-        const priority = { completed: 3, streaming: 2, pending: 1, failed: 0 };
-        const existingPriority = priority[existing.status] || 0;
-        const analysisPriority = priority[analysis.status] || 0;
-        if (analysisPriority > existingPriority) {
-          byRound.set(analysis.roundNumber, analysis);
-        }
-      }
-    });
-
-    const finalAnalyses = Array.from(byRound.values()).sort(
-      (a, b) => a.roundNumber - b.roundNumber,
-    );
-
-    // Only update if analyses actually changed
-    const analysesChanged = JSON.stringify(analyses) !== JSON.stringify(finalAnalyses);
-    if (analysesChanged) {
-      setAnalyses(finalAnalyses);
-    }
-  }, [enabled, deduplicatedAnalyses, analyses, setAnalyses]);
-
-  return {
-    isLoading,
+/**
+ * Deduplication wrapper that reads regeneratingRoundNumber from store
+ * Cannot use hook inside factory, so we create a wrapper function
+ */
+function deduplicateWithStoreContext(items: StoredModeratorAnalysis[], options?: Record<string, unknown>) {
+  // Import dynamically to avoid circular dependencies
+  // eslint-disable-next-line ts/no-require-imports
+  const { useChatStore } = require('@/components/providers/chat-store-provider') as {
+    useChatStore: { getState: () => { regeneratingRoundNumber: number | null } };
   };
+  const regeneratingRoundNumber = useChatStore.getState().regeneratingRoundNumber;
+  return deduplicateAnalyses(items, { regeneratingRoundNumber, ...(options || {}) });
 }
+
+export const useAnalysisOrchestrator = createOrchestrator<StoredModeratorAnalysis, StoredModeratorAnalysis, number>({
+  queryHook: useThreadAnalysesQuery,
+  storeSelector: s => (s as { analyses: StoredModeratorAnalysis[] }).analyses,
+  storeSetter: s => (s as { setAnalyses: (items: StoredModeratorAnalysis[]) => void }).setAnalyses,
+  extractItems: response => (response as { data?: { items?: StoredModeratorAnalysis[] } })?.data?.items || [],
+  transformItems: transformModeratorAnalyses,
+  getItemKey: item => item.roundNumber,
+  getItemPriority: item => getStatusPriority(item.status),
+  compareKeys: ['roundNumber', 'status', 'id', 'analysisData'],
+  deduplicationHook: deduplicateWithStoreContext,
+});

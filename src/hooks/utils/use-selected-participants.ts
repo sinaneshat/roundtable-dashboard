@@ -74,15 +74,12 @@ export function useSelectedParticipants(
 
   /**
    * Remove a participant and reindex remaining participants
-   * ✅ SEMANTIC MATCHING: Supports removal by id OR modelId for consistency with add logic
-   * This ensures symmetric behavior: add checks by modelId, remove works by modelId too
+   * Supports removal by id OR modelId for consistency with add logic
    *
    * @param participantId - Either database ID or modelId to identify participant
    */
   const handleRemoveParticipant = useCallback((participantId: string) => {
     setSelectedParticipants((prev) => {
-      // ✅ FLEXIBLE MATCHING: Try id first (backward compat), then modelId (semantic match)
-      // This supports both legacy code passing id and new code passing modelId
       const filtered = prev.filter(p => p.id !== participantId && p.modelId !== participantId);
 
       // Reindex the remaining participants to maintain continuous priority

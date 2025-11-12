@@ -13,7 +13,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 
-import type { ApiKeyResponse } from '@/api/routes/api-keys/schema';
+import type { ApiKey } from '@/api/routes/api-keys/schema';
 import { ApiKeyCard } from '@/components/settings/api-key-card';
 import {
   AlertDialog,
@@ -43,7 +43,7 @@ import { showApiErrorToast } from '@/lib/toast';
 // ============================================================================
 
 type ApiKeysListProps = {
-  apiKeys: ApiKeyResponse[];
+  apiKeys: ApiKey[];
   isLoading: boolean;
   onCreateNew: () => void;
 };

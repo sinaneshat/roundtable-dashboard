@@ -72,14 +72,8 @@ export {
 // ============================================================================
 
 export {
-  type PreSearchCompleteEvent,
-  type PreSearchDoneData,
-  type PreSearchErrorEvent,
-  type PreSearchQueryEvent,
+  getThreadPreSearchesService,
   type PreSearchRequest,
-  type PreSearchResultEvent,
-  type PreSearchStartEvent,
-  preSearchStreamService,
 } from './chat-pre-search';
 
 // ============================================================================

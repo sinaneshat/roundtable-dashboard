@@ -1,9 +1,9 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { AlertCircle, Brain, CheckCircle, Globe, Loader2, Search } from 'lucide-react';
+import { Brain, CheckCircle, Globe, Loader2, Search } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { memo, useEffect, useRef } from 'react';
+import { memo, useEffect, useRef, useState } from 'react';
 
 import { AnalysisStatuses, ChainOfThoughtStepStatuses, WebSearchDepths } from '@/api/core/enums';
 import type { PreSearchDataPayload, StoredPreSearch } from '@/api/routes/chat/schema';
@@ -12,9 +12,9 @@ import {
   ChainOfThoughtSearchResults,
   ChainOfThoughtStep,
 } from '@/components/ai-elements/chain-of-thought';
-import { useChatStore } from '@/components/providers/chat-store-provider';
+import { ChatLoading } from '@/components/chat/chat-loading';
 import { Badge } from '@/components/ui/badge';
-import { usePreSearchSSE } from '@/hooks/utils';
+import { useBoolean } from '@/hooks/utils';
 
 import { WebSearchResultCard } from './web-search-result-card';
 
@@ -29,12 +29,12 @@ type PreSearchStreamProps = {
 const triggeredSearchIds = new Map<string, boolean>();
 const triggeredRounds = new Map<string, Set<number>>();
 
-// eslint-disable-next-line react-refresh/only-export-components
+// eslint-disable-next-line react-refresh/only-export-components -- Utility function for managing component state
 export function clearTriggeredPreSearch(searchId: string) {
   triggeredSearchIds.delete(searchId);
 }
 
-// eslint-disable-next-line react-refresh/only-export-components
+// eslint-disable-next-line react-refresh/only-export-components -- Utility function for managing component state
 export function clearTriggeredPreSearchForRound(roundNumber: number) {
   const keysToDelete: string[] = [];
   triggeredSearchIds.forEach((_value, key) => {
@@ -56,10 +56,12 @@ function PreSearchStreamComponent({
   onStreamStart,
 }: PreSearchStreamProps) {
   const t = useTranslations();
+  const is409Conflict = useBoolean(false);
 
-  // ✅ CRITICAL: Store actions to update pre-search status during streaming
-  const updatePreSearchStatus = useChatStore(s => s.updatePreSearchStatus);
-  const updatePreSearchData = useChatStore(s => s.updatePreSearchData);
+  // Local streaming state
+  const [partialSearchData, setPartialSearchData] = useState<Partial<PreSearchDataPayload> | null>(null);
+  const [error, setError] = useState<Error | null>(null);
+  const eventSourceRef = useRef<EventSource | null>(null);
 
   // Store callbacks in refs for stability and to allow calling after unmount
   const onStreamCompleteRef = useRef(onStreamComplete);
@@ -73,41 +75,7 @@ function PreSearchStreamComponent({
     onStreamStartRef.current = onStreamStart;
   }, [onStreamStart]);
 
-  // ✅ Use custom SSE hook instead of useObject (backend sends custom events)
-  const { partialData: partialSearchData, error, isStreaming, submit } = usePreSearchSSE({
-    threadId,
-    roundNumber: preSearch.roundNumber,
-    userQuery: preSearch.userQuery,
-    enabled: preSearch.status === AnalysisStatuses.PENDING || preSearch.status === AnalysisStatuses.STREAMING,
-    autoSubmit: false, // Don't auto-submit, we'll control it manually
-    onDone: (finalObject) => {
-      // ✅ Update store: Completed status with data
-      updatePreSearchData(preSearch.roundNumber, finalObject);
-      updatePreSearchStatus(preSearch.roundNumber, AnalysisStatuses.COMPLETE);
-
-      onStreamCompleteRef.current?.(finalObject);
-    },
-    onError: (streamError) => {
-      const errorMessage = streamError.message || String(streamError);
-      if (errorMessage.includes('409') || errorMessage.includes('Conflict')) {
-        return; // Ignore conflict errors
-      }
-      // ✅ Update store: Failed status
-      updatePreSearchStatus(preSearch.roundNumber, AnalysisStatuses.FAILED);
-    },
-  });
-
-  // Update store when streaming starts
-  useEffect(() => {
-    if (isStreaming && preSearch.status !== AnalysisStatuses.STREAMING) {
-      updatePreSearchStatus(preSearch.roundNumber, AnalysisStatuses.STREAMING);
-      onStreamStartRef.current?.();
-    }
-    // ✅ FIX: Zustand actions are stable, don't need them in deps
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isStreaming, preSearch.status, preSearch.roundNumber]);
-
-  // Trigger pre-search submission once per round (deduplication)
+  // Custom SSE handler for backend's custom event format (POST with fetch)
   useEffect(() => {
     const roundAlreadyTriggered = triggeredRounds.get(threadId)?.has(preSearch.roundNumber) ?? false;
 
@@ -116,7 +84,7 @@ function PreSearchStreamComponent({
       && !roundAlreadyTriggered
       && (preSearch.status === AnalysisStatuses.PENDING || preSearch.status === AnalysisStatuses.STREAMING)
     ) {
-      // Mark as triggered BEFORE submitting to prevent duplicate submissions
+      // Mark as triggered BEFORE starting stream to prevent duplicate submissions
       triggeredSearchIds.set(preSearch.id, true);
 
       const roundSet = triggeredRounds.get(threadId);
@@ -126,24 +94,127 @@ function PreSearchStreamComponent({
         triggeredRounds.set(threadId, new Set([preSearch.roundNumber]));
       }
 
-      // Now submit the request
-      queueMicrotask(() => {
-        updatePreSearchStatus(preSearch.roundNumber, AnalysisStatuses.STREAMING);
-        onStreamStartRef.current?.();
-        submit();
-      });
-    }
-    // ✅ FIX: Zustand actions are stable, don't need them in deps
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [preSearch.id, preSearch.roundNumber, preSearch.status, threadId]);
+      const abortController = new AbortController();
+      eventSourceRef.current = abortController as unknown as EventSource;
 
-  // Cleanup on unmount - NO dependencies to prevent re-running on re-renders
-  useEffect(() => {
+      // Track partial data accumulation
+      const queries: Array<PreSearchDataPayload['queries'][number]> = [];
+      const results: Array<PreSearchDataPayload['results'][number]> = [];
+
+      // Start fetch-based SSE stream (backend uses POST)
+      const startStream = async () => {
+        try {
+          const response = await fetch(
+            `/api/v1/chat/threads/${threadId}/rounds/${preSearch.roundNumber}/pre-search`,
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'text/event-stream',
+              },
+              body: JSON.stringify({ userQuery: preSearch.userQuery }),
+              signal: abortController.signal,
+            },
+          );
+
+          if (!response.ok) {
+            if (response.status === 409) {
+              is409Conflict.onTrue();
+              return;
+            }
+            throw new Error(`Pre-search failed: ${response.statusText}`);
+          }
+
+          // Parse SSE stream manually
+          const reader = response.body?.getReader();
+          const decoder = new TextDecoder();
+
+          if (!reader) {
+            throw new Error('No response body');
+          }
+
+          let buffer = '';
+
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done)
+              break;
+
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || '';
+
+            let currentEvent = '';
+            let currentData = '';
+
+            for (const line of lines) {
+              if (line.startsWith('event:')) {
+                currentEvent = line.slice(6).trim();
+              } else if (line.startsWith('data:')) {
+                currentData = line.slice(5).trim();
+              } else if (line === '' && currentEvent && currentData) {
+                // Process complete event
+                try {
+                  if (currentEvent === 'start') {
+                    onStreamStartRef.current?.();
+                  } else if (currentEvent === 'query') {
+                    const queryData = JSON.parse(currentData);
+                    queries[queryData.index] = {
+                      query: queryData.query,
+                      rationale: queryData.rationale,
+                      searchDepth: queryData.searchDepth || WebSearchDepths.BASIC,
+                      index: queryData.index,
+                      total: queryData.total,
+                    };
+                    setPartialSearchData({ queries: [...queries], results: [...results] });
+                  } else if (currentEvent === 'result') {
+                    const resultData = JSON.parse(currentData);
+                    results[resultData.index] = {
+                      query: resultData.query,
+                      answer: resultData.answer,
+                      results: resultData.results || [],
+                      responseTime: resultData.responseTime,
+                    };
+                    setPartialSearchData({ queries: [...queries], results: [...results] });
+                  } else if (currentEvent === 'done') {
+                    const finalData = JSON.parse(currentData) as PreSearchDataPayload;
+                    setPartialSearchData(finalData);
+                    onStreamCompleteRef.current?.(finalData);
+                  } else if (currentEvent === 'failed') {
+                    const errorData = JSON.parse(currentData);
+                    setError(new Error(errorData.error || 'Pre-search failed'));
+                  }
+                } catch (err) {
+                  console.error(`Failed to parse ${currentEvent} event:`, err);
+                }
+
+                // Reset for next event
+                currentEvent = '';
+                currentData = '';
+              }
+            }
+          }
+        } catch (err) {
+          if (err instanceof Error && err.name === 'AbortError') {
+            return; // Normal abort, don't show error
+          }
+          console.error('Pre-search stream error:', err);
+          setError(err instanceof Error ? err : new Error('Stream failed'));
+        }
+      };
+
+      startStream();
+    }
+
+    // Cleanup on unmount
     return () => {
-      // Direct abort without calling stop() to avoid dependency issues
-      // The hook's internal cleanup will handle setting isStreaming to false
+      if (eventSourceRef.current) {
+        (eventSourceRef.current as unknown as AbortController).abort();
+        eventSourceRef.current = null;
+      }
     };
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [preSearch.id, preSearch.roundNumber, preSearch.status, threadId, preSearch.userQuery]);
 
   // Mark completed/failed pre-searches as triggered to prevent re-streaming
   const roundAlreadyMarked = triggeredRounds.get(threadId)?.has(preSearch.roundNumber) ?? false;
@@ -165,19 +236,16 @@ function PreSearchStreamComponent({
   }
 
   // Show error if present (excluding abort and conflict errors)
-  const shouldShowError = error && !(
+  const shouldShowError = error && !is409Conflict.value && !(
     error instanceof Error
-    && (error.name === 'AbortError'
-      || error.message?.includes('aborted')
-      || error.message?.includes('409')
-      || error.message?.includes('Conflict'))
+    && (error.name === 'AbortError' || error.message?.includes('aborted'))
   );
 
   if (shouldShowError) {
     return (
       <div className="flex flex-col gap-2 py-2">
         <div className="flex items-center gap-2 text-sm text-destructive">
-          <AlertCircle className="size-4" />
+          <span className="size-1.5 rounded-full bg-destructive/80" />
           <span>
             Failed to stream pre-search:
             {' '}
@@ -188,6 +256,9 @@ function PreSearchStreamComponent({
     );
   }
 
+  // Handle streaming state properly
+  // PENDING/STREAMING: Show partialSearchData (actual stream data)
+  // COMPLETED: Show stored searchData
   const displayData = preSearch.status === AnalysisStatuses.COMPLETE
     ? preSearch.searchData
     : partialSearchData;
@@ -197,35 +268,19 @@ function PreSearchStreamComponent({
     || (displayData.results && displayData.results.length > 0)
   );
 
+  // Show loading indicator for PENDING/STREAMING with no stream data yet
   if ((preSearch.status === AnalysisStatuses.PENDING || preSearch.status === AnalysisStatuses.STREAMING) && !hasData) {
-    return (
-      <div className="flex items-center gap-2 py-4 text-sm text-muted-foreground">
-        <div className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-        <span>Generating search queries...</span>
-      </div>
-    );
+    return <ChatLoading text="Generating search queries..." />;
   }
 
+  // Don't render if no data
   if (!hasData) {
     return null;
   }
 
   const { queries = [], results = [] } = displayData;
-
-  /**
-   * Type compatibility bridge for AI SDK streaming
-   *
-   * AI SDK's DeepPartial makes all properties recursively optional, but components
-   * expect complete types. This is safe because:
-   * 1. Schema validation ensures data structure is correct
-   * 2. UI will render whatever fields are available during streaming
-   * 3. Incomplete data is visually acceptable (progressive rendering)
-   *
-   * This is an established pattern when bridging streaming (partial) and
-   * complete types - similar to how AI SDK itself handles streaming text.
-   */
-  const validQueries = queries.filter((q): q is NonNullable<typeof q> => q != null) as PreSearchDataPayload['queries'];
-  const validResults = results.filter((r): r is NonNullable<typeof r> => r != null) as PreSearchDataPayload['results'];
+  const validQueries = queries.filter((q): q is NonNullable<typeof q> => q != null);
+  const validResults = results.filter((r): r is NonNullable<typeof r> => r != null);
 
   const isStreamingNow = preSearch.status === AnalysisStatuses.STREAMING;
 
@@ -277,7 +332,30 @@ function PreSearchStreamComponent({
             <ChainOfThoughtStep
               icon={isStreamingNow && !hasResult ? Loader2 : Globe}
               label={isStreamingNow && !hasResult ? t('chat.preSearch.steps.searching') : t('chat.preSearch.steps.searchComplete')}
-              description={isStreamingNow && !hasResult ? t('chat.preSearch.steps.searchingDesc') : undefined}
+              description={isStreamingNow && !hasResult
+                ? (
+                    <div className="flex items-center gap-1.5">
+                      <span>{t('chat.preSearch.steps.searchingDesc')}</span>
+                      <div className="flex items-center gap-1 ml-1">
+                        {[0, 1, 2].map(i => (
+                          <motion.div
+                            key={i}
+                            className="size-1.5 bg-muted-foreground/40 rounded-full"
+                            animate={{
+                              scale: [1, 1.3, 1],
+                              opacity: [0.4, 1, 0.4],
+                            }}
+                            transition={{
+                              repeat: Infinity,
+                              duration: 1.2,
+                              delay: i * 0.2,
+                            }}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )
+                : undefined}
               status={isStreamingNow && !hasResult ? ChainOfThoughtStepStatuses.ACTIVE : ChainOfThoughtStepStatuses.COMPLETE}
               metadata={hasResult && (
                 <>

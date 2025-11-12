@@ -23,6 +23,7 @@ import type { LanguageModelUsage } from 'ai';
 import { ulid } from 'ulid';
 
 import { getPostHogClient } from '@/lib/posthog-server';
+import { isObject, isToolCall } from '@/lib/utils/type-guards';
 
 // ============================================================================
 // TYPE DEFINITIONS (Using AI SDK Types)
@@ -436,10 +437,9 @@ export async function trackLLMGeneration(
     // =========================================================================
     // TOOL CALLS (AI SDK v5)
     // =========================================================================
-    const toolCalls = (Array.isArray(finishResult.toolCalls) ? finishResult.toolCalls : []) as Array<{
-      toolName: string;
-      input: unknown;
-    }>;
+    // ✅ TYPE GUARD: Validate tool calls array with runtime check
+    const rawToolCalls = Array.isArray(finishResult.toolCalls) ? finishResult.toolCalls : [];
+    const toolCalls = rawToolCalls.filter(isToolCall);
     const hasToolCalls = toolCalls.length > 0;
 
     // =========================================================================
@@ -646,13 +646,14 @@ export async function trackLLMError(
       error_stack: error.stack,
     };
 
-    // Check for HTTP status code in error
-    const httpError = error as Error & { statusCode?: number; responseBody?: string };
-    if (httpError.statusCode) {
-      errorDetails.http_status = httpError.statusCode;
-    }
-    if (httpError.responseBody) {
-      errorDetails.response_body = httpError.responseBody;
+    // ✅ TYPE GUARD: Check for HTTP error properties
+    if (isObject(error)) {
+      if ('statusCode' in error && typeof error.statusCode === 'number') {
+        errorDetails.http_status = error.statusCode;
+      }
+      if ('responseBody' in error && typeof error.responseBody === 'string') {
+        errorDetails.response_body = error.responseBody;
+      }
     }
 
     // Capture exception with trace linking
@@ -700,8 +701,10 @@ export async function trackLLMError(
  * Determine if an error is transient (retriable)
  */
 function isTransientError(error: Error): boolean {
-  const httpError = error as Error & { statusCode?: number };
-  const statusCode = httpError.statusCode;
+  // ✅ TYPE GUARD: Check for status code property
+  const statusCode = isObject(error) && 'statusCode' in error && typeof error.statusCode === 'number'
+    ? error.statusCode
+    : undefined;
 
   // Rate limits and server errors are transient
   if (statusCode === 429 || statusCode === 503 || statusCode === 502) {

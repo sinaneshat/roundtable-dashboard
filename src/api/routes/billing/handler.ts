@@ -5,6 +5,8 @@ import type Stripe from 'stripe';
 import { ErrorContextBuilders } from '@/api/common/error-contexts';
 import { AppError, createError } from '@/api/common/error-handling';
 import { createHandler, createHandlerWithBatch, Responses } from '@/api/core';
+import type { BillingInterval } from '@/api/core/enums';
+import { BillingIntervals, StripeSubscriptionStatuses } from '@/api/core/enums';
 import { IdParamSchema } from '@/api/core/schemas';
 import { stripeService } from '@/api/services/stripe.service';
 import { getCustomerIdByUserId, syncStripeDataFromStripe } from '@/api/services/stripe-sync.service';
@@ -51,9 +53,9 @@ function validateSubscriptionOwnership(
  * Annual Savings Calculator
  * Calculates percentage saved when paying annually vs monthly
  */
-function calculateAnnualSavings(prices: Array<{ interval: 'month' | 'year'; unitAmount: number }>): number | undefined {
-  const monthlyPrice = prices.find(p => p.interval === 'month');
-  const yearlyPrice = prices.find(p => p.interval === 'year');
+function calculateAnnualSavings(prices: Array<{ interval: BillingInterval; unitAmount: number }>): number | undefined {
+  const monthlyPrice = prices.find(p => p.interval === BillingIntervals.MONTH);
+  const yearlyPrice = prices.find(p => p.interval === BillingIntervals.YEAR);
 
   if (!monthlyPrice || !yearlyPrice || !monthlyPrice.unitAmount || !yearlyPrice.unitAmount) {
     return undefined;
@@ -140,7 +142,7 @@ export const listProductsHandler: RouteHandler<typeof listProductsRoute, ApiEnv>
 
           const annualSavingsPercent = calculateAnnualSavings(
             productPrices.map(p => ({
-              interval: (p.interval || 'month') as 'month' | 'year',
+              interval: (p.interval || BillingIntervals.MONTH) as BillingInterval,
               unitAmount: p.unitAmount ?? 0,
             })),
           );
@@ -217,7 +219,7 @@ export const getProductHandler: RouteHandler<typeof getProductRoute, ApiEnv> = c
 
       const annualSavingsPercent = calculateAnnualSavings(
         productPrices.map(p => ({
-          interval: (p.interval || 'month') as 'month' | 'year',
+          interval: (p.interval || BillingIntervals.MONTH) as BillingInterval,
           unitAmount: p.unitAmount ?? 0,
         })),
       );
@@ -280,7 +282,7 @@ export const createCheckoutSessionHandler: RouteHandler<typeof createCheckoutSes
       });
 
       const activeSubscription = existingSubscriptions.find(sub =>
-        (sub.status === 'active' || sub.status === 'trialing' || sub.status === 'past_due')
+        (sub.status === StripeSubscriptionStatuses.ACTIVE || sub.status === StripeSubscriptionStatuses.TRIALING || sub.status === StripeSubscriptionStatuses.PAST_DUE)
         && !sub.cancelAtPeriodEnd,
       );
 
@@ -757,7 +759,7 @@ export const cancelSubscriptionHandler: RouteHandler<typeof cancelSubscriptionRo
       }
 
       // Check if subscription is already canceled
-      if (subscription.status === 'canceled') {
+      if (subscription.status === StripeSubscriptionStatuses.CANCELED) {
         throw createError.badRequest(
           'Subscription is already canceled',
           ErrorContextBuilders.validation('subscription'),

@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
+import { StripeSubscriptionStatuses, SubscriptionChangeTypes } from '@/api/core/enums';
 import { PricingModal } from '@/components/modals/pricing-modal';
 import {
   useCancelSubscriptionMutation,
@@ -31,7 +32,7 @@ export default function PricingModalScreen() {
   const subscriptions = subscriptionsData?.success ? subscriptionsData.data?.items || [] : [];
 
   const activeSubscription = subscriptions.find(
-    sub => (sub.status === 'active' || sub.status === 'trialing') && !sub.cancelAtPeriodEnd,
+    sub => (sub.status === StripeSubscriptionStatuses.ACTIVE || sub.status === StripeSubscriptionStatuses.TRIALING) && !sub.cancelAtPeriodEnd,
   );
 
   const handleSubscribe = async (priceId: string) => {
@@ -47,7 +48,7 @@ export default function PricingModalScreen() {
           const changeDetails = result.data?.changeDetails;
 
           if (changeDetails) {
-            const changeType = changeDetails.isUpgrade ? 'upgrade' : changeDetails.isDowngrade ? 'downgrade' : 'change';
+            const changeType = changeDetails.isUpgrade ? SubscriptionChangeTypes.UPGRADE : changeDetails.isDowngrade ? SubscriptionChangeTypes.DOWNGRADE : SubscriptionChangeTypes.CHANGE;
 
             const params = new URLSearchParams({
               changeType,

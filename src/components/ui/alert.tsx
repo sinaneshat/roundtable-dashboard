@@ -1,6 +1,7 @@
 import { cva, type VariantProps } from "class-variance-authority"
 import * as React from "react"
 
+import type { ComponentVariant } from "@/api/core/enums"
 import { cn } from "@/lib/ui/cn"
 
 const alertVariants = cva(
@@ -11,7 +12,7 @@ const alertVariants = cva(
         default: "bg-card text-card-foreground",
         destructive:
           "text-destructive bg-card [&>svg]:text-current *:data-[slot=alert-description]:text-destructive/90",
-      },
+      } satisfies Partial<Record<ComponentVariant, string>>,
     },
     defaultVariants: {
       variant: "default",

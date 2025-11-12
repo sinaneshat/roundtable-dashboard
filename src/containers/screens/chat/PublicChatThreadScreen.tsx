@@ -4,6 +4,7 @@ import { ArrowRight, Lock, Sparkles } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useMemo } from 'react';
 
+import type { FeedbackType } from '@/api/core/enums';
 import type { ChatParticipant, RoundFeedback as RoundFeedbackType } from '@/api/routes/chat/schema';
 import { ThreadTimeline } from '@/components/chat/thread-timeline';
 import { UnifiedErrorBoundary } from '@/components/chat/unified-error-boundary';
@@ -43,7 +44,7 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
 
   // Build feedback map for quick lookup
   const feedbackByRound = useMemo(() => {
-    const map = new Map<number, 'like' | 'dislike'>();
+    const map = new Map<number, FeedbackType>();
     rawFeedback.forEach((fb: RoundFeedbackType) => {
       if (fb.feedbackType) {
         map.set(fb.roundNumber, fb.feedbackType);
@@ -119,17 +120,17 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
         <div className="flex flex-col min-h-screen relative">
           <div
             id="public-chat-scroll-container"
-            className="container max-w-3xl mx-auto px-4 sm:px-6 pt-20 pb-32 flex-1"
+            className="container max-w-3xl mx-auto px-3 sm:px-4 md:px-6 pt-16 sm:pt-20 pb-24 sm:pb-32 flex-1"
           >
             {timeline.length === 0
               ? (
                   <div className="flex items-center justify-center min-h-[50vh]">
-                    <div className="text-center space-y-4 max-w-md">
-                      <div className="w-16 h-16 rounded-full bg-muted/50 flex items-center justify-center mx-auto">
-                        <Sparkles className="w-8 h-8 text-muted-foreground" />
+                    <div className="text-center space-y-4 max-w-md px-4">
+                      <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-muted/50 flex items-center justify-center mx-auto">
+                        <Sparkles className="w-7 h-7 sm:w-8 sm:h-8 text-muted-foreground" />
                       </div>
                       <div className="space-y-2">
-                        <h3 className="text-lg font-semibold">{t('chat.public.noMessagesYet')}</h3>
+                        <h3 className="text-base sm:text-lg font-semibold">{t('chat.public.noMessagesYet')}</h3>
                         <p className="text-sm text-muted-foreground">
                           {t('chat.public.noMessagesDescription')}
                         </p>
@@ -149,16 +150,16 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
                       isReadOnly={true}
                     />
 
-                    <div className="mt-16 mb-8">
-                      <div className="rounded-xl border bg-gradient-to-br from-primary/5 via-primary/3 to-background p-8 sm:p-10 text-center space-y-6">
-                        <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-primary/10 mb-2">
-                          <Sparkles className="w-7 h-7 text-primary" />
+                    <div className="mt-12 sm:mt-16 mb-6 sm:mb-8">
+                      <div className="rounded-2xl sm:rounded-xl border bg-gradient-to-br from-primary/5 via-primary/3 to-background p-6 sm:p-8 md:p-10 text-center space-y-4 sm:space-y-6">
+                        <div className="inline-flex items-center justify-center w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-primary/10 mb-1 sm:mb-2">
+                          <Sparkles className="w-6 h-6 sm:w-7 sm:h-7 text-primary" />
                         </div>
-                        <div className="space-y-3">
-                          <h3 className="text-2xl sm:text-3xl font-bold">
+                        <div className="space-y-2 sm:space-y-3">
+                          <h3 className="text-xl sm:text-2xl md:text-3xl font-bold">
                             {tPublic('tryRoundtable')}
                           </h3>
-                          <p className="text-muted-foreground max-w-xl mx-auto text-base">
+                          <p className="text-sm sm:text-base text-muted-foreground max-w-xl mx-auto">
                             {tPublic('experiencePower')}
                             {' '}
                             {BRAND.displayName}
@@ -166,11 +167,11 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
                             {tPublic('description')}
                           </p>
                         </div>
-                        <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-4">
+                        <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2 sm:pt-4">
                           <Button
                             size="lg"
                             onClick={() => window.location.href = signUpUrl}
-                            className="gap-2 w-full sm:w-auto text-base px-8"
+                            className="gap-2 w-full sm:w-auto text-sm sm:text-base px-6 sm:px-8 touch-manipulation active:scale-95"
                           >
                             {tPublic('tryRoundtable')}
                             <ArrowRight className="w-4 h-4" />
@@ -179,7 +180,7 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
                             variant="outline"
                             size="lg"
                             onClick={() => window.location.href = '/?utm_source=public_chat&utm_medium=cta&utm_campaign=learn_more'}
-                            className="w-full sm:w-auto text-base px-8"
+                            className="w-full sm:w-auto text-sm sm:text-base px-6 sm:px-8 touch-manipulation active:scale-95"
                           >
                             {tPublic('learnMore')}
                           </Button>

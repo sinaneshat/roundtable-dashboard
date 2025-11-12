@@ -11,6 +11,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { queryKeys } from '@/lib/data/query-keys';
 import { createCheckoutSessionService, syncAfterCheckoutService } from '@/services/api';
+import { listModelsService } from '@/services/api/models';
 
 /**
  * Hook to create Stripe checkout session
@@ -50,30 +51,42 @@ export function useSyncAfterCheckoutMutation() {
 
   return useMutation({
     mutationFn: syncAfterCheckoutService,
-    onSuccess: () => {
-      // Invalidate all billing queries and force refetch to ensure fresh data
-      // Using refetch: true to trigger immediate refetch regardless of staleTime
+    onSuccess: async () => {
+      // Invalidate all billing queries and force immediate refetch
+      // Using refetchType: 'all' to refetch both active and inactive queries
+      // This ensures queries on the success page refetch even if not yet active
+
+      // Subscription queries - critical for success page
       queryClient.invalidateQueries({
         queryKey: queryKeys.subscriptions.all,
-        refetchType: 'active',
+        refetchType: 'all', // Refetch all queries, not just active
       });
+
+      // Product queries
       queryClient.invalidateQueries({
         queryKey: queryKeys.products.all,
-        refetchType: 'active',
+        refetchType: 'all',
       });
 
-      // Invalidate usage queries to reflect new quota limits from subscription
+      // Usage queries - reflect new quota limits from subscription
       queryClient.invalidateQueries({
         queryKey: queryKeys.usage.all,
-        refetchType: 'active',
+        refetchType: 'all',
       });
 
-      // ✅ FIX: Invalidate models query to refresh tier-based model access after plan upgrade
-      // Without this, users must hard refresh to see newly unlocked models in participant selector
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.models.all,
-        refetchType: 'active',
-      });
+      // Models query - tier-based access needs immediate refresh
+      // ⚠️ CRITICAL: Models API has aggressive HTTP caching (1hr browser, 24hr CDN)
+      // Must bypass cache to get fresh data with updated tier restrictions
+      try {
+        const freshModelsData = await listModelsService({ bypassCache: true });
+        queryClient.setQueryData(queryKeys.models.list(), freshModelsData);
+      } catch {
+        // Fallback: invalidate and let normal refetch handle it
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.models.all,
+          refetchType: 'all',
+        });
+      }
     },
     retry: false,
     throwOnError: false,

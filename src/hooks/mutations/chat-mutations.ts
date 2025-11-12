@@ -10,7 +10,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { z } from 'zod';
 
-import { revalidatePublicThread } from '@/app/auth/actions';
 import { invalidationPatterns, queryKeys } from '@/lib/data/query-keys';
 import {
   addParticipantService,
@@ -671,21 +670,11 @@ export function useTogglePublicMutation() {
         queryClient.setQueryData(queryKeys.threads.bySlug(context.slug), context.previousBySlug);
       }
     },
-    // On success, trigger ISR revalidation and invalidate queries
-    onSuccess: async (_data, variables) => {
-      // Trigger ISR revalidation for public page using Server Action
-      if (variables.slug) {
-        try {
-          const action = variables.isPublic ? 'publish' : 'unpublish';
-          await revalidatePublicThread(variables.slug, action);
-        } catch {
-          // Don't fail the mutation if revalidation fails
-          // The page will be regenerated on next request
-        }
-      }
-
+    // On success, invalidate queries
+    onSuccess: async (_data, _variables) => {
       // ✅ NO invalidation except for public page cache
-      // ISR revalidation is sufficient for public pages
+      // Public pages will be regenerated on next request via ISR
+      // Server Action revalidation removed to fix HMR bundling issues
     },
     retry: false,
     throwOnError: false,

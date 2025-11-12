@@ -1,0 +1,424 @@
+/**
+ * Participant Utilities
+ *
+ * **CONSOLIDATED MODULE**: Single source of truth for all participant operations
+ * Merged from participant-comparison.ts, participant-transformers.ts, participant-utils.ts
+ *
+ * Provides:
+ * - Comparison and equality checks
+ * - Format transformation
+ * - Validation and deduplication
+ *
+ * @module lib/utils/participant
+ */
+
+import type { ChatParticipant } from '@/api/routes/chat/schema';
+import type { ParticipantConfig } from '@/components/chat/chat-form-schemas';
+
+// ============================================================================
+// Type Definitions
+// ============================================================================
+
+/**
+ * Comparable participant type (common fields between ChatParticipant and ParticipantConfig)
+ */
+export type ComparableParticipant = Pick<
+  ChatParticipant | ParticipantConfig,
+  'modelId' | 'role' | 'priority'
+> & {
+  customRoleId?: string | null;
+  isEnabled?: boolean;
+};
+
+/**
+ * Comparison mode for participant equality
+ */
+export type ParticipantComparisonMode = 'modelIds' | 'strict';
+
+/**
+ * Update payload for participant changes
+ */
+export type UpdateParticipantPayload = {
+  id: string;
+  modelId: string;
+  role: string | null;
+  customRoleId: string | null | undefined;
+  priority: number;
+  isEnabled: boolean;
+};
+
+// ============================================================================
+// Comparison Functions
+// ============================================================================
+
+/**
+ * Generate comparison key for a participant
+ *
+ * @param participant - Participant to generate key for
+ * @param mode - Comparison mode ('modelIds' | 'strict')
+ * @returns Stable comparison key
+ */
+export function getParticipantKey(
+  participant: ComparableParticipant,
+  mode: ParticipantComparisonMode = 'strict',
+): string {
+  if (mode === 'modelIds') {
+    return participant.modelId;
+  }
+
+  return `${participant.modelId}:${participant.priority}:${participant.role || 'null'}:${participant.customRoleId || 'null'}`;
+}
+
+/**
+ * Generate sorted comparison key for participant array
+ *
+ * @param participants - Array of participants
+ * @param mode - Comparison mode
+ * @param filterEnabled - Filter out disabled participants
+ * @returns Sorted, delimited comparison key
+ */
+export function getParticipantsKey(
+  participants: ComparableParticipant[],
+  mode: ParticipantComparisonMode = 'strict',
+  filterEnabled = true,
+): string {
+  const filtered = filterEnabled
+    ? participants.filter(p => p.isEnabled !== false)
+    : participants;
+
+  return filtered
+    .sort((a, b) => a.priority - b.priority)
+    .map(p => getParticipantKey(p, mode))
+    .join('|');
+}
+
+/**
+ * Compare two participant arrays for equality
+ *
+ * @param a - First array
+ * @param b - Second array
+ * @param mode - Comparison mode
+ * @param options - Additional options
+ * @param options.filterEnabled - Whether to filter out disabled participants (default: true)
+ * @returns True if equal
+ */
+export function compareParticipants(
+  a: ComparableParticipant[],
+  b: ComparableParticipant[],
+  mode: ParticipantComparisonMode = 'strict',
+  options?: { filterEnabled?: boolean },
+): boolean {
+  const { filterEnabled = true } = options || {};
+  const keyA = getParticipantsKey(a, mode, filterEnabled);
+  const keyB = getParticipantsKey(b, mode, filterEnabled);
+  return keyA === keyB;
+}
+
+/**
+ * Check if participant configuration changed
+ *
+ * @param current - Current participants
+ * @param updated - Updated participants
+ * @param mode - Comparison mode
+ * @returns True if changed
+ */
+export function hasParticipantsChanged(
+  current: ComparableParticipant[],
+  updated: ComparableParticipant[],
+  mode: ParticipantComparisonMode = 'strict',
+): boolean {
+  return !compareParticipants(current, updated, mode);
+}
+
+/**
+ * Extract model IDs from participants
+ *
+ * @param participants - Array of participants
+ * @returns Sorted, comma-separated model IDs
+ */
+export function getParticipantModelIds(
+  participants: ComparableParticipant[],
+): string {
+  return participants
+    .map(p => p.modelId)
+    .sort()
+    .join(',');
+}
+
+// ============================================================================
+// Transformation Functions
+// ============================================================================
+
+/**
+ * Transform ParticipantConfig to API update payload
+ *
+ * @param participant - Participant configuration from form
+ * @returns API update payload
+ */
+export function participantConfigToUpdatePayload(
+  participant: ParticipantConfig,
+): UpdateParticipantPayload {
+  return {
+    id: participant.id.startsWith('participant-') ? '' : participant.id,
+    modelId: participant.modelId,
+    role: participant.role || null,
+    customRoleId: participant.customRoleId || null,
+    priority: participant.priority,
+    isEnabled: true,
+  };
+}
+
+/**
+ * Transform ParticipantConfig to optimistic ChatParticipant
+ *
+ * @param participant - Participant configuration
+ * @param threadId - Thread ID
+ * @param index - Priority index
+ * @returns Complete ChatParticipant for optimistic update
+ */
+export function participantConfigToOptimistic(
+  participant: ParticipantConfig,
+  threadId: string,
+  index: number,
+): ChatParticipant {
+  const now = new Date();
+
+  return {
+    id: participant.id,
+    threadId,
+    modelId: participant.modelId,
+    role: participant.role || null,
+    customRoleId: participant.customRoleId || null,
+    priority: index,
+    isEnabled: true,
+    settings: participant.settings || null,
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
+// ============================================================================
+// Validation Functions
+// ============================================================================
+
+/**
+ * Validate participant model ID format
+ *
+ * Valid format: `provider/model` (e.g., "openai/gpt-4")
+ *
+ * @param modelId - Model ID to validate
+ * @returns True if valid
+ */
+export function validateParticipantModelId(modelId: string): boolean {
+  if (!modelId || typeof modelId !== 'string') {
+    return false;
+  }
+
+  const parts = modelId.split('/');
+  return parts.length === 2
+    && parts[0] !== undefined
+    && parts[0].length > 0
+    && parts[1] !== undefined
+    && parts[1].length > 0;
+}
+
+/**
+ * Check if participant already exists in list
+ *
+ * @param participants - Existing participants
+ * @param modelId - Model ID to check
+ * @returns True if duplicate
+ */
+export function isParticipantDuplicate(
+  participants: Array<Pick<ChatParticipant | ParticipantConfig, 'modelId'>>,
+  modelId: string,
+): boolean {
+  return participants.some(p => p.modelId === modelId);
+}
+
+/**
+ * Get next priority for new participant
+ *
+ * @param participants - Existing participants
+ * @returns Next priority number
+ */
+export function getNextParticipantPriority(
+  participants: Array<Pick<ChatParticipant | ParticipantConfig, 'priority'>>,
+): number {
+  if (participants.length === 0) {
+    return 0;
+  }
+
+  const maxPriority = Math.max(...participants.map(p => p.priority));
+  return maxPriority + 1;
+}
+
+/**
+ * Deduplicate participants by modelId
+ *
+ * When duplicates found, keeps participant with lower priority.
+ *
+ * @param participants - Array to deduplicate
+ * @returns Deduplicated and sorted array
+ */
+export function deduplicateParticipants<T extends { modelId: string; priority: number }>(
+  participants: T[],
+): T[] {
+  const modelMap = new Map<string, T>();
+
+  // Sort by priority for deterministic selection
+  const sorted = [...participants].sort((a, b) => a.priority - b.priority);
+
+  sorted.forEach((p) => {
+    if (!modelMap.has(p.modelId)) {
+      modelMap.set(p.modelId, p);
+    }
+  });
+
+  return Array.from(modelMap.values()).sort((a, b) => a.priority - b.priority);
+}
+
+// ============================================================================
+// Update Detection & Preparation
+// ============================================================================
+// Extracted from participant-updates.ts for consolidation
+
+/**
+ * Result of participant change detection
+ */
+export type ParticipantUpdateResult = {
+  /** Whether any changes were detected */
+  hasChanges: boolean;
+  /** Whether any participants have temporary IDs (not yet persisted) */
+  hasTemporaryIds: boolean;
+  /** Whether participant list or configuration changed */
+  participantsChanged: boolean;
+};
+
+/**
+ * Prepared data for participant update
+ */
+export type PreparedParticipantUpdate = {
+  /** Update result with change flags */
+  updateResult: ParticipantUpdateResult;
+  /** Payloads for API PATCH request */
+  updatePayloads: UpdateParticipantPayload[];
+  /** Optimistic participant data for immediate UI update */
+  optimisticParticipants: ChatParticipant[];
+};
+
+/**
+ * Detect if participant configuration has changed
+ *
+ * Compares current participants with selected participants to determine
+ * if an API update is needed. Checks for:
+ * - Temporary IDs (new participants not yet persisted)
+ * - Participant list changes (additions/removals)
+ * - Configuration changes (priority, role, modelId)
+ *
+ * @param currentParticipants - Current persisted participants
+ * @param selectedParticipants - New participant configuration from form
+ * @returns Change detection result
+ *
+ * @example
+ * const result = detectParticipantChanges(
+ *   thread.participants,
+ *   formState.selectedParticipants
+ * )
+ *
+ * if (result.hasChanges) {
+ *   // Trigger update
+ * }
+ */
+export function detectParticipantChanges(
+  currentParticipants: ChatParticipant[],
+  selectedParticipants: ParticipantConfig[],
+): ParticipantUpdateResult {
+  // Check for temporary IDs (participants not yet persisted)
+  const hasTemporaryIds = selectedParticipants.some(p =>
+    p.id.startsWith('participant-'),
+  );
+
+  // Compare participant configurations using strict mode
+  // Strict mode compares: modelId, priority, role, customRoleId
+  const participantsChanged = hasParticipantsChanged(
+    currentParticipants,
+    selectedParticipants,
+    'strict',
+  );
+
+  const hasChanges = hasTemporaryIds || participantsChanged;
+
+  return {
+    hasChanges,
+    hasTemporaryIds,
+    participantsChanged,
+  };
+}
+
+/**
+ * Determine if participant config update should be triggered
+ *
+ * @param updateResult - Result from detectParticipantChanges
+ * @returns True if update should be executed
+ */
+export function shouldUpdateParticipantConfig(
+  updateResult: ParticipantUpdateResult,
+): boolean {
+  return updateResult.hasChanges;
+}
+
+/**
+ * Prepare all data needed for participant update
+ *
+ * Generates:
+ * - Change detection flags
+ * - API update payloads (temporary IDs converted to empty strings)
+ * - Optimistic participant data for immediate UI update
+ *
+ * @param currentParticipants - Current persisted participants
+ * @param selectedParticipants - New participant configuration
+ * @param threadId - Thread ID for optimistic participants
+ * @returns Prepared update data ready for mutation
+ *
+ * @example
+ * const prepared = prepareParticipantUpdate(
+ *   threadState.participants,
+ *   formState.selectedParticipants,
+ *   threadId
+ * )
+ *
+ * if (shouldUpdateParticipantConfig(prepared.updateResult)) {
+ *   await updateThreadMutation.mutateAsync({
+ *     json: { participants: prepared.updatePayloads }
+ *   })
+ *   store.updateParticipants(prepared.optimisticParticipants)
+ * }
+ */
+export function prepareParticipantUpdate(
+  currentParticipants: ChatParticipant[],
+  selectedParticipants: ParticipantConfig[],
+  threadId: string,
+): PreparedParticipantUpdate {
+  // Detect changes
+  const updateResult = detectParticipantChanges(
+    currentParticipants,
+    selectedParticipants,
+  );
+
+  // Prepare update payloads for API
+  const updatePayloads = selectedParticipants.map(p =>
+    participantConfigToUpdatePayload(p),
+  );
+
+  // Prepare optimistic participant data
+  const optimisticParticipants = selectedParticipants.map((p, index) =>
+    participantConfigToOptimistic(p, threadId, index),
+  );
+
+  return {
+    updateResult,
+    updatePayloads,
+    optimisticParticipants,
+  };
+}

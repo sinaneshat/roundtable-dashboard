@@ -5,7 +5,8 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { Suspense, useEffect, useState } from 'react';
 
-import type { SubscriptionTier } from '@/api/services/product-logic.service';
+import { StripeSubscriptionStatuses, SubscriptionChangeTypes } from '@/api/core/enums';
+import type { SubscriptionChangeType, SubscriptionTier } from '@/api/services/product-logic.service';
 import { getMaxModelsForTier, getTierFromProductId, SUBSCRIPTION_TIER_NAMES } from '@/api/services/product-logic.service';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -15,10 +16,10 @@ import { useCurrentSubscriptionQuery, useSubscriptionsQuery } from '@/hooks/quer
 import { useUsageStatsQuery } from '@/hooks/queries/usage';
 
 function ChangeBadge({ changeType, t }: {
-  changeType: 'upgrade' | 'downgrade' | 'change';
+  changeType: SubscriptionChangeType;
   t: ReturnType<typeof useTranslations>;
 }) {
-  if (changeType === 'upgrade') {
+  if (changeType === SubscriptionChangeTypes.UPGRADE) {
     return (
       <Badge className="bg-green-500/10 text-green-600 hover:bg-green-500/20 border-green-500/20">
         <ArrowUp className="mr-1 size-3" />
@@ -27,7 +28,7 @@ function ChangeBadge({ changeType, t }: {
     );
   }
 
-  if (changeType === 'downgrade') {
+  if (changeType === SubscriptionChangeTypes.DOWNGRADE) {
     return (
       <Badge className="bg-orange-500/10 text-orange-600 hover:bg-orange-500/20 border-orange-500/20">
         <ArrowDown className="mr-1 size-3" />
@@ -53,7 +54,7 @@ function SubscriptionChangedContent() {
   const t = useTranslations();
   const [countdown, setCountdown] = useState(10);
 
-  const changeType = searchParams.get('changeType') as 'upgrade' | 'downgrade' | 'change' | null;
+  const changeType = searchParams.get('changeType') as SubscriptionChangeType | null;
   const oldProductId = searchParams.get('oldProductId');
 
   const { data: subscriptionData, isFetching: isSubscriptionsFetching } = useSubscriptionsQuery();
@@ -62,7 +63,7 @@ function SubscriptionChangedContent() {
   const { data: usageStats, isFetching: isUsageStatsFetching } = useUsageStatsQuery();
 
   const displaySubscription
-    = currentSubscription?.data?.items?.find(sub => sub.status === 'active')
+    = currentSubscription?.data?.items?.find(sub => sub.status === StripeSubscriptionStatuses.ACTIVE)
       || currentSubscription?.data?.items?.[0]
       || subscriptionData?.data?.items?.[0]
       || null;
@@ -138,8 +139,8 @@ function SubscriptionChangedContent() {
     ? (oldTierString as SubscriptionTier)
     : null;
 
-  const isUpgrade = changeType === 'upgrade';
-  const isDowngrade = changeType === 'downgrade';
+  const isUpgrade = changeType === SubscriptionChangeTypes.UPGRADE;
+  const isDowngrade = changeType === SubscriptionChangeTypes.DOWNGRADE;
 
   const currentActiveTier = isDowngrade ? oldTier : newTier;
   const futureTier = isDowngrade ? newTier : null;

@@ -2,6 +2,7 @@ import { dehydrate, HydrationBoundary } from '@tanstack/react-query';
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 
+import { MessagePartTypes, MessageRoles } from '@/api/core/enums';
 import { BRAND } from '@/constants';
 import { PublicChatThreadScreen } from '@/containers/screens/chat';
 import { getQueryClient } from '@/lib/data/query-client';
@@ -47,9 +48,9 @@ export async function generateMetadata({
     const { thread, participants = [], messages = [] } = response.data;
 
     // Generate description from first user message or thread title
-    const firstUserMessage = messages?.find(m => m.role === 'user');
+    const firstUserMessage = messages?.find(m => m.role === MessageRoles.USER);
     const firstUserText = firstUserMessage?.parts
-      .filter(p => p.type === 'text' && 'text' in p)
+      .filter(p => p.type === MessagePartTypes.TEXT && 'text' in p)
       .map(p => (p as { type: 'text'; text: string }).text)
       .join(' ');
     const description = firstUserText
@@ -115,7 +116,7 @@ export default async function PublicChatThreadPage({
     if (!cachedData || typeof cachedData !== 'object' || !('success' in cachedData) || !cachedData.success) {
       // SEO-friendly 404: Thread doesn't exist
       const params = new URLSearchParams({
-        toast: 'error',
+        toast: 'failed',
         message: 'This conversation no longer exists. Create your own to get started!',
         action: 'create',
       });

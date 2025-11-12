@@ -3,8 +3,9 @@
 import { AlertCircle, ArrowRight, CheckCircle, Loader2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
+import { StripeSubscriptionStatuses } from '@/api/core/enums';
 import type { SubscriptionTier } from '@/api/services/product-logic.service';
 import { getMaxModelsForTier, getTierFromProductId, SUBSCRIPTION_TIER_NAMES } from '@/api/services/product-logic.service';
 import { Button } from '@/components/ui/button';
@@ -24,29 +25,28 @@ export function BillingSuccessClient() {
 
   // Force queries to be enabled on this page (user just completed checkout, they're authenticated)
   const subscriptionsQuery = useSubscriptionsQuery({ forceEnabled: true });
-  const currentSubscriptionQuery = useCurrentSubscriptionQuery();
+  const currentSubscriptionQuery = useCurrentSubscriptionQuery({ forceEnabled: true });
   const usageStatsQuery = useUsageStatsQuery({ forceEnabled: true });
 
   const hasInitiatedSync = useRef(false);
+  const readyTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const subscriptionData = subscriptionsQuery.data;
   const currentSubscription = currentSubscriptionQuery.data;
   const usageStats = usageStatsQuery.data;
 
   const displaySubscription
-    = currentSubscription?.data?.items?.find(sub => sub.status === 'active')
-      || currentSubscription?.data?.items?.[0]
-      || subscriptionData?.data?.items?.[0]
-      || null;
+    = currentSubscription?.data?.items?.find(sub => sub.status === StripeSubscriptionStatuses.ACTIVE)
+      ?? currentSubscription?.data?.items?.[0]
+      ?? subscriptionData?.data?.items?.[0]
+      ?? null;
 
-  // Capture previous tier on first render (before sync completes)
-  // useMemo runs during render but only once with empty deps
-  const previousTier = useMemo<SubscriptionTier | null>(() => {
-    return (usageStats?.data?.subscription?.tier as SubscriptionTier) || null;
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- only capture initial value
-  }, []);
+  // Get tier change information from sync mutation response
+  const tierChange = syncMutation.data?.data?.tierChange;
+  const previousTier = tierChange?.previousTier ?? 'free';
+  const newTier = tierChange?.newTier ?? 'free';
 
-  // Initiate sync
+  // Initiate sync - only once per component mount
   useEffect(() => {
     if (!hasInitiatedSync.current) {
       syncMutation.mutate(undefined);
@@ -54,34 +54,50 @@ export function BillingSuccessClient() {
     }
   }, [syncMutation]);
 
-  // Mark as ready when sync completes and queries have fetched data (or after timeout)
+  // Simplified ready state logic - only depends on values actually used
   useEffect(() => {
-    if (!syncMutation.isSuccess || isReady) {
+    // Early return if already ready or sync hasn't succeeded
+    if (isReady || !syncMutation.isSuccess) {
       return;
     }
 
-    // Check if queries have fetched (regardless of whether they have data)
-    const queriesFetched = subscriptionsQuery.isFetched && usageStatsQuery.isFetched;
+    // Check if both critical queries have fetched AND are not currently refetching
+    // isFetched: Query has completed at least once (could be stale server prefetch)
+    // !isFetching: Query is not currently fetching (ensures we have fresh data after invalidation)
+    const queriesFetched
+      = subscriptionsQuery.isFetched && !subscriptionsQuery.isFetching
+        && usageStatsQuery.isFetched && !usageStatsQuery.isFetching;
 
-    // If queries have fetched, immediately mark as ready
     if (queriesFetched) {
-      // Use queueMicrotask to defer setState to avoid synchronous updates in effect
+      // Queries have fetched fresh data - mark ready immediately
+      // Use queueMicrotask to avoid direct setState in useEffect warning
       queueMicrotask(() => setIsReady(true));
       return;
     }
 
-    // Otherwise, force ready after 1 second
-    const timer = setTimeout(() => {
-      setIsReady(true);
-    }, 1000);
+    // Queries haven't fetched yet or are still fetching - set fallback timeout (max 2 seconds)
+    // Clear any existing timeout first
+    if (readyTimeoutRef.current) {
+      clearTimeout(readyTimeoutRef.current);
+    }
 
-    return () => clearTimeout(timer);
+    readyTimeoutRef.current = setTimeout(() => {
+      setIsReady(true);
+      readyTimeoutRef.current = null;
+    }, 2000);
+
+    return () => {
+      if (readyTimeoutRef.current) {
+        clearTimeout(readyTimeoutRef.current);
+        readyTimeoutRef.current = null;
+      }
+    };
   }, [
     syncMutation.isSuccess,
     subscriptionsQuery.isFetched,
-    subscriptionsQuery.isSuccess,
+    subscriptionsQuery.isFetching,
     usageStatsQuery.isFetched,
-    usageStatsQuery.isSuccess,
+    usageStatsQuery.isFetching,
     isReady,
   ]);
 
@@ -172,23 +188,31 @@ export function BillingSuccessClient() {
     );
   }
 
+  // Use newTier from sync response, fallback to deriving from subscription
   const tierString = displaySubscription?.price?.productId
     ? getTierFromProductId(displaySubscription.price.productId)
     : 'free';
 
   const validTiers: SubscriptionTier[] = ['free', 'starter', 'pro', 'power'];
-  const currentTier: SubscriptionTier = validTiers.includes(tierString as SubscriptionTier)
+  const derivedTier: SubscriptionTier = validTiers.includes(tierString as SubscriptionTier)
     ? (tierString as SubscriptionTier)
     : 'free';
 
+  // Prefer newTier from sync response (most accurate), fallback to derived tier
+  const currentTier: SubscriptionTier = newTier || derivedTier;
+
   const tierName = SUBSCRIPTION_TIER_NAMES[currentTier];
+  const previousTierName = SUBSCRIPTION_TIER_NAMES[previousTier];
   const maxModels = getMaxModelsForTier(currentTier);
+  const previousMaxModels = getMaxModelsForTier(previousTier);
   const threadsLimit = usageStats?.data?.threads?.limit || 0;
   const messagesLimit = usageStats?.data?.messages?.limit || 0;
   const customRolesLimit = usageStats?.data?.customRoles?.limit || 0;
 
-  // Show upgrade comparison if user upgraded from free tier
-  const showUpgradeComparison = previousTier === 'free' && currentTier !== 'free';
+  // Show comparison if tier changed (any upgrade, downgrade, or free->paid)
+  const showTierComparison = previousTier !== currentTier;
+  const isUpgrade = validTiers.indexOf(currentTier) > validTiers.indexOf(previousTier);
+  const isDowngrade = validTiers.indexOf(currentTier) < validTiers.indexOf(previousTier);
 
   return (
     <div className="flex min-h-screen w-full flex-col items-center justify-start px-4 pt-16 md:pt-20">
@@ -219,20 +243,18 @@ export function BillingSuccessClient() {
           </div>
         </StaggerItem>
 
-        {showUpgradeComparison && (
+        {showTierComparison && (
           <StaggerItem className="w-full">
-            <Card className="border-green-500/20 bg-green-500/5">
+            <Card className={isUpgrade ? 'border-green-500/20 bg-green-500/5' : isDowngrade ? 'border-blue-500/20 bg-blue-500/5' : 'border-primary/20 bg-primary/5'}>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-green-600">
+                <CardTitle className={`flex items-center gap-2 ${isUpgrade ? 'text-green-600' : isDowngrade ? 'text-blue-600' : 'text-primary'}`}>
                   <CheckCircle className="size-5" />
-                  Upgraded Successfully
+                  {isUpgrade ? 'Upgraded Successfully' : isDowngrade ? 'Changed Successfully' : 'Subscription Updated'}
                 </CardTitle>
                 <CardDescription>
-                  You've upgraded from Free to
-                  {' '}
-                  {tierName}
-                  {' '}
-                  plan
+                  {isUpgrade && `You've upgraded from ${previousTierName} to ${tierName} plan`}
+                  {isDowngrade && `You've changed from ${previousTierName} to ${tierName} plan`}
+                  {!isUpgrade && !isDowngrade && `Your subscription has been updated to ${tierName} plan`}
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -240,23 +262,23 @@ export function BillingSuccessClient() {
                   <div className="text-center space-y-2">
                     <p className="text-sm font-medium text-muted-foreground">Previous</p>
                     <div className="px-4 py-2 rounded-lg bg-muted">
-                      <p className="text-lg font-bold">Free</p>
+                      <p className="text-lg font-bold">{previousTierName}</p>
                       <p className="text-xs text-muted-foreground">
-                        {getMaxModelsForTier('free')}
+                        {previousMaxModels}
                         {' '}
-                        models
+                        {previousMaxModels === 1 ? 'model' : 'models'}
                       </p>
                     </div>
                   </div>
-                  <ArrowRight className="size-6 text-green-600" />
+                  <ArrowRight className={`size-6 ${isUpgrade ? 'text-green-600' : isDowngrade ? 'text-blue-600' : 'text-primary'}`} />
                   <div className="text-center space-y-2">
-                    <p className="text-sm font-medium text-green-600">Current</p>
-                    <div className="px-4 py-2 rounded-lg bg-green-500/10 border border-green-500/20">
-                      <p className="text-lg font-bold text-green-600">{tierName}</p>
-                      <p className="text-xs text-green-600/80">
+                    <p className={`text-sm font-medium ${isUpgrade ? 'text-green-600' : isDowngrade ? 'text-blue-600' : 'text-primary'}`}>Current</p>
+                    <div className={isUpgrade ? 'px-4 py-2 rounded-lg bg-green-500/10 border border-green-500/20' : isDowngrade ? 'px-4 py-2 rounded-lg bg-blue-500/10 border border-blue-500/20' : 'px-4 py-2 rounded-lg bg-primary/10 border border-primary/20'}>
+                      <p className={`text-lg font-bold ${isUpgrade ? 'text-green-600' : isDowngrade ? 'text-blue-600' : 'text-primary'}`}>{tierName}</p>
+                      <p className={`text-xs ${isUpgrade ? 'text-green-600/80' : isDowngrade ? 'text-blue-600/80' : 'text-primary/80'}`}>
                         {maxModels}
                         {' '}
-                        models
+                        {maxModels === 1 ? 'model' : 'models'}
                       </p>
                     </div>
                   </div>

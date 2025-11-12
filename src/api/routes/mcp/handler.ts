@@ -17,6 +17,7 @@ import { ErrorContextBuilders } from '@/api/common/error-contexts';
 import { createError } from '@/api/common/error-handling';
 import { verifyThreadOwnership } from '@/api/common/permissions';
 import { createHandler, createHandlerWithBatch, Responses } from '@/api/core';
+import { AIModels } from '@/api/core/ai-models';
 import { AnalysisStatuses, DEFAULT_CHAT_MODE } from '@/api/core/enums';
 import { saveStreamedMessage } from '@/api/services/message-persistence.service';
 import { getAllModels, getModelById } from '@/api/services/models-config.service';
@@ -31,6 +32,7 @@ import {
   canAccessModelByPricing,
   getSafeMaxOutputTokens,
 } from '@/api/services/product-logic.service';
+import { buildParticipantSystemPrompt } from '@/api/services/prompts.service';
 import { handleRoundRegeneration } from '@/api/services/regeneration.service';
 import { calculateRoundNumber } from '@/api/services/round.service';
 import { getUserTier } from '@/api/services/usage-tracking.service';
@@ -40,6 +42,7 @@ import * as tables from '@/db/schema';
 import type { ChatMessage } from '@/db/validation';
 import { extractTextFromParts } from '@/lib/schemas/message-schemas';
 import { filterNonEmptyMessages } from '@/lib/utils/message-transforms';
+import { isObject } from '@/lib/utils/type-guards';
 
 import { chatMessagesToUIMessages } from '../chat/handlers/helpers';
 import { ModeratorAnalysisPayloadSchema } from '../chat/schema';
@@ -1096,10 +1099,9 @@ export const generateResponsesToolHandler: RouteHandler<typeof generateResponses
         );
 
         // System prompt
+        // ✅ SINGLE SOURCE: Default prompts from /src/lib/ai/prompts.ts
         const systemPrompt = participant.settings?.systemPrompt
-          || (participant.role
-            ? `You're ${participant.role}. Engage naturally in this discussion, sharing your perspective and insights. Be direct, thoughtful, and conversational.`
-            : `Engage naturally in this discussion. Share your thoughts, ask questions, and build on others' ideas. Be direct and conversational.`);
+          || buildParticipantSystemPrompt(participant.role);
 
         // Temperature support
         const modelSupportsTemperature = !participant.modelId.includes('o4-mini') && !participant.modelId.includes('o4-deep');
@@ -1286,19 +1288,22 @@ export const generateAnalysisToolHandler: RouteHandler<typeof generateAnalysisTo
     // Generate analysis using AI
     initializeOpenRouter(c.env);
     const client = openRouterService.getClient();
-    const analysisModelId = 'openai/gpt-4o';
+    const analysisModelId = AIModels.ANALYSIS;
+
+    // ✅ TYPE-SAFE: Map changelog with validated metadata
+    const changelogItems = changelogEntries.map(ce => ({
+      changeType: ce.changeType,
+      description: ce.changeSummary,
+      metadata: isObject(ce.changeData) ? ce.changeData : null,
+      createdAt: ce.createdAt,
+    }));
 
     const systemPrompt = buildModeratorSystemPrompt({
       roundNumber: input.roundNumber,
       mode: thread.mode,
       userQuestion,
       participantResponses,
-      changelogEntries: changelogEntries.map(ce => ({
-        changeType: ce.changeType,
-        description: ce.changeSummary,
-        metadata: ce.changeData as Record<string, unknown> | null,
-        createdAt: ce.createdAt,
-      })),
+      changelogEntries: changelogItems,
     });
 
     const userPrompt = buildModeratorUserPrompt({
@@ -1306,31 +1311,29 @@ export const generateAnalysisToolHandler: RouteHandler<typeof generateAnalysisTo
       mode: thread.mode,
       userQuestion,
       participantResponses,
-      changelogEntries: changelogEntries.map(ce => ({
-        changeType: ce.changeType,
-        description: ce.changeSummary,
-        metadata: ce.changeData as Record<string, unknown> | null,
-        createdAt: ce.createdAt,
-      })),
+      changelogEntries: changelogItems,
     });
 
     try {
-      // Generate structured analysis
+      // ✅ AI SDK v5: streamObject with mode:'json' (OpenRouter compatibility)
+      // mode:'json' uses response_format: {type: 'json_object'} instead of json_schema
       const result = await streamObject({
         model: client.chat(analysisModelId),
         schema: ModeratorAnalysisPayloadSchema,
-        schemaName: 'ModeratorAnalysis',
+        mode: 'json', // ✅ CRITICAL: Force JSON mode instead of json_schema
         system: systemPrompt,
         prompt: userPrompt,
-        mode: 'json',
         temperature: 0.3,
       });
+
+      // Await object result
+      const finalObject = await result.object;
 
       // Update analysis with result
       await db.update(tables.chatModeratorAnalysis)
         .set({
-          status: AnalysisStatuses.COMPLETED,
-          analysisData: await result.object,
+          status: AnalysisStatuses.COMPLETE,
+          analysisData: finalObject,
           completedAt: new Date(),
         })
         .where(eq(tables.chatModeratorAnalysis.id, analysisId));
@@ -1341,7 +1344,7 @@ export const generateAnalysisToolHandler: RouteHandler<typeof generateAnalysisTo
         result: {
           analysisId,
           roundNumber: input.roundNumber,
-          analysis: result.object,
+          analysis: finalObject,
         },
         metadata: {
           executionTime,
@@ -1465,10 +1468,9 @@ export const regenerateRoundToolHandler: RouteHandler<typeof regenerateRoundTool
             userTier,
           );
 
+          // ✅ SINGLE SOURCE: Default prompts from /src/lib/ai/prompts.ts
           const systemPrompt = participant.settings?.systemPrompt
-            || (participant.role
-              ? `You're ${participant.role}. Engage naturally in this discussion, sharing your perspective and insights. Be direct, thoughtful, and conversational.`
-              : `Engage naturally in this discussion. Share your thoughts, ask questions, and build on others' ideas. Be direct and conversational.`);
+            || buildParticipantSystemPrompt(participant.role);
 
           const modelSupportsTemperature = !participant.modelId.includes('o4-mini') && !participant.modelId.includes('o4-deep');
           const temperatureValue = modelSupportsTemperature ? (participant.settings?.temperature ?? 0.7) : undefined;
@@ -1798,7 +1800,7 @@ export const getRoundAnalysisToolHandler: RouteHandler<typeof getRoundAnalysisTo
       where: and(
         eq(tables.chatModeratorAnalysis.threadId, input.threadId),
         eq(tables.chatModeratorAnalysis.roundNumber, input.roundNumber),
-        eq(tables.chatModeratorAnalysis.status, AnalysisStatuses.COMPLETED),
+        eq(tables.chatModeratorAnalysis.status, AnalysisStatuses.COMPLETE),
       ),
       orderBy: [desc(tables.chatModeratorAnalysis.createdAt)],
     });
@@ -1873,7 +1875,7 @@ export const listRoundsToolHandler: RouteHandler<typeof listRoundsToolRoute, Api
             where: and(
               eq(tables.chatModeratorAnalysis.threadId, input.threadId),
               eq(tables.chatModeratorAnalysis.roundNumber, roundNumber),
-              eq(tables.chatModeratorAnalysis.status, AnalysisStatuses.COMPLETED),
+              eq(tables.chatModeratorAnalysis.status, AnalysisStatuses.COMPLETE),
             ),
           });
 

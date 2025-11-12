@@ -25,7 +25,7 @@ function AuthErrorContent() {
   const t = useTranslations();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const error = searchParams?.get('error') || 'Default';
+  const error = searchParams?.get('failed') || 'Default';
 
   const getErrorInfo = (errorType: string) => {
     const errorKey = errorType.toLowerCase();

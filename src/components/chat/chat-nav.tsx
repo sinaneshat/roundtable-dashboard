@@ -186,7 +186,10 @@ function AppSidebarComponent({ ...props }: React.ComponentProps<typeof Sidebar>)
                       className="size-10 object-contain shrink-0"
                       loading="lazy"
                     />
-                    <span className="truncate min-w-0">
+                    <span
+                      className="truncate min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-base font-bold"
+                      style={{ maxWidth: '11rem' }}
+                    >
                       {BRAND.displayName}
                     </span>
                   </Link>
@@ -194,7 +197,7 @@ function AppSidebarComponent({ ...props }: React.ComponentProps<typeof Sidebar>)
               </SidebarMenuItem>
 
               {/* Logo - Collapsed */}
-              <SidebarMenuItem className="hidden group-data-[collapsible=icon]:flex group-data-[collapsible=icon]:items-center group-data-[collapsible=icon]:justify-center mb-2">
+              <SidebarMenuItem className="hidden group-data-[collapsible=icon]:flex mb-2">
                 <SidebarMenuButton size="lg" asChild className="hover:bg-transparent" tooltip={BRAND.displayName}>
                   <Link
                     href="/chat"
@@ -224,7 +227,10 @@ function AppSidebarComponent({ ...props }: React.ComponentProps<typeof Sidebar>)
                     onClick={handleNewChat}
                   >
                     <Plus className="size-4 shrink-0" />
-                    <span className="truncate min-w-0">
+                    <span
+                      className="truncate min-w-0 overflow-hidden text-ellipsis whitespace-nowrap"
+                      style={{ maxWidth: '12rem' }}
+                    >
                       {t('navigation.newChat')}
                     </span>
                   </Link>
@@ -241,7 +247,10 @@ function AppSidebarComponent({ ...props }: React.ComponentProps<typeof Sidebar>)
                   }}
                 >
                   <Search className="size-4 shrink-0" />
-                  <span className="truncate min-w-0">
+                  <span
+                    className="truncate min-w-0 overflow-hidden text-ellipsis whitespace-nowrap"
+                    style={{ maxWidth: '12rem' }}
+                  >
                     {t('chat.searchChats')}
                   </span>
                 </SidebarMenuButton>
@@ -250,7 +259,10 @@ function AppSidebarComponent({ ...props }: React.ComponentProps<typeof Sidebar>)
               <SidebarMenuItem className="group-data-[collapsible=icon]:hidden">
                 <SidebarMenuButton disabled>
                   <FolderKanban className="size-4 shrink-0" />
-                  <span className="truncate min-w-0">
+                  <span
+                    className="truncate min-w-0 overflow-hidden text-ellipsis whitespace-nowrap"
+                    style={{ maxWidth: '9rem' }}
+                  >
                     Projects
                   </span>
                   <Badge variant="secondary" className="ml-auto text-[10px] px-1.5 py-0 shrink-0">
@@ -264,13 +276,12 @@ function AppSidebarComponent({ ...props }: React.ComponentProps<typeof Sidebar>)
                 <SidebarMenuButton
                   asChild
                   tooltip={t('navigation.newChat')}
-                  className="group-data-[collapsible=icon]:w-full"
                 >
                   <Link
                     href="/chat"
                     onClick={handleNewChat}
                   >
-                    <Plus className="size-4" />
+                    <Plus />
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
@@ -284,9 +295,8 @@ function AppSidebarComponent({ ...props }: React.ComponentProps<typeof Sidebar>)
                     }
                   }}
                   tooltip={t('chat.searchChats')}
-                  className="group-data-[collapsible=icon]:w-full"
                 >
-                  <Search className="size-4" />
+                  <Search />
                 </SidebarMenuButton>
               </SidebarMenuItem>
 
@@ -294,23 +304,25 @@ function AppSidebarComponent({ ...props }: React.ComponentProps<typeof Sidebar>)
                 <SidebarMenuButton
                   disabled
                   tooltip="Projects (Coming Soon)"
-                  className="group-data-[collapsible=icon]:w-full"
                 >
-                  <FolderKanban className="size-4" />
+                  <FolderKanban />
                 </SidebarMenuButton>
               </SidebarMenuItem>
             </SidebarMenu>
           </SidebarHeader>
-          <SidebarContent className="overflow-hidden p-0 w-full min-w-0">
+          <SidebarContent className="p-0 w-full min-w-0">
             <ScrollArea ref={sidebarContentRef} className="w-full h-full">
               <div className="flex flex-col w-full">
                 {/* Favorites Section */}
                 {!isLoading && !isError && favorites.length > 0 && (
                   <>
                     <div className="flex items-center justify-between px-2 pt-2 pb-1 w-full min-w-0 group-data-[collapsible=icon]:hidden">
-                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                      <div className="flex items-center gap-2 min-w-0 flex-1" style={{ maxWidth: '11rem' }}>
                         <Star className="size-4 shrink-0 fill-amber-500 text-amber-500" />
-                        <span className="text-sm font-medium text-foreground truncate min-w-0">
+                        <span
+                          className="text-sm font-medium text-foreground truncate min-w-0 overflow-hidden text-ellipsis whitespace-nowrap"
+                          style={{ maxWidth: '9rem' }}
+                        >
                           {t('chat.favorites')}
                         </span>
                       </div>
@@ -357,14 +369,14 @@ function AppSidebarComponent({ ...props }: React.ComponentProps<typeof Sidebar>)
 
                 {/* Empty State */}
                 {!isLoading && !isError && chats.length === 0 && (
-                  <SidebarGroup className="group-data-[collapsible=icon]:hidden">
-                    <Empty className="border-none">
+                  <SidebarGroup className="group-data-[collapsible=icon]:hidden px-2">
+                    <Empty className="border-none p-6">
                       <EmptyHeader>
-                        <EmptyMedia variant="icon">
-                          <MessageSquarePlus className="size-8" />
+                        <EmptyMedia variant="icon" className="mb-3">
+                          <MessageSquarePlus className="size-5" />
                         </EmptyMedia>
                         <EmptyTitle className="text-sm font-semibold">{t('chat.noChatsYet')}</EmptyTitle>
-                        <EmptyDescription className="text-xs text-muted-foreground">
+                        <EmptyDescription className="text-xs text-muted-foreground leading-relaxed mt-1.5">
                           {t('chat.noChatsDescription')}
                         </EmptyDescription>
                       </EmptyHeader>
@@ -401,22 +413,22 @@ function AppSidebarComponent({ ...props }: React.ComponentProps<typeof Sidebar>)
           <SidebarFooter>
             {isFreeUser && (
               <div className="group-data-[collapsible=icon]:hidden">
-                <Card variant="glass-subtle" className="border-sidebar-border">
-                  <CardHeader className="p-3 pb-2">
+                <Card variant="glass-subtle" className="border-sidebar-border py-0">
+                  <CardHeader className="px-3 pt-3 pb-2">
                     <div className="flex items-center gap-2">
                       <Sparkles className="size-4 text-amber-500 shrink-0" />
-                      <CardTitle className="text-sm">
+                      <CardTitle className="text-sm font-semibold">
                         {t('pricing.card.upgradePlan')}
                       </CardTitle>
                     </div>
-                    <CardDescription className="text-xs leading-relaxed">
+                    <CardDescription className="text-xs leading-snug mt-1">
                       {t('pricing.card.upgradeDescription')}
                     </CardDescription>
                   </CardHeader>
-                  <CardContent className="p-3 pt-0">
+                  <CardContent className="px-3 pb-3 pt-0">
                     <Button
                       variant="outline"
-                      className="w-full justify-center border-sidebar-border hover:bg-sidebar-accent"
+                      className="w-full justify-center text-xs border-sidebar-border hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
                       size="sm"
                       asChild
                     >

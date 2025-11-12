@@ -1,12 +1,13 @@
 import { Heading } from '@react-email/components';
 import type { CSSProperties, ReactNode } from 'react';
 
+import type { TextAlignment } from '@/api/core/enums';
 import { colors, spacing, typography } from '@/emails/design-tokens';
 
 type EmailHeadingProps = {
   children: ReactNode;
   level?: 1 | 2 | 3 | 4;
-  align?: 'left' | 'center' | 'right';
+  align?: Exclude<TextAlignment, 'justify'>;
   style?: CSSProperties;
 };
 

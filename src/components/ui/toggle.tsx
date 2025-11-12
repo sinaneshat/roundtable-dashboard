@@ -4,6 +4,7 @@ import * as TogglePrimitive from '@radix-ui/react-toggle';
 import { cva, type VariantProps } from 'class-variance-authority';
 import * as React from 'react';
 
+import type { ComponentVariant, ComponentSize } from '@/api/core/enums';
 import { cn } from '@/lib/ui/cn';
 
 const toggleVariants = cva(
@@ -14,12 +15,12 @@ const toggleVariants = cva(
         default: 'bg-transparent',
         outline:
           'border border-input bg-transparent hover:bg-accent hover:text-accent-foreground',
-      },
+      } satisfies Partial<Record<ComponentVariant, string>>,
       size: {
         default: 'h-10 min-w-10 px-3',
         sm: 'h-9 min-w-9 px-2.5',
         lg: 'h-11 min-w-11 px-5',
-      },
+      } satisfies Partial<Record<ComponentSize, string>>,
     },
     defaultVariants: {
       variant: 'default',

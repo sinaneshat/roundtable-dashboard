@@ -1,108 +1,146 @@
 /**
  * Message Transformation Utilities
  *
- * Provides utilities for transforming and manipulating messages
- * between backend ChatMessage format and AI SDK UIMessage format.
+ * **CONSOLIDATED MODULE**: Core message operations for format conversion,
+ * filtering, and manipulation. Single source of truth for message transformations.
  *
- * Note: AI SDK v5's useChat handles deduplication and validation automatically.
- * This module focuses on format conversion and metadata enrichment.
+ * Design Principles:
+ * - Use generics for reusable, type-safe operations
+ * - Accept predicates for flexible filtering
+ * - Use function composition for complex operations
+ * - Avoid High Knowledge Cost (HKC) implementations
+ *
+ * Consolidates:
+ * - message-transforms.ts: Format conversion, error creation
+ * - message-filtering.ts: Type guards, round/participant filtering
+ * - Metadata extraction delegated to metadata.ts (single source of truth)
  *
  * @module lib/utils/message-transforms
  */
 
 import type { UIMessage } from 'ai';
 
+import { MessagePartTypes, MessageRoles } from '@/api/core/enums';
 import type { ChatMessage } from '@/api/routes/chat/schema';
 import type { ErrorMetadata, UIMessageErrorType } from '@/lib/schemas/error-schemas';
 import { ErrorMetadataSchema, UIMessageErrorTypeSchema } from '@/lib/schemas/error-schemas';
-import type { ErrorType, FinishReason, MessageMetadata } from '@/lib/schemas/message-metadata';
-import { ErrorTypeSchema, FinishReasonSchema, MessageMetadataSchema, UsageSchema } from '@/lib/schemas/message-metadata';
+import type {
+  ErrorType,
+  FinishReason,
+  MessageMetadata,
+  ParticipantMessageMetadata,
+  PreSearchMessageMetadata,
+} from '@/lib/schemas/message-metadata';
+import {
+  ErrorTypeSchema,
+  FinishReasonSchema,
+  ParticipantMessageMetadataSchema,
+  PreSearchMessageMetadataSchema,
+  UsageSchema,
+} from '@/lib/schemas/message-metadata';
+import type { ParticipantContext } from '@/lib/schemas/participant-schemas';
 
-import { extractMetadataParticipantId, extractMetadataRoundNumber } from './metadata-extraction';
+import {
+  buildAssistantMetadata,
+  enrichMessageWithParticipant,
+  getAssistantMetadata,
+  getParticipantId,
+  getRoundNumber,
+  hasParticipantEnrichment,
+  isPreSearch,
+} from './metadata';
 
 // ============================================================================
-// Type Definitions
+// Type Exports
 // ============================================================================
 
-// ✅ UIMessageErrorType now imported from error-schemas (single source of truth)
 export type { UIMessageErrorType };
 
-/**
- * Validation result for message order checks
- */
-export type MessageOrderValidation = {
-  /** Whether the message order is valid */
-  isValid: boolean;
-  /** Specific validation error messages */
-  errors: string[];
-};
-
 // ============================================================================
-// Metadata Extraction
+// Type Guards
 // ============================================================================
 
 /**
- * Safely extract and parse message metadata
+ * Type guard: Check if message role is valid for UIMessage
  *
- * Validates metadata against MessageMetadataSchema and returns typed metadata.
- * Falls back to raw metadata if parsing fails (for backwards compatibility).
- *
- * @param metadata - Raw metadata object from message
- * @returns Parsed MessageMetadata or undefined if no metadata
- *
- * @example
- * ```typescript
- * const metadata = getMessageMetadata(message.metadata);
- * if (metadata?.participantId) {
- *   const participantId = metadata.participantId;
- * }
- * ```
+ * AI SDK UIMessage only supports 'user', 'assistant', and 'system' roles.
+ * Tool messages are handled separately.
  */
-export function getMessageMetadata(metadata: unknown): MessageMetadata | undefined {
-  if (!metadata)
-    return undefined;
+function isUIMessageRole(role: string): role is 'user' | 'assistant' | 'system' {
+  return role === MessageRoles.USER || role === MessageRoles.ASSISTANT || role === 'system';
+}
 
-  const result = MessageMetadataSchema.safeParse(metadata);
-  return result.success ? result.data : (metadata as MessageMetadata);
+/**
+ * Type guard: Check if UIMessage is pre-search message
+ *
+ * Uses Zod schema validation for runtime type safety.
+ * Pre-search messages contain web search results.
+ */
+export function isPreSearchMessage(
+  message: UIMessage,
+): message is UIMessage & { metadata: PreSearchMessageMetadata } {
+  if (!message.metadata)
+    return false;
+  const validation = PreSearchMessageMetadataSchema.safeParse(message.metadata);
+  return validation.success;
+}
+
+/**
+ * Type guard: Check if UIMessage is participant message
+ *
+ * Uses Zod schema validation for runtime type safety.
+ * Participant messages are assistant messages with full tracking metadata.
+ */
+export function isParticipantMessage(
+  message: UIMessage,
+): message is UIMessage & { metadata: ParticipantMessageMetadata } {
+  if (!message.metadata || message.role !== MessageRoles.ASSISTANT)
+    return false;
+  const validation = ParticipantMessageMetadataSchema.safeParse(message.metadata);
+  return validation.success;
 }
 
 // ============================================================================
-// Message Format Conversion
+// Format Conversion
 // ============================================================================
 
 /**
  * Convert a single backend ChatMessage to AI SDK UIMessage format
  *
- * Transforms database message format into the AI SDK's UIMessage structure.
- * Handles date serialization and metadata enrichment automatically.
- *
- * @param message - Backend ChatMessage from database
- * @returns UIMessage compatible with AI SDK
- *
- * @example
- * ```typescript
- * const dbMessage = await db.query.chatMessage.findFirst(...);
- * const uiMessage = chatMessageToUIMessage(dbMessage);
- * ```
+ * Transforms database message format into AI SDK's UIMessage structure.
+ * Handles date serialization and metadata enrichment.
  */
 export function chatMessageToUIMessage(
   message: ChatMessage | (Omit<ChatMessage, 'createdAt'> & { createdAt: string | Date }),
 ): UIMessage {
+  if (!isUIMessageRole(message.role)) {
+    throw new Error(
+      `Invalid message role for UI: ${message.role}. Tool messages should be filtered out.`,
+    );
+  }
+
   const createdAt = message.createdAt instanceof Date
     ? message.createdAt.toISOString()
     : message.createdAt;
 
-  // ✅ STRICT TYPING: Build metadata from database fields
-  // Let TypeScript infer the type - it will match PartialMessageMetadata structure
-  const metadata = message.roundNumber
-    ? {
-        ...(message.metadata || {}),
-        role: message.role, // ✅ FIX: Add role discriminator for type guard
-        participantId: message.participantId || undefined,
-        createdAt,
-        roundNumber: message.roundNumber,
-      }
-    : null;
+  // Preserve pre-search metadata exactly as-is
+  const messageMetadata = message.metadata as Record<string, unknown> | null | undefined;
+  const isPreSearchMsg = messageMetadata
+    && typeof messageMetadata === 'object'
+    && 'isPreSearch' in messageMetadata
+    && messageMetadata.isPreSearch === true;
+
+  const metadata = isPreSearchMsg
+    ? message.metadata
+    : message.roundNumber
+      ? {
+          ...(message.metadata || {}),
+          role: message.role,
+          participantId: message.participantId || undefined,
+          createdAt,
+          roundNumber: message.roundNumber,
+        }
+      : null;
 
   return {
     id: message.id,
@@ -115,76 +153,61 @@ export function chatMessageToUIMessage(
 /**
  * Convert array of backend ChatMessages to AI SDK UIMessage format
  *
- * Batch conversion for multiple messages. Uses chatMessageToUIMessage internally.
- * Preserves message order from database.
+ * Batch conversion with participant enrichment. Ensures all messages have
+ * roundNumber in metadata to prevent display issues.
  *
- * CRITICAL FIX: Ensures all messages have roundNumber set in metadata.
- * If backend messages are missing roundNumber, assigns them based on user message sequence.
- *
- * ✅ CRITICAL FIX: Enriches messages with participant metadata (model, role, etc.)
- * This ensures backend messages are recognized as "complete" and never need to lookup
- * participant info from current state, preventing duplication issues when participants change.
- *
- * @param messages - Array of backend ChatMessages from database
- * @param participants - Optional array of participants to enrich messages with model info
- * @returns Array of UIMessages compatible with AI SDK
- *
- * @example
- * ```typescript
- * const dbMessages = await db.query.chatMessage.findMany(...);
- * const uiMessages = chatMessagesToUIMessages(dbMessages, participants);
- * setMessages(uiMessages);
- * ```
+ * @param messages - Array of backend ChatMessages
+ * @param participants - Optional participants for enrichment
+ * @returns Array of UIMessages with complete metadata
  */
 export function chatMessagesToUIMessages(
   messages: (ChatMessage | (Omit<ChatMessage, 'createdAt'> & { createdAt: string | Date }))[],
-  participants?: Array<{ id: string; modelId: string; role: string | null }>,
+  participants?: ParticipantContext[],
 ): UIMessage[] {
-  // Convert all messages first
-  const uiMessages = messages.map(chatMessageToUIMessage);
+  // Filter out tool messages and convert
+  const uiMessages = messages
+    .filter(m => m.role !== MessageRoles.TOOL)
+    .map(chatMessageToUIMessage);
 
-  // ✅ CRITICAL FIX: Create participant lookup map for enrichment
+  // Create participant lookup for enrichment
   const participantMap = participants
     ? new Map(participants.map(p => [p.id, p]))
     : null;
 
-  // CRITICAL FIX: Ensure all messages have roundNumber in metadata
-  // This prevents groupMessagesByRound from having to use inference logic
-  // which can fail and cause messages to not be displayed
+  // Ensure all messages have roundNumber and participant enrichment
   let currentRound = 0;
   const messagesWithRoundNumber = uiMessages.map((message) => {
-    // Check if message already has roundNumber in metadata
-    // ✅ SINGLE SOURCE OF TRUTH: Use extraction utility for type-safe metadata access
-    const explicitRound = extractMetadataRoundNumber(message.metadata);
-    const hasRoundNumber = explicitRound !== undefined && explicitRound > 0;
+    const explicitRound = getRoundNumber(message.metadata);
+    const hasRoundNumber = explicitRound !== null && explicitRound !== undefined && explicitRound > 0;
 
-    if (hasRoundNumber) {
-      // Update current round tracker
-      if (message.role === 'user' && explicitRound > currentRound) {
+    if (hasRoundNumber && explicitRound !== null) {
+      if (message.role === MessageRoles.USER && explicitRound > currentRound) {
         currentRound = explicitRound;
       }
 
-      // ✅ CRITICAL FIX: Still enrich messages that already have roundNumber
-      // They might be missing model/role metadata needed for "complete" status
-      if (participantMap && message.role === 'assistant') {
-        // ✅ SINGLE SOURCE OF TRUTH: Use extraction utility for type-safe participant ID access
-        const participantId = extractMetadataParticipantId(message.metadata);
-        const participant = participantId ? participantMap.get(participantId) : null;
-        const msgMetadata = message.metadata && typeof message.metadata === 'object'
-          ? message.metadata as Record<string, unknown>
-          : undefined;
+      // Enrich messages that have roundNumber but missing participant metadata
+      if (participantMap && message.role === MessageRoles.ASSISTANT) {
+        const isPreSearchMsg = isPreSearch(message.metadata);
 
-        if (participant && msgMetadata && !msgMetadata.model) {
-          // Add model and role to metadata if missing
-          return {
-            ...message,
-            metadata: {
-              ...msgMetadata,
-              role: message.role, // ✅ FIX: Add role discriminator for type guard
-              model: participant.modelId,
-              ...(participant.role && { participantRole: participant.role }),
-            },
-          };
+        if (!isPreSearchMsg) {
+          const participantId = getParticipantId(message.metadata);
+          const participant = participantId ? participantMap.get(participantId) : null;
+
+          if (participant && !hasParticipantEnrichment(message.metadata)) {
+            const baseMetadata = getAssistantMetadata(message.metadata);
+            return {
+              ...message,
+              metadata: enrichMessageWithParticipant(
+                baseMetadata ? { ...baseMetadata, role: message.role } as MessageMetadata : { role: message.role, roundNumber: explicitRound } as MessageMetadata,
+                {
+                  id: participant.id,
+                  modelId: participant.modelId,
+                  role: participant.role,
+                  index: 0,
+                },
+              ),
+            };
+          }
         }
       }
 
@@ -192,41 +215,61 @@ export function chatMessagesToUIMessages(
     }
 
     // Message missing roundNumber - assign based on current round
-    if (message.role === 'user') {
-      // New user message starts a new round
+    if (message.role === MessageRoles.USER) {
       currentRound += 1;
     }
 
-    // ✅ CRITICAL FIX: Enrich message metadata with participant info if available
-    // This makes backend messages "complete" so they don't need participant lookups
-    const baseMetadata: Record<string, unknown> = {
-      ...(message.metadata || {}),
-      role: message.role, // ✅ FIX: Add role discriminator for type guard
-      roundNumber: currentRound || 1, // Default to round 1 if no rounds yet
-    };
+    const existingMetadata = message.role === MessageRoles.ASSISTANT
+      ? getAssistantMetadata(message.metadata)
+      : null;
 
-    // If we have participant data and this is an assistant message, enrich it
-    if (participantMap && message.role === 'assistant') {
-      // ✅ SINGLE SOURCE OF TRUTH: Use extraction utility for type-safe participant ID access
-      const participantId = extractMetadataParticipantId(message.metadata);
-      const participant = participantId ? participantMap.get(participantId) : null;
+    let enrichedMetadata: MessageMetadata;
 
-      if (participant) {
-        // Add model and role to metadata so message is recognized as "complete"
-        baseMetadata.model = participant.modelId;
-        if (participant.role) {
-          baseMetadata.participantRole = participant.role;
+    if (participantMap && message.role === MessageRoles.ASSISTANT) {
+      const isPreSearchMsg = isPreSearch(message.metadata);
+
+      if (!isPreSearchMsg) {
+        const participantId = getParticipantId(message.metadata);
+        const participant = participantId ? participantMap.get(participantId) : null;
+
+        if (participant) {
+          enrichedMetadata = {
+            ...buildAssistantMetadata(
+              existingMetadata || {},
+              {
+                roundNumber: currentRound || 1,
+                participantId: participant.id,
+                model: participant.modelId,
+                participantRole: participant.role,
+              },
+            ),
+            role: MessageRoles.ASSISTANT,
+          } as MessageMetadata;
+        } else {
+          enrichedMetadata = {
+            ...(existingMetadata || {}),
+            role: message.role,
+            roundNumber: currentRound || 1,
+          } as MessageMetadata;
         }
+      } else {
+        enrichedMetadata = {
+          ...(existingMetadata || {}),
+          role: message.role,
+          roundNumber: currentRound || 1,
+        } as MessageMetadata;
       }
+    } else {
+      enrichedMetadata = {
+        role: message.role,
+        roundNumber: currentRound || 1,
+      } as MessageMetadata;
     }
 
-    // Assign roundNumber and enriched metadata to message
-    const messageWithRound: UIMessage = {
+    return {
       ...message,
-      metadata: baseMetadata,
+      metadata: enrichedMetadata,
     };
-
-    return messageWithRound;
   });
 
   return messagesWithRoundNumber;
@@ -237,37 +280,182 @@ export function chatMessagesToUIMessages(
 // ============================================================================
 
 /**
- * Filter out messages with no meaningful content
+ * Generic filter function using predicate
  *
- * Removes user messages that contain only empty text parts.
- * Always keeps assistant messages (even if empty) since they may contain
- * error information or system messages.
- *
- * @param messages - Array of UIMessages to filter
- * @returns Array containing only messages with content
+ * Provides flexible, composable filtering with type safety.
  *
  * @example
  * ```typescript
- * const filteredMessages = filterNonEmptyMessages(allMessages);
- * await saveMessages(filteredMessages);
+ * const userMessages = filterMessages(messages, m => m.role === 'user');
+ * const round2Messages = filterMessages(messages, m => getRoundNumber(m.metadata) === 2);
  * ```
+ */
+export function filterMessages<T extends UIMessage>(
+  messages: T[],
+  predicate: (message: T) => boolean,
+): T[] {
+  return messages.filter(predicate);
+}
+
+/**
+ * Filter messages by role
+ */
+export function filterByRole(
+  messages: UIMessage[],
+  role: UIMessage['role'],
+): UIMessage[] {
+  return filterMessages(messages, m => m.role === role);
+}
+
+/**
+ * Filter messages by round number
+ */
+export function filterByRound(
+  messages: UIMessage[],
+  roundNumber: number,
+): UIMessage[] {
+  return filterMessages(messages, m => getRoundNumber(m.metadata) === roundNumber);
+}
+
+/**
+ * Filter to participant messages only (excludes pre-search)
+ */
+export function filterToParticipantMessages(
+  messages: UIMessage[],
+): Array<UIMessage & { metadata: ParticipantMessageMetadata }> {
+  return messages.filter(isParticipantMessage);
+}
+
+/**
+ * Filter to pre-search messages only
+ */
+export function filterToPreSearchMessages(
+  messages: UIMessage[],
+): Array<UIMessage & { metadata: PreSearchMessageMetadata }> {
+  return messages.filter(isPreSearchMessage);
+}
+
+/**
+ * Filter messages with no meaningful content
+ *
+ * Removes user messages with only empty text.
+ * Keeps assistant messages (may have errors or system info).
  */
 export function filterNonEmptyMessages(messages: UIMessage[]): UIMessage[] {
   return messages.filter((message) => {
-    // Always keep assistant messages (may have errors or tool calls)
-    if (message.role === 'assistant')
+    if (message.role === MessageRoles.ASSISTANT)
       return true;
 
-    // Only keep user messages with non-empty text
-    if (message.role === 'user') {
+    if (message.role === MessageRoles.USER) {
       const textParts = message.parts?.filter(
-        part => part.type === 'text' && 'text' in part && part.text.trim().length > 0,
+        part => part.type === MessagePartTypes.TEXT && 'text' in part && part.text.trim().length > 0,
       );
       return textParts && textParts.length > 0;
     }
 
     return false;
   });
+}
+
+/**
+ * Get all participant messages for a specific round
+ *
+ * Filters for assistant messages in the specified round,
+ * excluding pre-search messages.
+ */
+export function getParticipantMessagesForRound(
+  messages: UIMessage[],
+  roundNumber: number,
+): UIMessage[] {
+  return messages.filter((m) => {
+    if (m.role !== MessageRoles.ASSISTANT)
+      return false;
+
+    // Multiple checks for defense-in-depth
+    if (m.id && m.id.startsWith('pre-search-'))
+      return false;
+    if (isPreSearch(m.metadata))
+      return false;
+
+    const metadata = m.metadata as Record<string, unknown> | null | undefined;
+    if (metadata && typeof metadata === 'object' && metadata.role === 'system')
+      return false;
+
+    const participantId = getParticipantId(m.metadata);
+    if (participantId == null)
+      return false;
+
+    const msgRound = getRoundNumber(m.metadata);
+    return msgRound === roundNumber;
+  });
+}
+
+/**
+ * Extract participant message IDs from messages
+ *
+ * Returns unique message IDs from messages with participant metadata.
+ */
+export function getParticipantMessageIds(messages: UIMessage[]): string[] {
+  return Array.from(
+    new Set(
+      messages
+        .filter(m => getParticipantId(m.metadata) != null)
+        .map(m => m.id),
+    ),
+  );
+}
+
+/**
+ * Get participant messages with IDs for a specific round
+ *
+ * Combined operation for filtering and ID extraction.
+ */
+export function getParticipantMessagesWithIds(
+  messages: UIMessage[],
+  roundNumber: number,
+): { messages: UIMessage[]; ids: string[] } {
+  const filteredMessages = getParticipantMessagesForRound(messages, roundNumber);
+  const ids = getParticipantMessageIds(filteredMessages);
+  return { messages: filteredMessages, ids };
+}
+
+// ============================================================================
+// Convenience Filters
+// ============================================================================
+
+/**
+ * Get all user messages
+ */
+export function getUserMessages(messages: UIMessage[]): UIMessage[] {
+  return filterByRole(messages, MessageRoles.USER);
+}
+
+/**
+ * Get all assistant messages
+ */
+export function getAssistantMessages(messages: UIMessage[]): UIMessage[] {
+  return filterByRole(messages, MessageRoles.ASSISTANT);
+}
+
+/**
+ * Count messages in a specific round
+ */
+export function countMessagesInRound(
+  messages: UIMessage[],
+  roundNumber: number,
+): number {
+  return getParticipantMessagesForRound(messages, roundNumber).length;
+}
+
+/**
+ * Get the highest round number from messages
+ */
+export function getLatestRoundNumber(messages: UIMessage[]): number {
+  const roundNumbers = messages
+    .map(m => getRoundNumber(m.metadata))
+    .filter((round): round is number => round !== undefined && round !== null);
+
+  return roundNumbers.length > 0 ? Math.max(...roundNumbers) : 0;
 }
 
 // ============================================================================
@@ -277,174 +465,146 @@ export function filterNonEmptyMessages(messages: UIMessage[]): UIMessage[] {
 /**
  * Create a structured error UIMessage for a participant
  *
- * Creates an assistant message with error metadata when a participant
- * fails to generate a response (rate limits, network errors, etc.).
- *
- * @param participant - Participant information
- * @param participant.id - Unique identifier for the participant
- * @param participant.modelId - Model identifier (e.g., 'openai/gpt-4')
- * @param participant.role - Participant's role in the conversation (nullable)
- * @param currentIndex - Participant index in the conversation
- * @param errorMessage - Human-readable error message
- * @param errorType - Error category (defaults to 'error')
- * @param errorMetadata - Additional error context (validated against ErrorMetadataSchema)
- * @param roundNumber - Round number where error occurred
- * @returns UIMessage with error metadata
- *
- * @example
- * ```typescript
- * const errorMsg = createErrorUIMessage(
- *   participant,
- *   0,
- *   'Connection timeout',
- *   'provider_network',
- *   { statusCode: 504, errorCategory: 'network' },
- *   currentRound
- * );
- * ```
+ * Creates assistant message with error metadata when participant
+ * fails to generate a response.
  */
 export function createErrorUIMessage(
-  participant: { id: string; modelId: string; role: string | null },
+  participant: ParticipantContext,
   currentIndex: number,
   errorMessage: string,
-  errorType: UIMessageErrorType = UIMessageErrorTypeSchema.enum.error,
+  errorType: UIMessageErrorType = UIMessageErrorTypeSchema.enum.failed,
   errorMetadata?: ErrorMetadata,
   roundNumber?: number,
 ): UIMessage {
-  // Validate metadata if provided
   const validatedMetadata = errorMetadata
     ? ErrorMetadataSchema.safeParse(errorMetadata)
     : { success: false, data: undefined };
 
   const metadata = validatedMetadata.success ? validatedMetadata.data : errorMetadata;
 
-  return {
-    id: `error-${crypto.randomUUID()}-${currentIndex}`,
-    role: 'assistant',
-    parts: [{ type: 'text', text: '' }],
-    metadata: {
-      role: 'assistant', // ✅ FIX: Add role discriminator for type guard
+  const errorMeta = buildAssistantMetadata(
+    {},
+    {
       participantId: participant.id,
       participantIndex: currentIndex,
-      ...(participant.role && { participantRole: participant.role }),
+      participantRole: participant.role,
       model: participant.modelId,
+      roundNumber,
       hasError: true,
       errorType,
       errorMessage,
-      errorCategory: metadata?.errorCategory || errorType,
-      statusCode: metadata?.statusCode,
-      rawErrorMessage: metadata?.rawErrorMessage,
-      providerMessage: metadata?.providerMessage || metadata?.rawErrorMessage || errorMessage,
-      openRouterError: metadata?.openRouterError,
-      openRouterCode: metadata?.openRouterCode,
-      roundNumber,
+      additionalFields: {
+        errorCategory: metadata?.errorCategory || errorType,
+        statusCode: metadata?.statusCode,
+        rawErrorMessage: metadata?.rawErrorMessage,
+        providerMessage: metadata?.providerMessage || metadata?.rawErrorMessage || errorMessage,
+        openRouterError: metadata?.openRouterError,
+        openRouterCode: metadata?.openRouterCode,
+      },
     },
+  );
+
+  return {
+    id: `error-${crypto.randomUUID()}-${currentIndex}`,
+    role: MessageRoles.ASSISTANT,
+    parts: [{ type: MessagePartTypes.TEXT, text: '' }],
+    metadata: errorMeta,
   };
 }
 
 /**
  * Merge participant metadata into message metadata
  *
- * Enriches a message's metadata with participant information and error detection.
+ * Enriches message metadata with participant information.
  * Automatically detects empty responses and backend errors.
- *
- * @param message - UIMessage to enrich
- * @param participant - Participant information
- * @param participant.id - Unique identifier for the participant
- * @param participant.modelId - Model identifier (e.g., 'openai/gpt-4')
- * @param participant.role - Participant's role in the conversation (nullable)
- * @param currentIndex - Participant index in the conversation
- * @returns Enriched metadata object
- *
- * @example
- * ```typescript
- * const enrichedMetadata = mergeParticipantMetadata(
- *   streamedMessage,
- *   participant,
- *   0
- * );
- * ```
- */
-/**
- * Merge participant metadata - STRICT TYPING - Returns complete required metadata
- *
- * @param message - UIMessage from AI SDK
- * @param participant - Participant that generated the message
- * @param participant.id - Participant ULID
- * @param participant.modelId - AI model ID
- * @param participant.role - Participant role (nullable)
- * @param currentIndex - Index of current participant
- * @param roundNumber - REQUIRED round number (no longer optional from metadata)
- * @returns MessageMetadata with role discriminator and all required fields
  */
 export function mergeParticipantMetadata(
   message: UIMessage,
-  participant: { id: string; modelId: string; role: string | null },
+  participant: ParticipantContext,
   currentIndex: number,
   roundNumber: number,
+  options?: { hasGeneratedText?: boolean },
 ): Extract<MessageMetadata, { role: 'assistant' }> {
-  // Access metadata directly - metadata can contain many fields beyond ErrorMetadata schema
-  const metadata = message.metadata && typeof message.metadata === 'object'
-    ? message.metadata as Record<string, unknown>
-    : undefined;
+  const validatedMetadata = getAssistantMetadata(message.metadata);
 
-  const hasBackendError = metadata?.hasError === true || !!metadata?.error || !!metadata?.rawErrorMessage;
+  // Trust backend error flags
+  const hasBackendErrorFlag = validatedMetadata?.hasError === true;
+  const hasBackendNoErrorFlag = validatedMetadata?.hasError === false;
+  const hasExplicitErrorMetadata = (validatedMetadata?.errorType && validatedMetadata.errorType !== 'unknown')
+    || (validatedMetadata?.errorMessage && typeof validatedMetadata.errorMessage === 'string');
 
-  const textParts = message.parts?.filter(p => p.type === 'text') || [];
+  // Skip parts check when called from onFinish with hasGeneratedText=true
+  const skipPartsCheck = options?.hasGeneratedText === true;
+
+  // Frontend fallback error detection
+  const textParts = message.parts?.filter(p => p.type === MessagePartTypes.TEXT) || [];
   const hasTextContent = textParts.some(
     part => 'text' in part && typeof part.text === 'string' && part.text.trim().length > 0,
   );
+  const hasToolCalls = message.parts?.some(p => p.type === MessagePartTypes.TOOL_CALL) || false;
+  const hasAnyContent = skipPartsCheck ? true : (hasTextContent || hasToolCalls);
 
-  const isEmptyResponse = textParts.length === 0 || !hasTextContent;
-  const hasError = hasBackendError || isEmptyResponse;
+  // Determine hasError with proper priority
+  const hasError = hasBackendErrorFlag
+    ? true
+    : hasBackendNoErrorFlag
+      ? false
+      : skipPartsCheck
+        ? false
+        : hasExplicitErrorMetadata
+          ? true
+          : !hasAnyContent;
 
-  let errorMessage = typeof metadata?.rawErrorMessage === 'string' ? metadata.rawErrorMessage : undefined;
-  if (isEmptyResponse && !errorMessage) {
+  // Generate error message if needed
+  let errorMessage: string | undefined;
+  if (validatedMetadata?.errorMessage && typeof validatedMetadata.errorMessage === 'string') {
+    errorMessage = validatedMetadata.errorMessage;
+  }
+  if (!hasAnyContent && !errorMessage && hasError) {
     errorMessage = `The model (${participant.modelId}) did not generate a response.`;
   }
 
-  // Extract usage or provide defaults
-  const usageResult = UsageSchema.partial().safeParse(metadata?.usage);
+  // Parse usage data
+  const usageResult = UsageSchema.partial().safeParse(validatedMetadata?.usage);
   const usage = {
     promptTokens: usageResult.success ? (usageResult.data.promptTokens ?? 0) : 0,
     completionTokens: usageResult.success ? (usageResult.data.completionTokens ?? 0) : 0,
     totalTokens: usageResult.success ? (usageResult.data.totalTokens ?? 0) : 0,
   };
 
-  // ✅ STRICT TYPING: Validate finish reason using Zod enum (single source of truth)
-  const finishReasonRaw = metadata?.finishReason ? String(metadata.finishReason) : 'unknown';
+  // Parse finish reason
+  const finishReasonRaw = validatedMetadata?.finishReason ? String(validatedMetadata.finishReason) : 'unknown';
   const finishReasonResult = FinishReasonSchema.safeParse(finishReasonRaw);
   const safeFinishReason: FinishReason = finishReasonResult.success ? finishReasonResult.data : 'unknown';
 
-  // Extract optional createdAt field
-  const createdAt: string | undefined = metadata?.createdAt
-    ? (typeof metadata.createdAt === 'string' ? metadata.createdAt : undefined)
-    : undefined;
-
-  // ✅ STRICT TYPING: Validate errorType using Zod enum if present
-  const errorTypeRaw = typeof metadata?.errorType === 'string' ? metadata.errorType : (isEmptyResponse ? 'empty_response' : 'unknown');
+  // Parse error type
+  const errorTypeRaw = typeof validatedMetadata?.errorType === 'string'
+    ? validatedMetadata.errorType
+    : !hasAnyContent && hasError ? 'empty_response' : 'unknown';
   const errorTypeResult = ErrorTypeSchema.safeParse(errorTypeRaw);
   const safeErrorType: ErrorType = errorTypeResult.success ? errorTypeResult.data : 'unknown';
 
-  // Return complete metadata with ALL required fields
-  return {
-    role: 'assistant', // ✅ FIX: Add role discriminator for type guard
-    roundNumber,
-    participantId: participant.id,
-    participantIndex: currentIndex,
-    participantRole: participant.role,
-    model: participant.modelId,
-    finishReason: safeFinishReason,
-    usage,
-    hasError,
-    isTransient: metadata?.isTransient === true,
-    isPartialResponse: metadata?.isPartialResponse === true,
-    ...(hasError && {
-      errorType: safeErrorType,
-      errorMessage,
-    }),
-    ...(createdAt && { createdAt }),
-  };
+  return buildAssistantMetadata(
+    {
+      finishReason: safeFinishReason,
+      usage,
+      isTransient: validatedMetadata?.isTransient === true,
+      isPartialResponse: validatedMetadata?.isPartialResponse === true,
+      ...(validatedMetadata?.createdAt && typeof validatedMetadata.createdAt === 'string' && { createdAt: validatedMetadata.createdAt }),
+    },
+    {
+      participantId: participant.id,
+      participantIndex: currentIndex,
+      participantRole: participant.role,
+      model: participant.modelId,
+      roundNumber,
+      hasError,
+      ...(hasError && {
+        errorType: safeErrorType,
+        errorMessage,
+      }),
+    },
+  ) as Extract<MessageMetadata, { role: 'assistant' }>;
 }
 
 // ============================================================================
@@ -452,24 +612,21 @@ export function mergeParticipantMetadata(
 // ============================================================================
 
 /**
- * Validate message order is correct for conversation flow
+ * Validation result for message order checks
+ */
+export type MessageOrderValidation = {
+  isValid: boolean;
+  errors: string[];
+};
+
+/**
+ * Validate message order for conversation flow
  *
- * Validates that messages follow proper round-based conversation structure:
- * - Round numbers in ascending order (no backward jumps)
+ * Validates proper round-based structure:
+ * - Round numbers in ascending order
  * - Each round starts with exactly one user message
- * - User message appears before assistant messages in each round
- * - No round skipping (sequential: 1, 2, 3...)
- *
- * @param messages - Array of UIMessages to validate
- * @returns Validation result with isValid flag and error messages
- *
- * @example
- * ```typescript
- * const validation = validateMessageOrder(messages);
- * if (!validation.isValid) {
- *   throw new Error('Message order errors');
- * }
- * ```
+ * - User message appears before assistant messages
+ * - No round skipping
  */
 export function validateMessageOrder(messages: UIMessage[]): MessageOrderValidation {
   const errors: string[] = [];
@@ -484,19 +641,17 @@ export function validateMessageOrder(messages: UIMessage[]): MessageOrderValidat
     if (!msg)
       continue;
 
-    // ✅ SINGLE SOURCE OF TRUTH: Use extraction utility for type-safe round number access
-    const round = extractMetadataRoundNumber(msg.metadata) ?? 1;
+    const round = getRoundNumber(msg.metadata) ?? 1;
 
-    // Rule 1: Check round progression (no backward jumps)
+    // Check round progression
     if (round < lastRound) {
       errors.push(
-        `Message ${i} (id: ${msg.id}, role: ${msg.role}): Round ${round} appears after round ${lastRound} (backward jump)`,
+        `Message ${i} (id: ${msg.id}, role: ${msg.role}): Round ${round} appears after round ${lastRound}`,
       );
     }
 
     // Detect round transition
     if (round > lastRound) {
-      // Check for round skipping
       if (round > expectedNextRound) {
         errors.push(
           `Message ${i} (id: ${msg.id}): Round ${round} skips from ${lastRound} (expected ${expectedNextRound})`,
@@ -510,32 +665,31 @@ export function validateMessageOrder(messages: UIMessage[]): MessageOrderValidat
 
     roundsEncountered.add(round);
 
-    // Rule 2 & 5: Check user message position within round
-    if (msg.role === 'user') {
+    // Check user message position
+    if (msg.role === MessageRoles.USER) {
       if (userMessageSeenInCurrentRound) {
         errors.push(
-          `Message ${i} (id: ${msg.id}): Multiple user messages in round ${round} (only one allowed per round)`,
+          `Message ${i} (id: ${msg.id}): Multiple user messages in round ${round}`,
         );
       }
       userMessageSeenInCurrentRound = true;
-    } else if (msg.role === 'assistant') {
-      // Rule 3: Assistant message before user message in same round
+    } else if (msg.role === MessageRoles.ASSISTANT) {
       if (!userMessageSeenInCurrentRound) {
         errors.push(
-          `Message ${i} (id: ${msg.id}): Assistant message appears before user message in round ${round}`,
+          `Message ${i} (id: ${msg.id}): Assistant message before user message in round ${round}`,
         );
       }
     }
   }
 
-  // Check for sequential rounds (no gaps)
+  // Check sequential rounds
   const sortedRounds = Array.from(roundsEncountered).sort((a, b) => a - b);
   for (let i = 0; i < sortedRounds.length - 1; i++) {
     const current = sortedRounds[i];
     const next = sortedRounds[i + 1];
     if (next && current && next !== current + 1) {
       errors.push(
-        `Round sequence gap detected: Round ${current} is followed by round ${next} (missing round ${current + 1})`,
+        `Round gap: ${current} followed by ${next} (missing ${current + 1})`,
       );
     }
   }

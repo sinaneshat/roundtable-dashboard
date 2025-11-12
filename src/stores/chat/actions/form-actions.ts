@@ -10,16 +10,19 @@
 
 'use client';
 
-import { useCallback, useMemo } from 'react';
+import { useCallback } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
+import { AnalysisStatuses } from '@/api/core/enums';
 import { toCreateThreadRequest } from '@/components/chat/chat-form-schemas';
 import { useChatStore } from '@/components/providers/chat-store-provider';
 import { useCreateThreadMutation, useUpdateThreadMutation } from '@/hooks/mutations/chat-mutations';
 import type { ChatModeId } from '@/lib/config/chat-modes';
 import { showApiErrorToast } from '@/lib/toast';
 import { transformChatMessages, transformChatParticipants, transformChatThread } from '@/lib/utils/date-transforms';
+import { useMemoizedReturn } from '@/lib/utils/memo-utils';
 import { chatMessagesToUIMessages } from '@/lib/utils/message-transforms';
+import { prepareParticipantUpdate, shouldUpdateParticipantConfig } from '@/lib/utils/participant';
 
 export type UseChatFormActionsReturn = {
   /** Submit form to create new thread */
@@ -30,6 +33,8 @@ export type UseChatFormActionsReturn = {
   handleResetForm: () => void;
   /** Change mode and mark as having pending changes */
   handleModeChange: (mode: ChatModeId) => void;
+  /** Toggle web search on/off */
+  handleWebSearchToggle: (enabled: boolean) => void;
   /** Check if form is valid for submission */
   isFormValid: boolean;
 };
@@ -55,6 +60,7 @@ export function useChatFormActions(): UseChatFormActionsReturn {
     inputValue: s.inputValue,
     selectedMode: s.selectedMode,
     selectedParticipants: s.selectedParticipants,
+    enableWebSearch: s.enableWebSearch,
   })));
 
   // Batch thread state selectors
@@ -68,6 +74,7 @@ export function useChatFormActions(): UseChatFormActionsReturn {
     setInputValue: s.setInputValue,
     resetForm: s.resetForm,
     setSelectedMode: s.setSelectedMode,
+    setEnableWebSearch: s.setEnableWebSearch,
     setShowInitialUI: s.setShowInitialUI,
     setIsCreatingThread: s.setIsCreatingThread,
     setWaitingToStartStreaming: s.setWaitingToStartStreaming,
@@ -77,6 +84,7 @@ export function useChatFormActions(): UseChatFormActionsReturn {
     setExpectedParticipantIds: s.setExpectedParticipantIds,
     initializeThread: s.initializeThread,
     updateParticipants: s.updateParticipants,
+    addPreSearch: s.addPreSearch,
   })));
 
   // Mutations
@@ -108,6 +116,7 @@ export function useChatFormActions(): UseChatFormActionsReturn {
         message: prompt,
         mode: formState.selectedMode,
         participants: formState.selectedParticipants,
+        enableWebSearch: formState.enableWebSearch,
       });
 
       const response = await createThreadMutation.mutateAsync({
@@ -131,11 +140,30 @@ export function useChatFormActions(): UseChatFormActionsReturn {
 
       actions.initializeThread(threadWithDates, participantsWithDates, uiMessages);
 
+      // ✅ CRITICAL: If web search enabled, create PENDING pre-search in store
+      // Backend creates DB record but doesn't return it in response
+      // Store needs it so PreSearchCard renders and PreSearchStream can handle it
+      if (formState.enableWebSearch) {
+        // ✅ FIX: Generate temporary ID so PreSearchStream can track deduplication
+        // Backend record has real ID, but frontend needs placeholder for rendering
+        const tempPreSearchId = `temp-presearch-${thread.id}-1-${Date.now()}`;
+
+        actions.addPreSearch({
+          id: tempPreSearchId, // Temporary ID until SSE completes and syncs from server
+          threadId: thread.id,
+          roundNumber: 1,
+          userQuery: formState.inputValue,
+          status: AnalysisStatuses.PENDING,
+          searchData: null,
+          errorMessage: null,
+          completedAt: null,
+          createdAt: new Date(),
+        });
+      }
+
       // Set flag to trigger streaming once chat is ready
-      // Use queueMicrotask to ensure store updates have propagated
-      queueMicrotask(() => {
-        actions.setWaitingToStartStreaming(true);
-      });
+      // Store subscription will wait for startRound to be registered by provider
+      actions.setWaitingToStartStreaming(true);
     } catch (error) {
       showApiErrorToast('Error creating thread', error);
       actions.setShowInitialUI(true);
@@ -146,6 +174,7 @@ export function useChatFormActions(): UseChatFormActionsReturn {
     formState.inputValue,
     formState.selectedMode,
     formState.selectedParticipants,
+    formState.enableWebSearch,
     createThreadMutation,
     actions,
   ]);
@@ -162,60 +191,38 @@ export function useChatFormActions(): UseChatFormActionsReturn {
     }
 
     try {
-      // ✅ CRITICAL FIX: Detect if participants or mode actually changed
-      // Compare current state with selected state to avoid unnecessary PATCH requests
-      const currentModeId = threadState.thread?.mode || null;
-      const hasTemporaryIds = formState.selectedParticipants.some(p => p.id.startsWith('participant-'));
-
-      // Compare participants by modelId and priority (ignore temporary IDs and timestamps)
-      const currentParticipantsKey = threadState.participants
-        .filter(p => p.isEnabled)
-        .sort((a, b) => a.priority - b.priority)
-        .map(p => `${p.modelId}:${p.priority}:${p.role || 'null'}:${p.customRoleId || 'null'}`)
-        .join('|');
-
-      const selectedParticipantsKey = formState.selectedParticipants
-        .sort((a, b) => a.priority - b.priority)
-        .map(p => `${p.modelId}:${p.priority}:${p.role || 'null'}:${p.customRoleId || 'null'}`)
-        .join('|');
-
-      const participantsChanged = currentParticipantsKey !== selectedParticipantsKey;
-      const modeChanged = currentModeId !== formState.selectedMode;
-      const hasChanges = hasTemporaryIds || participantsChanged || modeChanged;
-
-      // Prepare participants for update
-      const participantsForUpdate = formState.selectedParticipants.map(p => ({
-        id: p.id.startsWith('participant-') ? '' : p.id,
-        modelId: p.modelId,
-        role: p.role || null,
-        customRoleId: p.customRoleId || null,
-        priority: p.priority,
-        isEnabled: true,
-      }));
-
-      const optimisticParticipants = formState.selectedParticipants.map((p, index) => ({
-        id: p.id,
+      // ✅ EXTRACTED TO UTILITY: Detect participant changes
+      const { updateResult, updatePayloads, optimisticParticipants } = prepareParticipantUpdate(
+        threadState.participants,
+        formState.selectedParticipants,
         threadId,
-        modelId: p.modelId,
-        role: p.role || null,
-        customRoleId: p.customRoleId || null,
-        priority: index,
-        isEnabled: true,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      }));
+      );
+
+      // Check for non-participant changes
+      const currentModeId = threadState.thread?.mode || null;
+      const currentWebSearch = threadState.thread?.enableWebSearch || false;
+      const modeChanged = currentModeId !== formState.selectedMode;
+      const webSearchChanged = currentWebSearch !== formState.enableWebSearch;
+
+      // Determine if any changes require API update
+      const hasAnyChanges = shouldUpdateParticipantConfig(updateResult) || modeChanged || webSearchChanged;
 
       // ✅ CRITICAL FIX: Only make PATCH request if something actually changed
-      if (hasChanges) {
+      if (hasAnyChanges) {
+        // Save current state for rollback on failure
+        const previousParticipants = threadState.participants;
+
         // Update participants optimistically
         actions.updateParticipants(optimisticParticipants);
 
-        if (hasTemporaryIds) {
+        if (updateResult.hasTemporaryIds) {
+          // Wait for response when creating new participants
           const response = await updateThreadMutation.mutateAsync({
             param: { id: threadId },
             json: {
-              participants: participantsForUpdate,
+              participants: updatePayloads,
               mode: formState.selectedMode,
+              enableWebSearch: formState.enableWebSearch,
             },
           });
 
@@ -224,28 +231,30 @@ export function useChatFormActions(): UseChatFormActionsReturn {
             const participantsWithDates = transformChatParticipants(response.data.participants);
 
             actions.updateParticipants(participantsWithDates);
-            await new Promise(resolve => queueMicrotask(resolve));
             actions.setExpectedParticipantIds(participantsWithDates.map(p => p.modelId));
           } else {
             actions.setExpectedParticipantIds(optimisticParticipants.map(p => p.modelId));
           }
         } else {
+          // ✅ CRITICAL FIX: Rollback optimistic update on failure
+          // Fire-and-forget with rollback - optimistic update already applied
           updateThreadMutation.mutateAsync({
             param: { id: threadId },
             json: {
-              participants: participantsForUpdate,
+              participants: updatePayloads,
               mode: formState.selectedMode,
+              enableWebSearch: formState.enableWebSearch,
             },
-          }).catch(() => {
-            // Silently fail - optimistic update already applied
+          }).catch((error) => {
+            // Rollback optimistic update on failure
+            actions.updateParticipants(previousParticipants);
+            showApiErrorToast('Failed to save configuration changes', error);
           });
 
-          await new Promise(resolve => queueMicrotask(resolve));
           actions.setExpectedParticipantIds(optimisticParticipants.map(p => p.modelId));
         }
       } else {
         // No changes - just use current participants for expected IDs
-        await new Promise(resolve => queueMicrotask(resolve));
         actions.setExpectedParticipantIds(threadState.participants.map(p => p.modelId));
       }
 
@@ -279,13 +288,21 @@ export function useChatFormActions(): UseChatFormActionsReturn {
     actions.setHasPendingConfigChanges(true);
   }, [actions]);
 
+  /**
+   * Toggle web search on/off
+   * Used by ChatOverviewScreen
+   */
+  const handleWebSearchToggle = useCallback((enabled: boolean) => {
+    actions.setEnableWebSearch(enabled);
+  }, [actions]);
+
   // Memoize return object to prevent unnecessary re-renders
-  // Even though individual functions are memoized, object literal creates new reference
-  return useMemo(() => ({
+  return useMemoizedReturn({
     handleCreateThread,
     handleUpdateThreadAndSend,
     handleResetForm,
     handleModeChange,
+    handleWebSearchToggle,
     isFormValid,
-  }), [handleCreateThread, handleUpdateThreadAndSend, handleResetForm, handleModeChange, isFormValid]);
+  }, [handleCreateThread, handleUpdateThreadAndSend, handleResetForm, handleModeChange, handleWebSearchToggle, isFormValid]);
 }

@@ -1,8 +1,8 @@
 'use client';
 
-import { Zap } from 'lucide-react';
+import { RotateCcw, Zap } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { AnalysisStatuses } from '@/api/core/enums';
 import type { PreSearchDataPayload, StoredPreSearch } from '@/api/routes/chat/schema';
@@ -11,6 +11,7 @@ import {
   ChainOfThoughtContent,
   ChainOfThoughtHeader,
 } from '@/components/ai-elements/chain-of-thought';
+import { useChatStore } from '@/components/providers/chat-store-provider';
 import { Badge } from '@/components/ui/badge';
 import { getQueryClient } from '@/lib/data/query-client';
 import { queryKeys } from '@/lib/data/query-keys';
@@ -24,6 +25,7 @@ type PreSearchCardProps = {
   preSearch: StoredPreSearch;
   isLatest?: boolean;
   className?: string;
+  streamingRoundNumber?: number | null;
 };
 
 export function PreSearchCard({
@@ -31,42 +33,107 @@ export function PreSearchCard({
   preSearch,
   isLatest = false,
   className,
+  streamingRoundNumber,
 }: PreSearchCardProps) {
   const t = useTranslations();
+
+  // Store actions (moved from child to parent callbacks)
+  const updatePreSearchStatus = useChatStore(s => s.updatePreSearchStatus);
+  const updatePreSearchData = useChatStore(s => s.updatePreSearchData);
 
   // Manual control state for accordion (follows RoundAnalysisCard pattern)
   const [isManuallyControlled, setIsManuallyControlled] = useState(false);
   const [manuallyOpen, setManuallyOpen] = useState(false);
+  const [isRetrying, setIsRetrying] = useState(false);
+  const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Completion callback: invalidate query to refetch completed data
+  // Auto-close logic: Close older searches when newer round streams
+  // Pattern from round-analysis-card.tsx:74-85
+  useEffect(() => {
+    if (streamingRoundNumber != null && !isLatest && streamingRoundNumber > preSearch.roundNumber) {
+      // AI SDK v5 Pattern: Use queueMicrotask instead of setTimeout(0)
+      // This schedules state updates in the microtask queue, more efficient than timer queue
+      queueMicrotask(() => {
+        setIsManuallyControlled(false);
+        setManuallyOpen(false);
+      });
+    }
+  }, [streamingRoundNumber, isLatest, preSearch.roundNumber]);
+
+  // Stream completion callback: Update store and invalidate queries
+  // Pattern from round-analysis-card.tsx:37-47 (onStreamComplete prop)
   const handleStreamComplete = useCallback((completedData?: PreSearchDataPayload) => {
     if (completedData) {
       const queryClient = getQueryClient();
+
+      // Update store with completed data
+      updatePreSearchData(preSearch.roundNumber, completedData);
+      updatePreSearchStatus(preSearch.roundNumber, AnalysisStatuses.COMPLETE);
 
       // Invalidate list query to sync orchestrator (store-first pattern)
       queryClient.invalidateQueries({
         queryKey: queryKeys.threads.preSearches(threadId),
       });
     }
-  }, [threadId]);
+  }, [threadId, preSearch.roundNumber, updatePreSearchData, updatePreSearchStatus]);
 
-  const isStreaming = preSearch.status === AnalysisStatuses.STREAMING;
+  // Retry failed search
+  // Pattern from round-analysis-card.tsx:99-130
+  const handleRetry = useCallback(async () => {
+    if (isRetrying)
+      return;
+    if (retryTimeoutRef.current) {
+      clearTimeout(retryTimeoutRef.current);
+    }
+    setIsRetrying(true);
+
+    try {
+      // Retry pre-search generation
+      await fetch(`/api/v1/chat/threads/${threadId}/rounds/${preSearch.roundNumber}/pre-search`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userQuery: preSearch.userQuery,
+        }),
+      });
+    } catch {
+      // Error handled by stream hook
+    }
+
+    retryTimeoutRef.current = setTimeout(() => {
+      setIsRetrying(false);
+    }, 2000);
+  }, [threadId, preSearch.roundNumber, preSearch.userQuery, isRetrying]);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (retryTimeoutRef.current) {
+        clearTimeout(retryTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  const isStreamingOrPending = preSearch.status === AnalysisStatuses.PENDING || preSearch.status === AnalysisStatuses.STREAMING;
   const hasError = preSearch.status === AnalysisStatuses.FAILED;
-  const isCompleted = preSearch.status === AnalysisStatuses.COMPLETED;
+  const isCompleted = preSearch.status === AnalysisStatuses.COMPLETE;
 
   // Disable interaction during streaming
+  // Pattern from round-analysis-card.tsx:91-98
   const handleOpenChange = useCallback((open: boolean) => {
-    if (isStreaming)
+    // Prevent interaction during streaming
+    if (isStreamingOrPending)
       return;
 
     setIsManuallyControlled(true);
     setManuallyOpen(open);
-  }, [isStreaming]);
+  }, [isStreamingOrPending]);
 
   // Determine accordion state (follows RoundAnalysisCard pattern)
+  // Pattern from round-analysis-card.tsx:86
   const isOpen = isManuallyControlled ? manuallyOpen : isLatest;
 
-  // Show progress for streaming state
+  // Show progress for completed state
   const completedCount = isCompleted && preSearch.searchData
     ? preSearch.searchData.successCount
     : 0;
@@ -79,8 +146,8 @@ export function PreSearchCard({
       <ChainOfThought
         open={isOpen}
         onOpenChange={handleOpenChange}
-        disabled={isStreaming}
-        className={cn(isStreaming && 'cursor-default')}
+        disabled={isStreamingOrPending}
+        className={cn(isStreamingOrPending && 'cursor-default')}
       >
         <ChainOfThoughtHeader>
           <div className="flex items-center gap-2.5 w-full">
@@ -99,7 +166,7 @@ export function PreSearchCard({
             )}
 
             {/* Status badges */}
-            {isStreaming && (
+            {isStreamingOrPending && (
               <Badge variant="outline" className="text-xs bg-blue-500/10 text-blue-500 border-blue-500/20">
                 {t('chat.preSearch.searching')}
               </Badge>
@@ -109,13 +176,36 @@ export function PreSearchCard({
                 {t('chat.preSearch.error')}
               </Badge>
             )}
+
+            {/* Retry button for failed searches */}
+            {/* Pattern from round-analysis-card.tsx:168-187 */}
+            {hasError && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleRetry();
+                }}
+                disabled={isRetrying}
+                className={cn(
+                  'ml-auto flex items-center gap-1.5 px-2 py-1 text-xs font-medium rounded-md transition-colors',
+                  'text-primary hover:text-primary/80 hover:bg-primary/10',
+                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+                  'disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent',
+                )}
+                aria-label={t('chat.preSearch.retry')}
+              >
+                <RotateCcw className={cn('size-3.5', isRetrying && 'animate-spin')} />
+                <span className="hidden sm:inline">{t('chat.preSearch.retry')}</span>
+              </button>
+            )}
           </div>
         </ChainOfThoughtHeader>
 
         <ChainOfThoughtContent>
           <div className="space-y-4">
-            {/* Streaming state - show PreSearchStream */}
-            {(preSearch.status === AnalysisStatuses.PENDING || preSearch.status === AnalysisStatuses.STREAMING) && (
+            {/* Streaming state - show PreSearchStream with callbacks */}
+            {isStreamingOrPending && (
               <PreSearchStream
                 threadId={threadId}
                 preSearch={preSearch}
@@ -130,8 +220,24 @@ export function PreSearchCard({
 
             {/* Failed state */}
             {hasError && preSearch.errorMessage && (
-              <div className="p-3 rounded-lg border border-destructive/30 bg-destructive/5 text-sm text-destructive">
-                {preSearch.errorMessage}
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 py-1.5 text-xs text-destructive">
+                  <span className="size-1.5 rounded-full bg-destructive/80" />
+                  <span>{preSearch.errorMessage}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleRetry}
+                  disabled={isRetrying}
+                  className={cn(
+                    'inline-flex items-center gap-2 px-3 py-1.5 text-xs font-medium transition-colors',
+                    'text-primary hover:text-primary/80',
+                    'disabled:opacity-50 disabled:cursor-not-allowed',
+                  )}
+                >
+                  <RotateCcw className={cn('size-3.5', isRetrying && 'animate-spin')} />
+                  {t('chat.preSearch.retry')}
+                </button>
               </div>
             )}
           </div>

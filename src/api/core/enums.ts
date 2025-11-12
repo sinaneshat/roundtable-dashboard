@@ -1,457 +1,214 @@
 /**
- * Centralized Enum Definitions - Single Source of Truth
- *
- * All backend enums consolidated in one location following ZOD-first pattern.
- * Eliminates duplication and ensures type safety across the entire backend.
- *
- * ✅ PATTERN: Define tuple → Create Zod schema → Infer TypeScript type
- * ✅ NO HARDCODED STRINGS: All string literals replaced with type-safe enums
- * ✅ SHARED: Frontend and backend import from single source
- *
+ * Centralized Enum Definitions
  * Reference: /docs/backend-patterns.md:380-459
  */
 
 import { z } from '@hono/zod-openapi';
 
 // ============================================================================
-// CHAT MODE ENUMS
+// GENERIC OPERATION STATUS
 // ============================================================================
 
-/**
- * Chat mode tuple - conversation interaction types
- * ✅ SINGLE SOURCE: Replaces /src/lib/config/chat-modes.ts:CHAT_MODES
- * ✅ MATCHES DATABASE: Aligns with chatThread.mode enum
- *
- * Used by:
- * - /src/db/tables/chat.ts - Database enum definition
- * - /src/api/routes/chat/schema.ts - Thread schemas
- * - /src/api/routes/mcp/schema.ts - MCP tool schemas
- * - Frontend chat mode selectors
- */
+export const OPERATION_STATUSES = ['idle', 'pending', 'active', 'streaming', 'complete', 'failed'] as const;
+
+export const OperationStatusSchema = z.enum(OPERATION_STATUSES).openapi({
+  description: 'Generic async operation lifecycle status',
+  example: 'streaming',
+});
+
+export type OperationStatus = z.infer<typeof OperationStatusSchema>;
+
+export const OperationStatuses = {
+  IDLE: 'idle' as const,
+  PENDING: 'pending' as const,
+  ACTIVE: 'active' as const,
+  STREAMING: 'streaming' as const,
+  COMPLETE: 'complete' as const,
+  FAILED: 'failed' as const,
+} as const;
+
+// ============================================================================
+// CHAT MODE
+// ============================================================================
+
 export const CHAT_MODES = ['analyzing', 'brainstorming', 'debating', 'solving'] as const;
 
-/**
- * Default chat mode constant
- * ✅ SINGLE SOURCE: Default mode for new conversations and fallbacks
- * ✅ TYPE-SAFE: Uses ChatMode enum
- */
 export const DEFAULT_CHAT_MODE: ChatMode = 'debating';
 
-/**
- * Chat mode Zod schema
- * ✅ RUNTIME VALIDATION: Validates chat mode values
- */
 export const ChatModeSchema = z.enum(CHAT_MODES).openapi({
   description: 'Conversation mode for roundtable discussions',
   example: 'brainstorming',
 });
 
-/**
- * Chat mode TypeScript type
- * ✅ ZOD INFERENCE: Type automatically derived from schema
- */
 export type ChatMode = z.infer<typeof ChatModeSchema>;
 
-/**
- * Chat mode tuple for database enum definition
- * Used by Drizzle schema to ensure database and TypeScript types match
- */
 export const CHAT_MODE_ENUM_VALUES = CHAT_MODES as unknown as [ChatMode, ...ChatMode[]];
 
+export const ChatModes = {
+  ANALYZING: 'analyzing' as const,
+  BRAINSTORMING: 'brainstorming' as const,
+  DEBATING: 'debating' as const,
+  SOLVING: 'solving' as const,
+} as const;
+
 // ============================================================================
-// THREAD STATUS ENUMS
+// THREAD STATUS
 // ============================================================================
 
-/**
- * Thread status tuple - lifecycle states
- * ✅ SINGLE SOURCE: Replaces /src/lib/config/chat-modes.ts:THREAD_STATUSES
- * ✅ MATCHES DATABASE: Aligns with chatThread.status enum
- *
- * Used by:
- * - /src/db/tables/chat.ts - Database enum definition
- * - /src/api/routes/chat/schema.ts - Thread schemas
- * - Frontend thread status indicators
- */
 export const THREAD_STATUSES = ['active', 'archived', 'deleted'] as const;
 
-/**
- * Thread status Zod schema
- * ✅ RUNTIME VALIDATION: Validates thread status values
- */
 export const ThreadStatusSchema = z.enum(THREAD_STATUSES).openapi({
   description: 'Thread lifecycle status',
   example: 'active',
 });
 
-/**
- * Thread status TypeScript type
- * ✅ ZOD INFERENCE: Type automatically derived from schema
- */
 export type ThreadStatus = z.infer<typeof ThreadStatusSchema>;
 
-/**
- * Thread status tuple for database enum definition
- */
 export const THREAD_STATUS_ENUM_VALUES = THREAD_STATUSES as unknown as [ThreadStatus, ...ThreadStatus[]];
 
 // ============================================================================
-// CHANGELOG ENUMS
+// CHANGELOG
 // ============================================================================
 
-/**
- * Changelog event types tuple
- * ✅ SINGLE SOURCE: All changelog types defined here
- * ✅ SIMPLIFIED: Consolidated to 3 change types for cleaner handling
- *
- * Types:
- * - added: New item added (participant, feature, etc.)
- * - modified: Existing item changed (mode, role, settings, etc.)
- * - removed: Item deleted or removed
- *
- * Used by:
- * - /src/api/routes/chat/schema.ts - ChangelogTypeSchema
- * - /src/api/routes/chat/handler.ts - Changelog creation
- * - /src/api/services/thread-changelog.service.ts - Changelog operations
- */
-export const CHANGELOG_TYPES = [
-  'added',
-  'modified',
-  'removed',
-] as const;
+export const CHANGELOG_TYPES = ['added', 'modified', 'removed'] as const;
 
-/**
- * Changelog type Zod schema
- * ✅ RUNTIME VALIDATION: Validates changelog type values
- * ✅ SIMPLIFIED: 3 types instead of 5
- */
 export const ChangelogTypeSchema = z.enum(CHANGELOG_TYPES).openapi({
-  description: 'Type of changelog event (added, modified, removed)',
+  description: 'Type of changelog event',
   example: 'added',
 });
 
-/**
- * Changelog type TypeScript type
- * ✅ ZOD INFERENCE: Type automatically derived from schema
- */
 export type ChangelogType = z.infer<typeof ChangelogTypeSchema>;
 
-/**
- * Changelog type tuple for database enum definition
- */
 export const CHANGELOG_TYPES_ENUM_VALUES = CHANGELOG_TYPES as unknown as [ChangelogType, ...ChangelogType[]];
 
-/**
- * Changelog types object for clear constant access
- * ✅ SIMPLIFIED: Consolidated to 3 change types for cleaner handling
- * ✅ RECOMMENDED PATTERN: Use ChangelogTypes.ADDED instead of 'added'
- *
- * @example
- * // ❌ WRONG: Hardcoded string
- * changeType: 'added'
- *
- * // ✅ CORRECT: Type-safe constant
- * changeType: ChangelogTypes.ADDED
- */
 export const ChangelogTypes = {
   ADDED: 'added' as const,
   MODIFIED: 'modified' as const,
   REMOVED: 'removed' as const,
-} as const satisfies Record<string, ChangelogType>;
+} as const;
 
 // ============================================================================
-// MESSAGE STATUS ENUMS
+// MESSAGE STATUS
 // ============================================================================
 
-/**
- * Message status tuple for UI rendering states
- * ✅ SINGLE SOURCE: All message status values defined here
- *
- * Used by:
- * - /src/api/routes/chat/schema.ts - Message schemas
- * - Frontend components - Message rendering states during streaming
- */
-export const MESSAGE_STATUSES = ['thinking', 'streaming', 'completed', 'error'] as const;
+export const MESSAGE_STATUSES = ['pending', 'streaming', 'complete', 'failed'] as const;
 
-/**
- * Message status Zod schema
- * ✅ RUNTIME VALIDATION: Validates message status values
- */
 export const MessageStatusSchema = z.enum(MESSAGE_STATUSES).openapi({
   description: 'Message status during streaming lifecycle',
   example: 'streaming',
 });
 
-/**
- * Message status TypeScript type
- * ✅ ZOD INFERENCE: Type automatically derived from schema
- */
 export type MessageStatus = z.infer<typeof MessageStatusSchema>;
 
-/**
- * Message status constants for clear usage
- * ✅ RECOMMENDED PATTERN: Use MessageStatuses.STREAMING instead of 'streaming'
- *
- * @example
- * // ❌ WRONG: Hardcoded string
- * status === 'streaming'
- *
- * // ✅ CORRECT: Type-safe constant
- * status === MessageStatuses.STREAMING
- */
 export const MessageStatuses = {
-  THINKING: 'thinking' as const,
+  PENDING: 'pending' as const,
   STREAMING: 'streaming' as const,
-  COMPLETED: 'completed' as const,
-  ERROR: 'error' as const,
-} as const satisfies Record<string, MessageStatus>;
+  COMPLETE: 'complete' as const,
+  FAILED: 'failed' as const,
+} as const;
 
 // ============================================================================
-// PRE-SEARCH STATUS ENUMS
+// PRE-SEARCH STATUS
 // ============================================================================
 
-/**
- * Pre-search operation status tuple
- * ✅ SINGLE SOURCE: All pre-search status values defined here
- *
- * Used by:
- * - Frontend components - Pre-search UI state rendering
- * - Store - Pre-search status tracking
- */
-export const PRE_SEARCH_STATUSES = ['idle', 'generating_queries', 'searching', 'complete', 'error'] as const;
+export const PRE_SEARCH_STATUSES = ['idle', 'streaming', 'active', 'complete', 'failed'] as const;
 
-/**
- * Pre-search status Zod schema
- * ✅ RUNTIME VALIDATION: Validates pre-search status values
- */
 export const PreSearchStatusSchema = z.enum(PRE_SEARCH_STATUSES).openapi({
   description: 'Pre-search operation status',
-  example: 'searching',
+  example: 'active',
 });
 
-/**
- * Pre-search status TypeScript type
- * ✅ ZOD INFERENCE: Type automatically derived from schema
- */
 export type PreSearchStatus = z.infer<typeof PreSearchStatusSchema>;
 
-/**
- * Pre-search status constants for clear usage
- * ✅ RECOMMENDED PATTERN: Use PreSearchStatuses.SEARCHING instead of 'searching'
- */
 export const PreSearchStatuses = {
   IDLE: 'idle' as const,
-  GENERATING_QUERIES: 'generating_queries' as const,
-  SEARCHING: 'searching' as const,
+  STREAMING: 'streaming' as const,
+  ACTIVE: 'active' as const,
   COMPLETE: 'complete' as const,
-  ERROR: 'error' as const,
-} as const satisfies Record<string, PreSearchStatus>;
+  FAILED: 'failed' as const,
+} as const;
 
-/**
- * Pre-search query status tuple
- * Tracks individual query execution state
- */
-export const PRE_SEARCH_QUERY_STATUSES = ['searching', 'complete'] as const;
+export const PRE_SEARCH_QUERY_STATUSES = ['active', 'complete'] as const;
 
-/**
- * Pre-search query status Zod schema
- */
 export const PreSearchQueryStatusSchema = z.enum(PRE_SEARCH_QUERY_STATUSES).openapi({
   description: 'Individual pre-search query status',
-  example: 'searching',
+  example: 'active',
 });
 
-/**
- * Pre-search query status TypeScript type
- */
 export type PreSearchQueryStatus = z.infer<typeof PreSearchQueryStatusSchema>;
 
-/**
- * Pre-search query status constants
- */
 export const PreSearchQueryStatuses = {
-  SEARCHING: 'searching' as const,
+  ACTIVE: 'active' as const,
   COMPLETE: 'complete' as const,
-} as const satisfies Record<string, PreSearchQueryStatus>;
+} as const;
 
 // ============================================================================
-// MESSAGE ROLE ENUMS
+// MESSAGE ROLE
 // ============================================================================
 
-/**
- * Message role tuple for chat messages
- * ✅ SINGLE SOURCE: All message role values defined here
- * ✅ MATCHES DATABASE: Aligns with chatMessage.role enum
- *
- * Used by:
- * - /src/db/tables/chat.ts - Database enum definition
- * - /src/api/routes/chat/schema.ts - Message schemas
- * - Frontend message rendering
- * - AI SDK v5 tool calling (tool role for tool results)
- */
 export const MESSAGE_ROLES = ['user', 'assistant', 'tool'] as const;
 
-/**
- * Message role Zod schema
- * ✅ RUNTIME VALIDATION: Validates message role values
- */
 export const MessageRoleSchema = z.enum(MESSAGE_ROLES).openapi({
   description: 'Message role (user input, AI response, or tool result)',
   example: 'assistant',
 });
 
-/**
- * Message role TypeScript type
- * ✅ ZOD INFERENCE: Type automatically derived from schema
- */
 export type MessageRole = z.infer<typeof MessageRoleSchema>;
 
-/**
- * Message role tuple for database enum definition
- */
 export const MESSAGE_ROLES_ENUM_VALUES = MESSAGE_ROLES as unknown as [MessageRole, ...MessageRole[]];
 
+export const MessageRoles = {
+  USER: 'user' as const,
+  ASSISTANT: 'assistant' as const,
+  TOOL: 'tool' as const,
+} as const;
+
 // ============================================================================
-// MESSAGE PART TYPE ENUMS
+// MESSAGE PART TYPE
 // ============================================================================
 
-/**
- * Message part types tuple for AI SDK message parts
- * ✅ SINGLE SOURCE: All message part types defined here
- *
- * Used by:
- * - /src/api/routes/chat/schema.ts - MessagePartSchema discriminated union
- * - Frontend components - Rendering different message content types
- */
-export const MESSAGE_PART_TYPES = ['text', 'reasoning'] as const;
+export const MESSAGE_PART_TYPES = ['text', 'reasoning', 'tool-call', 'tool-result'] as const;
 
-/**
- * Message part type Zod schema
- * ✅ RUNTIME VALIDATION: Validates message part types
- */
 export const MessagePartTypeSchema = z.enum(MESSAGE_PART_TYPES).openapi({
-  description: 'Types of message content parts (text or reasoning)',
+  description: 'Types of message content parts',
   example: 'text',
 });
 
-/**
- * Message part type TypeScript type
- * ✅ ZOD INFERENCE: Type for discriminated union
- */
 export type MessagePartType = z.infer<typeof MessagePartTypeSchema>;
 
+export const MessagePartTypes = {
+  TEXT: 'text' as const,
+  REASONING: 'reasoning' as const,
+  TOOL_CALL: 'tool-call' as const,
+  TOOL_RESULT: 'tool-result' as const,
+} as const;
+
 // ============================================================================
-// MODERATOR ANALYSIS STATUS ENUMS
+// MODERATOR ANALYSIS STATUS
 // ============================================================================
 
-/**
- * Moderator analysis status tuple
- * ✅ SINGLE SOURCE: All analysis status values defined here
- * ✅ MATCHES DATABASE: Aligns with chatModeratorAnalysis.status enum
- *
- * Used by:
- * - /src/api/services/moderator-analysis.service.ts - Analysis status tracking
- * - /src/api/services/analysis-background.service.ts - Background job status
- * - /src/db/tables/chat.ts - Database enum definition
- * - Frontend components - Analysis UI state rendering
- */
-export const ANALYSIS_STATUSES = ['pending', 'streaming', 'completed', 'failed'] as const;
+export const ANALYSIS_STATUSES = ['pending', 'streaming', 'complete', 'failed'] as const;
 
-/**
- * Analysis status Zod schema
- * ✅ RUNTIME VALIDATION: Validates analysis status values
- */
 export const AnalysisStatusSchema = z.enum(ANALYSIS_STATUSES).openapi({
   description: 'Moderator analysis processing status',
-  example: 'completed',
+  example: 'complete',
 });
 
-/**
- * Analysis status TypeScript type
- * ✅ ZOD INFERENCE: Type automatically derived from schema
- */
 export type AnalysisStatus = z.infer<typeof AnalysisStatusSchema>;
 
-/**
- * Analysis status tuple for database enum definition
- */
 export const ANALYSIS_STATUSES_ENUM_VALUES = ANALYSIS_STATUSES as unknown as [AnalysisStatus, ...AnalysisStatus[]];
 
-/**
- * Analysis status constants for clear usage
- * ✅ RECOMMENDED PATTERN: Use AnalysisStatuses.STREAMING instead of 'streaming'
- *
- * @example
- * // ❌ WRONG: Hardcoded string
- * status: 'streaming'
- *
- * // ✅ CORRECT: Type-safe constant
- * status: AnalysisStatuses.STREAMING
- */
 export const AnalysisStatuses = {
   PENDING: 'pending' as const,
   STREAMING: 'streaming' as const,
-  COMPLETED: 'completed' as const,
+  COMPLETE: 'complete' as const,
   FAILED: 'failed' as const,
-} as const satisfies Record<string, AnalysisStatus>;
+} as const;
 
 // ============================================================================
-// HTTP METHOD ENUMS (For logging and middleware)
+// AUTHENTICATION FAILURE REASON
 // ============================================================================
 
-/**
- * HTTP methods tuple
- * ✅ SINGLE SOURCE: All HTTP methods supported by the API
- */
-export const HTTP_METHODS = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS', 'HEAD'] as const;
-
-/**
- * HTTP method Zod schema
- */
-export const HttpMethodSchema = z.enum(HTTP_METHODS);
-
-/**
- * HTTP method TypeScript type
- */
-export type HttpMethod = z.infer<typeof HttpMethodSchema>;
-
-// ============================================================================
-// DATABASE OPERATION ENUMS (For logging and error context)
-// ============================================================================
-
-/**
- * Database operation types tuple
- * ✅ SINGLE SOURCE: All database operation types
- *
- * Used by:
- * - /src/api/core/schemas.ts - ErrorContextSchema
- * - /src/api/core/responses.ts - databaseError() helper
- * - Logging and monitoring
- */
-export const DATABASE_OPERATIONS = ['select', 'insert', 'update', 'delete', 'batch'] as const;
-
-/**
- * Database operation Zod schema
- */
-export const DatabaseOperationSchema = z.enum(DATABASE_OPERATIONS);
-
-/**
- * Database operation TypeScript type
- */
-export type DatabaseOperation = z.infer<typeof DatabaseOperationSchema>;
-
-// ============================================================================
-// AUTHENTICATION FAILURE REASON ENUMS
-// ============================================================================
-
-/**
- * Authentication failure reasons tuple
- * ✅ SINGLE SOURCE: All authentication failure reasons
- *
- * Used by:
- * - /src/api/core/schemas.ts - ErrorContextSchema
- * - /src/api/core/responses.ts - authenticationError() helper
- * - Authentication middleware
- */
 export const AUTH_FAILURE_REASONS = [
   'invalid_credentials',
   'account_locked',
@@ -461,380 +218,449 @@ export const AUTH_FAILURE_REASONS = [
   'session_expired',
 ] as const;
 
-/**
- * Authentication failure reason Zod schema
- */
 export const AuthFailureReasonSchema = z.enum(AUTH_FAILURE_REASONS);
 
-/**
- * Authentication failure reason TypeScript type
- */
 export type AuthFailureReason = z.infer<typeof AuthFailureReasonSchema>;
 
 // ============================================================================
-// RESOURCE UNAVAILABILITY REASON ENUMS
+// RESOURCE UNAVAILABILITY REASON
 // ============================================================================
 
-/**
- * Resource unavailability reasons tuple
- * ✅ SINGLE SOURCE: All resource unavailability reasons
- *
- * Used by:
- * - /src/api/core/schemas.ts - ErrorContextSchema
- * - Error handling for resource access
- */
 export const RESOURCE_UNAVAILABLE_REASONS = ['deleted', 'archived', 'private', 'expired'] as const;
 
-/**
- * Resource unavailability reason Zod schema
- */
 export const ResourceUnavailableReasonSchema = z.enum(RESOURCE_UNAVAILABLE_REASONS);
 
-/**
- * Resource unavailability reason TypeScript type
- */
 export type ResourceUnavailableReason = z.infer<typeof ResourceUnavailableReasonSchema>;
 
 // ============================================================================
-// HEALTH STATUS ENUMS
+// HEALTH STATUS
 // ============================================================================
 
-/**
- * Health check status tuple
- * ✅ SINGLE SOURCE: All health check status values
- *
- * Used by:
- * - /src/api/core/responses.ts - health() and detailedHealth() helpers
- * - /src/api/routes/system/handler.ts - Health check endpoints
- */
 export const HEALTH_STATUSES = ['healthy', 'degraded', 'unhealthy'] as const;
 
-/**
- * Health status Zod schema
- */
 export const HealthStatusSchema = z.enum(HEALTH_STATUSES);
 
-/**
- * Health status TypeScript type
- */
 export type HealthStatus = z.infer<typeof HealthStatusSchema>;
 
 // ============================================================================
-// SORT ORDER ENUMS
+// STREAMING EVENT TYPE
 // ============================================================================
 
-/**
- * Sort order tuple
- * ✅ SINGLE SOURCE: All sort order values
- *
- * Used by:
- * - /src/api/core/schemas.ts - CoreSchemas.sortOrder()
- * - List endpoints with sorting
- */
-export const SORT_ORDERS = ['asc', 'desc'] as const;
+export const STREAMING_EVENT_TYPES = ['start', 'chunk', 'complete', 'failed'] as const;
 
-/**
- * Sort order Zod schema
- */
-export const SortOrderSchema = z.enum(SORT_ORDERS).default('desc');
-
-/**
- * Sort order TypeScript type
- */
-export type SortOrder = z.infer<typeof SortOrderSchema>;
-
-// ============================================================================
-// STREAMING EVENT TYPE ENUMS
-// ============================================================================
-
-/**
- * SSE streaming event types tuple
- * ✅ SINGLE SOURCE: All Server-Sent Event types
- *
- * Used by:
- * - /src/api/core/schemas.ts - StreamingEventSchema discriminated union
- * - /src/api/common/streaming.ts - SSE event creation
- * - Frontend streaming hooks
- */
-export const STREAMING_EVENT_TYPES = ['start', 'chunk', 'complete', 'error'] as const;
-
-/**
- * Streaming event type TypeScript type
- */
 export type StreamingEventType = (typeof STREAMING_EVENT_TYPES)[number];
 
 // ============================================================================
-// FEEDBACK TYPE ENUMS
+// FEEDBACK TYPE
 // ============================================================================
 
-/**
- * Round feedback type tuple
- * ✅ SINGLE SOURCE: All feedback type values defined here
- * ✅ MATCHES DATABASE: Aligns with chatRoundFeedback.feedbackType enum
- *
- * Used by:
- * - /src/db/tables/chat.ts - Database enum definition
- * - /src/api/routes/chat/schema.ts - Feedback schemas
- * - Frontend feedback buttons (like/dislike)
- */
 export const FEEDBACK_TYPES = ['like', 'dislike'] as const;
 
-/**
- * Feedback type Zod schema
- * ✅ RUNTIME VALIDATION: Validates feedback type values
- */
 export const FeedbackTypeSchema = z.enum(FEEDBACK_TYPES).openapi({
   description: 'User feedback type for a conversation round',
   example: 'like',
 });
 
-/**
- * Feedback type TypeScript type
- * ✅ ZOD INFERENCE: Type automatically derived from schema
- */
 export type FeedbackType = z.infer<typeof FeedbackTypeSchema>;
 
-/**
- * Feedback type tuple for database enum definition
- */
 export const FEEDBACK_TYPES_ENUM_VALUES = FEEDBACK_TYPES as unknown as [FeedbackType, ...FeedbackType[]];
 
+export const FeedbackTypes = {
+  LIKE: 'like' as const,
+  DISLIKE: 'dislike' as const,
+} as const;
+
 // ============================================================================
-// MODEL CATEGORY ENUMS
+// SUBSCRIPTION CHANGE TYPE
 // ============================================================================
 
-/**
- * Model category tuple for AI model classification
- * ✅ SINGLE SOURCE: All model category values defined here
- *
- * Used by:
- * - /src/api/routes/models/schema.ts - Model categorization
- * - /src/api/services/models-config.service.ts - Model configuration
- * - Frontend model filtering and display
- */
+export const SUBSCRIPTION_CHANGE_TYPES = ['upgrade', 'downgrade', 'change'] as const;
+
+export const SubscriptionChangeTypeSchema = z.enum(SUBSCRIPTION_CHANGE_TYPES).openapi({
+  description: 'Type of subscription change',
+  example: 'upgrade',
+});
+
+export type SubscriptionChangeType = z.infer<typeof SubscriptionChangeTypeSchema>;
+
+export const SubscriptionChangeTypes = {
+  UPGRADE: 'upgrade' as const,
+  DOWNGRADE: 'downgrade' as const,
+  CHANGE: 'change' as const,
+} as const;
+
+// ============================================================================
+// STRIPE SUBSCRIPTION STATUS
+// ============================================================================
+
+export const STRIPE_SUBSCRIPTION_STATUSES = [
+  'active',
+  'trialing',
+  'past_due',
+  'unpaid',
+  'canceled',
+  'incomplete',
+  'incomplete_expired',
+  'paused',
+] as const;
+
+export const StripeSubscriptionStatusSchema = z.enum(STRIPE_SUBSCRIPTION_STATUSES).openapi({
+  description: 'Stripe subscription status matching Stripe API values',
+  example: 'active',
+});
+
+export type StripeSubscriptionStatus = z.infer<typeof StripeSubscriptionStatusSchema>;
+
+export const StripeSubscriptionStatuses = {
+  ACTIVE: 'active' as const,
+  TRIALING: 'trialing' as const,
+  PAST_DUE: 'past_due' as const,
+  UNPAID: 'unpaid' as const,
+  CANCELED: 'canceled' as const,
+  INCOMPLETE: 'incomplete' as const,
+  INCOMPLETE_EXPIRED: 'incomplete_expired' as const,
+  PAUSED: 'paused' as const,
+} as const;
+
+// ============================================================================
+// MODEL CATEGORY
+// ============================================================================
+
 export const MODEL_CATEGORIES = ['reasoning', 'general', 'creative', 'research'] as const;
 
-/**
- * Model category Zod schema
- * ✅ RUNTIME VALIDATION: Validates model category values
- */
 export const ModelCategorySchema = z.enum(MODEL_CATEGORIES).openapi({
-  description: 'AI model category classification for filtering',
+  description: 'AI model category classification',
   example: 'reasoning',
 });
 
-/**
- * Model category TypeScript type
- * ✅ ZOD INFERENCE: Type automatically derived from schema
- */
 export type ModelCategory = z.infer<typeof ModelCategorySchema>;
 
 // ============================================================================
-// USAGE STATUS ENUMS
+// USAGE STATUS
 // ============================================================================
 
-/**
- * Usage status tuple for visual indicators
- * ✅ SINGLE SOURCE: All usage status values defined here
- *
- * Used by:
- * - /src/api/routes/usage/schema.ts - Usage status schema
- * - Frontend usage metric displays
- * - UI status indicators (default, warning, critical)
- */
 export const USAGE_STATUSES = ['default', 'warning', 'critical'] as const;
 
-/**
- * Usage status Zod schema
- * ✅ RUNTIME VALIDATION: Validates usage status values
- */
 export const UsageStatusSchema = z.enum(USAGE_STATUSES).openapi({
   description: 'Visual status indicator for usage metrics',
   example: 'default',
 });
 
-/**
- * Usage status TypeScript type
- * ✅ ZOD INFERENCE: Type automatically derived from schema
- */
 export type UsageStatus = z.infer<typeof UsageStatusSchema>;
 
 // ============================================================================
-// WEB SEARCH COMPLEXITY ENUMS
+// WEB SEARCH COMPLEXITY
 // ============================================================================
 
-/**
- * Web search complexity tuple for determining search thoroughness
- * ✅ SINGLE SOURCE: All search complexity levels defined here
- * ✅ REPLACES: Hard-coded 'basic' | 'moderate' | 'deep' strings
- *
- * Used by:
- * - /src/api/services/web-search.service.ts - Search complexity determination
- * - /src/api/routes/chat/handlers/pre-search.handler.ts - Pre-search execution
- * - /src/components/chat/web-search-flat-display.tsx - UI complexity badges
- * - /src/api/routes/chat/schema.ts - WebSearchResultMetaSchema
- */
 export const WEB_SEARCH_COMPLEXITIES = ['basic', 'moderate', 'deep'] as const;
 
-/**
- * Web search complexity Zod schema
- * ✅ RUNTIME VALIDATION: Validates search complexity values
- */
 export const WebSearchComplexitySchema = z.enum(WEB_SEARCH_COMPLEXITIES).openapi({
-  description: 'Web search complexity level determining source count and depth',
+  description: 'Web search complexity level',
   example: 'moderate',
 });
 
-/**
- * Web search complexity TypeScript type
- * ✅ ZOD INFERENCE: Type automatically derived from schema
- */
 export type WebSearchComplexity = z.infer<typeof WebSearchComplexitySchema>;
 
-/**
- * Web search complexity constants for clear usage
- * ✅ RECOMMENDED PATTERN: Use WebSearchComplexities.DEEP instead of 'deep'
- *
- * @example
- * // ❌ WRONG: Hardcoded string
- * complexity === 'deep'
- *
- * // ✅ CORRECT: Type-safe constant
- * complexity === WebSearchComplexities.DEEP
- */
 export const WebSearchComplexities = {
   BASIC: 'basic' as const,
   MODERATE: 'moderate' as const,
   DEEP: 'deep' as const,
-} as const satisfies Record<string, WebSearchComplexity>;
+} as const;
 
 // ============================================================================
-// WEB SEARCH DEPTH ENUMS
+// WEB SEARCH DEPTH
 // ============================================================================
 
-/**
- * Web search depth tuple for controlling search thoroughness
- * ✅ SINGLE SOURCE: All search depth values defined here
- *
- * Used by:
- * - /src/api/services/web-search-presearch.service.ts - Search depth control
- * - /src/api/services/web-search-query-generation.service.ts - Query generation
- * - Frontend search configuration
- */
 export const WEB_SEARCH_DEPTHS = ['basic', 'advanced'] as const;
 
-/**
- * Web search depth Zod schema
- * ✅ RUNTIME VALIDATION: Validates search depth values
- */
 export const WebSearchDepthSchema = z.enum(WEB_SEARCH_DEPTHS).openapi({
-  description: 'Web search thoroughness level (basic or advanced)',
+  description: 'Web search thoroughness level',
   example: 'basic',
 });
 
-/**
- * Web search depth TypeScript type
- * ✅ ZOD INFERENCE: Type automatically derived from schema
- */
 export type WebSearchDepth = z.infer<typeof WebSearchDepthSchema>;
 
-/**
- * Web search depth constants for clear usage
- * ✅ RECOMMENDED PATTERN: Use WebSearchDepths.ADVANCED instead of 'advanced'
- *
- * @example
- * // ❌ WRONG: Hardcoded string
- * searchDepth === 'advanced'
- *
- * // ✅ CORRECT: Type-safe constant
- * searchDepth === WebSearchDepths.ADVANCED
- */
 export const WebSearchDepths = {
   BASIC: 'basic' as const,
   ADVANCED: 'advanced' as const,
-} as const satisfies Record<string, WebSearchDepth>;
+} as const;
 
 // ============================================================================
-// WEB SEARCH CONTENT TYPE ENUMS
+// WEB SEARCH CONTENT TYPE
 // ============================================================================
 
-/**
- * Web search content type tuple for categorizing search results
- * ✅ SINGLE SOURCE: All content type values defined here
- *
- * Used by:
- * - /src/api/services/web-search-schemas.ts - Result item schema
- * - /src/api/services/web-search-puppeteer.service.ts - Content extraction
- * - Frontend search result display with type badges
- */
 export const WEB_SEARCH_CONTENT_TYPES = ['article', 'comparison', 'guide', 'data', 'news', 'general'] as const;
 
-/**
- * Web search content type Zod schema
- * ✅ RUNTIME VALIDATION: Validates content type values
- */
 export const WebSearchContentTypeSchema = z.enum(WEB_SEARCH_CONTENT_TYPES).openapi({
   description: 'Content type classification for search results',
   example: 'article',
 });
 
-/**
- * Web search content type TypeScript type
- * ✅ ZOD INFERENCE: Type automatically derived from schema
- */
 export type WebSearchContentType = z.infer<typeof WebSearchContentTypeSchema>;
 
 // ============================================================================
-// AI SDK STATUS ENUMS (Frontend Hook State)
+// CHAIN OF THOUGHT STEP STATUS
 // ============================================================================
 
-/**
- * AI SDK useChat status tuple
- * ✅ SINGLE SOURCE: All AI SDK status values defined here
- * ✅ NO HARDCODED STRINGS: Replaces 'ready' | 'streaming' | 'awaiting_message' literals
- *
- * Reference: @ai-sdk/react useChat hook status return value
- * Used by:
- * - /src/hooks/utils/use-multi-participant-chat.ts - Chat hook streaming state
- * - Frontend components - Hook status checks
- *
- * States:
- * - ready: No active streaming, ready to send message
- * - streaming: Currently streaming a response
- * - awaiting_message: Waiting for user input (after tool call)
- */
+export const CHAIN_OF_THOUGHT_STEP_STATUSES = ['pending', 'active', 'complete'] as const;
+
+export const ChainOfThoughtStepStatusSchema = z.enum(CHAIN_OF_THOUGHT_STEP_STATUSES).openapi({
+  description: 'Chain of thought reasoning step status',
+  example: 'active',
+});
+
+export type ChainOfThoughtStepStatus = z.infer<typeof ChainOfThoughtStepStatusSchema>;
+
+export const ChainOfThoughtStepStatuses = {
+  PENDING: 'pending' as const,
+  ACTIVE: 'active' as const,
+  COMPLETE: 'complete' as const,
+} as const;
+
+// ============================================================================
+// AI SDK STATUS
+// ============================================================================
+
 export const AI_SDK_STATUSES = ['ready', 'streaming', 'awaiting_message'] as const;
 
-/**
- * AI SDK status Zod schema
- * ✅ RUNTIME VALIDATION: Validates AI SDK status values
- */
 export const AiSdkStatusSchema = z.enum(AI_SDK_STATUSES);
 
-/**
- * AI SDK status TypeScript type
- * ✅ ZOD INFERENCE: Type automatically derived from schema
- */
 export type AiSdkStatus = z.infer<typeof AiSdkStatusSchema>;
 
-/**
- * AI SDK status constants for clear usage
- * ✅ RECOMMENDED PATTERN: Use AiSdkStatuses.READY instead of 'ready'
- *
- * @example
- * // ❌ WRONG: Hardcoded string
- * if (status !== 'ready') return
- *
- * // ✅ CORRECT: Type-safe constant
- * if (status !== AiSdkStatuses.READY) return
- */
 export const AiSdkStatuses = {
   READY: 'ready' as const,
   STREAMING: 'streaming' as const,
   AWAITING_MESSAGE: 'awaiting_message' as const,
-} as const satisfies Record<string, AiSdkStatus>;
+} as const;
 
 // ============================================================================
-// NOTE: All exports are done inline above where each enum is defined
-// This ensures better tree-shaking and clearer code organization
+// BILLING INTERVAL
 // ============================================================================
+
+export const BILLING_INTERVALS = ['month', 'year', 'week', 'day'] as const;
+
+export const BillingIntervalSchema = z.enum(BILLING_INTERVALS).openapi({
+  description: 'Subscription billing cycle interval',
+  example: 'month',
+});
+
+export type BillingInterval = z.infer<typeof BillingIntervalSchema>;
+
+export const BillingIntervals = {
+  MONTH: 'month' as const,
+  YEAR: 'year' as const,
+  WEEK: 'week' as const,
+  DAY: 'day' as const,
+} as const;
+
+// ============================================================================
+// SCREEN MODE
+// ============================================================================
+
+export const SCREEN_MODES = ['overview', 'thread', 'public'] as const;
+
+export const ScreenModeSchema = z.enum(SCREEN_MODES).openapi({
+  description: 'Chat interface screen mode',
+  example: 'thread',
+});
+
+export type ScreenMode = z.infer<typeof ScreenModeSchema>;
+
+export const ScreenModes = {
+  OVERVIEW: 'overview' as const,
+  THREAD: 'thread' as const,
+  PUBLIC: 'public' as const,
+} as const;
+
+// ============================================================================
+// HTTP METHOD
+// ============================================================================
+
+export const HTTP_METHODS = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS'] as const;
+
+export const HttpMethodSchema = z.enum(HTTP_METHODS).openapi({
+  description: 'HTTP request method',
+  example: 'POST',
+});
+
+export type HttpMethod = z.infer<typeof HttpMethodSchema>;
+
+export const HttpMethods = {
+  GET: 'GET' as const,
+  POST: 'POST' as const,
+  PUT: 'PUT' as const,
+  DELETE: 'DELETE' as const,
+  PATCH: 'PATCH' as const,
+  HEAD: 'HEAD' as const,
+  OPTIONS: 'OPTIONS' as const,
+} as const;
+
+// ============================================================================
+// DATABASE OPERATION
+// ============================================================================
+
+export const DATABASE_OPERATIONS = ['select', 'insert', 'update', 'delete', 'batch'] as const;
+
+export const DatabaseOperationSchema = z.enum(DATABASE_OPERATIONS).openapi({
+  description: 'Database operation type',
+  example: 'insert',
+});
+
+export type DatabaseOperation = z.infer<typeof DatabaseOperationSchema>;
+
+export const DatabaseOperations = {
+  SELECT: 'select' as const,
+  INSERT: 'insert' as const,
+  UPDATE: 'update' as const,
+  DELETE: 'delete' as const,
+  BATCH: 'batch' as const,
+} as const;
+
+// ============================================================================
+// UI VARIANT
+// ============================================================================
+
+export const COMPONENT_VARIANTS = ['default', 'destructive', 'outline', 'secondary', 'ghost', 'link', 'success', 'warning', 'glass'] as const;
+export const ComponentVariantSchema = z.enum(COMPONENT_VARIANTS);
+export type ComponentVariant = z.infer<typeof ComponentVariantSchema>;
+export const ComponentVariants = {
+  DEFAULT: 'default' as const,
+  DESTRUCTIVE: 'destructive' as const,
+  OUTLINE: 'outline' as const,
+  SECONDARY: 'secondary' as const,
+  GHOST: 'ghost' as const,
+  LINK: 'link' as const,
+  SUCCESS: 'success' as const,
+  WARNING: 'warning' as const,
+  GLASS: 'glass' as const,
+} as const;
+
+export const COMPONENT_SIZES = ['sm', 'md', 'lg', 'xl', 'icon', 'default'] as const;
+export const ComponentSizeSchema = z.enum(COMPONENT_SIZES);
+export type ComponentSize = z.infer<typeof ComponentSizeSchema>;
+export const ComponentSizes = {
+  SM: 'sm' as const,
+  MD: 'md' as const,
+  LG: 'lg' as const,
+  XL: 'xl' as const,
+  ICON: 'icon' as const,
+  DEFAULT: 'default' as const,
+} as const;
+
+export const TEXT_ALIGNMENTS = ['left', 'center', 'right', 'justify'] as const;
+export const TextAlignmentSchema = z.enum(TEXT_ALIGNMENTS);
+export type TextAlignment = z.infer<typeof TextAlignmentSchema>;
+export const TextAlignments = {
+  LEFT: 'left' as const,
+  CENTER: 'center' as const,
+  RIGHT: 'right' as const,
+  JUSTIFY: 'justify' as const,
+} as const;
+
+// ============================================================================
+// EMAIL COMPONENT
+// ============================================================================
+
+export const EMAIL_TEXT_WEIGHTS = ['normal', 'medium', 'semibold', 'bold'] as const;
+export const EmailTextWeightSchema = z.enum(EMAIL_TEXT_WEIGHTS);
+export type EmailTextWeight = z.infer<typeof EmailTextWeightSchema>;
+
+export const EMAIL_COLORS = ['primary', 'secondary', 'muted', 'white', 'failed', 'dark'] as const;
+export const EmailColorSchema = z.enum(EMAIL_COLORS);
+export type EmailColor = z.infer<typeof EmailColorSchema>;
+
+export const EMAIL_SPACINGS = ['sm', 'md', 'lg'] as const;
+export const EmailSpacingSchema = z.enum(EMAIL_SPACINGS);
+export type EmailSpacing = z.infer<typeof EmailSpacingSchema>;
+
+export const TOAST_VARIANTS = ['default', 'destructive', 'success', 'warning', 'info', 'loading'] as const;
+export const ToastVariantSchema = z.enum(TOAST_VARIANTS);
+export type ToastVariant = z.infer<typeof ToastVariantSchema>;
+export const ToastVariants = {
+  DEFAULT: 'default' as const,
+  DESTRUCTIVE: 'destructive' as const,
+  SUCCESS: 'success' as const,
+  WARNING: 'warning' as const,
+  INFO: 'info' as const,
+  LOADING: 'loading' as const,
+} as const;
+
+// ============================================================================
+// AUTH ACTION
+// ============================================================================
+
+export const AUTH_ACTIONS = ['login', 'logout', 'token_refresh', 'permission_check', 'registration'] as const;
+
+export const AuthActionSchema = z.enum(AUTH_ACTIONS).openapi({
+  description: 'Authentication action type',
+  example: 'login',
+});
+
+export type AuthAction = z.infer<typeof AuthActionSchema>;
+
+export const AuthActions = {
+  LOGIN: 'login' as const,
+  LOGOUT: 'logout' as const,
+  TOKEN_REFRESH: 'token_refresh' as const,
+  PERMISSION_CHECK: 'permission_check' as const,
+  REGISTRATION: 'registration' as const,
+} as const;
+
+// ============================================================================
+// VALIDATION TYPE
+// ============================================================================
+
+export const VALIDATION_TYPES = ['body', 'query', 'params', 'headers'] as const;
+
+export const ValidationTypeSchema = z.enum(VALIDATION_TYPES).openapi({
+  description: 'Request validation context type',
+  example: 'body',
+});
+
+export type ValidationType = z.infer<typeof ValidationTypeSchema>;
+
+export const ValidationTypes = {
+  BODY: 'body' as const,
+  QUERY: 'query' as const,
+  PARAMS: 'params' as const,
+  HEADERS: 'headers' as const,
+} as const;
+
+// ============================================================================
+// ENVIRONMENT
+// ============================================================================
+
+export const ENVIRONMENTS = ['development', 'preview', 'production', 'test', 'local'] as const;
+
+export const EnvironmentSchema = z.enum(ENVIRONMENTS).openapi({
+  description: 'Application runtime environment',
+  example: 'production',
+});
+
+export type Environment = z.infer<typeof EnvironmentSchema>;
+
+export const Environments = {
+  DEVELOPMENT: 'development' as const,
+  PREVIEW: 'preview' as const,
+  PRODUCTION: 'production' as const,
+  TEST: 'test' as const,
+  LOCAL: 'local' as const,
+} as const;
+
+// ============================================================================
+// SORT DIRECTION
+// ============================================================================
+
+export const SORT_DIRECTIONS = ['asc', 'desc'] as const;
+
+export const SortDirectionSchema = z.enum(SORT_DIRECTIONS).default('desc').openapi({
+  description: 'Sort order direction',
+  example: 'desc',
+});
+
+export type SortDirection = z.infer<typeof SortDirectionSchema>;
+
+export const SortDirections = {
+  ASC: 'asc' as const,
+  DESC: 'desc' as const,
+} as const;

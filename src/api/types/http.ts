@@ -191,7 +191,7 @@ export type SecurityValidation = z.infer<typeof SecurityValidationSchema>;
  */
 export const EnvironmentVariablesSchema = z.object({
   // Core application
-  NODE_ENV: z.enum(['development', 'production', 'test']),
+  NODE_ENV: z.enum(['development', 'production', 'test']), // Subset of full environment enum
   BETTER_AUTH_SECRET: z.string().min(32),
   BETTER_AUTH_URL: z.string().url(),
 
@@ -201,7 +201,7 @@ export const EnvironmentVariablesSchema = z.object({
   SIGNED_URL_SECRET: z.string().min(32),
 
   // Optional configurations
-  LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
+  LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'failed']).default('info'),
   MAX_REQUEST_SIZE: z.coerce.number().positive().default(10485760),
   RATE_LIMIT_WINDOW: z.coerce.number().positive().default(900),
 });

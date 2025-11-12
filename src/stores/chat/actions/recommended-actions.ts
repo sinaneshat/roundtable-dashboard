@@ -15,11 +15,12 @@
 
 'use client';
 
-import { useCallback, useMemo } from 'react';
+import { useCallback } from 'react';
 
 import type { RecommendedAction } from '@/api/routes/chat/schema';
 import { useChatStore } from '@/components/providers/chat-store-provider';
 import { useModelsQuery } from '@/hooks/queries/models';
+import { useMemoizedReturn } from '@/lib/utils/memo-utils';
 
 export type UseRecommendedActionsOptions = {
   /** Optional ref to input container for scrolling behavior */
@@ -120,7 +121,7 @@ export function useRecommendedActions(
   ]);
 
   // Memoize return object to prevent unnecessary re-renders
-  return useMemo(() => ({
+  return useMemoizedReturn({
     handleActionClick,
-  }), [handleActionClick]);
+  }, [handleActionClick]);
 }

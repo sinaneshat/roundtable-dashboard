@@ -1,9 +1,10 @@
 import type { ReactNode } from 'react';
 
+import type { ComponentSize } from '@/api/core/enums';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { cn } from '@/lib/ui/cn';
 
-type ModalSize = 'sm' | 'md' | 'lg' | 'xl' | 'full';
+type ModalSize = Extract<ComponentSize, 'sm' | 'md' | 'lg'> | 'xl' | 'full';
 
 type BaseModalProps = {
   open: boolean;

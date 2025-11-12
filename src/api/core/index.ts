@@ -44,33 +44,29 @@ import {
 export { createOpenApiApp } from './app';
 
 // ============================================================================
-// SCHEMAS AND VALIDATION
+// CONFIGURATION
+// ============================================================================
+
+export { APP_CONFIG, FEATURE_FLAGS, STREAMING_CONFIG } from './config';
+
+// ============================================================================
+// ERRORS (API layer only - import @/api/common/* utilities directly)
 // ============================================================================
 
 export {
-  type AIProviderErrorCategory,
-  type AIProviderErrorMetadata,
-  // Consolidated API error factory
+  // ✅ Consolidated API error factory (defined in errors.ts)
   ApiErrors,
-  // Re-exported from common/error-handling.ts
-  AppError,
-  type AppErrorConfig,
-  createError,
-  ERROR_CODES,
-  ERROR_SEVERITY,
-  type ErrorCode,
-  ErrorCodeSchema,
-  ErrorContextBuilders,
-  // Error context shortcuts
+  // ✅ Error context shortcuts (defined in errors.ts)
   ErrorContexts,
-  type ErrorSeverity,
-  ErrorSeveritySchema,
-  ExternalServiceError,
+  // ✅ Error utilities (defined in errors.ts)
   formatErrorResponse,
   isAppError,
-  normalizeError,
-  structureAIProviderError,
 } from './errors';
+
+// ❌ DO NOT re-export from @/api/common/* here
+// Import these directly from their canonical source:
+// - createError, AppError, ERROR_CODES → from '@/api/common/error-handling'
+// - ErrorContextBuilders → from '@/api/common/error-contexts'
 export {
   // Type exports
   type BatchContext,

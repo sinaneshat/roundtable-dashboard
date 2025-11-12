@@ -4,7 +4,7 @@ import { motion } from 'motion/react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import {
   AlertDialog,
@@ -16,6 +16,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { StaggerItem } from '@/components/ui/motion';
 import {
   SidebarGroup,
   SidebarGroupLabel,
@@ -78,6 +79,7 @@ type ChatListProps = {
   deletingChatId?: string | null;
   isMobile?: boolean;
   onNavigate?: () => void;
+  disableAnimations?: boolean;
 };
 const EMPTY_FAVORITES: Chat[] = [];
 
@@ -88,6 +90,7 @@ function ChatItem({
   isMobile,
   onNavigate,
   onDeleteClick,
+  disableAnimation,
 }: {
   chat: Chat;
   isActive: boolean;
@@ -95,10 +98,12 @@ function ChatItem({
   isMobile: boolean;
   onNavigate?: () => void;
   onDeleteClick: (chat: Chat) => void;
+  disableAnimation?: boolean;
 }) {
   const t = useTranslations();
   const chatUrl = `/chat/${chat.slug}`;
-  return (
+
+  const content = (
     <SidebarMenuItem>
       <SidebarMenuButton
         asChild
@@ -113,9 +118,12 @@ function ChatItem({
             }
           }}
         >
-          <span className="truncate min-w-0 flex-1">
+          <div
+            className="truncate overflow-hidden text-ellipsis whitespace-nowrap"
+            style={{ maxWidth: '11rem' }}
+          >
             {chat.title}
-          </span>
+          </div>
         </Link>
       </SidebarMenuButton>
       <SidebarMenuAction
@@ -132,6 +140,12 @@ function ChatItem({
       </SidebarMenuAction>
     </SidebarMenuItem>
   );
+
+  if (disableAnimation) {
+    return content;
+  }
+
+  return <StaggerItem>{content}</StaggerItem>;
 }
 export function ChatList({
   chatGroups,
@@ -141,10 +155,27 @@ export function ChatList({
   deletingChatId,
   isMobile = false,
   onNavigate,
+  disableAnimations = false,
 }: ChatListProps) {
   const pathname = usePathname();
   const t = useTranslations();
   const [chatToDelete, setChatToDelete] = useState<Chat | null>(null);
+  const [hasAnimated, setHasAnimated] = useState(false);
+
+  // Only animate on first render, then disable forever
+  const shouldAnimate = !disableAnimations && !hasAnimated;
+
+  useEffect(() => {
+    if (!disableAnimations && !hasAnimated) {
+      // Mark as animated after mount to prevent future animations
+      // This intentional one-time state update controls animation behavior
+      // Wrapped in queueMicrotask to defer state update after render
+      queueMicrotask(() => {
+        setHasAnimated(true);
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Run once on mount
   const handleDeleteClick = (chat: Chat) => {
     setChatToDelete(chat);
   };
@@ -188,24 +219,63 @@ export function ChatList({
     <>
       {favorites.length > 0 && (
         <SidebarGroup className="group-data-[collapsible=icon]:hidden">
-          <SidebarMenu>
-            {favorites.map((chat) => {
-              const chatUrl = `/chat/${chat.slug}`;
-              const isActive = pathname === chatUrl;
-              const isDeleting = deletingChatId === chat.id;
-              return (
-                <ChatItem
-                  key={chat.id}
-                  chat={chat}
-                  isActive={isActive}
-                  isDeleting={isDeleting}
-                  isMobile={isMobile}
-                  onNavigate={onNavigate}
-                  onDeleteClick={handleDeleteClick}
-                />
-              );
-            })}
-          </SidebarMenu>
+          {shouldAnimate
+            ? (
+                <motion.div
+                  initial="initial"
+                  animate="animate"
+                  variants={{
+                    initial: {},
+                    animate: {
+                      transition: {
+                        staggerChildren: 0.03,
+                        delayChildren: 0.1,
+                      },
+                    },
+                  }}
+                >
+                  <SidebarMenu>
+                    {favorites.map((chat) => {
+                      const chatUrl = `/chat/${chat.slug}`;
+                      const isActive = pathname === chatUrl;
+                      const isDeleting = deletingChatId === chat.id;
+                      return (
+                        <ChatItem
+                          key={chat.id}
+                          chat={chat}
+                          isActive={isActive}
+                          isDeleting={isDeleting}
+                          isMobile={isMobile}
+                          onNavigate={onNavigate}
+                          onDeleteClick={handleDeleteClick}
+                          disableAnimation={false}
+                        />
+                      );
+                    })}
+                  </SidebarMenu>
+                </motion.div>
+              )
+            : (
+                <SidebarMenu>
+                  {favorites.map((chat) => {
+                    const chatUrl = `/chat/${chat.slug}`;
+                    const isActive = pathname === chatUrl;
+                    const isDeleting = deletingChatId === chat.id;
+                    return (
+                      <ChatItem
+                        key={chat.id}
+                        chat={chat}
+                        isActive={isActive}
+                        isDeleting={isDeleting}
+                        isMobile={isMobile}
+                        onNavigate={onNavigate}
+                        onDeleteClick={handleDeleteClick}
+                        disableAnimation={true}
+                      />
+                    );
+                  })}
+                </SidebarMenu>
+              )}
         </SidebarGroup>
       )}
       {chatGroups.map((group, groupIndex) => {
@@ -213,41 +283,92 @@ export function ChatList({
         const sectionZIndex = baseZIndex + groupIndex;
         return (
           <SidebarGroup key={group.label} className="group-data-[collapsible=icon]:hidden">
-            <StickyHeader zIndex={sectionZIndex} className="backdrop-blur-xl pb-1">
+            <StickyHeader zIndex={sectionZIndex} className="pb-1">
               <SidebarGroupLabel className="h-9 px-2 text-xs uppercase tracking-wider font-medium text-muted-foreground">
-                <motion.span
-                  className="truncate block min-w-0"
-                  initial={{ x: -10, opacity: 0 }}
-                  animate={{ x: 0, opacity: 1 }}
-                  transition={{
-                    type: 'spring',
-                    stiffness: 500,
-                    damping: 40,
-                    delay: (groupIndex * 0.05) + 0.1,
-                  }}
-                >
-                  {formatGroupLabel(group.label)}
-                </motion.span>
+                {shouldAnimate
+                  ? (
+                      <motion.span
+                        className="truncate block min-w-0 overflow-hidden text-ellipsis whitespace-nowrap"
+                        style={{ maxWidth: '13rem' }}
+                        initial={{ x: -10, opacity: 0 }}
+                        animate={{ x: 0, opacity: 1 }}
+                        transition={{
+                          type: 'spring',
+                          stiffness: 500,
+                          damping: 40,
+                          delay: (groupIndex * 0.05) + 0.1,
+                        }}
+                      >
+                        {formatGroupLabel(group.label)}
+                      </motion.span>
+                    )
+                  : (
+                      <span
+                        className="truncate block min-w-0 overflow-hidden text-ellipsis whitespace-nowrap"
+                        style={{ maxWidth: '13rem' }}
+                      >
+                        {formatGroupLabel(group.label)}
+                      </span>
+                    )}
               </SidebarGroupLabel>
             </StickyHeader>
-            <SidebarMenu>
-              {group.chats.map((chat) => {
-                const chatUrl = `/chat/${chat.slug}`;
-                const isActive = pathname === chatUrl;
-                const isDeleting = deletingChatId === chat.id;
-                return (
-                  <ChatItem
-                    key={chat.id}
-                    chat={chat}
-                    isActive={isActive}
-                    isDeleting={isDeleting}
-                    isMobile={isMobile}
-                    onNavigate={onNavigate}
-                    onDeleteClick={handleDeleteClick}
-                  />
-                );
-              })}
-            </SidebarMenu>
+            {shouldAnimate
+              ? (
+                  <motion.div
+                    initial="initial"
+                    animate="animate"
+                    variants={{
+                      initial: {},
+                      animate: {
+                        transition: {
+                          staggerChildren: 0.03,
+                          delayChildren: (groupIndex * 0.05) + 0.15,
+                        },
+                      },
+                    }}
+                  >
+                    <SidebarMenu>
+                      {group.chats.map((chat) => {
+                        const chatUrl = `/chat/${chat.slug}`;
+                        const isActive = pathname === chatUrl;
+                        const isDeleting = deletingChatId === chat.id;
+                        return (
+                          <ChatItem
+                            key={chat.id}
+                            chat={chat}
+                            isActive={isActive}
+                            isDeleting={isDeleting}
+                            isMobile={isMobile}
+                            onNavigate={onNavigate}
+                            onDeleteClick={handleDeleteClick}
+                            disableAnimation={false}
+                          />
+                        );
+                      })}
+                    </SidebarMenu>
+                  </motion.div>
+                )
+              : (
+                  <SidebarMenu>
+                    {group.chats.map((chat) => {
+                      const chatUrl = `/chat/${chat.slug}`;
+                      const isActive = pathname === chatUrl;
+                      const isDeleting = deletingChatId === chat.id;
+                      return (
+                        <ChatItem
+                          key={chat.id}
+                          chat={chat}
+                          isActive={isActive}
+                          isDeleting={isDeleting}
+                          isMobile={isMobile}
+                          onNavigate={onNavigate}
+                          onDeleteClick={handleDeleteClick}
+                          disableAnimation={true}
+                        />
+                      );
+                    })}
+                  </SidebarMenu>
+                )}
           </SidebarGroup>
         );
       })}

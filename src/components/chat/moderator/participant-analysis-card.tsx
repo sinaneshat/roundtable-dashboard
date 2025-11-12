@@ -1,10 +1,10 @@
 'use client';
 import { motion } from 'framer-motion';
 import { CheckCircle2, XCircle } from 'lucide-react';
+import Image from 'next/image';
 import { useTranslations } from 'next-intl';
 
 import type { ParticipantAnalysis } from '@/api/routes/chat/schema';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/ui/cn';
 import { getAvatarPropsFromModelId } from '@/lib/utils/ai-display';
 
@@ -33,12 +33,16 @@ export function ParticipantAnalysisCard({ analysis, rank }: ParticipantAnalysisC
       <div className="relative flex flex-col gap-3 p-3 rounded-lg bg-background/5">
         <div className="flex items-center gap-3">
           <div className="relative flex-shrink-0">
-            <Avatar className="size-10 ring-1 ring-white/10">
-              <AvatarImage src={avatarProps.src} alt={avatarProps.name} />
-              <AvatarFallback className="text-xs font-semibold">
-                {avatarProps.name.slice(0, 2).toUpperCase()}
-              </AvatarFallback>
-            </Avatar>
+            <div className="relative w-10 h-10 flex items-center justify-center">
+              <Image
+                src={avatarProps.src}
+                alt={avatarProps.name}
+                width={40}
+                height={40}
+                className="w-full h-full object-contain [image-rendering:crisp-edges]"
+                unoptimized
+              />
+            </div>
             {rank && rank <= 3 && (
               <motion.div
                 initial={{ scale: 0 }}

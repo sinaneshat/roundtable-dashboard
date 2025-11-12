@@ -16,6 +16,8 @@ import type { Context } from 'hono';
 import * as HttpStatusCodes from 'stoker/http-status-codes';
 import type { z } from 'zod';
 
+import type { DatabaseOperation } from '@/api/core/enums';
+
 import type { ApiResponse, CursorPaginatedResponse, ErrorContext, PaginatedResponse, ResponseMetadata } from './schemas';
 import { ApiErrorResponseSchema, createApiResponseSchema, createPaginatedResponseSchema } from './schemas';
 import type { ValidationError } from './validation';
@@ -400,7 +402,7 @@ export function externalServiceError(
  */
 export function databaseError(
   c: Context,
-  operation: 'select' | 'insert' | 'update' | 'delete' | 'batch',
+  operation: DatabaseOperation,
   message = 'Database operation failed',
   table?: string,
 ): Response {

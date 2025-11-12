@@ -1,12 +1,13 @@
 import { Section } from '@react-email/components';
 import type { CSSProperties, ReactNode } from 'react';
 
+import type { EmailSpacing, TextAlignment } from '@/api/core/enums';
 import { spacing } from '@/emails/design-tokens';
 
 type EmailSectionProps = {
   children: ReactNode;
-  spacing?: 'sm' | 'md' | 'lg';
-  align?: 'left' | 'center' | 'right';
+  spacing?: EmailSpacing;
+  align?: Exclude<TextAlignment, 'justify'>;
   style?: CSSProperties;
 };
 

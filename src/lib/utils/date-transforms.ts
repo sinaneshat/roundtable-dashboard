@@ -12,7 +12,8 @@
 
 import { z } from 'zod';
 
-import type { ChatMessage, ChatParticipant, ChatThread, StoredModeratorAnalysis } from '@/api/routes/chat/schema';
+import type { ChatMessage, ChatParticipant, ChatThread, StoredModeratorAnalysis, StoredPreSearch } from '@/api/routes/chat/schema';
+import { StoredPreSearchSchema } from '@/api/routes/chat/schema';
 
 // ============================================================================
 // ZOD SCHEMAS FOR API RESPONSES - SINGLE SOURCE OF TRUTH
@@ -285,4 +286,117 @@ export function transformModeratorAnalyses(
   analyses: unknown[],
 ): StoredModeratorAnalysis[] {
   return analyses.map(transformModeratorAnalysis);
+}
+
+/**
+ * Transform a single pre-search from API format to application format
+ * Converts string dates to Date objects for type safety
+ *
+ * @param preSearch - Raw pre-search from API (validated against StoredPreSearchSchema)
+ * @returns Pre-search with Date objects
+ */
+export function transformPreSearch(
+  preSearch: unknown,
+): StoredPreSearch {
+  const validated = StoredPreSearchSchema.parse(preSearch);
+
+  return {
+    ...validated,
+    createdAt: ensureDate(validated.createdAt),
+    completedAt: validated.completedAt ? ensureDate(validated.completedAt) : null,
+  };
+}
+
+/**
+ * Transform array of pre-searches
+ *
+ * **Zod-validated transformation** - No type assertions needed.
+ * ✅ FOLLOWS: transformModeratorAnalyses pattern exactly
+ *
+ * @param preSearches - Array of raw pre-searches from API (validated against schema)
+ * @returns Array of pre-searches with Date objects
+ *
+ * @example
+ * ```typescript
+ * const preSearches = transformPreSearches(apiResponse.data.items);
+ * ```
+ */
+export function transformPreSearches(
+  preSearches: unknown[],
+): StoredPreSearch[] {
+  return preSearches.map(transformPreSearch);
+}
+
+// ============================================================================
+// BUNDLE TRANSFORMATIONS - CONVENIENCE UTILITIES
+// ============================================================================
+
+/**
+ * Thread data bundle type for batch transformation
+ * Represents a complete thread response with related entities
+ */
+export type ThreadDataBundle = {
+  thread?: Omit<ChatThread, 'createdAt' | 'updatedAt' | 'lastMessageAt'> & {
+    createdAt: string | Date;
+    updatedAt: string | Date;
+    lastMessageAt: string | Date | null;
+  };
+  participants?: Array<Omit<ChatParticipant, 'createdAt' | 'updatedAt'> & {
+    createdAt: string | Date;
+    updatedAt: string | Date;
+  }>;
+  messages?: Array<Omit<ChatMessage, 'createdAt'> & {
+    createdAt: string | Date;
+  }>;
+  analyses?: unknown[];
+};
+
+/**
+ * Transformed thread data bundle with Date objects
+ */
+export type TransformedThreadDataBundle = {
+  thread?: ChatThread;
+  participants?: ChatParticipant[];
+  messages?: ChatMessage[];
+  analyses?: StoredModeratorAnalysis[];
+};
+
+/**
+ * Transform complete thread data bundle in one call
+ * Reduces boilerplate when transforming multiple related entities
+ *
+ * **SINGLE SOURCE OF TRUTH**: Use for all bulk API response transformations.
+ *
+ * @param bundle - Thread data bundle with string dates
+ * @returns Transformed bundle with Date objects
+ *
+ * @example
+ * ```typescript
+ * // Instead of:
+ * const thread = transformChatThread(apiResponse.data.thread);
+ * const participants = transformChatParticipants(apiResponse.data.participants);
+ * const messages = transformChatMessages(apiResponse.data.messages);
+ *
+ * // Use:
+ * const { thread, participants, messages } = transformThreadBundle(apiResponse.data);
+ * ```
+ *
+ * @example
+ * ```typescript
+ * // Partial transformations work too
+ * const { thread, participants } = transformThreadBundle({
+ *   thread: apiResponse.data.thread,
+ *   participants: apiResponse.data.participants,
+ * });
+ * ```
+ */
+export function transformThreadBundle(
+  bundle: ThreadDataBundle,
+): TransformedThreadDataBundle {
+  return {
+    thread: bundle.thread ? transformChatThread(bundle.thread) : undefined,
+    participants: bundle.participants ? transformChatParticipants(bundle.participants) : undefined,
+    messages: bundle.messages ? transformChatMessages(bundle.messages) : undefined,
+    analyses: bundle.analyses ? transformModeratorAnalyses(bundle.analyses) : undefined,
+  };
 }

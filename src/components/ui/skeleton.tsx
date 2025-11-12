@@ -131,13 +131,58 @@ function SubscriptionSkeleton({ className, ...props }: React.ComponentProps<"div
   )
 }
 
-export { 
-  Skeleton, 
-  CardSkeleton, 
-  TableRowSkeleton, 
-  StatCardSkeleton, 
+// Chat message skeletons matching simplified design without heavy borders
+function UserMessageSkeleton({ className, ...props }: React.ComponentProps<"div">) {
+  return (
+    <div className={cn("mb-4 flex justify-end", className)} {...props}>
+      <div className="max-w-[80%]">
+        {/* Header - simplified without borders, avatar on right */}
+        <div className="flex items-center gap-3 py-2 mb-2 flex-row-reverse">
+          <Skeleton className="size-8 rounded-full bg-white/15" />
+          <Skeleton className="h-5 w-24 bg-white/20" />
+        </div>
+        {/* Content */}
+        <div className="space-y-2">
+          <Skeleton className="h-4 w-full bg-white/15" />
+          <Skeleton className="h-4 w-3/4 bg-white/15" />
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function AssistantMessageSkeleton({ className, ...props }: React.ComponentProps<"div">) {
+  return (
+    <div className={cn("mb-4 flex justify-start", className)} {...props}>
+      <div className="max-w-[85%]">
+        {/* Header - simplified without borders */}
+        <div className="flex items-center gap-3 py-2 mb-2">
+          <Skeleton className="size-8 rounded-full bg-white/15" />
+          <div className="flex items-center gap-2">
+            <Skeleton className="h-5 w-32 bg-white/20" />
+            <Skeleton className="h-4 w-20 bg-white/15" />
+          </div>
+        </div>
+        {/* Content */}
+        <div className="space-y-2">
+          <Skeleton className="h-4 w-full bg-white/10" />
+          <Skeleton className="h-4 w-full bg-white/10" />
+          <Skeleton className="h-4 w-5/6 bg-white/10" />
+        </div>
+      </div>
+    </div>
+  )
+}
+
+export {
+  Skeleton,
+  CardSkeleton,
+  TableRowSkeleton,
+  StatCardSkeleton,
   ChartSkeleton,
   PaymentMethodSkeleton,
-  SubscriptionSkeleton
+  SubscriptionSkeleton,
+  UserMessageSkeleton,
+  AssistantMessageSkeleton
 }
 

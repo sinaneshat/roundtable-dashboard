@@ -28,9 +28,14 @@ type UseChatScrollResult = {
  *
  * Provides unified scroll management for chat messages and analyses with:
  * - Near-bottom detection (prevents auto-scroll when user scrolls up)
- * - Auto-scroll during streaming (only if user is near bottom)
- * - Auto-scroll on new analysis (always, regardless of position)
+ * - Auto-scroll during streaming (only if user is near bottom) - OPT-IN
+ * - Auto-scroll on new analysis (only if user is near bottom) - OPT-IN
  * - Manual scroll control
+ *
+ * USER SCROLL CONTROL:
+ * - User can freely scroll during ANY stream type (text, object, analysis)
+ * - Auto-scroll ONLY triggers when user is already near bottom (within 200px)
+ * - Scrolling up opts out of auto-scroll until user scrolls back to bottom
  *
  * @param params - Configuration for scroll behavior
  * @param params.messages - Array of UI messages (used to trigger scroll on new messages)
@@ -52,9 +57,9 @@ type UseChatScrollResult = {
  *   enableNearBottomDetection: true,
  * });
  *
- * // Scroll is automatic during streaming (if near bottom)
- * // Scroll is automatic when new analysis appears (always)
- * // User can manually scroll and opt out of auto-scroll
+ * // Scroll is automatic during streaming ONLY if user near bottom (opt-in)
+ * // Scroll is automatic on new analysis ONLY if user near bottom (opt-in)
+ * // User can scroll freely during any stream without being forced back
  *
  * // Manual scroll (for programmatic control):
  * <button onClick={() => scrollToBottom('smooth')}>
@@ -147,12 +152,16 @@ export function useChatScroll({
     // Check for new analyses that haven't been scrolled to yet
     const newAnalyses = analyses.filter(a => !scrolledToAnalysesRef.current.has(a.id));
     const hasNewAnalysis = newAnalyses.length > 0;
-    const shouldScrollForAnalysis = hasNewAnalysis && !isStreaming;
+
+    // ✅ FIX: REMOVED forced scroll during analysis streaming
+    // Previously: Auto-scrolled when new completed analysis appeared, ignoring user position
+    // Now: Only scroll if user is near bottom (opt-in behavior)
 
     // Determine if we should scroll
-    // - During streaming: Only scroll if user is near bottom (allows opt-out)
-    // - New analysis: Always scroll (significant event)
-    const shouldScroll = (isStreaming && isNearBottomRef.current) || shouldScrollForAnalysis;
+    // - During participant streaming: Only scroll if user is near bottom (allows opt-out)
+    // - New analysis: Only scroll if user is near bottom (allows opt-out)
+    // User can freely scroll during any stream type without being forced back to bottom
+    const shouldScroll = (isStreaming || hasNewAnalysis) && isNearBottomRef.current;
 
     if (shouldScroll) {
       // Mark new analyses as scrolled

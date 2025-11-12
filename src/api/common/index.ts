@@ -50,6 +50,11 @@ export {
   extractFile,
   extractOptionalString,
 } from './form-utils';
+
+// ============================================================================
+// METADATA UTILITIES
+// ============================================================================
+
 export {
   createProductMetadata,
   createSeoMetadata,
@@ -72,8 +77,7 @@ export {
 // RE-EXPORTS FROM CORE (for convenience)
 // ============================================================================
 
-// Pagination utilities now live in @/api/core/pagination
-// Re-exported here for backward compatibility and convenience
+// Pagination utilities from @/api/core/pagination
 export {
   applyCursorPagination,
   applyPagePagination,

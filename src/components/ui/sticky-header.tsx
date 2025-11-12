@@ -59,7 +59,7 @@ export function StickyHeader({
       className={cn(
         'sticky top-0',
         getZIndexClass(zIndex),
-        !noBackground && 'bg-sidebar',
+        !noBackground && 'backdrop-blur-[40px] backdrop-saturate-[200%] bg-black',
         className,
       )}
     >

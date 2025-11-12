@@ -1,6 +1,7 @@
 import { Column, Row, Section } from '@react-email/components';
 import type { CSSProperties, ReactNode } from 'react';
 
+import type { EmailSpacing } from '@/api/core/enums';
 import { BRAND } from '@/constants/brand';
 import { assets, spacing } from '@/emails/design-tokens';
 
@@ -9,7 +10,7 @@ type EmailBrandHeaderProps = {
   showLogo?: boolean;
   logoWidth?: number;
   logoHeight?: number;
-  padding?: 'sm' | 'md' | 'lg';
+  padding?: EmailSpacing;
   style?: CSSProperties;
 };
 

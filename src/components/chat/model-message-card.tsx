@@ -2,7 +2,7 @@
 import { memo } from 'react';
 import { Streamdown } from 'streamdown';
 
-import { MessageStatuses } from '@/api/core/enums';
+import { MessagePartTypes, MessageStatuses } from '@/api/core/enums';
 import type { EnhancedModelResponse } from '@/api/routes/models/schema';
 import { Message, MessageAvatar, MessageContent } from '@/components/ai-elements/message';
 import { Reasoning, ReasoningContent, ReasoningTrigger } from '@/components/ai-elements/reasoning';
@@ -10,7 +10,7 @@ import { CustomDataPart } from '@/components/chat/custom-data-part';
 import { MessageErrorDetails } from '@/components/chat/message-error-details';
 import { ToolCallPart } from '@/components/chat/tool-call-part';
 import { ToolResultPart } from '@/components/chat/tool-result-part';
-import type { UIMessageMetadata } from '@/lib/schemas/message-metadata';
+import type { MessageMetadata } from '@/lib/schemas/message-metadata';
 import { isAssistantMetadata } from '@/lib/schemas/message-metadata';
 import type { MessagePart, MessageStatus } from '@/lib/schemas/message-schemas';
 
@@ -24,7 +24,7 @@ type ModelMessageCardProps = {
   avatarName: string;
   className?: string;
   messageId?: string;
-  metadata?: UIMessageMetadata | null;
+  metadata?: MessageMetadata | null;
   isAccessible?: boolean;
   hideInlineHeader?: boolean;
   hideAvatar?: boolean;
@@ -51,7 +51,7 @@ export const ModelMessageCard = memo(({
 
   // ✅ STRICT TYPING: Only assistant messages have error fields
   const assistantMetadata = metadata && isAssistantMetadata(metadata) ? metadata : null;
-  const hasError = isError || assistantMetadata?.hasError || assistantMetadata?.error;
+  const hasError = isError || assistantMetadata?.hasError;
   const modelName = model?.name || assistantMetadata?.model || 'AI Assistant';
   const requiredTierName = model?.required_tier_name;
 
@@ -98,7 +98,7 @@ export const ModelMessageCard = memo(({
               />
             )}
             {parts.map((part, partIndex) => {
-              if (part.type === 'text') {
+              if (part.type === MessagePartTypes.TEXT) {
                 return (
                   <Streamdown
                     key={messageId ? `${messageId}-text-${partIndex}` : `text-${partIndex}`}
@@ -108,7 +108,7 @@ export const ModelMessageCard = memo(({
                   </Streamdown>
                 );
               }
-              if (part.type === 'reasoning') {
+              if (part.type === MessagePartTypes.REASONING) {
                 return (
                   <Reasoning
                     key={messageId ? `${messageId}-reasoning-${partIndex}` : `reasoning-${partIndex}`}
@@ -120,7 +120,7 @@ export const ModelMessageCard = memo(({
                   </Reasoning>
                 );
               }
-              if (part.type === 'tool-call') {
+              if (part.type === MessagePartTypes.TOOL_CALL) {
                 return (
                   <ToolCallPart
                     key={messageId ? `${messageId}-tool-call-${partIndex}` : `tool-call-${partIndex}`}
@@ -129,7 +129,7 @@ export const ModelMessageCard = memo(({
                   />
                 );
               }
-              if (part.type === 'tool-result') {
+              if (part.type === MessagePartTypes.TOOL_RESULT) {
                 return (
                   <ToolResultPart
                     key={messageId ? `${messageId}-tool-result-${partIndex}` : `tool-result-${partIndex}`}

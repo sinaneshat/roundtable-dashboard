@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 
+import { StripeSubscriptionStatuses } from '@/api/core/enums';
 import type { SubscriptionTier } from '@/api/services/product-logic.service';
 import { CancelSubscriptionDialog } from '@/components/chat/cancel-subscription-dialog';
 import { UsageMetrics } from '@/components/chat/usage-metrics';
@@ -61,7 +62,7 @@ export function NavUser() {
     : user?.email?.[0]?.toUpperCase() || 'U';
   const subscriptions = subscriptionsData?.success ? subscriptionsData.data?.items || [] : [];
   const activeSubscription = subscriptions.find(
-    sub => (sub.status === 'active' || sub.status === 'trialing') && !sub.cancelAtPeriodEnd,
+    sub => (sub.status === StripeSubscriptionStatuses.ACTIVE || sub.status === StripeSubscriptionStatuses.TRIALING) && !sub.cancelAtPeriodEnd,
   );
   const handleSignOut = async () => {
     await signOut();

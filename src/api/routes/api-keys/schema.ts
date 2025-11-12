@@ -190,9 +190,3 @@ export type ApiKey = z.infer<typeof ApiKeySchema>;
 export type ApiKeyWithKey = z.infer<typeof ApiKeyWithKeySchema>;
 export type CreateApiKeyRequest = z.infer<typeof CreateApiKeyRequestSchema>;
 export type UpdateApiKeyRequest = z.infer<typeof UpdateApiKeyRequestSchema>;
-
-/**
- * API Key response type (excludes sensitive hashed key)
- * Alias for ApiKey type for backward compatibility
- */
-export type ApiKeyResponse = ApiKey;

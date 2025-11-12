@@ -12,7 +12,7 @@ import { format } from 'date-fns';
 import { Key, Loader2, Trash2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
-import type { ApiKeyResponse } from '@/api/routes/api-keys/schema';
+import type { ApiKey } from '@/api/routes/api-keys/schema';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -30,7 +30,7 @@ import { cn } from '@/lib/ui/cn';
 // ============================================================================
 
 type ApiKeyCardProps = {
-  apiKey: ApiKeyResponse;
+  apiKey: ApiKey;
   onDelete: (keyId: string) => void;
   isDeleting?: boolean;
   className?: string;

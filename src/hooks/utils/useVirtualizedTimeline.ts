@@ -2,6 +2,8 @@ import type { VirtualItem, Virtualizer, VirtualizerOptions } from '@tanstack/rea
 import { useWindowVirtualizer } from '@tanstack/react-virtual';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { getRoundNumber } from '@/lib/utils/metadata';
+
 import type { TimelineItem } from './useThreadTimeline';
 
 /**
@@ -177,7 +179,7 @@ export function useVirtualizedTimeline({
   enableSmoothScroll = true,
   smoothScrollDuration = 1000,
   bottomPadding = 200,
-  streamingRounds: _streamingRounds,
+  streamingRounds,
 }: UseVirtualizedTimelineOptions): UseVirtualizedTimelineResult {
   // Track scroll container element for measuring scroll margin
   const scrollContainerRef = useRef<HTMLElement | null>(null);
@@ -197,7 +199,7 @@ export function useVirtualizedTimeline({
   useEffect(() => {
     const container = document.getElementById(scrollContainerId);
     if (container) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
+      // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect, react-hooks/set-state-in-effect -- Measuring DOM element on mount
       setScrollMargin(container.offsetTop || 0);
     }
   }, [scrollContainerId]);
@@ -236,6 +238,42 @@ export function useVirtualizedTimeline({
     [enableSmoothScroll, smoothScrollDuration],
   );
 
+  // ✅ CRITICAL: Custom range extractor to prevent streaming items from being unmounted
+  // TanStack Virtual best practice: Use rangeExtractor to keep specific items always rendered
+  // This prevents streaming content from disappearing when users scroll during active streams
+  const rangeExtractor = useCallback(
+    (range: { startIndex: number; endIndex: number; overscan: number; count: number }) => {
+      const indexes: number[] = [];
+
+      // Always include streaming round indexes (prevent virtualization removal)
+      if (streamingRounds && streamingRounds.size > 0) {
+        timelineItems.forEach((item, index) => {
+          const itemRound = item.type === 'messages'
+            ? getRoundNumber(item.data[0]?.metadata)
+            : item.type === 'analysis'
+              ? item.data.roundNumber
+              : undefined;
+
+          // ✅ TYPE-SAFE: getRoundNumber returns number | null, filter nulls
+          if (itemRound !== undefined && itemRound !== null && streamingRounds.has(itemRound)) {
+            indexes.push(index);
+          }
+        });
+      }
+
+      // Include viewport range (standard virtualization)
+      for (let i = range.startIndex; i <= range.endIndex; i++) {
+        if (!indexes.includes(i)) {
+          indexes.push(i);
+        }
+      }
+
+      // Sort for proper rendering order
+      return indexes.sort((a, b) => a - b);
+    },
+    [streamingRounds, timelineItems],
+  );
+
   // Initialize window virtualizer
   const virtualizer = useWindowVirtualizer({
     count: timelineItems.length,
@@ -246,6 +284,8 @@ export function useVirtualizedTimeline({
     scrollMargin,
     // Custom scroll function for smooth easing
     scrollToFn: enableSmoothScroll ? scrollToFn : undefined,
+    // ✅ CRITICAL: Custom range extractor prevents streaming items from unmounting
+    rangeExtractor,
   });
 
   // Get virtual items (only items that should be rendered)

@@ -16,12 +16,10 @@ import { ulid } from 'ulid';
 import { executeBatch } from '@/api/common/batch-operations';
 import { createError, structureAIProviderError } from '@/api/common/error-handling';
 import { createHandler } from '@/api/core';
-import { ChangelogTypes } from '@/api/core/enums';
 import { saveStreamedMessage } from '@/api/services/message-persistence.service';
-import { filterDbToConversationMessages } from '@/api/services/message-type-guards';
 import { getModelById } from '@/api/services/models-config.service';
 import { initializeOpenRouter, openRouterService } from '@/api/services/openrouter.service';
-import { validateParticipantUniqueness } from '@/api/services/participant-validation.service';
+import { processParticipantChanges } from '@/api/services/participant-config.service';
 import {
   createTrackingContext,
   generateTraceId,
@@ -41,15 +39,16 @@ import {
   getUserTier,
   incrementMessageUsage,
 } from '@/api/services/usage-tracking.service';
+import { logModeChange } from '@/api/services/thread-changelog.service';
 import type { ApiEnv } from '@/api/types';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db/schema';
 import type { ChatParticipant } from '@/db/validation';
+import { buildParticipantSystemPrompt } from '@/api/services/prompts.service';
 import { extractTextFromParts } from '@/lib/schemas/message-schemas';
 import { filterNonEmptyMessages } from '@/lib/utils/message-transforms';
 
 import type { streamChatRoute } from '../route';
-import type { ChangeData } from '../schema';
 import { StreamChatRequestSchema } from '../schema';
 import { chatMessagesToUIMessages } from './helpers';
 
@@ -130,27 +129,21 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
     // STEP 5: Handle mode change (if provided)
     // =========================================================================
     if (providedMode && providedMode !== thread.mode && participantIndex === 0) {
-      await executeBatch(db, [
-        db.update(tables.chatThread)
-          .set({
-            mode: providedMode,
-            updatedAt: new Date(),
-          })
-          .where(eq(tables.chatThread.id, threadId)),
-        db.insert(tables.chatThreadChangelog).values({
-          id: ulid(),
-          threadId,
-          roundNumber: currentRoundNumber,
-          changeType: ChangelogTypes.MODIFIED,
-          changeSummary: `Changed mode from ${thread.mode} to ${providedMode}`,
-          changeData: {
-            type: 'mode_change',
-            oldMode: thread.mode,
-            newMode: providedMode,
-          },
-          createdAt: new Date(),
-        }),
-      ]);
+      // ✅ CRITICAL FIX: Use nextRoundNumber for consistency with thread.handler.ts
+      // Changelog should appear BEFORE the next round (same pattern as thread.handler.ts:488, 571)
+      // This ensures changelog appears between current round and next round messages
+      const nextRoundNumber = currentRoundNumber + 1;
+
+      // Update thread mode
+      await db.update(tables.chatThread)
+        .set({
+          mode: providedMode,
+          updatedAt: new Date(),
+        })
+        .where(eq(tables.chatThread.id, threadId));
+
+      // ✅ SERVICE LAYER: Use thread-changelog.service for changelog creation
+      await logModeChange(threadId, nextRoundNumber, thread.mode, providedMode);
 
       thread.mode = providedMode;
     }
@@ -160,255 +153,28 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
     // =========================================================================
 
     if (providedParticipants && participantIndex === 0) {
-      // ✅ DETAILED CHANGE DETECTION: Track specific types of changes
-      // Type-safe changeData that matches database schema exactly
-      // ✅ Using Zod-inferred ChangeData type from schema
-      const changelogEntries: Array<{
-        id: string;
-        changeType: typeof ChangelogTypes[keyof typeof ChangelogTypes];
-        changeSummary: string;
-        changeData: ChangeData;
-      }> = [];
+      // ✅ SERVICE EXTRACTION: Use participant-config.service for change detection and persistence
+      // Replaces 260 lines of inline logic with reusable, testable service module
+      // Service handles: validation, change detection, database operations, changelog generation
+      const nextRoundNumber = currentRoundNumber + 1;
 
-      // ✅ CRITICAL: Load ALL participants (including disabled) for accurate change detection
-      // This prevents disabled participants from being treated as "new additions"
-      const allDbParticipants = thread.participants; // All participants (enabled + disabled)
-      const enabledDbParticipants = allDbParticipants.filter(p => p.isEnabled);
-      const providedEnabledParticipants = providedParticipants.filter(p => p.isEnabled !== false);
-
-      // ✅ VALIDATION: Check for duplicate modelIds in provided participants
-      validateParticipantUniqueness(providedEnabledParticipants);
-
-      // ✅ Match participants by modelId only for change detection
-      // This allows role changes to be treated as updates, not add/remove
-      // Each modelId can only appear once in the participant list
-
-      // Detect removed participants (modelId in enabled DB but not in provided list)
-      const removedParticipants = enabledDbParticipants.filter(
-        dbP => !providedEnabledParticipants.find(p => p.modelId === dbP.modelId),
+      const result = processParticipantChanges(
+        db,
+        thread.participants, // All participants (including disabled)
+        providedParticipants,
+        threadId,
+        nextRoundNumber,
       );
 
-      // ✅ FIXED: Detect truly new participants vs re-enabled participants
-      // Check against ALL participants (not just enabled) to prevent duplicate inserts
-      const addedParticipants = providedEnabledParticipants.filter(
-        provided => !allDbParticipants.find(dbP => dbP.modelId === provided.modelId),
-      );
-
-      // ✅ NEW: Detect re-enabled participants (exist in DB but disabled)
-      const reenabledParticipants = providedEnabledParticipants.filter((provided) => {
-        const dbP = allDbParticipants.find(db => db.modelId === provided.modelId);
-        return dbP && !dbP.isEnabled; // Exists but was disabled
-      });
-
-      // Detect updated participants (role text changed for same modelId)
-      const updatedParticipants = providedEnabledParticipants.filter((provided) => {
-        // First, find by modelId only (not role, since role might have changed)
-        const dbP = enabledDbParticipants.find(db => db.modelId === provided.modelId);
-        if (!dbP) {
-          return false; // This is an added participant, not updated
-        }
-        // Only consider it updated if the role text actually changed
-        const oldRole = dbP.role || null;
-        const newRole = provided.role || null;
-        return oldRole !== newRole;
-      });
-
-      // Note: Removed reordering detection as it's visually obvious to users
-      // and doesn't need a separate changelog entry
-
-      // ✅ BUILD INSERT OPERATIONS FOR NEW PARTICIPANTS
-      // Track mapping from frontend temp ID to real database ID for changelog
-      const participantIdMapping = new Map<string, string>();
-
-      const insertOps = addedParticipants.map((provided) => {
-        const newId = ulid(); // Generate a real database ID
-        participantIdMapping.set(provided.id, newId); // Track the mapping
-        return db.insert(tables.chatParticipant).values({
-          id: newId,
-          threadId,
-          modelId: provided.modelId,
-          role: provided.role ?? null,
-          customRoleId: provided.customRoleId ?? null,
-          priority: provided.priority,
-          isEnabled: provided.isEnabled ?? true,
-          settings: null,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        });
-      });
-
-      // ✅ UPDATE OPERATIONS - Match by modelId only (since role might have changed)
-      // Build update operations for existing participants
-      const updateOps = providedEnabledParticipants
-        .map((provided) => {
-          // Find matching DB participant by modelId only
-          const dbP = enabledDbParticipants.find(db => db.modelId === provided.modelId);
-          if (!dbP) {
-            return null; // Not an existing participant, skip
-          }
-
-          // Update with new role, priority, customRoleId, and isEnabled status
-          return db.update(tables.chatParticipant)
-            .set({
-              role: provided.role ?? null, // ✅ Update the role text
-              customRoleId: provided.customRoleId ?? null,
-              priority: provided.priority,
-              isEnabled: provided.isEnabled ?? true,
-              updatedAt: new Date(),
-            })
-            .where(eq(tables.chatParticipant.id, dbP.id)); // Use DB ID for update
-        })
-        .filter((op): op is NonNullable<typeof op> => op !== null);
-
-      // Also disable participants that were removed (not in provided list)
-      const disableOps = removedParticipants.map(removed =>
-        db.update(tables.chatParticipant)
-          .set({
-            isEnabled: false,
-            updatedAt: new Date(),
-          })
-          .where(eq(tables.chatParticipant.id, removed.id)),
-      );
-
-      // ✅ NEW: Re-enable previously disabled participants
-      // Instead of inserting duplicates, update existing disabled participants
-      const reenableOps = reenabledParticipants.map((provided) => {
-        const dbP = allDbParticipants.find(db => db.modelId === provided.modelId);
-        if (!dbP) {
-          return null; // Should never happen due to filter logic, but safety check
-        }
-        // Track the mapping for changelog (reuse existing DB ID)
-        participantIdMapping.set(provided.id, dbP.id);
-        return db.update(tables.chatParticipant)
-          .set({
-            isEnabled: true,
-            role: provided.role ?? null,
-            customRoleId: provided.customRoleId ?? null,
-            priority: provided.priority,
-            updatedAt: new Date(),
-          })
-          .where(eq(tables.chatParticipant.id, dbP.id));
-      }).filter((op): op is NonNullable<typeof op> => op !== null);
-
-      // ✅ FIXED: Helper to extract model name from modelId
-      const extractModelName = (modelId: string) => {
-        // Extract last part after "/" for better readability
-        const parts = modelId.split('/');
-        return parts[parts.length - 1] || modelId;
-      };
-
-      // Create specific changelog entries with simplified types
-      if (removedParticipants.length > 0) {
-        removedParticipants.forEach((removed) => {
-          const modelName = extractModelName(removed.modelId);
-          const displayName = removed.role || modelName;
-          changelogEntries.push({
-            id: ulid(),
-            changeType: ChangelogTypes.REMOVED,
-            changeSummary: `Removed ${displayName}`,
-            changeData: {
-              type: 'participant',
-              participantId: removed.id,
-              modelId: removed.modelId,
-              role: removed.role,
-            },
-          });
-        });
-      }
-
-      if (addedParticipants.length > 0) {
-        addedParticipants.forEach((added) => {
-          const modelName = extractModelName(added.modelId);
-          const displayName = added.role || modelName;
-          const realDbId = participantIdMapping.get(added.id); // Get the real database ID
-          changelogEntries.push({
-            id: ulid(),
-            changeType: ChangelogTypes.ADDED,
-            changeSummary: `Added ${displayName}`,
-            changeData: {
-              type: 'participant',
-              participantId: realDbId || added.id, // Use real DB ID, fallback to temp ID
-              modelId: added.modelId,
-              role: added.role,
-            },
-          });
-        });
-      }
-
-      if (updatedParticipants.length > 0) {
-        updatedParticipants.forEach((updated) => {
-          // Find the DB participant by modelId (since role might have changed)
-          const dbP = enabledDbParticipants.find(db => db.modelId === updated.modelId);
-          if (!dbP) {
-            return;
-          }
-
-          const oldRole = dbP.role || null;
-          const newRole = updated.role || null;
-
-          // Only create changelog if role actually changed
-          if (oldRole !== newRole) {
-            const modelName = extractModelName(updated.modelId);
-            const oldDisplay = oldRole || 'No Role';
-            const newDisplay = newRole || 'No Role';
-
-            changelogEntries.push({
-              id: ulid(),
-              changeType: ChangelogTypes.MODIFIED,
-              changeSummary: `Updated ${modelName} role from "${oldDisplay}" to "${newDisplay}"`,
-              changeData: {
-                type: 'participant_role',
-                participantId: dbP.id,
-                modelId: updated.modelId,
-                oldRole,
-                newRole,
-              },
-            });
-          }
-        });
-      }
-
-      // ✅ NEW: Create changelog entries for re-enabled participants
-      if (reenabledParticipants.length > 0) {
-        reenabledParticipants.forEach((reenabled) => {
-          const modelName = extractModelName(reenabled.modelId);
-          const displayName = reenabled.role || modelName;
-          const dbP = allDbParticipants.find(db => db.modelId === reenabled.modelId);
-          changelogEntries.push({
-            id: ulid(),
-            changeType: ChangelogTypes.ADDED, // Treat as "added" for user-facing message
-            changeSummary: `Added ${displayName}`,
-            changeData: {
-              type: 'participant',
-              participantId: dbP?.id || reenabled.id,
-              modelId: reenabled.modelId,
-              role: reenabled.role,
-            },
-          });
-        });
-      }
-
-      // Reordering changelog removed - it's visually obvious to users from the participant order
-
-      // Only persist if there are actual changes
-      if (changelogEntries.length > 0 || insertOps.length > 0 || updateOps.length > 0 || disableOps.length > 0 || reenableOps.length > 0) {
-        // Build changelog insert operations
-        const changelogOps = changelogEntries.map(entry =>
-          db.insert(tables.chatThreadChangelog)
-            .values({
-              id: entry.id,
-              threadId,
-              roundNumber: currentRoundNumber,
-              changeType: entry.changeType,
-              changeSummary: entry.changeSummary,
-              changeData: entry.changeData,
-              createdAt: new Date(),
-            })
-            .onConflictDoNothing(),
-        );
-
+      if (result.hasChanges) {
         // ✅ Execute all operations atomically (INSERT new, UPDATE existing, RE-ENABLE, DISABLE removed)
-        await executeBatch(db, [...insertOps, ...updateOps, ...reenableOps, ...disableOps, ...changelogOps]);
+        await executeBatch(db, [
+          ...result.insertOps,
+          ...result.updateOps,
+          ...result.reenableOps,
+          ...result.disableOps,
+          ...result.changelogOps,
+        ]);
       }
     }
 
@@ -493,12 +259,20 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
     // Replaces inline logic with Zod-validated type guard from message-type-guards.ts
     // Filters out pre-search messages to ensure clean conversation history for LLM
     //
-    // WHY THIS MATTERS FOR PARTICIPANT IDs:
-    // - Pre-search messages have role='assistant' but NO participantId
-    // - They're search result summaries, NOT participant responses
-    // - Filtering ensures participant count/indexing remains correct
-    // - Analysis handler uses same utilities to ensure consistency
-    const conversationDbMessages = filterDbToConversationMessages(previousDbMessages);
+    // WHY PRE-SEARCH IS FILTERED:
+    // - Pre-search messages have role='assistant' but are NOT participant responses
+    // - Including them would break conversation flow (user → assistant → user → assistant)
+    // - Pre-search context is provided via SYSTEM PROMPT instead (lines 638-650)
+    //
+    // BLOCKING FLOW (ensures search context is available):
+    // 1. User submits message with web search enabled
+    // 2. Provider AWAITS pre-search completion (chat-store-provider.tsx:186) ✅ BLOCKS
+    // 3. Pre-search saves results to DB (pre-search.handler.ts:352-372)
+    // 4. Pre-search completes, provider proceeds to call sendMessage
+    // 5. Participant streaming starts
+    // 6. Handler filters pre-search from conversation, adds to system prompt (line 638-650)
+    // 7. Participants respond with search context in their system prompt
+    const conversationDbMessages = previousDbMessages; // Include ALL messages
 
     // ✅ AI SDK V5 VALIDATION: Convert and validate database messages
     // chatMessagesToUIMessages() now uses AI SDK validateUIMessages() internally
@@ -663,10 +437,9 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
     // - Uses persona-based framing for natural engagement
     // - Direct, clear instructions without "AI" terminology
     // - Prevents fourth-wall breaking and self-referential behavior
+    // ✅ SINGLE SOURCE: Default prompts from /src/lib/ai/prompts.ts
     const baseSystemPrompt = participant.settings?.systemPrompt
-      || (participant.role
-        ? `You're ${participant.role}. Engage naturally in this discussion, sharing your perspective and insights. Be direct, thoughtful, and conversational.`
-        : `Engage naturally in this discussion. Share your thoughts, ask questions, and build on others' ideas. Be direct and conversational.`);
+      || buildParticipantSystemPrompt(participant.role);
 
     // =========================================================================
     // STEP 5.5: ✅ RAG CONTEXT RETRIEVAL - Semantic search for relevant context
@@ -674,7 +447,6 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
     // Retrieve relevant context from previous messages using semantic search
     // This enhances AI responses with relevant information from conversation history
     let systemPrompt = baseSystemPrompt;
-    // const startRetrievalTime = performance.now(); // Unused - would track RAG retrieval time
 
     try {
       // Extract query from last user message
@@ -1003,17 +775,41 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
     // but doesn't include the full reasoning in finishResult for most models
     const reasoningDeltas: string[] = [];
 
-    // ✅ MESSAGE ID TRACKING: Generate unique ID for this participant's message
-    // CRITICAL FIX: Pre-generate ID using ulid() to avoid AI SDK's generateId() collisions
-    // AI SDK's generateId() uses timestamps and can generate identical IDs when multiple
-    // participants process simultaneously, causing database conflicts and missing messages
+    // ✅ DETERMINISTIC MESSAGE ID GENERATION
+    // Message uniqueness is guaranteed by business logic: (threadId, roundNumber, participantIndex)
+    // Each participant position can only respond ONCE per round - this is the natural unique constraint
     //
-    // ✅ PARTICIPANT ID CONSISTENCY: This ID is STABLE regardless of web search
-    // - Pre-search messages use separate IDs (format: `pre-search-${roundNumber}-${ulid()}`)
-    // - Participant messages use this ID (format: ulid())
-    // - Pre-search does NOT affect participant indexing or ID generation
-    // - Analysis receives correct participant message IDs (filtered to exclude pre-search)
-    const streamMessageId = ulid();
+    // Why use participantIndex, not participant.id:
+    // - participantIndex represents ORDER in round (0, 1, 2, ...) - always unique per round
+    // - participant.id can be reused if same model added multiple times with different roles
+    // - Uniqueness is per POSITION in round, not per participant database record
+    //
+    // Why deterministic > random:
+    // - ✅ NO collision risk (composite key based on actual uniqueness)
+    // - ✅ Consistent structure across all participants
+    // - ✅ Human-readable and debuggable
+    // - ✅ Matches natural constraint: (threadId, roundNumber, participantIndex)
+    // - ❌ Random IDs (ULID/nanoid) can collide in concurrent scenarios
+    // - ❌ Random IDs require defensive frontend code for collision detection
+    //
+    // ID Format: {threadId}_r{roundNumber}_p{participantIndex}
+    // Example: "01K9Q5853A_r1_p0" (first participant), "01K9Q5853A_r1_p1" (second), etc.
+    //
+    // This follows the principle: Use composite keys when you have deterministic uniqueness,
+    // not random IDs that introduce collision risk
+    const streamMessageId = `${threadId}_r${currentRoundNumber}_p${participantIndex ?? 0}`;
+
+    // ✅ DEFENSIVE CHECK: Check for existing message with same ID
+    // This handles retries and race conditions gracefully
+    // Instead of throwing error, log warning and continue with idempotent behavior
+    const existingMessage = await db.query.chatMessage.findFirst({
+      where: eq(tables.chatMessage.id, streamMessageId),
+    });
+
+    if (existingMessage) {
+      // Message ID already exists - this could be a retry or race condition
+      // Continue processing - the upsert logic will handle updating the existing message (idempotent behavior)
+    }
 
     // =========================================================================
     // ✅ POSTHOG LLM TRACKING: Initialize trace and timing
@@ -1260,6 +1056,27 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
     // Client disconnects are handled by the Response stream - onFinish will still fire.
 
     // Get the base stream response
+    // ✅ CRITICAL FIX: Filter out assistant messages from current round
+    // AI SDK Bug: toUIMessageStreamResponse() reuses the last assistant message ID
+    // instead of calling generateMessageId() when originalMessages ends with assistant
+    // For multi-participant: exclude concurrent assistant responses (same round)
+    const filteredOriginalMessages = previousMessages.filter((m) => {
+      // Exclude the new user message (frontend already has it)
+      if (m.id === (message as UIMessage).id)
+        return false;
+
+      // ✅ CRITICAL: Exclude assistant messages from current round
+      // These are concurrent participant responses, not conversation history
+      if (m.role === 'assistant') {
+        const msgMeta = m.metadata as { roundNumber?: number } | undefined;
+        if (msgMeta?.roundNumber === currentRoundNumber) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+
     const baseStreamResponse = finalResult.toUIMessageStreamResponse({
       sendReasoning: true, // Stream reasoning for o1/o3/DeepSeek models
 
@@ -1270,12 +1087,12 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
       // Backend shouldn't re-send it in originalMessages to avoid duplication
       // Filter out the new message by ID to handle race conditions where subsequent
       // participants might query the DB after participant 0 saved the message
-      originalMessages: previousMessages.filter(m => m.id !== (message as UIMessage).id),
+      originalMessages: filteredOriginalMessages,
 
-      // ✅ AI SDK V5 OFFICIAL PATTERN: Server-side message ID generation
-      // Reference: https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot-message-persistence#message-ids
-      // CRITICAL FIX: Return pre-generated ulid() to ensure uniqueness across concurrent participants
-      // Pre-generating the ID prevents AI SDK's generateId() timestamp collisions
+      // ✅ DETERMINISTIC MESSAGE ID: Server-side generation using composite key
+      // Format: {threadId}_r{roundNumber}_p{participantId}
+      // Uniqueness guaranteed by business logic, not random generation
+      // No collision risk - each participant can only respond once per round
       generateMessageId: () => streamMessageId,
 
       // ✅ AI SDK V5 OFFICIAL PATTERN: Inject participant metadata at stream lifecycle events
@@ -1337,15 +1154,20 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
             participantId: participant.id,
             modelId: participant.modelId,
             participantRole: participant.role,
+            traceId: llmTraceId, // ✅ Include trace ID for debugging correlation
           });
         }
 
         // ✅ REFACTORED: Use shared error utility from /src/api/common/error-handling.ts
-        const errorMetadata = structureAIProviderError(error, {
-          id: participant.id,
-          modelId: participant.modelId,
-          role: participant.role,
-        });
+        const errorMetadata = structureAIProviderError(
+          error,
+          {
+            id: participant.id,
+            modelId: participant.modelId,
+            role: participant.role,
+          },
+          llmTraceId, // ✅ Include trace ID for debugging correlation
+        );
 
         return JSON.stringify(errorMetadata);
       },

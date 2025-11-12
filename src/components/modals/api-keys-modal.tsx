@@ -17,7 +17,7 @@ import { Book, ExternalLink, FileJson, FileText } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 
-import type { ApiKeyResponse } from '@/api/routes/api-keys/schema';
+import type { ApiKey } from '@/api/routes/api-keys/schema';
 import { BaseModal } from '@/components/modals/base-modal';
 import { ApiKeyForm } from '@/components/settings/api-key-form';
 import {
@@ -146,7 +146,7 @@ export function ApiKeysModal({ open, onOpenChange }: ApiKeysModalProps) {
           </TabsList>
           <TabsContent value="list" className="mt-4">
             <ApiKeysList
-              apiKeys={apiKeys as unknown as ApiKeyResponse[]}
+              apiKeys={apiKeys as unknown as ApiKey[]}
               isLoading={isLoading || isFetching}
               onCreateNew={() => setActiveTab('create')}
             />

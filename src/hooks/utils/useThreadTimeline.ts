@@ -98,8 +98,7 @@ export function useThreadTimeline({
     // STEP 1: Group messages by round number
     const messagesByRound = new Map<number, UIMessage[]>();
     messages.forEach((message) => {
-      const metadata = message.metadata as Record<string, unknown> | undefined;
-      const roundNumber = getRoundNumberFromMetadata(metadata, 1);
+      const roundNumber = getRoundNumberFromMetadata(message.metadata, 1);
 
       if (!messagesByRound.has(roundNumber)) {
         messagesByRound.set(roundNumber, []);

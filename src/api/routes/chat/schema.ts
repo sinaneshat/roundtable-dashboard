@@ -430,15 +430,85 @@ export const GeneratedSearchQuerySchema = z.object({
 
 export type GeneratedSearchQuery = z.infer<typeof GeneratedSearchQuerySchema>;
 
-/**
- * Generated search queries collection schema
- */
-export const GeneratedSearchQueriesSchema = z.object({
-  queries: z.array(GeneratedSearchQuerySchema).min(1).max(5).describe('1-5 generated search queries'),
-  analysis: z.string().describe('Brief analysis of the user question and search strategy'),
-}).openapi('GeneratedSearchQueries');
+// ============================================================================
+// SERVICE LAYER SCHEMAS (Moved from services - Single Source of Truth)
+// ============================================================================
 
-export type GeneratedSearchQueries = z.infer<typeof GeneratedSearchQueriesSchema>;
+/**
+ * Participant configuration input schema
+ * Used by participant-config.service.ts for change detection
+ */
+export const ParticipantConfigInputSchema = z.object({
+  id: CoreSchemas.id().openapi({
+    description: 'Participant ID (temp ID for new participants)',
+    example: 'participant_temp_1',
+  }),
+  modelId: CoreSchemas.id().openapi({
+    description: 'Model ID',
+    example: 'anthropic/claude-3.5-sonnet',
+  }),
+  role: z.string().nullable().optional().openapi({
+    description: 'Optional role name',
+  }),
+  customRoleId: CoreSchemas.id().nullable().optional().openapi({
+    description: 'Optional custom role ID',
+  }),
+  priority: z.number().int().min(0).openapi({
+    description: 'Display priority',
+  }),
+  isEnabled: z.boolean().optional().default(true).openapi({
+    description: 'Whether participant is enabled',
+  }),
+}).openapi('ParticipantConfigInput');
+
+export type ParticipantConfigInput = z.infer<typeof ParticipantConfigInputSchema>;
+
+/**
+ * Search context options schema
+ * Used by search-context-builder.ts for context generation
+ */
+export const SearchContextOptionsSchema = z.object({
+  currentRoundNumber: z.number().int().positive().openapi({
+    description: 'Current round number for determining context detail level',
+  }),
+  includeFullResults: z.boolean().optional().default(true).openapi({
+    description: 'Whether to include full results for current round',
+  }),
+}).openapi('SearchContextOptions');
+
+export type SearchContextOptions = z.infer<typeof SearchContextOptionsSchema>;
+
+/**
+ * Validated pre-search data schema
+ * Used by search-context-builder.ts for metadata extraction
+ */
+export const ValidatedPreSearchDataSchema = z.object({
+  queries: z.array(z.object({
+    query: z.string(),
+    rationale: z.string(),
+    searchDepth: WebSearchDepthSchema,
+    index: z.number().int().nonnegative(),
+  })),
+  analysis: z.string(),
+  successCount: z.number().int().nonnegative(),
+  failureCount: z.number().int().nonnegative(),
+  totalResults: z.number().int().nonnegative(),
+  totalTime: z.number(),
+  results: z.array(z.object({
+    query: z.string(),
+    answer: z.string().nullable(),
+    results: z.array(z.object({
+      title: z.string(),
+      url: z.string(),
+      content: z.string(),
+      score: z.number().min(0).max(1),
+      publishedDate: z.string().nullable().optional(),
+    })),
+    responseTime: z.number(),
+  })),
+}).openapi('ValidatedPreSearchData');
+
+export type ValidatedPreSearchData = z.infer<typeof ValidatedPreSearchDataSchema>;
 
 // ============================================================================
 // PRE-SEARCH API SCHEMAS
@@ -818,21 +888,6 @@ export const RoundFeedbackDataSchema = chatRoundFeedbackSelectSchema
   .openapi('RoundFeedbackData');
 
 export type RoundFeedbackData = z.infer<typeof RoundFeedbackDataSchema>;
-
-// ============================================================================
-// WEB SEARCH QUERY GENERATION SCHEMAS
-// ============================================================================
-
-/**
- * Single search query schema for AI-generated web searches
- */
-export const SearchQuerySchema = z.object({
-  query: z.string().min(1).max(200).describe('Search query optimized for web search engines'),
-  rationale: z.string().min(1).max(300).describe('Brief explanation of what this query will help find'),
-  searchDepth: z.enum(['basic', 'advanced']).describe('Search depth - basic for quick facts, advanced for comprehensive research'),
-}).openapi('SearchQuery');
-
-export type SearchQuery = z.infer<typeof SearchQuerySchema>;
 
 // ============================================================================
 // PRE-SEARCH STREAMING DATA SCHEMAS

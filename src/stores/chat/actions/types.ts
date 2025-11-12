@@ -12,7 +12,6 @@
 import { z } from 'zod';
 
 import { AnalysisStatusSchema } from '@/api/core/enums';
-import type { StoredModeratorAnalysis } from '@/api/routes/chat/schema';
 import { chatParticipantSelectSchema } from '@/db/validation/chat';
 
 /**
@@ -72,43 +71,6 @@ export type AnalysesCacheData = z.infer<typeof AnalysesCacheDataSchema>;
 export function validateAnalysesCache(data: unknown): AnalysesCacheData | undefined {
   const result = AnalysesCacheDataSchema.safeParse(data);
   return result.success ? result.data : undefined;
-}
-
-/**
- * Helper to transform analyses cache with type safety
- *
- * @param data - Raw cache data
- * @param transformer - Function to transform items array
- * @returns Updated cache data or original data if invalid
- *
- * @example
- * ```typescript
- * queryClient.setQueryData(queryKey, (oldData) =>
- *   transformAnalysesCache(oldData, (items) =>
- *     items.map(item =>
- *       item.id === analysisId ? { ...item, status: 'complete' } : item
- *     )
- *   )
- * );
- * ```
- */
-export function transformAnalysesCache(
-  data: unknown,
-  transformer: (items: StoredModeratorAnalysis[]) => StoredModeratorAnalysis[],
-): AnalysesCacheData | unknown {
-  const validated = validateAnalysesCache(data);
-  if (!validated) {
-    return data; // Return original if validation fails (graceful degradation)
-  }
-
-  const transformedItems = transformer(validated.data.items as StoredModeratorAnalysis[]);
-  return {
-    ...validated,
-    data: {
-      ...validated.data,
-      items: transformedItems,
-    },
-  };
 }
 
 /**

@@ -26,7 +26,7 @@ type WebSearchDisplayProps = {
 // Export the flat version as default (no nested cards)
 export { WebSearchFlatDisplay as default } from './web-search-flat-display';
 
-// Keep the original display component for backward compatibility
+// Card-based display component (alternative to flat display)
 export function WebSearchDisplay({ results, className, meta }: WebSearchDisplayProps) {
   const t = useTranslations('chat.tools.webSearch');
   const [isOpen, setIsOpen] = useState(true);

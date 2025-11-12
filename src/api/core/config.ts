@@ -16,6 +16,8 @@
 
 import { z } from 'zod';
 
+import { EnvironmentSchema } from '@/api/core/enums';
+
 // Inline validation utilities to avoid server-side imports on client
 const ValidationUtils = {
   string: {
@@ -23,7 +25,7 @@ const ValidationUtils = {
     url: () => z.string().url(),
     email: () => z.string().email(),
   },
-  environmentValidator: z.enum(['development', 'production', 'test', 'preview', 'local']),
+  environmentValidator: EnvironmentSchema,
   apiVersionValidator: z.enum(['v1', 'v2']),
   number: {
     percentage: () => z.number().min(0).max(100),
@@ -144,7 +146,7 @@ const storageEnvironmentSchema = z.object({
  */
 const monitoringEnvironmentSchema = z.object({
   // Logging configuration
-  LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
+  LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'failed']).default('info'),
   LOG_FORMAT: z.enum(['json', 'text']).default('json'),
   LOG_SENSITIVE_DATA: z.boolean().default(false),
 
@@ -337,6 +339,36 @@ export const FEATURE_FLAGS = {
   ENABLE_PERFORMANCE_MONITORING: false,
 } as const;
 
+/**
+ * SSE Streaming configuration
+ *
+ * Timeout protection prevents orphaned streaming records when:
+ * - User navigates away during stream
+ * - Network connection drops
+ * - Browser closes/refreshes during stream
+ *
+ * After timeout, STREAMING records are marked as FAILED to allow new streams
+ */
+export const STREAMING_CONFIG = {
+  /**
+   * Stream timeout in milliseconds (20 seconds)
+   * Applied to: moderator analysis, pre-search execution
+   *
+   * Rationale: SSE connections can get interrupted without backend knowing
+   * After 20s, assume connection lost and mark as failed for recovery
+   */
+  STREAM_TIMEOUT_MS: 20_000,
+
+  /**
+   * Orphan cleanup timeout in milliseconds (2 minutes)
+   * Applied to: cleanup operations in list endpoints
+   *
+   * Rationale: Grace period for legitimate long-running operations
+   * Used by getThreadAnalysesHandler, getThreadPreSearchesHandler
+   */
+  ORPHAN_CLEANUP_TIMEOUT_MS: 2 * 60 * 1000,
+} as const;
+
 // ============================================================================
 // PARSED CONFIGURATION
 // ============================================================================
@@ -389,7 +421,7 @@ export function isPreview(): boolean {
 /**
  * Get the current environment
  */
-export function getEnvironment(): 'development' | 'preview' | 'production' | 'test' | 'local' {
+export function getEnvironment(): import('@/api/core/enums').Environment {
   return getConfigValue('NEXT_PUBLIC_WEBAPP_ENV');
 }
 

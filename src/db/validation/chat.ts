@@ -16,6 +16,7 @@ import {
   chatMessage,
   chatModeratorAnalysis,
   chatParticipant,
+  chatPreSearch,
   chatRoundFeedback,
   chatThread,
   chatThreadChangelog,
@@ -99,6 +100,17 @@ export const chatModeratorAnalysisInsertSchema = createInsertSchema(chatModerato
 export const chatModeratorAnalysisUpdateSchema = createUpdateSchema(chatModeratorAnalysis);
 
 /**
+ * Pre-Search Schemas
+ * Web search results executed before participant streaming
+ */
+export const chatPreSearchSelectSchema = createSelectSchema(chatPreSearch);
+export const chatPreSearchInsertSchema = createInsertSchema(chatPreSearch, {
+  roundNumber: Refinements.positive(),
+  userQuery: Refinements.content(),
+});
+export const chatPreSearchUpdateSchema = createUpdateSchema(chatPreSearch);
+
+/**
  * Round Feedback Schemas
  * User feedback (like/dislike) for conversation rounds
  */
@@ -137,6 +149,10 @@ export type ChatCustomRoleUpdate = z.infer<typeof chatCustomRoleUpdateSchema>;
 export type ChatModeratorAnalysis = z.infer<typeof chatModeratorAnalysisSelectSchema>;
 export type ChatModeratorAnalysisInsert = z.infer<typeof chatModeratorAnalysisInsertSchema>;
 export type ChatModeratorAnalysisUpdate = z.infer<typeof chatModeratorAnalysisUpdateSchema>;
+
+export type ChatPreSearch = z.infer<typeof chatPreSearchSelectSchema>;
+export type ChatPreSearchInsert = z.infer<typeof chatPreSearchInsertSchema>;
+export type ChatPreSearchUpdate = z.infer<typeof chatPreSearchUpdateSchema>;
 
 export type ChatRoundFeedback = z.infer<typeof chatRoundFeedbackSelectSchema>;
 export type ChatRoundFeedbackInsert = z.infer<typeof chatRoundFeedbackInsertSchema>;

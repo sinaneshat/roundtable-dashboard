@@ -17,11 +17,14 @@ import type Stripe from 'stripe';
 import { executeBatch } from '@/api/common/batch-operations';
 import { createError } from '@/api/common/error-handling';
 import type { ErrorContext } from '@/api/core';
+import { StripeSubscriptionStatusSchema } from '@/api/core/enums';
+import type { StripeSubscriptionStatus } from '@/api/core/enums';
 import { stripeService } from '@/api/services/stripe.service';
 import { syncUserQuotaFromSubscription } from '@/api/services/usage-tracking.service';
 import { getDbAsync } from '@/db';
 import { CustomerCacheTags, getUserSubscriptionCacheTags } from '@/db/cache/cache-tags';
 import * as tables from '@/db/schema';
+import { hasBillingCycleAnchor, hasPeriodTimestamps, isObject, isStripePaymentMethod, safeParse } from '@/lib/utils/type-guards';
 
 /**
  * Calculate period end date based on start date and interval
@@ -53,7 +56,7 @@ function calculatePeriodEnd(
  */
 export type SyncedSubscriptionState
   = | {
-    status: 'active' | 'past_due' | 'unpaid' | 'canceled' | 'incomplete' | 'incomplete_expired' | 'trialing' | 'paused';
+    status: StripeSubscriptionStatus;
     subscriptionId: string;
     priceId: string;
     productId: string;
@@ -185,11 +188,14 @@ export async function syncStripeDataFromStripe(
   // Extract payment method details
   let paymentMethod: { brand: string | null; last4: string | null } | null = null;
   if (subscription.default_payment_method && typeof subscription.default_payment_method !== 'string') {
-    const pm = subscription.default_payment_method as Stripe.PaymentMethod;
-    paymentMethod = {
-      brand: pm.card?.brand ?? null,
-      last4: pm.card?.last4 ?? null,
-    };
+    // ✅ TYPE GUARD: Validate Stripe PaymentMethod structure
+    const pm = subscription.default_payment_method;
+    if (isStripePaymentMethod(pm)) {
+      paymentMethod = {
+        brand: pm.card?.brand ?? null,
+        last4: pm.card?.last4 ?? null,
+      };
+    }
   }
 
   // Extract period timestamps
@@ -198,42 +204,29 @@ export async function syncStripeDataFromStripe(
   let currentPeriodStart: number;
   let currentPeriodEnd: number;
 
-  const subWithPeriod = subscription as Stripe.Subscription & {
-    current_period_start?: number;
-    current_period_end?: number;
-  };
-
-  if (subWithPeriod.current_period_start && subWithPeriod.current_period_end) {
+  // ✅ TYPE GUARD: Check for period timestamps on subscription
+  if (hasPeriodTimestamps(subscription) && subscription.current_period_start && subscription.current_period_end) {
     // Traditional subscription structure
-    currentPeriodStart = subWithPeriod.current_period_start;
-    currentPeriodEnd = subWithPeriod.current_period_end;
-  } else {
-    // Intentionally empty
+    currentPeriodStart = subscription.current_period_start;
+    currentPeriodEnd = subscription.current_period_end;
+  } else if (hasPeriodTimestamps(firstItem) && firstItem.current_period_start && firstItem.current_period_end) {
     // Flexible billing mode - get from subscription item
-    const itemWithPeriod = firstItem as typeof firstItem & {
-      current_period_start?: number;
-      current_period_end?: number;
-    };
+    currentPeriodStart = firstItem.current_period_start;
+    currentPeriodEnd = firstItem.current_period_end;
+  } else {
+    // Fallback to billing_cycle_anchor and calculate end date
+    const billingCycleAnchor = hasBillingCycleAnchor(subscription) ? subscription.billing_cycle_anchor : undefined;
+    const interval = price.recurring?.interval || 'month';
+    const intervalCount = price.recurring?.interval_count || 1;
 
-    if (itemWithPeriod.current_period_start && itemWithPeriod.current_period_end) {
-      currentPeriodStart = itemWithPeriod.current_period_start;
-      currentPeriodEnd = itemWithPeriod.current_period_end;
+    if (billingCycleAnchor) {
+      currentPeriodStart = billingCycleAnchor;
+      currentPeriodEnd = calculatePeriodEnd(billingCycleAnchor, interval, intervalCount);
     } else {
-    // Intentionally empty
-      // Fallback to billing_cycle_anchor and calculate end date
-      const billingCycleAnchor = (subscription as typeof subscription & { billing_cycle_anchor?: number }).billing_cycle_anchor;
-      const interval = price.recurring?.interval || 'month';
-      const intervalCount = price.recurring?.interval_count || 1;
-
-      if (billingCycleAnchor) {
-        currentPeriodStart = billingCycleAnchor;
-        currentPeriodEnd = calculatePeriodEnd(billingCycleAnchor, interval, intervalCount);
-      } else {
-        // Intentionally empty
-        // Last resort: use subscription creation date
-        currentPeriodStart = subscription.created;
-        currentPeriodEnd = calculatePeriodEnd(subscription.created, interval, intervalCount);
-      }
+      // Intentionally empty
+      // Last resort: use subscription creation date
+      currentPeriodStart = subscription.created;
+      currentPeriodEnd = calculatePeriodEnd(subscription.created, interval, intervalCount);
     }
   }
 
@@ -285,6 +278,7 @@ export async function syncStripeDataFromStripe(
     });
   }
 
+  // ✅ TYPE GUARD: Check for deleted customer
   if ('deleted' in stripeCustomer && stripeCustomer.deleted) {
     throw createError.notFound(`Customer ${customerId} has been deleted in Stripe`, {
       errorType: 'external_service',
@@ -294,6 +288,8 @@ export async function syncStripeDataFromStripe(
     });
   }
 
+  // After deletion check, we know this is a valid Customer object
+  // Type assertion is safe here since Stripe API guarantees the type after deletion check
   const customerData = stripeCustomer as Stripe.Customer;
 
   // Prepare customer update operation
@@ -324,7 +320,8 @@ export async function syncStripeDataFromStripe(
     endedAt: subscription.ended_at ? new Date(subscription.ended_at * 1000) : null,
     trialStart: subscription.trial_start ? new Date(subscription.trial_start * 1000) : null,
     trialEnd: subscription.trial_end ? new Date(subscription.trial_end * 1000) : null,
-    metadata: subscription.metadata as Record<string, string> | null,
+    // ✅ TYPE GUARD: Validate metadata is Record<string, string> or null
+    metadata: isObject(subscription.metadata) ? subscription.metadata as Record<string, string> : null,
     createdAt: new Date(subscription.created * 1000),
     updatedAt: new Date(),
   }).onConflictDoUpdate({
@@ -341,21 +338,22 @@ export async function syncStripeDataFromStripe(
       endedAt: subscription.ended_at ? new Date(subscription.ended_at * 1000) : null,
       trialStart: subscription.trial_start ? new Date(subscription.trial_start * 1000) : null,
       trialEnd: subscription.trial_end ? new Date(subscription.trial_end * 1000) : null,
-      metadata: subscription.metadata as Record<string, string> | null,
+      // ✅ TYPE GUARD: Validate metadata is Record<string, string> or null
+      metadata: isObject(subscription.metadata) ? subscription.metadata as Record<string, string> : null,
       updatedAt: new Date(),
     },
   });
 
   // Prepare invoice upsert operations
   const invoiceUpserts = invoices.data.map((invoice) => {
-    // Extract subscription ID (can be string or Stripe.Subscription object or null)
-    const invoiceData = invoice as Stripe.Invoice & {
-      subscription?: string | Stripe.Subscription | null;
-    };
-    const subscriptionId = invoiceData.subscription
-      ? typeof invoiceData.subscription === 'string'
-        ? invoiceData.subscription
-        : invoiceData.subscription?.id ?? null
+    // ✅ TYPE GUARD: Extract subscription ID (can be string or Stripe.Subscription object or null)
+    const subscription = (invoice as Stripe.Invoice & { subscription?: string | Stripe.Subscription | null }).subscription;
+    const subscriptionId = subscription
+      ? typeof subscription === 'string'
+        ? subscription
+        : isObject(subscription) && 'id' in subscription
+          ? String(subscription.id)
+          : null
       : null;
 
     const isPaid = invoice.status === 'paid';
@@ -441,10 +439,20 @@ export async function syncStripeDataFromStripe(
   // Sync user quotas based on subscription changes
   // Handles upgrades (compounds quotas), downgrades, cancellations, and billing period resets
   // Following Theo's pattern: Always pass fresh Stripe data
+
+  // ✅ TYPE GUARD: Validate subscription status with Zod schema
+  const validatedStatus = safeParse(StripeSubscriptionStatusSchema, subscription.status);
+  if (!validatedStatus) {
+    throw createError.internal(`Invalid subscription status: ${subscription.status}`, {
+      errorType: 'validation',
+      field: 'subscription.status',
+    });
+  }
+
   await syncUserQuotaFromSubscription(
     customer.userId,
     price.id,
-    subscription.status as 'active' | 'trialing' | 'canceled' | 'past_due' | 'unpaid' | 'paused' | 'none',
+    validatedStatus,
     new Date(currentPeriodStart * 1000),
     new Date(currentPeriodEnd * 1000),
   );

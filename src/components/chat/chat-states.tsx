@@ -19,6 +19,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { EncryptedText } from '@/components/ui/encrypted-text';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { FadeIn, PageTransition } from '@/components/ui/motion';
 import { cn } from '@/lib/ui/cn';
@@ -47,9 +48,15 @@ export function LoadingState({
   }
   if (variant === 'inline') {
     return (
-      <div className={cn('flex items-center gap-2 text-sm text-muted-foreground', className)}>
+      <div className={cn('flex items-center gap-2 text-sm', className)}>
         <LoadingSpinner className="h-4 w-4" />
-        <span>{defaultTitle}</span>
+        <EncryptedText
+          text={defaultTitle}
+          revealDelayMs={30}
+          flipDelayMs={40}
+          encryptedClassName="text-muted-foreground/40"
+          revealedClassName="text-muted-foreground"
+        />
       </div>
     );
   }
@@ -106,10 +113,22 @@ export function LoadingState({
             </div>
             <div className="space-y-3">
               <h3 className={cn(config.title, 'font-medium')}>
-                {defaultTitle}
+                <EncryptedText
+                  text={defaultTitle}
+                  revealDelayMs={25}
+                  flipDelayMs={35}
+                  encryptedClassName="text-muted-foreground/40"
+                  revealedClassName="text-foreground"
+                />
               </h3>
-              <p className="text-sm text-muted-foreground max-w-md mx-auto">
-                {defaultMessage}
+              <p className="text-sm max-w-md mx-auto">
+                <EncryptedText
+                  text={defaultMessage}
+                  revealDelayMs={30}
+                  flipDelayMs={40}
+                  encryptedClassName="text-muted-foreground/40"
+                  revealedClassName="text-muted-foreground"
+                />
               </p>
             </div>
           </div>
@@ -123,9 +142,25 @@ export function LoadingState({
         <div className="text-center py-12">
           <div className="flex items-center justify-center mb-4">
             <LoadingSpinner className="h-8 w-8 me-2" />
-            <span className="text-xl font-medium">{defaultTitle}</span>
+            <span className="text-xl font-medium">
+              <EncryptedText
+                text={defaultTitle}
+                revealDelayMs={25}
+                flipDelayMs={35}
+                encryptedClassName="text-muted-foreground/40"
+                revealedClassName="text-foreground"
+              />
+            </span>
           </div>
-          <p className="text-muted-foreground">{defaultMessage}</p>
+          <p>
+            <EncryptedText
+              text={defaultMessage}
+              revealDelayMs={30}
+              flipDelayMs={40}
+              encryptedClassName="text-muted-foreground/40"
+              revealedClassName="text-muted-foreground"
+            />
+          </p>
         </div>
       </FadeIn>
     </PageTransition>
@@ -137,7 +172,7 @@ type ErrorStateProps = {
   onRetry?: () => void;
   retryLabel?: string;
   variant?: 'alert' | 'card' | 'network' | 'boundary';
-  severity?: 'error' | 'warning' | 'info';
+  severity?: 'failed' | 'warning' | 'info';
   networkType?: 'offline' | 'timeout' | 'connection';
   className?: string;
   icon?: ReactNode;
@@ -148,7 +183,7 @@ export function ErrorState({
   onRetry,
   retryLabel,
   variant = 'card',
-  severity = 'error',
+  severity = 'failed',
   networkType = 'connection',
   className,
   icon,
@@ -179,7 +214,7 @@ export function ErrorState({
     },
   };
   const severityConfig = {
-    error: {
+    failed: {
       icon: XCircle,
       title: t('states.error.default'),
       description: t('states.error.description'),

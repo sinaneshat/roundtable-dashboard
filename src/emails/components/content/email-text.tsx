@@ -1,14 +1,15 @@
 import { Text } from '@react-email/components';
 import type { CSSProperties, ReactNode } from 'react';
 
+import type { EmailColor, EmailTextWeight, TextAlignment } from '@/api/core/enums';
 import { colors, typography } from '@/emails/design-tokens';
 
 type EmailTextProps = {
   children: ReactNode;
   size?: 'sm' | 'base' | 'lg';
-  weight?: 'normal' | 'medium' | 'semibold' | 'bold';
-  color?: 'primary' | 'secondary' | 'muted' | 'white' | 'error';
-  align?: 'left' | 'center' | 'right';
+  weight?: EmailTextWeight;
+  color?: EmailColor;
+  align?: TextAlignment;
   style?: CSSProperties;
 };
 
