@@ -257,26 +257,26 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
     }
 
     // ✅ CRITICAL FIX: Wait for pre-search completion before streaming participants
-    // If web search enabled, check pre-search status for round 1
+    // ✅ 0-BASED: Check pre-search status for round 0 (first round)
     const webSearchEnabled = storeThread?.enableWebSearch ?? false;
     if (webSearchEnabled) {
-      const round1PreSearch = storePreSearches.find(ps => ps.roundNumber === 1);
+      const round0PreSearch = storePreSearches.find(ps => ps.roundNumber === 0);
 
-      // ✅ FIX: If pre-search doesn't exist yet, wait for orchestrator to sync it
+      // If pre-search doesn't exist yet, wait for orchestrator to sync it
       // Backend creates PENDING pre-search during thread creation, orchestrator syncs it
-      if (!round1PreSearch) {
-        console.error(`[Provider] Pre-search blocking error - orchestrator hasn't synced pre-search yet (round 1 not found in store)`);
+      if (!round0PreSearch) {
         return; // Don't trigger participants yet - waiting for pre-search to be synced
       }
 
       // If pre-search exists and is still pending or streaming, wait
-      if (round1PreSearch.status === AnalysisStatuses.PENDING || round1PreSearch.status === AnalysisStatuses.STREAMING) {
+      if (round0PreSearch.status === AnalysisStatuses.PENDING || round0PreSearch.status === AnalysisStatuses.STREAMING) {
         return; // Don't trigger participants yet - pre-search still running
       }
 
-      // ✅ ERROR: If pre-search failed, log it
-      if (round1PreSearch.status === AnalysisStatuses.FAILED) {
-        console.error(`[Provider] Pre-search failed - id:${round1PreSearch.id} error:${round1PreSearch.errorMessage || 'Unknown error'}`);
+      // ✅ ERROR: If pre-search failed, log error and proceed anyway
+      if (round0PreSearch.status === AnalysisStatuses.FAILED) {
+        console.error(`[Provider] Pre-search failed for round 0 - id:${round0PreSearch.id} threadId:${storeThread?.id} error:${round0PreSearch.errorMessage || 'Unknown error'}`);
+        // Continue to start participants even if pre-search failed
       }
     }
 

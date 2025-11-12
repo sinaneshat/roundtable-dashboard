@@ -92,7 +92,7 @@ export const ErrorMetadataSchema = z.object({
   retryAfter: z.number().optional(),
   modelId: z.string().optional(),
   participantId: z.string().optional(),
-  roundNumber: z.number().int().positive().optional(),
+  roundNumber: z.number().int().nonnegative().optional(), // ✅ 0-BASED: Allow round 0
 });
 
 export type ErrorMetadata = z.infer<typeof ErrorMetadataSchema>;

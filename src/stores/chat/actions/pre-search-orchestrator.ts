@@ -24,7 +24,7 @@ import type { StoredPreSearch } from '@/api/routes/chat/schema';
 import { useThreadPreSearchesQuery } from '@/hooks/queries/chat/pre-search';
 import { transformPreSearches } from '@/lib/utils/date-transforms';
 
-import { getStatusPriority } from '../store-constants';
+import { getStatusPriority, PRE_SEARCH_COMPARE_KEYS } from '../store-constants';
 import type { OrchestratorOptions, OrchestratorReturn } from './orchestrator-factory';
 import { createOrchestrator } from './orchestrator-factory';
 
@@ -51,5 +51,7 @@ export const usePreSearchOrchestrator = createOrchestrator<StoredPreSearch, Stor
   transformItems: transformPreSearches,
   getItemKey: item => item.roundNumber,
   getItemPriority: item => getStatusPriority(item.status),
-  compareKeys: ['roundNumber', 'status', 'id', 'searchData'],
+  // ✅ TYPE-SAFE: Use shared constant from store-constants.ts
+  // Ensures consistency across orchestrator and prevents drift from component dependencies
+  compareKeys: [...PRE_SEARCH_COMPARE_KEYS],
 });

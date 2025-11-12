@@ -179,7 +179,7 @@ export function hasRoundSummaryContent(
  * ALL required fields to be present and valid according to schema.
  *
  * Schema Requirements (enforced by Zod):
- * - roundNumber: Required integer ≥ 1
+ * - roundNumber: Required integer ≥ 0 (✅ 0-BASED: First round is 0)
  * - mode: Required string
  * - userQuestion: Required string
  * - participantAnalyses: Required array with ≥ 1 item

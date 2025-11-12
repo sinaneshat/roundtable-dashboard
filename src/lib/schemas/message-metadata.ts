@@ -67,7 +67,7 @@ export type ErrorType = z.infer<typeof ErrorTypeSchema>;
  * isParticipantTrigger: Transient flag for triggering participant streaming (not persisted to DB)
  */
 export const UserMessageMetadataSchema = z.object({
-  roundNumber: z.number().int().positive(),
+  roundNumber: z.number().int().nonnegative(), // ✅ 0-BASED: Allow round 0
   createdAt: z.string().datetime().optional(),
   isParticipantTrigger: z.boolean().optional(), // Frontend-only flag for triggering participants
 });
@@ -270,7 +270,7 @@ export type PreSearchStreamEvent = z.infer<typeof PreSearchStreamEventSchema>;
  */
 export const PreSearchMessageMetadataSchema = z.object({
   role: z.literal('system'),
-  roundNumber: z.number().int().positive(),
+  roundNumber: z.number().int().nonnegative(), // ✅ 0-BASED: Allow round 0
   isPreSearch: z.literal(true),
   preSearch: PreSearchMetadataSchema,
   createdAt: z.string().datetime().optional(),
@@ -288,7 +288,7 @@ export type PreSearchMessageMetadata = z.infer<typeof PreSearchMessageMetadataSc
  */
 const AssistantMessageMetadataCoreSchema = z.object({
   // Round tracking - REQUIRED
-  roundNumber: z.number().int().positive(),
+  roundNumber: z.number().int().nonnegative(), // ✅ 0-BASED: Allow round 0
 
   // Participant tracking - REQUIRED for assistant messages
   participantId: z.string().min(1), // Must be valid ULID
@@ -494,7 +494,7 @@ export function getRoundNumber(metadata: MessageMetadata): number {
  */
 export const PartialUserMetadataSchema = z.object({
   role: z.literal('user'),
-  roundNumber: z.number().int().positive(),
+  roundNumber: z.number().int().nonnegative(), // ✅ 0-BASED: Allow round 0
   createdAt: z.string().datetime().optional(),
 });
 
@@ -512,7 +512,7 @@ export const PartialAssistantMetadataSchema = z.object({
   role: z.literal('assistant'),
 
   // Required fields for partial metadata
-  roundNumber: z.number().int().positive(),
+  roundNumber: z.number().int().nonnegative(), // ✅ 0-BASED: Allow round 0
   participantId: z.string().min(1),
 
   // All other fields from AssistantMessageMetadata are optional

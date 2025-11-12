@@ -23,7 +23,7 @@ export function ModeratorRoundTrigger({
     <ChainOfThought defaultOpen={defaultOpen} disabled={isStreaming}>
       <ChainOfThoughtHeader>
         <span className="font-medium">
-          {t('roundAnalysis', { number: analysis.roundNumber })}
+          {t('roundAnalysis', { number: analysis.roundNumber + 1 })}
         </span>
       </ChainOfThoughtHeader>
       <ChainOfThoughtContent>

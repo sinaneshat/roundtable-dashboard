@@ -125,7 +125,7 @@ export function buildParticipantSystemPrompt(role?: string | null): string {
  * @returns JSON structure template matching ModeratorAnalysisPayloadSchema
  */
 export const MODERATOR_ANALYSIS_JSON_STRUCTURE = {
-  roundNumber: 1,
+  roundNumber: 0, // ✅ 0-BASED: Example showing first round
   mode: 'analyzing',
   userQuestion: 'string',
   leaderboard: [{

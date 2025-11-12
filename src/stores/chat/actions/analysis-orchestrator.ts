@@ -28,7 +28,7 @@ import type { ChatModeId } from '@/lib/config/chat-modes';
 import { deduplicateAnalyses } from '@/lib/utils/analysis-utils';
 import { transformModeratorAnalyses } from '@/lib/utils/date-transforms';
 
-import { getStatusPriority } from '../store-constants';
+import { getStatusPriority, MODERATOR_ANALYSIS_COMPARE_KEYS } from '../store-constants';
 import type { OrchestratorOptions, OrchestratorReturn } from './orchestrator-factory';
 import { createOrchestrator } from './orchestrator-factory';
 
@@ -67,6 +67,7 @@ export const useAnalysisOrchestrator = createOrchestrator<StoredModeratorAnalysi
   transformItems: transformModeratorAnalyses,
   getItemKey: item => item.roundNumber,
   getItemPriority: item => getStatusPriority(item.status),
-  compareKeys: ['roundNumber', 'status', 'id', 'analysisData'],
+  // ✅ TYPE-SAFE: Use shared constant from store-constants.ts
+  compareKeys: [...MODERATOR_ANALYSIS_COMPARE_KEYS],
   deduplicationHook: deduplicateWithStoreContext,
 });

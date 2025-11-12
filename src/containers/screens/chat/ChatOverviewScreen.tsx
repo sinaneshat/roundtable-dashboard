@@ -199,11 +199,12 @@ export default function ChatOverviewScreen() {
   );
 
   // Check if first round is incomplete
+  // ✅ 0-BASED: First round is round 0
   const firstRoundIncomplete = useMemo(() => {
-    if (!analyses[0] || analyses[0].roundNumber !== 1) {
+    if (!analyses[0] || analyses[0].roundNumber !== 0) {
       return false;
     }
-    return isRoundIncomplete(messages, contextParticipants, 1);
+    return isRoundIncomplete(messages, contextParticipants, 0);
   }, [messages, contextParticipants, analyses]);
 
   // Handle retry for incomplete/failed rounds
@@ -472,10 +473,11 @@ export default function ChatOverviewScreen() {
 
                   {/* Pre-search progress - unified container for streaming & hydrated states */}
                   {/* ✅ CONDITIONAL: Only show if web search is enabled for this thread */}
-                  {createdThreadId && currentThread?.enableWebSearch && preSearches.find(ps => ps.roundNumber === 1) && (
+                  {/* ✅ 0-BASED: First round is round 0 */}
+                  {createdThreadId && currentThread?.enableWebSearch && preSearches.find(ps => ps.roundNumber === 0) && (
                     <PreSearchCard
                       threadId={createdThreadId}
-                      preSearch={preSearches.find(ps => ps.roundNumber === 1)!}
+                      preSearch={preSearches.find(ps => ps.roundNumber === 0)!}
                       isLatest
                       streamingRoundNumber={streamingRoundNumber}
                     />

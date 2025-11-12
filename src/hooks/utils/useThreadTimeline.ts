@@ -96,9 +96,10 @@ export function useThreadTimeline({
 }: UseThreadTimelineOptions): TimelineItem[] {
   return useMemo(() => {
     // STEP 1: Group messages by round number
+    // ✅ 0-BASED: Default round is 0
     const messagesByRound = new Map<number, UIMessage[]>();
     messages.forEach((message) => {
-      const roundNumber = getRoundNumberFromMetadata(message.metadata, 1);
+      const roundNumber = getRoundNumberFromMetadata(message.metadata, 0);
 
       if (!messagesByRound.has(roundNumber)) {
         messagesByRound.set(roundNumber, []);
@@ -107,9 +108,10 @@ export function useThreadTimeline({
     });
 
     // STEP 2: Group changelog by round number
+    // ✅ 0-BASED: Default round is 0
     const changelogByRound = new Map<number, ChangelogItem[]>();
     changelog.forEach((change) => {
-      const roundNumber = change.roundNumber || 1;
+      const roundNumber = change.roundNumber ?? 0;
 
       if (!changelogByRound.has(roundNumber)) {
         changelogByRound.set(roundNumber, []);

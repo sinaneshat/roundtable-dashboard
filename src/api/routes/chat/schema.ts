@@ -653,7 +653,7 @@ const ChangelogListPayloadSchema = z.object({
 export const ChangelogListResponseSchema = createApiResponseSchema(ChangelogListPayloadSchema).openapi('ChangelogListResponse');
 export const CreateChangelogParamsSchema = z.object({
   threadId: CoreSchemas.id(),
-  roundNumber: z.number().int().positive(),
+  roundNumber: z.number().int().nonnegative(), // ✅ 0-BASED: Allow round 0
   changeType: ChangelogTypeSchema,
   changeSummary: z.string().min(1).max(500),
   changeData: z.record(z.string(), z.unknown()).optional(),
@@ -755,7 +755,7 @@ export const RoundSummarySchema = z.object({
 }).openapi('RoundSummary');
 
 export const ModeratorAnalysisPayloadSchema = z.object({
-  roundNumber: z.number().int().min(1).describe('The conversation round number (starts at 1)'),
+  roundNumber: z.number().int().min(0).describe('The conversation round number (✅ 0-BASED: starts at 0)'),
   mode: z.string().describe('Conversation mode (analyzing, brainstorming, debating, solving)'),
   userQuestion: z.string().describe('The user\'s original question/prompt'),
   participantAnalyses: z.array(ParticipantAnalysisSchema).min(1).describe('Detailed analysis for each participant'),
@@ -854,8 +854,8 @@ export const RoundFeedbackParamSchema = z.object({
     example: 'thread_abc123',
   }),
   roundNumber: z.string().openapi({
-    description: 'Round number (1-indexed)',
-    example: '1',
+    description: 'Round number (✅ 0-BASED: first round is 0)',
+    example: '0',
   }),
 });
 export const RoundFeedbackRequestSchema = chatRoundFeedbackUpdateSchema

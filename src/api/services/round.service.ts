@@ -8,6 +8,7 @@
  * - Round number calculation based on message history
  * - Round regeneration logic
  * - Participant trigger detection (empty messages that reuse rounds)
+ * - ✅ 0-BASED INDEXING: First round is round 0, first participant is p0
  */
 
 import { and, desc, eq } from 'drizzle-orm';
@@ -83,7 +84,8 @@ export async function calculateRoundNumber(
     // Frontend calculates correctly using calculateNextRoundNumber()
     const frontendRoundNumber = metadata?.roundNumber;
 
-    if (typeof frontendRoundNumber === 'number' && frontendRoundNumber >= 1) {
+    // ✅ 0-BASED: Round numbers start at 0
+    if (typeof frontendRoundNumber === 'number' && frontendRoundNumber >= 0) {
       // Frontend provided explicit round number - trust it
       return {
         roundNumber: frontendRoundNumber,
@@ -111,11 +113,13 @@ export async function calculateRoundNumber(
       limit: 1,
     });
 
-    const lastRoundNumber = existingUserMessages[0]?.roundNumber || 0;
+    // ✅ 0-BASED: Default to -1 so first round becomes 0
+    const lastRoundNumber = existingUserMessages[0]?.roundNumber ?? -1;
 
     // If trigger message (empty OR flagged), reuse last round number
     // If real message with content, increment to new round
-    if ((isParticipantTrigger || textContent.length === 0) && lastRoundNumber > 0) {
+    // ✅ 0-BASED: Allow round 0 (lastRoundNumber >= 0 instead of > 0)
+    if ((isParticipantTrigger || textContent.length === 0) && lastRoundNumber >= 0) {
       return {
         roundNumber: lastRoundNumber,
         isRegeneration: false,
@@ -123,6 +127,7 @@ export async function calculateRoundNumber(
       };
     }
 
+    // ✅ 0-BASED: First round is 0 (lastRoundNumber -1 + 1 = 0)
     return {
       roundNumber: lastRoundNumber + 1,
       isRegeneration: false,

@@ -54,8 +54,8 @@ const ChangelogEntrySchema = z.object({
 export const ModeratorPromptConfigSchema = z.object({
   /** Conversation mode */
   mode: z.enum(CHAT_MODES),
-  /** Round number (1-indexed) */
-  roundNumber: z.number().int().positive(),
+  /** Round number (✅ 0-BASED: First round is 0) */
+  roundNumber: z.number().int().nonnegative(), // ✅ 0-BASED: Allow 0
   /** User's original question for THIS round */
   userQuestion: z.string().min(1),
   /** Participant responses for THIS round ONLY (round-specific analysis) */
@@ -408,8 +408,9 @@ export function buildModeratorUserPrompt(config: ModeratorPromptConfig): string 
   const sections: string[] = [];
 
   // 1. CONTEXT
+  // ✅ 0-BASED: Display as "Round 1" for first round (roundNumber 0)
   sections.push(
-    `# Round ${roundNumber} Analysis - ${mode.charAt(0).toUpperCase() + mode.slice(1)} Discussion`,
+    `# Round ${roundNumber + 1} Analysis - ${mode.charAt(0).toUpperCase() + mode.slice(1)} Discussion`,
     '',
     'Analyze only this round\'s participant responses.',
     '',

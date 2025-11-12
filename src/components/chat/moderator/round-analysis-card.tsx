@@ -156,7 +156,7 @@ export function RoundAnalysisCard({
           <div className="flex items-center gap-2.5 w-full">
             <Clock className="size-4 text-muted-foreground flex-shrink-0" />
             <span className="text-sm font-medium">
-              {t('roundAnalysis', { number: analysis.roundNumber })}
+              {t('roundAnalysis', { number: analysis.roundNumber + 1 })}
             </span>
             <Badge variant="outline" className={cn('text-xs h-6', config.color)}>
               {config.label}

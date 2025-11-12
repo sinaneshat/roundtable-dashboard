@@ -241,7 +241,7 @@ export function chatMessagesToUIMessages(
             ...buildAssistantMetadata(
               existingMetadata || {},
               {
-                roundNumber: currentRound || 1,
+                roundNumber: currentRound ?? 0, // ✅ 0-BASED: Default to round 0
                 participantId: participant.id,
                 model: participant.modelId,
                 participantRole: participant.role,
@@ -253,20 +253,20 @@ export function chatMessagesToUIMessages(
           enrichedMetadata = {
             ...(existingMetadata || {}),
             role: message.role,
-            roundNumber: currentRound || 1,
+            roundNumber: currentRound ?? 0, // ✅ 0-BASED: Default to round 0
           } as MessageMetadata;
         }
       } else {
         enrichedMetadata = {
           ...(existingMetadata || {}),
           role: message.role,
-          roundNumber: currentRound || 1,
+          roundNumber: currentRound ?? 0, // ✅ 0-BASED: Default to round 0
         } as MessageMetadata;
       }
     } else {
       enrichedMetadata = {
         role: message.role,
-        roundNumber: currentRound || 1,
+        roundNumber: currentRound ?? 0, // ✅ 0-BASED: Default to round 0
       } as MessageMetadata;
     }
 

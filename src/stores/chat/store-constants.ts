@@ -13,6 +13,7 @@
  */
 
 import type { AnalysisStatus } from '@/api/core/enums';
+import type { StoredModeratorAnalysis, StoredPreSearch } from '@/api/routes/chat/schema';
 
 /**
  * Priority order for analysis/pre-search status resolution
@@ -47,3 +48,32 @@ export function getHigherPriorityStatus(
 ): AnalysisStatus {
   return getStatusPriority(status1) >= getStatusPriority(status2) ? status1 : status2;
 }
+
+// ============================================================================
+// ORCHESTRATOR COMPARE KEYS - Type-safe field lists for state change detection
+// ============================================================================
+
+/**
+ * Compare keys for ModeratorAnalysis - Must match component dependencies
+ */
+export const MODERATOR_ANALYSIS_COMPARE_KEYS = [
+  'roundNumber',
+  'status',
+  'id',
+  'analysisData',
+  'errorMessage',
+] as const satisfies ReadonlyArray<keyof StoredModeratorAnalysis>;
+
+/**
+ * Compare keys for PreSearch - Must match PreSearchStream effect dependencies
+ * ✅ CRITICAL: Missing keys cause unnecessary re-renders → aborted streams
+ */
+export const PRE_SEARCH_COMPARE_KEYS = [
+  'roundNumber',
+  'status',
+  'id',
+  'searchData',
+  'userQuery',
+  'errorMessage',
+  'completedAt',
+] as const satisfies ReadonlyArray<keyof StoredPreSearch>;

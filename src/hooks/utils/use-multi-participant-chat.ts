@@ -34,7 +34,7 @@ const UseMultiParticipantChatOptionsSchema = z
     participants: ParticipantsArraySchema,
     messages: z.array(z.custom<UIMessage>()).optional(),
     mode: z.string().optional(),
-    regenerateRoundNumber: z.number().int().positive().optional(),
+    regenerateRoundNumber: z.number().int().nonnegative().optional(), // ✅ 0-BASED: Allow round 0
   })
   .passthrough(); // Allow callbacks to pass through without validation
 
@@ -213,8 +213,9 @@ export function useMultiParticipantChat(
   const regenerateRoundNumberRef = useRef<number | null>(regenerateRoundNumberParam || null);
 
   // Simple round tracking state - backend is source of truth
-  const [_currentRound, setCurrentRound] = useState(1);
-  const currentRoundRef = useRef<number>(1);
+  // ✅ 0-BASED: First round is round 0
+  const [_currentRound, setCurrentRound] = useState(0);
+  const currentRoundRef = useRef<number>(0);
 
   // Simple participant state - index-based iteration
   const [currentParticipantIndex, setCurrentParticipantIndex] = useState(0);

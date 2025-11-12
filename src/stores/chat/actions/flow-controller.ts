@@ -91,10 +91,11 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
    * Check if first analysis is completed
    * PRIMARY: Analysis status = 'complete'
    * FALLBACK: Timeout-based completion (safety net)
+   * ✅ 0-BASED: First round is round 0
    */
   const firstAnalysisCompleted = useMemo(() => {
     const firstAnalysis = analyses[0];
-    if (!firstAnalysis || firstAnalysis.roundNumber !== 1) {
+    if (!firstAnalysis || firstAnalysis.roundNumber !== 0) {
       return false;
     }
 
@@ -144,10 +145,11 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
   /**
    * Defensive fallback: Allow navigation when participants done + AI slug ready
    * Even if analysis is stuck, navigate after 15s timeout
+   * ✅ 0-BASED: First round is round 0
    */
   const canNavigateWithoutAnalysis = useMemo(() => {
     const firstAnalysis = analyses[0];
-    if (!firstAnalysis || firstAnalysis.roundNumber !== 1) {
+    if (!firstAnalysis || firstAnalysis.roundNumber !== 0) {
       return false;
     }
 

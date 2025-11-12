@@ -242,7 +242,7 @@ export const GenerateAnalysisInputSchema = z.object({
     description: 'Thread ID',
     example: 'thread_abc123',
   }),
-  roundNumber: z.number().int().positive().openapi({
+  roundNumber: z.number().int().nonnegative().openapi({ // ✅ 0-BASED: Allow round 0
     description: 'Round number to analyze',
     example: 1,
   }),
@@ -257,7 +257,7 @@ export const RegenerateRoundInputSchema = z.object({
     description: 'Thread ID',
     example: 'thread_abc123',
   }),
-  roundNumber: z.number().int().positive().openapi({
+  roundNumber: z.number().int().nonnegative().openapi({ // ✅ 0-BASED: Allow round 0
     description: 'Round number to regenerate',
     example: 1,
   }),
@@ -276,7 +276,7 @@ export const RoundFeedbackInputSchema = z.object({
     description: 'Thread ID',
     example: 'thread_abc123',
   }),
-  roundNumber: z.number().int().positive().openapi({
+  roundNumber: z.number().int().nonnegative().openapi({ // ✅ 0-BASED: Allow round 0
     description: 'Round number',
     example: 1,
   }),
@@ -334,7 +334,7 @@ export const GetRoundAnalysisInputSchema = z.object({
     description: 'Thread ID',
     example: 'thread_abc123',
   }),
-  roundNumber: z.number().int().positive().openapi({
+  roundNumber: z.number().int().nonnegative().openapi({ // ✅ 0-BASED: Allow round 0
     description: 'Round number',
     example: 1,
   }),

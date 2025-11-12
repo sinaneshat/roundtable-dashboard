@@ -175,9 +175,10 @@ export const chatThreadChangelog = sqliteTable('chat_thread_changelog', {
     .references(() => chatThread.id, { onDelete: 'cascade' }),
   // ✅ ROUND TRACKING: Which round does this changelog belong to?
   // Changelog for round N appears BEFORE round N messages (showing what changed)
+  // ✅ 0-BASED: First round is 0
   roundNumber: integer('round_number')
     .notNull()
-    .default(1), // 1-indexed to match messages and analysis
+    .default(0), // ✅ 0-BASED: Default to round 0
   changeType: text('change_type', { enum: CHANGELOG_TYPES_ENUM_VALUES }).notNull(),
   changeSummary: text('change_summary').notNull(), // Human-readable summary
   // ✅ SIMPLIFIED SCHEMA: Discriminated union via 'type' field
@@ -263,9 +264,10 @@ export const chatMessage = sqliteTable('chat_message', {
   // ✅ ROUND TRACKING: Event-based round number for reliable analysis placement
   // Round = User message + all participant responses
   // Eliminates fragile date/time calculations on frontend
+  // ✅ 0-BASED: First round is 0
   roundNumber: integer('round_number')
     .notNull()
-    .default(1), // 1-indexed to match moderatorAnalysis.roundNumber
+    .default(0), // ✅ 0-BASED: Default to round 0
 
   // ✅ TOOL SUPPORT: Store tool calls made by the model (separate from tool results in parts[])
   toolCalls: text('tool_calls', { mode: 'json' }).$type<Array<{
@@ -313,7 +315,7 @@ export const chatModeratorAnalysis = sqliteTable('chat_moderator_analysis', {
   threadId: text('thread_id')
     .notNull()
     .references(() => chatThread.id, { onDelete: 'cascade' }),
-  roundNumber: integer('round_number').notNull(), // 1-indexed round number
+  roundNumber: integer('round_number').notNull(), // ✅ 0-BASED: First round is 0
   mode: text('mode', { enum: CHAT_MODE_ENUM_VALUES }).notNull(), // Mode when analysis was performed
   userQuestion: text('user_question').notNull(), // The user's question/prompt for this round
   // ✅ CRITICAL: Status field for idempotency and state tracking
@@ -407,7 +409,7 @@ export const chatRoundFeedback = sqliteTable('chat_round_feedback', {
   userId: text('user_id')
     .notNull()
     .references(() => user.id, { onDelete: 'cascade' }),
-  roundNumber: integer('round_number').notNull(), // 1-indexed round number
+  roundNumber: integer('round_number').notNull(), // ✅ 0-BASED: First round is 0
   feedbackType: text('feedback_type', { enum: FEEDBACK_TYPES_ENUM_VALUES }), // null = no feedback
   createdAt: integer('created_at', { mode: 'timestamp' })
     .defaultNow()
@@ -433,7 +435,7 @@ export const chatPreSearch = sqliteTable('chat_pre_search', {
   threadId: text('thread_id')
     .notNull()
     .references(() => chatThread.id, { onDelete: 'cascade' }),
-  roundNumber: integer('round_number').notNull(), // 1-indexed round number
+  roundNumber: integer('round_number').notNull(), // ✅ 0-BASED: First round is 0
   userQuery: text('user_query').notNull(), // The user's search query
   // ✅ CRITICAL: Status field for idempotency and state tracking
   // Prevents duplicate searches on page refresh

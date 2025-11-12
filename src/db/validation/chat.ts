@@ -102,7 +102,7 @@ export const chatCustomRoleUpdateSchema = createUpdateSchema(chatCustomRole, {
  */
 export const chatModeratorAnalysisSelectSchema = createSelectSchema(chatModeratorAnalysis);
 export const chatModeratorAnalysisInsertSchema = createInsertSchema(chatModeratorAnalysis, {
-  roundNumber: Refinements.positive(),
+  roundNumber: Refinements.nonNegativeInt(), // ✅ 0-BASED: Allow round 0
   userQuestion: Refinements.content(),
 });
 export const chatModeratorAnalysisUpdateSchema = createUpdateSchema(chatModeratorAnalysis);
@@ -113,7 +113,7 @@ export const chatModeratorAnalysisUpdateSchema = createUpdateSchema(chatModerato
  */
 export const chatPreSearchSelectSchema = createSelectSchema(chatPreSearch);
 export const chatPreSearchInsertSchema = createInsertSchema(chatPreSearch, {
-  roundNumber: Refinements.positive(),
+  roundNumber: Refinements.nonNegativeInt(), // ✅ 0-BASED: Allow round 0
   userQuery: Refinements.content(),
 });
 export const chatPreSearchUpdateSchema = createUpdateSchema(chatPreSearch);
@@ -124,7 +124,7 @@ export const chatPreSearchUpdateSchema = createUpdateSchema(chatPreSearch);
  */
 export const chatRoundFeedbackSelectSchema = createSelectSchema(chatRoundFeedback);
 export const chatRoundFeedbackInsertSchema = createInsertSchema(chatRoundFeedback, {
-  roundNumber: Refinements.positive(),
+  roundNumber: Refinements.nonNegativeInt(), // ✅ 0-BASED: Allow round 0
   feedbackType: () => z.enum(['like', 'dislike']).nullable(),
 });
 export const chatRoundFeedbackUpdateSchema = createUpdateSchema(chatRoundFeedback, {

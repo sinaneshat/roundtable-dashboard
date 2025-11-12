@@ -618,8 +618,8 @@ export const CustomRoleIdParamSchema = z.object({
 export const RoundNumberParamSchema = z.object({
   roundNumber: z.string().openapi({
     param: { name: 'roundNumber', in: 'path' },
-    description: 'Round number (1-indexed)',
-    example: '1',
+    description: 'Round number (✅ 0-BASED: first round is 0)',
+    example: '0',
   }),
 }).openapi('RoundNumberParam');
 
@@ -635,8 +635,8 @@ export const ThreadRoundParamSchema = z.object({
   }),
   roundNumber: z.string().openapi({
     param: { name: 'roundNumber', in: 'path' },
-    description: 'Round number (1-indexed)',
-    example: '1',
+    description: 'Round number (✅ 0-BASED: first round is 0)',
+    example: '0',
   }),
 }).openapi('ThreadRoundParam');
 

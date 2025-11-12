@@ -243,7 +243,7 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
         threadId,
         role: 'user' as const,
         parts: [{ type: 'text', text: body.firstMessage }],
-        roundNumber: 1,
+        roundNumber: 0, // ✅ 0-BASED: First round is 0
         createdAt: now,
       })
       .returning();
@@ -266,7 +266,7 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
       await db.insert(tables.chatPreSearch).values({
         id: ulid(),
         threadId,
-        roundNumber: 1,
+        roundNumber: 0, // ✅ 0-BASED: First round is 0
         userQuery: body.firstMessage,
         status: AnalysisStatuses.PENDING,
         createdAt: now,

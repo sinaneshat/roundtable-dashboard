@@ -42,28 +42,28 @@ export type UseChatAnalysisOptions = z.infer<typeof UseChatAnalysisOptionsSchema
  * ✅ SINGLE SOURCE OF TRUTH: Uses ParticipantsArraySchema from central schemas
  */
 export const CreatePendingAnalysisParamsSchema = z.object({
-  roundNumber: z.number().int().positive(),
+  roundNumber: z.number().int().nonnegative(), // ✅ 0-BASED: Allow round 0
   messages: z.array(z.custom<unknown>()),
   participants: ParticipantsArraySchema,
   userQuestion: z.string().min(1),
 }).strict();
 
 export const UpdateAnalysisDataParamsSchema = z.object({
-  roundNumber: z.number().int().positive(),
+  roundNumber: z.number().int().nonnegative(), // ✅ 0-BASED: Allow round 0
   data: ModeratorAnalysisPayloadSchema,
 }).strict();
 
 export const UpdateAnalysisStatusParamsSchema = z.object({
-  roundNumber: z.number().int().positive(),
+  roundNumber: z.number().int().nonnegative(), // ✅ 0-BASED: Allow round 0
   status: AnalysisStatusSchema,
 }).strict();
 
 export const RoundNumberParamSchema = z.object({
-  roundNumber: z.number().int().positive(),
+  roundNumber: z.number().int().nonnegative(), // ✅ 0-BASED: Allow round 0
 }).strict();
 
 export const MarkAnalysisFailedParamsSchema = z.object({
-  roundNumber: z.number().int().positive(),
+  roundNumber: z.number().int().nonnegative(), // ✅ 0-BASED: Allow round 0
   errorMessage: z.string().min(1),
 }).strict();
 

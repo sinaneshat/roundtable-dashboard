@@ -21,10 +21,9 @@ import { timeout } from 'hono/timeout';
 import { timing } from 'hono/timing';
 import { trimTrailingSlash } from 'hono/trailing-slash';
 import notFound from 'stoker/middlewares/not-found';
-import onError from 'stoker/middlewares/on-error';
 
 import { createOpenApiApp } from './core/app';
-import { attachSession, csrfProtection, protectMutations, requireSession } from './middleware';
+import { attachSession, csrfProtection, errorLogger, protectMutations, requireSession } from './middleware';
 import { ensureOpenRouterInitialized } from './middleware/openrouter';
 import { RateLimiterFactory } from './middleware/rate-limiter-factory';
 import { ensureStripeInitialized } from './middleware/stripe';
@@ -345,7 +344,10 @@ app.use('*', RateLimiterFactory.create('api'));
 // Step 3: Configure error and not-found handlers
 // ============================================================================
 
-app.onError(onError);
+// ✅ GLOBAL ERROR LOGGING: Catches ALL errors across ALL endpoints
+// errorLogger wraps Stoker's onError with comprehensive error logging
+// All errors are automatically logged - no need for try/catch in handlers
+app.onError(errorLogger);
 app.notFound(notFound);
 
 // ============================================================================
