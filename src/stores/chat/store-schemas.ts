@@ -15,18 +15,98 @@
 import type { UIMessage } from 'ai';
 import { z } from 'zod';
 
-import { AnalysisStatusSchema, ChatModeSchema,FeedbackTypeSchema as ApiFeedbackTypeSchema } from '@/api/core/enums';
+import type { FeedbackType } from '@/api/core/enums';
+import {
+  FeedbackTypeSchema as ApiFeedbackTypeSchema,
+  ChatModeSchema,
+} from '@/api/core/enums';
 import {
   ChatParticipantSchema,
   ChatThreadSchema,
-  ModeratorAnalysisPayloadSchema,
-  PreSearchDataPayloadSchema,
-  RecommendedActionSchema,
-  RoundFeedbackDataSchema,
   StoredModeratorAnalysisSchema,
   StoredPreSearchSchema,
 } from '@/api/routes/chat/schema';
 import { ParticipantConfigSchema } from '@/lib/schemas/participant-schemas';
+import type {
+  AddAnalysis,
+  AddParticipant,
+  AddPreSearch,
+  ApplyRecommendedAction,
+  ClearAllAnalyses,
+  ClearAllPreSearches,
+  ClearFeedback,
+  ChatSetMessages,
+  CreatePendingAnalysis,
+  LoadFeedbackFromServer,
+  RemoveAnalysis,
+  RemoveParticipant,
+  RemovePreSearch,
+  ReorderParticipants,
+  ResetFeedback,
+  ResetForm,
+  ResetUI,
+  Retry,
+  SetAnalyses,
+  SetCreatedThreadId,
+  SetCurrentParticipantIndex,
+  SetEnableWebSearch,
+  SetError,
+  SetFeedback,
+  SetInputValue,
+  SetIsCreatingThread,
+  SetIsStreaming,
+  SetMessages,
+  SetParticipants,
+  SetPendingFeedback,
+  SetPreSearches,
+  SetSelectedMode,
+  SetSelectedParticipants,
+  SetShowInitialUI,
+  SetStartRound,
+  SetThread,
+  SetWaitingToStartStreaming,
+  SendMessage,
+  SetChatSetMessages,
+  SetRetry,
+  SetSendMessage,
+  SetStop,
+  StartRound,
+  Stop,
+  UpdateAnalysisData,
+  UpdateAnalysisStatus,
+  UpdateParticipant,
+  UpdatePreSearchData,
+  UpdatePreSearchStatus,
+  SetHasInitiallyLoaded,
+  SetIsRegenerating,
+  SetIsCreatingAnalysis,
+  SetIsWaitingForChangelog,
+  SetHasPendingConfigChanges,
+  SetRegeneratingRoundNumber,
+  SetPendingMessage,
+  SetExpectedParticipantIds,
+  SetStreamingRoundNumber,
+  SetCurrentRoundNumber,
+  SetHasSentPendingMessage,
+  MarkAnalysisCreated,
+  HasAnalysisBeenCreated,
+  ClearAnalysisTracking,
+  MarkPreSearchTriggered,
+  HasPreSearchBeenTriggered,
+  ClearPreSearchTracking,
+  SetOnComplete,
+  SetOnRetry,
+  SetScreenMode,
+  ResetScreenMode,
+  ResetThreadState,
+  ResetToOverview,
+  InitializeThread,
+  UpdateParticipants,
+  PrepareForNewMessage,
+  CompleteStreaming,
+  StartRegeneration,
+  CompleteRegeneration,
+} from './store-action-types';
 
 // ============================================================================
 // RE-EXPORT: Unified ParticipantConfig Schema
@@ -45,7 +125,8 @@ import { ParticipantConfigSchema } from '@/lib/schemas/participant-schemas';
  * @see /src/lib/schemas/participant-schemas.ts - Single source of truth
  */
 export { ParticipantConfigSchema };
-export type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
+// Re-export type from participant-schemas (not duplicate)
+export type ParticipantConfig = z.infer<typeof ParticipantConfigSchema>;
 
 // ============================================================================
 // SCREEN MODE SCHEMA
@@ -57,37 +138,14 @@ export const ScreenModeSchema = z.enum(['overview', 'thread', 'public']);
 // AI SDK FUNCTION SCHEMAS (for type safety)
 // ============================================================================
 
-// Schema for AI SDK callback functions - typed but not validated at runtime
-const SendMessageFnSchema = z.function()
-  .args(z.string())
-  .returns(z.promise(z.void()));
-
-const StartRoundFnSchema = z.function()
-  .args()
-  .returns(z.void());
-
-const RetryFnSchema = z.function()
-  .args()
-  .returns(z.void());
-
-const StopFnSchema = z.function()
-  .args()
-  .returns(z.void());
-
-const ChatSetMessagesFnSchema = z.function()
-  .args(z.union([
-    z.array(z.custom<UIMessage>()),
-    z.function().args(z.array(z.custom<UIMessage>())).returns(z.array(z.custom<UIMessage>())),
-  ]))
-  .returns(z.void());
-
-const OnCompleteFnSchema = z.function()
-  .args()
-  .returns(z.void());
-
-const OnRetryFnSchema = z.function()
-  .args(z.number())
-  .returns(z.void());
+// Schema for AI SDK callback functions - typed with z.custom<T>()
+const SendMessageFnSchema = z.custom<SendMessage>();
+const StartRoundFnSchema = z.custom<StartRound>();
+const RetryFnSchema = z.custom<Retry>();
+const StopFnSchema = z.custom<Stop>();
+const ChatSetMessagesFnSchema = z.custom<ChatSetMessages>();
+const OnCompleteFnSchema = z.custom<SetOnComplete>();
+const OnRetryFnSchema = z.custom<SetOnRetry>();
 
 // ============================================================================
 // FORM SLICE SCHEMAS
@@ -101,41 +159,26 @@ export const FormStateSchema = z.object({
 });
 
 export const FormActionsSchema = z.object({
-  setInputValue: z.function().args(z.string()).returns(z.void()),
-  setSelectedMode: z.function().args(ChatModeSchema).returns(z.void()),
-  setSelectedParticipants: z.function().args(z.array(ParticipantConfigSchema)).returns(z.void()),
-  setEnableWebSearch: z.function().args(z.boolean()).returns(z.void()),
-  addParticipant: z.function().args(ParticipantConfigSchema).returns(z.void()),
-  removeParticipant: z.function().args(z.string()).returns(z.void()),
-  updateParticipant: z.function().args(z.string(), z.record(z.any())).returns(z.void()),
-  reorderParticipants: z.function().args(z.number(), z.number()).returns(z.void()),
-  resetForm: z.function().args().returns(z.void()),
-  applyRecommendedAction: z.function()
-    .args(
-      RecommendedActionSchema,
-      z.object({
-        maxModels: z.number().optional(),
-        tierName: z.string().optional(),
-        userTier: z.any().optional(),
-        allModels: z.array(z.any()).optional(),
-      }).optional(),
-    )
-    .returns(z.object({
-      success: z.boolean(),
-      error: z.string().optional(),
-      modelsAdded: z.number().optional(),
-      modelsSkipped: z.number().optional(),
-    })),
+  setInputValue: z.custom<SetInputValue>(),
+  setSelectedMode: z.custom<SetSelectedMode>(),
+  setSelectedParticipants: z.custom<SetSelectedParticipants>(),
+  setEnableWebSearch: z.custom<SetEnableWebSearch>(),
+  addParticipant: z.custom<AddParticipant>(),
+  removeParticipant: z.custom<RemoveParticipant>(),
+  updateParticipant: z.custom<UpdateParticipant>(),
+  reorderParticipants: z.custom<ReorderParticipants>(),
+  resetForm: z.custom<ResetForm>(),
+  applyRecommendedAction: z.custom<ApplyRecommendedAction>(),
 });
 
-export const FormSliceSchema = FormStateSchema.merge(FormActionsSchema);
+export const FormSliceSchema = z.intersection(FormStateSchema, FormActionsSchema);
 
 // ============================================================================
 // FEEDBACK SLICE SCHEMAS
 // ============================================================================
 
 export const FeedbackStateSchema = z.object({
-  feedbackByRound: z.custom<Map<number, z.infer<typeof ApiFeedbackTypeSchema> | null>>(),
+  feedbackByRound: z.custom<Map<number, FeedbackType | null>>(),
   pendingFeedback: z.object({
     roundNumber: z.number(),
     type: ApiFeedbackTypeSchema,
@@ -144,17 +187,14 @@ export const FeedbackStateSchema = z.object({
 });
 
 export const FeedbackActionsSchema = z.object({
-  setFeedback: z.function().args(z.number(), ApiFeedbackTypeSchema.nullable()).returns(z.void()),
-  setPendingFeedback: z.function().args(z.object({
-    roundNumber: z.number(),
-    type: ApiFeedbackTypeSchema,
-  }).nullable()).returns(z.void()),
-  clearFeedback: z.function().args(z.number()).returns(z.void()),
-  loadFeedbackFromServer: z.function().args(z.array(RoundFeedbackDataSchema)).returns(z.void()),
-  resetFeedback: z.function().args().returns(z.void()),
+  setFeedback: z.custom<SetFeedback>(),
+  setPendingFeedback: z.custom<SetPendingFeedback>(),
+  clearFeedback: z.custom<ClearFeedback>(),
+  loadFeedbackFromServer: z.custom<LoadFeedbackFromServer>(),
+  resetFeedback: z.custom<ResetFeedback>(),
 });
 
-export const FeedbackSliceSchema = FeedbackStateSchema.merge(FeedbackActionsSchema);
+export const FeedbackSliceSchema = z.intersection(FeedbackStateSchema, FeedbackActionsSchema);
 
 // ============================================================================
 // UI SLICE SCHEMAS
@@ -168,14 +208,14 @@ export const UIStateSchema = z.object({
 });
 
 export const UIActionsSchema = z.object({
-  setShowInitialUI: z.function().args(z.boolean()).returns(z.void()),
-  setWaitingToStartStreaming: z.function().args(z.boolean()).returns(z.void()),
-  setIsCreatingThread: z.function().args(z.boolean()).returns(z.void()),
-  setCreatedThreadId: z.function().args(z.string().nullable()).returns(z.void()),
-  resetUI: z.function().args().returns(z.void()),
+  setShowInitialUI: z.custom<SetShowInitialUI>(),
+  setWaitingToStartStreaming: z.custom<SetWaitingToStartStreaming>(),
+  setIsCreatingThread: z.custom<SetIsCreatingThread>(),
+  setCreatedThreadId: z.custom<SetCreatedThreadId>(),
+  resetUI: z.custom<ResetUI>(),
 });
 
-export const UISliceSchema = UIStateSchema.merge(UIActionsSchema);
+export const UISliceSchema = z.intersection(UIStateSchema, UIActionsSchema);
 
 // ============================================================================
 // ANALYSIS SLICE SCHEMAS
@@ -186,23 +226,16 @@ export const AnalysisStateSchema = z.object({
 });
 
 export const AnalysisActionsSchema = z.object({
-  setAnalyses: z.function().args(z.array(StoredModeratorAnalysisSchema)).returns(z.void()),
-  addAnalysis: z.function().args(StoredModeratorAnalysisSchema).returns(z.void()),
-  updateAnalysisData: z.function().args(z.number(), ModeratorAnalysisPayloadSchema).returns(z.void()),
-  updateAnalysisStatus: z.function().args(z.number(), AnalysisStatusSchema).returns(z.void()),
-  removeAnalysis: z.function().args(z.number()).returns(z.void()),
-  clearAllAnalyses: z.function().args().returns(z.void()),
-  createPendingAnalysis: z.function().args(z.object({
-    roundNumber: z.number(),
-    messages: z.array(z.custom<UIMessage>()),
-    participants: z.array(ChatParticipantSchema),
-    userQuestion: z.string(),
-    threadId: z.string(),
-    mode: ChatModeSchema,
-  })).returns(z.void()),
+  setAnalyses: z.custom<SetAnalyses>(),
+  addAnalysis: z.custom<AddAnalysis>(),
+  updateAnalysisData: z.custom<UpdateAnalysisData>(),
+  updateAnalysisStatus: z.custom<UpdateAnalysisStatus>(),
+  removeAnalysis: z.custom<RemoveAnalysis>(),
+  clearAllAnalyses: z.custom<ClearAllAnalyses>(),
+  createPendingAnalysis: z.custom<CreatePendingAnalysis>(),
 });
 
-export const AnalysisSliceSchema = AnalysisStateSchema.merge(AnalysisActionsSchema);
+export const AnalysisSliceSchema = z.intersection(AnalysisStateSchema, AnalysisActionsSchema);
 
 // ============================================================================
 // PRE-SEARCH SLICE SCHEMAS
@@ -213,15 +246,15 @@ export const PreSearchStateSchema = z.object({
 });
 
 export const PreSearchActionsSchema = z.object({
-  setPreSearches: z.function().args(z.array(StoredPreSearchSchema)).returns(z.void()),
-  addPreSearch: z.function().args(StoredPreSearchSchema).returns(z.void()),
-  updatePreSearchData: z.function().args(z.number(), PreSearchDataPayloadSchema).returns(z.void()),
-  updatePreSearchStatus: z.function().args(z.number(), AnalysisStatusSchema).returns(z.void()),
-  removePreSearch: z.function().args(z.number()).returns(z.void()),
-  clearAllPreSearches: z.function().args().returns(z.void()),
+  setPreSearches: z.custom<SetPreSearches>(),
+  addPreSearch: z.custom<AddPreSearch>(),
+  updatePreSearchData: z.custom<UpdatePreSearchData>(),
+  updatePreSearchStatus: z.custom<UpdatePreSearchStatus>(),
+  removePreSearch: z.custom<RemovePreSearch>(),
+  clearAllPreSearches: z.custom<ClearAllPreSearches>(),
 });
 
-export const PreSearchSliceSchema = PreSearchStateSchema.merge(PreSearchActionsSchema);
+export const PreSearchSliceSchema = z.intersection(PreSearchStateSchema, PreSearchActionsSchema);
 
 // ============================================================================
 // THREAD SLICE SCHEMAS
@@ -230,11 +263,13 @@ export const PreSearchSliceSchema = PreSearchStateSchema.merge(PreSearchActionsS
 export const ThreadStateSchema = z.object({
   thread: ChatThreadSchema.nullable(),
   participants: z.array(ChatParticipantSchema),
-  messages: z.array(z.custom<UIMessage>()),
+  messages: z.union([
+    z.array(z.custom<UIMessage>()),
+    z.custom<any>(),
+  ]),
   isStreaming: z.boolean(),
   currentParticipantIndex: z.number(),
   error: z.custom<Error | null>(),
-  // AI SDK methods
   sendMessage: SendMessageFnSchema.optional(),
   startRound: StartRoundFnSchema.optional(),
   retry: RetryFnSchema.optional(),
@@ -243,23 +278,20 @@ export const ThreadStateSchema = z.object({
 });
 
 export const ThreadActionsSchema = z.object({
-  setThread: z.function().args(ChatThreadSchema.nullable()).returns(z.void()),
-  setParticipants: z.function().args(z.array(ChatParticipantSchema)).returns(z.void()),
-  setMessages: z.function().args(z.union([
-    z.array(z.custom<UIMessage>()),
-    z.function().args(z.array(z.custom<UIMessage>())).returns(z.array(z.custom<UIMessage>())),
-  ])).returns(z.void()),
-  setIsStreaming: z.function().args(z.boolean()).returns(z.void()),
-  setCurrentParticipantIndex: z.function().args(z.number()).returns(z.void()),
-  setError: z.function().args(z.custom<Error | null>()).returns(z.void()),
-  setSendMessage: z.function().args(SendMessageFnSchema.optional()).returns(z.void()),
-  setStartRound: z.function().args(StartRoundFnSchema.optional()).returns(z.void()),
-  setRetry: z.function().args(RetryFnSchema.optional()).returns(z.void()),
-  setStop: z.function().args(StopFnSchema.optional()).returns(z.void()),
-  setChatSetMessages: z.function().args(ChatSetMessagesFnSchema.optional()).returns(z.void()),
+  setThread: z.custom<SetThread>(),
+  setParticipants: z.custom<SetParticipants>(),
+  setMessages: z.custom<SetMessages>(),
+  setIsStreaming: z.custom<SetIsStreaming>(),
+  setCurrentParticipantIndex: z.custom<SetCurrentParticipantIndex>(),
+  setError: z.custom<SetError>(),
+  setSendMessage: z.custom<SetSendMessage>(),
+  setStartRound: z.custom<SetStartRound>(),
+  setRetry: z.custom<SetRetry>(),
+  setStop: z.custom<SetStop>(),
+  setChatSetMessages: z.custom<SetChatSetMessages>(),
 });
 
-export const ThreadSliceSchema = ThreadStateSchema.merge(ThreadActionsSchema);
+export const ThreadSliceSchema = z.intersection(ThreadStateSchema, ThreadActionsSchema);
 
 // ============================================================================
 // FLAGS SLICE SCHEMAS
@@ -274,14 +306,14 @@ export const FlagsStateSchema = z.object({
 });
 
 export const FlagsActionsSchema = z.object({
-  setHasInitiallyLoaded: z.function().args(z.boolean()).returns(z.void()),
-  setIsRegenerating: z.function().args(z.boolean()).returns(z.void()),
-  setIsCreatingAnalysis: z.function().args(z.boolean()).returns(z.void()),
-  setIsWaitingForChangelog: z.function().args(z.boolean()).returns(z.void()),
-  setHasPendingConfigChanges: z.function().args(z.boolean()).returns(z.void()),
+  setHasInitiallyLoaded: z.custom<SetHasInitiallyLoaded>(),
+  setIsRegenerating: z.custom<SetIsRegenerating>(),
+  setIsCreatingAnalysis: z.custom<SetIsCreatingAnalysis>(),
+  setIsWaitingForChangelog: z.custom<SetIsWaitingForChangelog>(),
+  setHasPendingConfigChanges: z.custom<SetHasPendingConfigChanges>(),
 });
 
-export const FlagsSliceSchema = FlagsStateSchema.merge(FlagsActionsSchema);
+export const FlagsSliceSchema = z.intersection(FlagsStateSchema, FlagsActionsSchema);
 
 // ============================================================================
 // DATA SLICE SCHEMAS
@@ -296,14 +328,14 @@ export const DataStateSchema = z.object({
 });
 
 export const DataActionsSchema = z.object({
-  setRegeneratingRoundNumber: z.function().args(z.number().nullable()).returns(z.void()),
-  setPendingMessage: z.function().args(z.string().nullable()).returns(z.void()),
-  setExpectedParticipantIds: z.function().args(z.array(z.string()).nullable()).returns(z.void()),
-  setStreamingRoundNumber: z.function().args(z.number().nullable()).returns(z.void()),
-  setCurrentRoundNumber: z.function().args(z.number().nullable()).returns(z.void()),
+  setRegeneratingRoundNumber: z.custom<SetRegeneratingRoundNumber>(),
+  setPendingMessage: z.custom<SetPendingMessage>(),
+  setExpectedParticipantIds: z.custom<SetExpectedParticipantIds>(),
+  setStreamingRoundNumber: z.custom<SetStreamingRoundNumber>(),
+  setCurrentRoundNumber: z.custom<SetCurrentRoundNumber>(),
 });
 
-export const DataSliceSchema = DataStateSchema.merge(DataActionsSchema);
+export const DataSliceSchema = z.intersection(DataStateSchema, DataActionsSchema);
 
 // ============================================================================
 // TRACKING SLICE SCHEMAS
@@ -316,16 +348,16 @@ export const TrackingStateSchema = z.object({
 });
 
 export const TrackingActionsSchema = z.object({
-  setHasSentPendingMessage: z.function().args(z.boolean()).returns(z.void()),
-  markAnalysisCreated: z.function().args(z.number()).returns(z.void()),
-  hasAnalysisBeenCreated: z.function().args(z.number()).returns(z.boolean()),
-  clearAnalysisTracking: z.function().args(z.number()).returns(z.void()),
-  markPreSearchTriggered: z.function().args(z.number()).returns(z.void()),
-  hasPreSearchBeenTriggered: z.function().args(z.number()).returns(z.boolean()),
-  clearPreSearchTracking: z.function().args(z.number()).returns(z.void()),
+  setHasSentPendingMessage: z.custom<SetHasSentPendingMessage>(),
+  markAnalysisCreated: z.custom<MarkAnalysisCreated>(),
+  hasAnalysisBeenCreated: z.custom<HasAnalysisBeenCreated>(),
+  clearAnalysisTracking: z.custom<ClearAnalysisTracking>(),
+  markPreSearchTriggered: z.custom<MarkPreSearchTriggered>(),
+  hasPreSearchBeenTriggered: z.custom<HasPreSearchBeenTriggered>(),
+  clearPreSearchTracking: z.custom<ClearPreSearchTracking>(),
 });
 
-export const TrackingSliceSchema = TrackingStateSchema.merge(TrackingActionsSchema);
+export const TrackingSliceSchema = z.intersection(TrackingStateSchema, TrackingActionsSchema);
 
 // ============================================================================
 // CALLBACKS SLICE SCHEMAS
@@ -337,11 +369,11 @@ export const CallbacksStateSchema = z.object({
 });
 
 export const CallbacksActionsSchema = z.object({
-  setOnComplete: z.function().args(OnCompleteFnSchema.optional()).returns(z.void()),
-  setOnRetry: z.function().args(OnRetryFnSchema.optional()).returns(z.void()),
+  setOnComplete: z.custom<SetOnComplete>(),
+  setOnRetry: z.custom<SetOnRetry>(),
 });
 
-export const CallbacksSliceSchema = CallbacksStateSchema.merge(CallbacksActionsSchema);
+export const CallbacksSliceSchema = z.intersection(CallbacksStateSchema, CallbacksActionsSchema);
 
 // ============================================================================
 // SCREEN SLICE SCHEMAS
@@ -353,31 +385,25 @@ export const ScreenStateSchema = z.object({
 });
 
 export const ScreenActionsSchema = z.object({
-  setScreenMode: z.function().args(ScreenModeSchema.nullable()).returns(z.void()),
-  resetScreenMode: z.function().args().returns(z.void()),
+  setScreenMode: z.custom<SetScreenMode>(),
+  resetScreenMode: z.custom<ResetScreenMode>(),
 });
 
-export const ScreenSliceSchema = ScreenStateSchema.merge(ScreenActionsSchema);
+export const ScreenSliceSchema = z.intersection(ScreenStateSchema, ScreenActionsSchema);
 
 // ============================================================================
 // OPERATIONS SLICE SCHEMAS
 // ============================================================================
 
 export const OperationsActionsSchema = z.object({
-  resetThreadState: z.function().args().returns(z.void()),
-  resetToOverview: z.function().args().returns(z.void()),
-  initializeThread: z.function()
-    .args(
-      ChatThreadSchema,
-      z.array(ChatParticipantSchema),
-      z.array(z.custom<UIMessage>()).optional(),
-    )
-    .returns(z.void()),
-  updateParticipants: z.function().args(z.array(ChatParticipantSchema)).returns(z.void()),
-  prepareForNewMessage: z.function().args(z.string(), z.array(z.string())).returns(z.void()),
-  completeStreaming: z.function().args().returns(z.void()),
-  startRegeneration: z.function().args(z.number()).returns(z.void()),
-  completeRegeneration: z.function().args(z.number()).returns(z.void()),
+  resetThreadState: z.custom<ResetThreadState>(),
+  resetToOverview: z.custom<ResetToOverview>(),
+  initializeThread: z.custom<InitializeThread>(),
+  updateParticipants: z.custom<UpdateParticipants>(),
+  prepareForNewMessage: z.custom<PrepareForNewMessage>(),
+  completeStreaming: z.custom<CompleteStreaming>(),
+  startRegeneration: z.custom<StartRegeneration>(),
+  completeRegeneration: z.custom<CompleteRegeneration>(),
 });
 
 export const OperationsSliceSchema = OperationsActionsSchema;
@@ -386,52 +412,93 @@ export const OperationsSliceSchema = OperationsActionsSchema;
 // COMPLETE STORE SCHEMA
 // ============================================================================
 
-export const ChatStoreSchema = FormSliceSchema
-  .merge(FeedbackSliceSchema)
-  .merge(UISliceSchema)
-  .merge(AnalysisSliceSchema)
-  .merge(PreSearchSliceSchema)
-  .merge(ThreadSliceSchema)
-  .merge(FlagsSliceSchema)
-  .merge(DataSliceSchema)
-  .merge(TrackingSliceSchema)
-  .merge(CallbacksSliceSchema)
-  .merge(ScreenSliceSchema)
-  .merge(OperationsSliceSchema);
+export const ChatStoreSchema = z.intersection(
+  z.intersection(
+    z.intersection(
+      z.intersection(
+        z.intersection(
+          z.intersection(
+            z.intersection(
+              z.intersection(
+                z.intersection(
+                  z.intersection(FormSliceSchema, FeedbackSliceSchema),
+                  UISliceSchema,
+                ),
+                AnalysisSliceSchema,
+              ),
+              PreSearchSliceSchema,
+            ),
+            ThreadSliceSchema,
+          ),
+          FlagsSliceSchema,
+        ),
+        DataSliceSchema,
+      ),
+      TrackingSliceSchema,
+    ),
+    CallbacksSliceSchema,
+  ),
+  z.intersection(ScreenSliceSchema, OperationsSliceSchema),
+);
 
 // ============================================================================
-// TYPE EXPORTS (Inferred from Schemas)
+// STORE TYPE INFERENCE
 // ============================================================================
 
-export type ParticipantConfig = z.infer<typeof ParticipantConfigSchema>;
-export type ScreenMode = z.infer<typeof ScreenModeSchema>;
-
-// State types
-export type FormState = z.infer<typeof FormStateSchema>;
-export type FeedbackState = z.infer<typeof FeedbackStateSchema>;
-export type UIState = z.infer<typeof UIStateSchema>;
-export type AnalysisState = z.infer<typeof AnalysisStateSchema>;
-export type PreSearchState = z.infer<typeof PreSearchStateSchema>;
-export type ThreadState = z.infer<typeof ThreadStateSchema>;
-export type FlagsState = z.infer<typeof FlagsStateSchema>;
-export type DataState = z.infer<typeof DataStateSchema>;
-export type TrackingState = z.infer<typeof TrackingStateSchema>;
-export type CallbacksState = z.infer<typeof CallbacksStateSchema>;
-export type ScreenState = z.infer<typeof ScreenStateSchema>;
-
-// Slice types (state + actions)
-export type FormSlice = z.infer<typeof FormSliceSchema>;
-export type FeedbackSlice = z.infer<typeof FeedbackSliceSchema>;
-export type UISlice = z.infer<typeof UISliceSchema>;
-export type AnalysisSlice = z.infer<typeof AnalysisSliceSchema>;
-export type PreSearchSlice = z.infer<typeof PreSearchSliceSchema>;
-export type ThreadSlice = z.infer<typeof ThreadSliceSchema>;
-export type FlagsSlice = z.infer<typeof FlagsSliceSchema>;
-export type DataSlice = z.infer<typeof DataSliceSchema>;
-export type TrackingSlice = z.infer<typeof TrackingSliceSchema>;
-export type CallbacksSlice = z.infer<typeof CallbacksSliceSchema>;
-export type ScreenSlice = z.infer<typeof ScreenSliceSchema>;
-export type OperationsSlice = z.infer<typeof OperationsSliceSchema>;
-
-// Complete store type
+/**
+ * Complete Chat Store type inferred from Zod schemas
+ * All slices are combined into a single store type
+ *
+ * ✅ SINGLE SOURCE: Type derived from schemas
+ * ✅ TYPE-SAFE: All store operations validated
+ * ✅ ZUSTAND V5: Ready for combine middleware
+ */
 export type ChatStore = z.infer<typeof ChatStoreSchema>;
+
+// Re-export individual slice types for convenience
+export type FormState = z.infer<typeof FormStateSchema>;
+export type FormActions = z.infer<typeof FormActionsSchema>;
+export type FormSlice = z.infer<typeof FormSliceSchema>;
+
+export type FeedbackState = z.infer<typeof FeedbackStateSchema>;
+export type FeedbackActions = z.infer<typeof FeedbackActionsSchema>;
+export type FeedbackSlice = z.infer<typeof FeedbackSliceSchema>;
+
+export type UIState = z.infer<typeof UIStateSchema>;
+export type UIActions = z.infer<typeof UIActionsSchema>;
+export type UISlice = z.infer<typeof UISliceSchema>;
+
+export type AnalysisState = z.infer<typeof AnalysisStateSchema>;
+export type AnalysisActions = z.infer<typeof AnalysisActionsSchema>;
+export type AnalysisSlice = z.infer<typeof AnalysisSliceSchema>;
+
+export type PreSearchState = z.infer<typeof PreSearchStateSchema>;
+export type PreSearchActions = z.infer<typeof PreSearchActionsSchema>;
+export type PreSearchSlice = z.infer<typeof PreSearchSliceSchema>;
+
+export type ThreadState = z.infer<typeof ThreadStateSchema>;
+export type ThreadActions = z.infer<typeof ThreadActionsSchema>;
+export type ThreadSlice = z.infer<typeof ThreadSliceSchema>;
+
+export type FlagsState = z.infer<typeof FlagsStateSchema>;
+export type FlagsActions = z.infer<typeof FlagsActionsSchema>;
+export type FlagsSlice = z.infer<typeof FlagsSliceSchema>;
+
+export type DataState = z.infer<typeof DataStateSchema>;
+export type DataActions = z.infer<typeof DataActionsSchema>;
+export type DataSlice = z.infer<typeof DataSliceSchema>;
+
+export type TrackingState = z.infer<typeof TrackingStateSchema>;
+export type TrackingActions = z.infer<typeof TrackingActionsSchema>;
+export type TrackingSlice = z.infer<typeof TrackingSliceSchema>;
+
+export type CallbacksState = z.infer<typeof CallbacksStateSchema>;
+export type CallbacksActions = z.infer<typeof CallbacksActionsSchema>;
+export type CallbacksSlice = z.infer<typeof CallbacksSliceSchema>;
+
+export type ScreenState = z.infer<typeof ScreenStateSchema>;
+export type ScreenActions = z.infer<typeof ScreenActionsSchema>;
+export type ScreenSlice = z.infer<typeof ScreenSliceSchema>;
+
+export type OperationsActions = z.infer<typeof OperationsActionsSchema>;
+export type OperationsSlice = z.infer<typeof OperationsSliceSchema>;
