@@ -4,6 +4,7 @@ import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
+import { AnalysisStatuses } from '@/api/core/enums';
 import type { FeedbackType } from '@/api/core/enums';
 import type { ChatMessage, ChatParticipant, ChatThread, ModeratorAnalysisPayload } from '@/api/routes/chat/schema';
 import { ChatDeleteDialog } from '@/components/chat/chat-delete-dialog';
@@ -186,7 +187,9 @@ export default function ChatThreadScreen({
   const feedbackByRound = useChatStore(s => s.feedbackByRound);
   const hasLoadedFeedback = useChatStore(s => s.hasLoadedFeedback);
   const pendingFeedback = useChatStore(s => s.pendingFeedback);
-  const { data: feedbackData, isSuccess: feedbackSuccess } = useThreadFeedbackQuery(thread.id, !state.flags.hasInitiallyLoaded);
+  // ✅ FIX: Keep feedback query always enabled so it refetches on page refresh
+  // Previously disabled after initial load, preventing feedback from reloading
+  const { data: feedbackData, isSuccess: feedbackSuccess } = useThreadFeedbackQuery(thread.id, true);
 
   // Feedback actions hook
   const feedbackActions = useFeedbackActions({ threadId: thread.id });
@@ -200,6 +203,9 @@ export default function ChatThreadScreen({
   // The orchestrator now runs immediately on mount to sync prefetched analyses
   const isInitialMount = useRef(true);
 
+  // ✅ FIX: Track last loaded feedback to prevent infinite loops
+  const lastLoadedFeedbackRef = useRef<string>('');
+
   // Recommended actions hook (with scroll + config change tracking)
   const recommendedActions = useRecommendedActions({
     inputContainerRef,
@@ -212,13 +218,21 @@ export default function ChatThreadScreen({
   // This ensures backend messages are "complete" and never need participant lookups from current state
   const uiMessages = useMemo(() => chatMessagesToUIMessages(initialMessages, participants), [initialMessages, participants]);
 
-  // Load feedback from server once
+  // Load feedback from server (syncs on mount and after refetch)
+  // ✅ FIX: Use ref to prevent infinite loops - only load if data actually changed
   useEffect(() => {
-    if (!hasLoadedFeedback && feedbackSuccess && feedbackData) {
+    if (feedbackSuccess && feedbackData) {
       const feedbackArray = feedbackData.success && Array.isArray(feedbackData.data) ? feedbackData.data : [];
-      feedbackActions.loadFeedback(feedbackArray);
+      // Create stable key from feedback data to detect changes
+      const feedbackKey = feedbackArray.map(f => `${f.roundNumber}:${f.feedbackType}`).join(',');
+
+      // Only load if data changed
+      if (feedbackKey !== lastLoadedFeedbackRef.current) {
+        lastLoadedFeedbackRef.current = feedbackKey;
+        feedbackActions.loadFeedback(feedbackArray);
+      }
     }
-  }, [feedbackData, feedbackSuccess, hasLoadedFeedback, feedbackActions]);
+  }, [feedbackData, feedbackSuccess, feedbackActions]);
 
   // ✅ CRITICAL FIX: Refetch messages after initial load to catch any race condition
   // When navigating from overview screen, messages might still be saving to DB when SSR fetch happens
@@ -238,6 +252,56 @@ export default function ChatThreadScreen({
   const updateAnalysisData = useChatStore(s => s.updateAnalysisData);
   const updateAnalysisStatus = useChatStore(s => s.updateAnalysisStatus);
   const removePendingAnalysis = useChatStore(s => s.removeAnalysis);
+
+  // ✅ SAFETY MECHANISM: Auto-complete stuck analyses after timeout
+  // Prevents analyses stuck at 'streaming' from blocking new rounds
+  // ✅ Enum Pattern: Use AnalysisStatuses constants instead of string literals
+  useEffect(() => {
+    const ANALYSIS_TIMEOUT_MS = 90000; // 90 seconds
+    const stuckAnalyses = analyses.filter((analysis) => {
+      // ✅ Enum Pattern: Use AnalysisStatuses.STREAMING constant
+      if (analysis.status !== AnalysisStatuses.STREAMING)
+        return false;
+      const createdTime = analysis.createdAt instanceof Date
+        ? analysis.createdAt.getTime()
+        : new Date(analysis.createdAt).getTime();
+      const elapsed = Date.now() - createdTime;
+      return elapsed > ANALYSIS_TIMEOUT_MS;
+    });
+
+    if (stuckAnalyses.length > 0) {
+      console.warn('[Analysis Safety] Found stuck analyses, marking as complete:', stuckAnalyses.map(a => ({ round: a.roundNumber, elapsed: Date.now() - (a.createdAt instanceof Date ? a.createdAt.getTime() : new Date(a.createdAt).getTime()) })));
+      stuckAnalyses.forEach((analysis) => {
+        // ✅ Enum Pattern: Use AnalysisStatuses.COMPLETE constant
+        // Mark as complete even without data to unblock the UI
+        updateAnalysisStatus(analysis.roundNumber, AnalysisStatuses.COMPLETE);
+      });
+    }
+
+    // Check every 10 seconds
+    const interval = setInterval(() => {
+      const currentStuck = analyses.filter((analysis) => {
+        // ✅ Enum Pattern: Use AnalysisStatuses.STREAMING constant
+        if (analysis.status !== AnalysisStatuses.STREAMING)
+          return false;
+        const createdTime = analysis.createdAt instanceof Date
+          ? analysis.createdAt.getTime()
+          : new Date(analysis.createdAt).getTime();
+        const elapsed = Date.now() - createdTime;
+        return elapsed > ANALYSIS_TIMEOUT_MS;
+      });
+
+      if (currentStuck.length > 0) {
+        console.warn('[Analysis Safety] Found stuck analyses, marking as complete:', currentStuck.map(a => ({ round: a.roundNumber, elapsed: Date.now() - (a.createdAt instanceof Date ? a.createdAt.getTime() : new Date(a.createdAt).getTime()) })));
+        currentStuck.forEach((analysis) => {
+          // ✅ Enum Pattern: Use AnalysisStatuses.COMPLETE constant
+          updateAnalysisStatus(analysis.roundNumber, AnalysisStatuses.COMPLETE);
+        });
+      }
+    }, 10000);
+
+    return () => clearInterval(interval);
+  }, [analyses, updateAnalysisStatus]);
 
   // ✅ FIX: Declare selectedMode early so it can be used in useScreenInitialization
   const selectedMode = useChatStore(s => s.selectedMode);
@@ -333,6 +397,8 @@ export default function ChatThreadScreen({
     // Orchestrator runs immediately on mount to sync prefetched analyses from query cache
     if (!isInitialMount.current) {
       actions.resetThreadState();
+      // ✅ FIX: Reset feedback ref when navigating to different thread
+      lastLoadedFeedbackRef.current = '';
     }
     isInitialMount.current = false;
 
@@ -414,7 +480,7 @@ export default function ChatThreadScreen({
                   : null
               }
               streamingRoundNumber={streamingRoundNumber}
-              feedbackByRound={new Map([...feedbackByRound].filter(([, value]) => value !== null) as [number, FeedbackType][])}
+              feedbackByRound={new Map(Array.from(feedbackByRound.entries()).filter(([, value]) => value !== null) as Array<[number, FeedbackType]>)}
               pendingFeedback={pendingFeedback}
               getFeedbackHandler={getFeedbackHandler}
               onAnalysisStreamStart={(roundNumber) => {
@@ -430,6 +496,13 @@ export default function ChatThreadScreen({
                     roundNumber,
                     completedData as ModeratorAnalysisPayload,
                   );
+                } else {
+                  // ✅ CRITICAL FIX: Handle error case where no data returned
+                  // Mark analysis as failed to show error badge and unblock UI
+                  // This happens when streaming fails with validation errors, network errors, etc.
+                  // ✅ Enum Pattern: Use AnalysisStatuses.FAILED constant
+                  console.warn('[ChatThreadScreen] Analysis completed without data (error case), marking as failed:', { roundNumber });
+                  updateAnalysisStatus(roundNumber, AnalysisStatuses.FAILED);
                 }
 
                 // ✅ PROPER FIX: Don't invalidate immediately - let orchestrator handle merge

@@ -75,7 +75,7 @@ export async function verifyThreadOwnership(
   userId: string,
   db: Awaited<ReturnType<typeof getDbAsync>>,
   options?: { includeParticipants?: boolean },
-) {
+): Promise<ChatThread | (ChatThread & { participants: Array<ChatParticipant> })> {
   const thread = await db.query.chatThread.findFirst({
     where: eq(tables.chatThread.id, threadId),
     with: options?.includeParticipants

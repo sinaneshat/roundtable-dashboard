@@ -17,6 +17,7 @@
 'use client';
 
 import { useQueryClient } from '@tanstack/react-query';
+import type { UIMessage } from 'ai';
 import { useRouter } from 'next/navigation';
 import { startTransition, useEffect, useMemo, useRef, useState } from 'react';
 
@@ -68,6 +69,9 @@ export type FlowContext = {
   isCreatingThread: boolean;
   isCreatingAnalysis: boolean;
   hasNavigated: boolean;
+
+  // Screen mode
+  screenMode: 'overview' | 'thread' | 'public' | null;
 };
 
 /**
@@ -98,8 +102,10 @@ function determineFlowState(context: FlowContext): FlowState {
   }
 
   // Priority 2: Ready to navigate (analysis done + title ready)
+  // ✅ FIX: Only navigate in overview mode - thread screen already at destination
   if (
-    context.analysisStatus === AnalysisStatuses.COMPLETE
+    context.screenMode === 'overview'
+    && context.analysisStatus === AnalysisStatuses.COMPLETE
     && context.hasAiGeneratedTitle
     && context.threadSlug
   ) {
@@ -107,7 +113,12 @@ function determineFlowState(context: FlowContext): FlowState {
   }
 
   // Priority 3: Analysis streaming
-  if (context.analysisStatus === AnalysisStatuses.STREAMING) {
+  // ✅ FIX: Also consider analysis streaming if analysis exists and AI SDK is streaming
+  // This handles race condition where status hasn't been updated to 'streaming' yet
+  if (
+    context.analysisStatus === AnalysisStatuses.STREAMING
+    || (context.analysisExists && context.isAiSdkStreaming)
+  ) {
     return 'streaming_analysis';
   }
 
@@ -123,7 +134,10 @@ function determineFlowState(context: FlowContext): FlowState {
   }
 
   // Priority 5: Participants streaming
-  if (context.isAiSdkStreaming) {
+  // ✅ FIX: Only return streaming_participants if no analysis exists yet
+  // Once analysis exists and isAiSdkStreaming is true, that's analysis streaming (Priority 3),
+  // not participant streaming. This prevents falling back to streaming_participants during analysis.
+  if (context.isAiSdkStreaming && !context.analysisExists) {
     return 'streaming_participants';
   }
 
@@ -180,10 +194,12 @@ function getNextAction(
   // Transition: creating_thread → streaming_participants (handled by AI SDK)
   // No action needed here
 
-  // Transition: streaming_participants → creating_analysis
+  // Transition: * → creating_analysis
+  // ✅ FIX: Trigger CREATE_ANALYSIS from any previous state (not just streaming_participants)
+  // This handles race condition where streaming finishes before component mounts
   if (
-    prevState === 'streaming_participants'
-    && currentState === 'creating_analysis'
+    currentState === 'creating_analysis'
+    && prevState !== 'creating_analysis'
     && context.threadId
   ) {
     return { type: 'CREATE_ANALYSIS' };
@@ -277,6 +293,9 @@ export function useFlowStateMachine(
   // BUILD FLOW CONTEXT
   // ============================================================================
 
+  // Get screen mode from store
+  const screenMode = useChatStore(s => s.screenMode);
+
   const context = useMemo((): FlowContext => {
     const threadId = thread?.id || createdThreadId;
     const currentRound = messages.length > 0 ? getCurrentRoundNumber(messages) : 0;
@@ -295,6 +314,7 @@ export function useFlowStateMachine(
       isCreatingThread,
       isCreatingAnalysis,
       hasNavigated,
+      screenMode,
     };
   }, [
     thread,
@@ -306,6 +326,7 @@ export function useFlowStateMachine(
     isCreatingThread,
     isCreatingAnalysis,
     hasNavigated,
+    screenMode,
   ]);
 
   // ============================================================================
@@ -313,7 +334,10 @@ export function useFlowStateMachine(
   // ============================================================================
 
   const flowState = useMemo(() => determineFlowState(context), [context]);
-  const prevStateRef = useRef<FlowState>(flowState);
+  // ✅ FIX: Initialize prevState as 'idle' instead of current flowState
+  // This ensures we detect the transition TO creating_analysis even if component
+  // mounts after streaming has finished (fast streaming race condition)
+  const prevStateRef = useRef<FlowState>('idle');
 
   // ============================================================================
   // STATE TRANSITION SIDE EFFECTS
@@ -329,9 +353,12 @@ export function useFlowStateMachine(
           // Create pending analysis when participants finish
           const { threadId, currentRound } = context;
           if (threadId && messages.length > 0) {
-            const userMessage = messages.findLast(m => m.role === 'user');
+            const userMessage = messages.findLast((m: UIMessage) => m.role === 'user');
             const userQuestion = userMessage?.parts
-              ?.find(p => p.type === 'text' && 'text' in p)
+              ?.find((p: unknown): p is { type: 'text'; text: string } => {
+                const part = p as Record<string, unknown>;
+                return part.type === 'text' && 'text' in part;
+              })
               ?.text || '';
 
             markAnalysisCreated(currentRound);

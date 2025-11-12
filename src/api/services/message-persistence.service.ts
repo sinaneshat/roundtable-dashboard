@@ -29,6 +29,7 @@ import type { ChatMessage } from '@/db/validation';
 import type { MessagePartSchema } from '@/lib/schemas/message-schemas';
 import { extractTextFromParts } from '@/lib/schemas/message-schemas';
 import { isObject, isTextPart, safeParse } from '@/lib/utils/type-guards';
+import { createParticipantMetadata } from '@/lib/utils/metadata-builder';
 
 // Type inference from schema
 type MessagePart = z.infer<typeof MessagePartSchema>;
@@ -306,6 +307,25 @@ export async function saveStreamedMessage(
             totalTokens: 0,
           };
 
+    // ✅ TYPE-SAFE METADATA: Use builder to ensure all required fields
+    // Compile-time guarantee that metadata matches ParticipantMessageMetadataSchema
+    const messageMetadata = createParticipantMetadata({
+      roundNumber,
+      participantId,
+      participantIndex,
+      participantRole,
+      model: modelId,
+      finishReason: finishResult.finishReason,
+      usage: usageMetadata,
+      hasError: errorMetadata.hasError,
+      errorType: errorMetadata.errorCategory,
+      errorMessage: errorMetadata.errorMessage,
+      isTransient: errorMetadata.isTransientError,
+      isPartialResponse: errorMetadata.isPartialResponse,
+      providerMessage: errorMetadata.providerMessage,
+      openRouterError: errorMetadata.openRouterError,
+    });
+
     // Save message to database
     await db.insert(tables.chatMessage)
       .values({
@@ -315,23 +335,7 @@ export async function saveStreamedMessage(
         role: MessageRoles.ASSISTANT,
         parts,
         roundNumber,
-        metadata: {
-          role: MessageRoles.ASSISTANT, // ✅ FIX: Add role discriminator for type guard
-          roundNumber,
-          model: modelId,
-          participantId,
-          participantIndex,
-          participantRole,
-          usage: usageMetadata,
-          finishReason: finishResult.finishReason,
-          hasError: errorMetadata.hasError, // ✅ CRITICAL FIX: Use hasError from extractErrorMetadata (single source of truth)
-          errorType: errorMetadata.errorCategory,
-          errorMessage: errorMetadata.errorMessage,
-          providerMessage: errorMetadata.providerMessage,
-          openRouterError: errorMetadata.openRouterError,
-          isTransient: errorMetadata.isTransientError,
-          isPartialResponse: errorMetadata.isPartialResponse,
-        },
+        metadata: messageMetadata,
         createdAt: new Date(),
       })
       .returning();

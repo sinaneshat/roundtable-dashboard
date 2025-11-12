@@ -3,7 +3,8 @@ import { experimental_useObject as useObject } from '@ai-sdk/react';
 import { motion } from 'framer-motion';
 import { memo, useCallback, useEffect, useRef } from 'react';
 
-import { AnalysisStatuses } from '@/api/core/enums';
+import { AnalysisStatuses, StreamErrorTypes } from '@/api/core/enums';
+import type { StreamErrorType } from '@/api/core/enums';
 import type { ModeratorAnalysisPayload, RecommendedAction, StoredModeratorAnalysis } from '@/api/routes/chat/schema';
 import { ModeratorAnalysisPayloadSchema } from '@/api/routes/chat/schema';
 import { ChatLoading } from '@/components/chat/chat-loading';
@@ -61,6 +62,7 @@ function ModeratorAnalysisStreamComponent({
   onActionClick,
 }: ModeratorAnalysisStreamProps) {
   const is409Conflict = useBoolean(false);
+  const streamErrorTypeRef = useRef<StreamErrorType | null>(null);
 
   // ✅ CRITICAL FIX: Store callbacks in refs for stability and to allow calling after unmount
   // This prevents analysis from getting stuck in "streaming" state when component unmounts
@@ -91,28 +93,63 @@ function ModeratorAnalysisStreamComponent({
   const { object: partialAnalysis, error, submit, stop } = useObject({
     api: `/api/v1/chat/threads/${threadId}/rounds/${analysis.roundNumber}/analyze`,
     schema: ModeratorAnalysisPayloadSchema,
-    // React 19 Pattern: Use onFinish callback instead of useEffect for completion
+    // ✅ AI SDK v5: Enable telemetry for debugging
+    experimental_telemetry: {
+      isEnabled: true,
+      metadata: {
+        threadId,
+        roundNumber: analysis.roundNumber,
+        component: 'ModeratorAnalysisStream'
+      }
+    },
+    // ✅ AI SDK v5 Pattern: onFinish callback for handling completion and errors
+    // According to AI SDK v5 docs, when object === undefined, schema validation failed
+    // The error parameter contains the TypeValidationError or other streaming errors
     onFinish: ({ object: finalObject, error: streamError }) => {
-      if (streamError) {
-        const errorMessage = streamError.message || String(streamError);
-        const isAborted = streamError instanceof Error
-          && (streamError.name === 'AbortError' || errorMessage.includes('aborted'));
-        if (isAborted) {
-          return;
+      // ✅ CRITICAL: Log callback execution for AI SDK tracking
+      console.log(`[AI-SDK] onFinish fired - round:${analysis.roundNumber} hasData:${!!finalObject} hasError:${!!streamError}`);
+
+      // ✅ AI SDK v5 Pattern: Check if object is undefined (validation failure)
+      // From docs: "object is undefined if the final object does not match the schema"
+      if (finalObject === undefined) {
+        // Classify error type using enum pattern
+        let errorType: StreamErrorType = StreamErrorTypes.UNKNOWN;
+        const errorMessage = streamError?.message || String(streamError || 'Unknown error');
+
+        // ✅ Enum Pattern: Classify error type
+        if (streamError instanceof Error) {
+          if (streamError.name === 'AbortError' || errorMessage.includes('aborted')) {
+            errorType = StreamErrorTypes.ABORT;
+          } else if (streamError.name === 'TypeValidationError' || errorMessage.includes('validation')) {
+            errorType = StreamErrorTypes.VALIDATION;
+          } else if (errorMessage.includes('409') || errorMessage.includes('Conflict') || errorMessage.includes('already being generated')) {
+            errorType = StreamErrorTypes.CONFLICT;
+            is409Conflict.onTrue();
+          } else if (errorMessage.includes('fetch') || errorMessage.includes('network')) {
+            errorType = StreamErrorTypes.NETWORK;
+          }
         }
-        if (errorMessage.includes('409') || errorMessage.includes('Conflict') || errorMessage.includes('already being generated')) {
-          is409Conflict.onTrue();
-          return;
-        }
+
+        // Store error type for UI display
+        streamErrorTypeRef.current = errorType;
+
+        console.error(`[AI-SDK] Stream error (${errorType}) in round ${analysis.roundNumber}:`, errorMessage);
+
+        // ✅ CRITICAL FIX: Always call completion callback to prevent stuck 'streaming' status
+        // This ensures the analysis status gets updated even when validation or other errors occur
+        onStreamCompleteRef.current?.();
         return;
       }
-      // ✅ CRITICAL FIX: Always call completion callback, even if component unmounted
-      // Use ref to access latest callback and ensure status is updated to 'completed'
-      // This prevents analysis from being stuck in "streaming" state forever
+
+      // ✅ AI SDK v5 Pattern: object is defined, streaming completed successfully
       if (finalObject) {
         onStreamCompleteRef.current?.(finalObject);
       }
     },
+    // ✅ AI SDK v5: Add onError for better error tracking
+    onError: (error) => {
+      console.error(`[AI-SDK] Stream error - round:${analysis.roundNumber}`, error);
+    }
   });
 
   // ✅ Store submit function in ref for stable access in effects
@@ -186,20 +223,35 @@ function ModeratorAnalysisStreamComponent({
       triggeredRounds.set(threadId, new Set([analysis.roundNumber]));
     }
   }
-  const shouldShowError = error && !is409Conflict.value && !(
-    error instanceof Error
-    && (error.name === 'AbortError' || error.message?.includes('aborted'))
-  );
+  // ✅ Enum Pattern: Determine if error should be displayed based on error type
+  const errorType = streamErrorTypeRef.current;
+  const shouldShowError = error && !is409Conflict.value && errorType !== StreamErrorTypes.ABORT;
+
+  // ✅ Enum Pattern: Get user-friendly error message based on error type
+  const getErrorMessage = (type: StreamErrorType | null, error: Error | unknown): string => {
+    if (!type)
+      return error instanceof Error ? error.message : 'Unknown error';
+
+    switch (type) {
+      case StreamErrorTypes.VALIDATION:
+        return 'Analysis format validation failed. Please try again.';
+      case StreamErrorTypes.NETWORK:
+        return 'Network error occurred. Please check your connection and try again.';
+      case StreamErrorTypes.CONFLICT:
+        return 'Analysis is already being generated for this round.';
+      case StreamErrorTypes.UNKNOWN:
+        return error instanceof Error ? error.message : 'An unexpected error occurred.';
+      default:
+        return 'Failed to complete analysis.';
+    }
+  };
+
   if (shouldShowError) {
     return (
       <div className="flex flex-col gap-2 py-2">
         <div className="flex items-center gap-2 text-sm text-destructive">
           <span className="size-1.5 rounded-full bg-destructive/80" />
-          <span>
-            Failed to stream analysis:
-            {' '}
-            {error.message || 'Unknown error'}
-          </span>
+          <span>{getErrorMessage(errorType, error)}</span>
         </div>
       </div>
     );

@@ -127,7 +127,6 @@ export function useScreenInitialization(options: UseScreenInitializationOptions)
     thread,
     participants = [],
     initialMessages,
-    chatMode,
     enableOrchestrator = true,
   } = options;
 
@@ -174,25 +173,37 @@ export function useScreenInitialization(options: UseScreenInitializationOptions)
 
   const shouldEnableOrchestrator = Boolean(thread?.id) && enableOrchestrator;
 
+  // Get regeneratingRoundNumber from store for deduplication
+  const regeneratingRoundNumber = useChatStore(s => s.regeneratingRoundNumber);
+
   // Type assertion needed because useAnalysisOrchestrator extends OrchestratorOptions with mode
   // but the factory doesn't know about domain-specific extensions
   useAnalysisOrchestrator({
     threadId: thread?.id || '',
     enabled: shouldEnableOrchestrator,
+    deduplicationOptions: { regeneratingRoundNumber },
   } as Parameters<typeof useAnalysisOrchestrator>[0]);
 
   // ============================================================================
-  // PRE-SEARCH ORCHESTRATION (Thread mode only)
+  // PRE-SEARCH ORCHESTRATION (All modes when web search enabled)
   // ============================================================================
-  // ✅ FIX: Disable orchestrator in overview mode
-  // In overview mode, backend creates PENDING record automatically
-  // PreSearchStream handles SSE streaming directly, no need to query list
-  // Orchestrator only needed in thread mode to hydrate existing pre-searches
+  // ✅ CRITICAL FIX: Enable orchestrator in overview mode to sync backend's pre-search record
+  // Backend creates PENDING pre-search during thread creation (thread.handler.ts:265-274)
+  // Frontend needs orchestrator to sync this record from server
+  // PreSearchStream depends on having the synced pre-search record to execute API call
+  //
+  // FLOW:
+  // 1. Backend creates PENDING pre-search with real ID
+  // 2. Orchestrator syncs it to store
+  // 3. PreSearchStream detects PENDING status and executes SSE streaming
+  // 4. Results update database and orchestrator re-syncs
+  //
+  // Previously disabled in overview mode, causing race conditions and canceled API calls
 
   const shouldEnablePreSearchOrchestrator
-    = mode === 'thread'
-      && Boolean(thread?.id)
-      && Boolean(thread?.enableWebSearch);
+    = Boolean(thread?.id)
+      && Boolean(thread?.enableWebSearch)
+      && enableOrchestrator; // Respect parent's orchestrator control
 
   usePreSearchOrchestrator({
     threadId: thread?.id || '',

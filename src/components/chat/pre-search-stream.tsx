@@ -119,10 +119,13 @@ function PreSearchStreamComponent({
 
           if (!response.ok) {
             if (response.status === 409) {
+              console.warn(`[PreSearch] Conflict (409) - stream already in progress for round ${preSearch.roundNumber}`);
               is409Conflict.onTrue();
               return;
             }
-            throw new Error(`Pre-search failed: ${response.statusText}`);
+            const errorMsg = `Pre-search failed: ${response.statusText}`;
+            console.error(`[PreSearch] ${errorMsg}`);
+            throw new Error(errorMsg);
           }
 
           // Parse SSE stream manually
@@ -198,12 +201,14 @@ function PreSearchStreamComponent({
           if (err instanceof Error && err.name === 'AbortError') {
             return; // Normal abort, don't show error
           }
-          console.error('Pre-search stream error:', err);
+          console.error(`[PreSearch] Stream error - id:${preSearch.id} round:${preSearch.roundNumber}`, err);
           setError(err instanceof Error ? err : new Error('Stream failed'));
         }
       };
 
-      startStream();
+      startStream().catch((err) => {
+        console.error(`[PreSearch] startStream() rejected - id:${preSearch.id}`, err);
+      });
     }
 
     // Cleanup on unmount

@@ -1,6 +1,7 @@
 'use client';
 
 // ✅ REMOVED: useQueryClient - no longer invalidating queries on completion
+import type { UIMessage } from 'ai';
 import { AnimatePresence, motion } from 'motion/react';
 import Image from 'next/image';
 import { useTranslations } from 'next-intl';
@@ -456,7 +457,7 @@ export default function ChatOverviewScreen() {
                 <UnifiedErrorBoundary context="message-list" onReset={retryRound}>
                   {/* Split messages for correct ordering: user → pre-search → assistant */}
                   <ChatMessageList
-                    messages={messages.filter(m => m.role === MessageRoles.USER)}
+                    messages={messages.filter((m: UIMessage) => m.role === MessageRoles.USER)}
                     user={{
                       name: sessionUser?.name || 'You',
                       image: sessionUser?.image || null,
@@ -482,7 +483,7 @@ export default function ChatOverviewScreen() {
 
                   {/* Assistant messages appear after pre-search */}
                   <ChatMessageList
-                    messages={messages.filter(m => m.role !== MessageRoles.USER)}
+                    messages={messages.filter((m: UIMessage) => m.role !== MessageRoles.USER)}
                     user={{
                       name: sessionUser?.name || 'You',
                       image: sessionUser?.image || null,

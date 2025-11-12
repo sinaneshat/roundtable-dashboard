@@ -107,16 +107,10 @@ export default async function ChatThreadPage({
 
     // 4. ✅ NEW: Prefetch thread feedback - like/dislike button states
     // This eliminates loading state for feedback buttons
-    // CRITICAL: Must extract response.data to match what useThreadFeedbackQuery returns
+    // CRITICAL: Return full response to match what useThreadFeedbackQuery expects
     queryClient.prefetchQuery({
       queryKey: queryKeys.threads.feedback(thread.id),
-      queryFn: async () => {
-        const response = await getThreadFeedbackService({ param: { id: thread.id } });
-        if (!response.success) {
-          throw new Error('Failed to fetch feedback');
-        }
-        return response.data; // Extract data array to match query hook behavior
-      },
+      queryFn: () => getThreadFeedbackService({ param: { id: thread.id } }),
       staleTime: STALE_TIME_PRESETS.medium, // 2 minutes - matches client-side query
     }),
   ]);

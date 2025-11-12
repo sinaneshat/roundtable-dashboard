@@ -11,8 +11,6 @@
  * - Model icon path resolution
  */
 
-import { Buffer } from 'node:buffer';
-
 import { BRAND } from '@/constants/brand';
 import { getModelIconInfo } from '@/lib/utils/ai-display';
 
@@ -60,10 +58,10 @@ export async function getBase64Image(relativePath: string): Promise<string> {
     throw new Error(`Failed to fetch image: ${response.status} ${response.statusText}`);
   }
 
-  // Convert to buffer and then to base64
+  // Convert to base64 using browser-compatible method
   const arrayBuffer = await response.arrayBuffer();
-  const buffer = Buffer.from(arrayBuffer);
-  const base64 = buffer.toString('base64');
+  const uint8Array = new Uint8Array(arrayBuffer);
+  const base64 = btoa(String.fromCharCode(...uint8Array));
 
   // Determine MIME type from file extension
   const ext = cleanPath.split('.').pop()?.toLowerCase();

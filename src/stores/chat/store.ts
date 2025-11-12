@@ -67,15 +67,29 @@
  * TYPES: All inferred from Zod schemas in store-schemas.ts
  */
 
+import type { UIMessage } from 'ai';
+import type { z } from 'zod';
 import type { StateCreator } from 'zustand';
 import { devtools } from 'zustand/middleware';
 import { createStore } from 'zustand/vanilla';
 
+import type { AnalysisStatus, FeedbackType } from '@/api/core/enums';
 import { AnalysisStatuses, ChatModeSchema } from '@/api/core/enums';
+import type {
+  ModeratorAnalysisPayload,
+  PreSearchDataPayload,
+  RecommendedAction,
+  RoundFeedbackData,
+  StoredModeratorAnalysis,
+  StoredPreSearch,
+} from '@/api/routes/chat/schema';
+import type { ChatParticipant, ChatThread } from '@/db/validation';
 import { filterToParticipantMessages, getParticipantMessagesWithIds } from '@/lib/utils/message-filtering';
 import { getRoundNumber } from '@/lib/utils/metadata';
 
+import type { ApplyRecommendedActionOptions } from './actions/recommended-action-application';
 import { applyRecommendedAction as applyRecommendedActionLogic } from './actions/recommended-action-application';
+import type { Retry, SendMessage, StartRound } from './store-action-types';
 import {
   ANALYSIS_DEFAULTS,
   CALLBACKS_DEFAULTS,
@@ -100,19 +114,25 @@ import type {
   FlagsSlice,
   FormSlice,
   OperationsSlice,
+  ParticipantConfig,
   PreSearchSlice,
+  ScreenModeSchema,
   ScreenSlice,
   ThreadSlice,
   TrackingSlice,
   UISlice,
 } from './store-schemas';
 
+type ScreenMode = z.infer<typeof ScreenModeSchema>;
+type ChatMode = z.infer<typeof ChatModeSchema>;
+
 // ============================================================================
 // RE-EXPORT TYPES FROM SCHEMAS (Single Source of Truth)
 // ============================================================================
 
 export type { ScreenMode as ScreenModeExport } from './actions/screen-initialization';
-export type { ChatStore, ScreenMode } from './store-schemas';
+export type { ChatStore } from './store-schemas';
+export type { ScreenMode };
 
 // ============================================================================
 // SLICE IMPLEMENTATIONS - Using Zustand v5 StateCreator Pattern
@@ -130,33 +150,33 @@ const createFormSlice: StateCreator<
 > = set => ({
   ...FORM_DEFAULTS,
 
-  setInputValue: value =>
+  setInputValue: (value: string) =>
     set({ inputValue: value }, false, 'form/setInputValue'),
-  setSelectedMode: mode =>
+  setSelectedMode: (mode: ChatMode | null) =>
     set({ selectedMode: mode }, false, 'form/setSelectedMode'),
-  setSelectedParticipants: participants =>
+  setSelectedParticipants: (participants: ParticipantConfig[]) =>
     set({ selectedParticipants: participants }, false, 'form/setSelectedParticipants'),
-  setEnableWebSearch: enabled =>
+  setEnableWebSearch: (enabled: boolean) =>
     set({ enableWebSearch: enabled }, false, 'form/setEnableWebSearch'),
-  addParticipant: participant =>
+  addParticipant: (participant: ParticipantConfig) =>
     set(state => ({
       selectedParticipants: state.selectedParticipants.some(p => p.modelId === participant.modelId)
         ? state.selectedParticipants
         : [...state.selectedParticipants, { ...participant, priority: state.selectedParticipants.length }],
     }), false, 'form/addParticipant'),
-  removeParticipant: participantId =>
+  removeParticipant: (participantId: string) =>
     set(state => ({
       selectedParticipants: state.selectedParticipants
         .filter(p => p.id !== participantId && p.modelId !== participantId)
         .map((p, index) => ({ ...p, priority: index })),
     }), false, 'form/removeParticipant'),
-  updateParticipant: (participantId, updates) =>
+  updateParticipant: (participantId: string, updates: Partial<ParticipantConfig>) =>
     set(state => ({
       selectedParticipants: state.selectedParticipants.map(p =>
         p.id === participantId ? { ...p, ...updates } : p,
       ),
     }), false, 'form/updateParticipant'),
-  reorderParticipants: (fromIndex, toIndex) =>
+  reorderParticipants: (fromIndex: number, toIndex: number) =>
     set((state) => {
       const copy = [...state.selectedParticipants];
       const [removed] = copy.splice(fromIndex, 1);
@@ -170,7 +190,7 @@ const createFormSlice: StateCreator<
   resetForm: () =>
     set(FORM_DEFAULTS, false, 'form/resetForm'),
 
-  applyRecommendedAction: (action, options) => {
+  applyRecommendedAction: (action: RecommendedAction, options?: ApplyRecommendedActionOptions) => {
     // ✅ EXTRACTED: Business logic moved to actions/recommended-action-application.ts
     // Thin wrapper applies updates returned from pure function
     const result = applyRecommendedActionLogic(action, options);
@@ -199,21 +219,21 @@ const createFeedbackSlice: StateCreator<
 > = set => ({
   ...FEEDBACK_DEFAULTS,
 
-  setFeedback: (roundNumber, type) =>
+  setFeedback: (roundNumber: number, type: FeedbackType | null) =>
     set((state) => {
       const updated = new Map(state.feedbackByRound);
       updated.set(roundNumber, type);
       return { feedbackByRound: updated };
     }, false, 'feedback/setFeedback'),
-  setPendingFeedback: feedback =>
+  setPendingFeedback: (feedback: { roundNumber: number; type: FeedbackType } | null) =>
     set({ pendingFeedback: feedback }, false, 'feedback/setPendingFeedback'),
-  clearFeedback: roundNumber =>
+  clearFeedback: (roundNumber: number) =>
     set((state) => {
       const updated = new Map(state.feedbackByRound);
       updated.delete(roundNumber);
       return { feedbackByRound: updated };
     }, false, 'feedback/clearFeedback'),
-  loadFeedbackFromServer: data =>
+  loadFeedbackFromServer: (data: RoundFeedbackData[]) =>
     set({
       feedbackByRound: new Map(data.map(f => [f.roundNumber, f.feedbackType])),
       hasLoadedFeedback: true,
@@ -234,13 +254,13 @@ const createUISlice: StateCreator<
 > = set => ({
   ...UI_DEFAULTS,
 
-  setShowInitialUI: show =>
+  setShowInitialUI: (show: boolean) =>
     set({ showInitialUI: show }, false, 'ui/setShowInitialUI'),
-  setWaitingToStartStreaming: waiting =>
+  setWaitingToStartStreaming: (waiting: boolean) =>
     set({ waitingToStartStreaming: waiting }, false, 'ui/setWaitingToStartStreaming'),
-  setIsCreatingThread: creating =>
+  setIsCreatingThread: (creating: boolean) =>
     set({ isCreatingThread: creating }, false, 'ui/setIsCreatingThread'),
-  setCreatedThreadId: id =>
+  setCreatedThreadId: (id: string | null) =>
     set({ createdThreadId: id }, false, 'ui/setCreatedThreadId'),
   resetUI: () =>
     set(UI_DEFAULTS, false, 'ui/resetUI'),
@@ -258,13 +278,13 @@ const createAnalysisSlice: StateCreator<
 > = set => ({
   ...ANALYSIS_DEFAULTS,
 
-  setAnalyses: analyses =>
+  setAnalyses: (analyses: StoredModeratorAnalysis[]) =>
     set({ analyses }, false, 'analysis/setAnalyses'),
-  addAnalysis: analysis =>
+  addAnalysis: (analysis: StoredModeratorAnalysis) =>
     set(state => ({
       analyses: [...state.analyses, analysis],
     }), false, 'analysis/addAnalysis'),
-  updateAnalysisData: (roundNumber, data) =>
+  updateAnalysisData: (roundNumber: number, data: ModeratorAnalysisPayload) =>
     set(state => ({
       analyses: state.analyses.map((a) => {
         if (a.roundNumber !== roundNumber) {
@@ -283,7 +303,7 @@ const createAnalysisSlice: StateCreator<
         };
       }),
     }), false, 'analysis/updateAnalysisData'),
-  updateAnalysisStatus: (roundNumber, status) =>
+  updateAnalysisStatus: (roundNumber: number, status: AnalysisStatus) =>
     set(state => ({
       analyses: state.analyses.map(a =>
         a.roundNumber === roundNumber
@@ -291,14 +311,21 @@ const createAnalysisSlice: StateCreator<
           : a,
       ),
     }), false, 'analysis/updateAnalysisStatus'),
-  removeAnalysis: roundNumber =>
+  removeAnalysis: (roundNumber: number) =>
     set(state => ({
       analyses: state.analyses.filter(a => a.roundNumber !== roundNumber),
     }), false, 'analysis/removeAnalysis'),
   clearAllAnalyses: () =>
     set(ANALYSIS_DEFAULTS, false, 'analysis/clearAllAnalyses'),
-  createPendingAnalysis: (params) => {
-    const { roundNumber, messages, userQuestion, threadId, mode } = params;
+  createPendingAnalysis: (params: { roundNumber: number; messages: UIMessage[]; userQuestion: string; threadId: string; mode: ChatMode }) => {
+    const { roundNumber, messages, userQuestion, threadId, mode: rawMode } = params;
+
+    // Validate and narrow mode type to match database schema
+    const modeResult = ChatModeSchema.safeParse(rawMode);
+    if (!modeResult.success) {
+      return;
+    }
+    const mode = modeResult.data;
 
     // ✅ TYPE-SAFE EXTRACTION: Use consolidated utility from message-filtering.ts
     // Replaces unsafe type assertions with Zod-validated filtering
@@ -378,7 +405,6 @@ const createAnalysisSlice: StateCreator<
       );
 
       if (exists) {
-        // Analysis already exists - return unchanged state
         return state;
       }
 
@@ -402,13 +428,13 @@ const createPreSearchSlice: StateCreator<
 > = set => ({
   ...PRESEARCH_DEFAULTS,
 
-  setPreSearches: preSearches =>
+  setPreSearches: (preSearches: StoredPreSearch[]) =>
     set({ preSearches }, false, 'preSearch/setPreSearches'),
-  addPreSearch: preSearch =>
+  addPreSearch: (preSearch: StoredPreSearch) =>
     set(state => ({
       preSearches: [...state.preSearches, preSearch],
     }), false, 'preSearch/addPreSearch'),
-  updatePreSearchData: (roundNumber, data) =>
+  updatePreSearchData: (roundNumber: number, data: PreSearchDataPayload) =>
     set(state => ({
       preSearches: state.preSearches.map(ps =>
         ps.roundNumber === roundNumber
@@ -416,7 +442,7 @@ const createPreSearchSlice: StateCreator<
           : ps,
       ),
     }), false, 'preSearch/updatePreSearchData'),
-  updatePreSearchStatus: (roundNumber, status) =>
+  updatePreSearchStatus: (roundNumber: number, status: AnalysisStatus) =>
     set(state => ({
       preSearches: state.preSearches.map(ps =>
         ps.roundNumber === roundNumber
@@ -424,7 +450,7 @@ const createPreSearchSlice: StateCreator<
           : ps,
       ),
     }), false, 'preSearch/updatePreSearchStatus'),
-  removePreSearch: roundNumber =>
+  removePreSearch: (roundNumber: number) =>
     set(state => ({
       preSearches: state.preSearches.filter(ps => ps.roundNumber !== roundNumber),
     }), false, 'preSearch/removePreSearch'),
@@ -444,29 +470,29 @@ const createThreadSlice: StateCreator<
 > = set => ({
   ...THREAD_DEFAULTS,
 
-  setThread: thread =>
+  setThread: (thread: ChatThread | null) =>
     set({ thread }, false, 'thread/setThread'),
-  setParticipants: participants =>
+  setParticipants: (participants: ChatParticipant[]) =>
     set({ participants }, false, 'thread/setParticipants'),
-  setMessages: messages =>
+  setMessages: (messages: UIMessage[] | ((prev: UIMessage[]) => UIMessage[])) =>
     set(state => ({
       messages: typeof messages === 'function' ? messages(state.messages) : messages,
     }), false, 'thread/setMessages'),
-  setIsStreaming: isStreaming =>
+  setIsStreaming: (isStreaming: boolean) =>
     set({ isStreaming }, false, 'thread/setIsStreaming'),
-  setCurrentParticipantIndex: currentParticipantIndex =>
+  setCurrentParticipantIndex: (currentParticipantIndex: number) =>
     set({ currentParticipantIndex }, false, 'thread/setCurrentParticipantIndex'),
-  setError: error =>
+  setError: (error: Error | null) =>
     set({ error }, false, 'thread/setError'),
-  setSendMessage: fn =>
+  setSendMessage: (fn?: SendMessage) =>
     set({ sendMessage: fn }, false, 'thread/setSendMessage'),
-  setStartRound: fn =>
+  setStartRound: (fn?: StartRound) =>
     set({ startRound: fn }, false, 'thread/setStartRound'),
-  setRetry: fn =>
+  setRetry: (fn?: Retry) =>
     set({ retry: fn }, false, 'thread/setRetry'),
-  setStop: fn =>
+  setStop: (fn?: (() => void)) =>
     set({ stop: fn }, false, 'thread/setStop'),
-  setChatSetMessages: fn =>
+  setChatSetMessages: (fn?: ((messages: UIMessage[]) => void)) =>
     set({ chatSetMessages: fn }, false, 'thread/setChatSetMessages'),
 });
 
@@ -482,15 +508,15 @@ const createFlagsSlice: StateCreator<
 > = set => ({
   ...FLAGS_DEFAULTS,
 
-  setHasInitiallyLoaded: value =>
+  setHasInitiallyLoaded: (value: boolean) =>
     set({ hasInitiallyLoaded: value }, false, 'flags/setHasInitiallyLoaded'),
-  setIsRegenerating: value =>
+  setIsRegenerating: (value: boolean) =>
     set({ isRegenerating: value }, false, 'flags/setIsRegenerating'),
-  setIsCreatingAnalysis: value =>
+  setIsCreatingAnalysis: (value: boolean) =>
     set({ isCreatingAnalysis: value }, false, 'flags/setIsCreatingAnalysis'),
-  setIsWaitingForChangelog: value =>
+  setIsWaitingForChangelog: (value: boolean) =>
     set({ isWaitingForChangelog: value }, false, 'flags/setIsWaitingForChangelog'),
-  setHasPendingConfigChanges: value =>
+  setHasPendingConfigChanges: (value: boolean) =>
     set({ hasPendingConfigChanges: value }, false, 'flags/setHasPendingConfigChanges'),
 });
 
@@ -506,15 +532,15 @@ const createDataSlice: StateCreator<
 > = set => ({
   ...DATA_DEFAULTS,
 
-  setRegeneratingRoundNumber: value =>
+  setRegeneratingRoundNumber: (value: number | null) =>
     set({ regeneratingRoundNumber: value }, false, 'data/setRegeneratingRoundNumber'),
-  setPendingMessage: value =>
+  setPendingMessage: (value: string | null) =>
     set({ pendingMessage: value }, false, 'data/setPendingMessage'),
-  setExpectedParticipantIds: value =>
+  setExpectedParticipantIds: (value: string[] | null) =>
     set({ expectedParticipantIds: value }, false, 'data/setExpectedParticipantIds'),
-  setStreamingRoundNumber: value =>
+  setStreamingRoundNumber: (value: number | null) =>
     set({ streamingRoundNumber: value }, false, 'data/setStreamingRoundNumber'),
-  setCurrentRoundNumber: value =>
+  setCurrentRoundNumber: (value: number | null) =>
     set({ currentRoundNumber: value }, false, 'data/setCurrentRoundNumber'),
 });
 
@@ -530,31 +556,31 @@ const createTrackingSlice: StateCreator<
 > = (set, get) => ({
   ...TRACKING_DEFAULTS,
 
-  setHasSentPendingMessage: value =>
+  setHasSentPendingMessage: (value: boolean) =>
     set({ hasSentPendingMessage: value }, false, 'tracking/setHasSentPendingMessage'),
-  markAnalysisCreated: roundNumber =>
+  markAnalysisCreated: (roundNumber: number) =>
     set((state) => {
       const newSet = new Set(state.createdAnalysisRounds);
       newSet.add(roundNumber);
       return { createdAnalysisRounds: newSet };
     }, false, 'tracking/markAnalysisCreated'),
-  hasAnalysisBeenCreated: roundNumber =>
+  hasAnalysisBeenCreated: (roundNumber: number) =>
     get().createdAnalysisRounds.has(roundNumber),
-  clearAnalysisTracking: roundNumber =>
+  clearAnalysisTracking: (roundNumber: number) =>
     set((state) => {
       const newSet = new Set(state.createdAnalysisRounds);
       newSet.delete(roundNumber);
       return { createdAnalysisRounds: newSet };
     }, false, 'tracking/clearAnalysisTracking'),
-  markPreSearchTriggered: roundNumber =>
+  markPreSearchTriggered: (roundNumber: number) =>
     set((state) => {
       const newSet = new Set(state.triggeredPreSearchRounds);
       newSet.add(roundNumber);
       return { triggeredPreSearchRounds: newSet };
     }, false, 'tracking/markPreSearchTriggered'),
-  hasPreSearchBeenTriggered: roundNumber =>
+  hasPreSearchBeenTriggered: (roundNumber: number) =>
     get().triggeredPreSearchRounds.has(roundNumber),
-  clearPreSearchTracking: roundNumber =>
+  clearPreSearchTracking: (roundNumber: number) =>
     set((state) => {
       const newSet = new Set(state.triggeredPreSearchRounds);
       newSet.delete(roundNumber);
@@ -574,9 +600,9 @@ const createCallbacksSlice: StateCreator<
 > = set => ({
   ...CALLBACKS_DEFAULTS,
 
-  setOnComplete: callback =>
+  setOnComplete: (callback?: () => void) =>
     set({ onComplete: callback }, false, 'callbacks/setOnComplete'),
-  setOnRetry: callback =>
+  setOnRetry: (callback?: (roundNumber: number) => void) =>
     set({ onRetry: callback }, false, 'callbacks/setOnRetry'),
 });
 
@@ -592,7 +618,7 @@ const createScreenSlice: StateCreator<
 > = set => ({
   ...SCREEN_DEFAULTS,
 
-  setScreenMode: mode =>
+  setScreenMode: (mode: ScreenMode | null) =>
     set({
       screenMode: mode,
       isReadOnly: mode === 'public',
@@ -612,12 +638,12 @@ const createOperationsSlice: StateCreator<
   OperationsSlice
 > = (set, get) => ({
   resetThreadState: () =>
-    set(THREAD_RESET_STATE, false, 'operations/resetThreadState'),
+    set(THREAD_RESET_STATE as Partial<ChatStore>, false, 'operations/resetThreadState'),
 
   resetToOverview: () =>
-    set(COMPLETE_RESET_STATE, false, 'operations/resetToOverview'),
+    set(COMPLETE_RESET_STATE as Partial<ChatStore>, false, 'operations/resetToOverview'),
 
-  initializeThread: (thread, participants, initialMessages) => {
+  initializeThread: (thread: ChatThread, participants: ChatParticipant[], initialMessages?: UIMessage[]) => {
     const messagesToSet = initialMessages || [];
 
     // ✅ UNIFIED PATTERN: Pre-search data is fetched by PreSearchCard component
@@ -633,11 +659,19 @@ const createOperationsSlice: StateCreator<
     }, false, 'operations/initializeThread');
   },
 
-  updateParticipants: participants =>
+  updateParticipants: (participants: ChatParticipant[]) =>
     set({ participants }, false, 'operations/updateParticipants'),
 
-  prepareForNewMessage: (message, participantIds) =>
+  prepareForNewMessage: (message: string, participantIds: string[]) =>
     set(state => ({
+      // ✅ CRITICAL FIX: Clear streaming flags before preparing new message
+      // If previous round's flags weren't properly cleared, this ensures clean state
+      isCreatingAnalysis: false,
+      isRegenerating: false,
+      streamingRoundNumber: null,
+      regeneratingRoundNumber: null,
+      currentRoundNumber: null,
+      // Prepare new message state
       isWaitingForChangelog: true,
       pendingMessage: message,
       expectedParticipantIds: participantIds.length > 0
@@ -655,7 +689,7 @@ const createOperationsSlice: StateCreator<
       currentRoundNumber: null,
     }, false, 'operations/completeStreaming'),
 
-  startRegeneration: (roundNumber) => {
+  startRegeneration: (roundNumber: number) => {
     const { clearAnalysisTracking } = get();
     clearAnalysisTracking(roundNumber);
     set({
@@ -666,7 +700,7 @@ const createOperationsSlice: StateCreator<
     }, false, 'operations/startRegeneration');
   },
 
-  completeRegeneration: _roundNumber =>
+  completeRegeneration: (_roundNumber: number) =>
     set({
       isRegenerating: false,
       regeneratingRoundNumber: null,
@@ -707,7 +741,11 @@ export function createChatStore() {
         ...createScreenSlice(...args),
         ...createOperationsSlice(...args),
       }),
-      { name: 'ChatStore' },
+      {
+        name: 'ChatStore',
+        enabled: process.env.NODE_ENV !== 'production',
+        anonymousActionType: 'unknown-action',
+      },
     ),
   );
 

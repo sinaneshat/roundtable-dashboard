@@ -293,7 +293,8 @@ const AssistantMessageMetadataCoreSchema = z.object({
   // Participant tracking - REQUIRED for assistant messages
   participantId: z.string().min(1), // Must be valid ULID
   participantIndex: z.number().int().nonnegative(),
-  participantRole: z.string().nullable(), // Nullable but not optional - must be explicitly set
+  // ✅ AI SDK FIX: null gets stripped from SSE - provide default
+  participantRole: z.string().nullable().default(null),
 
   // AI SDK core fields - REQUIRED for tracking
   model: z.string().min(1), // Must specify which model was used
@@ -302,10 +303,11 @@ const AssistantMessageMetadataCoreSchema = z.object({
   // Usage tracking - REQUIRED for cost/performance monitoring
   usage: UsageSchema,
 
-  // Error state - REQUIRED booleans (no optional)
-  hasError: z.boolean(),
-  isTransient: z.boolean(),
-  isPartialResponse: z.boolean(),
+  // Error state - REQUIRED booleans
+  // ✅ AI SDK FIX: false gets stripped from SSE - provide defaults
+  hasError: z.boolean().default(false),
+  isTransient: z.boolean().default(false),
+  isPartialResponse: z.boolean().default(false),
 
   // Error details - only present when hasError = true
   errorType: ErrorTypeSchema.optional(), // Zod enum - validated error types

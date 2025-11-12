@@ -1053,17 +1053,20 @@ export function useDeleteCustomRoleMutation() {
  * Hook to set round feedback (like/dislike)
  * Protected endpoint - requires authentication
  *
- * ✅ ONE-WAY DATA FLOW: NO query invalidation
- * ChatThreadScreen manages feedback in client-side state (clientFeedback Map).
- * This is a FIRE-AND-FORGET mutation - persist to server, client handles UI.
+ * ✅ CRITICAL FIX: Invalidate feedback query on success
+ * Ensures page refresh loads latest feedback from server
  */
 export function useSetRoundFeedbackMutation() {
+  const queryClient = useQueryClient();
+
   return useMutation({
     mutationFn: setRoundFeedbackService,
-    onSuccess: () => {
-      // ✅ ONE-WAY DATA FLOW: NO invalidation
-      // ChatThreadScreen uses clientFeedback Map as source of truth
-      // Feedback already updated optimistically in ChatThreadScreen.tsx:519-523
+    onSuccess: (_data, variables) => {
+      // ✅ CRITICAL FIX: Invalidate feedback query so page refresh loads latest data
+      // Client state already optimistically updated, but we need server to be source of truth on refresh
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.threads.feedback(variables.param.threadId),
+      });
     },
     onError: () => {
       // Error is handled by throwOnError: false

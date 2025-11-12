@@ -34,6 +34,7 @@ export * from './memo-utils';
 // ============================================================================
 export * from './message'; // message-filtering + message-transforms + message-status
 export * from './metadata';
+export * from './metadata-builder'; // ✅ TYPE-SAFE: Enforces all required fields at compile-time
 export * from './participant'; // All participant operations (includes updates)
 export * from './round-utils';
 // ============================================================================

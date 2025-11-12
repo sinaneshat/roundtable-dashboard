@@ -27,7 +27,11 @@ import { Refinements } from './refinements';
 /**
  * Chat Thread Schemas
  */
-export const chatThreadSelectSchema = createSelectSchema(chatThread);
+const baseThreadSelectSchema = createSelectSchema(chatThread);
+export const chatThreadSelectSchema = baseThreadSelectSchema.extend({
+  // ✅ FIX: metadata field accepts both null and undefined (SQLite behavior)
+  metadata: z.any().nullable().optional(),
+});
 export const chatThreadInsertSchema = createInsertSchema(chatThread, {
   title: Refinements.title(),
 });
@@ -38,7 +42,11 @@ export const chatThreadUpdateSchema = createUpdateSchema(chatThread, {
 /**
  * Chat Participant Schemas
  */
-export const chatParticipantSelectSchema = createSelectSchema(chatParticipant);
+const baseParticipantSelectSchema = createSelectSchema(chatParticipant);
+export const chatParticipantSelectSchema = baseParticipantSelectSchema.extend({
+  // ✅ FIX: settings field accepts both null and undefined (SQLite behavior)
+  settings: z.any().nullable().optional(),
+});
 export const chatParticipantInsertSchema = createInsertSchema(chatParticipant, {
   modelId: Refinements.content(),
   role: Refinements.nameOptional(),

@@ -44,11 +44,15 @@ import {
   buildAssistantMetadata,
   enrichMessageWithParticipant,
   getAssistantMetadata,
+  getMessageMetadata,
   getParticipantId,
   getRoundNumber,
   hasParticipantEnrichment,
   isPreSearch,
 } from './metadata';
+
+// Re-export for convenience
+export { getMessageMetadata };
 
 // ============================================================================
 // Type Exports
@@ -382,8 +386,9 @@ export function getParticipantMessagesForRound(
       return false;
 
     const participantId = getParticipantId(m.metadata);
-    if (participantId == null)
+    if (participantId == null) {
       return false;
+    }
 
     const msgRound = getRoundNumber(m.metadata);
     return msgRound === roundNumber;

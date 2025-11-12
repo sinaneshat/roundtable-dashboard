@@ -15,10 +15,11 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
-import type { ParticipantConfig } from '@/components/chat/chat-form-schemas';
 import { useChatStore } from '@/components/providers/chat-store-provider';
+import type { ChatThread } from '@/db/validation';
 import type { ChatModeId } from '@/lib/config/chat-modes';
 import { queryKeys } from '@/lib/data/query-keys';
+import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
 import { useMemoizedReturn } from '@/lib/utils/memo-utils';
 
 export type UseThreadActionsOptions = {
@@ -134,12 +135,19 @@ export function useThreadActions(options: UseThreadActionsOptions): UseThreadAct
    * Clear changelog waiting flag when changelog fetch completes
    * Uses TanStack Query status for proper async coordination
    *
+   * ✅ FIX: Clear immediately if already not fetching when flag set
+   * Previous logic only cleared on transition (fetching → complete)
+   * If changelog already complete, flag stuck forever → message never sends
+   *
    * ✅ SAFETY NET: Auto-timeout after 30s to prevent permanent blocking
    * Primary path relies on React Query completion, timeout is last resort
    * If timeout triggers frequently, indicates changelog query issues
    */
   useEffect(() => {
-    // PRIMARY PATH: Clear waiting flag when changelog fetch completes
+    // PRIMARY PATH: Clear waiting flag when changelog is not fetching
+    // This handles both:
+    // 1. Transition from fetching → complete (original case)
+    // 2. Already complete when flag set (new case - fixes stuck messages)
     if (flags.isWaitingForChangelog && !isChangelogFetching) {
       actions.setIsWaitingForChangelog(false);
       return undefined;
@@ -179,19 +187,25 @@ export function useThreadActions(options: UseThreadActionsOptions): UseThreadAct
 
   /** Handle mode change with config change tracking */
   const handleModeChange = useCallback(
-    createConfigChangeHandler(actions.setSelectedMode),
+    (value: ChatThread['mode']) => {
+      createConfigChangeHandler(actions.setSelectedMode)(value);
+    },
     [createConfigChangeHandler, actions.setSelectedMode],
   );
 
   /** Handle participants change with config change tracking */
   const handleParticipantsChange = useCallback(
-    createConfigChangeHandler(actions.setSelectedParticipants),
+    (value: ParticipantConfig[]) => {
+      createConfigChangeHandler(actions.setSelectedParticipants)(value);
+    },
     [createConfigChangeHandler, actions.setSelectedParticipants],
   );
 
   /** Handle web search toggle with config change tracking */
   const handleWebSearchToggle = useCallback(
-    createConfigChangeHandler(actions.setEnableWebSearch),
+    (value: boolean) => {
+      createConfigChangeHandler(actions.setEnableWebSearch)(value);
+    },
     [createConfigChangeHandler, actions.setEnableWebSearch],
   );
 

@@ -434,6 +434,33 @@ export const AiSdkStatuses = {
 } as const;
 
 // ============================================================================
+// STREAM ERROR TYPES (AI SDK v5 Error Handling)
+// ============================================================================
+
+export const STREAM_ERROR_TYPES = [
+  'abort',
+  'validation',
+  'conflict',
+  'network',
+  'unknown',
+] as const;
+
+export const StreamErrorTypeSchema = z.enum(STREAM_ERROR_TYPES).openapi({
+  description: 'Type of error that occurred during AI streaming',
+  example: 'validation',
+});
+
+export type StreamErrorType = z.infer<typeof StreamErrorTypeSchema>;
+
+export const StreamErrorTypes = {
+  ABORT: 'abort' as const,
+  VALIDATION: 'validation' as const,
+  CONFLICT: 'conflict' as const,
+  NETWORK: 'network' as const,
+  UNKNOWN: 'unknown' as const,
+} as const;
+
+// ============================================================================
 // BILLING INTERVAL
 // ============================================================================
 

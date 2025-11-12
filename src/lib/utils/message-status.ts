@@ -20,7 +20,6 @@
 import type { UIMessage } from 'ai';
 
 import { MessagePartTypes } from '@/api/core/enums';
-import { isAssistantMetadata } from '@/lib/schemas/message-metadata';
 import type { MessageStatus } from '@/lib/schemas/message-schemas';
 
 import { getAssistantMetadata } from './metadata';
@@ -184,10 +183,8 @@ export function getMessageStatus({
   hasAnyContent = true,
 }: MessageStatusInput): MessageStatus {
   // Extract metadata using type-safe utility
-  const metadata = getAssistantMetadata(message.metadata);
-
-  // Only assistant messages have error fields
-  const assistantMetadata = metadata && isAssistantMetadata(metadata) ? metadata : null;
+  // getAssistantMetadata already returns AssistantMessageMetadata | null with validation
+  const assistantMetadata = getAssistantMetadata(message.metadata);
 
   // Priority 1: Check for error state
   const hasError = assistantMetadata?.hasError === true;

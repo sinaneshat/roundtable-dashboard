@@ -51,17 +51,12 @@ export type UseAnalysisOrchestratorReturn = OrchestratorReturn;
  * })
  */
 /**
- * Deduplication wrapper that reads regeneratingRoundNumber from store
- * Cannot use hook inside factory, so we create a wrapper function
+ * Deduplication wrapper that uses regeneratingRoundNumber from options
+ * The regeneratingRoundNumber is passed from the React component context
  */
 function deduplicateWithStoreContext(items: StoredModeratorAnalysis[], options?: Record<string, unknown>) {
-  // Import dynamically to avoid circular dependencies
-  // eslint-disable-next-line ts/no-require-imports
-  const { useChatStore } = require('@/components/providers/chat-store-provider') as {
-    useChatStore: { getState: () => { regeneratingRoundNumber: number | null } };
-  };
-  const regeneratingRoundNumber = useChatStore.getState().regeneratingRoundNumber;
-  return deduplicateAnalyses(items, { regeneratingRoundNumber, ...(options || {}) });
+  // The regeneratingRoundNumber is passed as an option from the component context
+  return deduplicateAnalyses(items, options || {});
 }
 
 export const useAnalysisOrchestrator = createOrchestrator<StoredModeratorAnalysis, StoredModeratorAnalysis, number>({

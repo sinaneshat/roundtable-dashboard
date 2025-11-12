@@ -53,6 +53,7 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
   const streamingState = useChatStore(useShallow(s => ({
     showInitialUI: s.showInitialUI,
     isStreaming: s.isStreaming,
+    screenMode: s.screenMode,
   })));
 
   const threadState = useChatStore(useShallow(s => ({
@@ -67,6 +68,9 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
   const [hasNavigated, setHasNavigated] = useState(false);
   const [hasUpdatedThread, setHasUpdatedThread] = useState(false);
   const [aiGeneratedSlug, setAiGeneratedSlug] = useState<string | null>(null);
+
+  // ✅ FIX: Disable controller if screen mode changed (navigated away)
+  const isActive = enabled && streamingState.screenMode === 'overview';
 
   // Reset flags when returning to initial UI
   useEffect(() => {
@@ -168,7 +172,7 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
   // ============================================================================
 
   // Start polling when chat started and haven't detected AI title yet
-  const shouldPoll = enabled
+  const shouldPoll = isActive
     && !streamingState.showInitialUI
     && !!threadState.createdThreadId
     && !hasUpdatedThread;
@@ -183,7 +187,7 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
    * Polls immediately after thread creation, replaces URL in background
    */
   useEffect(() => {
-    if (!enabled)
+    if (!isActive)
       return;
 
     const slugData = slugStatusQuery.data?.success && slugStatusQuery.data.data ? slugStatusQuery.data.data : null;
@@ -226,7 +230,7 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
-    enabled,
+    isActive,
     slugStatusQuery.data,
     setThread,
     queryClient,
@@ -244,7 +248,7 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
   const hasAiSlug = Boolean(aiGeneratedSlug || (threadState.currentThread?.isAiGeneratedTitle && threadState.currentThread?.slug));
 
   useEffect(() => {
-    if (!enabled)
+    if (!isActive)
       return;
 
     // Only navigate if initial UI is hidden
@@ -291,7 +295,7 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
-    enabled,
+    isActive,
     firstAnalysisCompleted,
     canNavigateWithoutAnalysis,
     streamingState.showInitialUI,

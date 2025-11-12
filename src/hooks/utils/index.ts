@@ -14,7 +14,7 @@ export type { UseFlowLoadingOptions, UseFlowLoadingReturn } from './use-flow-loa
 export { useFlowLoading } from './use-flow-loading';
 export { useFuzzySearch } from './use-fuzzy-search';
 export type { UseMessagePartsOptions, UseMessagePartsReturn } from './use-message-parts';
-export { getMessageParts, useMessageParts } from './use-message-parts';
+export { useMessageParts } from './use-message-parts';
 export { useIsMobile } from './use-mobile';
 export type { UseModelLookupReturn } from './use-model-lookup';
 export { useModelLookup } from './use-model-lookup';
@@ -30,3 +30,4 @@ export type { TimelineItem, UseThreadTimelineOptions } from './useThreadTimeline
 export { useThreadTimeline } from './useThreadTimeline';
 export type { UseVirtualizedTimelineOptions, UseVirtualizedTimelineResult } from './useVirtualizedTimeline';
 export { useVirtualizedTimeline } from './useVirtualizedTimeline';
+export { getMessageParts } from '@/lib/utils/message-status';

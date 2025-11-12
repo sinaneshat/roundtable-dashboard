@@ -33,7 +33,7 @@ import type { ReactNode } from 'react';
 import { createContext, use, useCallback, useEffect, useRef } from 'react';
 import { useStore } from 'zustand';
 
-import { MessagePartTypes, MessageRoles } from '@/api/core/enums';
+import { AnalysisStatuses, MessagePartTypes, MessageRoles } from '@/api/core/enums';
 import { useMultiParticipantChat } from '@/hooks/utils';
 import { queryKeys } from '@/lib/data/query-keys';
 import { showApiErrorToast } from '@/lib/toast';
@@ -196,7 +196,7 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
     const preSearchForRound = preSearches.find(ps => ps.roundNumber === newRoundNumber);
 
     // If web search is enabled and pre-search hasn't completed, wait
-    if (webSearchEnabled && (!preSearchForRound || preSearchForRound.status !== 'complete')) {
+    if (webSearchEnabled && (!preSearchForRound || preSearchForRound.status !== AnalysisStatuses.COMPLETE)) {
       return; // Don't send message yet - wait for pre-search to complete
     }
 
@@ -262,12 +262,22 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
     if (webSearchEnabled) {
       const round1PreSearch = storePreSearches.find(ps => ps.roundNumber === 1);
 
+      // ✅ FIX: If pre-search doesn't exist yet, wait for orchestrator to sync it
+      // Backend creates PENDING pre-search during thread creation, orchestrator syncs it
+      if (!round1PreSearch) {
+        console.error(`[Provider] Pre-search blocking error - orchestrator hasn't synced pre-search yet (round 1 not found in store)`);
+        return; // Don't trigger participants yet - waiting for pre-search to be synced
+      }
+
       // If pre-search exists and is still pending or streaming, wait
-      if (round1PreSearch && (round1PreSearch.status === 'pending' || round1PreSearch.status === 'streaming')) {
+      if (round1PreSearch.status === AnalysisStatuses.PENDING || round1PreSearch.status === AnalysisStatuses.STREAMING) {
         return; // Don't trigger participants yet - pre-search still running
       }
 
-      // Pre-search completed, failed, or doesn't exist - safe to proceed
+      // ✅ ERROR: If pre-search failed, log it
+      if (round1PreSearch.status === AnalysisStatuses.FAILED) {
+        console.error(`[Provider] Pre-search failed - id:${round1PreSearch.id} error:${round1PreSearch.errorMessage || 'Unknown error'}`);
+      }
     }
 
     // Call fresh startRound with current participants from store
@@ -289,19 +299,24 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
     return sendMessageRef.current(content);
   }, [queryClient]);
 
-  const startRoundWithQuotaInvalidation = useCallback(() => {
+  const startRoundWithQuotaInvalidation = useCallback(async () => {
     // ✅ Invalidate usage quota immediately when round starts
     queryClient.invalidateQueries({ queryKey: queryKeys.usage.stats() });
     queryClient.invalidateQueries({ queryKey: queryKeys.usage.messageQuota() });
 
-    return startRoundRef.current();
-  }, [queryClient]);
+    return await startRoundRef.current();
+  }, [queryClient]) as () => Promise<void>;
+
+  // Wrap retry to match Promise<void> signature
+  const retryWithPromise = useCallback(async () => {
+    chat.retry();
+  }, [chat]);
 
   useEffect(() => {
     storeRef.current?.setState({
       sendMessage: sendMessageWithQuotaInvalidation,
       startRound: startRoundWithQuotaInvalidation,
-      retry: chat.retry,
+      retry: retryWithPromise,
       stop: chat.stop,
       chatSetMessages: chat.setMessages,
       messages: chat.messages,
@@ -311,7 +326,7 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
   }, [
     sendMessageWithQuotaInvalidation,
     startRoundWithQuotaInvalidation,
-    chat.retry,
+    retryWithPromise,
     chat.stop,
     chat.setMessages,
     chat.messages,
@@ -322,6 +337,99 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
   // ✅ REMOVED: Duplicate streaming trigger - store subscription (store.ts:1076-1163) handles this
   // The subscription has proper guard protection and identical pre-search waiting logic
   // Keeping this effect created race conditions where both paths could trigger startRound()
+
+  // ✅ CRITICAL FIX: Watch for pending message conditions and trigger send
+  // This replaces the removed store subscription (store.ts:991-1072)
+  // handleComplete only fires after rounds complete, so we need this for new message submissions
+  const pendingMessage = useStore(store, s => s.pendingMessage);
+  const expectedParticipantIds = useStore(store, s => s.expectedParticipantIds);
+  const hasSentPendingMessage = useStore(store, s => s.hasSentPendingMessage);
+  const isStreaming = useStore(store, s => s.isStreaming);
+  const isWaitingForChangelog = useStore(store, s => s.isWaitingForChangelog);
+  const screenMode = useStore(store, s => s.screenMode);
+  const storeParticipantsForSend = useStore(store, s => s.participants);
+  const storePreSearchesForSend = useStore(store, s => s.preSearches);
+
+  useEffect(() => {
+    const currentState = store.getState();
+    const {
+      pendingMessage: statePendingMessage,
+      expectedParticipantIds: stateExpectedParticipantIds,
+      hasSentPendingMessage: stateHasSentPendingMessage,
+      isStreaming: stateIsStreaming,
+      participants: storeParticipants,
+      sendMessage,
+      messages: storeMessages,
+      isWaitingForChangelog: stateIsWaitingForChangelog,
+      setHasSentPendingMessage,
+      setStreamingRoundNumber,
+      setHasPendingConfigChanges,
+      screenMode: stateScreenMode,
+      thread: storeThread,
+      enableWebSearch: stateEnableWebSearch,
+      preSearches: statePreSearches,
+    } = currentState;
+
+    // Guard: Only send on overview/thread screens (not public)
+    if (stateScreenMode === 'public') {
+      return;
+    }
+
+    // Check if we should send pending message
+    if (!statePendingMessage || !stateExpectedParticipantIds || stateHasSentPendingMessage || stateIsStreaming) {
+      return;
+    }
+
+    // Compare participant model IDs
+    const currentModelIds = storeParticipants
+      .filter(p => p.isEnabled)
+      .map(p => p.modelId)
+      .sort()
+      .join(',');
+    const expectedModelIds = stateExpectedParticipantIds.sort().join(',');
+
+    if (currentModelIds !== expectedModelIds) {
+      return;
+    }
+
+    // Check changelog wait state
+    if (stateIsWaitingForChangelog) {
+      return;
+    }
+
+    // Calculate next round number (using shared utility for consistency)
+    const currentRound = getCurrentRoundNumber(storeMessages);
+    const newRoundNumber = currentRound + 1;
+
+    // Check if pre-search is needed for this round
+    const webSearchEnabled = storeThread?.enableWebSearch ?? stateEnableWebSearch;
+    const preSearchForRound = statePreSearches.find(ps => ps.roundNumber === newRoundNumber);
+
+    // If web search is enabled and pre-search hasn't completed, wait
+    if (webSearchEnabled && (!preSearchForRound || preSearchForRound.status !== AnalysisStatuses.COMPLETE)) {
+      return; // Don't send message yet - wait for pre-search to complete
+    }
+
+    // All conditions met - send the message
+    setHasSentPendingMessage(true);
+    setStreamingRoundNumber(newRoundNumber);
+    setHasPendingConfigChanges(false);
+
+    // Send message in next tick (prevents blocking)
+    queueMicrotask(() => {
+      sendMessage?.(statePendingMessage);
+    });
+  }, [
+    store,
+    pendingMessage,
+    expectedParticipantIds,
+    hasSentPendingMessage,
+    isStreaming,
+    isWaitingForChangelog,
+    screenMode,
+    storeParticipantsForSend,
+    storePreSearchesForSend,
+  ]);
 
   // ✅ CLEANUP: Only stop streaming on navigation, don't reset state
   // Screen components manage their own state via useScreenInitialization and thread.id changes

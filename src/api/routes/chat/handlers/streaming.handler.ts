@@ -9,9 +9,8 @@
 
 import type { RouteHandler } from '@hono/zod-openapi';
 import type { UIMessage } from 'ai';
-import { convertToModelMessages, RetryError, streamText, validateUIMessages } from 'ai';
+import { RetryError, streamText } from 'ai';
 import { and, asc, eq } from 'drizzle-orm';
-import { ulid } from 'ulid';
 
 import { executeBatch } from '@/api/common/batch-operations';
 import { createError, structureAIProviderError } from '@/api/common/error-handling';
@@ -31,22 +30,26 @@ import {
   AI_TIMEOUT_CONFIG,
   getSafeMaxOutputTokens,
 } from '@/api/services/product-logic.service';
+import { buildParticipantSystemPrompt } from '@/api/services/prompts.service';
 import { handleRoundRegeneration } from '@/api/services/regeneration.service';
 import { calculateRoundNumber } from '@/api/services/round.service';
-import { buildSearchContext } from '@/api/services/search-context-builder';
+import {
+  buildSystemPromptWithContext,
+  extractUserQuery,
+  loadParticipantConfiguration,
+  prepareValidatedMessages,
+} from '@/api/services/streaming-orchestration.service';
+import { logModeChange } from '@/api/services/thread-changelog.service';
 import {
   enforceMessageQuota,
   getUserTier,
   incrementMessageUsage,
 } from '@/api/services/usage-tracking.service';
-import { logModeChange } from '@/api/services/thread-changelog.service';
 import type { ApiEnv } from '@/api/types';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db/schema';
-import type { ChatParticipant } from '@/db/validation';
-import { buildParticipantSystemPrompt } from '@/api/services/prompts.service';
 import { extractTextFromParts } from '@/lib/schemas/message-schemas';
-import { filterNonEmptyMessages } from '@/lib/utils/message-transforms';
+import { completeStreamingMetadata, createStreamingMetadata } from '@/lib/utils/metadata-builder';
 
 import type { streamChatRoute } from '../route';
 import { StreamChatRequestSchema } from '../schema';
@@ -181,71 +184,17 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
     // =========================================================================
     // STEP 1.6: ✅ LOAD PARTICIPANTS (After Persistence)
     // =========================================================================
-    // OPTIMIZATION: Only reload participants when participant 0 persisted changes
-    // This prevents redundant database queries for subsequent participants (1, 2, 3...)
-    //
-    // RELOAD STRATEGY:
-    // - Participant 0 with providedParticipants: MUST reload (just persisted changes)
-    // - Participants 1+ with providedParticipants: Use initial thread.participants (no persistence)
-    // - Any participant without providedParticipants: Use initial thread.participants
-    //
-    // Performance Impact: Saves 25-50ms per subsequent participant request
-
-    let participants: ChatParticipant[];
-
-    if (providedParticipants && participantIndex === 0) {
-      // ✅ PARTICIPANT 0 ONLY: Reload from database after persistence
-      // Only participant 0 persists changes, so only it needs to reload
-      // Performance Optimization: Saves 25-50ms per subsequent participant request
-
-      const reloadedThread = await db.query.chatThread.findFirst({
-        where: eq(tables.chatThread.id, threadId),
-        with: {
-          participants: {
-            where: eq(tables.chatParticipant.isEnabled, true),
-            orderBy: [asc(tables.chatParticipant.priority)],
-          },
-        },
-      });
-
-      if (!reloadedThread || reloadedThread.participants.length === 0) {
-        throw createError.badRequest('No enabled participants after persistence');
-      }
-
-      participants = reloadedThread.participants;
-    } else {
-      // ✅ SUBSEQUENT PARTICIPANTS (1, 2, 3...) OR NO CONFIG: Use initial thread.participants
-      // Subsequent participants don't persist changes, so they can use cached data from line 79
-      // This optimization eliminates redundant queries while maintaining consistency
-      participants = thread.participants;
-    }
-
-    if (participants.length === 0) {
-      throw createError.badRequest('No enabled participants in this thread');
-    }
+    const { participants, participant } = await loadParticipantConfiguration({
+      threadId,
+      participantIndex: participantIndex ?? 0,
+      providedParticipants,
+      thread,
+      db,
+    });
 
     // =========================================================================
-    // STEP 2: Get SINGLE Participant (frontend orchestration)
+    // STEP 3: Load Previous Messages and Prepare for Streaming
     // =========================================================================
-
-    const participant = participants[participantIndex ?? 0];
-    if (!participant) {
-      throw createError.badRequest(`Participant at index ${participantIndex} not found`);
-    }
-
-    // =========================================================================
-    // STEP 3: ✅ AI SDK V5 OFFICIAL PATTERN - Load Previous Messages from DB
-    // Reference: https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot-message-persistence#sending-only-the-last-message
-    // =========================================================================
-    // OPTIMIZATION: Instead of sending entire message history from frontend,
-    // load previous messages from database and append new message.
-    //
-    // Benefits:
-    // - Reduced bandwidth (important for long conversations)
-    // - Faster requests as conversation grows
-    // - Single source of truth (database)
-
-    // Load previous messages directly from database
     const previousDbMessages = await db.query.chatMessage.findMany({
       where: eq(tables.chatMessage.threadId, threadId),
       orderBy: [
@@ -255,85 +204,14 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
       ],
     });
 
-    // ✅ TYPE-SAFE FILTERING: Use consolidated utility for conversation message filtering
-    // Replaces inline logic with Zod-validated type guard from message-type-guards.ts
-    // Filters out pre-search messages to ensure clean conversation history for LLM
-    //
-    // WHY PRE-SEARCH IS FILTERED:
-    // - Pre-search messages have role='assistant' but are NOT participant responses
-    // - Including them would break conversation flow (user → assistant → user → assistant)
-    // - Pre-search context is provided via SYSTEM PROMPT instead (lines 638-650)
-    //
-    // BLOCKING FLOW (ensures search context is available):
-    // 1. User submits message with web search enabled
-    // 2. Provider AWAITS pre-search completion (chat-store-provider.tsx:186) ✅ BLOCKS
-    // 3. Pre-search saves results to DB (pre-search.handler.ts:352-372)
-    // 4. Pre-search completes, provider proceeds to call sendMessage
-    // 5. Participant streaming starts
-    // 6. Handler filters pre-search from conversation, adds to system prompt (line 638-650)
-    // 7. Participants respond with search context in their system prompt
-    const conversationDbMessages = previousDbMessages; // Include ALL messages
-
-    // ✅ AI SDK V5 VALIDATION: Convert and validate database messages
-    // chatMessagesToUIMessages() now uses AI SDK validateUIMessages() internally
-    const previousMessages = await chatMessagesToUIMessages(conversationDbMessages);
-
-    // =========================================================================
-    // STEP 3.5: ✅ AI SDK V5 MESSAGE VALIDATION - Validate incoming messages
-    // =========================================================================
-    // OFFICIAL AI SDK PATTERN: Always validate incoming messages before processing
-    // Reference: https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot#validating-messages-from-database
-    //
-    // VALIDATION FLOW:
-    // 1. Previous messages loaded from DB → validated by chatMessagesToUIMessages()
-    // 2. New message from frontend → needs validation
-    // 3. Combine ALL messages → re-validate entire conversation history
-    // 4. Ensures complete conversation compliance before streaming
-    //
-    // This ensures:
-    // - Message format compliance (UIMessage structure)
-    // - Metadata schema validation (roundNumber, participantId, etc.)
-    // - Data integrity before any processing or database operations
-    //
-    // CRITICAL: Validate at entry point to catch malformed messages early
-    //
-    // NOTE: AI SDK deduplicates messages internally, so duplicates are safe
-
-    const allMessages = [...previousMessages, message as UIMessage];
-
-    let typedMessages: UIMessage[] = [];
-
-    try {
-      // ✅ AI SDK V5 BEST PRACTICE: Validate ALL messages (previous + new)
-      // - Previous messages already validated by chatMessagesToUIMessages()
-      // - New message validated here
-      // - Full conversation history re-validated for safety
-      // - AI SDK handles deduplication automatically
-      //
-      // NOTE: We don't validate metadata schema here because:
-      // - Incoming messages have minimal metadata (roundNumber, isParticipantTrigger)
-      // - UIMessageMetadataSchema is a discriminated union requiring 'role' field
-      // - Message.role already provides role information at message level
-      // - Metadata is optional per UIMessage spec
-      typedMessages = await validateUIMessages({
-        messages: allMessages,
-        // Don't validate metadata - allow messages with partial/minimal metadata
-      });
-    } catch (error) {
-      throw createError.badRequest(
-        `Invalid message format: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        { errorType: 'validation' },
-      );
-    }
+    // Convert to UIMessages for validation
+    const previousMessages = await chatMessagesToUIMessages(previousDbMessages);
 
     // =========================================================================
     // STEP 4: Save New User Message (ONLY first participant)
     // =========================================================================
-    // ✅ EVENT-BASED ROUND TRACKING: Only first participant saves user message
-    // This prevents duplicate user messages and ensures consistent round numbers
-
-    const lastMessage = typedMessages[typedMessages.length - 1];
-    if (lastMessage && lastMessage.role === 'user' && participantIndex === 0) {
+    if ((message as UIMessage).role === 'user' && participantIndex === 0) {
+      const lastMessage = message as UIMessage;
       const existsInDb = await db.query.chatMessage.findFirst({
         where: eq(tables.chatMessage.id, lastMessage.id),
       });
@@ -390,20 +268,15 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
     }
 
     // =========================================================================
-    // STEP 5: Initialize OpenRouter and Setup
+    // STEP 5: Initialize OpenRouter and Prepare Messages
     // =========================================================================
-
     initializeOpenRouter(c.env);
     const client = openRouterService.getClient();
     const userTier = await getUserTier(user.id);
 
-    // ✅ DYNAMIC TOKEN LIMIT: Fetch model info to get context_length and calculate safe max tokens
-    // Direct API call to OpenRouter (no caching needed - browser manages context after load)
-    // ✅ DYNAMIC PRICING: Also fetch pricing for PostHog LLM tracking
+    // Get model info for token limits and pricing
     const modelInfo = getModelById(participant.modelId);
-    const modelContextLength = modelInfo?.context_length || 16000; // Default fallback
-
-    // Extract dynamic pricing for PostHog tracking (per 1M tokens)
+    const modelContextLength = modelInfo?.context_length || 16000;
     const modelPricing = modelInfo
       ? {
           input: Number.parseFloat(modelInfo.pricing.prompt) * 1_000_000,
@@ -411,234 +284,36 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
         }
       : undefined;
 
-    // Estimate input tokens: system prompt + average message content
-    // Rough estimate: 1 token ≈ 4 characters
-    // Use conservative average of 200 tokens per message (includes system, user, assistant)
-    const systemPromptTokens = Math.ceil((participant.settings?.systemPrompt || '').length / 4);
-    const averageTokensPerMessage = 200;
-    const messageTokens = typedMessages.length * averageTokensPerMessage;
-    const estimatedInputTokens = systemPromptTokens + messageTokens + 500; // +500 for overhead and safety
+    // Prepare and validate messages
+    const { modelMessages } = await prepareValidatedMessages({
+      previousDbMessages,
+      newMessage: message as UIMessage,
+    });
 
-    // Calculate safe max output tokens based on model's context length
+    // Build system prompt with RAG context
+    const userQuery = extractUserQuery([...previousMessages, message as UIMessage]);
+    const baseSystemPrompt = participant.settings?.systemPrompt
+      || buildParticipantSystemPrompt(participant.role);
+    const systemPrompt = await buildSystemPromptWithContext({
+      participant,
+      thread,
+      userQuery,
+      previousDbMessages,
+      currentRoundNumber,
+      env: { AI: c.env.AI },
+      db,
+    });
+
+    // Calculate token limits
+    const systemPromptTokens = Math.ceil(systemPrompt.length / 4);
+    const averageTokensPerMessage = 200;
+    const messageTokens = modelMessages.length * averageTokensPerMessage;
+    const estimatedInputTokens = systemPromptTokens + messageTokens + 500;
     const maxOutputTokens = getSafeMaxOutputTokens(
       modelContextLength,
       estimatedInputTokens,
       userTier,
     );
-
-    // =========================================================================
-    // STEP 6: ✅ OFFICIAL AI SDK v5 PATTERN - Direct streamText()
-    // Reference: https://sdk.vercel.ai/docs/ai-sdk-core/generating-text#stream-text
-    // =========================================================================
-
-    // Prepare system prompt for this participant
-    // ✅ OPTIMIZED SYSTEM PROMPT: 2025 best practices for natural conversation
-    // - Avoids AI self-awareness that triggers content filters
-    // - Uses persona-based framing for natural engagement
-    // - Direct, clear instructions without "AI" terminology
-    // - Prevents fourth-wall breaking and self-referential behavior
-    // ✅ SINGLE SOURCE: Default prompts from /src/lib/ai/prompts.ts
-    const baseSystemPrompt = participant.settings?.systemPrompt
-      || buildParticipantSystemPrompt(participant.role);
-
-    // =========================================================================
-    // STEP 5.5: ✅ RAG CONTEXT RETRIEVAL - Semantic search for relevant context
-    // =========================================================================
-    // Retrieve relevant context from previous messages using semantic search
-    // This enhances AI responses with relevant information from conversation history
-    let systemPrompt = baseSystemPrompt;
-
-    try {
-      // Extract query from last user message
-      const lastUserMessage = typedMessages.findLast(m => m.role === 'user');
-      const userQuery = lastUserMessage
-        ? extractTextFromParts(lastUserMessage.parts as Array<{ type: 'text'; text: string } | { type: 'reasoning'; text: string }>)
-        : '';
-
-      // Only retrieve context if we have a valid query
-      if (userQuery.trim()) {
-        // ✅ AUTORAG RETRIEVAL: Project-based knowledge base
-        // Check if thread is associated with a project
-        if (thread.projectId) {
-          const project = await db.query.chatProject.findFirst({
-            where: eq(tables.chatProject.id, thread.projectId),
-          });
-
-          // If project exists, apply custom instructions (OpenAI Projects pattern)
-          if (project) {
-            // Add custom instructions to system prompt if provided
-            if (project.customInstructions) {
-              systemPrompt = `${baseSystemPrompt}\n\n## Project Instructions\n\n${project.customInstructions}`;
-            }
-
-            // If project has AutoRAG configured, retrieve context
-            if (project.autoragInstanceId) {
-              try {
-                const ragResponse = await c.env.AI.autorag(project.autoragInstanceId).aiSearch({
-                  query: userQuery,
-                  max_num_results: 5,
-                  rewrite_query: true,
-                  stream: false,
-                  filters: {
-                    type: 'and',
-                    filters: [
-                      { key: 'folder', type: 'gte', value: project.r2FolderPrefix },
-                      { key: 'folder', type: 'lte', value: `${project.r2FolderPrefix}~` },
-                    ],
-                  },
-                });
-
-                // If we got a response, inject it into the system prompt
-                if (ragResponse.response) {
-                  systemPrompt = `${systemPrompt}\n\n## Project Knowledge\n\n${ragResponse.response}\n\n---\n\nUse the above knowledge from the project when relevant to the conversation. Provide natural, coherent responses.`;
-                }
-              } catch {
-                // AutoRAG failures should not break the chat flow
-                // Continue with base system prompt
-              }
-            }
-          }
-        }
-      }
-    } catch {
-      // RAG failures should not break the chat flow
-      // Continue with base system prompt without RAG context
-    }
-
-    // Convert UI messages to model messages
-    // ✅ SHARED UTILITY: Filter out empty messages (caused by subsequent participant triggers)
-    const nonEmptyMessages = filterNonEmptyMessages(typedMessages);
-
-    if (nonEmptyMessages.length === 0) {
-      throw createError.badRequest('No valid messages to send to AI model');
-    }
-
-    // =========================================================================
-    // STEP 6.4: ✅ CONVERT UI MESSAGES TO MODEL MESSAGES
-    // =========================================================================
-    // AI SDK V5 PATTERN: Convert validated UIMessages to ModelMessages for LLM
-    // Reference: https://sdk.vercel.ai/docs/ai-sdk-core/generating-text#stream-text
-    // Reference: https://sdk.vercel.ai/docs/reference/ai-sdk-core/convert-to-model-messages
-    //
-    // MESSAGE FORMAT TRANSFORMATION:
-    // - UIMessage: Rich format with parts[], metadata, createdAt (frontend/database)
-    // - CoreMessage (ModelMessage): Simplified format for LLM providers (OpenRouter, OpenAI, etc.)
-    //
-    // CONVERSION PROCESS:
-    // 1. UIMessage.parts[] → CoreMessage.content (text, tool-call, tool-result)
-    // 2. UIMessage.metadata → Stripped (not sent to LLM)
-    // 3. UIMessage.createdAt → Stripped (not sent to LLM)
-    // 4. UIMessage.role → CoreMessage.role (preserved)
-    //
-    // IMPORTANT: Messages were already validated at entry point (line 515-529)
-    // This ensures we NEVER pass UIMessage[] directly to streamText/generateText
-    // Only CoreMessage[] should be passed to LLM providers
-    //
-    // WHY THIS MATTERS:
-    // - LLM providers don't understand UIMessage format (they expect CoreMessage)
-    // - Direct UIMessage[] to streamText() will cause runtime errors
-    // - convertToModelMessages() handles all edge cases (empty parts, tool calls, etc.)
-
-    let modelMessages;
-    try {
-      // ✅ CRITICAL: Use convertToModelMessages() to transform validated UIMessages
-      // This converts UIMessage format (with parts[]) to CoreMessage format expected by LLMs
-      // NEVER pass UIMessage[] directly to streamText() - always convert first
-      modelMessages = convertToModelMessages(nonEmptyMessages);
-    } catch (error) {
-      throw createError.badRequest(
-        `Failed to convert messages for model: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        { errorType: 'validation' },
-      );
-    }
-
-    // =========================================================================
-    // STEP 6.5: ✅ VALIDATE MESSAGE HISTORY: Ensure last message is from user
-    // =========================================================================
-    // OpenRouter and most LLM APIs require conversations to end with a user message.
-    // This validation prevents the "Last message cannot be from the assistant" error.
-    //
-    // WHY THIS HAPPENS:
-    // - Frontend sends empty user messages to trigger subsequent participants
-    // - Backend filters out empty user messages (line 2454)
-    // - Result: Message history ends with assistant message → API rejects it
-    //
-    // FIX: If last message is from assistant, duplicate the last user message to ensure
-    // proper conversation structure for multi-participant flows.
-    const lastModelMessage = modelMessages[modelMessages.length - 1];
-    if (!lastModelMessage || lastModelMessage.role !== 'user') {
-      // Find the last user message to duplicate
-      const lastUserMessage = nonEmptyMessages.findLast(m => m.role === 'user');
-      if (!lastUserMessage) {
-        throw createError.badRequest('No valid user message found in conversation history');
-      }
-
-      // Extract text content from last user message
-      const lastUserText = lastUserMessage.parts?.find(p => p.type === 'text' && 'text' in p);
-      if (!lastUserText || !('text' in lastUserText)) {
-        throw createError.badRequest('Last user message has no valid text content');
-      }
-
-      // Re-convert with the last user message duplicated at the end
-      // This ensures the conversation structure is: [user, assistant, user, assistant, ..., user]
-      modelMessages = convertToModelMessages([
-        ...nonEmptyMessages,
-        {
-          id: `user-continuation-${ulid()}`,
-          role: 'user',
-          parts: [{ type: 'text', text: lastUserText.text }],
-        },
-      ]);
-    }
-
-    // =========================================================================
-    // STEP 6.6: ✅ WEB SEARCH PRE-SEARCH CONTEXT LOADING
-    // =========================================================================
-    // Pre-search is now executed via separate /chat/pre-search endpoint BEFORE streaming
-    // This section loads existing pre-search results from database to add to system prompt
-    //
-    // ✅ CONSOLIDATED SERVICE: Uses search-context-builder.ts for type-safe context generation
-    // ✅ CRITICAL FIX: ALL participants should receive search context, not just participant 0
-    // ✅ CONTEXT STRATEGY:
-    //    - Current round: Full search results with all website contents
-    //    - Previous rounds: Summary/analysis only (to avoid context bloat)
-    //
-    // ✅ HISTORY CONSTRUCTION:
-    //    1. Conversation history (conversationDbMessages) excludes pre-search messages
-    //       - These are filtered out above using filterDbToConversationMessages()
-    //       - History shows: user messages + participant responses only
-    //    2. Search context (searchContext) is added to system prompt separately
-    //       - Current round: Full details (query, summary, sources, content)
-    //       - Previous rounds: Analysis summary only
-    //    3. ALL participants see complete history:
-    //       - All previous user messages
-    //       - All previous participant responses
-    //       - Current round search results (if web search enabled)
-    //       - Previous round search summaries
-    //
-    // This ensures participants have full context while keeping the conversation
-    // history clean and focused on actual participant interactions.
-
-    let searchContext = '';
-
-    if (thread.enableWebSearch) {
-      try {
-        // ✅ CONSOLIDATED: Use buildSearchContext() from search-context-builder.ts
-        // Replaces 60+ lines of inline context building logic
-        // Type-safe with Zod validation, handles current vs previous round strategies
-        searchContext = buildSearchContext(previousDbMessages, {
-          currentRoundNumber,
-          includeFullResults: true, // Full details for current round
-        });
-      } catch {
-        // Ignore error - don't fail the request
-      }
-    }
-
-    // Add search context to system prompt if available
-    if (searchContext) {
-      systemPrompt = `${systemPrompt}${searchContext}`;
-    }
 
     // =========================================================================
     // STEP 7: ✅ OFFICIAL AI SDK v5 STREAMING PATTERN
@@ -844,17 +519,18 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
     );
 
     // =========================================================================
-    // ✅ PREPARE PARTICIPANT METADATA FOR STREAMING
+    // ✅ TYPE-SAFE PARTICIPANT METADATA FOR STREAMING
     // =========================================================================
-    // This metadata will be injected into the streaming response via messageMetadata callback
-    // It ensures the frontend receives participant information during streaming, not just after completion
-    const streamMetadata = {
+    // Uses type-safe builder that enforces all required fields at compile-time
+    // PREVENTS: Missing fields that cause schema validation failures
+    // ENSURES: Metadata always matches ParticipantMessageMetadataSchema
+    const streamMetadata = createStreamingMetadata({
       roundNumber: currentRoundNumber,
       participantId: participant.id,
-      participantIndex,
+      participantIndex: participantIndex ?? 0,
       participantRole: participant.role,
       model: participant.modelId,
-    };
+    });
 
     // =========================================================================
     // ✅ AI SDK V5 BUILT-IN RETRY LOGIC
@@ -1101,21 +777,18 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
       // Send metadata on 'start' to ensure frontend receives participant info immediately
       // Send additional metadata on 'finish' to include usage stats
       messageMetadata: ({ part }) => {
-        // Send participant metadata when streaming starts
         if (part.type === 'start') {
           return streamMetadata;
         }
 
-        // Send additional metadata when streaming finishes
         if (part.type === 'finish') {
-          return {
-            ...streamMetadata,
-            totalTokens: part.totalUsage?.totalTokens ?? 0,
+          return completeStreamingMetadata(streamMetadata, {
             finishReason: part.finishReason,
-          };
+            usage: undefined,
+            totalUsage: part.totalUsage,
+          });
         }
 
-        // For 'start-step' and 'finish-step', return undefined (no extra metadata needed)
         return undefined;
       },
 

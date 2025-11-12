@@ -13,7 +13,7 @@
 import { useCallback } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
-import { AnalysisStatuses } from '@/api/core/enums';
+// Removed: AnalysisStatuses import - no longer needed after removing duplicate pre-search creation
 import { toCreateThreadRequest } from '@/components/chat/chat-form-schemas';
 import { useChatStore } from '@/components/providers/chat-store-provider';
 import { useCreateThreadMutation, useUpdateThreadMutation } from '@/hooks/mutations/chat-mutations';
@@ -140,26 +140,10 @@ export function useChatFormActions(): UseChatFormActionsReturn {
 
       actions.initializeThread(threadWithDates, participantsWithDates, uiMessages);
 
-      // ✅ CRITICAL: If web search enabled, create PENDING pre-search in store
-      // Backend creates DB record but doesn't return it in response
-      // Store needs it so PreSearchCard renders and PreSearchStream can handle it
-      if (formState.enableWebSearch) {
-        // ✅ FIX: Generate temporary ID so PreSearchStream can track deduplication
-        // Backend record has real ID, but frontend needs placeholder for rendering
-        const tempPreSearchId = `temp-presearch-${thread.id}-1-${Date.now()}`;
-
-        actions.addPreSearch({
-          id: tempPreSearchId, // Temporary ID until SSE completes and syncs from server
-          threadId: thread.id,
-          roundNumber: 1,
-          userQuery: formState.inputValue,
-          status: AnalysisStatuses.PENDING,
-          searchData: null,
-          errorMessage: null,
-          completedAt: null,
-          createdAt: new Date(),
-        });
-      }
+      // ✅ REMOVED: Duplicate pre-search creation
+      // Backend already creates PENDING pre-search record during thread creation (thread.handler.ts:265-274)
+      // PreSearchOrchestrator will sync it from server automatically
+      // No need for temporary frontend record - causes race conditions with orchestrator sync
 
       // Set flag to trigger streaming once chat is ready
       // Store subscription will wait for startRound to be registered by provider

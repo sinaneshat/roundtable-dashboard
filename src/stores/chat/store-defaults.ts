@@ -82,8 +82,8 @@ export const THREAD_DEFAULTS = {
   error: null as Error | null,
   // AI SDK methods
   sendMessage: undefined as ((content: string) => Promise<void>) | undefined,
-  startRound: undefined as (() => void) | undefined,
-  retry: undefined as (() => void) | undefined,
+  startRound: undefined as (() => Promise<void>) | undefined,
+  retry: undefined as (() => Promise<void>) | undefined,
   stop: undefined as (() => void) | undefined,
   chatSetMessages: undefined as ((messages: UIMessage[] | ((messages: UIMessage[]) => UIMessage[])) => void) | undefined,
 } as const;
@@ -146,38 +146,97 @@ export const SCREEN_DEFAULTS = {
 
 /**
  * Complete default state for full store reset
+ * 🚨 STATE ONLY: Only includes state properties, not action methods
+ * Store.set() expects state only - action methods are not passed to set()
  * Used by: resetToOverview
  */
 export const COMPLETE_RESET_STATE = {
-  ...FORM_DEFAULTS,
-  ...FEEDBACK_DEFAULTS,
-  ...UI_DEFAULTS,
-  ...ANALYSIS_DEFAULTS,
-  ...PRESEARCH_DEFAULTS,
-  ...THREAD_DEFAULTS,
-  ...FLAGS_DEFAULTS,
-  ...DATA_DEFAULTS,
-  ...TRACKING_DEFAULTS,
-  ...CALLBACKS_DEFAULTS,
-  ...SCREEN_DEFAULTS,
+  // Form state
+  inputValue: FORM_DEFAULTS.inputValue,
+  selectedMode: FORM_DEFAULTS.selectedMode,
+  selectedParticipants: FORM_DEFAULTS.selectedParticipants,
+  enableWebSearch: FORM_DEFAULTS.enableWebSearch,
+  // Feedback state
+  feedbackByRound: FEEDBACK_DEFAULTS.feedbackByRound,
+  pendingFeedback: FEEDBACK_DEFAULTS.pendingFeedback,
+  hasLoadedFeedback: FEEDBACK_DEFAULTS.hasLoadedFeedback,
+  // UI state
+  showInitialUI: UI_DEFAULTS.showInitialUI,
+  waitingToStartStreaming: UI_DEFAULTS.waitingToStartStreaming,
+  isCreatingThread: UI_DEFAULTS.isCreatingThread,
+  createdThreadId: UI_DEFAULTS.createdThreadId,
+  // Analysis state
+  analyses: ANALYSIS_DEFAULTS.analyses,
+  // Pre-search state
+  preSearches: PRESEARCH_DEFAULTS.preSearches,
+  // Thread state
+  thread: THREAD_DEFAULTS.thread,
+  participants: THREAD_DEFAULTS.participants,
+  messages: THREAD_DEFAULTS.messages,
+  isStreaming: THREAD_DEFAULTS.isStreaming,
+  currentParticipantIndex: THREAD_DEFAULTS.currentParticipantIndex,
+  error: THREAD_DEFAULTS.error,
+  sendMessage: THREAD_DEFAULTS.sendMessage,
+  startRound: THREAD_DEFAULTS.startRound,
+  retry: THREAD_DEFAULTS.retry,
+  stop: THREAD_DEFAULTS.stop,
+  chatSetMessages: THREAD_DEFAULTS.chatSetMessages,
+  // Flags state
+  hasInitiallyLoaded: FLAGS_DEFAULTS.hasInitiallyLoaded,
+  isRegenerating: FLAGS_DEFAULTS.isRegenerating,
+  isCreatingAnalysis: FLAGS_DEFAULTS.isCreatingAnalysis,
+  isWaitingForChangelog: FLAGS_DEFAULTS.isWaitingForChangelog,
+  hasPendingConfigChanges: FLAGS_DEFAULTS.hasPendingConfigChanges,
+  // Data state
+  regeneratingRoundNumber: DATA_DEFAULTS.regeneratingRoundNumber,
+  pendingMessage: DATA_DEFAULTS.pendingMessage,
+  expectedParticipantIds: DATA_DEFAULTS.expectedParticipantIds,
+  streamingRoundNumber: DATA_DEFAULTS.streamingRoundNumber,
+  currentRoundNumber: DATA_DEFAULTS.currentRoundNumber,
+  // Tracking state
+  hasSentPendingMessage: TRACKING_DEFAULTS.hasSentPendingMessage,
+  createdAnalysisRounds: TRACKING_DEFAULTS.createdAnalysisRounds,
+  triggeredPreSearchRounds: TRACKING_DEFAULTS.triggeredPreSearchRounds,
+  // Callbacks state
+  onComplete: CALLBACKS_DEFAULTS.onComplete,
+  onRetry: CALLBACKS_DEFAULTS.onRetry,
+  // Screen state
+  screenMode: SCREEN_DEFAULTS.screenMode,
+  isReadOnly: SCREEN_DEFAULTS.isReadOnly,
 } as const;
 
 /**
  * Thread-specific reset state
+ * 🚨 STATE ONLY: Only includes state properties, not action methods
+ * Store.set() expects state only - action methods are not passed to set()
  * Used by: resetThreadState (when unmounting thread screen)
  */
 export const THREAD_RESET_STATE = {
-  ...FLAGS_DEFAULTS,
-  ...DATA_DEFAULTS,
-  ...TRACKING_DEFAULTS,
-  // Include AI SDK methods and callbacks that were missing
-  sendMessage: undefined as ((content: string) => Promise<void>) | undefined,
-  startRound: undefined as (() => void) | undefined,
-  retry: undefined as (() => void) | undefined,
-  stop: undefined as (() => void) | undefined,
-  chatSetMessages: undefined as ((messages: UIMessage[] | ((messages: UIMessage[]) => UIMessage[])) => void) | undefined,
-  onComplete: undefined as (() => void) | undefined,
-  onRetry: undefined as ((roundNumber: number) => void) | undefined,
+  // Flags state
+  hasInitiallyLoaded: FLAGS_DEFAULTS.hasInitiallyLoaded,
+  isRegenerating: FLAGS_DEFAULTS.isRegenerating,
+  isCreatingAnalysis: FLAGS_DEFAULTS.isCreatingAnalysis,
+  isWaitingForChangelog: FLAGS_DEFAULTS.isWaitingForChangelog,
+  hasPendingConfigChanges: FLAGS_DEFAULTS.hasPendingConfigChanges,
+  // Data state
+  regeneratingRoundNumber: DATA_DEFAULTS.regeneratingRoundNumber,
+  pendingMessage: DATA_DEFAULTS.pendingMessage,
+  expectedParticipantIds: DATA_DEFAULTS.expectedParticipantIds,
+  streamingRoundNumber: DATA_DEFAULTS.streamingRoundNumber,
+  currentRoundNumber: DATA_DEFAULTS.currentRoundNumber,
+  // Tracking state
+  hasSentPendingMessage: TRACKING_DEFAULTS.hasSentPendingMessage,
+  createdAnalysisRounds: TRACKING_DEFAULTS.createdAnalysisRounds,
+  triggeredPreSearchRounds: TRACKING_DEFAULTS.triggeredPreSearchRounds,
+  // AI SDK methods (thread-related)
+  sendMessage: THREAD_DEFAULTS.sendMessage,
+  startRound: THREAD_DEFAULTS.startRound,
+  retry: THREAD_DEFAULTS.retry,
+  stop: THREAD_DEFAULTS.stop,
+  chatSetMessages: THREAD_DEFAULTS.chatSetMessages,
+  // Callbacks (included in thread reset)
+  onComplete: CALLBACKS_DEFAULTS.onComplete,
+  onRetry: CALLBACKS_DEFAULTS.onRetry,
 } as const;
 
 /**

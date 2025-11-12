@@ -718,13 +718,23 @@ export const LeaderboardEntrySchema = z.object({
   overallRating: z.number().min(1).max(10).describe('Overall rating for ranking'),
   badge: z.string().nullable().describe('Optional badge/award (e.g., "Most Creative", "Best Analysis")'),
 }).openapi('LeaderboardEntry');
+
+// RecommendedAction schema - used within RoundSummarySchema
+export const RecommendedActionSchema = z.object({
+  action: z.string().describe('User-ready prompt addressing specific gaps in the conversation. Write as the user would: "Can you explore X? What challenges..." NOT "Explore X" or "Consider Y". Be direct and actionable.'),
+  rationale: z.string().describe('Why this addresses a blind spot in the conversation'),
+  suggestedModels: z.array(z.string()).describe('Model IDs to add (e.g., "openai/gpt-4o"), empty if none'),
+  suggestedRoles: z.array(z.string()).describe('Roles for new participants (e.g., "critic"), empty if none'),
+  suggestedMode: z.string().describe('Mode change if beneficial (e.g., "debating"), empty if none'),
+});
+
 export const RoundSummarySchema = z.object({
   keyInsights: z.array(z.string()).min(1).max(6).describe('3-6 most important insights or patterns identified across all participant responses'),
   consensusPoints: z.array(z.string()).min(0).max(5).describe('2-5 key points where participants showed agreement or alignment (empty if no consensus)'),
   divergentApproaches: z.array(z.object({
     topic: z.string().describe('The specific topic or aspect where participants diverged'),
-    perspectives: z.array(z.string()).min(2).describe('Different perspectives taken by participants'),
-  })).min(0).max(4).describe('2-4 areas where participants took significantly different approaches'),
+    perspectives: z.array(z.string()).min(1).describe('Different perspectives taken by participants (at least 1)'),
+  })).min(0).max(4).describe('0-4 areas where participants took significantly different approaches'),
   comparativeAnalysis: z.object({
     strengthsByCategory: z.array(z.object({
       category: z.string().describe('Strength category (e.g., "Technical Depth", "Creativity")'),
@@ -739,15 +749,9 @@ export const RoundSummarySchema = z.object({
       recommendation: z.string().describe('Which approach(es) work best for this scenario and why'),
     })).min(1).max(3).describe('2-3 scenario-based recommendations'),
   }).describe('Framework to help user make informed decisions'),
-  overallSummary: z.string().min(200).max(1200).describe('Comprehensive narrative summary (3-5 paragraphs) that synthesizes the analysis and provides context for the structured insights'),
-  conclusion: z.string().min(150).max(600).describe('Final conclusion (2-3 paragraphs) with clear recommendation on best path forward, synthesizing insights from all analysis sections'),
-  recommendedActions: z.array(z.object({
-    action: z.string().describe('User-ready prompt addressing specific gaps in the conversation. Write as the user would: "Can you explore X? What challenges..." NOT "Explore X" or "Consider Y". Be direct and actionable.'),
-    rationale: z.string().describe('Why this addresses a blind spot in the conversation'),
-    suggestedModels: z.array(z.string()).describe('Model IDs to add (e.g., "openai/gpt-4o"), empty if none'),
-    suggestedRoles: z.array(z.string()).describe('Roles for new participants (e.g., "critic"), empty if none'),
-    suggestedMode: z.string().describe('Mode change if beneficial (e.g., "debating"), empty if none'),
-  })).min(1).max(5).describe('1-5 next steps addressing conversation gaps. Generate after conclusion.'),
+  overallSummary: z.string().min(50).max(1200).describe('Narrative summary that synthesizes the analysis (50-1200 chars, adapt length to complexity)'),
+  conclusion: z.string().min(30).max(600).describe('Final conclusion with recommendation (30-600 chars, adapt length to complexity)'),
+  recommendedActions: z.array(RecommendedActionSchema).min(1).max(5).describe('1-5 next steps addressing conversation gaps. Generate after conclusion.'),
 }).openapi('RoundSummary');
 
 export const ModeratorAnalysisPayloadSchema = z.object({
@@ -779,6 +783,10 @@ const ModeratorAnalysisListPayloadSchema = z.object({
   count: z.number().int().nonnegative(),
 }).openapi('ModeratorAnalysisListPayload');
 export const ModeratorAnalysisListResponseSchema = createApiResponseSchema(ModeratorAnalysisListPayloadSchema).openapi('ModeratorAnalysisListResponse');
+
+// Export schemas for store usage
+export { ChatParticipantSchema, ChatThreadSchema };
+
 export type ChatThread = z.infer<typeof ChatThreadSchema>;
 export type CreateThreadRequest = z.infer<typeof CreateThreadRequestSchema>;
 export type UpdateThreadRequest = z.infer<typeof UpdateThreadRequestSchema>;
@@ -792,8 +800,7 @@ export type ChatCustomRole = z.infer<typeof ChatCustomRoleSchema>;
 export type CreateCustomRoleRequest = z.infer<typeof CreateCustomRoleRequestSchema>;
 export type UpdateCustomRoleRequest = z.infer<typeof UpdateCustomRoleRequestSchema>;
 export type RoundSummary = z.infer<typeof RoundSummarySchema>;
-// Extract RecommendedAction from RoundSummary array type
-export type RecommendedAction = z.infer<typeof RoundSummarySchema>['recommendedActions'][number];
+export type RecommendedAction = z.infer<typeof RecommendedActionSchema>;
 // ============================================================================
 // SIMPLIFIED CHANGELOG DATA SCHEMAS
 // ============================================================================
