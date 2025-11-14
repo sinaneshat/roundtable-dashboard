@@ -20,7 +20,7 @@ import type { ErrorMetadata } from '@/api/services/error-metadata.service';
 import ErrorMetadataService from '@/api/services/error-metadata.service';
 import { filterDbToParticipantMessages } from '@/api/services/message-type-guards';
 import {
-  checkAnalysisQuota,
+  getUserUsageStats,
   incrementMessageUsage,
 } from '@/api/services/usage-tracking.service';
 import type { getDbAsync } from '@/db';
@@ -28,8 +28,8 @@ import * as tables from '@/db/schema';
 import type { ChatMessage } from '@/db/validation';
 import type { MessagePartSchema } from '@/lib/schemas/message-schemas';
 import { extractTextFromParts } from '@/lib/schemas/message-schemas';
-import { isObject, isTextPart, safeParse } from '@/lib/utils/type-guards';
 import { createParticipantMetadata } from '@/lib/utils/metadata-builder';
+import { isObject, isTextPart, safeParse } from '@/lib/utils/type-guards';
 
 // Type inference from schema
 type MessagePart = z.infer<typeof MessagePartSchema>;
@@ -291,8 +291,8 @@ export async function saveStreamedMessage(
     // If both are missing, estimate from text length (1 token ≈ 4 characters)
     const usageMetadata = usageData
       ? {
-          promptTokens: usageData.inputTokens,
-          completionTokens: usageData.outputTokens,
+          promptTokens: usageData.inputTokens ?? 0,
+          completionTokens: usageData.outputTokens ?? 0,
           totalTokens: (usageData.inputTokens ?? 0) + (usageData.outputTokens ?? 0),
         }
       : text.trim().length > 0
@@ -315,15 +315,15 @@ export async function saveStreamedMessage(
       participantIndex,
       participantRole,
       model: modelId,
-      finishReason: finishResult.finishReason,
+      finishReason: finishResult.finishReason as 'stop' | 'length' | 'content-filter' | 'tool-calls' | 'failed' | 'other' | 'unknown',
       usage: usageMetadata,
       hasError: errorMetadata.hasError,
-      errorType: errorMetadata.errorCategory,
+      errorType: errorMetadata.errorCategory as 'rate_limit' | 'context_length' | 'api_error' | 'network' | 'timeout' | 'model_unavailable' | 'empty_response' | 'unknown' | undefined,
       errorMessage: errorMetadata.errorMessage,
       isTransient: errorMetadata.isTransientError,
       isPartialResponse: errorMetadata.isPartialResponse,
       providerMessage: errorMetadata.providerMessage,
-      openRouterError: errorMetadata.openRouterError,
+      openRouterError: errorMetadata.openRouterError ? { message: errorMetadata.openRouterError } : undefined,
     });
 
     // Save message to database
@@ -358,6 +358,8 @@ export async function saveStreamedMessage(
       });
 
       if (!existingToolMessage) {
+        // ✅ CRITICAL: Tool messages don't use discriminated metadata
+        // They store minimal info since they're just tool results
         await db.insert(tables.chatMessage)
           .values({
             id: toolMessageId,
@@ -366,12 +368,7 @@ export async function saveStreamedMessage(
             role: MessageRoles.TOOL,
             parts: toolParts,
             roundNumber,
-            metadata: {
-              roundNumber,
-              participantId,
-              participantIndex,
-              relatedMessageId: messageId, // Link to assistant message with tool calls
-            },
+            metadata: null, // Tool messages have no metadata (just parts with tool-result type)
             createdAt: new Date(),
           });
       }
@@ -436,9 +433,9 @@ async function createPendingAnalysis(
   const { threadId, roundNumber, threadMode, userId, participants, db } = params;
 
   try {
-    // Check analysis quota first
-    const analysisQuota = await checkAnalysisQuota(userId);
-    if (!analysisQuota.canCreate) {
+    // Check analysis quota first (silent return if quota exceeded)
+    const stats = await getUserUsageStats(userId);
+    if (stats.analysis.remaining === 0) {
       return;
     }
 

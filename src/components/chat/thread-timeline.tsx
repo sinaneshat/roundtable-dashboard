@@ -13,10 +13,11 @@ import type { FeedbackType } from '@/api/core/enums';
 import { AnalysisStatuses } from '@/api/core/enums';
 import type { ChatParticipant, ModeratorAnalysisPayload, RecommendedAction, StoredPreSearch } from '@/api/routes/chat/schema';
 import { Actions } from '@/components/ai-elements/actions';
+import { DbMessageMetadataSchema } from '@/db/schemas/chat-metadata';
 import type { TimelineItem } from '@/hooks/utils';
 import { useVirtualizedTimeline } from '@/hooks/utils';
-import { messageHasError, MessageMetadataSchema } from '@/lib/schemas/message-metadata';
-import { getRoundNumberFromMetadata } from '@/lib/utils/round-utils';
+import { messageHasError } from '@/lib/schemas/message-metadata';
+import { DEFAULT_ROUND_NUMBER, extractRoundNumber } from '@/lib/schemas/round-schemas';
 
 import { ChatMessageList } from './chat-message-list';
 import { ConfigurationChangesGroup } from './configuration-changes-group';
@@ -138,12 +139,12 @@ export function ThreadTimeline({
           return null;
 
         const roundNumber = item.type === 'messages'
-          ? getRoundNumberFromMetadata(item.data[0]?.metadata, 1)
+          ? extractRoundNumber(item.data[0]?.metadata)
           : item.type === 'analysis'
             ? item.data.roundNumber
             : item.type === 'changelog'
-              ? item.data[0]?.roundNumber ?? 1
-              : 1;
+              ? item.data[0]?.roundNumber ?? DEFAULT_ROUND_NUMBER
+              : DEFAULT_ROUND_NUMBER;
 
         return (
           <div
@@ -204,7 +205,7 @@ export function ThreadTimeline({
 
                 {!isStreaming && (() => {
                   const hasRoundError = item.data.some((msg) => {
-                    const parseResult = MessageMetadataSchema.safeParse(msg.metadata);
+                    const parseResult = DbMessageMetadataSchema.safeParse(msg.metadata);
                     return parseResult.success && messageHasError(parseResult.data);
                   });
 

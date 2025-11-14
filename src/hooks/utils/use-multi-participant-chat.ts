@@ -9,15 +9,14 @@ import { z } from 'zod';
 
 import { AiSdkStatuses, MessagePartTypes, MessageRoles } from '@/api/core/enums';
 import type { ChatParticipant } from '@/api/routes/chat/schema';
+import type { DbAssistantMessageMetadata } from '@/db/schemas/chat-metadata';
 import { ErrorMetadataSchema } from '@/lib/schemas/error-schemas';
-import type { AssistantMessageMetadata } from '@/lib/schemas/message-metadata';
-import { ParticipantsArraySchema } from '@/lib/schemas/participant-schemas';
+import { DEFAULT_PARTICIPANT_INDEX, ParticipantsArraySchema } from '@/lib/schemas/participant-schemas';
 import type { UIMessageErrorType } from '@/lib/utils/message-transforms';
 import { createErrorUIMessage, mergeParticipantMetadata } from '@/lib/utils/message-transforms';
-import { getRoundNumber } from '@/lib/utils/metadata';
+import { getRoundNumber, getUserMetadata } from '@/lib/utils/metadata';
 import { deduplicateParticipants } from '@/lib/utils/participant';
 import { calculateNextRoundNumber, getCurrentRoundNumber } from '@/lib/utils/round-utils';
-import { isObject } from '@/lib/utils/type-guards';
 
 import { useSyncedRefs } from './use-synced-refs';
 
@@ -49,7 +48,7 @@ type UseMultiParticipantChatOptions = {
   /** Initial messages for the chat (optional) */
   messages?: UIMessage[];
   /** Callback when a round completes (all enabled participants have responded) */
-  onComplete?: () => void;
+  onComplete?: (messages: UIMessage[]) => void;
   /** Callback when user clicks retry (receives the round number being retried) */
   onRetry?: (roundNumber: number) => void;
   /** Callback when an error occurs */
@@ -263,14 +262,16 @@ export function useMultiParticipantChat(
       // eslint-disable-next-line react-dom/no-flush-sync -- Required for analysis trigger synchronization
       flushSync(() => {
         setIsExplicitlyStreaming(false);
-        setCurrentParticipantIndex(0);
+        setCurrentParticipantIndex(DEFAULT_PARTICIPANT_INDEX);
       });
 
       resetErrorTracking();
       regenerateRoundNumberRef.current = null;
       lastUsedParticipantIndex.current = null; // Reset for next round
 
-      callbackRefs.onComplete.current?.();
+      // ✅ CRITICAL FIX: Pass messages directly to avoid stale ref issue
+      // messagesRef.current has the latest messages with complete metadata
+      callbackRefs.onComplete.current?.(messagesRef.current);
 
       return;
     }
@@ -319,6 +320,7 @@ export function useMultiParticipantChat(
       aiSendMessageRef.current({
         text: userText,
         metadata: {
+          role: 'user',
           roundNumber: currentRoundRef.current,
           isParticipantTrigger: true,
         },
@@ -557,7 +559,7 @@ export function useMultiParticipantChat(
               if (msg.id !== idToSearchFor)
                 return false;
 
-              const msgMetadata = msg.metadata as AssistantMessageMetadata | undefined;
+              const msgMetadata = msg.metadata as DbAssistantMessageMetadata | undefined;
 
               // If message has no metadata, it's unclaimed - safe to use
               if (!msgMetadata)
@@ -577,7 +579,7 @@ export function useMultiParticipantChat(
               // This prevents edge cases where messages might have been refetched
               const duplicateMsg = prev.find(msg => msg.id === completeMessage.id);
               if (duplicateMsg) {
-                const dupMetadata = duplicateMsg.metadata as AssistantMessageMetadata | undefined;
+                const dupMetadata = duplicateMsg.metadata as DbAssistantMessageMetadata | undefined;
                 const dupParticipantId = dupMetadata?.participantId;
 
                 // Only replace if it's the same participant (prevents overwriting different participant's message)
@@ -701,7 +703,7 @@ export function useMultiParticipantChat(
 
     // CRITICAL: Update refs FIRST to avoid race conditions
     // These refs are used in prepareSendMessagesRequest and must be set before the API call
-    currentIndexRef.current = 0;
+    currentIndexRef.current = DEFAULT_PARTICIPANT_INDEX;
     roundParticipantsRef.current = enabled;
     isTriggeringRef.current = false;
     currentRoundRef.current = roundNumber;
@@ -709,7 +711,7 @@ export function useMultiParticipantChat(
 
     // Reset all state for new round
     setIsExplicitlyStreaming(true);
-    setCurrentParticipantIndex(0);
+    setCurrentParticipantIndex(DEFAULT_PARTICIPANT_INDEX);
     setCurrentRound(roundNumber);
     resetErrorTracking();
 
@@ -724,6 +726,7 @@ export function useMultiParticipantChat(
     aiSendMessage({
       text: userText,
       metadata: {
+        role: 'user',
         roundNumber,
         isParticipantTrigger: true,
       },
@@ -758,7 +761,7 @@ export function useMultiParticipantChat(
 
       // CRITICAL: Update refs FIRST to avoid race conditions
       // These refs are used in prepareSendMessagesRequest and must be set before the API call
-      currentIndexRef.current = 0;
+      currentIndexRef.current = DEFAULT_PARTICIPANT_INDEX;
       roundParticipantsRef.current = enabled;
       isTriggeringRef.current = false;
       lastUsedParticipantIndex.current = null; // Reset for new round
@@ -785,7 +788,7 @@ export function useMultiParticipantChat(
       // AI SDK v5 Pattern: Synchronization for proper message ordering
       // Reset all state for new round
       setIsExplicitlyStreaming(true);
-      setCurrentParticipantIndex(0);
+      setCurrentParticipantIndex(DEFAULT_PARTICIPANT_INDEX);
       setCurrentRound(newRoundNumber);
       resetErrorTracking();
 
@@ -808,6 +811,7 @@ export function useMultiParticipantChat(
       aiSendMessage({
         text: trimmed,
         metadata: {
+          role: 'user',
           roundNumber: newRoundNumber,
         },
       });
@@ -834,9 +838,9 @@ export function useMultiParticipantChat(
         return false;
       }
 
-      // ✅ TYPE-SAFE: Check transient flag with proper validation
-      const metadata = m.metadata && isObject(m.metadata) ? m.metadata : null;
-      const isParticipantTrigger = metadata?.isParticipantTrigger === true;
+      // ✅ TYPE-SAFE: Use extraction utility for user metadata
+      const userMetadata = getUserMetadata(m.metadata);
+      const isParticipantTrigger = userMetadata?.isParticipantTrigger === true;
 
       if (isParticipantTrigger) {
         return false;
@@ -888,11 +892,11 @@ export function useMultiParticipantChat(
     setIsExplicitlyStreaming(false);
 
     // CRITICAL: Update ref BEFORE setting state
-    currentIndexRef.current = 0;
+    currentIndexRef.current = DEFAULT_PARTICIPANT_INDEX;
     lastUsedParticipantIndex.current = null; // Reset for retry
 
     // Update participant index synchronously (no flushSync needed)
-    setCurrentParticipantIndex(0);
+    setCurrentParticipantIndex(DEFAULT_PARTICIPANT_INDEX);
 
     resetErrorTracking();
     isTriggeringRef.current = false;
@@ -912,7 +916,7 @@ export function useMultiParticipantChat(
   const stopStreaming = useCallback(() => {
     stop();
     setIsExplicitlyStreaming(false);
-    setCurrentParticipantIndex(0);
+    setCurrentParticipantIndex(DEFAULT_PARTICIPANT_INDEX);
     isTriggeringRef.current = false;
     lastUsedParticipantIndex.current = null; // Reset when stopping
   }, [stop]);

@@ -85,7 +85,7 @@ import type {
 } from '@/api/routes/chat/schema';
 import type { ChatParticipant, ChatThread } from '@/db/validation';
 import { filterToParticipantMessages, getParticipantMessagesWithIds } from '@/lib/utils/message-filtering';
-import { getRoundNumber } from '@/lib/utils/metadata';
+import { getParticipantId, getRoundNumber } from '@/lib/utils/metadata';
 
 import type { ApplyRecommendedActionOptions } from './actions/recommended-action-application';
 import { applyRecommendedAction as applyRecommendedActionLogic } from './actions/recommended-action-application';
@@ -348,9 +348,11 @@ const createAnalysisSlice: StateCreator<
       const messagesByParticipant = new Map<string, string>();
 
       validParticipantMessages.forEach((msg) => {
-        // ✅ NO UNSAFE CAST: Type guard narrows metadata to ParticipantMessageMetadata
-        // participantId is guaranteed to exist (Zod-validated, no optional chaining needed)
-        messagesByParticipant.set(msg.metadata.participantId, msg.id);
+        // ✅ TYPE-SAFE: Use extraction utility for consistent metadata access
+        const participantId = getParticipantId(msg.metadata);
+        if (participantId) {
+          messagesByParticipant.set(participantId, msg.id);
+        }
       });
 
       // Use deduplicated IDs
@@ -370,7 +372,6 @@ const createAnalysisSlice: StateCreator<
     });
 
     if (!allMessagesFromCorrectRound) {
-      // Messages from wrong round detected - skip analysis creation
       return;
     }
 

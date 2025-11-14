@@ -13,9 +13,9 @@ import type { SubscriptionTier } from '@/api/services/product-logic.service';
 import { canAccessModelByPricing } from '@/api/services/product-logic.service';
 import { ModelMessageCard } from '@/components/chat/model-message-card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { isAssistantMessageMetadata } from '@/db/schemas/chat-metadata';
 import { useUsageStatsQuery } from '@/hooks/queries/usage';
 import { useModelLookup } from '@/hooks/utils';
-import { isAssistantMetadata } from '@/lib/schemas/message-metadata';
 import type { MessagePart, MessageStatus } from '@/lib/schemas/message-schemas';
 import { extractColorFromImage } from '@/lib/ui';
 import { cn } from '@/lib/ui/cn';
@@ -90,7 +90,7 @@ function AssistantGroupCard({
   const hasStreamingMessage = group.messages.some(({ participantInfo }) => participantInfo.isStreaming);
   const hasErrorMessage = group.messages.some(({ message }) => {
     const metadata = getMessageMetadata(message.metadata);
-    const assistantMetadata = metadata && isAssistantMetadata(metadata) ? metadata : null;
+    const assistantMetadata = metadata && isAssistantMessageMetadata(metadata) ? metadata : null;
     return assistantMetadata?.hasError;
   });
 
@@ -300,7 +300,7 @@ function getParticipantInfoForMessage({
   const metadata = getMessageMetadata(message.metadata);
 
   // ✅ STRICT TYPING: Use type guard to access assistant-specific fields
-  const assistantMetadata = metadata && isAssistantMetadata(metadata) ? metadata : null;
+  const assistantMetadata = metadata && isAssistantMessageMetadata(metadata) ? metadata : null;
 
   // AI SDK v5 Pattern: A message is complete once it has model metadata
   // The onFinish callback in useMultiParticipantChat adds metadata.model via mergeParticipantMetadata
@@ -448,7 +448,7 @@ export const ChatMessageList = memo(
 
         const metadata = getMessageMetadata(message.metadata);
         // ✅ STRICT TYPING: Use type guard to access assistant-specific fields
-        const assistantMetadata = metadata && isAssistantMetadata(metadata) ? metadata : null;
+        const assistantMetadata = metadata && isAssistantMessageMetadata(metadata) ? metadata : null;
         const isComplete = !!assistantMetadata?.model;
 
         // ✅ For completed messages, return frozen metadata immediately without dependencies
@@ -541,7 +541,7 @@ export const ChatMessageList = memo(
         const model = findModel(participantInfo.modelId);
         const isAccessible = model ? canAccessModelByPricing(userTier, model) : true;
 
-        const assistantMetadata = metadata && isAssistantMetadata(metadata) ? metadata : null;
+        const assistantMetadata = metadata && isAssistantMessageMetadata(metadata) ? metadata : null;
         const displayName = model?.name || assistantMetadata?.model || 'AI Assistant';
         const requiredTierName = model?.required_tier_name;
 

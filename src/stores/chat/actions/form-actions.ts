@@ -125,10 +125,17 @@ export function useChatFormActions(): UseChatFormActionsReturn {
 
       const { thread, participants, messages: initialMessages } = response.data;
 
+      //   threadId: thread.id.slice(0, 8),
+      //   messagesFromBackend: initialMessages.map(m => ({ role: m.role, metadata: m.metadata, roundNumber: m.roundNumber })),
+      // });
+
       // ✅ SINGLE SOURCE OF TRUTH: Use date transform utilities
       const threadWithDates = transformChatThread(thread);
       const participantsWithDates = transformChatParticipants(participants);
       const messagesWithDates = transformChatMessages(initialMessages);
+
+      //   messagesWithDates: messagesWithDates.map(m => ({ role: m.role, metadata: m.metadata })),
+      // });
 
       actions.setShowInitialUI(false);
       actions.setInputValue('');
@@ -137,6 +144,9 @@ export function useChatFormActions(): UseChatFormActionsReturn {
       // ✅ SINGLE SOURCE OF TRUTH: Use utility for type-safe message transformation
       // Replaces unsafe type assertions with validated conversion
       const uiMessages = chatMessagesToUIMessages(messagesWithDates);
+
+      //   uiMessages: uiMessages.map(m => ({ role: m.role, metadata: m.metadata })),
+      // });
 
       actions.initializeThread(threadWithDates, participantsWithDates, uiMessages);
 

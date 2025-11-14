@@ -15,6 +15,13 @@ import {
   createCursorPaginatedResponseSchema,
   CursorPaginationQuerySchema,
 } from '@/api/core/schemas';
+import {
+  DbChangelogDataSchema,
+  DbCustomRoleMetadataSchema,
+  DbMessageMetadataSchema,
+  DbParticipantSettingsSchema,
+  DbThreadMetadataSchema,
+} from '@/db/schemas/chat-metadata';
 import { userSelectSchema } from '@/db/validation/auth';
 import {
   chatCustomRoleInsertSchema,
@@ -33,8 +40,7 @@ import {
   chatThreadSelectSchema,
   chatThreadUpdateSchema,
 } from '@/db/validation/chat';
-import { ParticipantSettingsSchema } from '@/lib/config/participant-settings';
-import { MessageMetadataSchema } from '@/lib/schemas/message-metadata';
+import { RoundNumberSchema } from '@/lib/schemas/round-schemas';
 
 export const MessageContentSchema = z.string()
   .min(1, 'Message is required')
@@ -141,12 +147,15 @@ const StreamParticipantSchema = BaseParticipantSchema.pick({
 // ENTITY SCHEMAS
 // ============================================================================
 
+// ✅ TYPE-SAFE: Use strongly-typed schemas from single source of truth
 const ChatParticipantSchema = chatParticipantSelectSchema
   .extend({
-    settings: ParticipantSettingsSchema,
+    // ✅ TYPE-SAFE: Settings nullable (SQLite can return null)
+    settings: DbParticipantSettingsSchema.nullable().optional(),
   })
   .openapi('ChatParticipant');
 
+// ✅ TYPE-SAFE: Discriminated union metadata (user | assistant | pre-search, nullable for legacy)
 const ChatMessageSchema = chatMessageSelectSchema
   .extend({
     toolCalls: z.array(z.object({
@@ -157,28 +166,29 @@ const ChatMessageSchema = chatMessageSelectSchema
         arguments: z.string(),
       }),
     })).nullable().optional(),
-    metadata: MessageMetadataSchema.optional(),
+    // ✅ TYPE-SAFE: Metadata typed by discriminated union (nullable for legacy data)
+    metadata: DbMessageMetadataSchema.nullable(),
   })
   .openapi('ChatMessage');
 
+// ✅ TYPE-SAFE: Strictly typed thread metadata (tags, summary only)
 const ChatThreadSchema = chatThreadSelectSchema
   .extend({
-    metadata: z.object({
-      tags: z.array(z.string()).optional(),
-      summary: z.string().optional(),
-    }).nullable().optional(),
+    metadata: DbThreadMetadataSchema.nullable().optional(),
   })
   .openapi('ChatThread');
 
+// ✅ TYPE-SAFE: Discriminated union changelog data (4 change types)
 const ChatThreadChangelogSchema = chatThreadChangelogSelectSchema
+  .extend({
+    changeData: DbChangelogDataSchema,
+  })
   .openapi('ChatThreadChangelog');
 
+// ✅ TYPE-SAFE: Strictly typed custom role metadata (tags, category only)
 const ChatCustomRoleSchema = chatCustomRoleSelectSchema
   .extend({
-    metadata: z.object({
-      tags: z.array(z.string()).optional(),
-      category: z.string().optional(),
-    }).nullable().optional(),
+    metadata: DbCustomRoleMetadataSchema.nullable().optional(),
   })
   .openapi('ChatCustomRole');
 export const CreateThreadRequestSchema = chatThreadInsertSchema
@@ -341,8 +351,9 @@ const UIMessageSchema = z.object({
     description: 'Message creation timestamp',
     example: '2025-01-15T10:30:00.000Z',
   }),
-  metadata: z.record(z.string(), z.unknown()).optional().openapi({
-    description: 'Optional message metadata',
+  // ✅ TYPE-SAFE: Use discriminated union schema for strict validation
+  metadata: DbMessageMetadataSchema.optional().openapi({
+    description: 'Message metadata (discriminated by role: user | assistant | system)',
   }),
 }).openapi('UIMessage');
 
@@ -468,8 +479,8 @@ export type ParticipantConfigInput = z.infer<typeof ParticipantConfigInputSchema
  * Used by search-context-builder.ts for context generation
  */
 export const SearchContextOptionsSchema = z.object({
-  currentRoundNumber: z.number().int().positive().openapi({
-    description: 'Current round number for determining context detail level',
+  currentRoundNumber: RoundNumberSchema.openapi({
+    description: 'Current round number for determining context detail level (0-based: first round is 0)',
   }),
   includeFullResults: z.boolean().optional().default(true).openapi({
     description: 'Whether to include full results for current round',
@@ -487,12 +498,12 @@ export const ValidatedPreSearchDataSchema = z.object({
     query: z.string(),
     rationale: z.string(),
     searchDepth: WebSearchDepthSchema,
-    index: z.number().int().nonnegative(),
+    index: RoundNumberSchema, // ✅ 0-BASED: Query index starts at 0
   })),
   analysis: z.string(),
-  successCount: z.number().int().nonnegative(),
-  failureCount: z.number().int().nonnegative(),
-  totalResults: z.number().int().nonnegative(),
+  successCount: RoundNumberSchema,
+  failureCount: RoundNumberSchema,
+  totalResults: RoundNumberSchema,
   totalTime: z.number(),
   results: z.array(z.object({
     query: z.string(),
@@ -611,9 +622,9 @@ export const StreamChatRequestSchema = z.object({
     .openapi({
       description: 'Current participant configuration (optional). If provided, used instead of loading from database.',
     }),
-  regenerateRound: z.number().int().positive().optional().openapi({
-    description: 'Round number to regenerate (replace). If provided, deletes old messages and analysis for that round first.',
-    example: 2,
+  regenerateRound: RoundNumberSchema.optional().openapi({
+    description: 'Round number to regenerate (replace). ✅ 0-BASED: first round is 0. If provided, deletes old messages and analysis for that round first.',
+    example: 0,
   }),
   mode: ChatModeSchema.optional().openapi({
     description: 'Conversation mode for this thread. If changed, generates changelog entry.',
@@ -653,10 +664,10 @@ const ChangelogListPayloadSchema = z.object({
 export const ChangelogListResponseSchema = createApiResponseSchema(ChangelogListPayloadSchema).openapi('ChangelogListResponse');
 export const CreateChangelogParamsSchema = z.object({
   threadId: CoreSchemas.id(),
-  roundNumber: z.number().int().nonnegative(), // ✅ 0-BASED: Allow round 0
+  roundNumber: RoundNumberSchema, // ✅ 0-BASED: Allow round 0
   changeType: ChangelogTypeSchema,
   changeSummary: z.string().min(1).max(500),
-  changeData: z.record(z.string(), z.unknown()).optional(),
+  changeData: DbChangelogDataSchema, // ✅ SINGLE SOURCE OF TRUTH: Use discriminated union
 }).openapi('CreateChangelogParams');
 export type CreateChangelogParams = z.infer<typeof CreateChangelogParamsSchema>;
 export const ParticipantInfoSchema = chatParticipantSelectSchema
@@ -693,7 +704,7 @@ export const SkillRatingSchema = z.object({
   rating: z.number().min(1).max(10).describe('Rating out of 10 for this specific skill'),
 }).openapi('SkillRating');
 export const ParticipantAnalysisSchema = z.object({
-  participantIndex: z.number().int().min(0).describe('Index of the participant in the conversation (0-based)'),
+  participantIndex: RoundNumberSchema.describe('Index of the participant in the conversation (0-based)'),
   participantRole: z.string().nullable().describe('The role assigned to this participant (e.g., "The Ideator")'),
   modelId: z.string()
     .describe('AI model ID (e.g., "anthropic/claude-sonnet-4.5")'),
@@ -709,7 +720,7 @@ export const ParticipantAnalysisSchema = z.object({
 }).openapi('ParticipantAnalysis');
 export const LeaderboardEntrySchema = z.object({
   rank: z.number().int().min(1).describe('Rank position (1 = best)'),
-  participantIndex: z.number().int().min(0).describe('Index of the participant'),
+  participantIndex: RoundNumberSchema.describe('Index of the participant'),
   participantRole: z.string().nullable().describe('The role assigned to this participant'),
   modelId: z.string()
     .describe('AI model ID (e.g., "anthropic/claude-sonnet-4.5")'),
@@ -755,7 +766,7 @@ export const RoundSummarySchema = z.object({
 }).openapi('RoundSummary');
 
 export const ModeratorAnalysisPayloadSchema = z.object({
-  roundNumber: z.number().int().min(0).describe('The conversation round number (✅ 0-BASED: starts at 0)'),
+  roundNumber: RoundNumberSchema.describe('The conversation round number (✅ 0-BASED: starts at 0)'),
   mode: z.string().describe('Conversation mode (analyzing, brainstorming, debating, solving)'),
   userQuestion: z.string().describe('The user\'s original question/prompt'),
   participantAnalyses: z.array(ParticipantAnalysisSchema).min(1).describe('Detailed analysis for each participant'),
@@ -925,7 +936,7 @@ export const PreSearchQueryGeneratedDataSchema = z.object({
   query: z.string(),
   rationale: z.string(),
   searchDepth: z.enum(['basic', 'advanced']),
-  index: z.number().int().min(0),
+  index: RoundNumberSchema,
   total: z.number().int().min(1),
 }).openapi('PreSearchQueryGeneratedData');
 
@@ -941,7 +952,7 @@ export const PreSearchQueryDataSchema = z.object({
   query: z.string(),
   rationale: z.string(),
   searchDepth: z.enum(['basic', 'advanced']),
-  index: z.number().int().min(0),
+  index: RoundNumberSchema,
   total: z.number().int().min(1),
 }).openapi('PreSearchQueryData');
 
@@ -956,9 +967,9 @@ export const PreSearchResultDataSchema = z.object({
   timestamp: z.number(),
   query: z.string(),
   answer: z.string().nullable(),
-  resultCount: z.number().int().min(0),
+  resultCount: RoundNumberSchema,
   responseTime: z.number(),
-  index: z.number().int().min(0),
+  index: RoundNumberSchema,
 }).openapi('PreSearchResultData');
 
 export type PreSearchResultData = z.infer<typeof PreSearchResultDataSchema>;
@@ -970,10 +981,10 @@ export type PreSearchResultData = z.infer<typeof PreSearchResultDataSchema>;
 export const PreSearchCompleteDataSchema = z.object({
   type: z.literal('pre_search_complete'),
   timestamp: z.number(),
-  totalSearches: z.number().int().min(0),
-  successfulSearches: z.number().int().min(0),
-  failedSearches: z.number().int().min(0),
-  totalResults: z.number().int().min(0),
+  totalSearches: RoundNumberSchema,
+  successfulSearches: RoundNumberSchema,
+  failedSearches: RoundNumberSchema,
+  totalResults: RoundNumberSchema,
 }).openapi('PreSearchCompleteData');
 
 export type PreSearchCompleteData = z.infer<typeof PreSearchCompleteDataSchema>;
@@ -1024,7 +1035,7 @@ export const PreSearchQuerySchema = z.object({
   query: z.string(),
   rationale: z.string(),
   searchDepth: z.enum(['basic', 'advanced']),
-  index: z.number().int().min(0),
+  index: RoundNumberSchema,
   total: z.number().int().min(1),
   status: PreSearchQueryStatusSchema,
   result: WebSearchResultSchema.optional(),

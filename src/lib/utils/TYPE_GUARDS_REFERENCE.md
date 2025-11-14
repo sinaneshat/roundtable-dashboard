@@ -2,6 +2,17 @@
 
 Quick reference for using type guards in the Roundtable codebase.
 
+**🚨 SINGLE SOURCE OF TRUTH**: `/docs/type-inference-patterns.md`
+
+This is a quick reference guide. For comprehensive type safety patterns, including:
+- Enum 5-part pattern
+- Metadata type safety chain
+- Query keys pattern
+- Zod schema patterns
+- Type inference best practices
+
+**See**: `/docs/type-inference-patterns.md` (Sections 2-4, 6, 13)
+
 ## Import
 
 ```typescript

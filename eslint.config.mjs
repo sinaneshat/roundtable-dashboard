@@ -2,8 +2,11 @@ import antfu from '@antfu/eslint-config';
 import nextPlugin from '@next/eslint-plugin-next';
 import pluginQuery from '@tanstack/eslint-plugin-query';
 import drizzlePlugin from 'eslint-plugin-drizzle';
+import jestPlugin from 'eslint-plugin-jest';
+import jestDomPlugin from 'eslint-plugin-jest-dom';
 import jsxA11y from 'eslint-plugin-jsx-a11y';
 import simpleImportSort from 'eslint-plugin-simple-import-sort';
+import testingLibraryPlugin from 'eslint-plugin-testing-library';
 
 export default antfu(
   {
@@ -68,6 +71,42 @@ export default antfu(
     },
   },
   {
+    files: ['**/__tests__/**/*', '**/*.test.*', '**/*.spec.*', '**/test-*.{ts,tsx}', 'src/lib/testing/**/*', 'jest.setup.ts'],
+    plugins: {
+      'jest': jestPlugin,
+      'jest-dom': jestDomPlugin,
+      'testing-library': testingLibraryPlugin,
+    },
+    rules: {
+      // Jest rules
+      'jest/no-disabled-tests': 'warn',
+      'jest/no-focused-tests': 'error',
+      'jest/no-identical-title': 'error',
+      'jest/prefer-to-have-length': 'warn',
+      'jest/valid-expect': 'error',
+      'jest/no-conditional-expect': 'error',
+      'jest/no-standalone-expect': 'error',
+
+      // Testing Library rules
+      'testing-library/await-async-queries': 'error',
+      'testing-library/no-await-sync-queries': 'error',
+      'testing-library/no-debugging-utils': 'warn',
+      'testing-library/prefer-screen-queries': 'warn',
+      'testing-library/prefer-user-event': 'warn',
+
+      // Jest-DOM rules
+      'jest-dom/prefer-checked': 'warn',
+      'jest-dom/prefer-enabled-disabled': 'warn',
+      'jest-dom/prefer-focus': 'warn',
+      'jest-dom/prefer-required': 'warn',
+
+      // Relax some rules for test files
+      'ts/no-explicit-any': 'off',
+      'no-console': 'off',
+      'react-refresh/only-export-components': 'off',
+    },
+  },
+  {
     rules: {
       'perfectionist/sort-imports': 'off',
       'import/order': 'off', // Avoid conflicts with `simple-import-sort` plugin
@@ -86,7 +125,7 @@ export default antfu(
       }],
       'ts/no-explicit-any': 'error',
       'ts/explicit-function-return-type': 'off',
-      'no-console': 'error',
+      'no-console': ['error', { allow: ['error'] }],
 
       // // Prevent re-exports and enforce better export patterns
       // 'import/no-namespace': ['error', { ignore: ['*.css', '*.scss', '*.less'] }], // Prevents export * from './module'

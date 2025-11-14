@@ -30,7 +30,7 @@ import { CustomerCacheTags, PriceCacheTags, SubscriptionCacheTags, UserCacheTags
 import * as tables from '@/db/schema';
 import type { UserChatUsage } from '@/db/validation';
 
-import type { QuotaCheck, UsageStats, UsageStatus } from '../routes/usage/schema';
+import type { UsageStats, UsageStatus } from '../routes/usage/schema';
 import type { SubscriptionTier } from './product-logic.service';
 import { TIER_QUOTAS } from './product-logic.service';
 
@@ -381,54 +381,6 @@ async function rolloverBillingPeriod(
 }
 
 /**
- * Check thread creation quota
- * Returns whether user can create a new thread and current usage stats
- */
-export async function checkThreadQuota(userId: string): Promise<QuotaCheck> {
-  const usage = await ensureUserUsageRecord(userId);
-
-  // ✅ Get limit from CODE, not database
-  const quotas = getTierQuotas(usage.subscriptionTier);
-  const limit = quotas.threadsPerMonth;
-
-  const canCreate = usage.threadsCreated < limit;
-  const remaining = Math.max(0, limit - usage.threadsCreated);
-
-  return {
-    canCreate,
-    current: usage.threadsCreated,
-    limit,
-    remaining,
-    resetDate: usage.currentPeriodEnd,
-    tier: usage.subscriptionTier,
-  };
-}
-
-/**
- * Check message creation quota
- * Returns whether user can send a new message and current usage stats
- */
-export async function checkMessageQuota(userId: string): Promise<QuotaCheck> {
-  const usage = await ensureUserUsageRecord(userId);
-
-  // ✅ Get limit from CODE, not database
-  const quotas = getTierQuotas(usage.subscriptionTier);
-  const limit = quotas.messagesPerMonth;
-
-  const canCreate = usage.messagesCreated < limit;
-  const remaining = Math.max(0, limit - usage.messagesCreated);
-
-  return {
-    canCreate,
-    current: usage.messagesCreated,
-    limit,
-    remaining,
-    resetDate: usage.currentPeriodEnd,
-    tier: usage.subscriptionTier,
-  };
-}
-
-/**
  * ✅ BUSINESS LOGIC: Compute usage status based on percentage thresholds
  * Single source of truth for warning/critical thresholds
  *
@@ -443,57 +395,6 @@ function computeUsageStatus(percentage: number): UsageStatus {
     return 'warning'; // Approaching limit (80%+)
   }
   return 'default'; // Normal usage (<80%)
-}
-
-/**
- * Check custom role creation quota
- * Returns whether user can create a new custom role and current usage stats
- */
-export async function checkCustomRoleQuota(userId: string): Promise<QuotaCheck> {
-  const usage = await ensureUserUsageRecord(userId);
-
-  // ✅ Get limit from CODE, not database
-  const quotas = getTierQuotas(usage.subscriptionTier);
-  const limit = quotas.customRolesPerMonth;
-
-  const canCreate = usage.customRolesCreated < limit;
-  const remaining = Math.max(0, limit - usage.customRolesCreated);
-
-  return {
-    canCreate,
-    current: usage.customRolesCreated,
-    limit,
-    remaining,
-    resetDate: usage.currentPeriodEnd,
-    tier: usage.subscriptionTier,
-  };
-}
-
-/**
- * Check analysis generation quota
- * Returns whether user can generate a new analysis and current usage stats
- *
- * Analysis is only generated for multi-participant conversations (2+ participants)
- * Single participant conversations do not trigger analysis
- */
-export async function checkAnalysisQuota(userId: string): Promise<QuotaCheck> {
-  const usage = await ensureUserUsageRecord(userId);
-
-  // ✅ Get limit from CODE, not database
-  const quotas = getTierQuotas(usage.subscriptionTier);
-  const limit = quotas.analysisPerMonth;
-
-  const canCreate = usage.analysisGenerated < limit;
-  const remaining = Math.max(0, limit - usage.analysisGenerated);
-
-  return {
-    canCreate,
-    current: usage.analysisGenerated,
-    limit,
-    remaining,
-    resetDate: usage.currentPeriodEnd,
-    tier: usage.subscriptionTier,
-  };
 }
 
 /**
@@ -714,16 +615,16 @@ export async function getUserUsageStats(userId: string): Promise<UsageStats> {
  * Throws error if user has exceeded quota
  */
 export async function enforceThreadQuota(userId: string): Promise<void> {
-  const quota = await checkThreadQuota(userId);
+  const stats = await getUserUsageStats(userId);
 
-  if (!quota.canCreate) {
+  if (stats.threads.remaining === 0) {
     const context: ErrorContext = {
       errorType: 'resource',
       resource: 'chat_thread',
       userId,
     };
     throw createError.badRequest(
-      `Thread creation limit reached. You have used ${quota.current} of ${quota.limit} threads this month. Upgrade your plan for more threads.`,
+      `Thread creation limit reached. You have used ${stats.threads.used} of ${stats.threads.limit} threads this month. Upgrade your plan for more threads.`,
       context,
     );
   }
@@ -734,16 +635,16 @@ export async function enforceThreadQuota(userId: string): Promise<void> {
  * Throws error if user has exceeded quota
  */
 export async function enforceMessageQuota(userId: string): Promise<void> {
-  const quota = await checkMessageQuota(userId);
+  const stats = await getUserUsageStats(userId);
 
-  if (!quota.canCreate) {
+  if (stats.messages.remaining === 0) {
     const context: ErrorContext = {
       errorType: 'resource',
       resource: 'chat_message',
       userId,
     };
     throw createError.badRequest(
-      `Message creation limit reached. You have used ${quota.current} of ${quota.limit} messages this month. Upgrade your plan for more messages.`,
+      `Message creation limit reached. You have used ${stats.messages.used} of ${stats.messages.limit} messages this month. Upgrade your plan for more messages.`,
       context,
     );
   }
@@ -754,16 +655,16 @@ export async function enforceMessageQuota(userId: string): Promise<void> {
  * Throws error if user has exceeded quota
  */
 export async function enforceCustomRoleQuota(userId: string): Promise<void> {
-  const quota = await checkCustomRoleQuota(userId);
+  const stats = await getUserUsageStats(userId);
 
-  if (!quota.canCreate) {
+  if (stats.customRoles.remaining === 0) {
     const context: ErrorContext = {
       errorType: 'resource',
       resource: 'chat_custom_role',
       userId,
     };
     throw createError.badRequest(
-      `Custom role creation limit reached. You have used ${quota.current} of ${quota.limit} custom roles this month. Upgrade your plan for more custom roles.`,
+      `Custom role creation limit reached. You have used ${stats.customRoles.used} of ${stats.customRoles.limit} custom roles this month. Upgrade your plan for more custom roles.`,
       context,
     );
   }
@@ -777,16 +678,16 @@ export async function enforceCustomRoleQuota(userId: string): Promise<void> {
  * This check should only be called when generating analysis for such conversations
  */
 export async function enforceAnalysisQuota(userId: string): Promise<void> {
-  const quota = await checkAnalysisQuota(userId);
+  const stats = await getUserUsageStats(userId);
 
-  if (!quota.canCreate) {
+  if (stats.analysis.remaining === 0) {
     const context: ErrorContext = {
       errorType: 'resource',
       resource: 'chat_moderator_analysis',
       userId,
     };
     throw createError.badRequest(
-      `Analysis generation limit reached. You have used ${quota.current} of ${quota.limit} analyses this month. Upgrade your plan for more analysis capacity.`,
+      `Analysis generation limit reached. You have used ${stats.analysis.used} of ${stats.analysis.limit} analyses this month. Upgrade your plan for more analysis capacity.`,
       context,
     );
   }

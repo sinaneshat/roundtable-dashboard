@@ -10,8 +10,8 @@ import { CustomDataPart } from '@/components/chat/custom-data-part';
 import { MessageErrorDetails } from '@/components/chat/message-error-details';
 import { ToolCallPart } from '@/components/chat/tool-call-part';
 import { ToolResultPart } from '@/components/chat/tool-result-part';
-import type { MessageMetadata } from '@/lib/schemas/message-metadata';
-import { isAssistantMetadata } from '@/lib/schemas/message-metadata';
+import type { DbMessageMetadata } from '@/db/schemas/chat-metadata';
+import { isAssistantMessageMetadata } from '@/db/schemas/chat-metadata';
 import type { MessagePart, MessageStatus } from '@/lib/schemas/message-schemas';
 
 type ModelMessageCardProps = {
@@ -24,7 +24,7 @@ type ModelMessageCardProps = {
   avatarName: string;
   className?: string;
   messageId?: string;
-  metadata?: MessageMetadata | null;
+  metadata?: DbMessageMetadata | null;
   isAccessible?: boolean;
   hideInlineHeader?: boolean;
   hideAvatar?: boolean;
@@ -50,7 +50,7 @@ export const ModelMessageCard = memo(({
   const isError = status === MessageStatuses.FAILED;
 
   // ✅ STRICT TYPING: Only assistant messages have error fields
-  const assistantMetadata = metadata && isAssistantMetadata(metadata) ? metadata : null;
+  const assistantMetadata = metadata && isAssistantMessageMetadata(metadata) ? metadata : null;
   const hasError = isError || assistantMetadata?.hasError;
   const modelName = model?.name || assistantMetadata?.model || 'AI Assistant';
   const requiredTierName = model?.required_tier_name;

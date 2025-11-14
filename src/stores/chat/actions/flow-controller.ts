@@ -116,7 +116,6 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
       const elapsed = Date.now() - createdTime;
 
       if (elapsed > SAFETY_TIMEOUT_MS) {
-        console.warn('[FlowController] Analysis stuck at streaming for >60s, forcing navigation');
         return true;
       }
     }
@@ -134,7 +133,6 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
       const elapsed = Date.now() - createdTime;
 
       if (elapsed > SAFETY_TIMEOUT_MS) {
-        console.warn('[FlowController] Analysis stuck at pending for >60s, forcing navigation');
         return true;
       }
     }
@@ -258,12 +256,12 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
       return;
     }
 
-    // Check if we're actually in overview mode
-    if (typeof window !== 'undefined' && window.location.pathname === '/chat') {
-      // Only navigate if we have an active chat creation flow
-      if (!threadState.createdThreadId) {
-        return;
-      }
+    // ✅ FIX: Only navigate if we're in an ACTIVE chat creation flow
+    // Don't navigate if user intentionally returned to /chat (e.g., clicked logo/new chat)
+    // Check that we have a URL update pending (hasUpdatedThread) which indicates
+    // we're in the middle of creating a new thread, not just viewing overview
+    if (!hasUpdatedThread) {
+      return;
     }
 
     // Navigate when either:
@@ -303,6 +301,7 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
     streamingState.showInitialUI,
     hasNavigated,
     hasAiSlug,
+    hasUpdatedThread,
     threadState.createdThreadId,
     queryClient,
     router,

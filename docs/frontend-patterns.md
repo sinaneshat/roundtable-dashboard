@@ -43,6 +43,18 @@ This document outlines established frontend patterns, architectural decisions, a
 }
 ```
 
+### Type Safety & Patterns Cross-Reference
+
+**🚨 MANDATORY**: All type safety, enum, metadata, and validation patterns are defined in:
+- **`/docs/type-inference-patterns.md`** - Single source of truth for:
+  - Enum 5-part pattern (MessageRoles, ChatModes, AnalysisStatuses, etc.)
+  - Metadata extraction functions (getRoundNumber, getParticipantId, etc.)
+  - Query keys pattern (queryKeys.threads, invalidationPatterns)
+  - Zod schema patterns and type inference
+  - Type-safe data fetching and validation
+
+**ALL frontend code MUST follow patterns defined in type-inference-patterns.md**
+
 ### Directory Structure Philosophy
 
 ```bash
@@ -1786,9 +1798,9 @@ export type TeamId = string & { readonly brand: unique symbol }
 **Component Testing Patterns:**
 ```typescript
 // File: src/components/__tests__/user-card.test.tsx
-import { render, screen } from '@testing-library/react'
+import { render, screen } from '@/lib/testing'
 import { UserCard } from '../chat/user-card'
-import { mockUser } from '@/lib/test-utils'
+import { createMockMessages } from '@/lib/testing'
 
 describe('UserCard', () => {
   it('renders user information correctly', () => {

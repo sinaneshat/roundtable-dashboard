@@ -18,25 +18,14 @@
 import type { UIMessage } from 'ai';
 
 import { MessageRoles } from '@/api/core/enums';
+import {
+  calculateNextRound,
+  DEFAULT_ROUND_NUMBER,
+  extractRoundNumber,
+  NO_ROUND_SENTINEL,
+} from '@/lib/schemas/round-schemas';
 
 import { getRoundNumber } from './metadata';
-import { isObject } from './type-guards';
-
-/**
- * Helper: Safely extract round number from metadata
- * ✅ 0-BASED: Default is 0 (first round)
- * @internal
- */
-function safeGetRoundNumber(metadata: unknown, defaultValue = 0): number {
-  // ✅ TYPE-SAFE: Use type guard from @/lib/utils/type-guards
-  if (!isObject(metadata))
-    return defaultValue;
-  // ✅ 0-BASED: Round numbers start at 0
-  if (typeof metadata.roundNumber === 'number' && metadata.roundNumber >= 0) {
-    return metadata.roundNumber;
-  }
-  return defaultValue;
-}
 
 /**
  * Calculate next round number for NEW user message creation
@@ -58,11 +47,11 @@ function safeGetRoundNumber(metadata: unknown, defaultValue = 0): number {
  */
 export function calculateNextRoundNumber(messages: UIMessage[]): number {
   // Find the highest round number from user messages
-  let maxRoundNumber = -1; // ✅ 0-BASED: Start at -1 so first round is 0
+  let maxRoundNumber = NO_ROUND_SENTINEL;
 
   messages.forEach((message) => {
     if (message.role === MessageRoles.USER) {
-      const roundNumber = safeGetRoundNumber(message.metadata, -1);
+      const roundNumber = extractRoundNumber(message.metadata, NO_ROUND_SENTINEL);
       if (roundNumber > maxRoundNumber) {
         maxRoundNumber = roundNumber;
       }
@@ -70,7 +59,7 @@ export function calculateNextRoundNumber(messages: UIMessage[]): number {
   });
 
   // ✅ 0-BASED: Return max + 1, or 0 if no user messages exist
-  return maxRoundNumber + 1;
+  return calculateNextRound(maxRoundNumber);
 }
 
 /**
@@ -87,17 +76,17 @@ export function calculateNextRoundNumber(messages: UIMessage[]): number {
  * @returns The maximum round number found in metadata, or 0 if none found (✅ 0-BASED)
  */
 export function getMaxRoundNumber(messages: UIMessage[]): number {
-  let max = -1; // ✅ 0-BASED: Start at -1
+  let max = NO_ROUND_SENTINEL;
 
   messages.forEach((message) => {
-    const roundNumber = safeGetRoundNumber(message.metadata, -1);
+    const roundNumber = extractRoundNumber(message.metadata, NO_ROUND_SENTINEL);
     if (roundNumber > max) {
       max = roundNumber;
     }
   });
 
   // ✅ 0-BASED: Return max, or 0 if no messages (first round is 0)
-  return max >= 0 ? max : 0;
+  return max >= 0 ? max : DEFAULT_ROUND_NUMBER;
 }
 
 /**
@@ -116,14 +105,14 @@ export function getMaxRoundNumber(messages: UIMessage[]): number {
  */
 export function getRoundNumberFromMetadata(
   messageOrMetadata: UIMessage | unknown,
-  defaultValue = 0,
+  defaultValue = DEFAULT_ROUND_NUMBER,
 ): number {
   // If it's a UIMessage, extract metadata
   if (messageOrMetadata && typeof messageOrMetadata === 'object' && 'metadata' in messageOrMetadata) {
-    return safeGetRoundNumber((messageOrMetadata as UIMessage).metadata, defaultValue);
+    return extractRoundNumber((messageOrMetadata as UIMessage).metadata, defaultValue);
   }
   // Otherwise treat it as raw metadata
-  return safeGetRoundNumber(messageOrMetadata, defaultValue);
+  return extractRoundNumber(messageOrMetadata, defaultValue);
 }
 
 /**
@@ -144,7 +133,7 @@ export function getRoundNumberFromMetadata(
 export function getCurrentRoundNumber(messages: UIMessage[]): number {
   const lastUserMessage = messages.findLast(m => m.role === MessageRoles.USER);
   if (!lastUserMessage)
-    return 0; // ✅ 0-BASED: First round is 0
+    return DEFAULT_ROUND_NUMBER;
   return getRoundNumberFromMetadata(lastUserMessage);
 }
 
@@ -188,7 +177,7 @@ export function groupMessagesByRound(messages: UIMessage[]): Map<number, UIMessa
       if (message.role === MessageRoles.USER) {
         // User message without explicit round number (shouldn't happen, but defensive)
         // Look for the last user message before this one to determine next round
-        let inferredRound = 0; // ✅ 0-BASED: First round is 0
+        let inferredRound = DEFAULT_ROUND_NUMBER;
 
         for (let i = index - 1; i >= 0; i--) {
           const prevMessage = messages[i];
@@ -212,7 +201,7 @@ export function groupMessagesByRound(messages: UIMessage[]): Map<number, UIMessa
       } else {
         // Assistant/system message without explicit round number
         // Infer from the most recent user message BEFORE this message
-        let inferredRound = 0; // ✅ 0-BASED: First round is 0
+        let inferredRound = DEFAULT_ROUND_NUMBER;
 
         for (let i = index - 1; i >= 0; i--) {
           const prevMessage = messages[i];
@@ -242,7 +231,7 @@ export function groupMessagesByRound(messages: UIMessage[]): Map<number, UIMessa
   // PASS 2: Group all messages by determined round
   const grouped = new Map<number, UIMessage[]>();
   messages.forEach((message, index) => {
-    const roundNumber = messageRounds.get(index) ?? 0; // ✅ 0-BASED: Default to round 0
+    const roundNumber = messageRounds.get(index) ?? DEFAULT_ROUND_NUMBER;
 
     if (!grouped.has(roundNumber)) {
       grouped.set(roundNumber, []);

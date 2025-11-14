@@ -12,6 +12,7 @@ import {
   ChainOfThoughtHeader,
 } from '@/components/ai-elements/chain-of-thought';
 import { Badge } from '@/components/ui/badge';
+import { getDisplayRoundNumber } from '@/lib/schemas/round-schemas';
 import { cn } from '@/lib/ui/cn';
 
 import { LeaderboardCard } from './leaderboard-card';
@@ -156,7 +157,7 @@ export function RoundAnalysisCard({
           <div className="flex items-center gap-2.5 w-full">
             <Clock className="size-4 text-muted-foreground flex-shrink-0" />
             <span className="text-sm font-medium">
-              {t('roundAnalysis', { number: analysis.roundNumber + 1 })}
+              {t('roundAnalysis', { number: getDisplayRoundNumber(analysis.roundNumber) })}
             </span>
             <Badge variant="outline" className={cn('text-xs h-6', config.color)}>
               {config.label}

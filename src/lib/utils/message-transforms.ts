@@ -22,20 +22,20 @@ import type { UIMessage } from 'ai';
 
 import { MessagePartTypes, MessageRoles } from '@/api/core/enums';
 import type { ChatMessage } from '@/api/routes/chat/schema';
+import type { DbMessageMetadata, DbPreSearchMessageMetadata } from '@/db/schemas/chat-metadata';
+import {
+  DbAssistantMessageMetadataSchema,
+  DbPreSearchMessageMetadataSchema,
+} from '@/db/schemas/chat-metadata';
 import type { ErrorMetadata, UIMessageErrorType } from '@/lib/schemas/error-schemas';
 import { ErrorMetadataSchema, UIMessageErrorTypeSchema } from '@/lib/schemas/error-schemas';
 import type {
   ErrorType,
   FinishReason,
-  MessageMetadata,
-  ParticipantMessageMetadata,
-  PreSearchMessageMetadata,
 } from '@/lib/schemas/message-metadata';
 import {
   ErrorTypeSchema,
   FinishReasonSchema,
-  ParticipantMessageMetadataSchema,
-  PreSearchMessageMetadataSchema,
   UsageSchema,
 } from '@/lib/schemas/message-metadata';
 import type { ParticipantContext } from '@/lib/schemas/participant-schemas';
@@ -50,6 +50,11 @@ import {
   hasParticipantEnrichment,
   isPreSearch,
 } from './metadata';
+
+// Convenience type aliases for backward compatibility
+type MessageMetadata = DbMessageMetadata;
+type PreSearchMessageMetadata = DbPreSearchMessageMetadata;
+type ParticipantMessageMetadata = DbMessageMetadata & { role: 'assistant'; participantId: string };
 
 // Re-export for convenience
 export { getMessageMetadata };
@@ -85,7 +90,7 @@ export function isPreSearchMessage(
 ): message is UIMessage & { metadata: PreSearchMessageMetadata } {
   if (!message.metadata)
     return false;
-  const validation = PreSearchMessageMetadataSchema.safeParse(message.metadata);
+  const validation = DbPreSearchMessageMetadataSchema.safeParse(message.metadata);
   return validation.success;
 }
 
@@ -100,8 +105,8 @@ export function isParticipantMessage(
 ): message is UIMessage & { metadata: ParticipantMessageMetadata } {
   if (!message.metadata || message.role !== MessageRoles.ASSISTANT)
     return false;
-  const validation = ParticipantMessageMetadataSchema.safeParse(message.metadata);
-  return validation.success;
+  const validation = DbAssistantMessageMetadataSchema.safeParse(message.metadata);
+  return validation.success && validation.data && 'participantId' in validation.data;
 }
 
 // ============================================================================
@@ -182,7 +187,8 @@ export function chatMessagesToUIMessages(
   let currentRound = 0;
   const messagesWithRoundNumber = uiMessages.map((message) => {
     const explicitRound = getRoundNumber(message.metadata);
-    const hasRoundNumber = explicitRound !== null && explicitRound !== undefined && explicitRound > 0;
+    // ✅ 0-BASED FIX: Accept round 0 as valid (was: explicitRound > 0)
+    const hasRoundNumber = explicitRound !== null && explicitRound !== undefined && explicitRound >= 0;
 
     if (hasRoundNumber && explicitRound !== null) {
       if (message.role === MessageRoles.USER && explicitRound > currentRound) {
@@ -219,10 +225,6 @@ export function chatMessagesToUIMessages(
     }
 
     // Message missing roundNumber - assign based on current round
-    if (message.role === MessageRoles.USER) {
-      currentRound += 1;
-    }
-
     const existingMetadata = message.role === MessageRoles.ASSISTANT
       ? getAssistantMetadata(message.metadata)
       : null;
@@ -268,6 +270,12 @@ export function chatMessagesToUIMessages(
         role: message.role,
         roundNumber: currentRound ?? 0, // ✅ 0-BASED: Default to round 0
       } as MessageMetadata;
+    }
+
+    // ✅ CRITICAL FIX: Increment currentRound AFTER assigning it to the message
+    // This ensures the first user message gets roundNumber: 0, not 1
+    if (message.role === MessageRoles.USER) {
+      currentRound += 1;
     }
 
     return {
@@ -371,28 +379,37 @@ export function getParticipantMessagesForRound(
   messages: UIMessage[],
   roundNumber: number,
 ): UIMessage[] {
-  return messages.filter((m) => {
-    if (m.role !== MessageRoles.ASSISTANT)
+  const filtered = messages.filter((m) => {
+    if (m.role !== MessageRoles.ASSISTANT) {
       return false;
+    }
 
     // Multiple checks for defense-in-depth
-    if (m.id && m.id.startsWith('pre-search-'))
+    if (m.id && m.id.startsWith('pre-search-')) {
       return false;
-    if (isPreSearch(m.metadata))
+    }
+    if (isPreSearch(m.metadata)) {
       return false;
+    }
 
     const metadata = m.metadata as Record<string, unknown> | null | undefined;
-    if (metadata && typeof metadata === 'object' && metadata.role === 'system')
+    if (metadata && typeof metadata === 'object' && metadata.role === 'system') {
       return false;
+    }
 
     const participantId = getParticipantId(m.metadata);
+
     if (participantId == null) {
       return false;
     }
 
     const msgRound = getRoundNumber(m.metadata);
-    return msgRound === roundNumber;
+    const matches = msgRound === roundNumber;
+
+    return matches;
   });
+
+  return filtered;
 }
 
 /**
@@ -638,7 +655,8 @@ export function validateMessageOrder(messages: UIMessage[]): MessageOrderValidat
 
   let lastRound = 0;
   let userMessageSeenInCurrentRound = false;
-  let expectedNextRound = 1;
+  // ✅ 0-BASED FIX: Expect first round to be 0 (was: 1)
+  let expectedNextRound = 0;
   const roundsEncountered = new Set<number>();
 
   for (let i = 0; i < messages.length; i++) {
@@ -646,7 +664,8 @@ export function validateMessageOrder(messages: UIMessage[]): MessageOrderValidat
     if (!msg)
       continue;
 
-    const round = getRoundNumber(msg.metadata) ?? 1;
+    // ✅ 0-BASED FIX: Default to 0 for first round (was: ?? 1)
+    const round = getRoundNumber(msg.metadata) ?? 0;
 
     // Check round progression
     if (round < lastRound) {

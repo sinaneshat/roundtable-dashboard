@@ -247,12 +247,6 @@ export {
 // ============================================================================
 
 export {
-  type CheckMessageQuotaRequest,
-  type CheckMessageQuotaResponse,
-  checkMessageQuotaService,
-  type CheckThreadQuotaRequest,
-  type CheckThreadQuotaResponse,
-  checkThreadQuotaService,
   type GetUsageStatsRequest,
   type GetUsageStatsResponse,
   getUserUsageStatsService,

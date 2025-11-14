@@ -49,6 +49,7 @@ import type { ApiEnv } from '@/api/types';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db/schema';
 import { extractTextFromParts } from '@/lib/schemas/message-schemas';
+import { DEFAULT_PARTICIPANT_INDEX } from '@/lib/schemas/participant-schemas';
 import { completeStreamingMetadata, createStreamingMetadata } from '@/lib/utils/metadata-builder';
 
 import type { streamChatRoute } from '../route';
@@ -110,7 +111,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
       await handleRoundRegeneration({
         threadId,
         regenerateRound,
-        participantIndex: participantIndex ?? 0,
+        participantIndex: participantIndex ?? DEFAULT_PARTICIPANT_INDEX,
         db,
       });
     }
@@ -120,7 +121,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
     // =========================================================================
     const roundResult = await calculateRoundNumber({
       threadId,
-      participantIndex: participantIndex ?? 0,
+      participantIndex: participantIndex ?? DEFAULT_PARTICIPANT_INDEX,
       message,
       regenerateRound,
       db,
@@ -186,7 +187,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
     // =========================================================================
     const { participants, participant } = await loadParticipantConfiguration({
       threadId,
-      participantIndex: participantIndex ?? 0,
+      participantIndex: participantIndex ?? DEFAULT_PARTICIPANT_INDEX,
       providedParticipants,
       thread,
       db,
@@ -472,7 +473,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
     //
     // This follows the principle: Use composite keys when you have deterministic uniqueness,
     // not random IDs that introduce collision risk
-    const streamMessageId = `${threadId}_r${currentRoundNumber}_p${participantIndex ?? 0}`;
+    const streamMessageId = `${threadId}_r${currentRoundNumber}_p${participantIndex ?? DEFAULT_PARTICIPANT_INDEX}`;
 
     // ✅ DEFENSIVE CHECK: Check for existing message with same ID
     // This handles retries and race conditions gracefully
@@ -509,7 +510,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
       threadId,
       currentRoundNumber,
       participant,
-      participantIndex ?? 0,
+      participantIndex ?? DEFAULT_PARTICIPANT_INDEX,
       thread.mode,
       {
         modelName: modelInfo?.name,
@@ -527,7 +528,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
     const streamMetadata = createStreamingMetadata({
       roundNumber: currentRoundNumber,
       participantId: participant.id,
-      participantIndex: participantIndex ?? 0,
+      participantIndex: participantIndex ?? DEFAULT_PARTICIPANT_INDEX,
       participantRole: participant.role,
       model: participant.modelId,
     });
@@ -587,7 +588,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
           messageId,
           threadId,
           participantId: participant.id,
-          participantIndex: participantIndex ?? 0,
+          participantIndex: participantIndex ?? DEFAULT_PARTICIPANT_INDEX,
           participantRole: participant.role,
           modelId: participant.modelId,
           roundNumber: currentRoundNumber,

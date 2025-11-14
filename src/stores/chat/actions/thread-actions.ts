@@ -159,7 +159,6 @@ export function useThreadActions(options: UseThreadActionsOptions): UseThreadAct
     if (flags.isWaitingForChangelog) {
       const SAFETY_TIMEOUT_MS = 30000; // 30 seconds (increased from 10s)
       const timeout = setTimeout(() => {
-        console.warn('[Changelog] Waiting flag stuck for >30s, auto-releasing. This indicates a query hang.');
         actions.setIsWaitingForChangelog(false);
       }, SAFETY_TIMEOUT_MS);
 

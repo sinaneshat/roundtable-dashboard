@@ -200,15 +200,9 @@ import {
 } from './routes/system/route';
 // Usage tracking routes
 import {
-  checkCustomRoleQuotaHandler,
-  checkMessageQuotaHandler,
-  checkThreadQuotaHandler,
   getUserUsageStatsHandler,
 } from './routes/usage/handler';
 import {
-  checkCustomRoleQuotaRoute,
-  checkMessageQuotaRoute,
-  checkThreadQuotaRoute,
   getUserUsageStatsRoute,
 } from './routes/usage/route';
 
@@ -506,12 +500,9 @@ const appRoutes = app
   .openapi(deleteKnowledgeFileRoute, deleteKnowledgeFileHandler) // Delete knowledge file
 
   // ============================================================================
-  // Usage Routes - Usage tracking and quota management (protected)
+  // Usage Routes - Single source of truth for usage and quota (protected)
   // ============================================================================
-  .openapi(getUserUsageStatsRoute, getUserUsageStatsHandler) // Get user usage statistics
-  .openapi(checkThreadQuotaRoute, checkThreadQuotaHandler) // Check thread creation quota
-  .openapi(checkMessageQuotaRoute, checkMessageQuotaHandler) // Check message sending quota
-  .openapi(checkCustomRoleQuotaRoute, checkCustomRoleQuotaHandler) // Check custom role creation quota
+  .openapi(getUserUsageStatsRoute, getUserUsageStatsHandler) // Get all usage statistics and quota info
 
   // ============================================================================
   // Models Routes - Simplified OpenRouter models endpoint (public)

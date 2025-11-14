@@ -53,8 +53,6 @@ export const queryKeys = {
     all: QueryKeyFactory.base('usage'),
     stats: () => QueryKeyFactory.action('usage', 'stats'),
     quotas: () => [...queryKeys.usage.all, 'quotas'] as const,
-    threadQuota: () => QueryKeyFactory.action('usage', 'quota', 'threads'),
-    messageQuota: () => QueryKeyFactory.action('usage', 'quota', 'messages'),
   },
 
   // Chat Threads
@@ -173,15 +171,13 @@ export const invalidationPatterns = {
   // After chat operations - invalidate usage stats
   afterChatOperation: [
     queryKeys.usage.stats(),
-    queryKeys.usage.threadQuota(),
-    queryKeys.usage.messageQuota(),
   ],
 
-  // Thread operations - only invalidate thread list and quota, not full stats
+  // Thread operations - only invalidate thread list and stats
   // Stats are only updated when messages are sent (actual usage), not when threads are created/deleted
   threads: [
     queryKeys.threads.lists(),
-    queryKeys.usage.threadQuota(), // Only quota needs update, not full stats
+    queryKeys.usage.stats(), // Invalidate stats to refresh quota
   ],
 
   threadDetail: (threadId: string) => [
@@ -196,12 +192,11 @@ export const invalidationPatterns = {
     // queryKeys.threads.analyses(threadId),
   ],
 
-  // After thread message - invalidate thread detail and usage
+  // After thread message - invalidate thread detail and usage stats
   afterThreadMessage: (threadId: string) => [
     queryKeys.threads.detail(threadId),
     queryKeys.threads.lists(),
     queryKeys.usage.stats(),
-    queryKeys.usage.messageQuota(),
   ],
 
   // Custom role operations

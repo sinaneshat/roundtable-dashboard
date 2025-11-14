@@ -110,11 +110,12 @@ function AppSidebarComponent({ ...props }: React.ComponentProps<typeof Sidebar>)
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []); // No dependencies - ref always has latest callback
-  const handleNewChat = () => {
+  const handleNavLinkClick = useCallback(() => {
+    // Close mobile sidebar when navigating
     if (isMobile) {
       setOpenMobile(false);
     }
-  };
+  }, [isMobile, setOpenMobile]);
   const handleDeleteChat = (chatId: string) => {
     const chat = chats.find(c => c.id === chatId);
     const chatSlug = chat?.slug;
@@ -170,14 +171,7 @@ function AppSidebarComponent({ ...props }: React.ComponentProps<typeof Sidebar>)
               {/* Logo/Brand */}
               <SidebarMenuItem className="group-data-[collapsible=icon]:hidden mb-2">
                 <SidebarMenuButton size="lg" asChild className="hover:bg-transparent">
-                  <Link
-                    href="/chat"
-                    onClick={() => {
-                      if (isMobile) {
-                        setOpenMobile(false);
-                      }
-                    }}
-                  >
+                  <Link href="/chat" onClick={handleNavLinkClick}>
                     <Image
                       src={BRAND.logos.main}
                       alt={`${BRAND.displayName} Logo`}
@@ -199,14 +193,7 @@ function AppSidebarComponent({ ...props }: React.ComponentProps<typeof Sidebar>)
               {/* Logo - Collapsed */}
               <SidebarMenuItem className="hidden group-data-[collapsible=icon]:flex mb-2">
                 <SidebarMenuButton size="lg" asChild className="hover:bg-transparent" tooltip={BRAND.displayName}>
-                  <Link
-                    href="/chat"
-                    onClick={() => {
-                      if (isMobile) {
-                        setOpenMobile(false);
-                      }
-                    }}
-                  >
+                  <Link href="/chat" onClick={handleNavLinkClick}>
                     <Image
                       src={BRAND.logos.main}
                       alt={`${BRAND.displayName} Logo`}
@@ -222,10 +209,7 @@ function AppSidebarComponent({ ...props }: React.ComponentProps<typeof Sidebar>)
               {/* Action Buttons - Expanded */}
               <SidebarMenuItem className="group-data-[collapsible=icon]:hidden">
                 <SidebarMenuButton asChild>
-                  <Link
-                    href="/chat"
-                    onClick={handleNewChat}
-                  >
+                  <Link href="/chat" onClick={handleNavLinkClick}>
                     <Plus className="size-4 shrink-0" />
                     <span
                       className="truncate min-w-0 overflow-hidden text-ellipsis whitespace-nowrap"
@@ -273,14 +257,8 @@ function AppSidebarComponent({ ...props }: React.ComponentProps<typeof Sidebar>)
 
               {/* Icon Buttons - Collapsed */}
               <SidebarMenuItem className="hidden group-data-[collapsible=icon]:flex">
-                <SidebarMenuButton
-                  asChild
-                  tooltip={t('navigation.newChat')}
-                >
-                  <Link
-                    href="/chat"
-                    onClick={handleNewChat}
-                  >
+                <SidebarMenuButton asChild tooltip={t('navigation.newChat')}>
+                  <Link href="/chat" onClick={handleNavLinkClick}>
                     <Plus />
                   </Link>
                 </SidebarMenuButton>

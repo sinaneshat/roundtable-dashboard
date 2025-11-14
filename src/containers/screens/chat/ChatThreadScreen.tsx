@@ -4,22 +4,27 @@ import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
-import { AnalysisStatuses } from '@/api/core/enums';
 import type { FeedbackType } from '@/api/core/enums';
+import { AnalysisStatuses } from '@/api/core/enums';
 import type { ChatMessage, ChatParticipant, ChatThread, ModeratorAnalysisPayload } from '@/api/routes/chat/schema';
+import { AvatarGroup } from '@/components/chat/avatar-group';
 import { ChatDeleteDialog } from '@/components/chat/chat-delete-dialog';
 import { ChatInput } from '@/components/chat/chat-input';
-import { ChatModeSelector } from '@/components/chat/chat-mode-selector';
-import { ChatParticipantsList } from '@/components/chat/chat-participants-list';
 import { ChatThreadActions } from '@/components/chat/chat-thread-actions';
+import { ConversationModeModal } from '@/components/chat/conversation-mode-modal';
+import { ModelSelectionModal } from '@/components/chat/model-selection-modal';
 import { clearTriggeredAnalysesForRound } from '@/components/chat/moderator/moderator-analysis-stream';
 import { StreamingParticipantsLoader } from '@/components/chat/streaming-participants-loader';
 import { useThreadHeader } from '@/components/chat/thread-header-context';
 import { ThreadTimeline } from '@/components/chat/thread-timeline';
 import { UnifiedErrorBoundary } from '@/components/chat/unified-error-boundary';
+import { UnifiedQuotaWarning } from '@/components/chat/unified-quota-warning';
 import { WebSearchToggle } from '@/components/chat/web-search-toggle';
 import { useChatStore } from '@/components/providers/chat-store-provider';
-import { useThreadChangelogQuery, useThreadFeedbackQuery } from '@/hooks/queries/chat';
+import { Button } from '@/components/ui/button';
+import { useUsageStatsQuery } from '@/hooks/queries';
+import { useCustomRolesQuery, useThreadChangelogQuery, useThreadFeedbackQuery } from '@/hooks/queries/chat';
+import { useModelsQuery } from '@/hooks/queries/models';
 import type { TimelineItem } from '@/hooks/utils';
 import {
   useBoolean,
@@ -28,6 +33,7 @@ import {
   useThreadTimeline,
 } from '@/hooks/utils';
 import type { ChatModeId } from '@/lib/config/chat-modes';
+import { getChatModeById } from '@/lib/config/chat-modes';
 import { queryKeys } from '@/lib/data/query-keys';
 import { chatMessagesToUIMessages } from '@/lib/utils/message-transforms';
 import {
@@ -107,6 +113,8 @@ export default function ChatThreadScreen({
   const queryClient = useQueryClient();
   const t = useTranslations('chat');
   const isDeleteDialogOpen = useBoolean(false);
+  const isModeModalOpen = useBoolean(false);
+  const isModelModalOpen = useBoolean(false);
 
   // ✅ useBoolean now returns stable callbacks via useCallback
   useThreadHeaderUpdater({
@@ -114,6 +122,11 @@ export default function ChatThreadScreen({
     slug,
     onDeleteClick: isDeleteDialogOpen.onTrue,
   });
+
+  // Query for models and custom roles (for modals)
+  const { data: modelsData } = useModelsQuery();
+  const { data: customRolesData } = useCustomRolesQuery(isModelModalOpen.value);
+  const { data: statsData } = useUsageStatsQuery();
   const messages = useChatStore(s => s.messages);
   const isStreaming = useChatStore(s => s.isStreaming);
   const currentParticipantIndex = useChatStore(s => s.currentParticipantIndex);
@@ -185,7 +198,6 @@ export default function ChatThreadScreen({
   }, [changelogResponse]);
   // Feedback management via store
   const feedbackByRound = useChatStore(s => s.feedbackByRound);
-  const hasLoadedFeedback = useChatStore(s => s.hasLoadedFeedback);
   const pendingFeedback = useChatStore(s => s.pendingFeedback);
   // ✅ FIX: Keep feedback query always enabled so it refetches on page refresh
   // Previously disabled after initial load, preventing feedback from reloading
@@ -270,7 +282,6 @@ export default function ChatThreadScreen({
     });
 
     if (stuckAnalyses.length > 0) {
-      console.warn('[Analysis Safety] Found stuck analyses, marking as complete:', stuckAnalyses.map(a => ({ round: a.roundNumber, elapsed: Date.now() - (a.createdAt instanceof Date ? a.createdAt.getTime() : new Date(a.createdAt).getTime()) })));
       stuckAnalyses.forEach((analysis) => {
         // ✅ Enum Pattern: Use AnalysisStatuses.COMPLETE constant
         // Mark as complete even without data to unblock the UI
@@ -292,7 +303,6 @@ export default function ChatThreadScreen({
       });
 
       if (currentStuck.length > 0) {
-        console.warn('[Analysis Safety] Found stuck analyses, marking as complete:', currentStuck.map(a => ({ round: a.roundNumber, elapsed: Date.now() - (a.createdAt instanceof Date ? a.createdAt.getTime() : new Date(a.createdAt).getTime()) })));
         currentStuck.forEach((analysis) => {
           // ✅ Enum Pattern: Use AnalysisStatuses.COMPLETE constant
           updateAnalysisStatus(analysis.roundNumber, AnalysisStatuses.COMPLETE);
@@ -354,6 +364,49 @@ export default function ChatThreadScreen({
   const setInputValue = useChatStore(s => s.setInputValue);
   const removeParticipant = useChatStore(s => s.removeParticipant);
 
+  // Prepare data for ModelSelectionModal
+  const allEnabledModels = useMemo(() => modelsData?.data?.items || [], [modelsData?.data?.items]);
+  const customRoles = useMemo(() => customRolesData?.pages.flatMap(page =>
+    (page?.success && page.data?.items) ? page.data.items : [],
+  ) || [], [customRolesData?.pages]);
+
+  const userTierInfo = useMemo(() => {
+    const userTierConfig = modelsData?.data?.user_tier_config || {
+      tier: 'free' as const,
+      tier_name: 'Free',
+      max_models: 2,
+      can_upgrade: true,
+    };
+
+    return {
+      tier_name: userTierConfig.tier_name,
+      max_models: userTierConfig.max_models,
+      current_tier: userTierConfig.tier,
+      can_upgrade: userTierConfig.can_upgrade,
+    };
+  }, [modelsData?.data?.user_tier_config]);
+
+  // Create orderedModels for ModelSelectionModal
+  const orderedModels = useMemo(() => {
+    if (allEnabledModels.length === 0)
+      return [];
+
+    const selectedModels = selectedParticipants
+      .sort((a, b) => a.priority - b.priority)
+      .flatMap((p, index) => {
+        const model = allEnabledModels.find(m => m.id === p.modelId);
+        return model ? [{ model, participant: p, order: index }] : [];
+      });
+
+    const selectedIds = new Set(selectedParticipants.map(p => p.modelId));
+    const unselectedModels = allEnabledModels
+      .filter(m => !selectedIds.has(m.id))
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map((m, index) => ({ model: m, participant: null, order: selectedModels.length + index }));
+
+    return [...selectedModels, ...unselectedModels];
+  }, [selectedParticipants, allEnabledModels]);
+
   // Form actions hook
   const formActions = useChatFormActions();
 
@@ -363,6 +416,56 @@ export default function ChatThreadScreen({
     isRoundInProgress,
     isChangelogFetching,
   });
+
+  // Modal callbacks for ConversationModeModal
+  const handleModeSelect = useCallback((mode: ChatModeId) => {
+    threadActions.handleModeChange(mode);
+    isModeModalOpen.onFalse();
+  }, [threadActions, isModeModalOpen]);
+
+  // Modal callbacks for ModelSelectionModal
+  const handleModelReorder = useCallback((reordered: typeof orderedModels) => {
+    const reorderedParticipants = reordered
+      .filter(om => om.participant !== null)
+      .map((om, index) => ({ ...om.participant!, priority: index }));
+    threadActions.handleParticipantsChange(reorderedParticipants);
+  }, [threadActions]);
+
+  const handleModelToggle = useCallback((modelId: string) => {
+    const orderedModel = orderedModels.find(om => om.model.id === modelId);
+    if (!orderedModel)
+      return;
+
+    if (orderedModel.participant) {
+      // Remove participant
+      const filtered = selectedParticipants.filter(p => p.id !== orderedModel.participant!.id);
+      const reindexed = filtered.map((p, index) => ({ ...p, priority: index }));
+      threadActions.handleParticipantsChange(reindexed);
+    } else {
+      // Add participant
+      const newParticipant = {
+        id: `participant-${Date.now()}`,
+        modelId,
+        role: '',
+        priority: selectedParticipants.length,
+      };
+      threadActions.handleParticipantsChange([...selectedParticipants, newParticipant]);
+    }
+  }, [orderedModels, selectedParticipants, threadActions]);
+
+  const handleModelRoleChange = useCallback((modelId: string, role: string, customRoleId?: string) => {
+    const updated = selectedParticipants.map(p =>
+      p.modelId === modelId ? { ...p, role, customRoleId } : p,
+    );
+    threadActions.handleParticipantsChange(updated);
+  }, [selectedParticipants, threadActions]);
+
+  const handleModelRoleClear = useCallback((modelId: string) => {
+    const updated = selectedParticipants.map(p =>
+      p.modelId === modelId ? { ...p, role: '', customRoleId: undefined } : p,
+    );
+    threadActions.handleParticipantsChange(updated);
+  }, [selectedParticipants, threadActions]);
 
   // Unified scroll management using useChatScroll hook
   const { scrolledToAnalysesRef } = useChatScroll({
@@ -383,6 +486,9 @@ export default function ChatThreadScreen({
 
   // Get web search toggle state from store (form state, not DB)
   const enableWebSearch = useChatStore(s => s.enableWebSearch);
+
+  // Check message quota (thread screen sends messages in existing threads)
+  const isQuotaExceeded = statsData?.success ? statsData.data.messages.remaining === 0 : false;
 
   // AI SDK v5 Pattern: Initialize thread on mount and when thread ID changes
   // Following crash course Exercise 01.07, 04.02, 04.03:
@@ -501,7 +607,6 @@ export default function ChatThreadScreen({
                   // Mark analysis as failed to show error badge and unblock UI
                   // This happens when streaming fails with validation errors, network errors, etc.
                   // ✅ Enum Pattern: Use AnalysisStatuses.FAILED constant
-                  console.warn('[ChatThreadScreen] Analysis completed without data (error case), marking as failed:', { roundNumber });
                   updateAnalysisStatus(roundNumber, AnalysisStatuses.FAILED);
                 }
 
@@ -538,13 +643,15 @@ export default function ChatThreadScreen({
             className="sticky bottom-0 z-50 bg-gradient-to-t from-background via-background to-transparent pt-4 sm:pt-6 pb-3 sm:pb-4 mt-auto"
           >
             <div className="container max-w-3xl mx-auto px-3 sm:px-4 md:px-6">
+              <UnifiedQuotaWarning checkType="messages" />
               <ChatInput
                 value={inputValue}
                 onChange={setInputValue}
                 onSubmit={handlePromptSubmit}
                 status={isRoundInProgress ? 'submitted' : 'ready'}
                 onStop={stopStreaming}
-                placeholder={t('input.placeholder')}
+                placeholder={isQuotaExceeded ? t('chat.input.placeholderQuotaExceeded') : t('chat.input.placeholder')}
+                disabled={isQuotaExceeded}
                 participants={selectedParticipants}
                 currentParticipantIndex={currentParticipantIndex}
                 onRemoveParticipant={isRoundInProgress
@@ -558,17 +665,45 @@ export default function ChatThreadScreen({
                     }}
                 toolbar={(
                   <>
-                    <ChatParticipantsList
-                      participants={selectedParticipants}
-                      onParticipantsChange={threadActions.handleParticipantsChange}
-                      isStreaming={isRoundInProgress}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
                       disabled={isRoundInProgress}
-                    />
-                    <ChatModeSelector
-                      selectedMode={selectedMode || (thread.mode as ChatModeId)}
-                      onModeChange={threadActions.handleModeChange}
+                      onClick={isModelModalOpen.onTrue}
+                      className="h-9 rounded-2xl gap-1.5 text-xs relative px-3"
+                    >
+                      <span className="hidden xs:inline sm:inline">{t('models.aiModels')}</span>
+                      {selectedParticipants.length > 0 && (
+                        <AvatarGroup
+                          participants={selectedParticipants}
+                          allModels={allEnabledModels}
+                          maxVisible={3}
+                          size="sm"
+                        />
+                      )}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
                       disabled={isRoundInProgress}
-                    />
+                      onClick={isModeModalOpen.onTrue}
+                      className="h-9 rounded-2xl gap-1.5 text-xs relative px-3"
+                    >
+                      {(() => {
+                        const currentMode = getChatModeById(selectedMode || (thread.mode as ChatModeId));
+                        const ModeIcon = currentMode?.icon;
+                        return (
+                          <>
+                            {ModeIcon && <ModeIcon className="size-4" />}
+                            <span className="hidden xs:inline sm:inline">
+                              {currentMode?.label || t('modes.mode')}
+                            </span>
+                          </>
+                        );
+                      })()}
+                    </Button>
                     <WebSearchToggle
                       enabled={enableWebSearch}
                       onToggle={threadActions.handleWebSearchToggle}
@@ -586,6 +721,26 @@ export default function ChatThreadScreen({
         onOpenChange={isDeleteDialogOpen.setValue}
         threadId={thread.id}
         threadSlug={slug}
+      />
+      <ConversationModeModal
+        open={isModeModalOpen.value}
+        onOpenChange={isModeModalOpen.setValue}
+        selectedMode={selectedMode || (thread.mode as ChatModeId)}
+        onModeSelect={handleModeSelect}
+      />
+      <ModelSelectionModal
+        open={isModelModalOpen.value}
+        onOpenChange={isModelModalOpen.setValue}
+        orderedModels={orderedModels}
+        onReorder={handleModelReorder}
+        allParticipants={selectedParticipants}
+        customRoles={customRoles}
+        onToggle={handleModelToggle}
+        onRoleChange={handleModelRoleChange}
+        onClearRole={handleModelRoleClear}
+        selectedCount={selectedParticipants.length}
+        maxModels={userTierInfo.max_models}
+        userTierInfo={userTierInfo}
       />
     </>
   );

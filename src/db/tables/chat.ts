@@ -10,6 +10,13 @@ import {
   MESSAGE_ROLES_ENUM_VALUES,
   THREAD_STATUS_ENUM_VALUES,
 } from '@/api/core/enums';
+import type {
+  DbChangelogData,
+  DbCustomRoleMetadata,
+  DbMessageMetadata,
+  DbParticipantSettings,
+  DbThreadMetadata,
+} from '@/db/schemas/chat-metadata';
 
 import { user } from './auth';
 import { chatProject } from './project';
@@ -48,11 +55,8 @@ export const chatThread = sqliteTable('chat_thread', {
   enableWebSearch: integer('enable_web_search', { mode: 'boolean' })
     .notNull()
     .default(false), // Allow participants to browse web for information
-  metadata: text('metadata', { mode: 'json' }).$type<{
-    tags?: string[];
-    summary?: string;
-    [key: string]: unknown;
-  }>(),
+  // ✅ TYPE-SAFE: Strictly typed metadata using discriminated union schema
+  metadata: text('metadata', { mode: 'json' }).$type<DbThreadMetadata>(),
   // Optimistic locking - prevents lost updates in concurrent modifications
   version: integer('version').notNull().default(1),
   createdAt: integer('created_at', { mode: 'timestamp' })
@@ -87,11 +91,8 @@ export const chatCustomRole = sqliteTable('chat_custom_role', {
   name: text('name').notNull(), // e.g., "The Devil's Advocate"
   description: text('description'), // Brief description of the role
   systemPrompt: text('system_prompt').notNull(), // The actual prompt that defines the role behavior
-  metadata: text('metadata', { mode: 'json' }).$type<{
-    tags?: string[];
-    category?: string;
-    [key: string]: unknown;
-  }>(),
+  // ✅ TYPE-SAFE: Strictly typed metadata for custom roles
+  metadata: text('metadata', { mode: 'json' }).$type<DbCustomRoleMetadata>(),
   createdAt: integer('created_at', { mode: 'timestamp' })
     .defaultNow()
     .notNull(),
@@ -122,12 +123,8 @@ export const chatParticipant = sqliteTable('chat_participant', {
   isEnabled: integer('is_enabled', { mode: 'boolean' })
     .notNull()
     .default(true),
-  settings: text('settings', { mode: 'json' }).$type<{
-    temperature?: number;
-    maxTokens?: number;
-    systemPrompt?: string; // Inline system prompt (overrides custom role if both present)
-    [key: string]: unknown;
-  }>(),
+  // ✅ TYPE-SAFE: Strictly typed settings (temperature, maxTokens, systemPrompt)
+  settings: text('settings', { mode: 'json' }).$type<DbParticipantSettings>(),
   createdAt: integer('created_at', { mode: 'timestamp' })
     .defaultNow()
     .notNull(),
@@ -181,28 +178,9 @@ export const chatThreadChangelog = sqliteTable('chat_thread_changelog', {
     .default(0), // ✅ 0-BASED: Default to round 0
   changeType: text('change_type', { enum: CHANGELOG_TYPES_ENUM_VALUES }).notNull(),
   changeSummary: text('change_summary').notNull(), // Human-readable summary
-  // ✅ SIMPLIFIED SCHEMA: Discriminated union via 'type' field
-  // Each changeData includes a type field: 'participant', 'participant_role', or 'mode_change'
-  changeData: text('change_data', { mode: 'json' }).$type<{
-    type: 'participant' | 'participant_role' | 'mode_change' | 'participant_reorder';
-    // For mode_change
-    oldMode?: string;
-    newMode?: string;
-    // For participant changes
-    participantId?: string;
-    modelId?: string;
-    role?: string | null;
-    oldRole?: string | null;
-    newRole?: string | null;
-    // For participant_reorder
-    participants?: Array<{
-      id: string;
-      modelId: string;
-      role: string | null;
-      priority: number;
-    }>;
-    [key: string]: unknown;
-  }>(),
+  // ✅ TYPE-SAFE: Discriminated union by 'type' field - no escape hatches
+  // Four change types: 'participant', 'participant_role', 'mode_change', 'participant_reorder'
+  changeData: text('change_data', { mode: 'json' }).$type<DbChangelogData>().notNull(),
   createdAt: integer('created_at', { mode: 'timestamp' })
     .defaultNow()
     .notNull(),
@@ -279,16 +257,10 @@ export const chatMessage = sqliteTable('chat_message', {
     };
   }>>(),
 
-  metadata: text('metadata', { mode: 'json' }).$type<{
-    model?: string;
-    finishReason?: string;
-    usage?: {
-      promptTokens?: number;
-      completionTokens?: number;
-      totalTokens?: number;
-    };
-    [key: string]: unknown;
-  }>(),
+  // ✅ TYPE-SAFE: Discriminated union by 'role' field - strictly validated metadata
+  // Three message types: user, assistant/participant, pre-search/system
+  // Each type has different required fields enforced by discriminated union
+  metadata: text('metadata', { mode: 'json' }).$type<DbMessageMetadata>(),
 
   createdAt: integer('created_at', { mode: 'timestamp_ms' })
     .defaultNow()

@@ -20,13 +20,13 @@ import { ulid } from 'ulid';
 import { createError, normalizeError } from '@/api/common/error-handling';
 import { ChangelogTypes } from '@/api/core/enums';
 import type {
-  ChangeData,
   ChatParticipant,
   ParticipantConfigInput,
 } from '@/api/routes/chat/schema';
 import type { TypedLogger } from '@/api/types/logger';
 import type { DbType } from '@/db';
 import * as tables from '@/db/schema';
+import type { DbChangelogData } from '@/db/schemas/chat-metadata';
 
 // ============================================================================
 // TYPES (imported from schema.ts - no manual definitions)
@@ -47,7 +47,7 @@ export type ChangelogEntry = {
   id: string;
   changeType: typeof ChangelogTypes[keyof typeof ChangelogTypes];
   changeSummary: string;
-  changeData: ChangeData;
+  changeData: DbChangelogData;
 };
 
 // ============================================================================
@@ -348,7 +348,6 @@ export function buildParticipantOperations(
           changeData: {
             type: 'participant_role',
             participantId: dbP.id,
-            modelId: updated.modelId,
             oldRole,
             newRole,
           },

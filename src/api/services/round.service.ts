@@ -15,6 +15,11 @@ import { and, desc, eq } from 'drizzle-orm';
 
 import type { getDbAsync } from '@/db';
 import * as tables from '@/db/schema';
+import {
+  calculateNextRound,
+  DEFAULT_ROUND_NUMBER,
+  NO_ROUND_SENTINEL,
+} from '@/lib/schemas/round-schemas';
 import { isTextPart } from '@/lib/utils/type-guards';
 
 // ============================================================================
@@ -113,13 +118,13 @@ export async function calculateRoundNumber(
       limit: 1,
     });
 
-    // ✅ 0-BASED: Default to -1 so first round becomes 0
-    const lastRoundNumber = existingUserMessages[0]?.roundNumber ?? -1;
+    // ✅ 0-BASED: Use NO_ROUND_SENTINEL so first round becomes 0
+    const lastRoundNumber = existingUserMessages[0]?.roundNumber ?? NO_ROUND_SENTINEL;
 
     // If trigger message (empty OR flagged), reuse last round number
     // If real message with content, increment to new round
     // ✅ 0-BASED: Allow round 0 (lastRoundNumber >= 0 instead of > 0)
-    if ((isParticipantTrigger || textContent.length === 0) && lastRoundNumber >= 0) {
+    if ((isParticipantTrigger || textContent.length === 0) && lastRoundNumber >= DEFAULT_ROUND_NUMBER) {
       return {
         roundNumber: lastRoundNumber,
         isRegeneration: false,
@@ -127,9 +132,9 @@ export async function calculateRoundNumber(
       };
     }
 
-    // ✅ 0-BASED: First round is 0 (lastRoundNumber -1 + 1 = 0)
+    // ✅ 0-BASED: Use centralized calculation (NO_ROUND_SENTINEL + 1 = 0 for first round)
     return {
-      roundNumber: lastRoundNumber + 1,
+      roundNumber: calculateNextRound(lastRoundNumber),
       isRegeneration: false,
       isTriggerMessage: false,
     };
@@ -208,7 +213,7 @@ export async function validateRegenerateRound(
     columns: { roundNumber: true },
   });
 
-  const maxRoundNumber = maxRound?.roundNumber || 0;
+  const maxRoundNumber = maxRound?.roundNumber ?? DEFAULT_ROUND_NUMBER;
 
   if (regenerateRound !== maxRoundNumber) {
     throw new Error(

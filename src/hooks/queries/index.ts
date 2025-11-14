@@ -54,7 +54,5 @@ export {
 
 // Usage queries (protected)
 export {
-  useMessageQuotaQuery,
-  useThreadQuotaQuery,
   useUsageStatsQuery,
 } from './usage';

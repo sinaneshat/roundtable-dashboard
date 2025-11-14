@@ -178,44 +178,6 @@ export const UsageStatsResponseSchema = createApiResponseSchema(
   UsageStatsPayloadSchema,
 ).openapi('UsageStatsResponse');
 
-/**
- * Quota check API response schema
- * ✅ ALL FIELDS SERVER-COMPUTED: Service calculates quota checks
- * ✅ REUSES: subscriptionTierSchema from product-logic.service.ts
- *
- * Note: Date objects are automatically serialized to ISO strings by Hono
- */
-export const QuotaCheckPayloadSchema = z.object({
-  canCreate: z.boolean().openapi({
-    description: 'Whether user can create more resources',
-    example: true,
-  }),
-  current: z.number().openapi({
-    description: 'Current usage count',
-    example: 1,
-  }),
-  limit: z.number().openapi({
-    description: 'Maximum allowed for this tier',
-    example: 5,
-  }),
-  remaining: z.number().openapi({
-    description: 'Remaining quota',
-    example: 4,
-  }),
-  resetDate: z.coerce.date().openapi({
-    description: 'Date when quota resets (end of billing period)',
-    example: '2025-10-31T23:59:59Z',
-  }),
-  tier: subscriptionTierSchemaOpenAPI.openapi({
-    description: 'Current subscription tier',
-    example: SUBSCRIPTION_TIERS[0],
-  }),
-}).openapi('QuotaCheckPayload');
-
-export const QuotaCheckResponseSchema = createApiResponseSchema(
-  QuotaCheckPayloadSchema,
-).openapi('QuotaCheckResponse');
-
 // ============================================================================
 // Type Exports
 // ============================================================================
@@ -225,12 +187,10 @@ export const QuotaCheckResponseSchema = createApiResponseSchema(
  * Note: Date objects are automatically serialized to ISO strings by Hono/JSON.stringify
  */
 export type UsageStatsPayload = z.infer<typeof UsageStatsPayloadSchema>;
-export type QuotaCheckPayload = z.infer<typeof QuotaCheckPayloadSchema>;
 
 /**
  * Backward-compatible type aliases
  * These are used by usage-tracking.service.ts
  */
 export type UsageStats = UsageStatsPayload;
-export type QuotaCheck = QuotaCheckPayload;
 export type UsageStatus = z.infer<typeof UsageStatusSchema>;

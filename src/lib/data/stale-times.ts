@@ -46,7 +46,7 @@ export const STALE_TIMES = {
   // Usage & Quota (change frequently)
   // ============================================================================
   usage: 60 * 1000, // 1 minute - usage stats update frequently
-  quota: 60 * 1000, // 1 minute - quota limits tied to subscription
+  quota: 10 * 1000, // 10 seconds - quota checks need to be fresh for UI blocking
 
   // ============================================================================
   // Chat & Messages (real-time data)

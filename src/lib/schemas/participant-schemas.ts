@@ -16,6 +16,256 @@ import { chatParticipantSelectSchema } from '@/db/validation/chat';
 import { ParticipantSettingsSchema } from '@/lib/config/participant-settings';
 
 // ============================================================================
+// PARTICIPANT INDEX CONSTANTS - SINGLE SOURCE OF TRUTH
+// ============================================================================
+
+/**
+ * ✅ 0-BASED INDEXING: First participant is index 0
+ * Default participant index when none is specified
+ */
+export const DEFAULT_PARTICIPANT_INDEX = 0;
+
+/**
+ * Sentinel value for "no participant" calculations
+ * Used in similar pattern to NO_ROUND_SENTINEL
+ */
+export const NO_PARTICIPANT_SENTINEL = -1;
+
+// ============================================================================
+// PARTICIPANT METADATA SCHEMAS - MESSAGE METADATA
+// ============================================================================
+
+/**
+ * Participant index schema - validates participant index in message metadata
+ * ✅ 0-BASED: First participant is 0
+ */
+export const ParticipantIndexSchema = z.number().int().nonnegative();
+
+/**
+ * Participant index with sentinel schema - allows -1 for calculations
+ */
+export const ParticipantIndexWithSentinelSchema = z.number().int().min(NO_PARTICIPANT_SENTINEL);
+
+/**
+ * Type inference for participant index
+ */
+export type ParticipantIndex = z.infer<typeof ParticipantIndexSchema>;
+
+/**
+ * Type inference for participant index with sentinel
+ */
+export type ParticipantIndexWithSentinel = z.infer<typeof ParticipantIndexWithSentinelSchema>;
+
+/**
+ * Participant ID schema - validates participant ID in message metadata
+ */
+export const ParticipantIdSchema = z.string().min(1, 'Participant ID required');
+
+/**
+ * Participant role schema - validates participant role in message metadata
+ */
+export const ParticipantRoleSchema = z.string().nullable();
+
+/**
+ * Model ID schema - validates model ID in message metadata
+ */
+export const ModelIdSchema = z.string().min(1, 'Model ID required');
+
+// ============================================================================
+// MESSAGE METADATA - Re-export from Single Source of Truth
+// ============================================================================
+
+/**
+ * Message metadata schemas are now defined in /src/db/schemas/chat-metadata.ts
+ * Re-exporting here for backward compatibility
+ */
+export type {
+  DbAssistantMessageMetadata as AssistantMessageMetadata,
+  DbMessageMetadata as MessageMetadata,
+  DbUserMessageMetadata as UserMessageMetadata,
+} from '@/db/schemas/chat-metadata';
+export {
+  DbAssistantMessageMetadataSchema as AssistantMessageMetadataSchema,
+  DbMessageMetadataSchema as MessageMetadataSchema,
+  DbUserMessageMetadataSchema as UserMessageMetadataSchema,
+} from '@/db/schemas/chat-metadata';
+
+// ============================================================================
+// METADATA CREATION UTILITIES - Re-export from metadata-builder.ts
+// ============================================================================
+
+/**
+ * Type guards are now defined in /src/db/schemas/chat-metadata.ts
+ * Re-exporting here for backward compatibility
+ */
+export {
+  isAssistantMessageMetadata,
+  isParticipantMessageMetadata,
+  isUserMessageMetadata,
+} from '@/db/schemas/chat-metadata';
+
+// ============================================================================
+// METADATA EXTRACTION UTILITIES
+// ============================================================================
+
+/**
+ * Extract participant index from metadata safely
+ * SINGLE SOURCE OF TRUTH for participant index extraction
+ *
+ * @param metadata - Message metadata
+ * @param fallback - Fallback value if extraction fails (default: 0)
+ * @returns Participant index or fallback
+ *
+ * @example
+ * ```typescript
+ * const index = extractParticipantIndex(message.metadata); // Returns 0 if missing
+ * const index = extractParticipantIndex(message.metadata, -1); // Returns -1 if missing
+ * ```
+ */
+export function extractParticipantIndex(
+  metadata: unknown,
+  fallback: number = DEFAULT_PARTICIPANT_INDEX,
+): ParticipantIndex {
+  if (!metadata || typeof metadata !== 'object') {
+    return fallback;
+  }
+
+  const metadataObj = metadata as Record<string, unknown>;
+  const participantIndex = metadataObj.participantIndex;
+
+  if (typeof participantIndex === 'number' && participantIndex >= 0) {
+    return participantIndex;
+  }
+
+  return fallback;
+}
+
+/**
+ * Get display participant index (1-based for UI)
+ * ✅ DISPLAY ONLY: Use this for user-facing text
+ * ✅ 0-BASED → 1-BASED: Adds 1 for display
+ *
+ * @param participantIndex - 0-based participant index
+ * @returns 1-based display number (Participant 1, Participant 2, etc.)
+ *
+ * @example
+ * ```typescript
+ * const displayIndex = getDisplayParticipantIndex(0); // Returns 1
+ * const displayIndex = getDisplayParticipantIndex(1); // Returns 2
+ * ```
+ */
+export function getDisplayParticipantIndex(participantIndex: ParticipantIndex): number {
+  return participantIndex + 1;
+}
+
+/**
+ * Format participant index for display
+ * Example: 0 → "Participant #1", 1 → "Participant #2"
+ *
+ * @param participantIndex - 0-based participant index
+ * @returns Formatted string for display
+ *
+ * @example
+ * ```typescript
+ * const formatted = formatParticipantIndex(0); // Returns "Participant #1"
+ * const formatted = formatParticipantIndex(1); // Returns "Participant #2"
+ * ```
+ */
+export function formatParticipantIndex(participantIndex: ParticipantIndex): string {
+  return `Participant #${getDisplayParticipantIndex(participantIndex)}`;
+}
+
+/**
+ * Extract participant ID from metadata safely
+ * SINGLE SOURCE OF TRUTH for participant ID extraction
+ *
+ * @param metadata - Message metadata
+ * @returns Participant ID or null
+ *
+ * @example
+ * ```typescript
+ * const id = extractParticipantId(message.metadata);
+ * if (id) {
+ *   // Use participant ID
+ * }
+ * ```
+ */
+export function extractParticipantId(metadata: unknown): string | null {
+  if (!metadata || typeof metadata !== 'object') {
+    return null;
+  }
+
+  const metadataObj = metadata as Record<string, unknown>;
+  const participantId = metadataObj.participantId;
+
+  if (typeof participantId === 'string' && participantId.length > 0) {
+    return participantId;
+  }
+
+  return null;
+}
+
+/**
+ * Extract participant role from metadata safely
+ * SINGLE SOURCE OF TRUTH for participant role extraction
+ *
+ * @param metadata - Message metadata
+ * @returns Participant role or null
+ *
+ * @example
+ * ```typescript
+ * const role = extractParticipantRole(message.metadata);
+ * ```
+ */
+export function extractParticipantRole(metadata: unknown): string | null {
+  if (!metadata || typeof metadata !== 'object') {
+    return null;
+  }
+
+  const metadataObj = metadata as Record<string, unknown>;
+  const participantRole = metadataObj.participantRole;
+
+  if (typeof participantRole === 'string') {
+    return participantRole;
+  }
+
+  return null;
+}
+
+/**
+ * Extract model from metadata safely
+ * SINGLE SOURCE OF TRUTH for model extraction
+ *
+ * @param metadata - Message metadata
+ * @returns Model ID or null
+ *
+ * @example
+ * ```typescript
+ * const model = extractModel(message.metadata);
+ * ```
+ */
+export function extractModel(metadata: unknown): string | null {
+  if (!metadata || typeof metadata !== 'object') {
+    return null;
+  }
+
+  const metadataObj = metadata as Record<string, unknown>;
+  const model = metadataObj.model;
+
+  if (typeof model === 'string' && model.length > 0) {
+    return model;
+  }
+
+  return null;
+}
+
+/**
+ * Metadata creation functions are now centralized in /src/lib/utils/metadata-builder.ts
+ * Re-exporting here for backward compatibility
+ */
+export { createParticipantMetadata } from '@/lib/utils/metadata-builder';
+
+// ============================================================================
 // PARTICIPANT SCHEMAS - SINGLE SOURCE OF TRUTH
 // ============================================================================
 

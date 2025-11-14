@@ -12,6 +12,7 @@ import { z } from '@hono/zod-openapi';
 
 import { ChatModeSchema, DEFAULT_CHAT_MODE } from '@/api/core/enums';
 import { CoreSchemas, createApiResponseSchema } from '@/api/core/schemas';
+import { RoundNumberSchema } from '@/lib/schemas/round-schemas';
 
 // ============================================================================
 // MCP Protocol Schemas (Following MCP Specification)
@@ -242,9 +243,9 @@ export const GenerateAnalysisInputSchema = z.object({
     description: 'Thread ID',
     example: 'thread_abc123',
   }),
-  roundNumber: z.number().int().nonnegative().openapi({ // ✅ 0-BASED: Allow round 0
-    description: 'Round number to analyze',
-    example: 1,
+  roundNumber: RoundNumberSchema.openapi({
+    description: 'Round number to analyze (0-based: first round is 0)',
+    example: 0,
   }),
 }).openapi('GenerateAnalysisInput');
 
@@ -257,9 +258,9 @@ export const RegenerateRoundInputSchema = z.object({
     description: 'Thread ID',
     example: 'thread_abc123',
   }),
-  roundNumber: z.number().int().nonnegative().openapi({ // ✅ 0-BASED: Allow round 0
-    description: 'Round number to regenerate',
-    example: 1,
+  roundNumber: RoundNumberSchema.openapi({
+    description: 'Round number to regenerate (0-based: first round is 0)',
+    example: 0,
   }),
   waitForCompletion: z.boolean().default(true).openapi({
     description: 'Whether to wait for regeneration before returning',
@@ -276,9 +277,9 @@ export const RoundFeedbackInputSchema = z.object({
     description: 'Thread ID',
     example: 'thread_abc123',
   }),
-  roundNumber: z.number().int().nonnegative().openapi({ // ✅ 0-BASED: Allow round 0
-    description: 'Round number',
-    example: 1,
+  roundNumber: RoundNumberSchema.openapi({
+    description: 'Round number (0-based: first round is 0)',
+    example: 0,
   }),
   feedback: z.enum(['like', 'dislike', 'none']).openapi({
     description: 'Feedback type (none removes feedback)',
@@ -334,9 +335,9 @@ export const GetRoundAnalysisInputSchema = z.object({
     description: 'Thread ID',
     example: 'thread_abc123',
   }),
-  roundNumber: z.number().int().nonnegative().openapi({ // ✅ 0-BASED: Allow round 0
-    description: 'Round number',
-    example: 1,
+  roundNumber: RoundNumberSchema.openapi({
+    description: 'Round number (0-based: first round is 0)',
+    example: 0,
   }),
 }).openapi('GetRoundAnalysisInput');
 

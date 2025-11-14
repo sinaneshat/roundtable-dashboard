@@ -2,12 +2,13 @@
 import { AlertCircle } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
+import type { DbMessageMetadata } from '@/db/schemas/chat-metadata';
+import { isAssistantMessageMetadata } from '@/db/schemas/chat-metadata';
 import { useBoolean } from '@/hooks/utils';
-import type { MessageMetadata } from '@/lib/schemas/message-metadata';
-import { isAssistantMetadata } from '@/lib/schemas/message-metadata';
+import { getDisplayParticipantIndex } from '@/lib/schemas/participant-schemas';
 
 type MessageErrorDetailsProps = {
-  metadata: MessageMetadata | null | undefined;
+  metadata: DbMessageMetadata | null | undefined;
   className?: string;
 };
 export function MessageErrorDetails({
@@ -19,7 +20,7 @@ export function MessageErrorDetails({
 
   // ✅ STRICT TYPING: Only assistant messages have error state
   // User messages don't have error fields, so check type first
-  if (!metadata || !isAssistantMetadata(metadata)) {
+  if (!metadata || !isAssistantMessageMetadata(metadata)) {
     return null;
   }
 
@@ -79,12 +80,12 @@ export function MessageErrorDetails({
             <span className="font-medium min-w-20">{t('model')}</span>
             <span className="font-mono">{model}</span>
           </div>
-          {participantIndex !== null && (
+          {participantIndex !== null && participantIndex !== undefined && (
             <div className="flex gap-2">
               <span className="font-medium min-w-20">{t('participant')}</span>
               <span className="font-mono">
                 #
-                {participantIndex + 1}
+                {getDisplayParticipantIndex(participantIndex)}
               </span>
             </div>
           )}

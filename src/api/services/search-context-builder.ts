@@ -21,10 +21,9 @@ import type {
   SearchContextOptions,
   ValidatedPreSearchData,
 } from '@/api/routes/chat/schema';
+import { DbPreSearchDataSchema, isPreSearchMessageMetadata } from '@/db/schemas/chat-metadata';
 import type { ChatMessage } from '@/db/validation';
-import { PreSearchMetadataSchema } from '@/lib/schemas/message-metadata';
 import { getRoundNumber } from '@/lib/utils/metadata';
-import { isObject } from '@/lib/utils/type-guards';
 
 import { filterDbToPreSearchMessages } from './message-type-guards';
 
@@ -122,14 +121,16 @@ export function buildSearchContext(
 function extractValidatedPreSearchData(
   message: ChatMessage,
 ): ValidatedPreSearchData | null {
-  // ✅ TYPE-SAFE: Use type guard instead of force cast
-  if (!isObject(message.metadata) || !message.metadata.preSearch)
+  // ✅ TYPE-SAFE: Check if metadata exists and is not null
+  if (!message.metadata)
     return null;
 
-  const metadata = message.metadata;
+  // ✅ TYPE-SAFE: Use type guard to narrow to pre-search metadata
+  if (!isPreSearchMessageMetadata(message.metadata))
+    return null;
 
-  // Validate with Zod schema
-  const validation = PreSearchMetadataSchema.safeParse(metadata.preSearch);
+  // ✅ TYPE-SAFE: Now TypeScript knows metadata has preSearch property
+  const validation = DbPreSearchDataSchema.safeParse(message.metadata.preSearch);
   if (!validation.success)
     return null;
 
@@ -190,7 +191,8 @@ function buildPreviousRoundSearchContext(
   roundNumber: number,
   preSearch: ValidatedPreSearchData,
 ): string {
-  let context = `### Round ${roundNumber} Search Summary\n\n`;
+  // ✅ 0-BASED: roundNumber is 0-based, add +1 for display
+  let context = `### Round ${roundNumber + 1} Search Summary (internal: ${roundNumber})\n\n`;
 
   if (preSearch.analysis) {
     // Use AI-generated analysis as summary

@@ -33,6 +33,18 @@ roundtable.now implements a modern, type-safe API architecture built on:
 - **Middleware-Based Security** with rate limiting and CSRF protection
 - **OpenAPI Documentation** auto-generated from code
 
+### Type Safety & Patterns Cross-Reference
+
+**🚨 MANDATORY**: All type safety, enum, metadata, and validation patterns are defined in:
+- **`/docs/type-inference-patterns.md`** - Single source of truth for:
+  - Enum 5-part pattern (array constant → Zod schema → TypeScript type → constant object)
+  - Metadata type safety chain (discriminated unions, extraction functions, builders)
+  - Query keys pattern (hierarchical factory with `as const`)
+  - Zod schema patterns (CoreSchemas, discriminated unions, composition)
+  - Type inference chain (Database → Zod → TypeScript → OpenAPI)
+
+**ALL backend code MUST follow patterns defined in type-inference-patterns.md**
+
 ### Directory Structure
 
 ```

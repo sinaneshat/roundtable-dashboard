@@ -4,34 +4,42 @@
 import type { UIMessage } from 'ai';
 import { AnimatePresence, motion } from 'motion/react';
 import Image from 'next/image';
+import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
 import { MessageRoles } from '@/api/core/enums';
 import type { ModeratorAnalysisPayload } from '@/api/routes/chat/schema';
+import { AvatarGroup } from '@/components/chat/avatar-group';
 import type { ParticipantConfig } from '@/components/chat/chat-form-schemas';
 import { ChatInput } from '@/components/chat/chat-input';
 import { ChatMessageList } from '@/components/chat/chat-message-list';
-import { ChatModeSelector } from '@/components/chat/chat-mode-selector';
-import { ChatParticipantsList } from '@/components/chat/chat-participants-list';
 import { ChatQuickStart } from '@/components/chat/chat-quick-start';
+import { ConversationModeModal } from '@/components/chat/conversation-mode-modal';
+import { ModelSelectionModal } from '@/components/chat/model-selection-modal';
 import { RoundAnalysisCard } from '@/components/chat/moderator/round-analysis-card';
 import { PreSearchCard } from '@/components/chat/pre-search-card';
 import { StreamingParticipantsLoader } from '@/components/chat/streaming-participants-loader';
 import { useThreadHeader } from '@/components/chat/thread-header-context';
 import { UnifiedErrorBoundary } from '@/components/chat/unified-error-boundary';
+import { UnifiedQuotaWarning } from '@/components/chat/unified-quota-warning';
 import { WebSearchToggle } from '@/components/chat/web-search-toggle';
 import { useChatStore } from '@/components/providers/chat-store-provider';
+import { Button } from '@/components/ui/button';
 import { RadialGlow } from '@/components/ui/radial-glow';
 import { BRAND } from '@/constants/brand';
+import { useUsageStatsQuery } from '@/hooks/queries';
+import { useCustomRolesQuery } from '@/hooks/queries/chat';
+import { useModelsQuery } from '@/hooks/queries/models';
 import {
+  useBoolean,
   useChatScroll,
   useFlowLoading,
   useModelLookup,
 } from '@/hooks/utils';
 import { useSession } from '@/lib/auth/client';
-import { getDefaultChatMode } from '@/lib/config/chat-modes';
+import { getChatModeById, getDefaultChatMode } from '@/lib/config/chat-modes';
 // ✅ REMOVED: queryKeys - no longer invalidating queries on completion
 import { showApiErrorToast } from '@/lib/toast';
 // ✅ REMOVED: waitForIdleOrRender - was a timeout workaround (2s) for race conditions
@@ -46,6 +54,7 @@ import {
 export default function ChatOverviewScreen() {
   // ✅ REMOVED: queryClient - no longer invalidating queries on completion
   const t = useTranslations();
+  const pathname = usePathname();
   const { data: session } = useSession();
   const sessionUser = session?.user;
 
@@ -140,6 +149,105 @@ export default function ChatOverviewScreen() {
 
   const { setThreadTitle, setThreadActions } = useThreadHeader();
 
+  // Modal state management
+  const modeModal = useBoolean(false);
+  const modelModal = useBoolean(false);
+
+  // Model selection modal data
+  const { data: modelsData } = useModelsQuery();
+  const { data: customRolesData } = useCustomRolesQuery(modelModal.value && !isStreaming);
+  const { data: statsData } = useUsageStatsQuery();
+  const participantIdCounterRef = useRef(0);
+
+  const allEnabledModels = useMemo(
+    () => modelsData?.data?.items || [],
+    [modelsData?.data?.items],
+  );
+
+  const customRoles = customRolesData?.pages.flatMap(page =>
+    (page?.success && page.data?.items) ? page.data.items : [],
+  ) || [];
+
+  const userTierConfig = modelsData?.data?.user_tier_config || {
+    tier: 'free' as const,
+    tier_name: 'Free',
+    max_models: 2,
+    can_upgrade: true,
+  };
+
+  const orderedModels = useMemo(() => {
+    if (allEnabledModels.length === 0)
+      return [];
+
+    const selectedModels = selectedParticipants
+      .sort((a, b) => a.priority - b.priority)
+      .flatMap((p, index) => {
+        const model = allEnabledModels.find(m => m.id === p.modelId);
+        return model ? [{ model, participant: p, order: index }] : [];
+      });
+
+    const selectedIds = new Set(selectedParticipants.map(p => p.modelId));
+    const unselectedModels = allEnabledModels
+      .filter(m => !selectedIds.has(m.id))
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map((m, index) => ({
+        model: m,
+        participant: null,
+        order: selectedModels.length + index,
+      }));
+
+    return [...selectedModels, ...unselectedModels];
+  }, [selectedParticipants, allEnabledModels]);
+
+  const handleToggleModel = useCallback((modelId: string) => {
+    const orderedModel = orderedModels.find(om => om.model.id === modelId);
+    if (!orderedModel)
+      return;
+
+    if (orderedModel.participant) {
+      // Remove model
+      const filtered = selectedParticipants.filter(p => p.id !== orderedModel.participant!.id);
+      const reindexed = filtered.map((p, index) => ({ ...p, priority: index }));
+      setSelectedParticipants(reindexed);
+    } else {
+      // Add model
+      participantIdCounterRef.current += 1;
+      const newParticipant: ParticipantConfig = {
+        id: `participant-${participantIdCounterRef.current}`,
+        modelId,
+        role: '',
+        priority: selectedParticipants.length,
+      };
+      setSelectedParticipants([...selectedParticipants, newParticipant]);
+    }
+  }, [orderedModels, selectedParticipants, setSelectedParticipants]);
+
+  const handleRoleChange = useCallback((modelId: string, role: string, customRoleId?: string) => {
+    setSelectedParticipants(
+      selectedParticipants.map(p =>
+        p.modelId === modelId ? { ...p, role, customRoleId } : p,
+      ),
+    );
+  }, [selectedParticipants, setSelectedParticipants]);
+
+  const handleClearRole = useCallback((modelId: string) => {
+    setSelectedParticipants(
+      selectedParticipants.map(p =>
+        p.modelId === modelId ? { ...p, role: '', customRoleId: undefined } : p,
+      ),
+    );
+  }, [selectedParticipants, setSelectedParticipants]);
+
+  const handleReorderModels = useCallback((newOrder: typeof orderedModels) => {
+    const reorderedParticipants = newOrder
+      .filter(om => om.participant !== null)
+      .map((om, index) => ({
+        ...om.participant!,
+        priority: index,
+      }));
+    setSelectedParticipants(reorderedParticipants);
+  }, [setSelectedParticipants]);
+
   // Initialize default participants if needed
   const initialParticipants = useMemo<ParticipantConfig[]>(() => {
     if (defaultModelId) {
@@ -171,12 +279,17 @@ export default function ChatOverviewScreen() {
   // ✅ CRITICAL FIX: Disable orchestrator during streaming/analysis creation
   // The orchestrator was racing with onStreamComplete callback, overwriting 'complete' status
   // with stale 'streaming' from server. Disabling during active operations prevents race.
+  // ✅ FIX: Only pass thread if we have a valid createdThreadId from active flow
+  // This prevents re-initializing with stale thread data when navigating to /chat overview
+  // When user clicks "New Chat" from thread view, createdThreadId gets reset by resetToOverview()
+  const shouldInitializeThread = Boolean(createdThreadId && currentThread);
+
   useScreenInitialization({
     mode: 'overview',
-    thread: currentThread,
-    participants: contextParticipants,
+    thread: shouldInitializeThread ? currentThread : null,
+    participants: shouldInitializeThread ? contextParticipants : [],
     chatMode: selectedMode,
-    enableOrchestrator: !isStreaming && !isCreatingAnalysis,
+    enableOrchestrator: !isStreaming && !isCreatingAnalysis && shouldInitializeThread,
   });
 
   // Handle form submission
@@ -215,6 +328,9 @@ export default function ChatOverviewScreen() {
 
   const currentStreamingParticipant = contextParticipants[currentParticipantIndex] || null;
 
+  // Check thread quota (overview screen creates new threads)
+  const isQuotaExceeded = statsData?.success ? statsData.data.threads.remaining === 0 : false;
+
   // React 19 Pattern: Initialize thread header on mount, update when title changes
   useEffect(() => {
     // ✅ FIX: Update title when AI-generated title becomes available
@@ -227,39 +343,51 @@ export default function ChatOverviewScreen() {
     setThreadActions(null);
   }, [currentThread?.isAiGeneratedTitle, currentThread?.title, setThreadTitle, setThreadActions]);
 
-  // Consolidated: Reset to overview defaults on mount
+  // Consolidated: Reset to overview defaults when navigating to /chat
   // IMPORTANT: This resets ALL state when navigating to /chat from anywhere
   // (including from /chat/[slug] back to /chat)
   // This ensures clean state when returning to the overview screen
   // ✅ FIX: Use useLayoutEffect to run synchronously BEFORE other effects
   // Prevents race condition where useOverviewActions navigation effect
   // evaluates with stale thread data before reset completes
+  // ✅ FIX: Track pathname changes to detect navigation to /chat
+  const prevPathnameRef = useRef<string | null>(null);
   const hasResetOnMount = useRef(false);
 
   useLayoutEffect(() => {
-    // Prevent double reset on mount
-    if (hasResetOnMount.current) {
+    // Always reset on first mount when pathname is /chat
+    if (!hasResetOnMount.current && pathname === '/chat') {
+      hasResetOnMount.current = true;
+      resetToOverview();
+
+      // Set initial form values if defaults are available
+      if (defaultModelId && initialParticipants.length > 0) {
+        setSelectedMode(getDefaultChatMode());
+        setSelectedParticipants(initialParticipants);
+      }
+
+      prevPathnameRef.current = pathname;
       return;
     }
-    hasResetOnMount.current = true;
 
-    // Reset ALL state (form, thread, messages, analyses, etc.)
-    // This includes pre-searches and all AI SDK methods
-    resetToOverview();
+    // Reset if navigating from different route to /chat
+    const isNavigatingToChat = pathname === '/chat' && prevPathnameRef.current !== '/chat';
 
-    // Set initial form values if defaults are available
-    if (defaultModelId && initialParticipants.length > 0) {
-      setSelectedMode(getDefaultChatMode());
-      setSelectedParticipants(initialParticipants);
+    if (isNavigatingToChat) {
+      // Reset ALL state (form, thread, messages, analyses, etc.)
+      // This includes pre-searches and all AI SDK methods
+      resetToOverview();
+
+      // Set initial form values if defaults are available
+      if (defaultModelId && initialParticipants.length > 0) {
+        setSelectedMode(getDefaultChatMode());
+        setSelectedParticipants(initialParticipants);
+      }
     }
 
-    // Reset flag on unmount to allow reset on next mount
-    return () => {
-      hasResetOnMount.current = false;
-    };
-    // Only run on mount
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    // Update previous pathname
+    prevPathnameRef.current = pathname;
+  }, [pathname, resetToOverview, defaultModelId, initialParticipants, setSelectedMode, setSelectedParticipants]);
 
   // Fallback: Initialize defaults when defaultModelId becomes available (first load)
   // This handles the case where defaultModelId isn't ready on initial mount
@@ -278,14 +406,16 @@ export default function ChatOverviewScreen() {
 
   // React 19 Pattern: Handle streaming stop when returning to initial UI using queueMicrotask
   const prevShowInitialUIRef = useRef(showInitialUI);
-  if (prevShowInitialUIRef.current !== showInitialUI) {
-    prevShowInitialUIRef.current = showInitialUI;
-    if (showInitialUI && isStreaming) {
-      queueMicrotask(() => {
-        stopStreaming?.();
-      });
+  useEffect(() => {
+    if (prevShowInitialUIRef.current !== showInitialUI) {
+      prevShowInitialUIRef.current = showInitialUI;
+      if (showInitialUI && isStreaming) {
+        queueMicrotask(() => {
+          stopStreaming?.();
+        });
+      }
     }
-  }
+  }, [showInitialUI, isStreaming, stopStreaming]);
 
   // Scroll management - auto-scroll during streaming (if user is near bottom)
   // Always scroll when analysis appears (regardless of position)
@@ -410,28 +540,50 @@ export default function ChatOverviewScreen() {
                     exit={{ opacity: 0 }}
                     transition={{ delay: 0.5, duration: 0.3 }}
                   >
+                    <UnifiedQuotaWarning checkType="threads" />
                     <ChatInput
                       value={inputValue}
                       onChange={setInputValue}
                       onSubmit={handlePromptSubmit}
                       status={isCreatingThread || isStreaming ? 'submitted' : 'ready'}
                       onStop={stopStreaming}
-                      placeholder={t('chat.input.placeholder')}
+                      placeholder={isQuotaExceeded ? t('chat.input.placeholderThreadQuotaExceeded') : t('chat.input.placeholder')}
+                      disabled={isQuotaExceeded}
                       participants={selectedParticipants}
                       currentParticipantIndex={currentParticipantIndex}
                       onRemoveParticipant={isStreaming ? undefined : removeParticipant}
                       toolbar={(
                         <>
-                          <ChatParticipantsList
-                            participants={selectedParticipants}
-                            onParticipantsChange={isStreaming ? undefined : setSelectedParticipants}
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
                             disabled={isStreaming}
-                          />
-                          <ChatModeSelector
-                            selectedMode={selectedMode || getDefaultChatMode()}
-                            onModeChange={isStreaming ? undefined : setSelectedMode}
+                            onClick={() => modelModal.onTrue()}
+                            className="h-9 rounded-2xl gap-1.5 text-xs px-3"
+                          >
+                            <span>{t('chat.models.aiModels')}</span>
+                            <AvatarGroup participants={selectedParticipants} allModels={allEnabledModels} size="sm" maxVisible={3} />
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
                             disabled={isStreaming}
-                          />
+                            onClick={() => modeModal.onTrue()}
+                            className="h-9 rounded-2xl gap-1.5 text-xs px-3"
+                          >
+                            {(() => {
+                              const currentMode = getChatModeById(selectedMode || getDefaultChatMode());
+                              const ModeIcon = currentMode?.icon;
+                              return (
+                                <>
+                                  {ModeIcon && <ModeIcon className="size-4" />}
+                                  <span>{currentMode?.label || t('chat.modes.mode')}</span>
+                                </>
+                              );
+                            })()}
+                          </Button>
                           <WebSearchToggle
                             enabled={enableWebSearch}
                             onToggle={isStreaming ? undefined : formActions.handleWebSearchToggle}
@@ -576,28 +728,50 @@ export default function ChatOverviewScreen() {
               className="sticky bottom-0 z-50 bg-gradient-to-t from-background via-background to-transparent pt-4 sm:pt-6 pb-3 sm:pb-4 mt-auto"
             >
               <div className="container max-w-3xl mx-auto px-3 sm:px-4 md:px-6">
+                <UnifiedQuotaWarning checkType="threads" />
                 <ChatInput
                   value={inputValue}
                   onChange={setInputValue}
                   onSubmit={handlePromptSubmit}
                   status={isCreatingThread || isStreaming ? 'submitted' : 'ready'}
                   onStop={stopStreaming}
-                  placeholder={t('chat.input.placeholder')}
+                  placeholder={isQuotaExceeded ? t('chat.input.placeholderThreadQuotaExceeded') : t('chat.input.placeholder')}
+                  disabled={isQuotaExceeded}
                   participants={selectedParticipants}
                   currentParticipantIndex={currentParticipantIndex}
                   onRemoveParticipant={isStreaming ? undefined : removeParticipant}
                   toolbar={(
                     <>
-                      <ChatParticipantsList
-                        participants={selectedParticipants}
-                        onParticipantsChange={isStreaming ? undefined : setSelectedParticipants}
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
                         disabled={isStreaming}
-                      />
-                      <ChatModeSelector
-                        selectedMode={selectedMode || getDefaultChatMode()}
-                        onModeChange={isStreaming ? undefined : setSelectedMode}
+                        onClick={() => modelModal.onTrue()}
+                        className="h-9 rounded-2xl gap-1.5 text-xs px-3"
+                      >
+                        <span>{t('chat.models.aiModels')}</span>
+                        <AvatarGroup participants={selectedParticipants} allModels={allEnabledModels} size="sm" maxVisible={3} />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
                         disabled={isStreaming}
-                      />
+                        onClick={() => modeModal.onTrue()}
+                        className="h-9 rounded-2xl gap-1.5 text-xs px-3"
+                      >
+                        {(() => {
+                          const currentMode = getChatModeById(selectedMode || getDefaultChatMode());
+                          const ModeIcon = currentMode?.icon;
+                          return (
+                            <>
+                              {ModeIcon && <ModeIcon className="size-4" />}
+                              <span>{currentMode?.label || t('chat.modes.mode')}</span>
+                            </>
+                          );
+                        })()}
+                      </Button>
                       <WebSearchToggle
                         enabled={enableWebSearch}
                         onToggle={isStreaming ? undefined : formActions.handleWebSearchToggle}
@@ -610,6 +784,38 @@ export default function ChatOverviewScreen() {
             </motion.div>
           )}
         </AnimatePresence>
+
+        {/* Conversation Mode Modal */}
+        <ConversationModeModal
+          open={modeModal.value}
+          onOpenChange={modeModal.setValue}
+          selectedMode={selectedMode || getDefaultChatMode()}
+          onModeSelect={(mode) => {
+            setSelectedMode(mode);
+            modeModal.onFalse();
+          }}
+        />
+
+        {/* Model Selection Modal */}
+        <ModelSelectionModal
+          open={modelModal.value}
+          onOpenChange={modelModal.setValue}
+          orderedModels={orderedModels}
+          onReorder={handleReorderModels}
+          allParticipants={selectedParticipants}
+          customRoles={customRoles}
+          onToggle={handleToggleModel}
+          onRoleChange={handleRoleChange}
+          onClearRole={handleClearRole}
+          selectedCount={selectedParticipants.length}
+          maxModels={userTierConfig.max_models}
+          userTierInfo={{
+            tier_name: userTierConfig.tier_name,
+            max_models: userTierConfig.max_models,
+            current_tier: userTierConfig.tier,
+            can_upgrade: userTierConfig.can_upgrade,
+          }}
+        />
       </div>
     </UnifiedErrorBoundary>
   );

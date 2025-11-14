@@ -3,8 +3,8 @@ import { experimental_useObject as useObject } from '@ai-sdk/react';
 import { motion } from 'framer-motion';
 import { memo, useCallback, useEffect, useRef } from 'react';
 
-import { AnalysisStatuses, StreamErrorTypes } from '@/api/core/enums';
 import type { StreamErrorType } from '@/api/core/enums';
+import { AnalysisStatuses, StreamErrorTypes } from '@/api/core/enums';
 import type { ModeratorAnalysisPayload, RecommendedAction, StoredModeratorAnalysis } from '@/api/routes/chat/schema';
 import { ModeratorAnalysisPayloadSchema } from '@/api/routes/chat/schema';
 import { ChatLoading } from '@/components/chat/chat-loading';
@@ -93,22 +93,10 @@ function ModeratorAnalysisStreamComponent({
   const { object: partialAnalysis, error, submit, stop } = useObject({
     api: `/api/v1/chat/threads/${threadId}/rounds/${analysis.roundNumber}/analyze`,
     schema: ModeratorAnalysisPayloadSchema,
-    // ✅ AI SDK v5: Enable telemetry for debugging
-    experimental_telemetry: {
-      isEnabled: true,
-      metadata: {
-        threadId,
-        roundNumber: analysis.roundNumber,
-        component: 'ModeratorAnalysisStream'
-      }
-    },
     // ✅ AI SDK v5 Pattern: onFinish callback for handling completion and errors
     // According to AI SDK v5 docs, when object === undefined, schema validation failed
     // The error parameter contains the TypeValidationError or other streaming errors
     onFinish: ({ object: finalObject, error: streamError }) => {
-      // ✅ CRITICAL: Log callback execution for AI SDK tracking
-      console.log(`[AI-SDK] onFinish fired - round:${analysis.roundNumber} hasData:${!!finalObject} hasError:${!!streamError}`);
-
       // ✅ AI SDK v5 Pattern: Check if object is undefined (validation failure)
       // From docs: "object is undefined if the final object does not match the schema"
       if (finalObject === undefined) {
@@ -133,8 +121,6 @@ function ModeratorAnalysisStreamComponent({
         // Store error type for UI display
         streamErrorTypeRef.current = errorType;
 
-        console.error(`[AI-SDK] Stream error (${errorType}) in round ${analysis.roundNumber}:`, errorMessage);
-
         // ✅ CRITICAL FIX: Always call completion callback to prevent stuck 'streaming' status
         // This ensures the analysis status gets updated even when validation or other errors occur
         onStreamCompleteRef.current?.();
@@ -146,10 +132,6 @@ function ModeratorAnalysisStreamComponent({
         onStreamCompleteRef.current?.(finalObject);
       }
     },
-    // ✅ AI SDK v5: Add onError for better error tracking
-    onError: (error) => {
-      console.error(`[AI-SDK] Stream error - round:${analysis.roundNumber}`, error);
-    }
   });
 
   // ✅ Store submit function in ref for stable access in effects
@@ -197,7 +179,8 @@ function ModeratorAnalysisStreamComponent({
       const messageIds = analysis.participantMessageIds;
       queueMicrotask(() => {
         onStreamStartRef.current?.();
-        submitRef.current({ participantMessageIds: messageIds });
+        const body = { participantMessageIds: messageIds };
+        submitRef.current(body);
       });
     }
     // Note: participantMessageIds NOT in deps to avoid re-trigger on metadata updates

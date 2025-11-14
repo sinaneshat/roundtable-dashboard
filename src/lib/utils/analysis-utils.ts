@@ -13,7 +13,8 @@ import type { DeepPartial, UIMessage } from 'ai';
 import { MessageRoles } from '@/api/core/enums';
 import type { ChatParticipant, ModeratorAnalysisPayload, StoredModeratorAnalysis } from '@/api/routes/chat/schema';
 import { ModeratorAnalysisPayloadSchema } from '@/api/routes/chat/schema';
-import { messageHasError, MessageMetadataSchema } from '@/lib/schemas/message-metadata';
+import { DbMessageMetadataSchema } from '@/db/schemas/chat-metadata';
+import { messageHasError } from '@/lib/schemas/message-metadata';
 import { getStatusPriority } from '@/stores/chat/store-constants';
 
 import { isObject } from './type-guards';
@@ -254,7 +255,7 @@ export function isCompleteAnalysis(
  *
  * Detection Logic:
  * 1. Filters to assistant messages only (user messages excluded)
- * 2. Validates each message's metadata against MessageMetadataSchema
+ * 2. Validates each message's metadata against DbMessageMetadataSchema
  * 3. Uses messageHasError() to check for error indicators:
  *    - hasError flag
  *    - errorType field
@@ -284,7 +285,7 @@ export function checkAllParticipantsFailed(messages: UIMessage[]): boolean {
 
   // Check if every assistant message has an error
   return assistantMessages.every((m) => {
-    const parsed = MessageMetadataSchema.safeParse(m.metadata);
+    const parsed = DbMessageMetadataSchema.safeParse(m.metadata);
     return parsed.success && messageHasError(parsed.data);
   });
 }
@@ -325,7 +326,7 @@ export function isRoundIncomplete(
     if (m.role !== MessageRoles.ASSISTANT) {
       return false;
     }
-    const parsed = MessageMetadataSchema.safeParse(m.metadata);
+    const parsed = DbMessageMetadataSchema.safeParse(m.metadata);
     return parsed.success && parsed.data?.roundNumber === roundNumber;
   });
 
@@ -338,7 +339,7 @@ export function isRoundIncomplete(
 
   // Round is incomplete if any participant message has an error
   const hasErrors = assistantMessagesInRound.some((m) => {
-    const parsed = MessageMetadataSchema.safeParse(m.metadata);
+    const parsed = DbMessageMetadataSchema.safeParse(m.metadata);
     return parsed.success && messageHasError(parsed.data);
   });
 
@@ -395,7 +396,7 @@ export function shouldCreateAnalysis(
     }
 
     // Check if message belongs to current round
-    const parsed = MessageMetadataSchema.safeParse(m.metadata);
+    const parsed = DbMessageMetadataSchema.safeParse(m.metadata);
     if (!parsed.success || !parsed.data) {
       return false;
     }

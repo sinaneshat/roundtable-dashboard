@@ -17,86 +17,56 @@
 import { z } from 'zod';
 
 import { WebSearchContentTypeSchema, WebSearchDepthSchema } from '@/api/core/enums';
+/* eslint-disable perfectionist/sort-named-imports */
+import type {
+  DbMessageMetadata as MessageMetadata,
+  ErrorType,
+  FinishReason,
+  Usage,
+} from '@/db/schemas/chat-metadata';
+import {
+  ErrorTypeSchema,
+  FinishReasonSchema,
+  isAssistantMessageMetadata as isAssistantMetadata,
+  UsageSchema,
+} from '@/db/schemas/chat-metadata';
+/* eslint-enable perfectionist/sort-named-imports */
 
 // ============================================================================
-// Shared Enums (Zod-first Pattern - Single Source of Truth)
+// Re-export Shared Schemas (for backward compatibility)
 // ============================================================================
-
-/**
- * AI SDK finish reason enum
- * Zod-first pattern: Schema is source of truth, reused across all metadata schemas
- *
- * @see https://sdk.vercel.ai/docs/ai-sdk-core/stream-text
- */
-export const FinishReasonSchema = z.enum([
-  'stop',
-  'length',
-  'tool-calls',
-  'content-filter',
-  'failed',
-  'other',
-  'unknown',
-]);
-
-export type FinishReason = z.infer<typeof FinishReasonSchema>;
-
-/**
- * Error type enum for categorizing AI operation errors
- * Zod-first pattern: Schema defines valid error types
- */
-export const ErrorTypeSchema = z.enum([
-  'rate_limit',
-  'context_length',
-  'api_error',
-  'network',
-  'timeout',
-  'model_unavailable',
-  'empty_response',
-  'unknown',
-]);
-
-export type ErrorType = z.infer<typeof ErrorTypeSchema>;
+// These schemas are now defined in chat-metadata.ts to break circular dependency
+// Re-exporting here so existing imports continue to work
+export { ErrorTypeSchema, FinishReasonSchema, UsageSchema };
+export type { ErrorType, FinishReason, Usage };
 
 // ============================================================================
-// User Message Metadata Schema (Minimal Requirements)
+// Re-export Database Message Metadata Schemas (Single Source of Truth)
 // ============================================================================
 
-/**
- * User messages only need roundNumber
- * Other fields are optional or system-generated
- * isParticipantTrigger: Transient flag for triggering participant streaming (not persisted to DB)
- */
-export const UserMessageMetadataSchema = z.object({
-  roundNumber: z.number().int().nonnegative(), // ✅ 0-BASED: Allow round 0
-  createdAt: z.string().datetime().optional(),
-  isParticipantTrigger: z.boolean().optional(), // Frontend-only flag for triggering participants
-});
-
-export type UserMessageMetadata = z.infer<typeof UserMessageMetadataSchema>;
-
-// ============================================================================
-// Usage Tracking Schema (Reusable)
-// ============================================================================
-
-/**
- * Token usage schema - reusable across message metadata and API responses
- * Single source of truth for usage tracking structure
- */
-export const UsageSchema = z.object({
-  promptTokens: z.number().int().nonnegative(),
-  completionTokens: z.number().int().nonnegative(),
-  totalTokens: z.number().int().nonnegative(),
-});
-
-export type Usage = z.infer<typeof UsageSchema>;
-
-// ============================================================================
-// Assistant Message Metadata Schema (Strict Requirements)
-// ============================================================================
+export type {
+  DbAssistantMessageMetadata as AssistantMessageMetadata,
+  DbMessageMetadata as MessageMetadata,
+  DbPreSearchMessageMetadata as PreSearchMessageMetadata,
+  DbUserMessageMetadata as UserMessageMetadata,
+} from '@/db/schemas/chat-metadata';
+export {
+  DbAssistantMessageMetadataSchema as AssistantMessageMetadataSchema,
+  DbMessageMetadataSchema as MessageMetadataSchema,
+  DbPreSearchMessageMetadataSchema as PreSearchMessageMetadataSchema,
+  DbUserMessageMetadataSchema as UserMessageMetadataSchema,
+} from '@/db/schemas/chat-metadata';
 
 // ============================================================================
 // Pre-Search Metadata Schema (for web search results)
 // ============================================================================
+
+export type {
+  DbPreSearchData as PreSearchMetadata,
+} from '@/db/schemas/chat-metadata';
+export {
+  DbPreSearchDataSchema as PreSearchMetadataSchema,
+} from '@/db/schemas/chat-metadata';
 
 /**
  * Pre-search query metadata
@@ -137,24 +107,6 @@ export const PreSearchResultSchema = z.object({
 });
 
 export type PreSearchResult = z.infer<typeof PreSearchResultSchema>;
-
-/**
- * Pre-search metadata
- * Contains information about initial web searches performed before streaming
- * Now includes full search results with URLs for citation
- */
-export const PreSearchMetadataSchema = z.object({
-  queries: z.array(PreSearchQueryMetadataSchema),
-  analysis: z.string(),
-  successCount: z.number().int().nonnegative(),
-  failureCount: z.number().int().nonnegative(),
-  totalResults: z.number().int().nonnegative(),
-  totalTime: z.number(),
-  // Full search results with URLs for participant citation
-  results: z.array(PreSearchResultSchema),
-});
-
-export type PreSearchMetadata = z.infer<typeof PreSearchMetadataSchema>;
 
 // ============================================================================
 // Pre-Search Streaming State Schemas
@@ -255,222 +207,31 @@ export type PreSearchErrorEvent = z.infer<typeof PreSearchErrorEventSchema>;
 export type PreSearchStreamEvent = z.infer<typeof PreSearchStreamEventSchema>;
 
 // ============================================================================
-// Pre-Search Message Metadata Schema (System Messages with Web Search)
+// Type Guards - Re-export from Database Schemas
 // ============================================================================
 
-/**
- * Pre-search message metadata schema
- * These are system messages containing web search results, not participant responses
- *
- * DISTINGUISHING CHARACTERISTICS:
- * - role: 'system' (NOT 'assistant' like participant messages)
- * - isPreSearch: true (explicit flag for type narrowing)
- * - NO participantId (these are not from specific participants)
- * - Contains preSearch data with web search results
- */
-export const PreSearchMessageMetadataSchema = z.object({
-  role: z.literal('system'),
-  roundNumber: z.number().int().nonnegative(), // ✅ 0-BASED: Allow round 0
-  isPreSearch: z.literal(true),
-  preSearch: PreSearchMetadataSchema,
-  createdAt: z.string().datetime().optional(),
-});
-
-export type PreSearchMessageMetadata = z.infer<typeof PreSearchMessageMetadataSchema>;
+export {
+  isAssistantMessageMetadata as isAssistantMetadata,
+  isParticipantMessageMetadata as isParticipantMetadata,
+  isPreSearchMessageMetadata as isPreSearchMetadata,
+  isUserMessageMetadata as isUserMetadata,
+  safeParseMessageMetadata,
+  validateMessageMetadata,
+} from '@/db/schemas/chat-metadata';
 
 // ============================================================================
-// Assistant Message Metadata Schema (Strict Requirements)
+// Backward Compatibility Helpers
 // ============================================================================
-
-/**
- * Core assistant message metadata - REQUIRED fields only
- * These fields are REQUIRED - no optional chaining needed
- */
-const AssistantMessageMetadataCoreSchema = z.object({
-  // Round tracking - REQUIRED
-  roundNumber: z.number().int().nonnegative(), // ✅ 0-BASED: Allow round 0
-
-  // Participant tracking - REQUIRED for assistant messages
-  participantId: z.string().min(1), // Must be valid ULID
-  participantIndex: z.number().int().nonnegative(),
-  // ✅ AI SDK FIX: null gets stripped from SSE - provide default
-  participantRole: z.string().nullable().default(null),
-
-  // AI SDK core fields - REQUIRED for tracking
-  model: z.string().min(1), // Must specify which model was used
-  finishReason: FinishReasonSchema, // Zod enum - single source of truth
-
-  // Usage tracking - REQUIRED for cost/performance monitoring
-  usage: UsageSchema,
-
-  // Error state - REQUIRED booleans
-  // ✅ AI SDK FIX: false gets stripped from SSE - provide defaults
-  hasError: z.boolean().default(false),
-  isTransient: z.boolean().default(false),
-  isPartialResponse: z.boolean().default(false),
-
-  // Error details - only present when hasError = true
-  errorType: ErrorTypeSchema.optional(), // Zod enum - validated error types
-  errorMessage: z.string().optional(),
-  errorCategory: z.string().optional(),
-
-  // Timestamp
-  createdAt: z.string().datetime().optional(),
-});
-
-/**
- * Full assistant message metadata including optional backend/debugging fields
- * All components should use this type to access metadata
- */
-export const AssistantMessageMetadataSchema = AssistantMessageMetadataCoreSchema.extend({
-  // Backend/debugging fields - OPTIONAL
-  providerMessage: z.string().optional(),
-  openRouterError: z.record(z.string(), z.unknown()).optional(),
-  retryAttempts: z.number().int().nonnegative().optional(),
-  isEmptyResponse: z.boolean().optional(),
-  statusCode: z.number().int().optional(),
-  responseBody: z.string().optional(),
-  aborted: z.boolean().optional(), // Whether request was aborted
-});
-
-export type AssistantMessageMetadata = z.infer<typeof AssistantMessageMetadataSchema>;
-
-// ============================================================================
-// Participant Message Metadata Schema (Alias for clarity in filtering)
-// ============================================================================
-
-/**
- * Participant message metadata - alias for assistant metadata with explicit naming
- * Use this type when specifically filtering for participant responses (vs pre-search)
- *
- * This is the same as AssistantMessageMetadata but with clearer naming
- * for contexts where we're explicitly filtering out pre-search messages
- */
-export const ParticipantMessageMetadataSchema = AssistantMessageMetadataSchema;
-export type ParticipantMessageMetadata = AssistantMessageMetadata;
-
-// ============================================================================
-// Discriminated Union - Type-Safe Message Metadata
-// ============================================================================
-
-/**
- * Type-safe message metadata that enforces different requirements across message types
- * Use this for runtime validation and type narrowing
- *
- * THREE MESSAGE TYPES:
- * 1. User messages: Only roundNumber required
- * 2. Assistant/Participant messages: Full participant tracking + error state
- * 3. Pre-search/System messages: Web search results, no participant
- */
-export const MessageMetadataSchema = z.discriminatedUnion('role', [
-  z.object({
-    role: z.literal('user'),
-    ...UserMessageMetadataSchema.shape,
-  }),
-  z.object({
-    role: z.literal('assistant'),
-    ...AssistantMessageMetadataSchema.shape,
-  }),
-  PreSearchMessageMetadataSchema,
-]);
-
-export type MessageMetadata = z.infer<typeof MessageMetadataSchema>;
-
-// ============================================================================
-// Backend Storage Metadata (for database operations with defaults)
-// ============================================================================
-
-/**
- * Backend-only metadata schema with default values for database storage
- * Use this for validating metadata coming from API with defaults applied
- *
- * NOTE: AssistantMessageMetadata already includes all these fields as optional.
- * This schema adds defaults for database storage operations.
- */
-export const BackendMessageMetadataSchema = AssistantMessageMetadataSchema.extend({
-  retryAttempts: z.number().int().nonnegative().default(0),
-  isEmptyResponse: z.boolean().default(false),
-});
-
-export type BackendMessageMetadata = z.infer<typeof BackendMessageMetadataSchema>;
-
-// ============================================================================
-// Type Guards - Strict Type Narrowing
-// ============================================================================
-
-/**
- * Type guard to check if metadata is for an assistant message
- * Enables strict type narrowing without optional chaining
- */
-export function isAssistantMetadata(
-  metadata: MessageMetadata,
-): metadata is Extract<MessageMetadata, { role: 'assistant' }> {
-  return metadata.role === 'assistant';
-}
-
-/**
- * Type guard to check if metadata is for a user message
- */
-export function isUserMetadata(
-  metadata: MessageMetadata,
-): metadata is Extract<MessageMetadata, { role: 'user' }> {
-  return metadata.role === 'user';
-}
-
-/**
- * Type guard to check if metadata is for a pre-search message
- * Pre-search messages contain web search results and are NOT participant responses
- */
-export function isPreSearchMetadata(
-  metadata: MessageMetadata,
-): metadata is PreSearchMessageMetadata {
-  return metadata.role === 'system' && 'isPreSearch' in metadata && metadata.isPreSearch === true;
-}
-
-/**
- * Type guard to check if metadata is for a participant message
- * Participant messages are assistant messages that are NOT pre-search
- */
-export function isParticipantMetadata(
-  metadata: MessageMetadata,
-): metadata is Extract<MessageMetadata, { role: 'assistant' }> {
-  return metadata.role === 'assistant' && 'participantId' in metadata;
-}
-
-// ============================================================================
-// Validation Helpers
-// ============================================================================
-
-/**
- * Validate and parse assistant message metadata
- * Throws if metadata is invalid or missing required fields
- */
-export function validateAssistantMetadata(metadata: unknown): AssistantMessageMetadata {
-  const result = AssistantMessageMetadataSchema.safeParse(metadata);
-  if (!result.success) {
-    throw new Error(`Invalid assistant message metadata: ${result.error.message}`);
-  }
-  return result.data;
-}
-
-/**
- * Validate and parse user message metadata
- */
-export function validateUserMetadata(metadata: unknown): UserMessageMetadata {
-  const result = UserMessageMetadataSchema.safeParse(metadata);
-  if (!result.success) {
-    throw new Error(`Invalid user message metadata: ${result.error.message}`);
-  }
-  return result.data;
-}
 
 /**
  * Check if message has error WITHOUT loose type checking
  * Only works after metadata is validated
+ *
+ * Accepts both MessageMetadata and DbMessageMetadata for compatibility
  */
-export function messageHasError(metadata: MessageMetadata): boolean {
-  if (isAssistantMetadata(metadata)) {
-    return metadata.hasError === true;
+export function messageHasError(metadata: MessageMetadata | import('@/db/schemas/chat-metadata').DbMessageMetadata): boolean {
+  if (isAssistantMetadata(metadata as MessageMetadata)) {
+    return (metadata as Extract<MessageMetadata, { role: 'assistant' }>).hasError === true;
   }
   return false; // User messages don't have error state
 }
@@ -527,7 +288,6 @@ export const PartialAssistantMetadataSchema = z.object({
   errorType: ErrorTypeSchema.optional(), // Zod enum - reused
   errorMessage: z.string().optional(),
   errorCategory: z.string().optional(),
-  preSearch: PreSearchMetadataSchema.optional(),
   createdAt: z.string().datetime().optional(),
 
   // Backend/debugging fields - all optional

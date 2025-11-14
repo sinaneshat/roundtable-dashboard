@@ -6,6 +6,12 @@ Project guidance for Claude Code specialized agents working on Roundtable - a co
 
 ## 🚨 DOCUMENTATION HIERARCHY
 
+**TYPE SAFETY & INFERENCE PATTERNS** (ALL AGENTS MUST READ):
+- **🚨 MANDATORY**: `/docs/type-inference-patterns.md`
+- **Defines**: Enum 5-part pattern, metadata type safety chain, query keys, Zod schemas, type inference
+- **Enforces**: Single source of truth, Zod-first pattern, no escape hatches, discriminated unions
+- **ALL agents MUST follow these patterns without deviation**
+
 **BACKEND DEVELOPMENT**:
 - **🚨 SINGLE SOURCE OF TRUTH**: `/docs/backend-patterns.md`
 - **ALL backend agents MUST read this document FIRST before any implementation**
@@ -48,6 +54,12 @@ pnpm preview               # Build and preview worker locally
 pnpm deploy:preview        # Deploy to preview environment
 pnpm deploy:production     # Deploy to production
 
+# Testing
+pnpm test                  # Run all tests
+pnpm test:watch            # Run tests in watch mode
+pnpm test:coverage         # Run tests with coverage
+pnpm test:ci               # Run tests in CI mode
+
 # Testing & Quality
 pnpm i18n:full-check       # Check all i18n translation keys
 pnpm i18n:validate         # Validate translation structure
@@ -77,8 +89,15 @@ src/
 │   └── migrations/        # SQL migration files
 ├── hooks/                 # React Query data fetching
 ├── lib/                   # Utility libraries
-└── i18n/                  # Internationalization (English-only, dynamic keys)
-    └── locales/           # en/common.json translation keys
+├── i18n/                  # Internationalization (English-only, dynamic keys)
+│   └── locales/           # en/common.json translation keys
+├── __tests__/             # Test files
+│   └── README.md          # Testing documentation
+└── lib/
+    └── testing/           # Testing utilities
+        ├── index.ts       # Barrel export
+        ├── render.tsx     # Custom render with providers
+        └── helpers.ts     # Test helpers and utilities
 ```
 
 ## Core Architecture Patterns
@@ -117,6 +136,28 @@ src/
 - TanStack Query hooks in `src/hooks/` for server state
 - All user text through `useTranslations()` - NO hardcoded strings (English-only)
 - Dark theme only (no theme switching)
+
+### Testing Layer (Jest + React Testing Library)
+**Test Infrastructure** (`jest.config.ts`, `jest.setup.ts`):
+- Jest configured with `next/jest` for Next.js support
+- JSDOM environment for DOM testing
+- Global mocks: `matchMedia`, `IntersectionObserver`, `ResizeObserver`
+- Testing utilities in `src/lib/testing/` following project architecture
+
+**Testing Patterns**:
+- Use `render` from `@/lib/testing` for consistent provider setup
+- Prefer user-centric queries (`getByRole`, `getByLabelText`)
+- Use `userEvent` for realistic user interactions
+- Test behavior, not implementation details
+- Focus on what users see and do
+
+**Test Organization**:
+- `src/__tests__/` - General test files
+- `src/components/{domain}/__tests__/` - Component tests
+- `src/stores/{domain}/__tests__/` - Store tests
+- `src/lib/testing/` - Shared test utilities (render, helpers, etc.)
+
+**Documentation**: See `docs/TESTING_SETUP.md` and `src/__tests__/README.md`
 
 ## Email System
 
@@ -228,9 +269,30 @@ NEXT_PUBLIC_SES_VERIFIED_EMAIL=noreply@your-domain.com
 - **Translation Patterns**: All user-facing text must use `useTranslations()` hooks and `t()` function
 - **Note**: Application is English-only, but translation keys are maintained for consistency and maintainability
 
+### Testing Context (`test-expert`)
+**Primary Context Documents**:
+- **Testing Documentation**: `/docs/TESTING_SETUP.md` - Comprehensive testing setup guide
+  - `/src/__tests__/README.md` - Testing patterns and examples
+- **Configuration Files**:
+  - `/jest.config.ts` - Jest configuration with Next.js integration
+  - `/jest.setup.ts` - Global test setup and mocks
+- **Testing Utilities**: `/src/lib/testing/` - Testing library following project architecture
+  - `index.ts` - Barrel export for all testing utilities
+  - `render.tsx` - Custom render utilities with providers
+  - `helpers.ts` - Mock factories, async utilities, localStorage mocks
+- **Component Tests**: `/src/components/{domain}/__tests__/` - Domain-specific component tests
+- **Store Tests**: `/src/stores/{domain}/__tests__/` - State management tests
+- **Testing Patterns**:
+  - Use `render` from `@/lib/testing` for provider setup
+  - Prefer semantic queries (`getByRole`, `getByLabelText`)
+  - Use `userEvent` for user interactions
+  - Test behavior, not implementation
+  - Focus on user experience
+
 ### Configuration Context (All Agents)
 **Primary Context Documents**:
 - **📋 Project Documentation**: `/docs/` - Essential implementation guides
+  - **🚨 `/docs/type-inference-patterns.md` - MANDATORY for ALL agents - Enum 5-part pattern, metadata type safety, query keys, Zod schemas**
   - **🚨 `/docs/backend-patterns.md` - THE SINGLE SOURCE OF TRUTH for ALL backend development**
   - **🚨 `/docs/frontend-patterns.md` - THE SINGLE SOURCE OF TRUTH for ALL frontend development**
 - **Environment Setup**: `/wrangler.jsonc` - Cloudflare Workers configuration and bindings
@@ -358,24 +420,46 @@ Each agent has domain-specific expertise:
 - API research and integration analysis
 - Best practices research and recommendations (`/src/db/tables/` domain modeling)
 
+**test-expert.md**: Jest + React Testing Library specialist
+- **Must consult**: `/docs/TESTING_SETUP.md`, `src/__tests__/README.md` for testing patterns
+- Write unit and integration tests following RTL best practices
+- Test chat participant behavior, turn-taking, and UI state updates
+- Use custom `render` from `@/lib/testing` for provider setup
+- Focus on user behavior, not implementation details
+- Testing utilities located in `/src/lib/testing/` following project architecture
+- Follow semantic queries (`getByRole`, `getByLabelText`)
+- Use `userEvent` for realistic user interactions
+- Maintain high test coverage without testing implementation
+
 ## Agent Chaining Examples
 
-**Database → Backend → Frontend**:
+**Database → Backend → Frontend → Testing**:
 1. Schema changes trigger migration generation
 2. Backend agent updates API endpoints with new schemas
 3. Frontend agent updates React Query hooks and UI components
+4. Test agent writes tests for new functionality
 
 **Feature Development Workflow**:
 1. Research agent analyzes requirements and APIs
 2. Backend agent implements database schema and API endpoints
 3. Frontend agent creates UI components and data fetching
 4. i18n agent ensures all text uses translation keys (English-only)
+5. Test agent writes comprehensive tests for the feature
 
 **External Integration Pattern**:
 1. Backend agent implements external API integration
 2. Database operations for data tracking and audit trails
 3. Frontend agent creates UI and status handling
-4. Real-time updates via polling or server-sent events
+4. Test agent writes tests with mocked API responses
+5. Real-time updates via polling or server-sent events
+
+**Testing Workflow**:
+1. Test agent reviews component/feature requirements
+2. Examines existing tests for patterns
+3. Creates test utilities and helpers as needed
+4. Writes unit tests for components and stores
+5. Writes integration tests for user flows
+6. Ensures accessibility and error state coverage
 
 ## Advanced Agent Orchestration Patterns
 

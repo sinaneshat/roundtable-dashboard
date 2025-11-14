@@ -41,6 +41,7 @@ import { getDbAsync } from '@/db';
 import * as tables from '@/db/schema';
 import type { ChatMessage } from '@/db/validation';
 import { extractTextFromParts } from '@/lib/schemas/message-schemas';
+import { DEFAULT_PARTICIPANT_INDEX } from '@/lib/schemas/participant-schemas';
 import { filterNonEmptyMessages } from '@/lib/utils/message-transforms';
 import { isObject } from '@/lib/utils/type-guards';
 
@@ -713,6 +714,10 @@ export const sendMessageToolHandler: RouteHandler<typeof sendMessageToolRoute, A
       parts: [{ type: 'text', text: input.content }],
       participantId: null,
       roundNumber: currentRoundNumber,
+      metadata: {
+        role: 'user',
+        roundNumber: currentRoundNumber, // ✅ CRITICAL: Must be in metadata for frontend transform
+      },
       createdAt: new Date(),
     });
 
@@ -1030,7 +1035,7 @@ export const generateResponsesToolHandler: RouteHandler<typeof generateResponses
     // Calculate round number
     const roundResult = await calculateRoundNumber({
       threadId: input.threadId,
-      participantIndex: 0,
+      participantIndex: DEFAULT_PARTICIPANT_INDEX,
       message: { role: 'user', parts: [{ type: 'text', text: input.messageContent }] } as UIMessage,
       regenerateRound: undefined,
       db,
@@ -1045,6 +1050,10 @@ export const generateResponsesToolHandler: RouteHandler<typeof generateResponses
       parts: [{ type: 'text', text: input.messageContent }],
       participantId: null,
       roundNumber: roundResult.roundNumber,
+      metadata: {
+        role: 'user',
+        roundNumber: roundResult.roundNumber, // ✅ CRITICAL: Must be in metadata for frontend transform
+      },
       createdAt: new Date(),
     });
 
@@ -1392,7 +1401,7 @@ export const regenerateRoundToolHandler: RouteHandler<typeof regenerateRoundTool
     const cleanupResult = await handleRoundRegeneration({
       threadId: input.threadId,
       regenerateRound: input.roundNumber,
-      participantIndex: 0,
+      participantIndex: DEFAULT_PARTICIPANT_INDEX,
       db,
     });
 

@@ -333,7 +333,17 @@
       "model": "model",
       "models": "models",
       "upgradeToUnlock": "Upgrade to unlock these models",
-      "minimumRequired": "At least one participant is required"
+      "minimumRequired": "At least one participant is required",
+      "yourModels": "Your Models",
+      "availableModels": "Available Models",
+      "premiumModels": "Premium Models",
+      "modal": {
+        "title": "Choose, reorder, and assign roles",
+        "subtitle": "Manage your AI models and their roles",
+        "searchPlaceholder": "Search AI models...",
+        "premium": "Premium",
+        "locked": "Locked"
+      }
     },
     "roles": {
       "addRole": "+ Role",
@@ -349,7 +359,27 @@
     "modes": {
       "mode": "Mode",
       "currentMode": "Current Mode:",
-      "chatModes": "Chat Modes"
+      "chatModes": "Chat Modes",
+      "modal": {
+        "title": "Conversation Mode",
+        "subtitle": "Choose how AI models interact with your query",
+        "debating": {
+          "title": "Debating",
+          "description": "Explore different perspectives through structured debate"
+        },
+        "brainstorming": {
+          "title": "Brainstorming",
+          "description": "Generate creative ideas collaboratively"
+        },
+        "problemSolving": {
+          "title": "Problem Solving",
+          "description": "Work together to find practical solutions"
+        },
+        "analyzing": {
+          "title": "Analyzing",
+          "description": "Deep analysis from multiple expert viewpoints"
+        }
+      }
     },
     "webSearch": {
       "title": "Web Search",
@@ -522,6 +552,8 @@
       "placeholder": "Message Roundtable...",
       "placeholderStreaming": "AI participants are responding...",
       "streamingPlaceholder": "Waiting for AI response...",
+      "placeholderQuotaExceeded": "Message quota reached - upgrade to continue...",
+      "placeholderThreadQuotaExceeded": "Thread quota reached - upgrade to create more threads...",
       "submit": "Send message",
       "threadPlaceholder": "Continue the conversation...",
       "voiceInput": "Voice input"
@@ -664,6 +696,17 @@
     "feedback": {
       "like": "This round was helpful",
       "dislike": "This round was not helpful"
+    },
+    "quota": {
+      "messageQuotaExceeded": "Message Quota Reached",
+      "quotaExceededDescription": "You've used {current} of {limit} messages this month.",
+      "threadQuotaExceeded": "Thread Quota Reached",
+      "threadQuotaExceededDescription": "You've used {current} of {limit} threads this month.",
+      "limitReached": "Usage limit reached",
+      "threadLimitReached": "Thread limit reached ({current}/{limit})",
+      "messageLimitReached": "Message limit reached ({current}/{limit})",
+      "analysisLimitReached": "Analysis limit reached ({current}/{limit})",
+      "resetsOn": "Quota resets on {date}."
     }
   },
   "common": {

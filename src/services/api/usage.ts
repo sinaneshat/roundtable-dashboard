@@ -23,29 +23,22 @@ export type GetUsageStatsResponse = InferResponseType<
   ApiClientType['usage']['stats']['$get']
 >;
 
-export type CheckThreadQuotaRequest = InferRequestType<
-  ApiClientType['usage']['quota']['threads']['$get']
->;
-
-export type CheckThreadQuotaResponse = InferResponseType<
-  ApiClientType['usage']['quota']['threads']['$get']
->;
-
-export type CheckMessageQuotaRequest = InferRequestType<
-  ApiClientType['usage']['quota']['messages']['$get']
->;
-
-export type CheckMessageQuotaResponse = InferResponseType<
-  ApiClientType['usage']['quota']['messages']['$get']
->;
-
 // ============================================================================
 // Service Functions
 // ============================================================================
 
 /**
- * Get comprehensive usage statistics for the authenticated user
- * Returns threads, messages, and subscription tier information
+ * ✅ SINGLE SOURCE OF TRUTH - Get comprehensive usage statistics
+ *
+ * This is the ONLY API call needed for quota checking and usage display.
+ * Returns ALL quota information (can derive canCreate from used/limit):
+ * - threads: { used, limit, remaining, percentage, status }
+ * - messages: { used, limit, remaining, percentage, status }
+ * - analysis: { used, limit, remaining, percentage, status }
+ * - customRoles: { used, limit, remaining, percentage, status }
+ * - period: { start, end, daysRemaining }
+ * - subscription: { tier, isAnnual }
+ *
  * Protected endpoint - requires authentication
  *
  * Following Hono RPC best practices: Always provide an object to $get()
@@ -53,28 +46,4 @@ export type CheckMessageQuotaResponse = InferResponseType<
 export async function getUserUsageStatsService(args?: GetUsageStatsRequest) {
   const client = await createApiClient();
   return parseResponse(client.usage.stats.$get(args ?? {}));
-}
-
-/**
- * Check thread creation quota
- * Returns whether the user can create more threads
- * Protected endpoint - requires authentication
- *
- * Following Hono RPC best practices: Always provide an object to $get()
- */
-export async function checkThreadQuotaService(args?: CheckThreadQuotaRequest) {
-  const client = await createApiClient();
-  return parseResponse(client.usage.quota.threads.$get(args ?? {}));
-}
-
-/**
- * Check message creation quota
- * Returns whether the user can send more messages
- * Protected endpoint - requires authentication
- *
- * Following Hono RPC best practices: Always provide an object to $get()
- */
-export async function checkMessageQuotaService(args?: CheckMessageQuotaRequest) {
-  const client = await createApiClient();
-  return parseResponse(client.usage.quota.messages.$get(args ?? {}));
 }

@@ -12,6 +12,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { FreePricingCard } from '@/components/ui/free-pricing-card';
 import { PricingCard } from '@/components/ui/pricing-card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { cn } from '@/lib/ui/cn';
 import type { Subscription } from '@/types/billing';
 
 // UI-specific billing interval (subset of BillingInterval from API)
@@ -29,6 +30,7 @@ type PricingContentProps = {
   onCancel: (subscriptionId: string) => void | Promise<void>;
   onManageBilling: () => void;
   showSubscriptionBanner?: boolean;
+  isModal?: boolean;
 };
 
 /**
@@ -49,6 +51,7 @@ export function PricingContent({
   onCancel,
   onManageBilling,
   showSubscriptionBanner = false,
+  isModal = false,
 }: PricingContentProps) {
   const t = useTranslations();
   const [selectedInterval, setSelectedInterval] = useState<UIBillingInterval>('month');
@@ -191,6 +194,7 @@ export function PricingContent({
               onManageBilling={onManageBilling}
               getAnnualSavings={getAnnualSavings}
               t={t}
+              isModal={isModal}
             />
           </TabsContent>
 
@@ -210,6 +214,7 @@ export function PricingContent({
               onManageBilling={onManageBilling}
               getAnnualSavings={getAnnualSavings}
               t={t}
+              isModal={isModal}
             />
           </TabsContent>
         </Tabs>
@@ -233,6 +238,7 @@ type ProductGridProps = {
   onManageBilling: () => void;
   getAnnualSavings: (productId: string) => number;
   t: (key: string) => string;
+  isModal?: boolean;
 };
 
 function ProductGrid({
@@ -249,6 +255,7 @@ function ProductGrid({
   onManageBilling,
   getAnnualSavings,
   t,
+  isModal = false,
 }: ProductGridProps) {
   if (products.length === 0) {
     return (
@@ -279,8 +286,12 @@ function ProductGrid({
 
   return (
     <div className="w-full">
-      {/* Responsive grid with proper gap and breakpoints */}
-      <div className="grid grid-cols-1 gap-6 w-full sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+      {/* Responsive grid - modal shows 2 cols max, page shows up to 4 cols */}
+      <div className={cn(
+        'grid grid-cols-1 gap-6 w-full',
+        isModal ? 'sm:grid-cols-2' : 'sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4',
+      )}
+      >
         {/* Free Tier Card - Always First */}
         <motion.div
           initial={{ opacity: 0, scale: 0.95 }}

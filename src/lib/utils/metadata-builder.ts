@@ -1,7 +1,7 @@
 /**
  * Type-Safe Metadata Builder
  *
- * SINGLE SOURCE OF TRUTH for creating valid message metadata
+ * ✅ MIGRATED TO NEW SINGLE SOURCE OF TRUTH: Uses DbAssistantMessageMetadata
  * Enforces all required fields at compile-time via TypeScript
  *
  * PREVENTS: Missing fields that cause schema validation failures
@@ -10,7 +10,8 @@
  * Location: /src/lib/utils/metadata-builder.ts
  */
 
-import type { AssistantMessageMetadata, ParticipantMessageMetadata } from '@/lib/schemas/message-metadata';
+import type { DbAssistantMessageMetadata } from '@/db/schemas/chat-metadata';
+import type { RoundNumber } from '@/lib/schemas/round-schemas';
 
 // ============================================================================
 // Type-Safe Builder Parameters
@@ -21,8 +22,8 @@ import type { AssistantMessageMetadata, ParticipantMessageMetadata } from '@/lib
  * TypeScript enforces ALL fields must be provided
  */
 export type ParticipantMetadataParams = {
-  // Round tracking
-  roundNumber: number;
+  // Round tracking (0-based: first round is 0)
+  roundNumber: RoundNumber;
 
   // Participant identification
   participantId: string;
@@ -33,7 +34,7 @@ export type ParticipantMetadataParams = {
   model: string;
 
   // AI SDK core fields (will have defaults if not provided)
-  finishReason?: 'stop' | 'length' | 'content-filter' | 'tool-calls' | 'error' | 'other' | 'unknown';
+  finishReason?: 'stop' | 'length' | 'content-filter' | 'tool-calls' | 'failed' | 'other' | 'unknown';
   usage?: {
     promptTokens: number;
     completionTokens: number;
@@ -42,7 +43,7 @@ export type ParticipantMetadataParams = {
 
   // Error state (defaults to false if not provided)
   hasError?: boolean;
-  errorType?: string;
+  errorType?: 'rate_limit' | 'context_length' | 'api_error' | 'network' | 'timeout' | 'model_unavailable' | 'empty_response' | 'unknown';
   errorMessage?: string;
   errorCategory?: string;
 
@@ -76,17 +77,20 @@ export type ParticipantMetadataParams = {
  * const metadata = createParticipantMetadata({
  *   roundNumber: 1,
  *   participantId: '01ABC123',
- *   participantIndex: 0,
+ *   participantIndex: 0, // First participant
  *   participantRole: null,
  *   model: 'gpt-4',
  * });
  */
 export function createParticipantMetadata(
   params: ParticipantMetadataParams,
-): ParticipantMessageMetadata {
-  // ✅ TYPE SAFETY: Return type is ParticipantMessageMetadata
+): DbAssistantMessageMetadata {
+  // ✅ TYPE SAFETY: Return type is DbAssistantMessageMetadata (single source of truth)
   // TypeScript ensures this object matches the Zod schema structure
   return {
+    // ✅ DISCRIMINATOR: Required 'role' field for type-safe metadata
+    role: 'assistant' as const,
+
     // Required fields (no defaults)
     roundNumber: params.roundNumber,
     participantId: params.participantId,
@@ -128,7 +132,7 @@ export function createParticipantMetadata(
  * Update participant metadata with new fields
  * Preserves existing fields while updating specified ones
  *
- * ✅ TYPE SAFETY: Only allows valid ParticipantMessageMetadata fields
+ * ✅ TYPE SAFETY: Only allows valid DbAssistantMessageMetadata fields
  *
  * @example
  * const updated = updateParticipantMetadata(existingMetadata, {
@@ -137,9 +141,9 @@ export function createParticipantMetadata(
  * });
  */
 export function updateParticipantMetadata(
-  existing: ParticipantMessageMetadata,
+  existing: DbAssistantMessageMetadata,
   updates: Partial<ParticipantMetadataParams>,
-): ParticipantMessageMetadata {
+): DbAssistantMessageMetadata {
   return createParticipantMetadata({
     ...existing,
     ...updates,
@@ -159,7 +163,7 @@ export function updateParticipantMetadata(
  */
 export function createStreamingMetadata(
   params: Omit<ParticipantMetadataParams, 'finishReason' | 'usage'>,
-): ParticipantMessageMetadata {
+): DbAssistantMessageMetadata {
   return createParticipantMetadata({
     ...params,
     finishReason: 'unknown',
@@ -177,9 +181,18 @@ export function createStreamingMetadata(
  *
  * @param streamMetadata - Initial metadata from createStreamingMetadata
  * @param finishResult - AI SDK finishResult from onFinish callback
+ * @param finishResult.finishReason - Reason the stream finished
+ * @param finishResult.usage - Token usage statistics
+ * @param finishResult.usage.promptTokens - Tokens used in prompt
+ * @param finishResult.usage.completionTokens - Tokens used in completion
+ * @param finishResult.usage.totalTokens - Total tokens used
+ * @param finishResult.totalUsage - Alternative total usage (fallback for some models)
+ * @param finishResult.totalUsage.promptTokens - Tokens used in prompt
+ * @param finishResult.totalUsage.completionTokens - Tokens used in completion
+ * @param finishResult.totalUsage.totalTokens - Total tokens used
  */
 export function completeStreamingMetadata(
-  streamMetadata: ParticipantMessageMetadata,
+  streamMetadata: DbAssistantMessageMetadata,
   finishResult: {
     finishReason: 'stop' | 'length' | 'content-filter' | 'tool-calls' | 'error' | 'other' | 'unknown';
     usage?: {
@@ -193,17 +206,19 @@ export function completeStreamingMetadata(
       totalTokens?: number;
     };
   },
-): ParticipantMessageMetadata {
+): DbAssistantMessageMetadata {
   // Use totalUsage as fallback for models like DeepSeek
   const usageData = finishResult.usage || finishResult.totalUsage;
 
   return updateParticipantMetadata(streamMetadata, {
-    finishReason: finishResult.finishReason,
-    usage: usageData ? {
-      promptTokens: usageData.promptTokens ?? 0,
-      completionTokens: usageData.completionTokens ?? 0,
-      totalTokens: usageData.totalTokens ?? (usageData.promptTokens ?? 0) + (usageData.completionTokens ?? 0),
-    } : streamMetadata.usage,
+    finishReason: finishResult.finishReason as 'stop' | 'length' | 'content-filter' | 'tool-calls' | 'failed' | 'other' | 'unknown',
+    usage: usageData
+      ? {
+          promptTokens: usageData.promptTokens ?? 0,
+          completionTokens: usageData.completionTokens ?? 0,
+          totalTokens: usageData.totalTokens ?? (usageData.promptTokens ?? 0) + (usageData.completionTokens ?? 0),
+        }
+      : streamMetadata.usage,
   });
 }
 
@@ -212,7 +227,7 @@ export function completeStreamingMetadata(
  * Used in AI SDK onError callback
  */
 export function createErrorMetadata(
-  streamMetadata: ParticipantMessageMetadata,
+  streamMetadata: DbAssistantMessageMetadata,
   error: {
     message: string;
     errorType?: string;
@@ -221,11 +236,11 @@ export function createErrorMetadata(
     statusCode?: number;
     responseBody?: string;
   },
-): ParticipantMessageMetadata {
+): DbAssistantMessageMetadata {
   return updateParticipantMetadata(streamMetadata, {
     hasError: true,
     errorMessage: error.message,
-    errorType: error.errorType,
+    errorType: error.errorType as 'rate_limit' | 'context_length' | 'api_error' | 'network' | 'timeout' | 'model_unavailable' | 'empty_response' | 'unknown' | undefined,
     errorCategory: error.errorCategory,
     isTransient: error.isTransient ?? false,
     isPartialResponse: false,
@@ -244,22 +259,23 @@ export function createErrorMetadata(
  */
 export function hasRequiredParticipantFields(
   metadata: unknown,
-): metadata is ParticipantMessageMetadata {
-  if (!metadata || typeof metadata !== 'object') return false;
+): metadata is DbAssistantMessageMetadata {
+  if (!metadata || typeof metadata !== 'object')
+    return false;
 
   const m = metadata as Record<string, unknown>;
 
   // Check all required fields exist
   return (
-    typeof m.roundNumber === 'number' &&
-    typeof m.participantId === 'string' &&
-    typeof m.participantIndex === 'number' &&
-    (m.participantRole === null || typeof m.participantRole === 'string') &&
-    typeof m.model === 'string' &&
-    typeof m.finishReason === 'string' &&
-    typeof m.usage === 'object' &&
-    typeof m.hasError === 'boolean' &&
-    typeof m.isTransient === 'boolean' &&
-    typeof m.isPartialResponse === 'boolean'
+    typeof m.roundNumber === 'number'
+    && typeof m.participantId === 'string'
+    && typeof m.participantIndex === 'number'
+    && (m.participantRole === null || typeof m.participantRole === 'string')
+    && typeof m.model === 'string'
+    && typeof m.finishReason === 'string'
+    && typeof m.usage === 'object'
+    && typeof m.hasError === 'boolean'
+    && typeof m.isTransient === 'boolean'
+    && typeof m.isPartialResponse === 'boolean'
   );
 }

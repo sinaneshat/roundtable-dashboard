@@ -16,22 +16,28 @@
  * 4. Support both frontend (UIMessage) and backend (ChatMessage) types
  */
 
-import type { ChatMessage } from '@/db/validation';
 import type {
-  AssistantMessageMetadata,
-  MessageMetadata,
-  ParticipantMessageMetadata,
-  PreSearchMessageMetadata,
-  UserMessageMetadata,
-} from '@/lib/schemas/message-metadata';
+  DbAssistantMessageMetadata,
+  DbMessageMetadata,
+  DbPreSearchMessageMetadata,
+  DbUserMessageMetadata,
+} from '@/db/schemas/chat-metadata';
 import {
-  AssistantMessageMetadataSchema,
-  MessageMetadataSchema,
-  ParticipantMessageMetadataSchema,
-  PreSearchMessageMetadataSchema,
-  UserMessageMetadataSchema,
-} from '@/lib/schemas/message-metadata';
+  DbAssistantMessageMetadataSchema,
+  DbMessageMetadataSchema,
+  DbPreSearchMessageMetadataSchema,
+  DbUserMessageMetadataSchema,
+  isParticipantMessageMetadata,
+} from '@/db/schemas/chat-metadata';
+import type { ChatMessage } from '@/db/validation';
 import type { UIMessage } from '@/lib/schemas/ui-message-schemas';
+
+// Convenience type aliases for backward compatibility
+type MessageMetadata = DbMessageMetadata;
+type UserMessageMetadata = DbUserMessageMetadata;
+type AssistantMessageMetadata = DbAssistantMessageMetadata;
+type PreSearchMessageMetadata = DbPreSearchMessageMetadata;
+type ParticipantMessageMetadata = DbAssistantMessageMetadata; // Participant messages are assistant messages with participantId
 
 // ============================================================================
 // Type Guards with Zod Validation
@@ -58,7 +64,7 @@ export function getMessageMetadata(metadata: unknown): MessageMetadata | undefin
   if (!metadata)
     return undefined;
 
-  const result = MessageMetadataSchema.safeParse(metadata);
+  const result = DbMessageMetadataSchema.safeParse(metadata);
   return result.success ? result.data : (metadata as MessageMetadata);
 }
 
@@ -69,7 +75,7 @@ export function getMessageMetadata(metadata: unknown): MessageMetadata | undefin
 export function getUserMetadata(
   metadata: unknown,
 ): UserMessageMetadata | null {
-  const result = UserMessageMetadataSchema.safeParse(metadata);
+  const result = DbUserMessageMetadataSchema.safeParse(metadata);
   return result.success ? result.data : null;
 }
 
@@ -80,7 +86,7 @@ export function getUserMetadata(
 export function getAssistantMetadata(
   metadata: unknown,
 ): AssistantMessageMetadata | null {
-  const result = AssistantMessageMetadataSchema.safeParse(metadata);
+  const result = DbAssistantMessageMetadataSchema.safeParse(metadata);
   return result.success ? result.data : null;
 }
 
@@ -91,8 +97,14 @@ export function getAssistantMetadata(
 export function getParticipantMetadata(
   metadata: unknown,
 ): ParticipantMessageMetadata | null {
-  const result = ParticipantMessageMetadataSchema.safeParse(metadata);
-  return result.success ? result.data : null;
+  // Participant metadata is assistant metadata with participantId
+  const result = DbAssistantMessageMetadataSchema.safeParse(metadata);
+  if (!result.success) {
+    return null;
+  }
+  // Verify it has participantId using type guard from db schemas
+  const hasParticipantId = isParticipantMessageMetadata(result.data);
+  return hasParticipantId ? result.data : null;
 }
 
 /**
@@ -102,7 +114,7 @@ export function getParticipantMetadata(
 export function getPreSearchMetadata(
   metadata: unknown,
 ): PreSearchMessageMetadata | null {
-  const result = PreSearchMessageMetadataSchema.safeParse(metadata);
+  const result = DbPreSearchMessageMetadataSchema.safeParse(metadata);
   return result.success ? result.data : null;
 }
 
@@ -229,9 +241,12 @@ export function isPreSearch(metadata: unknown): boolean {
 export function requireParticipantMetadata(
   metadata: unknown,
 ): ParticipantMessageMetadata {
-  const result = ParticipantMessageMetadataSchema.safeParse(metadata);
+  const result = DbAssistantMessageMetadataSchema.safeParse(metadata);
   if (!result.success) {
     throw new Error(`Invalid participant metadata: ${result.error.message}`);
+  }
+  if (!isParticipantMessageMetadata(result.data)) {
+    throw new Error('Invalid participant metadata: missing participantId');
   }
   return result.data;
 }
@@ -243,7 +258,7 @@ export function requireParticipantMetadata(
 export function requireAssistantMetadata(
   metadata: unknown,
 ): AssistantMessageMetadata {
-  const result = AssistantMessageMetadataSchema.safeParse(metadata);
+  const result = DbAssistantMessageMetadataSchema.safeParse(metadata);
   if (!result.success) {
     throw new Error(`Invalid assistant metadata: ${result.error.message}`);
   }
@@ -257,7 +272,7 @@ export function requireAssistantMetadata(
 export function requireUserMetadata(
   metadata: unknown,
 ): UserMessageMetadata {
-  const result = UserMessageMetadataSchema.safeParse(metadata);
+  const result = DbUserMessageMetadataSchema.safeParse(metadata);
   if (!result.success) {
     throw new Error(`Invalid user metadata: ${result.error.message}`);
   }
@@ -271,7 +286,7 @@ export function requireUserMetadata(
 export function requirePreSearchMetadata(
   metadata: unknown,
 ): PreSearchMessageMetadata {
-  const result = PreSearchMessageMetadataSchema.safeParse(metadata);
+  const result = DbPreSearchMessageMetadataSchema.safeParse(metadata);
   if (!result.success) {
     throw new Error(`Invalid pre-search metadata: ${result.error.message}`);
   }
@@ -352,7 +367,8 @@ export function buildAssistantMetadata(
   if (options.participantIndex !== undefined) {
     metadata.participantIndex = options.participantIndex;
   }
-  if (options.participantRole) {
+  // ✅ FIX: participantRole can be null, must check undefined not truthiness
+  if (options.participantRole !== undefined) {
     metadata.participantRole = options.participantRole;
   }
   if (options.model) {

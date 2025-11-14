@@ -110,16 +110,16 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         {...props}
       >
         {loading ? (
-          <>
+          <span className="inline-flex items-center gap-2">
             <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
             {buttonChildren}
-          </>
+          </span>
         ) : (
-          <>
+          <span className="inline-flex items-center gap-2">
             {startIcon && <span className="inline-flex items-center shrink-0" aria-hidden="true">{startIcon}</span>}
             {buttonChildren}
             {endIcon && <span className="inline-flex items-center shrink-0" aria-hidden="true">{endIcon}</span>}
-          </>
+          </span>
         )}
       </Comp>
     )

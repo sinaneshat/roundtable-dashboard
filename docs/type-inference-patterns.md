@@ -9,15 +9,18 @@ This document details the complete type inference chain from database schema to 
 ## Table of Contents
 
 1. [Architecture Overview](#architecture-overview)
-2. [Type Inference Chain](#type-inference-chain)
-3. [Zod Schema Patterns](#zod-schema-patterns)
-4. [Drizzle ORM Integration](#drizzle-orm-integration)
-5. [OpenAPI Type Generation](#openapi-type-generation)
-6. [Handler Factory Type Safety](#handler-factory-type-safety)
-7. [Schema Composition Patterns](#schema-composition-patterns)
-8. [AI SDK Integration Patterns](#ai-sdk-integration-patterns)
-9. [Best Practices](#best-practices)
-10. [Anti-Patterns](#anti-patterns)
+2. [Enum-Based Pattern System](#enum-based-pattern-system)
+3. [Metadata Type Safety Chain](#metadata-type-safety-chain)
+4. [Query Keys Pattern](#query-keys-pattern)
+5. [Type Inference Chain](#type-inference-chain)
+6. [Zod Schema Patterns](#zod-schema-patterns)
+7. [Drizzle ORM Integration](#drizzle-orm-integration)
+8. [OpenAPI Type Generation](#openapi-type-generation)
+9. [Handler Factory Type Safety](#handler-factory-type-safety)
+10. [Schema Composition Patterns](#schema-composition-patterns)
+11. [AI SDK Integration Patterns](#ai-sdk-integration-patterns)
+12. [Best Practices](#best-practices)
+13. [Anti-Patterns](#anti-patterns)
 
 ---
 
@@ -43,6 +46,291 @@ TypeScript Types (Compile Time)
 API Documentation
     ↓ RPC Client Type Inference
 Frontend Type Safety
+```
+
+---
+
+## Enum-Based Pattern System
+
+### The 5-Part Enum Pattern
+
+**Single Source**: `/src/api/core/enums.ts`
+
+Every enum in the codebase MUST follow this exact 5-part pattern:
+
+```typescript
+// ============================================================================
+// EXAMPLE: CHAT MODE ENUM
+// ============================================================================
+
+// 1️⃣ ARRAY CONSTANT - Source of truth for values
+export const CHAT_MODES = ['analyzing', 'brainstorming', 'debating', 'solving'] as const;
+
+// 2️⃣ DEFAULT VALUE (if applicable)
+export const DEFAULT_CHAT_MODE: ChatMode = 'debating';
+
+// 3️⃣ ZOD SCHEMA - Runtime validation + OpenAPI docs
+export const ChatModeSchema = z.enum(CHAT_MODES).openapi({
+  description: 'Conversation mode for roundtable discussions',
+  example: 'brainstorming',
+});
+
+// 4️⃣ TYPESCRIPT TYPE - Inferred from Zod schema
+export type ChatMode = z.infer<typeof ChatModeSchema>;
+
+// 5️⃣ CONSTANT OBJECT - For usage in code (prevents typos)
+export const ChatModes = {
+  ANALYZING: 'analyzing' as const,
+  BRAINSTORMING: 'brainstorming' as const,
+  DEBATING: 'debating' as const,
+  SOLVING: 'solving' as const,
+} as const;
+```
+
+### Usage Pattern
+
+**✅ CORRECT - Use constant object:**
+```typescript
+import { ChatModes } from '@/api/core/enums';
+
+if (mode === ChatModes.ANALYZING) {
+  // Type-safe, autocomplete works, no typos possible
+}
+```
+
+**❌ INCORRECT - Hardcoded strings:**
+```typescript
+if (mode === 'analyzing') {
+  // Fragile, no autocomplete, typo-prone
+}
+```
+
+### Critical Enums
+
+| Enum | Constant Object | Use Cases |
+|------|----------------|-----------|
+| `MessageRoles` | `USER`, `ASSISTANT`, `TOOL` | Message role discrimination |
+| `ChatModes` | `ANALYZING`, `BRAINSTORMING`, `DEBATING`, `SOLVING` | Thread mode selection |
+| `AnalysisStatuses` | `PENDING`, `STREAMING`, `COMPLETE`, `FAILED` | Moderator analysis lifecycle |
+| `PreSearchStatuses` | `IDLE`, `STREAMING`, `ACTIVE`, `COMPLETE`, `FAILED` | Pre-search lifecycle |
+| `AiSdkStatuses` | `READY`, `STREAMING`, `AWAITING_MESSAGE` | AI SDK hook status |
+
+**Reference**: `/src/api/core/enums.ts:1-694`
+
+---
+
+## Metadata Type Safety Chain
+
+### Single Source of Truth for Metadata
+
+**Location**: `/src/db/schemas/chat-metadata.ts`
+
+All message metadata uses discriminated unions by `role` field:
+
+```typescript
+// Discriminated union - TypeScript narrows based on 'role'
+export const DbMessageMetadataSchema = z.discriminatedUnion('role', [
+  DbUserMessageMetadataSchema,           // role: 'user'
+  DbAssistantMessageMetadataSchema,      // role: 'assistant'
+  DbPreSearchMessageMetadataSchema,      // role: 'system'
+]);
+
+export type DbMessageMetadata = z.infer<typeof DbMessageMetadataSchema>;
+```
+
+### User Message Metadata
+
+```typescript
+// From: /src/db/schemas/chat-metadata.ts:87-95
+export const DbUserMessageMetadataSchema = z.object({
+  role: z.literal('user'),                    // ✅ Discriminator
+  roundNumber: RoundNumberSchema,             // ✅ 0-based (required)
+  createdAt: z.string().datetime().optional(),
+  isParticipantTrigger: z.boolean().optional(), // Frontend-only flag
+});
+
+export type DbUserMessageMetadata = z.infer<typeof DbUserMessageMetadataSchema>;
+```
+
+### Assistant Message Metadata
+
+```typescript
+// From: /src/db/schemas/chat-metadata.ts:109-148
+export const DbAssistantMessageMetadataSchema = z.object({
+  role: z.literal('assistant'),              // ✅ Discriminator
+
+  // ✅ REQUIRED: Round tracking (0-based)
+  roundNumber: RoundNumberSchema,
+
+  // ✅ REQUIRED: Participant identification
+  participantId: z.string().min(1),
+  participantIndex: z.number().int().nonnegative(),
+  participantRole: z.string().nullable(),
+
+  // ✅ REQUIRED: Model tracking
+  model: z.string().min(1),
+  finishReason: FinishReasonSchema,
+
+  // ✅ REQUIRED: Usage tracking
+  usage: UsageSchema,
+
+  // ✅ REQUIRED: Error state (with defaults)
+  hasError: z.boolean().default(false),
+  isTransient: z.boolean().default(false),
+  isPartialResponse: z.boolean().default(false),
+
+  // Optional error details
+  errorType: ErrorTypeSchema.optional(),
+  errorMessage: z.string().optional(),
+  // ... additional backend debugging fields
+});
+
+export type DbAssistantMessageMetadata = z.infer<typeof DbAssistantMessageMetadataSchema>;
+```
+
+### Metadata Extraction Functions
+
+**Single Source**: `/src/lib/utils/metadata.ts`
+
+**Type-safe extraction with Zod validation:**
+
+```typescript
+// Role-specific extractors (return null if invalid)
+export function getUserMetadata(metadata: unknown): DbUserMessageMetadata | null;
+export function getAssistantMetadata(metadata: unknown): DbAssistantMessageMetadata | null;
+export function getParticipantMetadata(metadata: unknown): DbAssistantMessageMetadata | null;
+export function getPreSearchMetadata(metadata: unknown): DbPreSearchMessageMetadata | null;
+
+// Field-specific extractors (null-safe)
+export function getRoundNumber(metadata: unknown): number | null;
+export function getParticipantId(metadata: unknown): string | null;
+export function getParticipantIndex(metadata: unknown): number | null;
+export function getParticipantRole(metadata: unknown): string | null;
+export function getModel(metadata: unknown): string | null;
+export function hasError(metadata: unknown): boolean;
+export function isPreSearch(metadata: unknown): boolean;
+
+// Throwing variants (for backend - critical errors)
+export function requireUserMetadata(metadata: unknown): DbUserMessageMetadata;
+export function requireAssistantMetadata(metadata: unknown): DbAssistantMessageMetadata;
+export function requireParticipantMetadata(metadata: unknown): DbAssistantMessageMetadata;
+```
+
+**Usage Pattern:**
+
+```typescript
+// ✅ CORRECT - Type-safe extraction
+import { getRoundNumber, getParticipantId } from '@/lib/utils/metadata';
+
+const roundNumber = getRoundNumber(message.metadata);  // number | null
+const participantId = getParticipantId(message.metadata);  // string | null
+
+if (roundNumber !== null && participantId) {
+  // Both values are guaranteed types here
+}
+```
+
+```typescript
+// ❌ INCORRECT - Unsafe casting
+const roundNumber = (message.metadata as Record<string, unknown>)?.roundNumber;
+const participantId = (message.metadata as any).participantId;
+```
+
+### Metadata Builder Functions
+
+**Single Source**: `/src/lib/utils/metadata-builder.ts`
+
+```typescript
+// Type-safe metadata construction with compile-time enforcement
+import { createParticipantMetadata } from '@/lib/utils/metadata-builder';
+
+const metadata = createParticipantMetadata({
+  // TypeScript enforces ALL required fields
+  roundNumber: 1,
+  participantId: '01ABC123',
+  participantIndex: 0,
+  participantRole: null,
+  model: 'gpt-4',
+  finishReason: 'stop',
+  usage: { promptTokens: 100, completionTokens: 50, totalTokens: 150 },
+  hasError: false,
+  isTransient: false,
+  isPartialResponse: false,
+});
+```
+
+### Metadata Anti-Patterns
+
+**❌ FORBIDDEN:**
+- `.passthrough()` on metadata schemas - Only explicitly defined fields allowed
+- `.nullable()` on root schemas - Use explicit `z.string().nullable()` instead
+- `[key: string]: unknown` - No loose index signatures
+- `as Record<string, unknown>` - Use type-safe extraction functions
+
+**✅ ENFORCED:**
+- All metadata must pass Zod validation
+- Required fields MUST be present
+- Types inferred from Zod schemas (single source of truth)
+- Use extraction functions from `/src/lib/utils/metadata.ts`
+
+---
+
+## Query Keys Pattern
+
+### Factory System
+
+**Single Source**: `/src/lib/data/query-keys.ts`
+
+Hierarchical, type-safe query key generation with `as const`:
+
+```typescript
+const QueryKeyFactory = {
+  base: (resource: string) => [resource] as const,
+  list: (resource: string) => [resource, 'list'] as const,
+  detail: (resource: string, id: string) => [resource, 'detail', id] as const,
+  current: (resource: string) => [resource, 'current'] as const,
+  all: (resource: string) => [resource, 'all'] as const,
+  action: (resource: string, action: string, ...params: string[]) =>
+    [resource, action, ...params] as const,
+} as const;
+```
+
+### Domain-Specific Query Keys
+
+```typescript
+export const queryKeys = {
+  threads: {
+    all: QueryKeyFactory.base('threads'),          // ['threads']
+    lists: (search?: string) =>
+      search
+        ? [...queryKeys.threads.all, 'list', 'search', search] as const
+        : [...queryKeys.threads.all, 'list'] as const,
+    detail: (id: string) => QueryKeyFactory.detail('threads', id),
+    messages: (id: string) => QueryKeyFactory.action('threads', 'messages', id),
+    changelog: (id: string) => QueryKeyFactory.action('threads', 'changelog', id),
+    analyses: (id: string) => QueryKeyFactory.action('threads', 'analyses', id),
+    preSearches: (id: string) => QueryKeyFactory.action('threads', 'pre-searches', id),
+  },
+} as const;
+```
+
+### Invalidation Patterns
+
+```typescript
+export const invalidationPatterns = {
+  // After chat operations - invalidate usage stats and unified quota
+  afterChatOperation: [
+    queryKeys.usage.stats(),
+    queryKeys.usage.unifiedQuota(),
+  ],
+
+  threadDetail: (threadId: string) => [
+    queryKeys.threads.detail(threadId),
+    queryKeys.threads.lists(),
+    queryKeys.threads.changelog(threadId),
+    // ❌ Don't invalidate analyses - they're tied to specific rounds
+  ],
+} as const;
 ```
 
 ---
@@ -1402,6 +1690,69 @@ export const createResourceHandler = createHandler(
 ---
 
 ## Anti-Patterns
+
+### ❌ Hardcoded String Literals (Enums)
+
+**WRONG**:
+```typescript
+if (mode === 'analyzing') {  // ❌ Typo-prone, no autocomplete
+  // ...
+}
+```
+
+**CORRECT**:
+```typescript
+import { ChatModes } from '@/api/core/enums';
+
+if (mode === ChatModes.ANALYZING) {  // ✅ Type-safe, autocomplete works
+  // ...
+}
+```
+
+### ❌ Unsafe Metadata Extraction
+
+**WRONG**:
+```typescript
+const roundNumber = (metadata as Record<string, unknown>)?.roundNumber;  // ❌ No validation
+const participantId = (metadata as any).participantId;  // ❌ No type safety
+```
+
+**CORRECT**:
+```typescript
+import { getRoundNumber, getParticipantId } from '@/lib/utils/metadata';
+
+const roundNumber = getRoundNumber(metadata);  // ✅ Zod validated, returns number | null
+const participantId = getParticipantId(metadata);  // ✅ Zod validated, returns string | null
+```
+
+### ❌ Inline Metadata Construction
+
+**WRONG**:
+```typescript
+const metadata = {  // ❌ No type safety, easy to miss required fields
+  role: 'assistant',
+  roundNumber: 1,
+  // Missing participantId, participantIndex, model, etc.
+};
+```
+
+**CORRECT**:
+```typescript
+import { createParticipantMetadata } from '@/lib/utils/metadata-builder';
+
+const metadata = createParticipantMetadata({  // ✅ TypeScript enforces all required fields
+  roundNumber: 1,
+  participantId: '01ABC123',
+  participantIndex: 0,
+  participantRole: null,
+  model: 'gpt-4',
+  finishReason: 'stop',
+  usage: { promptTokens: 100, completionTokens: 50, totalTokens: 150 },
+  hasError: false,
+  isTransient: false,
+  isPartialResponse: false,
+});
+```
 
 ### ❌ Type Casting
 

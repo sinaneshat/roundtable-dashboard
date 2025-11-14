@@ -24,6 +24,7 @@ import { startTransition, useEffect, useMemo, useRef, useState } from 'react';
 import { AnalysisStatuses } from '@/api/core/enums';
 import { useChatStore } from '@/components/providers/chat-store-provider';
 import { queryKeys } from '@/lib/data/query-keys';
+import { getRoundNumber } from '@/lib/utils/metadata';
 import { getCurrentRoundNumber } from '@/lib/utils/round-utils';
 
 // ============================================================================
@@ -57,6 +58,7 @@ export type FlowContext = {
   currentRound: number;
   hasMessages: boolean;
   participantCount: number;
+  allParticipantsResponded: boolean; // ✅ NEW: All participants responded for current round
 
   // Analysis state
   analysisStatus: typeof AnalysisStatuses[keyof typeof AnalysisStatuses] | null;
@@ -123,11 +125,12 @@ function determineFlowState(context: FlowContext): FlowState {
   }
 
   // Priority 4: Creating analysis (participants done, no analysis yet)
+  // ✅ FIX: Check if all participants responded for CURRENT round before creating analysis
   if (
     !context.isAiSdkStreaming
-    && context.hasMessages
+    && context.allParticipantsResponded // ✅ NEW: All participants must respond for current round
     && context.participantCount > 0
-    && !context.analysisExists
+    && !context.analysisExists // ✅ Already fixed: Checks current round
     && !context.isCreatingAnalysis
   ) {
     return 'creating_analysis';
@@ -284,6 +287,7 @@ export function useFlowStateMachine(
   // Store actions
   const createPendingAnalysis = useChatStore(s => s.createPendingAnalysis);
   const markAnalysisCreated = useChatStore(s => s.markAnalysisCreated);
+  const hasAnalysisBeenCreated = useChatStore(s => s.hasAnalysisBeenCreated);
   const completeStreaming = useChatStore(s => s.completeStreaming);
 
   // Track navigation state
@@ -299,7 +303,17 @@ export function useFlowStateMachine(
   const context = useMemo((): FlowContext => {
     const threadId = thread?.id || createdThreadId;
     const currentRound = messages.length > 0 ? getCurrentRoundNumber(messages) : 0;
+
+    // ✅ FIX: Check if analysis exists for CURRENT round, not ANY round
+    const currentRoundAnalysis = analyses.find(a => a.roundNumber === currentRound);
     const firstAnalysis = analyses[0];
+
+    // ✅ FIX: Count participant messages for CURRENT round only
+    // ✅ TYPE-SAFE: Use extraction utility instead of manual metadata access
+    const participantMessagesInRound = messages.filter((m) => {
+      return m.role === 'assistant' && getRoundNumber(m.metadata) === currentRound;
+    });
+    const allParticipantsResponded = participantMessagesInRound.length >= participants.length && participants.length > 0;
 
     return {
       threadId,
@@ -308,8 +322,9 @@ export function useFlowStateMachine(
       currentRound,
       hasMessages: messages.length > 0,
       participantCount: participants.length,
+      allParticipantsResponded, // ✅ NEW: Round-specific participant completion
       analysisStatus: firstAnalysis?.status || null,
-      analysisExists: analyses.length > 0,
+      analysisExists: !!currentRoundAnalysis, // ✅ FIX: Round-specific check
       isAiSdkStreaming,
       isCreatingThread,
       isCreatingAnalysis,
@@ -353,6 +368,13 @@ export function useFlowStateMachine(
           // Create pending analysis when participants finish
           const { threadId, currentRound } = context;
           if (threadId && messages.length > 0) {
+            // ✅ CRITICAL FIX: Check if analysis already created before proceeding
+            // Prevents duplicate analysis creation when both provider and flow-state-machine trigger
+            if (hasAnalysisBeenCreated(currentRound)) {
+              completeStreaming();
+              break; // Analysis already created, skip
+            }
+
             const userMessage = messages.findLast((m: UIMessage) => m.role === 'user');
             const userQuestion = userMessage?.parts
               ?.find((p: unknown): p is { type: 'text'; text: string } => {
@@ -412,6 +434,7 @@ export function useFlowStateMachine(
     queryClient,
     router,
     markAnalysisCreated,
+    hasAnalysisBeenCreated,
     createPendingAnalysis,
     completeStreaming,
   ]);

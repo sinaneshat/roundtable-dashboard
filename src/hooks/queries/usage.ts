@@ -16,20 +16,41 @@ import { useSession } from '@/lib/auth/client';
 import { queryKeys } from '@/lib/data/query-keys';
 import { STALE_TIMES } from '@/lib/data/stale-times';
 import {
-  checkMessageQuotaService,
-  checkThreadQuotaService,
   getUserUsageStatsService,
 } from '@/services/api';
 
 /**
- * Hook to fetch user usage statistics
- * Returns comprehensive usage data for threads and messages
+ * ✅ SINGLE SOURCE OF TRUTH - Usage statistics and quota checks
+ *
+ * This is the ONLY hook needed for both quota checking AND usage display.
+ *
+ * Returns ALL quota information in one call:
+ * - threads: { used, limit, remaining, percentage, status }
+ * - messages: { used, limit, remaining, percentage, status }
+ * - analysis: { used, limit, remaining, percentage, status }
+ * - customRoles: { used, limit, remaining, percentage, status }
+ * - period: { start, end, daysRemaining }
+ * - subscription: { tier, isAnnual }
+ *
+ * Quota blocking logic:
+ * - canCreate = used < limit
+ * - Check remaining === 0 or used >= limit to block UI
+ *
  * Protected endpoint - requires authentication
  *
- * Stale time: 1 minute (usage data should be relatively fresh)
+ * Stale time: 10 seconds (fresh data for UI blocking)
+ * Refetch interval: 30 seconds (automatic background updates)
  *
  * @param options - Optional query options
  * @param options.forceEnabled - Force enable query regardless of auth state
+ *
+ * @example
+ * const { data } = useUsageStatsQuery();
+ * if (data?.success) {
+ *   const { threads, messages } = data.data;
+ *   const canCreateThread = threads.remaining > 0;
+ *   const canSendMessage = messages.remaining > 0;
+ * }
  */
 export function useUsageStatsQuery(options?: { forceEnabled?: boolean }) {
   const { data: session, isPending } = useSession();
@@ -38,51 +59,10 @@ export function useUsageStatsQuery(options?: { forceEnabled?: boolean }) {
   return useQuery({
     queryKey: queryKeys.usage.stats(),
     queryFn: getUserUsageStatsService,
-    staleTime: STALE_TIMES.usage, // 1 minute - match server-side prefetch
+    staleTime: STALE_TIMES.quota, // 10 seconds - fresh data for UI blocking
+    refetchInterval: 30 * 1000, // Refetch every 30s for quota changes
     retry: false,
-    enabled: options?.forceEnabled ?? isAuthenticated, // Only fetch when authenticated
-    throwOnError: false,
-  });
-}
-
-/**
- * Hook to check thread creation quota
- * Returns whether user can create more threads
- * Protected endpoint - requires authentication
- *
- * Stale time: 30 seconds (quota checks should be fresh)
- */
-export function useThreadQuotaQuery() {
-  const { data: session, isPending } = useSession();
-  const isAuthenticated = !isPending && !!session?.user?.id;
-
-  return useQuery({
-    queryKey: queryKeys.usage.threadQuota(),
-    queryFn: checkThreadQuotaService,
-    staleTime: STALE_TIMES.quota, // 1 minute - consistent with usage stats
-    retry: false,
-    enabled: isAuthenticated,
-    throwOnError: false,
-  });
-}
-
-/**
- * Hook to check message creation quota
- * Returns whether user can send more messages
- * Protected endpoint - requires authentication
- *
- * Stale time: 30 seconds (quota checks should be fresh)
- */
-export function useMessageQuotaQuery() {
-  const { data: session, isPending } = useSession();
-  const isAuthenticated = !isPending && !!session?.user?.id;
-
-  return useQuery({
-    queryKey: queryKeys.usage.messageQuota(),
-    queryFn: checkMessageQuotaService,
-    staleTime: STALE_TIMES.quota, // 1 minute - consistent with usage stats
-    retry: false,
-    enabled: isAuthenticated,
+    enabled: options?.forceEnabled ?? isAuthenticated,
     throwOnError: false,
   });
 }

@@ -6,6 +6,7 @@ import { desc, eq } from 'drizzle-orm';
 import { ulid } from 'ulid';
 
 import { executeBatch } from '@/api/common/batch-operations';
+import type { ChatMode } from '@/api/core/enums';
 import { ChangelogTypes } from '@/api/core/enums';
 import type { CreateChangelogParams } from '@/api/routes/chat/schema';
 import { getDbAsync } from '@/db';
@@ -25,6 +26,7 @@ import type { ChatThreadChangelog } from '@/db/validation';
  *   changeType: 'added',
  *   changeSummary: 'Added Claude 3.5 Sonnet as The Ideator',
  *   changeData: {
+ *     type: 'participant',
  *     participantId: 'participant_456',
  *     modelId: 'anthropic/claude-3.5-sonnet',
  *     role: 'The Ideator',
@@ -39,15 +41,7 @@ export async function createChangelogEntry(params: CreateChangelogParams): Promi
 
   // ✅ ATOMIC BATCH: Insert changelog + update thread timestamp
   // Using reusable batch helper from @/api/common/batch-operations
-  // Type assertion to match database schema
-  type DBChangeData = {
-    type: 'participant' | 'participant_role' | 'mode_change' | 'participant_reorder';
-    [key: string]: unknown;
-  };
-
-  // Ensure changeData has the required 'type' field and matches DB type
-  const changeData = (params.changeData as DBChangeData) ?? { type: 'participant' as const };
-
+  // changeData is properly typed as DbChangelogData from single source of truth
   await executeBatch(db, [
     db.insert(tables.chatThreadChangelog).values({
       id: changelogId,
@@ -55,7 +49,7 @@ export async function createChangelogEntry(params: CreateChangelogParams): Promi
       roundNumber: params.roundNumber,
       changeType: params.changeType,
       changeSummary: params.changeSummary,
-      changeData,
+      changeData: params.changeData,
       createdAt: now,
     }),
     // Update thread.updatedAt to trigger ISR revalidation for public pages
@@ -97,8 +91,8 @@ export async function getThreadChangelog(
 export async function logModeChange(
   threadId: string,
   roundNumber: number,
-  oldMode: string,
-  newMode: string,
+  oldMode: ChatMode,
+  newMode: ChatMode,
 ): Promise<string> {
   return createChangelogEntry({
     threadId,
@@ -193,7 +187,6 @@ export async function logParticipantUpdated(
     changeData: {
       type: 'participant_role',
       participantId,
-      modelId,
       oldRole,
       newRole,
     },

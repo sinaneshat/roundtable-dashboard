@@ -63,6 +63,15 @@ function PreSearchStreamComponent({
   const [error, setError] = useState<Error | null>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
 
+  // ✅ DEBUG: Track component renders
+  const renderCountRef = useRef(0);
+  renderCountRef.current++;
+  //   id: preSearch.id,
+  //   round: preSearch.roundNumber,
+  //   status: preSearch.status,
+  //   threadId,
+  // });
+
   // Store callbacks in refs for stability and to allow calling after unmount
   const onStreamCompleteRef = useRef(onStreamComplete);
   const onStreamStartRef = useRef(onStreamStart);
@@ -77,158 +86,174 @@ function PreSearchStreamComponent({
 
   // Custom SSE handler for backend's custom event format (POST with fetch)
   useEffect(() => {
+    // ✅ FIX: Only trigger for PENDING status, not STREAMING/COMPLETE/FAILED
+    // STREAMING status means the backend has already started processing
+    // COMPLETE/FAILED means it's done - no need to trigger
+    if (preSearch.status !== AnalysisStatuses.PENDING) {
+      return;
+    }
+
+    // ✅ CRITICAL: Check BOTH id-level AND round-level deduplication
+    const idAlreadyTriggered = triggeredSearchIds.has(preSearch.id);
     const roundAlreadyTriggered = triggeredRounds.get(threadId)?.has(preSearch.roundNumber) ?? false;
 
-    if (
-      !triggeredSearchIds.has(preSearch.id)
-      && !roundAlreadyTriggered
-      && (preSearch.status === AnalysisStatuses.PENDING || preSearch.status === AnalysisStatuses.STREAMING)
-    ) {
-      // Mark as triggered BEFORE starting stream to prevent duplicate submissions
-      triggeredSearchIds.set(preSearch.id, true);
-
-      const roundSet = triggeredRounds.get(threadId);
-      if (roundSet) {
-        roundSet.add(preSearch.roundNumber);
-      } else {
-        triggeredRounds.set(threadId, new Set([preSearch.roundNumber]));
-      }
-
-      const abortController = new AbortController();
-      eventSourceRef.current = abortController as unknown as EventSource;
-
-      // Track partial data accumulation
-      const queries: Array<PreSearchDataPayload['queries'][number]> = [];
-      const results: Array<PreSearchDataPayload['results'][number]> = [];
-
-      // Start fetch-based SSE stream (backend uses POST)
-      const startStream = async () => {
-        try {
-          const response = await fetch(
-            `/api/v1/chat/threads/${threadId}/rounds/${preSearch.roundNumber}/pre-search`,
-            {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Accept': 'text/event-stream',
-              },
-              body: JSON.stringify({ userQuery: preSearch.userQuery }),
-              signal: abortController.signal,
-            },
-          );
-
-          if (!response.ok) {
-            if (response.status === 409) {
-              console.warn(`[PreSearch] Conflict (409) - stream already in progress for round ${preSearch.roundNumber}`);
-              is409Conflict.onTrue();
-              return;
-            }
-            const errorMsg = `Pre-search failed: ${response.statusText}`;
-            console.error(`[PreSearch] ${errorMsg}`);
-            throw new Error(errorMsg);
-          }
-
-          // Parse SSE stream manually
-          const reader = response.body?.getReader();
-          const decoder = new TextDecoder();
-
-          if (!reader) {
-            throw new Error('No response body');
-          }
-
-          let buffer = '';
-
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done)
-              break;
-
-            buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split('\n');
-            buffer = lines.pop() || '';
-
-            let currentEvent = '';
-            let currentData = '';
-
-            for (const line of lines) {
-              if (line.startsWith('event:')) {
-                currentEvent = line.slice(6).trim();
-              } else if (line.startsWith('data:')) {
-                currentData = line.slice(5).trim();
-              } else if (line === '' && currentEvent && currentData) {
-                // Process complete event
-                try {
-                  if (currentEvent === 'start') {
-                    onStreamStartRef.current?.();
-                  } else if (currentEvent === 'query') {
-                    const queryData = JSON.parse(currentData);
-                    queries[queryData.index] = {
-                      query: queryData.query,
-                      rationale: queryData.rationale,
-                      searchDepth: queryData.searchDepth || WebSearchDepths.BASIC,
-                      index: queryData.index,
-                      total: queryData.total,
-                    };
-                    setPartialSearchData({ queries: [...queries], results: [...results] });
-                  } else if (currentEvent === 'result') {
-                    const resultData = JSON.parse(currentData);
-                    results[resultData.index] = {
-                      query: resultData.query,
-                      answer: resultData.answer,
-                      results: resultData.results || [],
-                      responseTime: resultData.responseTime,
-                    };
-                    setPartialSearchData({ queries: [...queries], results: [...results] });
-                  } else if (currentEvent === 'done') {
-                    const finalData = JSON.parse(currentData) as PreSearchDataPayload;
-                    setPartialSearchData(finalData);
-                    onStreamCompleteRef.current?.(finalData);
-                  } else if (currentEvent === 'failed') {
-                    const errorData = JSON.parse(currentData);
-                    setError(new Error(errorData.error || 'Pre-search failed'));
-                  }
-                } catch (err) {
-                  console.error(`Failed to parse ${currentEvent} event:`, err);
-                }
-
-                // Reset for next event
-                currentEvent = '';
-                currentData = '';
-              }
-            }
-          }
-        } catch (err) {
-          if (err instanceof Error && err.name === 'AbortError') {
-            return; // Normal abort, don't show error
-          }
-          console.error(`[PreSearch] Stream error - id:${preSearch.id} round:${preSearch.roundNumber}`, err);
-          setError(err instanceof Error ? err : new Error('Stream failed'));
-        }
-      };
-
-      startStream().catch((err) => {
-        console.error(`[PreSearch] startStream() rejected - id:${preSearch.id}`, err);
-      });
+    // If EITHER check passes, don't trigger
+    if (idAlreadyTriggered || roundAlreadyTriggered) {
+      return;
     }
+
+    // Mark as triggered BEFORE starting stream to prevent duplicate submissions
+    triggeredSearchIds.set(preSearch.id, true);
+
+    const roundSet = triggeredRounds.get(threadId);
+    if (roundSet) {
+      roundSet.add(preSearch.roundNumber);
+    } else {
+      triggeredRounds.set(threadId, new Set([preSearch.roundNumber]));
+    }
+
+    const abortController = new AbortController();
+    eventSourceRef.current = abortController as unknown as EventSource;
+
+    // Track partial data accumulation
+    const queries: Array<PreSearchDataPayload['queries'][number]> = [];
+    const results: Array<PreSearchDataPayload['results'][number]> = [];
+
+    // Start fetch-based SSE stream (backend uses POST)
+    const startStream = async () => {
+      try {
+        const response = await fetch(
+          `/api/v1/chat/threads/${threadId}/rounds/${preSearch.roundNumber}/pre-search`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'text/event-stream',
+            },
+            body: JSON.stringify({ userQuery: preSearch.userQuery }),
+            signal: abortController.signal,
+          },
+        );
+
+        if (!response.ok) {
+          if (response.status === 409) {
+            is409Conflict.onTrue();
+            return;
+          }
+          const errorMsg = `Pre-search failed: ${response.statusText}`;
+          throw new Error(errorMsg);
+        }
+
+        // Parse SSE stream manually
+        const reader = response.body?.getReader();
+        const decoder = new TextDecoder();
+
+        if (!reader) {
+          throw new Error('No response body');
+        }
+
+        let buffer = '';
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done)
+            break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+
+          let currentEvent = '';
+          let currentData = '';
+
+          for (const line of lines) {
+            if (line.startsWith('event:')) {
+              currentEvent = line.slice(6).trim();
+            } else if (line.startsWith('data:')) {
+              currentData = line.slice(5).trim();
+            } else if (line === '' && currentEvent && currentData) {
+              // Process complete event
+              try {
+                if (currentEvent === 'start') {
+                  onStreamStartRef.current?.();
+                } else if (currentEvent === 'query') {
+                  const queryData = JSON.parse(currentData);
+                  queries[queryData.index] = {
+                    query: queryData.query,
+                    rationale: queryData.rationale,
+                    searchDepth: queryData.searchDepth || WebSearchDepths.BASIC,
+                    index: queryData.index,
+                    total: queryData.total,
+                  };
+                  setPartialSearchData({ queries: [...queries], results: [...results] });
+                } else if (currentEvent === 'result') {
+                  const resultData = JSON.parse(currentData);
+                  results[resultData.index] = {
+                    query: resultData.query,
+                    answer: resultData.answer,
+                    results: resultData.results || [],
+                    responseTime: resultData.responseTime,
+                  };
+                  setPartialSearchData({ queries: [...queries], results: [...results] });
+                } else if (currentEvent === 'done') {
+                  const finalData = JSON.parse(currentData) as PreSearchDataPayload;
+                  setPartialSearchData(finalData);
+                  onStreamCompleteRef.current?.(finalData);
+                } else if (currentEvent === 'failed') {
+                  const errorData = JSON.parse(currentData);
+                  setError(new Error(errorData.error || 'Pre-search failed'));
+                }
+              } catch {
+                // Failed to parse event, continue
+              }
+
+              // Reset for next event
+              currentEvent = '';
+              currentData = '';
+            }
+          }
+        }
+      } catch (err) {
+        if (err instanceof Error && err.name === 'AbortError') {
+          return; // Normal abort, don't show error
+        }
+        setError(err instanceof Error ? err : new Error('Stream failed'));
+      }
+    };
+
+    startStream().catch(() => {
+      // Stream failed, error state already handled
+    });
 
     // Cleanup on unmount
     return () => {
-      if (eventSourceRef.current) {
-        (eventSourceRef.current as unknown as AbortController).abort();
-        eventSourceRef.current = null;
-      }
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [preSearch.id, preSearch.roundNumber, preSearch.status, threadId, preSearch.userQuery]);
+      // ✅ CRITICAL FIX: Do NOT delete search ID from triggered map on unmount
+      // This prevents double-calling when component unmounts/remounts (e.g., React Strict Mode, parent re-renders)
+      // The ID is only cleared via clearTriggeredPreSearchForRound() during regeneration
+      // Background fetch will complete and sync via PreSearchOrchestrator
+      // triggeredSearchIds.delete(preSearch.id); // REMOVED - causes double fetching
+      // triggeredRounds cleanup // REMOVED - causes double fetching
 
-  // Mark completed/failed pre-searches as triggered to prevent re-streaming
+      // Clean up the ref but DON'T abort the fetch
+      // Let it complete in background - results will sync via orchestrator
+      eventSourceRef.current = null;
+    };
+    // ✅ FIX: Removed preSearch.status from dependencies to prevent effect re-run when backend updates status
+    // The effect should only run once per unique search (id + roundNumber)
+    // Status changes (pending→streaming→completed) should NOT re-trigger the effect
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [preSearch.id, preSearch.roundNumber, threadId, preSearch.userQuery]);
+
+  // Mark completed/failed/streaming pre-searches as triggered to prevent re-streaming
+  // ✅ FIX: Also mark STREAMING status to prevent duplicate triggers during status transitions
   const roundAlreadyMarked = triggeredRounds.get(threadId)?.has(preSearch.roundNumber) ?? false;
 
   if (
     !triggeredSearchIds.has(preSearch.id)
     && !roundAlreadyMarked
     && (preSearch.status === AnalysisStatuses.COMPLETE
-      || preSearch.status === AnalysisStatuses.FAILED)
+      || preSearch.status === AnalysisStatuses.FAILED
+      || preSearch.status === AnalysisStatuses.STREAMING)
   ) {
     triggeredSearchIds.set(preSearch.id, true);
 

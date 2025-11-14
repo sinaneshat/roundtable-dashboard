@@ -244,6 +244,10 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
         role: 'user' as const,
         parts: [{ type: 'text', text: body.firstMessage }],
         roundNumber: 0, // ✅ 0-BASED: First round is 0
+        metadata: {
+          role: 'user',
+          roundNumber: 0, // ✅ CRITICAL: Must be in metadata for frontend transform
+        },
         createdAt: now,
       })
       .returning();
@@ -483,9 +487,10 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
       });
 
       // roundNumber is a column, not in metadata
+      // ✅ 0-BASED FIX: Default to 0 for first round (was: 1)
       const currentRoundNumber = latestMessages.length > 0 && latestMessages[0]
         ? latestMessages[0].roundNumber
-        : 1;
+        : 0;
 
       // ✅ CRITICAL FIX: Changelog should appear BEFORE the next round
       // User makes changes AFTER round N completes, so changelog belongs to round N+1
@@ -567,9 +572,10 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
       });
 
       // roundNumber is a column, not in metadata
+      // ✅ 0-BASED FIX: Default to 0 for first round (was: 1)
       const currentRoundNumber = latestMessagesForMode.length > 0 && latestMessagesForMode[0]
         ? latestMessagesForMode[0].roundNumber
-        : 1;
+        : 0;
 
       // ✅ CRITICAL FIX: Changelog should appear BEFORE the next round
       // Mode change applies to the next round, not the current one

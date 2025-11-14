@@ -12,6 +12,13 @@ import { createInsertSchema, createSelectSchema, createUpdateSchema } from 'driz
 import { z } from 'zod';
 
 import {
+  DbChangelogDataSchema,
+  DbCustomRoleMetadataSchema,
+  DbMessageMetadataSchema,
+  DbParticipantSettingsSchema,
+  DbThreadMetadataSchema,
+} from '@/db/schemas/chat-metadata';
+import {
   chatCustomRole,
   chatMessage,
   chatModeratorAnalysis,
@@ -29,8 +36,8 @@ import { Refinements } from './refinements';
  */
 const baseThreadSelectSchema = createSelectSchema(chatThread);
 export const chatThreadSelectSchema = baseThreadSelectSchema.extend({
-  // ✅ FIX: metadata field accepts both null and undefined (SQLite behavior)
-  metadata: z.any().nullable().optional(),
+  // ✅ TYPE-SAFE: Use strictly typed thread metadata
+  metadata: DbThreadMetadataSchema.nullable().optional(),
 });
 export const chatThreadInsertSchema = createInsertSchema(chatThread, {
   title: Refinements.title(),
@@ -44,8 +51,8 @@ export const chatThreadUpdateSchema = createUpdateSchema(chatThread, {
  */
 const baseParticipantSelectSchema = createSelectSchema(chatParticipant);
 export const chatParticipantSelectSchema = baseParticipantSelectSchema.extend({
-  // ✅ FIX: settings field accepts both null and undefined (SQLite behavior)
-  settings: z.any().nullable().optional(),
+  // ✅ TYPE-SAFE: Use strictly typed settings schema (nullable for SQLite)
+  settings: DbParticipantSettingsSchema.nullable().optional(),
 });
 export const chatParticipantInsertSchema = createInsertSchema(chatParticipant, {
   modelId: Refinements.content(),
@@ -62,10 +69,14 @@ export const chatParticipantUpdateSchema = createUpdateSchema(chatParticipant, {
  * Chat Message Schemas
  * ✅ AI SDK v5 ALIGNMENT: parts[] array replaces content/reasoning fields
  */
-export const chatMessageSelectSchema = createSelectSchema(chatMessage);
+export const chatMessageSelectSchema = createSelectSchema(chatMessage).extend({
+  // ✅ TYPE-SAFE: Discriminated union metadata (nullable for legacy data compatibility)
+  metadata: DbMessageMetadataSchema.nullable(),
+});
 export const chatMessageInsertSchema = createInsertSchema(chatMessage, {
   role: () => z.enum(['user', 'assistant']),
   // parts array is validated by database schema type
+  // metadata validated by DbMessageMetadataSchema
 });
 export const chatMessageUpdateSchema = createUpdateSchema(chatMessage, {
   // parts array is validated by database schema type
@@ -74,9 +85,13 @@ export const chatMessageUpdateSchema = createUpdateSchema(chatMessage, {
 /**
  * Chat Thread Changelog Schemas
  */
-export const chatThreadChangelogSelectSchema = createSelectSchema(chatThreadChangelog);
+export const chatThreadChangelogSelectSchema = createSelectSchema(chatThreadChangelog).extend({
+  // ✅ TYPE-SAFE: Use discriminated union changelog data
+  changeData: DbChangelogDataSchema,
+});
 export const chatThreadChangelogInsertSchema = createInsertSchema(chatThreadChangelog, {
   changeSummary: Refinements.description(),
+  // changeData validated by DbChangelogDataSchema
 });
 export const chatThreadChangelogUpdateSchema = createUpdateSchema(chatThreadChangelog);
 
@@ -84,16 +99,21 @@ export const chatThreadChangelogUpdateSchema = createUpdateSchema(chatThreadChan
  * Custom Role Schemas
  * User-defined role templates with system prompts
  */
-export const chatCustomRoleSelectSchema = createSelectSchema(chatCustomRole);
+export const chatCustomRoleSelectSchema = createSelectSchema(chatCustomRole).extend({
+  // ✅ TYPE-SAFE: Use strictly typed custom role metadata
+  metadata: DbCustomRoleMetadataSchema.nullable().optional(),
+});
 export const chatCustomRoleInsertSchema = createInsertSchema(chatCustomRole, {
   name: Refinements.name(),
   systemPrompt: Refinements.systemPrompt(),
   description: Refinements.descriptionOptional(),
+  // metadata validated by DbCustomRoleMetadataSchema
 });
 export const chatCustomRoleUpdateSchema = createUpdateSchema(chatCustomRole, {
   name: Refinements.nameOptional(),
   systemPrompt: Refinements.systemPromptOptional(),
   description: Refinements.descriptionOptional(),
+  // metadata validated by DbCustomRoleMetadataSchema
 });
 
 /**

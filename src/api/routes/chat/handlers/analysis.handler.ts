@@ -5,7 +5,6 @@ import { ulid } from 'ulid';
 
 import { createError } from '@/api/common/error-handling';
 import { verifyThreadOwnership } from '@/api/common/permissions';
-import type { ErrorContext } from '@/api/core';
 import { createHandler, Responses, STREAMING_CONFIG } from '@/api/core';
 import { AIModels } from '@/api/core/ai-models';
 import { AnalysisStatuses } from '@/api/core/enums';
@@ -25,7 +24,7 @@ import {
 } from '@/api/services/posthog-llm-tracking.service';
 import { buildModeratorAnalysisEnhancedPrompt } from '@/api/services/prompts.service';
 import {
-  checkAnalysisQuota,
+  enforceAnalysisQuota,
   getUserTier,
   incrementAnalysisUsage,
 } from '@/api/services/usage-tracking.service';
@@ -33,6 +32,7 @@ import type { ApiEnv } from '@/api/types';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db/schema';
 import { extractTextFromParts } from '@/lib/schemas/message-schemas';
+import { NO_PARTICIPANT_SENTINEL } from '@/lib/schemas/participant-schemas';
 import { requireParticipantMetadata } from '@/lib/utils/metadata';
 import { isObject } from '@/lib/utils/type-guards';
 
@@ -114,7 +114,7 @@ function generateModeratorAnalysis(
               threadId,
               roundNumber,
               participantId: 'moderator',
-              participantIndex: -1, // Moderator is not a participant
+              participantIndex: NO_PARTICIPANT_SENTINEL, // Moderator is not a participant
               participantRole: 'AI Moderator',
               modelId: analysisModelId,
               modelName: analysisModelName,
@@ -176,7 +176,7 @@ function generateModeratorAnalysis(
               threadId,
               roundNumber,
               participantId: 'moderator',
-              participantIndex: -1, // Moderator is not a participant
+              participantIndex: NO_PARTICIPANT_SENTINEL, // Moderator is not a participant
               participantRole: 'AI Moderator',
               modelId: analysisModelId,
               modelName: analysisModelName,
@@ -234,12 +234,15 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
   async (c) => {
     const { user } = c.auth();
     const { threadId, roundNumber } = c.validated.params;
+
     const body = c.validated.body;
+
     const db = await getDbAsync();
     const roundNum = Number.parseInt(roundNumber, 10);
-    if (Number.isNaN(roundNum) || roundNum < 1) {
+    // ✅ 0-BASED: Round numbers start at 0 (first round is 0)
+    if (Number.isNaN(roundNum) || roundNum < 0) {
       throw createError.badRequest(
-        'Invalid round number. Must be a positive integer.',
+        'Invalid round number. Must be a non-negative integer (0-based indexing).',
         {
           errorType: 'validation',
           field: 'roundNumber',
@@ -589,19 +592,9 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
         };
       })
       .sort((a, b) => a.participantIndex - b.participantIndex);
-    const analysisQuota = await checkAnalysisQuota(user.id);
-    if (!analysisQuota.canCreate) {
-      const context: ErrorContext = {
-        errorType: 'resource',
-        resource: 'chat_moderator_analysis',
-        userId: user.id,
-        resourceId: `${threadId}:${roundNum}`,
-      };
-      throw createError.badRequest(
-        `Analysis generation limit reached. You have used ${analysisQuota.current} of ${analysisQuota.limit} analyses this month. Upgrade your plan for more analysis capacity.`,
-        context,
-      );
-    }
+
+    // Enforce analysis quota before generation
+    await enforceAnalysisQuota(user.id);
     await incrementAnalysisUsage(user.id);
 
     // ✅ TIER-AWARE ANALYSIS: Get user's subscription tier for model filtering

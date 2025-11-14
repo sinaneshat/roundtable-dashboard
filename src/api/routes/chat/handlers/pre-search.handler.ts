@@ -78,7 +78,7 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
     const db = await getDbAsync();
 
     const roundNum = Number.parseInt(roundNumber, 10);
-    if (Number.isNaN(roundNum) || roundNum < 1) {
+    if (Number.isNaN(roundNum) || roundNum < 0) {
       throw createError.badRequest('Invalid round number');
     }
 
@@ -335,7 +335,7 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
             })
             .where(eq(tables.chatPreSearch.id, existingSearch.id));
 
-          // Create message record with search results
+          // ✅ TYPE-SAFE: Create message record with properly typed pre-search metadata
           const preSearchMsgId = `pre-search-${roundNum}-${ulid()}`;
           await db.insert(tables.chatMessage)
             .values({
@@ -347,12 +347,13 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
                 text: JSON.stringify({ type: 'web_search_results', ...searchData }),
               }] as Array<{ type: 'text'; text: string }>,
               roundNumber: roundNum,
+              // ✅ TYPE-SAFE: Use DbPreSearchMessageMetadata discriminated union
               metadata: {
-                role: 'system',
+                role: 'system' as const,
                 roundNumber: roundNum,
-                isPreSearch: true,
+                isPreSearch: true as const,
                 preSearch: searchData,
-              } as Record<string, unknown>,
+              },
               createdAt: new Date(),
             })
             .onConflictDoNothing();

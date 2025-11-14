@@ -37,7 +37,7 @@ import { AnalysisStatuses, MessagePartTypes, MessageRoles } from '@/api/core/enu
 import { useMultiParticipantChat } from '@/hooks/utils';
 import { queryKeys } from '@/lib/data/query-keys';
 import { showApiErrorToast } from '@/lib/toast';
-import { getCurrentRoundNumber } from '@/lib/utils/round-utils';
+import { calculateNextRoundNumber, getCurrentRoundNumber } from '@/lib/utils/round-utils';
 import type { ChatStore, ChatStoreApi } from '@/stores/chat';
 import { createChatStore } from '@/stores/chat';
 
@@ -83,11 +83,7 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
   // 1. Analysis trigger: Create pending analysis for moderator review
   // 2. Pending message check: Send next message if waiting for changelog/pre-search
 
-  // ✅ CRITICAL FIX: Create ref to hold latest SDK messages
-  // This allows handleComplete to access fresh messages with metadata
-  const sdkMessagesRef = useRef<UIMessage[]>([]);
-
-  const handleComplete = useCallback(() => {
+  const handleComplete = useCallback((sdkMessages: UIMessage[]) => {
     const currentState = store.getState();
 
     // ============================================================================
@@ -96,10 +92,9 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
     // Moved from store subscription (store.ts:865-963)
     // Provider has direct access to chat hook state without stale closures
 
-    // ✅ CRITICAL FIX: Use messages from AI SDK ref, not store
-    // Store messages might not have updated metadata yet due to React batching
-    // AI SDK hook has the latest messages with complete metadata
-    const sdkMessages = sdkMessagesRef.current;
+    // ✅ CRITICAL FIX: Receive messages directly from onComplete callback
+    // This avoids stale ref issues - messages are passed with complete metadata
+    // sdkMessages parameter has the latest messages from messagesRef.current
 
     if (currentState.thread || currentState.createdThreadId) {
       const { thread: storeThread, participants: storeParticipants, selectedMode, createdThreadId: storeCreatedThreadId } = currentState;
@@ -110,6 +105,13 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
       if (threadId && mode && sdkMessages.length > 0) {
         try {
           const roundNumber = getCurrentRoundNumber(sdkMessages);
+
+          // ✅ CRITICAL FIX: Check if analysis already created before proceeding
+          // Prevents duplicate analysis creation when both provider and flow-state-machine trigger
+          if (currentState.hasAnalysisBeenCreated(roundNumber)) {
+            return; // Analysis already created, skip
+          }
+
           const userMessage = sdkMessages.findLast(m => m.role === MessageRoles.USER);
           const userQuestion = userMessage?.parts?.find(p => p.type === MessagePartTypes.TEXT && 'text' in p)?.text || '';
 
@@ -188,8 +190,11 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
     }
 
     // Calculate next round number (using shared utility for consistency)
-    const currentRound = getCurrentRoundNumber(storeMessages);
-    const newRoundNumber = currentRound + 1;
+    // ✅ BUG FIX: Use calculateNextRoundNumber instead of getCurrentRoundNumber + 1
+    // getCurrentRoundNumber returns 0 for empty messages (the current round we're in)
+    // Adding 1 incorrectly makes first round = 1 instead of 0
+    // calculateNextRoundNumber handles this correctly: -1 + 1 = 0 for first round
+    const newRoundNumber = calculateNextRoundNumber(storeMessages);
 
     // Check if pre-search is needed for this round
     const webSearchEnabled = storeThread?.enableWebSearch ?? enableWebSearch;
@@ -237,9 +242,7 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
   useEffect(() => {
     sendMessageRef.current = chat.sendMessage;
     startRoundRef.current = chat.startRound;
-    // ✅ CRITICAL FIX: Update SDK messages ref with latest messages
-    sdkMessagesRef.current = chat.messages || [];
-  }, [chat.sendMessage, chat.startRound, chat.messages]);
+  }, [chat.sendMessage, chat.startRound]);
 
   // ✅ ARCHITECTURAL FIX: Provider-side streaming trigger
   // Watches waitingToStartStreaming and calls FRESH startRound
@@ -275,7 +278,7 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
 
       // ✅ ERROR: If pre-search failed, log error and proceed anyway
       if (round0PreSearch.status === AnalysisStatuses.FAILED) {
-        console.error(`[Provider] Pre-search failed for round 0 - id:${round0PreSearch.id} threadId:${storeThread?.id} error:${round0PreSearch.errorMessage || 'Unknown error'}`);
+        // Pre-search failed - continuing with participants
         // Continue to start participants even if pre-search failed
       }
     }
@@ -286,11 +289,10 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
   }, [waitingToStart, chat, storeParticipants, storeMessages, storePreSearches, storeThread, store]);
 
   // ✅ QUOTA INVALIDATION: Wrap functions to invalidate quota immediately when streaming starts
-  // ✅ QUOTA INVALIDATION: Invalidate usage quota when message streaming starts
+  // ✅ QUOTA INVALIDATION: Invalidate usage stats when message streaming starts
   const sendMessageWithQuotaInvalidation = useCallback(async (content: string) => {
-    // ✅ Invalidate usage quota immediately when message streaming starts
+    // ✅ Invalidate usage stats immediately when message streaming starts
     queryClient.invalidateQueries({ queryKey: queryKeys.usage.stats() });
-    queryClient.invalidateQueries({ queryKey: queryKeys.usage.messageQuota() });
 
     // ✅ PRE-SEARCH: Handled server-side in streaming handler
     // Backend automatically triggers pre-search if enableWebSearch is true
@@ -300,9 +302,8 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
   }, [queryClient]);
 
   const startRoundWithQuotaInvalidation = useCallback(async () => {
-    // ✅ Invalidate usage quota immediately when round starts
+    // ✅ Invalidate usage stats immediately when round starts
     queryClient.invalidateQueries({ queryKey: queryKeys.usage.stats() });
-    queryClient.invalidateQueries({ queryKey: queryKeys.usage.messageQuota() });
 
     return await startRoundRef.current();
   }, [queryClient]) as () => Promise<void>;
@@ -398,8 +399,11 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
     }
 
     // Calculate next round number (using shared utility for consistency)
-    const currentRound = getCurrentRoundNumber(storeMessages);
-    const newRoundNumber = currentRound + 1;
+    // ✅ BUG FIX: Use calculateNextRoundNumber instead of getCurrentRoundNumber + 1
+    // getCurrentRoundNumber returns 0 for empty messages (the current round we're in)
+    // Adding 1 incorrectly makes first round = 1 instead of 0
+    // calculateNextRoundNumber handles this correctly: -1 + 1 = 0 for first round
+    const newRoundNumber = calculateNextRoundNumber(storeMessages);
 
     // Check if pre-search is needed for this round
     const webSearchEnabled = storeThread?.enableWebSearch ?? stateEnableWebSearch;

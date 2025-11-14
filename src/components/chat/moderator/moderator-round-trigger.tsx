@@ -4,6 +4,7 @@ import { useTranslations } from 'next-intl';
 import { AnalysisStatuses } from '@/api/core/enums';
 import type { StoredModeratorAnalysis } from '@/api/routes/chat/schema';
 import { ChainOfThought, ChainOfThoughtContent, ChainOfThoughtHeader } from '@/components/ai-elements/chain-of-thought';
+import { getDisplayRoundNumber } from '@/lib/schemas/round-schemas';
 
 import { ModeratorAnalysisPanel } from './moderator-analysis-panel';
 
@@ -23,7 +24,7 @@ export function ModeratorRoundTrigger({
     <ChainOfThought defaultOpen={defaultOpen} disabled={isStreaming}>
       <ChainOfThoughtHeader>
         <span className="font-medium">
-          {t('roundAnalysis', { number: analysis.roundNumber + 1 })}
+          {t('roundAnalysis', { number: getDisplayRoundNumber(analysis.roundNumber) })}
         </span>
       </ChainOfThoughtHeader>
       <ChainOfThoughtContent>

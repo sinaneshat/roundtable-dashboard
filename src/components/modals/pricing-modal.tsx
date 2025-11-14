@@ -63,6 +63,8 @@ export function PricingModal({
       title={t('pricing.modal.title')}
       description={t('pricing.modal.description')}
       size="xl"
+      useScrollArea
+      scrollAreaHeight="60vh"
     >
       <PricingContent
         products={products}
@@ -76,6 +78,7 @@ export function PricingModal({
         onCancel={onCancel}
         onManageBilling={onManageBilling}
         showSubscriptionBanner={false}
+        isModal
       />
     </BaseModal>
   );

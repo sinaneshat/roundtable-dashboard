@@ -254,6 +254,7 @@ async function validateRequest<
   if (config.validateBody && ['POST', 'PUT', 'PATCH'].includes(c.req.method)) {
     try {
       const body = await c.req.json();
+
       const result = validateWithSchema(config.validateBody, body);
 
       if (!result.success) {

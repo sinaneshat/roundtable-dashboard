@@ -15,6 +15,7 @@ import { getUserTier } from '@/api/services/usage-tracking.service';
 import type { ApiEnv } from '@/api/types';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db/schema';
+import { calculateNextRound, NO_ROUND_SENTINEL } from '@/lib/schemas/round-schemas';
 
 import type {
   addParticipantRoute,
@@ -71,7 +72,8 @@ export const addParticipantHandler: RouteHandler<typeof addParticipantRoute, Api
       orderBy: desc(tables.chatMessage.roundNumber),
       limit: 1,
     });
-    const nextRoundNumber = (existingUserMessages[0]?.roundNumber || 0) + 1;
+    const lastRoundNumber = existingUserMessages[0]?.roundNumber ?? NO_ROUND_SENTINEL;
+    const nextRoundNumber = calculateNextRound(lastRoundNumber);
 
     // ✅ SERVICE LAYER: Use thread-changelog.service for changelog creation
     await logParticipantAdded(
@@ -121,7 +123,8 @@ export const updateParticipantHandler: RouteHandler<typeof updateParticipantRout
         orderBy: desc(tables.chatMessage.roundNumber),
         limit: 1,
       });
-      const nextRoundNumber = (existingUserMessages[0]?.roundNumber || 0) + 1;
+      const lastRoundNumber = existingUserMessages[0]?.roundNumber ?? NO_ROUND_SENTINEL;
+      const nextRoundNumber = calculateNextRound(lastRoundNumber);
 
       // ✅ SERVICE LAYER: Use thread-changelog.service for changelog creation
       await logParticipantUpdated(
@@ -158,7 +161,8 @@ export const deleteParticipantHandler: RouteHandler<typeof deleteParticipantRout
       orderBy: desc(tables.chatMessage.roundNumber),
       limit: 1,
     });
-    const nextRoundNumber = (existingUserMessages[0]?.roundNumber || 0) + 1;
+    const lastRoundNumber = existingUserMessages[0]?.roundNumber ?? NO_ROUND_SENTINEL;
+    const nextRoundNumber = calculateNextRound(lastRoundNumber);
 
     // ✅ SERVICE LAYER: Use thread-changelog.service for changelog creation
     await logParticipantRemoved(

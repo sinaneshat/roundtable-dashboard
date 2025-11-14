@@ -7,6 +7,7 @@ import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { useThreadsQuery } from '@/hooks/queries/chat';
 import { useDebouncedValue } from '@/hooks/utils';
 import { cn } from '@/lib/ui/cn';
@@ -67,6 +68,7 @@ export function CommandSearch({ isOpen, onClose }: CommandSearchProps) {
   const modalRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const scrollViewportRef = useRef<HTMLDivElement | null>(null);
   const debouncedSearch = useDebouncedValue(searchQuery, 300);
   const {
     data: threadsData,
@@ -179,9 +181,9 @@ export function CommandSearch({ isOpen, onClose }: CommandSearchProps) {
   // React 19.2: Store latest callback in ref using useLayoutEffect
   useLayoutEffect(() => {
     scrollHandlerRef.current = () => {
-      if (!scrollAreaRef.current || !hasNextPage || isFetchingNextPage)
+      if (!scrollViewportRef.current || !hasNextPage || isFetchingNextPage)
         return;
-      const { scrollTop, scrollHeight, clientHeight } = scrollAreaRef.current;
+      const { scrollTop, scrollHeight, clientHeight } = scrollViewportRef.current;
       const scrollPercentage = (scrollTop + clientHeight) / scrollHeight;
       if (scrollPercentage > 0.8) {
         fetchNextPage();
@@ -190,14 +192,19 @@ export function CommandSearch({ isOpen, onClose }: CommandSearchProps) {
   });
 
   useEffect(() => {
+    // SHADCN ScrollArea: Find viewport element (has data-slot="scroll-area-viewport")
     const scrollArea = scrollAreaRef.current;
     if (!scrollArea)
       return;
+    const viewport = scrollArea.querySelector('[data-slot="scroll-area-viewport"]') as HTMLDivElement;
+    if (!viewport)
+      return;
+    scrollViewportRef.current = viewport;
     const handleScroll = () => {
       scrollHandlerRef.current?.();
     };
-    scrollArea.addEventListener('scroll', handleScroll);
-    return () => scrollArea.removeEventListener('scroll', handleScroll);
+    viewport.addEventListener('scroll', handleScroll);
+    return () => viewport.removeEventListener('scroll', handleScroll);
   }, []); // No dependencies - ref always has latest callback
   return (
     <AnimatePresence>
@@ -217,10 +224,11 @@ export function CommandSearch({ isOpen, onClose }: CommandSearchProps) {
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.98 }}
               transition={{ duration: 0.15 }}
-              className="relative w-full max-w-2xl mx-4 overflow-hidden pointer-events-auto"
+              className="relative w-full max-w-2xl mx-4 pointer-events-auto"
             >
-              <div className={cn('backdrop-blur-sm bg-background/95 border shadow-2xl', 'rounded-lg border overflow-hidden')}>
-                <div className="flex items-center gap-3 px-4 py-3 border-b border-border">
+              <div className={cn('flex flex-col backdrop-blur-sm bg-background/95 border shadow-2xl rounded-lg p-0 gap-0 overflow-hidden')}>
+                {/* Fixed Header Section */}
+                <div className="flex items-center gap-3 px-4 py-3 border-b border-border shrink-0">
                   <Search className="size-5 text-muted-foreground" />
                   <input
                     ref={searchInputRef}
@@ -239,10 +247,9 @@ export function CommandSearch({ isOpen, onClose }: CommandSearchProps) {
                     <X className="size-4" />
                   </Button>
                 </div>
-                <div
-                  ref={scrollAreaRef}
-                  className="max-h-[60vh] overflow-y-auto overflow-x-hidden"
-                >
+
+                {/* Scrollable Results Section */}
+                <ScrollArea ref={scrollAreaRef} className="h-[400px] border-t border-white/10">
                   {isLoading && !threads.length
                     ? (
                         <div className="flex items-center justify-center py-12">
@@ -275,8 +282,10 @@ export function CommandSearch({ isOpen, onClose }: CommandSearchProps) {
                             <p className="text-xs text-muted-foreground mt-1">{t('chat.noResultsDescription')}</p>
                           </div>
                         )}
-                </div>
-                <div className="flex items-center gap-4 px-4 py-2 border-t border-border bg-muted/30 text-xs text-muted-foreground">
+                </ScrollArea>
+
+                {/* Fixed Footer Section */}
+                <div className="flex items-center gap-4 px-4 py-2 border-t border-border bg-muted/30 text-xs text-muted-foreground shrink-0">
                   <div className="flex items-center gap-1">
                     <kbd className="px-1.5 py-0.5 rounded bg-background border border-border">↑</kbd>
                     <kbd className="px-1.5 py-0.5 rounded bg-background border border-border">↓</kbd>

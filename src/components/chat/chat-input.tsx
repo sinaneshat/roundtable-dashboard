@@ -116,7 +116,9 @@ export function ChatInput({
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      onSubmit(e as unknown as FormEvent);
+      if (!isDisabled && hasValidInput) {
+        onSubmit(e as unknown as FormEvent);
+      }
     }
   };
 
@@ -129,11 +131,21 @@ export function ChatInput({
           'border border-transparent',
           'bg-gradient-to-r from-white/10 via-white/5 to-white/10 p-px',
           'shadow-lg',
+          isDisabled && 'opacity-60 cursor-not-allowed',
           className,
         )}
       >
         <div className="flex flex-col rounded-2xl bg-white/5 backdrop-blur-xl overflow-hidden h-full">
-          <form onSubmit={onSubmit} className="flex flex-col h-full">
+          <form
+            onSubmit={(e) => {
+              if (isDisabled || !hasValidInput) {
+                e.preventDefault();
+                return;
+              }
+              onSubmit(e);
+            }}
+            className="flex flex-col h-full"
+          >
             {/* Textarea */}
             <div className="relative flex items-end px-3 py-2">
               <textarea
@@ -143,7 +155,7 @@ export function ChatInput({
                 onKeyDown={handleKeyDown}
                 disabled={isDisabled}
                 placeholder={placeholder || t('chat.input.placeholder')}
-                className="flex-1 bg-transparent border-0 text-base focus:outline-none focus:ring-0 placeholder:text-muted-foreground/60 disabled:opacity-50 resize-none overflow-y-auto"
+                className="flex-1 bg-transparent border-0 text-base focus:outline-none focus:ring-0 placeholder:text-muted-foreground/60 disabled:opacity-50 disabled:cursor-not-allowed resize-none overflow-y-auto"
                 style={{ minHeight: `${minHeight}px` }}
               />
             </div>
