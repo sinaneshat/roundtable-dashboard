@@ -139,15 +139,18 @@ export function chatMessageToUIMessage(
     && 'isPreSearch' in messageMetadata
     && messageMetadata.isPreSearch === true;
 
+  // ✅ CRITICAL FIX: Always preserve roundNumber from database column
+  // Even when metadata exists, ensure roundNumber from column takes precedence
+  // This prevents inconsistencies when metadata is outdated or incomplete
   const metadata = isPreSearchMsg
     ? message.metadata
-    : message.roundNumber
+    : message.roundNumber !== null && message.roundNumber !== undefined
       ? {
           ...(message.metadata || {}),
           role: message.role,
           participantId: message.participantId || undefined,
           createdAt,
-          roundNumber: message.roundNumber,
+          roundNumber: message.roundNumber, // Database column is source of truth
         }
       : null;
 
@@ -225,11 +228,47 @@ export function chatMessagesToUIMessages(
     }
 
     // Message missing roundNumber - assign based on current round
-    const existingMetadata = message.role === MessageRoles.ASSISTANT
-      ? getAssistantMetadata(message.metadata)
-      : null;
+    // ✅ ZOD-FIRST PATTERN: Use validated extraction functions
 
-    let enrichedMetadata: MessageMetadata;
+    // Check if message already has validated metadata
+    if (message.role === MessageRoles.ASSISTANT) {
+      const validMetadata = getAssistantMetadata(message.metadata);
+      if (validMetadata) {
+        // Metadata validates, just update roundNumber
+        const updated: DbAssistantMessageMetadata = {
+          ...validMetadata,
+          roundNumber: currentRound ?? 0,
+        };
+
+        if (message.role === MessageRoles.USER) {
+          currentRound += 1;
+        }
+
+        return {
+          ...message,
+          metadata: updated,
+        };
+      }
+    } else if (message.role === MessageRoles.USER) {
+      const validMetadata = getUserMetadata(message.metadata);
+      if (validMetadata) {
+        const updated: DbUserMessageMetadata = {
+          ...validMetadata,
+          roundNumber: currentRound ?? 0,
+        };
+
+        currentRound += 1;
+
+        return {
+          ...message,
+          metadata: updated,
+        };
+      }
+    }
+
+    // Message lacks valid metadata - create minimal metadata
+    // This path should rarely execute for database-loaded messages
+    let enrichedMetadata: DbMessageMetadata | null;
 
     if (participantMap && message.role === MessageRoles.ASSISTANT) {
       const isPreSearchMsg = isPreSearch(message.metadata);
@@ -239,37 +278,24 @@ export function chatMessagesToUIMessages(
         const participant = participantId ? participantMap.get(participantId) : null;
 
         if (participant) {
-          enrichedMetadata = {
-            ...buildAssistantMetadata(
-              existingMetadata || {},
-              {
-                roundNumber: currentRound ?? 0, // ✅ 0-BASED: Default to round 0
-                participantId: participant.id,
-                model: participant.modelId,
-                participantRole: participant.role,
-              },
-            ),
-            role: MessageRoles.ASSISTANT,
-          } as MessageMetadata;
+          const existingMetadata = getAssistantMetadata(message.metadata);
+          enrichedMetadata = buildAssistantMetadata(
+            existingMetadata || {},
+            {
+              roundNumber: currentRound ?? 0,
+              participantId: participant.id,
+              model: participant.modelId,
+              participantRole: participant.role,
+            },
+          );
         } else {
-          enrichedMetadata = {
-            ...(existingMetadata || {}),
-            role: message.role,
-            roundNumber: currentRound ?? 0, // ✅ 0-BASED: Default to round 0
-          } as MessageMetadata;
+          enrichedMetadata = null;
         }
       } else {
-        enrichedMetadata = {
-          ...(existingMetadata || {}),
-          role: message.role,
-          roundNumber: currentRound ?? 0, // ✅ 0-BASED: Default to round 0
-        } as MessageMetadata;
+        enrichedMetadata = message.metadata;
       }
     } else {
-      enrichedMetadata = {
-        role: message.role,
-        roundNumber: currentRound ?? 0, // ✅ 0-BASED: Default to round 0
-      } as MessageMetadata;
+      enrichedMetadata = null;
     }
 
     // ✅ CRITICAL FIX: Increment currentRound AFTER assigning it to the message

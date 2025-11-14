@@ -699,6 +699,9 @@ export function useMultiParticipantChat(
       return;
     }
 
+    // Get round number from the last user message
+    // startRound is called to trigger participants for an EXISTING user message
+    // The user message already has the correct roundNumber in its metadata
     const roundNumber = getCurrentRoundNumber(messages);
 
     // CRITICAL: Update refs FIRST to avoid race conditions

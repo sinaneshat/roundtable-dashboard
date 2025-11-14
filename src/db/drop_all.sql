@@ -9,6 +9,8 @@
 -- ============================================================================
 
 -- Chat-related tables (children first)
+DROP TABLE IF EXISTS project_knowledge_file;
+DROP TABLE IF EXISTS chat_project;
 DROP TABLE IF EXISTS chat_moderator_analysis;
 DROP TABLE IF EXISTS chat_round_feedback;
 DROP TABLE IF EXISTS chat_message;

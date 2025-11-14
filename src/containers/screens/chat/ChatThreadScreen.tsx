@@ -650,7 +650,7 @@ export default function ChatThreadScreen({
                 onSubmit={handlePromptSubmit}
                 status={isRoundInProgress ? 'submitted' : 'ready'}
                 onStop={stopStreaming}
-                placeholder={isQuotaExceeded ? t('chat.input.placeholderQuotaExceeded') : t('chat.input.placeholder')}
+                placeholder={isQuotaExceeded ? t('input.placeholderQuotaExceeded') : t('input.placeholder')}
                 disabled={isQuotaExceeded}
                 participants={selectedParticipants}
                 currentParticipantIndex={currentParticipantIndex}

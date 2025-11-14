@@ -219,7 +219,7 @@ function AssistantGroupCard({
                 />
                 {sourceParts.length > 0 && (
                   <div className="mt-2 ml-12 space-y-1">
-                    <p className="text-xs font-medium text-muted-foreground">{t('sources.title')}</p>
+                    <p className="text-xs font-medium text-muted-foreground">{t('chat.sources.title')}</p>
                     <div className="space-y-1">
                       {sourceParts.map((sourcePart) => {
                         if ('type' in sourcePart && sourcePart.type === 'source-url' && 'url' in sourcePart) {

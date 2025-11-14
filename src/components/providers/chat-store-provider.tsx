@@ -259,6 +259,17 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
       return;
     }
 
+    // ✅ SINGLE SOURCE OF TRUTH: Only trigger startRound for ChatOverviewScreen
+    // ChatThreadScreen uses sendMessage flow (pendingMessage effect) instead
+    // This prevents duplicate message creation and ensures correct roundNumber
+    const currentScreenMode = store.getState().screenMode;
+    if (currentScreenMode !== 'overview') {
+      // Not on overview screen - don't trigger startRound
+      // Clear the flag to prevent infinite waiting
+      store.getState().setWaitingToStartStreaming(false);
+      return;
+    }
+
     // ✅ CRITICAL FIX: Wait for pre-search completion before streaming participants
     // ✅ 0-BASED: Check pre-search status for round 0 (first round)
     const webSearchEnabled = storeThread?.enableWebSearch ?? false;

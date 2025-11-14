@@ -16,6 +16,8 @@
  * 4. Support both frontend (UIMessage) and backend (ChatMessage) types
  */
 
+import { z } from 'zod';
+
 import type {
   DbAssistantMessageMetadata,
   DbMessageMetadata,
@@ -158,10 +160,43 @@ export function extractMessageMetadata(
  * Returns null if metadata is invalid or roundNumber is missing
  *
  * **REPLACES**: `(metadata as Record<string, unknown>)?.roundNumber`
+ *
+ * ✅ ZOD-FIRST PATTERN: Validates using Zod schemas without type casting
+ * Handles 0-based indexing where roundNumber: 0 is valid
  */
 export function getRoundNumber(metadata: unknown): number | null {
-  const validated = extractMessageMetadata({ metadata } as UIMessage);
-  return validated?.roundNumber ?? null;
+  if (!metadata) {
+    return null;
+  }
+
+  // Try each message type schema (user, assistant, pre-search)
+  const userResult = DbUserMessageMetadataSchema.safeParse(metadata);
+  if (userResult.success) {
+    return userResult.data.roundNumber;
+  }
+
+  const assistantResult = DbAssistantMessageMetadataSchema.safeParse(metadata);
+  if (assistantResult.success) {
+    return assistantResult.data.roundNumber;
+  }
+
+  const preSearchResult = DbPreSearchMessageMetadataSchema.safeParse(metadata);
+  if (preSearchResult.success) {
+    return preSearchResult.data.roundNumber;
+  }
+
+  // ✅ FALLBACK: Minimal schema for roundNumber extraction only
+  // Handles cases where metadata has roundNumber but fails full validation
+  const PartialRoundNumberSchema = z.object({
+    roundNumber: z.number().int().nonnegative(),
+  });
+
+  const partialResult = PartialRoundNumberSchema.partial().safeParse(metadata);
+  if (partialResult.success && partialResult.data.roundNumber !== undefined) {
+    return partialResult.data.roundNumber;
+  }
+
+  return null;
 }
 
 /**
