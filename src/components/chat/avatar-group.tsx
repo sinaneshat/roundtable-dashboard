@@ -19,8 +19,8 @@ export function AvatarGroup({
   className,
 }: AvatarGroupProps) {
   const sizeClasses = {
-    sm: 'size-5',
-    md: 'size-7',
+    sm: 'size-8',
+    md: 'size-10',
   };
 
   const textSizeClasses = {
@@ -39,7 +39,7 @@ export function AvatarGroup({
 
   const remainingCount = participants.length - maxVisible;
 
-  const overlapOffset = size === 'sm' ? -6 : -8;
+  const overlapOffset = size === 'sm' ? -10 : -12;
 
   return (
     <div className={cn('flex items-center', className)}>
@@ -49,27 +49,34 @@ export function AvatarGroup({
           return null;
 
         return (
-          <Avatar
+          <div
             key={participant.id}
-            className={cn(
-              sizeClasses[size],
-              ringClasses[size],
-              'relative ring-black bg-black transition-transform hover:scale-110 hover:z-50',
-            )}
+            className="relative"
             style={{
               zIndex: visibleParticipants.length - index,
-              marginLeft: index === 0 ? 0 : overlapOffset,
+              marginLeft: index === 0 ? '0px' : `${overlapOffset}px`,
             }}
           >
-            <AvatarImage
-              src={getProviderIcon(model.provider)}
-              alt={model.name}
-              className="object-contain p-0.5"
-            />
-            <AvatarFallback className={cn(textSizeClasses[size], 'bg-muted font-semibold')}>
-              {model.name.slice(0, 2).toUpperCase()}
-            </AvatarFallback>
-          </Avatar>
+            <Avatar
+              className={cn(
+                sizeClasses[size],
+                ringClasses[size],
+                'relative ring-black bg-black border-2 border-black transition-transform hover:scale-110 hover:z-50',
+              )}
+              style={{ backgroundColor: '#000000' }}
+            >
+              <div className="absolute inset-0 bg-black rounded-full" style={{ backgroundColor: '#000000' }} />
+              <AvatarImage
+                src={getProviderIcon(model.provider)}
+                alt={model.name}
+                className="object-contain p-1 relative z-10 bg-black rounded-full"
+                style={{ backgroundColor: '#000000' }}
+              />
+              <AvatarFallback className={cn(textSizeClasses[size], 'bg-black font-semibold relative z-10')} style={{ backgroundColor: '#000000' }}>
+                {model.name.slice(0, 2).toUpperCase()}
+              </AvatarFallback>
+            </Avatar>
+          </div>
         );
       })}
       {remainingCount > 0 && (

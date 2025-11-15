@@ -274,16 +274,20 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
     // Wrap startRound and retry to return Promise<void> to match store types
     currentState.setStartRound(chat.startRound
       ? async () => {
-          chat.startRound();
-        }
+        chat.startRound();
+      }
       : undefined);
     currentState.setRetry(chat.retry
       ? async () => {
-          chat.retry();
-        }
+        chat.retry();
+      }
       : undefined);
     currentState.setStop(chat.stop);
     currentState.setChatSetMessages(chat.setMessages);
+  // Note: 'chat' object not in deps - we only depend on its methods which are listed
+  // Adding 'chat' would cause unnecessary re-runs since it's a new object on every render
+  // We correctly depend on the stable method references: sendMessage, startRound, retry, stop, setMessages
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [store, chat.sendMessage, chat.startRound, chat.retry, chat.stop, chat.setMessages]);
 
   // ✅ ARCHITECTURAL FIX: Provider-side streaming trigger

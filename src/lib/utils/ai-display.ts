@@ -102,6 +102,7 @@ const PROVIDER_ICON_MAP: Record<string, string> = {
   'xai': 'xai.png',
   'deepseek': 'deepseek.png',
   'qwen': 'qwen.png',
+  'moonshotai': 'kimi.png',
 
   // Model name aliases (for backward compatibility)
   'claude': 'anthropic.png',
@@ -257,6 +258,8 @@ export function getModelColorClass(avatarSrc: string, isUser: boolean = false): 
     return 'red-500';
   if (lowerSrc.includes('xai'))
     return 'slate-400';
+  if (lowerSrc.includes('kimi') || lowerSrc.includes('moonshotai'))
+    return 'teal-500';
 
   return 'muted-foreground';
 }

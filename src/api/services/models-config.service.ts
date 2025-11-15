@@ -43,43 +43,68 @@ import { ModelCategorySchema } from '@/api/core/enums';
  * This is the single source of truth for what models are allowed in the app
  */
 export const ModelIdEnum = z.enum([
-  // Google Models - VERIFIED OpenRouter IDs
+  // Google Models - VERIFIED OpenRouter IDs (Text-only, multimodal text+vision)
   'google/gemini-2.5-pro',
   'google/gemini-2.5-flash',
-  'google/gemini-2.0-flash-exp', // Fixed: was google/gemini-2.0-flash
-  'google/gemini-2.0-flash-exp:free', // Free tier version
+  'google/gemini-2.5-flash-lite',
+  'google/gemini-2.0-flash-exp',
+  'google/gemini-2.0-flash-exp:free',
 
   // OpenAI Models - VERIFIED OpenRouter IDs
-  'openai/gpt-5', // Fixed: removed date suffix
+  'openai/gpt-5',
+  'openai/gpt-5.1',
+  'openai/gpt-5-pro',
+  'openai/gpt-5-mini',
+  'openai/gpt-5-nano',
+  'openai/gpt-4.5-preview',
   'openai/chatgpt-4o-latest',
   'openai/gpt-4-turbo',
   'openai/o3-mini',
-  'openai/o1', // Fixed: changed from o1-pro to o1 (o1-pro not confirmed on OpenRouter)
+  'openai/o3-mini-high',
+  'openai/o4-mini',
+  'openai/o4-mini-high',
+  'openai/o1',
 
   // Anthropic Models - VERIFIED OpenRouter IDs
-  'anthropic/claude-4.5-sonnet-20250929',
+  'anthropic/claude-sonnet-4.5',
+  'anthropic/claude-haiku-4.5',
   'anthropic/claude-4-sonnet-20250522',
+  'anthropic/claude-3.7-sonnet',
+  'anthropic/claude-3.7-sonnet:thinking',
   'anthropic/claude-3.5-sonnet',
   'anthropic/claude-3-opus',
 
   // xAI Models - VERIFIED OpenRouter IDs
   'x-ai/grok-4',
   'x-ai/grok-4-fast',
+  'x-ai/grok-4-fast:free',
+  'x-ai/grok-3',
+  'x-ai/grok-3-mini',
   'x-ai/grok-code-fast-1',
 
   // DeepSeek Models - VERIFIED OpenRouter IDs
   'deepseek/deepseek-chat',
-  'deepseek/deepseek-chat-v3-0324', // Fixed: changed from v3.1 to v3-0324
-  'deepseek/deepseek-chat-v3-0324:free', // Free tier version
-  'deepseek/deepseek-r1:free', // Reasoning model (free)
+  'deepseek/deepseek-chat-v3.1',
+  'deepseek/deepseek-chat-v3.1:free',
+  'deepseek/deepseek-v3.1-terminus',
+  'deepseek/deepseek-v3.2-exp',
+  'deepseek/deepseek-r1',
+  'deepseek/deepseek-r1:free',
+  'deepseek/deepseek-chat-v3-0324',
+  'deepseek/deepseek-chat-v3-0324:free',
 
   // Qwen/Alibaba Models - VERIFIED OpenRouter IDs
   'qwen/qwen-max',
   'qwen/qwen3-coder',
+  'qwen/qwen3-32b',
 
   // Meta Models - VERIFIED OpenRouter IDs
   'meta-llama/llama-4-scout',
-  'meta-llama/llama-3.3-70b-instruct:free', // High-quality 70B model (free)
+  'meta-llama/llama-4-maverick',
+  'meta-llama/llama-3.3-70b-instruct:free',
+
+  // MoonshotAI Models - VERIFIED OpenRouter IDs
+  'moonshotai/kimi-k2-0905',
 ]);
 
 export type ModelId = z.infer<typeof ModelIdEnum>;
@@ -95,6 +120,7 @@ export const ModelProviderEnum = z.enum([
   'deepseek',
   'qwen',
   'meta-llama',
+  'moonshotai',
 ]);
 
 export type ModelProvider = z.infer<typeof ModelProviderEnum>;
@@ -163,24 +189,27 @@ export const HardcodedModelSchema = z.object({
 export type HardcodedModel = z.infer<typeof HardcodedModelSchema>;
 
 // ============================================================================
-// TOP 20 HARDCODED MODELS (October 2025)
+// COMPREHENSIVE MODEL CATALOG (November 2025)
 // ============================================================================
 
 /**
- * ✅ SINGLE SOURCE OF TRUTH: Top 20 AI models hardcoded
+ * ✅ SINGLE SOURCE OF TRUTH: Complete AI model catalog (50+ models)
  *
  * Selected based on:
- * - Chatbot Arena / LMArena rankings (Oct 2025)
+ * - OpenRouter availability and verified model IDs
+ * - Chatbot Arena / LMArena rankings (Nov 2025)
  * - OpenRouter usage statistics
  * - Performance benchmarks and industry reviews
+ * - Text-only models (excludes image generation like Nano Banana/Imagen)
  *
- * Models ranked by overall capability and popularity:
- * 1-5: Flagship models (best overall)
- * 6-12: Premium models (excellent performance)
- * 13-20: Specialized/fast models (specific use cases)
+ * Models organized by provider and capability:
+ * - Flagship models (best overall performance)
+ * - Premium models (excellent performance)
+ * - Specialized models (coding, reasoning, fast inference)
+ * - Free tier models (cost-effective options)
  */
 export const HARDCODED_MODELS: readonly HardcodedModel[] = [
-  // ========== FLAGSHIP MODELS (Rank 1-5) ==========
+  // ========== GOOGLE MODELS ==========
 
   {
     id: 'google/gemini-2.5-pro',
@@ -261,45 +290,6 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
   },
 
   {
-    id: 'anthropic/claude-4.5-sonnet-20250929',
-    name: 'Claude 4.5 Sonnet',
-    description:
-      'Anthropic\'s latest flagship with industry-leading coding performance (77.2% on SWE-bench). Best for complex reasoning and agentic tasks.',
-    context_length: 200000,
-    created: 1727654400, // Sept 2025
-    pricing: {
-      prompt: '0.00000300', // $3 per 1M tokens
-      completion: '0.00001500', // $15 per 1M tokens
-    },
-    top_provider: {
-      context_length: 200000,
-      max_completion_tokens: 8192,
-      is_moderated: false,
-    },
-    per_request_limits: null,
-    architecture: {
-      modality: 'text+image->text',
-      tokenizer: 'Claude',
-      instruct_type: 'claude',
-    },
-    provider: 'anthropic',
-    category: 'general',
-    capabilities: {
-      vision: true,
-      reasoning: true,
-      streaming: true,
-      tools: true,
-    },
-    pricing_display: {
-      input: '$3/1M tokens',
-      output: '$15/1M tokens',
-    },
-    is_free: false,
-    supports_vision: true,
-    is_reasoning_model: false,
-  },
-
-  {
     id: 'x-ai/grok-4',
     name: 'Grok 4',
     description:
@@ -346,8 +336,8 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
     context_length: 64000,
     created: 1704067200, // Jan 2025
     pricing: {
-      prompt: '0.00000014', // $0.14 per 1M tokens
-      completion: '0.00000028', // $0.28 per 1M tokens
+      prompt: '0.00000030', // $0.30 per 1M tokens
+      completion: '0.00000120', // $1.20 per 1M tokens
     },
     top_provider: {
       context_length: 64000,
@@ -369,8 +359,8 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
       tools: true,
     },
     pricing_display: {
-      input: '$0.14/1M tokens',
-      output: '$0.28/1M tokens',
+      input: '$0.30/1M tokens',
+      output: '$1.20/1M tokens',
     },
     is_free: false,
     supports_vision: false,
@@ -426,8 +416,8 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
     context_length: 128000,
     created: 1715385600, // May 2024
     pricing: {
-      prompt: '0.00000250', // $2.50 per 1M tokens
-      completion: '0.00001000', // $10 per 1M tokens
+      prompt: '0.00000500', // $5.00 per 1M tokens
+      completion: '0.00001500', // $15.00 per 1M tokens
     },
     top_provider: {
       context_length: 128000,
@@ -449,8 +439,8 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
       tools: true,
     },
     pricing_display: {
-      input: '$2.50/1M tokens',
-      output: '$10/1M tokens',
+      input: '$5.00/1M tokens',
+      output: '$15.00/1M tokens',
     },
     is_free: false,
     supports_vision: true,
@@ -504,8 +494,8 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
     context_length: 128000,
     created: 1709251200, // March 2025
     pricing: {
-      prompt: '0.00000200', // $2.00 per 1M tokens
-      completion: '0.00000600', // $6.00 per 1M tokens
+      prompt: '0.00000160', // $1.60 per 1M tokens
+      completion: '0.00000640', // $6.40 per 1M tokens
     },
     top_provider: {
       context_length: 128000,
@@ -527,8 +517,8 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
       tools: true,
     },
     pricing_display: {
-      input: '$2.00/1M tokens',
-      output: '$6.00/1M tokens',
+      input: '$1.60/1M tokens',
+      output: '$6.40/1M tokens',
     },
     is_free: false,
     supports_vision: false,
@@ -543,8 +533,8 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
     context_length: 2000000,
     created: 1709251200, // March 2025
     pricing: {
-      prompt: '0.00000010', // $0.10 per 1M tokens
-      completion: '0.00000040', // $0.40 per 1M tokens
+      prompt: '0.00000030', // $0.30 per 1M tokens
+      completion: '0.00000250', // $2.50 per 1M tokens
     },
     top_provider: {
       context_length: 2000000,
@@ -566,6 +556,45 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
       tools: true,
     },
     pricing_display: {
+      input: '$0.30/1M tokens',
+      output: '$2.50/1M tokens',
+    },
+    is_free: false,
+    supports_vision: true,
+    is_reasoning_model: false,
+  },
+
+  {
+    id: 'google/gemini-2.5-flash-lite',
+    name: 'Gemini 2.5 Flash Lite',
+    description:
+      'Lightweight Gemini model with 1M token context. Optimized for ultra-low latency with optional reasoning mode via API parameter.',
+    context_length: 1048576,
+    created: 1709251200, // March 2025
+    pricing: {
+      prompt: '0.00000010', // $0.10 per 1M tokens
+      completion: '0.00000040', // $0.40 per 1M tokens
+    },
+    top_provider: {
+      context_length: 1048576,
+      max_completion_tokens: 8192,
+      is_moderated: false,
+    },
+    per_request_limits: null,
+    architecture: {
+      modality: 'text+image+file+audio+video->text',
+      tokenizer: 'Gemini',
+      instruct_type: 'gemini',
+    },
+    provider: 'google',
+    category: 'general',
+    capabilities: {
+      vision: true,
+      reasoning: true,
+      streaming: true,
+      tools: true,
+    },
+    pricing_display: {
       input: '$0.10/1M tokens',
       output: '$0.40/1M tokens',
     },
@@ -573,6 +602,8 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
     supports_vision: true,
     is_reasoning_model: false,
   },
+
+  // ========== ANTHROPIC MODELS ==========
 
   {
     id: 'anthropic/claude-4-sonnet-20250522',
@@ -779,7 +810,7 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
     context_length: 128000,
     created: 1720051200, // July 2024
     pricing: {
-      prompt: '0.00000050', // $0.50 per 1M tokens
+      prompt: '0.00000020', // $0.20 per 1M tokens
       completion: '0.00000150', // $1.50 per 1M tokens
     },
     top_provider: {
@@ -802,7 +833,7 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
       tools: true,
     },
     pricing_display: {
-      input: '$0.50/1M tokens',
+      input: '$0.20/1M tokens',
       output: '$1.50/1M tokens',
     },
     is_free: false,
@@ -857,8 +888,8 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
     context_length: 128000,
     created: 1730419200, // Nov 2024
     pricing: {
-      prompt: '0.00000050', // $0.50 per 1M tokens
-      completion: '0.00000150', // $1.50 per 1M tokens
+      prompt: '0.00000022', // $0.22 per 1M tokens
+      completion: '0.00000095', // $0.95 per 1M tokens
     },
     top_provider: {
       context_length: 128000,
@@ -880,8 +911,8 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
       tools: true,
     },
     pricing_display: {
-      input: '$0.50/1M tokens',
-      output: '$1.50/1M tokens',
+      input: '$0.22/1M tokens',
+      output: '$0.95/1M tokens',
     },
     is_free: false,
     supports_vision: false,
@@ -1088,10 +1119,916 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
     name: 'Llama 4 Scout',
     description:
       'Meta\'s Llama 4 Scout (109B) with 10M token context (128k-328k via providers). Strong open-source alternative for general tasks.',
+    context_length: 328000,
+    created: 1743638400, // April 2025
+    pricing: {
+      prompt: '0.00000008', // $0.08 per 1M tokens
+      completion: '0.00000030', // $0.30 per 1M tokens
+    },
+    top_provider: {
+      context_length: 128000,
+      max_completion_tokens: 8192,
+      is_moderated: false,
+    },
+    per_request_limits: null,
+    architecture: {
+      modality: 'text->text',
+      tokenizer: 'Llama',
+      instruct_type: 'llama',
+    },
+    provider: 'meta-llama',
+    category: 'general',
+    capabilities: {
+      vision: false,
+      reasoning: true,
+      streaming: true,
+      tools: true,
+    },
+    pricing_display: {
+      input: '$0.08/1M tokens',
+      output: '$0.30/1M tokens',
+    },
+    is_free: false,
+    supports_vision: false,
+    is_reasoning_model: false,
+  },
+
+  // ========== NEW MODELS - NOVEMBER 2025 UPDATE ==========
+
+  // OpenAI GPT-5 Series
+  {
+    id: 'openai/gpt-5.1',
+    name: 'GPT-5.1',
+    description:
+      'OpenAI\'s enhanced GPT-5 with stronger reasoning, improved instruction adherence, and natural conversational style. Optimized for math, coding, and structured analysis.',
+    context_length: 400000,
+    created: 1738368000, // Feb 2025
+    pricing: {
+      prompt: '0.00000125', // $1.25 per 1M tokens
+      completion: '0.00001000', // $10 per 1M tokens
+    },
+    top_provider: {
+      context_length: 400000,
+      max_completion_tokens: 128000,
+      is_moderated: true,
+    },
+    per_request_limits: null,
+    architecture: {
+      modality: 'text+image+file->text',
+      tokenizer: 'o200k_base',
+      instruct_type: 'chatml',
+    },
+    provider: 'openai',
+    category: 'general',
+    capabilities: {
+      vision: true,
+      reasoning: true,
+      streaming: true,
+      tools: true,
+    },
+    pricing_display: {
+      input: '$1.25/1M tokens',
+      output: '$10/1M tokens',
+    },
+    is_free: false,
+    supports_vision: true,
+    is_reasoning_model: false,
+  },
+
+  {
+    id: 'openai/gpt-5-pro',
+    name: 'GPT-5 Pro',
+    description:
+      'OpenAI\'s most advanced GPT-5 variant with extended capabilities for complex reasoning and problem-solving tasks.',
+    context_length: 400000,
+    created: 1735689600, // Jan 2025
+    pricing: {
+      prompt: '0.00001500', // $15 per 1M tokens
+      completion: '0.00012000', // $120 per 1M tokens
+    },
+    top_provider: {
+      context_length: 400000,
+      max_completion_tokens: 128000,
+      is_moderated: true,
+    },
+    per_request_limits: null,
+    architecture: {
+      modality: 'text+image+file->text',
+      tokenizer: 'o200k_base',
+      instruct_type: 'chatml',
+    },
+    provider: 'openai',
+    category: 'general',
+    capabilities: {
+      vision: true,
+      reasoning: true,
+      streaming: true,
+      tools: true,
+    },
+    pricing_display: {
+      input: '$15/1M tokens',
+      output: '$120/1M tokens',
+    },
+    is_free: false,
+    supports_vision: true,
+    is_reasoning_model: false,
+  },
+
+  {
+    id: 'openai/gpt-5-mini',
+    name: 'GPT-5 Mini',
+    description:
+      'Compact GPT-5 model optimized for speed and cost-efficiency while maintaining strong general capabilities.',
+    context_length: 256000,
+    created: 1735689600, // Jan 2025
+    pricing: {
+      prompt: '0.00000025', // $0.25 per 1M tokens
+      completion: '0.00000200', // $2.00 per 1M tokens
+    },
+    top_provider: {
+      context_length: 256000,
+      max_completion_tokens: 64000,
+      is_moderated: true,
+    },
+    per_request_limits: null,
+    architecture: {
+      modality: 'text+image->text',
+      tokenizer: 'o200k_base',
+      instruct_type: 'chatml',
+    },
+    provider: 'openai',
+    category: 'general',
+    capabilities: {
+      vision: true,
+      reasoning: true,
+      streaming: true,
+      tools: true,
+    },
+    pricing_display: {
+      input: '$0.25/1M tokens',
+      output: '$2.00/1M tokens',
+    },
+    is_free: false,
+    supports_vision: true,
+    is_reasoning_model: false,
+  },
+
+  {
+    id: 'openai/gpt-5-nano',
+    name: 'GPT-5 Nano',
+    description:
+      'Ultra-lightweight GPT-5 model for high-throughput, low-latency applications with excellent cost efficiency.',
+    context_length: 128000,
+    created: 1735689600, // Jan 2025
+    pricing: {
+      prompt: '0.00000005', // $0.05 per 1M tokens
+      completion: '0.00000040', // $0.40 per 1M tokens
+    },
+    top_provider: {
+      context_length: 128000,
+      max_completion_tokens: 32000,
+      is_moderated: true,
+    },
+    per_request_limits: null,
+    architecture: {
+      modality: 'text->text',
+      tokenizer: 'o200k_base',
+      instruct_type: 'chatml',
+    },
+    provider: 'openai',
+    category: 'general',
+    capabilities: {
+      vision: false,
+      reasoning: true,
+      streaming: true,
+      tools: true,
+    },
+    pricing_display: {
+      input: '$0.05/1M tokens',
+      output: '$0.40/1M tokens',
+    },
+    is_free: false,
+    supports_vision: false,
+    is_reasoning_model: false,
+  },
+
+  {
+    id: 'openai/gpt-4.5-preview',
+    name: 'GPT-4.5 Preview',
+    description:
+      'Research preview of GPT-4.5 with advanced reasoning, creativity, and multi-turn conversation capabilities.',
+    context_length: 128000,
+    created: 1733097600, // Dec 2024
+    pricing: {
+      prompt: '0.00000500', // $5.00 per 1M tokens (estimated)
+      completion: '0.00001500', // $15.00 per 1M tokens (estimated)
+    },
+    top_provider: {
+      context_length: 128000,
+      max_completion_tokens: 16384,
+      is_moderated: true,
+    },
+    per_request_limits: null,
+    architecture: {
+      modality: 'text+image->text',
+      tokenizer: 'cl100k_base',
+      instruct_type: 'chatml',
+    },
+    provider: 'openai',
+    category: 'general',
+    capabilities: {
+      vision: true,
+      reasoning: true,
+      streaming: true,
+      tools: true,
+    },
+    pricing_display: {
+      input: '$5.00/1M tokens',
+      output: '$15.00/1M tokens',
+    },
+    is_free: false,
+    supports_vision: true,
+    is_reasoning_model: false,
+  },
+
+  // OpenAI o-series Reasoning Models
+  {
+    id: 'openai/o3-mini-high',
+    name: 'o3 Mini High',
+    description:
+      'OpenAI o3-mini with high reasoning effort setting. Enhanced performance for complex STEM reasoning tasks.',
+    context_length: 128000,
+    created: 1738281600, // Jan 2025
+    pricing: {
+      prompt: '0.00000110', // $1.10 per 1M tokens
+      completion: '0.00000440', // $4.40 per 1M tokens
+    },
+    top_provider: {
+      context_length: 128000,
+      max_completion_tokens: 100000,
+      is_moderated: true,
+    },
+    per_request_limits: null,
+    architecture: {
+      modality: 'text->text',
+      tokenizer: 'o200k_base',
+      instruct_type: 'chatml',
+    },
+    provider: 'openai',
+    category: 'reasoning',
+    capabilities: {
+      vision: false,
+      reasoning: true,
+      streaming: true,
+      tools: true,
+    },
+    pricing_display: {
+      input: '$1.10/1M tokens',
+      output: '$4.40/1M tokens',
+    },
+    is_free: false,
+    supports_vision: false,
+    is_reasoning_model: true,
+  },
+
+  {
+    id: 'openai/o4-mini',
+    name: 'o4 Mini',
+    description:
+      'OpenAI o4-mini compact reasoning model optimized for fast, cost-efficient performance with strong multimodal and agentic capabilities.',
+    context_length: 128000,
+    created: 1740960000, // March 2025
+    pricing: {
+      prompt: '0.00000110', // $1.10 per 1M tokens
+      completion: '0.00000440', // $4.40 per 1M tokens
+    },
+    top_provider: {
+      context_length: 128000,
+      max_completion_tokens: 100000,
+      is_moderated: true,
+    },
+    per_request_limits: null,
+    architecture: {
+      modality: 'text->text',
+      tokenizer: 'o200k_base',
+      instruct_type: 'chatml',
+    },
+    provider: 'openai',
+    category: 'reasoning',
+    capabilities: {
+      vision: false,
+      reasoning: true,
+      streaming: true,
+      tools: true,
+    },
+    pricing_display: {
+      input: '$1.10/1M tokens',
+      output: '$4.40/1M tokens',
+    },
+    is_free: false,
+    supports_vision: false,
+    is_reasoning_model: true,
+  },
+
+  {
+    id: 'openai/o4-mini-high',
+    name: 'o4 Mini High',
+    description:
+      'OpenAI o4-mini with high reasoning effort setting for enhanced accuracy on complex reasoning and coding tasks.',
+    context_length: 128000,
+    created: 1740960000, // March 2025
+    pricing: {
+      prompt: '0.00000110', // $1.10 per 1M tokens
+      completion: '0.00000440', // $4.40 per 1M tokens
+    },
+    top_provider: {
+      context_length: 128000,
+      max_completion_tokens: 100000,
+      is_moderated: true,
+    },
+    per_request_limits: null,
+    architecture: {
+      modality: 'text->text',
+      tokenizer: 'o200k_base',
+      instruct_type: 'chatml',
+    },
+    provider: 'openai',
+    category: 'reasoning',
+    capabilities: {
+      vision: false,
+      reasoning: true,
+      streaming: true,
+      tools: true,
+    },
+    pricing_display: {
+      input: '$1.10/1M tokens',
+      output: '$4.40/1M tokens',
+    },
+    is_free: false,
+    supports_vision: false,
+    is_reasoning_model: true,
+  },
+
+  // Anthropic Claude Models
+  {
+    id: 'anthropic/claude-sonnet-4.5',
+    name: 'Claude Sonnet 4.5',
+    description:
+      'Anthropic\'s Claude Sonnet 4.5 with enhanced coding performance (77.2% on SWE-bench). Industry-leading for complex reasoning and agentic tasks.',
+    context_length: 200000,
+    created: 1727654400, // Sept 2025
+    pricing: {
+      prompt: '0.00000300', // $3 per 1M tokens
+      completion: '0.00001500', // $15 per 1M tokens
+    },
+    top_provider: {
+      context_length: 200000,
+      max_completion_tokens: 8192,
+      is_moderated: false,
+    },
+    per_request_limits: null,
+    architecture: {
+      modality: 'text+image->text',
+      tokenizer: 'Claude',
+      instruct_type: 'claude',
+    },
+    provider: 'anthropic',
+    category: 'general',
+    capabilities: {
+      vision: true,
+      reasoning: true,
+      streaming: true,
+      tools: true,
+    },
+    pricing_display: {
+      input: '$3/1M tokens',
+      output: '$15/1M tokens',
+    },
+    is_free: false,
+    supports_vision: true,
+    is_reasoning_model: false,
+  },
+
+  {
+    id: 'anthropic/claude-haiku-4.5',
+    name: 'Claude Haiku 4.5',
+    description:
+      'Anthropic\'s fastest model delivering near-frontier intelligence at low cost and latency. >73% on SWE-bench, among the world\'s best coding models.',
+    context_length: 200000,
+    created: 1730419200, // Nov 2024
+    pricing: {
+      prompt: '0.00000100', // $1 per 1M tokens
+      completion: '0.00000500', // $5 per 1M tokens
+    },
+    top_provider: {
+      context_length: 200000,
+      max_completion_tokens: 8192,
+      is_moderated: false,
+    },
+    per_request_limits: null,
+    architecture: {
+      modality: 'text+image->text',
+      tokenizer: 'Claude',
+      instruct_type: 'claude',
+    },
+    provider: 'anthropic',
+    category: 'general',
+    capabilities: {
+      vision: true,
+      reasoning: true,
+      streaming: true,
+      tools: true,
+    },
+    pricing_display: {
+      input: '$1/1M tokens',
+      output: '$5/1M tokens',
+    },
+    is_free: false,
+    supports_vision: true,
+    is_reasoning_model: false,
+  },
+
+  {
+    id: 'anthropic/claude-3.7-sonnet',
+    name: 'Claude 3.7 Sonnet',
+    description:
+      'Claude 3.7 Sonnet with hybrid reasoning approach. Improved coding, especially front-end development, and excellent for agentic workflows.',
+    context_length: 200000,
+    created: 1727654400, // Sept 2025
+    pricing: {
+      prompt: '0.00000300', // $3 per 1M tokens
+      completion: '0.00001500', // $15 per 1M tokens
+    },
+    top_provider: {
+      context_length: 200000,
+      max_completion_tokens: 64000,
+      is_moderated: false,
+    },
+    per_request_limits: null,
+    architecture: {
+      modality: 'text+image+file->text',
+      tokenizer: 'Claude',
+      instruct_type: 'claude',
+    },
+    provider: 'anthropic',
+    category: 'general',
+    capabilities: {
+      vision: true,
+      reasoning: true,
+      streaming: true,
+      tools: true,
+    },
+    pricing_display: {
+      input: '$3/1M tokens',
+      output: '$15/1M tokens',
+    },
+    is_free: false,
+    supports_vision: true,
+    is_reasoning_model: false,
+  },
+
+  {
+    id: 'anthropic/claude-3.7-sonnet:thinking',
+    name: 'Claude 3.7 Sonnet (Thinking)',
+    description:
+      'Claude 3.7 Sonnet with extended reasoning mode enabled. Enhanced accuracy for complex math, coding, and instruction-following tasks.',
+    context_length: 200000,
+    created: 1727654400, // Sept 2025
+    pricing: {
+      prompt: '0.00000300', // $3 per 1M tokens
+      completion: '0.00001500', // $15 per 1M tokens (base rate, higher for thinking tokens)
+    },
+    top_provider: {
+      context_length: 200000,
+      max_completion_tokens: 64000,
+      is_moderated: false,
+    },
+    per_request_limits: null,
+    architecture: {
+      modality: 'text+image+file->text',
+      tokenizer: 'Claude',
+      instruct_type: 'claude',
+    },
+    provider: 'anthropic',
+    category: 'reasoning',
+    capabilities: {
+      vision: true,
+      reasoning: true,
+      streaming: true,
+      tools: true,
+    },
+    pricing_display: {
+      input: '$3/1M tokens',
+      output: '$15/1M tokens',
+    },
+    is_free: false,
+    supports_vision: true,
+    is_reasoning_model: true,
+  },
+
+  // xAI Grok Models
+  {
+    id: 'x-ai/grok-4-fast:free',
+    name: 'Grok 4 Fast (Free)',
+    description:
+      'Free tier xAI Grok 4 Fast with SOTA cost-efficiency and 2M token context. Multimodal model optimized for speed.',
+    context_length: 2000000,
+    created: 1706832000, // Feb 2025
+    pricing: {
+      prompt: '0', // Free
+      completion: '0', // Free
+    },
+    top_provider: {
+      context_length: 2000000,
+      max_completion_tokens: 8192,
+      is_moderated: false,
+    },
+    per_request_limits: null,
+    architecture: {
+      modality: 'text+image->text',
+      tokenizer: 'Grok',
+      instruct_type: 'grok',
+    },
+    provider: 'x-ai',
+    category: 'general',
+    capabilities: {
+      vision: true,
+      reasoning: true,
+      streaming: true,
+      tools: true,
+    },
+    pricing_display: {
+      input: 'Free',
+      output: 'Free',
+    },
+    is_free: true,
+    supports_vision: true,
+    is_reasoning_model: false,
+  },
+
+  {
+    id: 'x-ai/grok-3',
+    name: 'Grok 3',
+    description:
+      'xAI\'s Grok 3 model with powerful reasoning capabilities and truth-seeking AI approach.',
+    context_length: 128000,
+    created: 1698796800, // Nov 2023
+    pricing: {
+      prompt: '0.00000300', // $3.00 per 1M tokens
+      completion: '0.00001500', // $15.00 per 1M tokens
+    },
+    top_provider: {
+      context_length: 128000,
+      max_completion_tokens: 8192,
+      is_moderated: false,
+    },
+    per_request_limits: null,
+    architecture: {
+      modality: 'text->text',
+      tokenizer: 'Grok',
+      instruct_type: 'grok',
+    },
+    provider: 'x-ai',
+    category: 'general',
+    capabilities: {
+      vision: false,
+      reasoning: true,
+      streaming: true,
+      tools: true,
+    },
+    pricing_display: {
+      input: '$3.00/1M tokens',
+      output: '$15.00/1M tokens',
+    },
+    is_free: false,
+    supports_vision: false,
+    is_reasoning_model: false,
+  },
+
+  {
+    id: 'x-ai/grok-3-mini',
+    name: 'Grok 3 Mini',
+    description:
+      'Compact version of Grok 3 optimized for efficiency while maintaining strong reasoning capabilities.',
+    context_length: 128000,
+    created: 1698796800, // Nov 2023
+    pricing: {
+      prompt: '0.00000030', // $0.30 per 1M tokens
+      completion: '0.00000050', // $0.50 per 1M tokens
+    },
+    top_provider: {
+      context_length: 128000,
+      max_completion_tokens: 8192,
+      is_moderated: false,
+    },
+    per_request_limits: null,
+    architecture: {
+      modality: 'text->text',
+      tokenizer: 'Grok',
+      instruct_type: 'grok',
+    },
+    provider: 'x-ai',
+    category: 'general',
+    capabilities: {
+      vision: false,
+      reasoning: true,
+      streaming: true,
+      tools: true,
+    },
+    pricing_display: {
+      input: '$0.30/1M tokens',
+      output: '$0.50/1M tokens',
+    },
+    is_free: false,
+    supports_vision: false,
+    is_reasoning_model: false,
+  },
+
+  // DeepSeek Models
+  {
+    id: 'deepseek/deepseek-chat-v3.1',
+    name: 'DeepSeek V3.1',
+    description:
+      'DeepSeek V3.1 with 671B parameters (37B active). Enhanced performance with both thinking and non-thinking modes.',
+    context_length: 64000,
+    created: 1709251200, // March 2025
+    pricing: {
+      prompt: '0.00000020', // $0.20 per 1M tokens
+      completion: '0.00000080', // $0.80 per 1M tokens
+    },
+    top_provider: {
+      context_length: 64000,
+      max_completion_tokens: 8192,
+      is_moderated: false,
+    },
+    per_request_limits: null,
+    architecture: {
+      modality: 'text->text',
+      tokenizer: 'DeepSeek',
+      instruct_type: 'chatml',
+    },
+    provider: 'deepseek',
+    category: 'general',
+    capabilities: {
+      vision: false,
+      reasoning: true,
+      streaming: true,
+      tools: true,
+    },
+    pricing_display: {
+      input: '$0.20/1M tokens',
+      output: '$0.80/1M tokens',
+    },
+    is_free: false,
+    supports_vision: false,
+    is_reasoning_model: false,
+  },
+
+  {
+    id: 'deepseek/deepseek-chat-v3.1:free',
+    name: 'DeepSeek V3.1 (Free)',
+    description:
+      'Free tier DeepSeek V3.1 with excellent capabilities. Rate-limited but perfect for development and testing.',
+    context_length: 64000,
+    created: 1709251200, // March 2025
+    pricing: {
+      prompt: '0', // Free
+      completion: '0', // Free
+    },
+    top_provider: {
+      context_length: 64000,
+      max_completion_tokens: 8192,
+      is_moderated: false,
+    },
+    per_request_limits: null,
+    architecture: {
+      modality: 'text->text',
+      tokenizer: 'DeepSeek',
+      instruct_type: 'chatml',
+    },
+    provider: 'deepseek',
+    category: 'general',
+    capabilities: {
+      vision: false,
+      reasoning: true,
+      streaming: true,
+      tools: true,
+    },
+    pricing_display: {
+      input: 'Free',
+      output: 'Free',
+    },
+    is_free: true,
+    supports_vision: false,
+    is_reasoning_model: false,
+  },
+
+  {
+    id: 'deepseek/deepseek-v3.1-terminus',
+    name: 'DeepSeek V3.1 Terminus',
+    description:
+      'Updated DeepSeek V3.1 addressing language consistency and agent capabilities with enhanced performance.',
+    context_length: 64000,
+    created: 1709251200, // March 2025
+    pricing: {
+      prompt: '0.00000023', // $0.23 per 1M tokens
+      completion: '0.00000090', // $0.90 per 1M tokens
+    },
+    top_provider: {
+      context_length: 64000,
+      max_completion_tokens: 8192,
+      is_moderated: false,
+    },
+    per_request_limits: null,
+    architecture: {
+      modality: 'text->text',
+      tokenizer: 'DeepSeek',
+      instruct_type: 'chatml',
+    },
+    provider: 'deepseek',
+    category: 'general',
+    capabilities: {
+      vision: false,
+      reasoning: true,
+      streaming: true,
+      tools: true,
+    },
+    pricing_display: {
+      input: '$0.23/1M tokens',
+      output: '$0.90/1M tokens',
+    },
+    is_free: false,
+    supports_vision: false,
+    is_reasoning_model: false,
+  },
+
+  {
+    id: 'deepseek/deepseek-v3.2-exp',
+    name: 'DeepSeek V3.2 Experimental',
+    description:
+      'Experimental DeepSeek V3.2 introducing DeepSeek Sparse Attention (DSA) for improved efficiency in long-context scenarios.',
+    context_length: 64000,
+    created: 1709251200, // March 2025
+    pricing: {
+      prompt: '0.00000027', // $0.27 per 1M tokens
+      completion: '0.00000040', // $0.40 per 1M tokens
+    },
+    top_provider: {
+      context_length: 64000,
+      max_completion_tokens: 8192,
+      is_moderated: false,
+    },
+    per_request_limits: null,
+    architecture: {
+      modality: 'text->text',
+      tokenizer: 'DeepSeek',
+      instruct_type: 'chatml',
+    },
+    provider: 'deepseek',
+    category: 'general',
+    capabilities: {
+      vision: false,
+      reasoning: true,
+      streaming: true,
+      tools: true,
+    },
+    pricing_display: {
+      input: '$0.27/1M tokens',
+      output: '$0.40/1M tokens',
+    },
+    is_free: false,
+    supports_vision: false,
+    is_reasoning_model: false,
+  },
+
+  {
+    id: 'deepseek/deepseek-r1',
+    name: 'DeepSeek R1',
+    description:
+      'DeepSeek R1 reasoning model with performance on par with OpenAI o1. 671B parameters (37B active), open-sourced with MIT license.',
+    context_length: 163840,
+    created: 1736640000, // Jan 2025
+    pricing: {
+      prompt: '0.00000030', // $0.30 per 1M tokens
+      completion: '0.00000120', // $1.20 per 1M tokens
+    },
+    top_provider: {
+      context_length: 163840,
+      max_completion_tokens: 8192,
+      is_moderated: false,
+    },
+    per_request_limits: null,
+    architecture: {
+      modality: 'text->text',
+      tokenizer: 'DeepSeek',
+      instruct_type: 'chatml',
+    },
+    provider: 'deepseek',
+    category: 'reasoning',
+    capabilities: {
+      vision: false,
+      reasoning: true,
+      streaming: true,
+      tools: true,
+    },
+    pricing_display: {
+      input: '$0.30/1M tokens',
+      output: '$1.20/1M tokens',
+    },
+    is_free: false,
+    supports_vision: false,
+    is_reasoning_model: true,
+  },
+
+  // Qwen Models
+  {
+    id: 'qwen/qwen3-32b',
+    name: 'Qwen3 32B',
+    description:
+      'Qwen3 32B model with strong general capabilities and competitive performance across benchmarks.',
+    context_length: 128000,
+    created: 1730419200, // Nov 2024
+    pricing: {
+      prompt: '0.00000005', // $0.05 per 1M tokens
+      completion: '0.00000020', // $0.20 per 1M tokens
+    },
+    top_provider: {
+      context_length: 128000,
+      max_completion_tokens: 8192,
+      is_moderated: false,
+    },
+    per_request_limits: null,
+    architecture: {
+      modality: 'text->text',
+      tokenizer: 'Qwen',
+      instruct_type: 'chatml',
+    },
+    provider: 'qwen',
+    category: 'general',
+    capabilities: {
+      vision: false,
+      reasoning: true,
+      streaming: true,
+      tools: true,
+    },
+    pricing_display: {
+      input: '$0.05/1M tokens',
+      output: '$0.20/1M tokens',
+    },
+    is_free: false,
+    supports_vision: false,
+    is_reasoning_model: false,
+  },
+
+  {
+    id: 'qwen/qwen3-235b',
+    name: 'Qwen3 235B',
+    description:
+      'Qwen3-235B MoE model (22B active) optimized for complex reasoning with 262k token context. High-performance open-weight model.',
+    context_length: 262144,
+    created: 1730419200, // Nov 2024
+    pricing: {
+      prompt: '0.00000100', // $1.00 per 1M tokens (estimated)
+      completion: '0.00000300', // $3.00 per 1M tokens (estimated)
+    },
+    top_provider: {
+      context_length: 262144,
+      max_completion_tokens: 8192,
+      is_moderated: false,
+    },
+    per_request_limits: null,
+    architecture: {
+      modality: 'text->text',
+      tokenizer: 'Qwen',
+      instruct_type: 'chatml',
+    },
+    provider: 'qwen',
+    category: 'general',
+    capabilities: {
+      vision: false,
+      reasoning: true,
+      streaming: true,
+      tools: true,
+    },
+    pricing_display: {
+      input: '$1.00/1M tokens',
+      output: '$3.00/1M tokens',
+    },
+    is_free: false,
+    supports_vision: false,
+    is_reasoning_model: false,
+  },
+
+  // Meta Llama Models
+  {
+    id: 'meta-llama/llama-4-maverick',
+    name: 'Llama 4 Maverick 17B',
+    description:
+      'Llama 4 Maverick 17B high-capacity multimodal MoE model with 128 experts and 17B active parameters (400B total).',
     context_length: 128000,
     created: 1743638400, // April 2025
     pricing: {
-      prompt: '0.00000020', // $0.20 per 1M tokens
+      prompt: '0.00000015', // $0.15 per 1M tokens
       completion: '0.00000060', // $0.60 per 1M tokens
     },
     top_provider: {
@@ -1106,6 +2043,85 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
       instruct_type: 'llama',
     },
     provider: 'meta-llama',
+    category: 'general',
+    capabilities: {
+      vision: false,
+      reasoning: true,
+      streaming: true,
+      tools: true,
+    },
+    pricing_display: {
+      input: '$0.15/1M tokens',
+      output: '$0.60/1M tokens',
+    },
+    is_free: false,
+    supports_vision: false,
+    is_reasoning_model: false,
+  },
+
+  // MoonshotAI Kimi Models
+  {
+    id: 'moonshotai/kimi-k2-0905',
+    name: 'Kimi K2',
+    description:
+      'Kimi K2 Sept 2025 update with 1T total parameters (32B active). Optimized for agentic capabilities, coding, reasoning, and tool-use.',
+    context_length: 262144,
+    created: 1725494400, // Sept 2025
+    pricing: {
+      prompt: '0.00000039', // $0.39 per 1M tokens
+      completion: '0.00000190', // $1.90 per 1M tokens
+    },
+    top_provider: {
+      context_length: 262144,
+      max_completion_tokens: 8192,
+      is_moderated: false,
+    },
+    per_request_limits: null,
+    architecture: {
+      modality: 'text->text',
+      tokenizer: 'Kimi',
+      instruct_type: 'chatml',
+    },
+    provider: 'moonshotai',
+    category: 'general',
+    capabilities: {
+      vision: false,
+      reasoning: true,
+      streaming: true,
+      tools: true,
+    },
+    pricing_display: {
+      input: '$0.39/1M tokens',
+      output: '$1.90/1M tokens',
+    },
+    is_free: false,
+    supports_vision: false,
+    is_reasoning_model: false,
+  },
+
+  {
+    id: 'moonshotai/kimi-k2-turbo',
+    name: 'Kimi K2 Turbo',
+    description:
+      'Kimi K2 Turbo variant optimized for faster inference while maintaining strong agentic and coding capabilities.',
+    context_length: 262144,
+    created: 1725494400, // Sept 2025
+    pricing: {
+      prompt: '0.00000020', // $0.20 per 1M tokens (estimated)
+      completion: '0.00000060', // $0.60 per 1M tokens (estimated)
+    },
+    top_provider: {
+      context_length: 262144,
+      max_completion_tokens: 8192,
+      is_moderated: false,
+    },
+    per_request_limits: null,
+    architecture: {
+      modality: 'text->text',
+      tokenizer: 'Kimi',
+      instruct_type: 'chatml',
+    },
+    provider: 'moonshotai',
     category: 'general',
     capabilities: {
       vision: false,

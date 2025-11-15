@@ -241,6 +241,12 @@ export function useVirtualizedTimeline({
   // ✅ CRITICAL: Custom range extractor to prevent streaming items from being unmounted
   // TanStack Virtual best practice: Use rangeExtractor to keep specific items always rendered
   // This prevents streaming content from disappearing when users scroll during active streams
+  //
+  // EXPANDED PROTECTION: Includes ALL items related to streaming rounds:
+  // - Changelog items (configuration changes before the round)
+  // - Message items (participant responses)
+  // - Analysis items (moderator analysis)
+  // - Pre-search items (rendered within message blocks)
   const rangeExtractor = useCallback(
     (range: { startIndex: number; endIndex: number; overscan: number; count: number }) => {
       const indexes: number[] = [];
@@ -248,15 +254,35 @@ export function useVirtualizedTimeline({
       // Always include streaming round indexes (prevent virtualization removal)
       if (streamingRounds && streamingRounds.size > 0) {
         timelineItems.forEach((item, index) => {
-          const itemRound = item.type === 'messages'
-            ? getRoundNumber(item.data[0]?.metadata)
-            : item.type === 'analysis'
-              ? item.data.roundNumber
-              : undefined;
+          let itemRound: number | null = null;
+
+          // Extract round number based on item type
+          if (item.type === 'messages') {
+            itemRound = getRoundNumber(item.data[0]?.metadata);
+          } else if (item.type === 'analysis') {
+            itemRound = item.data.roundNumber;
+          } else if (item.type === 'changelog') {
+            // Changelog items don't have roundNumber directly, but they precede the round
+            // Include changelog if it appears immediately before a streaming round
+            itemRound = item.data[0]?.roundNumber ?? null;
+          }
 
           // ✅ TYPE-SAFE: getRoundNumber returns number | null, filter nulls
-          if (itemRound !== undefined && itemRound !== null && streamingRounds.has(itemRound)) {
+          if (itemRound !== null && streamingRounds.has(itemRound)) {
             indexes.push(index);
+
+            // ✅ EXPANDED PROTECTION: Also include the item immediately BEFORE streaming rounds
+            // This ensures changelog items that precede the round stay visible
+            if (index > 0 && !indexes.includes(index - 1)) {
+              const prevItem = timelineItems[index - 1];
+              // Only include previous item if it's a changelog for the same round
+              if (prevItem?.type === 'changelog') {
+                const prevRound = prevItem.data[0]?.roundNumber ?? null;
+                if (prevRound === itemRound) {
+                  indexes.push(index - 1);
+                }
+              }
+            }
           }
         });
       }

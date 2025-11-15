@@ -130,7 +130,6 @@ type ChatMode = z.infer<typeof ChatModeSchema>;
 // RE-EXPORT TYPES FROM SCHEMAS (Single Source of Truth)
 // ============================================================================
 
-export type { ScreenMode as ScreenModeExport } from './actions/screen-initialization';
 export type { ChatStore } from './store-schemas';
 export type { ScreenMode };
 

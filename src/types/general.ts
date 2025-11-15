@@ -3,8 +3,8 @@ import { z } from 'zod';
 
 // Zod schemas for form components - maximum reusability
 export const formOptionSchema = z.object({
-  label: z.union([z.string(), z.any()]), // Allow React elements for enhanced labels
-  value: z.string(),
+  label: z.string(), // Display text for the option
+  value: z.string(), // Value identifier
   description: z.string().optional(),
 });
 
