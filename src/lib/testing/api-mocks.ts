@@ -165,8 +165,14 @@ export function createMockThreadDetailResponse(
     data: {
       thread,
       participants,
+      messages: [],
+      changelog: [],
+      user: {
+        id: '35981ef3-3267-4af7-9fdb-2e3c47149c2c',
+        name: 'Test User',
+        image: null,
+      },
     },
-    error: null,
   };
 }
 
@@ -196,9 +202,9 @@ export function createMockThreadListResponse(
       pagination: {
         nextCursor: null,
         hasMore: false,
+        count: threads.length,
       },
     },
-    error: null,
   };
 }
 
@@ -237,8 +243,8 @@ export function createMockMessagesListResponse(
     success: true,
     data: {
       messages,
+      count: messages.length,
     },
-    error: null,
   };
 }
 
@@ -251,8 +257,9 @@ export function createMockParticipantDetailResponse(
 ): ParticipantDetailResponse {
   return {
     success: true,
-    data: createMockParticipant(participantOverrides),
-    error: null,
+    data: {
+      participant: createMockParticipant(participantOverrides),
+    },
   };
 }
 
@@ -264,9 +271,9 @@ export function createMockChangelogListResponse(): ChangelogListResponse {
   return {
     success: true,
     data: {
-      changes: [],
+      items: [],
+      count: 0,
     },
-    error: null,
   };
 }
 
@@ -282,7 +289,7 @@ export function createMockAnalysesListResponse(
   return {
     success: true,
     data: {
-      analyses: [
+      items: [
         {
           id: `analysis_${threadId}_${roundNumber}`,
           threadId,
@@ -292,9 +299,6 @@ export function createMockAnalysesListResponse(
           status: AnalysisStatuses.COMPLETE,
           participantMessageIds: [`${threadId}_r${roundNumber}_p0`],
           analysisData: {
-            roundNumber,
-            mode: ChatModes.DEBATING,
-            userQuestion: `Question for round ${roundNumber}`,
             participantAnalyses: [
               {
                 participantIndex: 0,
@@ -346,8 +350,8 @@ export function createMockAnalysesListResponse(
           completedAt: new Date(),
         },
       ],
+      count: 1,
     },
-    error: null,
   };
 }
 
@@ -362,30 +366,51 @@ export function createMockPreSearchesListResponse(
   return {
     success: true,
     data: {
-      preSearches: [
+      items: [
         {
           id: `presearch_${threadId}_${roundNumber}`,
           threadId,
           roundNumber,
-          userQuestion: `Question for round ${roundNumber}`,
+          userQuery: `Question for round ${roundNumber}`,
           status: PreSearchStatuses.COMPLETE,
           searchData: {
-            searchQuery: 'test search query',
-            results: [
+            queries: [
               {
-                title: 'Test Result',
-                url: 'https://example.com',
-                snippet: 'Test snippet',
+                query: 'test search query',
+                rationale: 'Test rationale',
+                searchDepth: 'basic' as const,
+                index: 0,
+                total: 1,
               },
             ],
+            results: [
+              {
+                query: 'test search query',
+                answer: 'Test answer',
+                results: [
+                  {
+                    title: 'Test Result',
+                    url: 'https://example.com',
+                    content: 'Test content',
+                    score: 0.9,
+                  },
+                ],
+                responseTime: 100,
+              },
+            ],
+            analysis: 'Test analysis',
+            successCount: 1,
+            failureCount: 0,
+            totalResults: 1,
+            totalTime: 100,
           },
           errorMessage: null,
           createdAt: new Date(),
           completedAt: new Date(),
         },
       ],
+      count: 1,
     },
-    error: null,
   };
 }
 

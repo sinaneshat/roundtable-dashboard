@@ -454,6 +454,7 @@ export function ChatParticipantsList({
                                       'px-3 py-2.5 text-xs font-medium border-b',
                                       'sticky top-0 z-20',
                                       'backdrop-blur-sm',
+                                      'bg-background/10',
                                       isUserTier && 'bg-primary/15 text-primary border-primary/20',
                                       isLowerTier && 'bg-muted/50 text-muted-foreground',
                                       isHigherTier && 'bg-muted/60 text-muted-foreground border-muted',

@@ -11,7 +11,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { useThreadsQuery } from '@/hooks/queries/chat';
 import { useDebouncedValue } from '@/hooks/utils';
 import { cn } from '@/lib/ui/cn';
-import { glassOverlay } from '@/lib/ui/glassmorphism';
+import { glassCard, glassCardStyles, glassOverlay, glassOverlayStyles } from '@/lib/ui/glassmorphism';
 
 type CommandSearchProps = {
   isOpen: boolean;
@@ -216,6 +216,7 @@ export function CommandSearch({ isOpen, onClose }: CommandSearchProps) {
             exit={{ opacity: 0 }}
             transition={{ duration: 0.15 }}
             className={cn('fixed inset-0 z-[60]', glassOverlay)}
+            style={glassOverlayStyles}
           />
           <div className="fixed inset-0 z-[60] flex items-start justify-center pt-[20vh] overflow-hidden pointer-events-none">
             <motion.div
@@ -226,7 +227,10 @@ export function CommandSearch({ isOpen, onClose }: CommandSearchProps) {
               transition={{ duration: 0.15 }}
               className="relative w-full max-w-2xl mx-4 pointer-events-auto"
             >
-              <div className={cn('flex flex-col backdrop-blur-sm bg-background/95 border shadow-2xl rounded-lg p-0 gap-0 overflow-hidden')}>
+              <div
+                className={cn('flex flex-col border shadow-2xl rounded-lg p-0 gap-0 overflow-hidden', glassCard('medium'))}
+                style={glassCardStyles.medium}
+              >
                 {/* Fixed Header Section */}
                 <div className="flex items-center gap-3 px-4 py-3 border-b border-border shrink-0">
                   <Search className="size-5 text-muted-foreground" />

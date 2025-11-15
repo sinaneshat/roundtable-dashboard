@@ -22,6 +22,8 @@
  * ✅ PATTERN: Ensure type safety with Zod validation
  */
 
+import { vi } from 'vitest';
+
 import { ChatModes, MessageRoles } from '@/api/core/enums';
 import type { ThreadDetailResponse } from '@/api/routes/chat/schema';
 import {
@@ -32,55 +34,43 @@ import {
   createMockFetchResponse,
   createMockMessage,
   createMockMessagesListResponse,
-  createMockParticipant,
-  createMockThread,
   createMockThreadDetailResponse,
 } from '@/lib/testing';
 import { getRoundNumber } from '@/lib/utils/metadata';
 
-describe('E2E: Thread Lifecycle with API Integration', () => {
+describe('e2E: Thread Lifecycle with API Integration', () => {
   const THREAD_ID = '01KA1K2GD2PP0BJH2VZ9J6QRBA';
   const USER_ID = '35981ef3-3267-4af7-9fdb-2e3c47149c2c';
 
+  let fetchMock: ReturnType<typeof vi.fn>;
+
   beforeEach(() => {
     // Clear all mocks
-    jest.clearAllMocks();
+    vi.clearAllMocks();
 
-    // Reset fetch mock
-    global.fetch = jest.fn();
+    // Create and stub global fetch
+    fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
   });
 
-  describe('Thread Creation Flow', () => {
+  describe('thread Creation Flow', () => {
     it('should receive valid thread creation response from API', async () => {
       // ============================================================================
       // STEP 1: Mock backend API response for thread creation
       // ============================================================================
-      const mockThread = createMockThread({
-        id: THREAD_ID,
-        userId: USER_ID,
-        title: 'New Discussion',
-        slug: 'new-discussion-abc123',
-        mode: ChatModes.DEBATING,
-        status: 'active',
-      });
-
-      const mockParticipant = createMockParticipant({
-        id: 'participant_0',
-        threadId: THREAD_ID,
-        modelId: 'gpt-4',
-        priority: 0,
-      });
-
-      const apiResponse: ThreadDetailResponse = {
-        success: true,
-        data: {
-          thread: mockThread,
-          participants: [mockParticipant],
+      const apiResponse: ThreadDetailResponse = createMockThreadDetailResponse(
+        {
+          id: THREAD_ID,
+          userId: USER_ID,
+          title: 'New Discussion',
+          slug: 'new-discussion-abc123',
+          mode: ChatModes.DEBATING,
+          status: 'active',
         },
-        error: null,
-      };
+        [{ id: 'participant_0', threadId: THREAD_ID, modelId: 'gpt-4', priority: 0 }],
+      );
 
-      (global.fetch as jest.Mock).mockResolvedValueOnce(
+      fetchMock.mockResolvedValueOnce(
         createMockFetchResponse(apiResponse),
       );
 
@@ -123,7 +113,7 @@ describe('E2E: Thread Lifecycle with API Integration', () => {
       // ============================================================================
       // STEP 1: Mock API error response
       // ============================================================================
-      (global.fetch as jest.Mock).mockResolvedValueOnce(
+      fetchMock.mockResolvedValueOnce(
         createMockFetchError('Thread quota exceeded', 429),
       );
 
@@ -148,7 +138,7 @@ describe('E2E: Thread Lifecycle with API Integration', () => {
     });
   });
 
-  describe('Thread Loading Flow (by ID)', () => {
+  describe('thread Loading Flow (by ID)', () => {
     it('should receive complete thread data from all API endpoints', async () => {
       // ============================================================================
       // STEP 1: Mock all API responses for thread detail page
@@ -175,7 +165,7 @@ describe('E2E: Thread Lifecycle with API Integration', () => {
       // ============================================================================
       // STEP 2: Simulate loading sequence (as happens on page load)
       // ============================================================================
-      (global.fetch as jest.Mock)
+      fetchMock
         .mockResolvedValueOnce(createMockFetchResponse(threadResponse))
         .mockResolvedValueOnce(createMockFetchResponse(messagesResponse))
         .mockResolvedValueOnce(createMockFetchResponse(changelogResponse))
@@ -228,7 +218,7 @@ describe('E2E: Thread Lifecycle with API Integration', () => {
     });
   });
 
-  describe('Messages Loading and Round Number Consistency', () => {
+  describe('messages Loading and Round Number Consistency', () => {
     it('should preserve 0-based roundNumber from backend API', async () => {
       // ============================================================================
       // SCENARIO: User refreshes page on thread with round 0 complete
@@ -240,7 +230,7 @@ describe('E2E: Thread Lifecycle with API Integration', () => {
       // Messages for round 0 (first round)
       const messagesResponse = createMockMessagesListResponse(THREAD_ID, 0, 1);
 
-      (global.fetch as jest.Mock)
+      fetchMock
         .mockResolvedValueOnce(createMockFetchResponse(threadResponse))
         .mockResolvedValueOnce(createMockFetchResponse(messagesResponse));
 
@@ -304,7 +294,7 @@ describe('E2E: Thread Lifecycle with API Integration', () => {
         error: null,
       };
 
-      (global.fetch as jest.Mock)
+      fetchMock
         .mockResolvedValueOnce(createMockFetchResponse(threadResponse))
         .mockResolvedValueOnce(createMockFetchResponse(messagesResponse));
 
@@ -333,7 +323,7 @@ describe('E2E: Thread Lifecycle with API Integration', () => {
     });
   });
 
-  describe('Analysis Loading and State Sync', () => {
+  describe('analysis Loading and State Sync', () => {
     it('should receive analysis from API with correct roundNumber', async () => {
       // ============================================================================
       // CRITICAL: Analysis for round 0 should have roundNumber: 0 (not 1)
@@ -342,7 +332,7 @@ describe('E2E: Thread Lifecycle with API Integration', () => {
       const threadResponse = createMockThreadDetailResponse({ id: THREAD_ID });
       const analysesResponse = createMockAnalysesListResponse(THREAD_ID, 0);
 
-      (global.fetch as jest.Mock)
+      fetchMock
         .mockResolvedValueOnce(createMockFetchResponse(threadResponse))
         .mockResolvedValueOnce(createMockFetchResponse(analysesResponse));
 
@@ -369,7 +359,7 @@ describe('E2E: Thread Lifecycle with API Integration', () => {
     });
   });
 
-  describe('Error Handling and State Recovery', () => {
+  describe('error Handling and State Recovery', () => {
     it('should return proper error structure from API', async () => {
       // ============================================================================
       // SCENARIO: Network error while loading messages
@@ -377,7 +367,7 @@ describe('E2E: Thread Lifecycle with API Integration', () => {
 
       const threadResponse = createMockThreadDetailResponse({ id: THREAD_ID });
 
-      (global.fetch as jest.Mock)
+      fetchMock
         .mockResolvedValueOnce(createMockFetchResponse(threadResponse))
         .mockResolvedValueOnce(createMockFetchError('Network error', 500));
 
@@ -402,7 +392,7 @@ describe('E2E: Thread Lifecycle with API Integration', () => {
       // ============================================================================
 
       const successMessagesResponse = createMockMessagesListResponse(THREAD_ID, 0, 1);
-      (global.fetch as jest.Mock).mockResolvedValueOnce(
+      fetchMock.mockResolvedValueOnce(
         createMockFetchResponse(successMessagesResponse),
       );
 

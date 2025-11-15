@@ -24,13 +24,13 @@ import type { TestAssistantMessage, TestUserMessage } from '@/lib/testing';
 import { createTestAssistantMessage, createTestUserMessage } from '@/lib/testing';
 import { getParticipantId, getParticipantIndex, getRoundNumber } from '@/lib/utils/metadata';
 
-describe('Analysis Participant ID Validation', () => {
+describe('analysis Participant ID Validation', () => {
   const THREAD_ID = '01KA1RNWKYNQSDM5EGMCSCYGX5';
 
   /**
    * CRITICAL TEST: Participant message IDs must match their metadata
    */
-  describe('Message ID and metadata consistency', () => {
+  describe('message ID and metadata consistency', () => {
     it('should have message ID roundNumber matching metadata roundNumber', () => {
       // Simulate actual backend behavior with multiple rounds
       const messages: (TestUserMessage | TestAssistantMessage)[] = [
@@ -77,19 +77,21 @@ describe('Analysis Participant ID Validation', () => {
       ];
 
       // Verify each participant message
-      messages.forEach((msg) => {
-        if (msg.role === MessageRoles.ASSISTANT && msg.id.includes('_r')) {
-          // Extract round number from ID
-          const idMatch = msg.id.match(/_r(\d+)_p(\d+)/);
-          expect(idMatch).toBeTruthy();
+      const assistantMessages = messages.filter(
+        msg => msg.role === MessageRoles.ASSISTANT && msg.id.includes('_r'),
+      );
 
-          const roundFromId = Number.parseInt(idMatch![1]!);
-          const participantIndexFromId = Number.parseInt(idMatch![2]!);
+      assistantMessages.forEach((msg) => {
+        // Extract round number from ID
+        const idMatch = msg.id.match(/_r(\d+)_p(\d+)/);
+        expect(idMatch).toBeTruthy();
 
-          // CRITICAL: ID must match metadata
-          expect(getRoundNumber(msg.metadata)).toBe(roundFromId);
-          expect(getParticipantIndex(msg.metadata)).toBe(participantIndexFromId);
-        }
+        const roundFromId = Number.parseInt(idMatch![1]!);
+        const participantIndexFromId = Number.parseInt(idMatch![2]!);
+
+        // CRITICAL: ID must match metadata
+        expect(getRoundNumber(msg.metadata)).toBe(roundFromId);
+        expect(getParticipantIndex(msg.metadata)).toBe(participantIndexFromId);
       });
     });
 
@@ -122,7 +124,7 @@ describe('Analysis Participant ID Validation', () => {
   /**
    * CRITICAL TEST: Analysis must only include participants from its round
    */
-  describe('Analysis participant message ID validation', () => {
+  describe('analysis participant message ID validation', () => {
     it('should only include participant message IDs from the SAME round', () => {
       const messages: (TestUserMessage | TestAssistantMessage)[] = [
         // Round 0
@@ -161,7 +163,7 @@ describe('Analysis Participant ID Validation', () => {
 
       // Simulate analysis creation for round 1
       const round1Messages = messages.filter(m =>
-        getRoundNumber(m.metadata) === 1 && m.role === MessageRoles.ASSISTANT && getParticipantId(m.metadata)
+        getRoundNumber(m.metadata) === 1 && m.role === MessageRoles.ASSISTANT && getParticipantId(m.metadata),
       );
 
       const participantMessageIds = round1Messages.map(m => m.id);
@@ -194,17 +196,21 @@ describe('Analysis Participant ID Validation', () => {
       ];
 
       // Verify each ID matches the analysis round
-      buggyParticipantMessageIds.forEach((id) => {
+      const buggyId = `${THREAD_ID}_r0_p1`;
+      const [buggyMessage, ...correctMessages] = buggyParticipantMessageIds.map((id) => {
         const idMatch = id.match(/_r(\d+)_p(\d+)/);
         const roundFromId = Number.parseInt(idMatch![1]!);
+        return { id, roundFromId };
+      });
 
-        // This should fail - detecting the bug
-        if (id === `${THREAD_ID}_r0_p1`) {
-          expect(roundFromId).not.toBe(analysisRoundNumber);
-          expect(roundFromId).toBe(0); // Wrong round
-        } else {
-          expect(roundFromId).toBe(analysisRoundNumber);
-        }
+      // This should fail - detecting the bug
+      expect(buggyMessage?.id).toBe(buggyId);
+      expect(buggyMessage?.roundFromId).not.toBe(analysisRoundNumber);
+      expect(buggyMessage?.roundFromId).toBe(0); // Wrong round
+
+      // Remaining IDs should match analysis round
+      correctMessages.forEach((msg) => {
+        expect(msg.roundFromId).toBe(analysisRoundNumber);
       });
 
       // Correct IDs should be
@@ -236,7 +242,7 @@ describe('Analysis Participant ID Validation', () => {
   /**
    * CRITICAL TEST: No duplicate message IDs in same round
    */
-  describe('Duplicate message ID detection', () => {
+  describe('duplicate message ID detection', () => {
     it('should NOT have duplicate participant message IDs in same round', () => {
       const round1Messages = [
         createTestAssistantMessage({
@@ -259,7 +265,7 @@ describe('Analysis Participant ID Validation', () => {
       const uniqueIds = new Set(ids);
 
       // No duplicates
-      expect(ids.length).toBe(uniqueIds.size);
+      expect(ids).toHaveLength(uniqueIds.size);
     });
 
     it('should DETECT if same message ID appears twice (user bug scenario)', () => {
@@ -287,8 +293,8 @@ describe('Analysis Participant ID Validation', () => {
       const uniqueIds = new Set(ids);
 
       // Should detect duplicate
-      expect(ids.length).not.toBe(uniqueIds.size);
-      expect(ids.length).toBe(2);
+      expect(ids).not.toHaveLength(uniqueIds.size);
+      expect(ids).toHaveLength(2);
       expect(uniqueIds.size).toBe(1); // Only one unique ID
 
       // Find the duplicate
@@ -305,7 +311,7 @@ describe('Analysis Participant ID Validation', () => {
   /**
    * CRITICAL TEST: Message ID format validation
    */
-  describe('Message ID format validation', () => {
+  describe('message ID format validation', () => {
     it('should match pattern {threadId}_r{roundNumber}_p{participantIndex}', () => {
       const validIds = [
         { id: `${THREAD_ID}_r0_p0`, round: 0, index: 0 },

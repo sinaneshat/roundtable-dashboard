@@ -75,6 +75,7 @@ export function ConversationModeModal({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
+        glass={true}
         className={cn('rounded-2xl', className)}
         style={{
           width: '90vw',

@@ -191,19 +191,17 @@ function AppSidebarComponent({ ...props }: React.ComponentProps<typeof Sidebar>)
               </SidebarMenuItem>
 
               {/* Logo - Collapsed */}
-              <SidebarMenuItem className="hidden group-data-[collapsible=icon]:flex mb-2">
-                <SidebarMenuButton size="lg" asChild className="hover:bg-transparent" tooltip={BRAND.displayName}>
-                  <Link href="/chat" onClick={handleNavLinkClick}>
-                    <Image
-                      src={BRAND.logos.main}
-                      alt={`${BRAND.displayName} Logo`}
-                      width={40}
-                      height={40}
-                      className="size-10 object-contain shrink-0"
-                      loading="lazy"
-                    />
-                  </Link>
-                </SidebarMenuButton>
+              <SidebarMenuItem className="hidden group-data-[collapsible=icon]:flex mb-2 items-center justify-center">
+                <Link href="/chat" onClick={handleNavLinkClick} className="p-0 m-0 block">
+                  <Image
+                    src={BRAND.logos.main}
+                    alt={`${BRAND.displayName} Logo`}
+                    width={48}
+                    height={48}
+                    className="size-12 object-contain shrink-0"
+                    loading="lazy"
+                  />
+                </Link>
               </SidebarMenuItem>
 
               {/* Action Buttons - Expanded */}
@@ -406,7 +404,7 @@ function AppSidebarComponent({ ...props }: React.ComponentProps<typeof Sidebar>)
                   <CardContent className="px-3 pb-3 pt-0">
                     <Button
                       variant="outline"
-                      className="w-full justify-center text-xs border-sidebar-border hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                      className="w-full justify-center text-xs border-sidebar-border hover:bg-white/10 hover:backdrop-blur-sm active:bg-white/15 active:scale-[0.998] transition-all duration-200"
                       size="sm"
                       asChild
                     >

@@ -19,18 +19,13 @@ export function AvatarGroup({
   className,
 }: AvatarGroupProps) {
   const sizeClasses = {
-    sm: 'size-8',
+    sm: 'size-6',
     md: 'size-10',
   };
 
   const textSizeClasses = {
-    sm: 'text-[7px]',
-    md: 'text-[9px]',
-  };
-
-  const ringClasses = {
-    sm: 'ring-2',
-    md: 'ring-2',
+    sm: 'text-[10px]',
+    md: 'text-xs',
   };
 
   const visibleParticipants = participants
@@ -39,7 +34,7 @@ export function AvatarGroup({
 
   const remainingCount = participants.length - maxVisible;
 
-  const overlapOffset = size === 'sm' ? -10 : -12;
+  const overlapOffset = size === 'sm' ? -8 : -12;
 
   return (
     <div className={cn('flex items-center', className)}>
@@ -60,19 +55,15 @@ export function AvatarGroup({
             <Avatar
               className={cn(
                 sizeClasses[size],
-                ringClasses[size],
-                'relative ring-black bg-black border-2 border-black transition-transform hover:scale-110 hover:z-50',
+                'relative bg-black border-2 border-black transition-transform hover:scale-110 hover:z-50',
               )}
-              style={{ backgroundColor: '#000000' }}
             >
-              <div className="absolute inset-0 bg-black rounded-full" style={{ backgroundColor: '#000000' }} />
               <AvatarImage
                 src={getProviderIcon(model.provider)}
                 alt={model.name}
-                className="object-contain p-1 relative z-10 bg-black rounded-full"
-                style={{ backgroundColor: '#000000' }}
+                className="object-contain p-0.5 relative z-10"
               />
-              <AvatarFallback className={cn(textSizeClasses[size], 'bg-black font-semibold relative z-10')} style={{ backgroundColor: '#000000' }}>
+              <AvatarFallback className={cn(textSizeClasses[size], 'bg-black font-semibold relative z-10')}>
                 {model.name.slice(0, 2).toUpperCase()}
               </AvatarFallback>
             </Avatar>

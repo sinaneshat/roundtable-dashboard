@@ -6,7 +6,7 @@ import { useTranslations } from 'next-intl';
 import * as React from "react"
 
 import { cn } from "@/lib/ui/cn"
-import { glassCard, glassOverlay } from "@/lib/ui/glassmorphism"
+import { glassCard, glassCardStyles, glassOverlay, glassOverlayStyles } from "@/lib/ui/glassmorphism"
 
 function Dialog({
   ...props
@@ -49,6 +49,7 @@ function DialogOverlay({
         glass ? glassOverlay : "bg-black/50",
         className
       )}
+      style={glass ? glassOverlayStyles : undefined}
       {...props}
     />
   )
@@ -80,6 +81,7 @@ function DialogContent({
             : "bg-background border shadow-lg",
           className
         )}
+        style={glass ? glassCardStyles.medium : undefined}
         {...props}
       >
         {children}

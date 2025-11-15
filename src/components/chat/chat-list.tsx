@@ -373,7 +373,7 @@ export function ChatList({
         );
       })}
       <AlertDialog open={!!chatToDelete} onOpenChange={open => !open && handleCancelDelete()}>
-        <AlertDialogContent>
+        <AlertDialogContent glass={true}>
           <AlertDialogHeader>
             <AlertDialogTitle>{t('chat.deleteThreadConfirmTitle')}</AlertDialogTitle>
             <AlertDialogDescription>

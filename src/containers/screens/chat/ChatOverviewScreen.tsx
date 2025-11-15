@@ -429,7 +429,7 @@ export default function ChatOverviewScreen() {
 
   return (
     <UnifiedErrorBoundary context="chat">
-      <div className="min-h-screen flex flex-col relative">
+      <div className={`flex flex-col relative ${showInitialUI ? '' : 'min-h-screen'}`}>
         {/* Radial glow - fixed positioning, doesn't affect layout */}
         <AnimatePresence>
           {showInitialUI && (
@@ -464,7 +464,7 @@ export default function ChatOverviewScreen() {
           id="chat-scroll-container"
           className={`container max-w-3xl mx-auto px-3 sm:px-4 md:px-6 flex-1 relative z-10 ${
             showInitialUI
-              ? '!flex !flex-col !justify-center !items-center !min-h-screen'
+              ? '!flex !flex-col !justify-start !items-center pt-4'
               : 'pt-0 pb-32 sm:pb-36'
           }`}
         >

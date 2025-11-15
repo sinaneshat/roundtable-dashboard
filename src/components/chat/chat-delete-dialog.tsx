@@ -58,7 +58,7 @@ export function ChatDeleteDialog({
   };
   return (
     <AlertDialog open={isOpen} onOpenChange={onOpenChange}>
-      <AlertDialogContent>
+      <AlertDialogContent glass={true}>
         <AlertDialogHeader>
           <AlertDialogTitle>{t('deleteThreadConfirmTitle')}</AlertDialogTitle>
           <AlertDialogDescription>

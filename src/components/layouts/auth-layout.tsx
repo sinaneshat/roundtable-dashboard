@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 
 import { Logo } from '@/components/logo';
-import { DottedGlowBackground } from '@/components/ui/dotted-glow-background';
+import { RadialGlow } from '@/components/ui/radial-glow';
 import { BRAND } from '@/constants/brand';
 
 type AuthLayoutProps = {
@@ -16,21 +16,14 @@ export default function AuthLayout({ children }: AuthLayoutProps) {
 
   return (
     <div className="relative min-h-svh">
-      {/* Animated dotted glow background */}
-      <div className="fixed inset-0 -z-10">
-        <DottedGlowBackground
-          className="pointer-events-none"
-          opacity={0.8}
-          gap={10}
-          radius={1.6}
-          color="rgba(156, 163, 175, 0.3)"
-          darkColor="rgba(156, 163, 175, 0.2)"
-          glowColor="rgba(147, 197, 253, 0.5)"
-          darkGlowColor="rgba(59, 130, 246, 0.6)"
-          backgroundOpacity={0}
-          speedMin={0.3}
-          speedMax={1.6}
-          speedScale={1}
+      {/* Pulsating radial glow background - matching dashboard */}
+      <div className="fixed inset-0 -z-10 flex items-center justify-center pointer-events-none overflow-hidden">
+        <RadialGlow
+          size={800}
+          offsetY={0}
+          duration={18}
+          animate={true}
+          useLogoColors={true}
         />
       </div>
 

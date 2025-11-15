@@ -135,9 +135,9 @@ export function ModelItem({
               <div className="flex-1 min-w-0 overflow-hidden space-y-1">
                 <div className="flex items-center gap-1.5 min-w-0">
                   <span className="text-sm font-semibold truncate flex-shrink">{model.name}</span>
-                  {model.required_tier && model.required_tier !== 'free' && (
-                    <Badge variant="secondary" className="text-[10px] px-1.5 py-0.5 h-4 font-semibold bg-amber-500/20 text-amber-400 border-amber-500/30 shrink-0">
-                      PRO
+                  {isDisabledDueToTier && (model.required_tier_name || model.required_tier) && (
+                    <Badge variant="secondary" className="text-[10px] px-1.5 py-0.5 h-4 font-semibold bg-amber-500/20 text-amber-400 border-amber-500/30 shrink-0 uppercase">
+                      {model.required_tier_name || model.required_tier}
                     </Badge>
                   )}
                   {isDisabledDueToLimit && !isDisabledDueToTier && (

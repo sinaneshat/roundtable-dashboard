@@ -157,7 +157,7 @@ export function ApiKeysList({ apiKeys, isLoading, error, onCreateNew }: ApiKeysL
 
       {/* Delete Confirmation Dialog - Following chat-delete-dialog.tsx pattern */}
       <AlertDialog open={!!deleteKeyId} onOpenChange={() => setDeleteKeyId(null)}>
-        <AlertDialogContent>
+        <AlertDialogContent glass={true}>
           <AlertDialogHeader>
             <AlertDialogTitle>{t('apiKeys.list.deleteConfirmTitle')}</AlertDialogTitle>
             <AlertDialogDescription>

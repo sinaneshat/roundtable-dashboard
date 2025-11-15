@@ -29,9 +29,9 @@ import type { UIMessage } from 'ai';
 import { AnalysisStatuses, MessageRoles } from '@/api/core/enums';
 import type { RoundSummary, StoredModeratorAnalysis } from '@/api/routes/chat/schema';
 import type { DbMessageMetadata } from '@/db/schemas/chat-metadata';
-import type { ChatParticipant, ChatThread } from '@/db/validation/chat';
+import type { ChatParticipant } from '@/db/validation/chat';
 import type { TestAssistantMessage } from '@/lib/testing';
-import { createTestAssistantMessage, createTestUserMessage } from '@/lib/testing';
+import { createMockParticipant, createMockThread, createTestAssistantMessage, createTestUserMessage } from '@/lib/testing';
 import { getRoundNumber } from '@/lib/utils/metadata';
 import { getCurrentRoundNumber } from '@/lib/utils/round-utils';
 
@@ -39,44 +39,19 @@ import { getCurrentRoundNumber } from '@/lib/utils/round-utils';
 // Test Data Factories (Mimicking Server Responses)
 // ============================================================================
 
-/**
- * Create a complete thread object as returned by server
- * This mimics /api/v1/chat/threads/[id] response
- */
-function createMockThread(overrides?: Partial<ChatThread>): ChatThread {
-  return {
-    id: '01KA1DEY81D0X6760M7ZDKZTC5',
-    slug: 'test-conversation-slug',
-    title: 'Test Conversation',
-    isAiGeneratedTitle: true,
-    userId: 'user-123',
-    projectId: null,
-    mode: 'analyzing',
-    status: 'active',
-    enableWebSearch: false,
-    isPublic: false,
-    createdAt: new Date('2024-01-01T00:00:00Z'),
-    updatedAt: new Date('2024-01-01T00:00:00Z'),
-    ...overrides,
-  };
-}
+// Using createMockThread and createMockParticipant from @/lib/testing instead of duplicating
 
 /**
  * Create complete participant objects as returned by server
  * This mimics /api/v1/chat/threads/[id]/participants response
  */
 function createMockParticipants(count = 2): ChatParticipant[] {
-  return Array.from({ length: count }, (_, i) => ({
+  return Array.from({ length: count }, (_, i) => createMockParticipant({
     id: `p${i}`,
     threadId: '01KA1DEY81D0X6760M7ZDKZTC5',
     modelId: `model-${i}`,
     role: i === 0 ? 'The Analyst' : 'The Critic',
-    customRoleId: null,
     priority: i,
-    isEnabled: true,
-    settings: null,
-    createdAt: new Date('2024-01-01T00:00:00Z'),
-    updatedAt: new Date('2024-01-01T00:00:00Z'),
   }));
 }
 
@@ -123,6 +98,7 @@ function createMockRoundSummary(): RoundSummary {
 function createMockAnalysis(
   roundNumber: number,
   participantMessageIds: string[],
+  statusOverride?: typeof AnalysisStatuses[keyof typeof AnalysisStatuses],
 ): StoredModeratorAnalysis {
   return {
     id: `analysis-r${roundNumber}`,
@@ -130,7 +106,7 @@ function createMockAnalysis(
     roundNumber,
     mode: 'analyzing',
     userQuestion: `Question for round ${roundNumber}`,
-    status: AnalysisStatuses.COMPLETE,
+    status: statusOverride ?? AnalysisStatuses.COMPLETE,
     participantMessageIds,
     analysisData: {
       participantAnalyses: participantMessageIds.map((_msgId, index) => ({
@@ -831,22 +807,19 @@ describe('screen navigation integration', () => {
       const thread = createMockThread({ isAiGeneratedTitle: true });
 
       // Scenario 1: Analysis still streaming
-      const streamingAnalysis = createMockAnalysis(0, [`${THREAD_ID}_r0_p0`]);
-      streamingAnalysis.status = AnalysisStatuses.STREAMING;
+      const streamingAnalysis = createMockAnalysis(0, [`${THREAD_ID}_r0_p0`], AnalysisStatuses.STREAMING);
 
       const shouldNavigateStreaming = streamingAnalysis.status === AnalysisStatuses.COMPLETE && thread.isAiGeneratedTitle;
       expect(shouldNavigateStreaming).toBe(false); // Should NOT navigate
 
       // Scenario 2: Analysis pending
-      const pendingAnalysis = createMockAnalysis(0, [`${THREAD_ID}_r0_p0`]);
-      pendingAnalysis.status = AnalysisStatuses.PENDING;
+      const pendingAnalysis = createMockAnalysis(0, [`${THREAD_ID}_r0_p0`], AnalysisStatuses.PENDING);
 
       const shouldNavigatePending = pendingAnalysis.status === AnalysisStatuses.COMPLETE && thread.isAiGeneratedTitle;
       expect(shouldNavigatePending).toBe(false); // Should NOT navigate
 
       // Scenario 3: Analysis complete + AI title ready
-      const completeAnalysis = createMockAnalysis(0, [`${THREAD_ID}_r0_p0`]);
-      completeAnalysis.status = AnalysisStatuses.COMPLETE;
+      const completeAnalysis = createMockAnalysis(0, [`${THREAD_ID}_r0_p0`], AnalysisStatuses.COMPLETE);
 
       const shouldNavigateComplete = completeAnalysis.status === AnalysisStatuses.COMPLETE && thread.isAiGeneratedTitle;
       expect(shouldNavigateComplete).toBe(true); // SHOULD navigate

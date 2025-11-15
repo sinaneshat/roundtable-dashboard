@@ -784,11 +784,25 @@ export function createChatStore() {
       }),
       {
         name: 'ChatStore',
-        enabled: process.env.NODE_ENV !== 'production',
+        enabled: true, // Always enable for debugging
         anonymousActionType: 'unknown-action',
       },
     ),
   );
+
+  // Debug: Verify devtools connection
+  if (typeof window !== 'undefined') {
+    const hasExtension = !!(window as typeof window & { __REDUX_DEVTOOLS_EXTENSION__?: unknown }).__REDUX_DEVTOOLS_EXTENSION__;
+    console.error('[ChatStore] Redux DevTools Extension available:', hasExtension);
+    console.error('[ChatStore] Store created with devtools middleware');
+    console.error('[ChatStore] Store has devtools property:', 'devtools' in store);
+
+    // Trigger a test action to ensure store appears in devtools
+    setTimeout(() => {
+      store.setState({ showInitialUI: true }, false, 'devtools/initialization-test');
+      console.error('[ChatStore] Test action dispatched to verify devtools connection');
+    }, 100);
+  }
 
   // ============================================================================
   // Store Subscriptions (Removed)

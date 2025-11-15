@@ -5,12 +5,8 @@ import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   plugins: [tsconfigPaths(), react()],
-  css: {
-    // Mock CSS imports in tests
-    modules: {
-      classNameStrategy: 'non-scoped',
-    },
-  },
+  // ✅ V4: CSS modules configuration removed - use default behavior
+  // Test environment handles CSS imports automatically
   test: {
     // Environment
     environment: 'jsdom',

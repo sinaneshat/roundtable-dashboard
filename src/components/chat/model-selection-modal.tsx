@@ -215,6 +215,7 @@ export function ModelSelectionModal({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
+        glass={true}
         className={cn(
           'w-[90vw] min-w-[400px] max-w-[512px] p-0 gap-0 overflow-hidden',
           className,
@@ -272,48 +273,51 @@ export function ModelSelectionModal({
               )
             : groupedModels.map((group, groupIndex) => (
                 <div key={group.title} className={groupIndex > 0 ? 'border-t border-white/10' : ''}>
-                  {/* Sticky Section Header - matches original implementation */}
-                  <div
-                    className={cn(
-                      'sticky top-0 z-10 backdrop-blur-sm border-b px-6 py-2.5',
-                      groupIndex === 0 && 'bg-primary/10 border-primary/20', // Selected - highlighted
-                      groupIndex === 1 && 'bg-accent/50 border-accent', // Most Popular - accent
-                      groupIndex > 1 && 'bg-background/95 border-white/10', // Tiers - neutral
-                    )}
-                    style={{ boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1)' }}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className={cn(
-                        'text-xs font-semibold',
-                        groupIndex === 0 && 'text-foreground',
-                        groupIndex === 1 && 'text-accent-foreground',
-                        groupIndex > 1 && 'text-muted-foreground uppercase tracking-wider',
+                  {/* Sticky Section Header - heavy glass blur with nested structure */}
+                  <div className="sticky top-0 z-10">
+                    <div
+                      className={cn(
+                        'backdrop-blur-3xl bg-background/80 border-b border-white/10 px-6 py-2.5 shadow-lg',
                       )}
-                      >
-                        {group.title}
-                      </span>
-                      {groupIndex === 0 && selectedCount > 0 && (
-                        <div className="flex items-center gap-2">
-                          <Badge variant="default" className="text-[10px] px-1.5 py-0 h-4">
-                            {selectedCount}
-                            /
-                            {maxModels}
-                          </Badge>
-                          <span className="text-[10px] opacity-70">{tModels('dragToReorder')}</span>
-                        </div>
-                      )}
-                      {groupIndex === 1 && (
-                        <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4">
-                          {tModels('topModels')}
-                        </Badge>
-                      )}
-                      {groupIndex > 1 && (
-                        <span className="text-[10px] opacity-80">
-                          {group.models.length}
-                          {' '}
-                          {group.models.length === 1 ? tModels('model') : tModels('models')}
+                      style={{
+                        boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1)',
+                        backdropFilter: 'blur(64px) saturate(150%)',
+                        WebkitBackdropFilter: 'blur(64px) saturate(150%)',
+                      }}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className={cn(
+                          'text-xs font-semibold',
+                          groupIndex === 0 && 'text-foreground',
+                          groupIndex === 1 && 'text-accent-foreground',
+                          groupIndex > 1 && 'text-muted-foreground uppercase tracking-wider',
+                        )}
+                        >
+                          {group.title}
                         </span>
-                      )}
+                        {groupIndex === 0 && selectedCount > 0 && (
+                          <div className="flex items-center gap-2">
+                            <Badge variant="default" className="text-[10px] px-1.5 py-0 h-4">
+                              {selectedCount}
+                              /
+                              {maxModels}
+                            </Badge>
+                            <span className="text-[10px] opacity-70">{tModels('dragToReorder')}</span>
+                          </div>
+                        )}
+                        {groupIndex === 1 && (
+                          <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4">
+                            {tModels('topModels')}
+                          </Badge>
+                        )}
+                        {groupIndex > 1 && (
+                          <span className="text-[10px] opacity-80">
+                            {group.models.length}
+                            {' '}
+                            {group.models.length === 1 ? tModels('model') : tModels('models')}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
 

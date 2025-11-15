@@ -85,13 +85,41 @@ export function glassCard(variant: keyof typeof glassVariants = 'medium'): strin
 }
 
 /**
+ * Enhanced glass card styles with color distortion
+ * Applied via inline styles for premium frosted glass effect with saturation
+ */
+export const glassCardStyles = {
+  subtle: {
+    backdropFilter: 'blur(12px) saturate(140%)',
+    WebkitBackdropFilter: 'blur(12px) saturate(140%)',
+  },
+  medium: {
+    backdropFilter: 'blur(24px) saturate(150%)',
+    WebkitBackdropFilter: 'blur(24px) saturate(150%)',
+  },
+  strong: {
+    backdropFilter: 'blur(40px) saturate(160%)',
+    WebkitBackdropFilter: 'blur(40px) saturate(160%)',
+  },
+} as const;
+
+/**
  * Glass overlay for dialogs and modals
- * Subtle backdrop blur following shadcn patterns (minimal blur, reduced opacity)
+ * Enhanced backdrop blur with color saturation for premium frosted glass effect
  */
 export const glassOverlay = cn(
-  'backdrop-blur-sm',
-  'bg-black/30',
+  'backdrop-blur-xl',
+  'bg-black/40',
 );
+
+/**
+ * Enhanced glass overlay styles with color distortion
+ * Applied via inline styles for maximum effect
+ */
+export const glassOverlayStyles = {
+  backdropFilter: 'blur(24px) saturate(150%)',
+  WebkitBackdropFilter: 'blur(24px) saturate(150%)',
+} as const;
 
 /**
  * Glass input/form styling

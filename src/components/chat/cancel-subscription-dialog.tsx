@@ -39,7 +39,7 @@ export function CancelSubscriptionDialog({
   });
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
-      <AlertDialogContent className="max-w-lg">
+      <AlertDialogContent glass={true} className="max-w-lg">
         <AlertDialogHeader>
           <div className="flex items-center gap-3">
             <div className="flex size-10 items-center justify-center rounded-full bg-destructive/10">

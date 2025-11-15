@@ -72,6 +72,7 @@ export function BaseModal({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
+        glass={true}
         className={cn(
           sizeClasses[size],
           'rounded-2xl',

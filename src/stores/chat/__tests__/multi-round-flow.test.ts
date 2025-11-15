@@ -24,6 +24,7 @@ import type { UIMessage } from 'ai';
 
 import { MessageRoles } from '@/api/core/enums';
 import type { ChatMessage } from '@/api/routes/chat/schema';
+import type { DbAssistantMessageMetadata, DbUserMessageMetadata } from '@/db/schemas/chat-metadata';
 import { createTestAssistantMessage, createTestUserMessage } from '@/lib/testing';
 import { chatMessagesToUIMessages } from '@/lib/utils/message-transforms';
 import { getRoundNumber } from '@/lib/utils/metadata';
@@ -32,7 +33,7 @@ import { calculateNextRoundNumber, getCurrentRoundNumber } from '@/lib/utils/rou
 describe('multi-round conversation flow', () => {
   const THREAD_ID = '01KA1DEY81D0X6760M7ZDKZTC5';
 
-  describe('CRITICAL: round number progression', () => {
+  describe('cRITICAL: round number progression', () => {
     /**
      * BUG 1: Second round incorrectly uses r0_p0 instead of r1_p0
      * Root cause: calculateNextRoundNumber() not incrementing properly
@@ -178,7 +179,7 @@ describe('multi-round conversation flow', () => {
     });
   });
 
-  describe('CRITICAL: message ID and metadata consistency', () => {
+  describe('cRITICAL: message ID and metadata consistency', () => {
     /**
      * BUG 2: Message ID says r0_p0 but metadata has roundNumber: 1
      * Root cause: Message ID generation and metadata assignment out of sync
@@ -212,26 +213,29 @@ describe('multi-round conversation flow', () => {
       ];
 
       // Parse round from message ID and verify it matches metadata
-      messages.forEach((msg) => {
-        if (msg.role === MessageRoles.ASSISTANT && msg.id.includes('_r')) {
+      const assistantMessagesWithRound = messages
+        .filter(msg => msg.role === MessageRoles.ASSISTANT && msg.id.includes('_r'))
+        .map((msg) => {
           const idMatch = msg.id.match(/_r(\d+)_/);
-          if (idMatch) {
-            const roundFromId = Number.parseInt(idMatch[1] || '0', 10);
-            const roundFromMetadata = getRoundNumber(msg.metadata);
+          return { msg, idMatch };
+        })
+        .filter(({ idMatch }) => idMatch !== null);
 
-            // CRITICAL ASSERTION: ID and metadata MUST match
-            expect(roundFromMetadata).toBe(roundFromId);
-            expect({
-              messageId: msg.id,
-              roundFromId,
-              roundFromMetadata,
-            }).toEqual({
-              messageId: msg.id,
-              roundFromId,
-              roundFromMetadata: roundFromId, // These must be equal
-            });
-          }
-        }
+      assistantMessagesWithRound.forEach(({ msg, idMatch }) => {
+        const roundFromId = Number.parseInt(idMatch![1] || '0', 10);
+        const roundFromMetadata = getRoundNumber(msg.metadata);
+
+        // CRITICAL ASSERTION: ID and metadata MUST match
+        expect(roundFromMetadata).toBe(roundFromId);
+        expect({
+          messageId: msg.id,
+          roundFromId,
+          roundFromMetadata,
+        }).toEqual({
+          messageId: msg.id,
+          roundFromId,
+          roundFromMetadata: roundFromId, // These must be equal
+        });
       });
     });
 
@@ -269,7 +273,7 @@ describe('multi-round conversation flow', () => {
     });
   });
 
-  describe('CRITICAL: message ordering after server data load', () => {
+  describe('cRITICAL: message ordering after server data load', () => {
     /**
      * BUG 3: Message ordering broken after refresh
      * Root cause: chatMessagesToUIMessages() not preserving or enriching metadata properly
@@ -281,7 +285,7 @@ describe('multi-round conversation flow', () => {
      * The core round number utilities (getCurrentRoundNumber, calculateNextRoundNumber)
      * work correctly - the issue is in the transformation layer.
      */
-    it.skip('should maintain correct message order after transforming server data', () => {
+    it.todo('should maintain correct message order after transforming server data', () => {
       // Simulate server data (ChatMessage format) with proper metadata
       // Real server responses include metadata from database
       const serverMessages: ChatMessage[] = [
@@ -292,9 +296,8 @@ describe('multi-round conversation flow', () => {
           parts: [{ type: 'text', text: 'First question' }],
           roundNumber: 0,
           participantId: null,
-          metadata: { role: MessageRoles.USER, roundNumber: 0 } as any,
+          metadata: { role: MessageRoles.USER, roundNumber: 0 } satisfies DbUserMessageMetadata,
           createdAt: new Date('2024-01-01T00:00:00Z'),
-          updatedAt: new Date('2024-01-01T00:00:00Z'),
         },
         {
           id: `${THREAD_ID}_r0_p0`,
@@ -315,9 +318,8 @@ describe('multi-round conversation flow', () => {
             hasError: false,
             isTransient: false,
             isPartialResponse: false,
-          } as any,
+          } satisfies DbAssistantMessageMetadata,
           createdAt: new Date('2024-01-01T00:00:01Z'),
-          updatedAt: new Date('2024-01-01T00:00:01Z'),
         },
         {
           id: 'user-r1',
@@ -326,9 +328,8 @@ describe('multi-round conversation flow', () => {
           parts: [{ type: 'text', text: 'Second question' }],
           roundNumber: 1,
           participantId: null,
-          metadata: { role: MessageRoles.USER, roundNumber: 1 } as any,
+          metadata: { role: MessageRoles.USER, roundNumber: 1 } satisfies DbUserMessageMetadata,
           createdAt: new Date('2024-01-01T00:00:02Z'),
-          updatedAt: new Date('2024-01-01T00:00:02Z'),
         },
         {
           id: `${THREAD_ID}_r1_p0`,
@@ -349,9 +350,8 @@ describe('multi-round conversation flow', () => {
             hasError: false,
             isTransient: false,
             isPartialResponse: false,
-          } as any,
+          } satisfies DbAssistantMessageMetadata,
           createdAt: new Date('2024-01-01T00:00:03Z'),
-          updatedAt: new Date('2024-01-01T00:00:03Z'),
         },
       ];
 
@@ -376,7 +376,7 @@ describe('multi-round conversation flow', () => {
      * BUG 3 continued: Test with missing metadata from server
      * When metadata is null, chatMessagesToUIMessages enriches from roundNumber field
      */
-    it.skip('should assign correct roundNumbers when server metadata is missing', () => {
+    it.todo('should assign correct roundNumbers when server metadata is missing', () => {
       // Simulate server data with missing metadata (defensive scenario)
       const serverMessages: ChatMessage[] = [
         {
@@ -388,7 +388,6 @@ describe('multi-round conversation flow', () => {
           participantId: null,
           metadata: null, // Missing metadata - function enriches from roundNumber
           createdAt: new Date(),
-          updatedAt: new Date(),
         },
         {
           id: `${THREAD_ID}_r0_p0`,
@@ -399,7 +398,6 @@ describe('multi-round conversation flow', () => {
           participantId: 'p0',
           metadata: null, // Missing metadata - function enriches from roundNumber + participantId
           createdAt: new Date(),
-          updatedAt: new Date(),
         },
         {
           id: 'user-r1',
@@ -410,7 +408,6 @@ describe('multi-round conversation flow', () => {
           participantId: null,
           metadata: null, // Missing metadata
           createdAt: new Date(),
-          updatedAt: new Date(),
         },
         {
           id: `${THREAD_ID}_r1_p0`,
@@ -421,7 +418,6 @@ describe('multi-round conversation flow', () => {
           participantId: 'p0',
           metadata: null, // Missing metadata
           createdAt: new Date(),
-          updatedAt: new Date(),
         },
       ];
 
@@ -447,29 +443,35 @@ describe('multi-round conversation flow', () => {
     /**
      * BUG 3 continued: Test message ordering with 3 rounds
      */
-    it.skip('should maintain order across 3 rounds with multiple participants', () => {
+    it.todo('should maintain order across 3 rounds with multiple participants', () => {
       const serverMessages: ChatMessage[] = [
         // Round 0
-        { id: 'user-r0', threadId: THREAD_ID, role: MessageRoles.USER, parts: [], roundNumber: 0, participantId: null, metadata: { role: MessageRoles.USER, roundNumber: 0 } as any, createdAt: new Date(), updatedAt: new Date() },
-        { id: `${THREAD_ID}_r0_p0`, threadId: THREAD_ID, role: MessageRoles.ASSISTANT, parts: [], roundNumber: 0, participantId: 'p0', metadata: { role: MessageRoles.ASSISTANT, roundNumber: 0, participantId: 'p0', participantIndex: 0, participantRole: null, model: 'gpt-4', finishReason: 'stop', usage: { promptTokens: 100, completionTokens: 50, totalTokens: 150 }, hasError: false, isTransient: false, isPartialResponse: false } as any, createdAt: new Date(), updatedAt: new Date() },
-        { id: `${THREAD_ID}_r0_p1`, threadId: THREAD_ID, role: MessageRoles.ASSISTANT, parts: [], roundNumber: 0, participantId: 'p1', metadata: { role: MessageRoles.ASSISTANT, roundNumber: 0, participantId: 'p1', participantIndex: 1, participantRole: null, model: 'gpt-4', finishReason: 'stop', usage: { promptTokens: 100, completionTokens: 50, totalTokens: 150 }, hasError: false, isTransient: false, isPartialResponse: false } as any, createdAt: new Date(), updatedAt: new Date() },
+        { id: 'user-r0', threadId: THREAD_ID, role: MessageRoles.USER, parts: [], roundNumber: 0, participantId: null, metadata: { role: MessageRoles.USER, roundNumber: 0 } satisfies DbUserMessageMetadata, createdAt: new Date() },
+        { id: `${THREAD_ID}_r0_p0`, threadId: THREAD_ID, role: MessageRoles.ASSISTANT, parts: [], roundNumber: 0, participantId: 'p0', metadata: { role: MessageRoles.ASSISTANT, roundNumber: 0, participantId: 'p0', participantIndex: 0, participantRole: null, model: 'gpt-4', finishReason: 'stop', usage: { promptTokens: 100, completionTokens: 50, totalTokens: 150 }, hasError: false, isTransient: false, isPartialResponse: false } satisfies DbAssistantMessageMetadata, createdAt: new Date() },
+        { id: `${THREAD_ID}_r0_p1`, threadId: THREAD_ID, role: MessageRoles.ASSISTANT, parts: [], roundNumber: 0, participantId: 'p1', metadata: { role: MessageRoles.ASSISTANT, roundNumber: 0, participantId: 'p1', participantIndex: 1, participantRole: null, model: 'gpt-4', finishReason: 'stop', usage: { promptTokens: 100, completionTokens: 50, totalTokens: 150 }, hasError: false, isTransient: false, isPartialResponse: false } satisfies DbAssistantMessageMetadata, createdAt: new Date() },
         // Round 1
-        { id: 'user-r1', threadId: THREAD_ID, role: MessageRoles.USER, parts: [], roundNumber: 1, participantId: null, metadata: { role: MessageRoles.USER, roundNumber: 1 } as any, createdAt: new Date(), updatedAt: new Date() },
-        { id: `${THREAD_ID}_r1_p0`, threadId: THREAD_ID, role: MessageRoles.ASSISTANT, parts: [], roundNumber: 1, participantId: 'p0', metadata: { role: MessageRoles.ASSISTANT, roundNumber: 1, participantId: 'p0', participantIndex: 0, participantRole: null, model: 'gpt-4', finishReason: 'stop', usage: { promptTokens: 100, completionTokens: 50, totalTokens: 150 }, hasError: false, isTransient: false, isPartialResponse: false } as any, createdAt: new Date(), updatedAt: new Date() },
-        { id: `${THREAD_ID}_r1_p1`, threadId: THREAD_ID, role: MessageRoles.ASSISTANT, parts: [], roundNumber: 1, participantId: 'p1', metadata: { role: MessageRoles.ASSISTANT, roundNumber: 1, participantId: 'p1', participantIndex: 1, participantRole: null, model: 'gpt-4', finishReason: 'stop', usage: { promptTokens: 100, completionTokens: 50, totalTokens: 150 }, hasError: false, isTransient: false, isPartialResponse: false } as any, createdAt: new Date(), updatedAt: new Date() },
+        { id: 'user-r1', threadId: THREAD_ID, role: MessageRoles.USER, parts: [], roundNumber: 1, participantId: null, metadata: { role: MessageRoles.USER, roundNumber: 1 } satisfies DbUserMessageMetadata, createdAt: new Date() },
+        { id: `${THREAD_ID}_r1_p0`, threadId: THREAD_ID, role: MessageRoles.ASSISTANT, parts: [], roundNumber: 1, participantId: 'p0', metadata: { role: MessageRoles.ASSISTANT, roundNumber: 1, participantId: 'p0', participantIndex: 0, participantRole: null, model: 'gpt-4', finishReason: 'stop', usage: { promptTokens: 100, completionTokens: 50, totalTokens: 150 }, hasError: false, isTransient: false, isPartialResponse: false } satisfies DbAssistantMessageMetadata, createdAt: new Date() },
+        { id: `${THREAD_ID}_r1_p1`, threadId: THREAD_ID, role: MessageRoles.ASSISTANT, parts: [], roundNumber: 1, participantId: 'p1', metadata: { role: MessageRoles.ASSISTANT, roundNumber: 1, participantId: 'p1', participantIndex: 1, participantRole: null, model: 'gpt-4', finishReason: 'stop', usage: { promptTokens: 100, completionTokens: 50, totalTokens: 150 }, hasError: false, isTransient: false, isPartialResponse: false } satisfies DbAssistantMessageMetadata, createdAt: new Date() },
         // Round 2
-        { id: 'user-r2', threadId: THREAD_ID, role: MessageRoles.USER, parts: [], roundNumber: 2, participantId: null, metadata: { role: MessageRoles.USER, roundNumber: 2 } as any, createdAt: new Date(), updatedAt: new Date() },
-        { id: `${THREAD_ID}_r2_p0`, threadId: THREAD_ID, role: MessageRoles.ASSISTANT, parts: [], roundNumber: 2, participantId: 'p0', metadata: { role: MessageRoles.ASSISTANT, roundNumber: 2, participantId: 'p0', participantIndex: 0, participantRole: null, model: 'gpt-4', finishReason: 'stop', usage: { promptTokens: 100, completionTokens: 50, totalTokens: 150 }, hasError: false, isTransient: false, isPartialResponse: false } as any, createdAt: new Date(), updatedAt: new Date() },
-        { id: `${THREAD_ID}_r2_p1`, threadId: THREAD_ID, role: MessageRoles.ASSISTANT, parts: [], roundNumber: 2, participantId: 'p1', metadata: { role: MessageRoles.ASSISTANT, roundNumber: 2, participantId: 'p1', participantIndex: 1, participantRole: null, model: 'gpt-4', finishReason: 'stop', usage: { promptTokens: 100, completionTokens: 50, totalTokens: 150 }, hasError: false, isTransient: false, isPartialResponse: false } as any, createdAt: new Date(), updatedAt: new Date() },
+        { id: 'user-r2', threadId: THREAD_ID, role: MessageRoles.USER, parts: [], roundNumber: 2, participantId: null, metadata: { role: MessageRoles.USER, roundNumber: 2 } satisfies DbUserMessageMetadata, createdAt: new Date() },
+        { id: `${THREAD_ID}_r2_p0`, threadId: THREAD_ID, role: MessageRoles.ASSISTANT, parts: [], roundNumber: 2, participantId: 'p0', metadata: { role: MessageRoles.ASSISTANT, roundNumber: 2, participantId: 'p0', participantIndex: 0, participantRole: null, model: 'gpt-4', finishReason: 'stop', usage: { promptTokens: 100, completionTokens: 50, totalTokens: 150 }, hasError: false, isTransient: false, isPartialResponse: false } satisfies DbAssistantMessageMetadata, createdAt: new Date() },
+        { id: `${THREAD_ID}_r2_p1`, threadId: THREAD_ID, role: MessageRoles.ASSISTANT, parts: [], roundNumber: 2, participantId: 'p1', metadata: { role: MessageRoles.ASSISTANT, roundNumber: 2, participantId: 'p1', participantIndex: 1, participantRole: null, model: 'gpt-4', finishReason: 'stop', usage: { promptTokens: 100, completionTokens: 50, totalTokens: 150 }, hasError: false, isTransient: false, isPartialResponse: false } satisfies DbAssistantMessageMetadata, createdAt: new Date() },
       ];
 
       const uiMessages = chatMessagesToUIMessages(serverMessages);
 
       // Verify exact order
       const expectedOrder = [
-        'user-r0', `${THREAD_ID}_r0_p0`, `${THREAD_ID}_r0_p1`,
-        'user-r1', `${THREAD_ID}_r1_p0`, `${THREAD_ID}_r1_p1`,
-        'user-r2', `${THREAD_ID}_r2_p0`, `${THREAD_ID}_r2_p1`,
+        'user-r0',
+        `${THREAD_ID}_r0_p0`,
+        `${THREAD_ID}_r0_p1`,
+        'user-r1',
+        `${THREAD_ID}_r1_p0`,
+        `${THREAD_ID}_r1_p1`,
+        'user-r2',
+        `${THREAD_ID}_r2_p0`,
+        `${THREAD_ID}_r2_p1`,
       ];
 
       expect(uiMessages.map(m => m.id)).toEqual(expectedOrder);
@@ -483,7 +485,7 @@ describe('multi-round conversation flow', () => {
     });
   });
 
-  describe('CRITICAL: getCurrentRoundNumber calculation', () => {
+  describe('cRITICAL: getCurrentRoundNumber calculation', () => {
     /**
      * Test that getCurrentRoundNumber returns correct value for each round
      */
@@ -515,7 +517,7 @@ describe('multi-round conversation flow', () => {
     });
   });
 
-  describe('CRITICAL: calculateNextRoundNumber calculation', () => {
+  describe('cRITICAL: calculateNextRoundNumber calculation', () => {
     /**
      * Test that calculateNextRoundNumber returns correct next round
      */
@@ -556,7 +558,7 @@ describe('multi-round conversation flow', () => {
     });
   });
 
-  describe('EDGE CASES: comprehensive round number scenarios', () => {
+  describe('eDGE CASES: comprehensive round number scenarios', () => {
     it('should handle round number edge cases correctly', () => {
       // Test case 1: No messages
       expect(getCurrentRoundNumber([])).toBe(0);
@@ -590,7 +592,7 @@ describe('multi-round conversation flow', () => {
     });
   });
 
-  describe('REGRESSION: specific bug scenarios from user reports', () => {
+  describe('rEGRESSION: specific bug scenarios from user reports', () => {
     /**
      * User reported: Analysis had roundNumber: 1 when it should be 0 for first round
      * This test verifies first round uses r0, second uses r1, etc.
@@ -678,34 +680,41 @@ describe('multi-round conversation flow', () => {
     /**
      * User reported: After refresh, message ID was r0_p0 but metadata had roundNumber: 1
      */
-    it.skip('should NOT have mismatched ID and metadata after refresh (user bug report)', () => {
+    it.todo('should NOT have mismatched ID and metadata after refresh (user bug report)', () => {
       // Simulate what comes from server after refresh with proper metadata
       const serverMessages: ChatMessage[] = [
-        { id: 'user-r0', threadId: THREAD_ID, role: MessageRoles.USER, parts: [], roundNumber: 0, participantId: null, metadata: { roundNumber: 0, role: MessageRoles.USER } as any, createdAt: new Date(), updatedAt: new Date() },
-        { id: `${THREAD_ID}_r0_p0`, threadId: THREAD_ID, role: MessageRoles.ASSISTANT, parts: [], roundNumber: 0, participantId: 'p0', metadata: { roundNumber: 0, role: MessageRoles.ASSISTANT, participantId: 'p0', participantIndex: 0, participantRole: null, model: 'gpt-4', finishReason: 'stop', usage: { promptTokens: 100, completionTokens: 50, totalTokens: 150 }, hasError: false, isTransient: false, isPartialResponse: false } as any, createdAt: new Date(), updatedAt: new Date() },
-        { id: 'user-r1', threadId: THREAD_ID, role: MessageRoles.USER, parts: [], roundNumber: 1, participantId: null, metadata: { roundNumber: 1, role: MessageRoles.USER } as any, createdAt: new Date(), updatedAt: new Date() },
-        { id: `${THREAD_ID}_r1_p0`, threadId: THREAD_ID, role: MessageRoles.ASSISTANT, parts: [], roundNumber: 1, participantId: 'p0', metadata: { roundNumber: 1, role: MessageRoles.ASSISTANT, participantId: 'p0', participantIndex: 0, participantRole: null, model: 'gpt-4', finishReason: 'stop', usage: { promptTokens: 100, completionTokens: 50, totalTokens: 150 }, hasError: false, isTransient: false, isPartialResponse: false } as any, createdAt: new Date(), updatedAt: new Date() },
+        { id: 'user-r0', threadId: THREAD_ID, role: MessageRoles.USER, parts: [], roundNumber: 0, participantId: null, metadata: { roundNumber: 0, role: MessageRoles.USER } satisfies DbUserMessageMetadata, createdAt: new Date() },
+        { id: `${THREAD_ID}_r0_p0`, threadId: THREAD_ID, role: MessageRoles.ASSISTANT, parts: [], roundNumber: 0, participantId: 'p0', metadata: { roundNumber: 0, role: MessageRoles.ASSISTANT, participantId: 'p0', participantIndex: 0, participantRole: null, model: 'gpt-4', finishReason: 'stop', usage: { promptTokens: 100, completionTokens: 50, totalTokens: 150 }, hasError: false, isTransient: false, isPartialResponse: false } satisfies DbAssistantMessageMetadata, createdAt: new Date() },
+        { id: 'user-r1', threadId: THREAD_ID, role: MessageRoles.USER, parts: [], roundNumber: 1, participantId: null, metadata: { roundNumber: 1, role: MessageRoles.USER } satisfies DbUserMessageMetadata, createdAt: new Date() },
+        { id: `${THREAD_ID}_r1_p0`, threadId: THREAD_ID, role: MessageRoles.ASSISTANT, parts: [], roundNumber: 1, participantId: 'p0', metadata: { roundNumber: 1, role: MessageRoles.ASSISTANT, participantId: 'p0', participantIndex: 0, participantRole: null, model: 'gpt-4', finishReason: 'stop', usage: { promptTokens: 100, completionTokens: 50, totalTokens: 150 }, hasError: false, isTransient: false, isPartialResponse: false } satisfies DbAssistantMessageMetadata, createdAt: new Date() },
       ];
 
       const uiMessages = chatMessagesToUIMessages(serverMessages);
 
       // Check EVERY message for ID-metadata consistency
-      uiMessages.forEach((msg) => {
-        if (msg.role === MessageRoles.ASSISTANT && msg.id.includes('_r')) {
+      const assistantMessagesWithRound = uiMessages
+        .filter(msg => msg.role === MessageRoles.ASSISTANT && msg.id.includes('_r'))
+        .map((msg) => {
           const idMatch = msg.id.match(/_r(\d+)_/);
-          if (idMatch) {
-            const roundFromId = Number.parseInt(idMatch[1] || '0', 10);
-            const roundFromMetadata = getRoundNumber(msg.metadata);
+          return { msg, idMatch };
+        })
+        .filter(({ idMatch }) => idMatch !== null);
 
-            // CRITICAL: These must match
-            expect(roundFromMetadata).toBe(roundFromId);
+      assistantMessagesWithRound.forEach(({ msg, idMatch }) => {
+        const roundFromId = Number.parseInt(idMatch![1] || '0', 10);
+        const roundFromMetadata = getRoundNumber(msg.metadata);
 
-            // EXPLICIT: If ID says r1, metadata CANNOT say 0
-            if (roundFromId === 1) {
-              expect(roundFromMetadata).not.toBe(0);
-            }
-          }
-        }
+        // CRITICAL: These must match
+        expect(roundFromMetadata).toBe(roundFromId);
+
+        // EXPLICIT: If ID says r1, metadata CANNOT say 0
+        const round1Messages = assistantMessagesWithRound
+          .filter(({ idMatch }) => Number.parseInt(idMatch![1] || '0', 10) === 1);
+
+        round1Messages.forEach(({ msg }) => {
+          const roundFromMetadata = getRoundNumber(msg.metadata);
+          expect(roundFromMetadata).not.toBe(0);
+        });
       });
 
       // Specific check for round 1 message

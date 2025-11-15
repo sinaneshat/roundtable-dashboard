@@ -155,7 +155,7 @@ function SearchResultItem({ result, index, totalCount }: SearchResultItemProps) 
       {/* Iframe Dialog for scraped content */}
       {hasFullContent && (
         <Dialog open={showIframe} onOpenChange={setShowIframe}>
-          <DialogContent className="max-w-6xl max-h-[90vh] p-0">
+          <DialogContent glass={true} className="max-w-6xl max-h-[90vh] p-0">
             <DialogHeader className="p-6 pb-0">
               <DialogTitle className="text-base">{result.title}</DialogTitle>
               <DialogDescription className="text-xs">{result.url}</DialogDescription>
