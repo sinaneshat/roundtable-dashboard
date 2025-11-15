@@ -1,6 +1,5 @@
 'use client';
 
-import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 
 import { Logo } from '@/components/logo';
@@ -16,69 +15,78 @@ export default function AuthLayout({ children }: AuthLayoutProps) {
 
   return (
     <div className="relative min-h-svh">
-      {/* Pulsating radial glow background - matching dashboard */}
-      <div className="fixed inset-0 -z-10 flex items-center justify-center pointer-events-none overflow-hidden">
-        <RadialGlow
-          size={800}
-          offsetY={0}
-          duration={18}
-          animate={true}
-          useLogoColors={true}
-        />
+      {/* Pulsating radial glow background - full screen coverage */}
+      <div className="fixed inset-0 -z-10 pointer-events-none overflow-hidden">
+        <div className="absolute inset-0 flex items-center justify-center">
+          {/* Mobile portrait (<640px wide) - 2.5x coverage */}
+          <div className="block sm:hidden">
+            <RadialGlow
+              size={1600}
+              offsetY={0}
+              duration={18}
+              animate={true}
+              useLogoColors={true}
+            />
+          </div>
+          {/* Tablet (640px-1024px) - 2x coverage */}
+          <div className="hidden sm:block lg:hidden">
+            <RadialGlow
+              size={2200}
+              offsetY={0}
+              duration={18}
+              animate={true}
+              useLogoColors={true}
+            />
+          </div>
+          {/* Desktop (1024px-1920px) - 1.8x coverage */}
+          <div className="hidden lg:block 2xl:hidden">
+            <RadialGlow
+              size={3200}
+              offsetY={0}
+              duration={18}
+              animate={true}
+              useLogoColors={true}
+            />
+          </div>
+          {/* Large desktop (>1920px) - 1.5x coverage */}
+          <div className="hidden 2xl:block">
+            <RadialGlow
+              size={4500}
+              offsetY={0}
+              duration={18}
+              animate={true}
+              useLogoColors={true}
+            />
+          </div>
+        </div>
       </div>
 
       {/* Main content container */}
-      <div className="relative z-10 flex min-h-svh flex-col items-center justify-center gap-8 p-6 md:p-10">
+      <div className="relative z-10 flex min-h-svh flex-col items-center justify-center gap-6 sm:gap-8 p-4 sm:p-6 md:p-10">
         {/* Animated content wrapper */}
-        <div className="flex w-full max-w-sm flex-col gap-8 animate-fade-in-up">
+        <div className="flex w-full max-w-sm flex-col gap-6 sm:gap-8 animate-fade-in-up">
           {/* Logo section with animation */}
-          <div className="flex flex-col items-center gap-2 animate-fade-in">
-            <Link
-              href="/"
-              className="group flex items-center gap-3 transition-transform duration-300 hover:scale-105"
-            >
+          <div className="flex flex-col items-center gap-4 animate-fade-in">
+            <div className="flex items-center gap-3 sm:gap-4">
               <Logo
-                size="md"
-                variant="full"
-                className="transition-all duration-500 ease-out"
+                size="lg"
+                variant="icon"
+                className="transition-all duration-500 ease-out w-12 h-12 sm:w-16 sm:h-16 md:w-20 md:h-20"
               />
-            </Link>
-            <div className="flex flex-col items-center gap-1 text-center">
-              <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-                {t('auth.layout.welcomeTo', { brand: BRAND.name })}
-              </h1>
-              <p className="text-sm text-muted-foreground">
-                {t('auth.layout.subtitle')}
-              </p>
+              <div className="flex flex-col gap-0.5 sm:gap-1">
+                <span className="text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight text-foreground">
+                  {BRAND.displayName}
+                </span>
+                <p className="text-sm sm:text-base text-muted-foreground">
+                  {t('auth.layout.subtitle')}
+                </p>
+              </div>
             </div>
           </div>
 
           {/* Auth form content */}
           <div className="animate-fade-in-up delay-200">
             {children}
-          </div>
-        </div>
-
-        {/* Enhanced footer with animations */}
-        <div className="w-full max-w-sm animate-fade-in delay-500">
-          <div className="space-y-4 text-center text-xs text-muted-foreground">
-            <div className="flex flex-wrap justify-center gap-x-4 gap-y-2">
-              <Link
-                href={BRAND.legal.terms}
-                className="transition-colors hover:text-primary underline underline-offset-4"
-              >
-                {t('legal.terms.title')}
-              </Link>
-              <Link
-                href={BRAND.legal.privacy}
-                className="transition-colors hover:text-primary underline underline-offset-4"
-              >
-                {t('legal.privacy.title')}
-              </Link>
-            </div>
-            <p className="opacity-70">
-              {BRAND.venture}
-            </p>
           </div>
         </div>
       </div>

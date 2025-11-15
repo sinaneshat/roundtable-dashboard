@@ -260,3 +260,172 @@ export function setupLocalStorageMock(): void {
     writable: true,
   });
 }
+
+// ============================================================================
+// Web Search Test Helpers
+// ============================================================================
+
+/**
+ * Creates a mock pre-search record for testing
+ * ✅ ENUM PATTERN: Uses AnalysisStatuses enum for status field
+ */
+export function createMockPreSearch(data: {
+  id: string;
+  threadId: string;
+  roundNumber: number;
+  status: 'pending' | 'streaming' | 'complete' | 'failed';
+  userQuery: string;
+  searchData?: {
+    queries?: Array<{
+      query: string;
+      rationale: string;
+      searchDepth: 'basic' | 'advanced';
+      index: number;
+      total: number;
+    }>;
+    results?: Array<{
+      query: string;
+      answer: string;
+      results: Array<{
+        title: string;
+        url: string;
+        content: string;
+        score: number;
+      }>;
+      responseTime: number;
+    }>;
+  };
+  createdAt?: Date;
+}): {
+  id: string;
+  threadId: string;
+  roundNumber: number;
+  status: 'pending' | 'streaming' | 'complete' | 'failed';
+  userQuery: string;
+  searchData: typeof data.searchData;
+  errorMessage: null;
+  createdAt: Date;
+} {
+  return {
+    id: data.id,
+    threadId: data.threadId,
+    roundNumber: data.roundNumber,
+    status: data.status,
+    userQuery: data.userQuery,
+    searchData: data.searchData || undefined,
+    errorMessage: null,
+    createdAt: data.createdAt || new Date(),
+  };
+}
+
+/**
+ * Creates mock search data payload for testing
+ */
+export function createMockSearchData(options?: {
+  numQueries?: number;
+  includeResults?: boolean;
+}): {
+  queries: Array<{
+    query: string;
+    rationale: string;
+    searchDepth: 'basic' | 'advanced';
+    index: number;
+    total: number;
+  }>;
+  results: Array<{
+    query: string;
+    answer: string;
+    results: Array<{
+      title: string;
+      url: string;
+      content: string;
+      score: number;
+    }>;
+    responseTime: number;
+  }>;
+} {
+  const numQueries = options?.numQueries || 2;
+  const includeResults = options?.includeResults ?? true;
+
+  const queries = Array.from({ length: numQueries }, (_, i) => ({
+    query: `Test query ${i + 1}`,
+    rationale: `Rationale for query ${i + 1}`,
+    searchDepth: (i % 2 === 0 ? 'basic' : 'advanced') as 'basic' | 'advanced',
+    index: i,
+    total: numQueries,
+  }));
+
+  const results = includeResults
+    ? queries.map((q, i) => ({
+        query: q.query,
+        answer: `Summary answer for ${q.query}`,
+        results: [
+          {
+            title: `Result ${i + 1} - Article 1`,
+            url: `https://example.com/article${i + 1}`,
+            content: `Content for article ${i + 1}`,
+            score: 0.95,
+          },
+          {
+            title: `Result ${i + 1} - Article 2`,
+            url: `https://example.com/article${i + 2}`,
+            content: `More content for article ${i + 2}`,
+            score: 0.85,
+          },
+        ],
+        responseTime: 1200 + i * 100,
+      }))
+    : [];
+
+  return { queries, results };
+}
+
+/**
+ * Mock fetch for SSE streaming
+ * Creates a ReadableStream that emits SSE events
+ */
+export function mockFetchSSE(events: Array<{ event: string; data: unknown }>): Response {
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream({
+    start(controller) {
+      events.forEach((evt) => {
+        const eventLine = `event: ${evt.event}\n`;
+        const dataLine = `data: ${JSON.stringify(evt.data)}\n\n`;
+        controller.enqueue(encoder.encode(eventLine));
+        controller.enqueue(encoder.encode(dataLine));
+      });
+      controller.close();
+    },
+  });
+
+  return new Response(stream, {
+    headers: { 'Content-Type': 'text/event-stream' },
+    status: 200,
+  });
+}
+
+/**
+ * Wait for pre-search to complete (status = 'complete')
+ * Useful for integration tests
+ */
+export async function waitForSearchComplete(
+  getStatus: () => 'pending' | 'streaming' | 'complete' | 'failed',
+  timeout = 5000,
+): Promise<void> {
+  const startTime = Date.now();
+  return new Promise<void>((resolve, reject) => {
+    const interval = setInterval(() => {
+      const status = getStatus();
+      if (status === 'complete') {
+        clearInterval(interval);
+        resolve();
+      } else if (status === 'failed') {
+        clearInterval(interval);
+        reject(new Error('Search failed'));
+      } else if (Date.now() - startTime > timeout) {
+        clearInterval(interval);
+        reject(new Error('Search timeout'));
+      }
+    }, 100);
+  });
+}

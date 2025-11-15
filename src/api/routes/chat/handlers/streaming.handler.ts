@@ -107,19 +107,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
     }
 
     // =========================================================================
-    // STEP 3: Handle regeneration (delete old round data)
-    // =========================================================================
-    if (regenerateRound) {
-      await handleRoundRegeneration({
-        threadId,
-        regenerateRound,
-        participantIndex: participantIndex ?? DEFAULT_PARTICIPANT_INDEX,
-        db,
-      });
-    }
-
-    // =========================================================================
-    // STEP 4: Calculate round number
+    // STEP 3: Calculate round number (needed for pre-search and regeneration)
     // =========================================================================
     const roundResult = await calculateRoundNumber({
       threadId,
@@ -132,29 +120,34 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
     const currentRoundNumber = roundResult.roundNumber;
 
     // =========================================================================
-    // STEP 4.5: Create PENDING pre-search record if web search enabled
+    // STEP 3.5: ✅ CRITICAL FIX - Create PENDING pre-search BEFORE streaming
     // =========================================================================
-    // ✅ FIX: Create pre-search record for subsequent rounds (not just round 0)
-    // Only create if:
-    // 1. Web search is enabled on thread (or being enabled via providedEnableWebSearch)
+    // BUG FIX: Pre-search record must exist BEFORE streaming orchestration starts
+    //
+    // FLOW:
+    // 1. Calculate round number (STEP 3)
+    // 2. Create PENDING pre-search record (THIS STEP)
+    // 3. Handle regeneration (STEP 4)
+    // 4. Streaming orchestration starts (STEP 6+)
+    //
+    // Why this order matters:
+    // - Frontend PreSearchOrchestrator expects record to exist before streaming
+    // - Regeneration may delete existing pre-search, so we create fresh PENDING record first
+    // - Record creation is idempotent (checks for existing record)
+    //
+    // Conditions:
+    // 1. Web search is enabled (thread.enableWebSearch OR providedEnableWebSearch)
     // 2. This is the first participant (participantIndex === 0)
     // 3. This is NOT a regeneration (regeneration clears existing pre-search)
     // 4. Pre-search record doesn't already exist for this round
-    //
-    // ✅ CRITICAL FIX: Use DEFAULT_PARTICIPANT_INDEX constant instead of hardcoded 0
-    // This ensures consistency with participant index validation throughout the codebase
-    //
-    // ✅ MID-CONVERSATION WEB SEARCH FIX: Check providedEnableWebSearch FIRST
-    // If user is enabling web search mid-conversation, providedEnableWebSearch will be true
-    // but thread.enableWebSearch is still false (not updated yet, that happens in STEP 5.5)
-    // So we need to check: providedEnableWebSearch ?? thread.enableWebSearch
     const isFirstParticipant = (participantIndex ?? DEFAULT_PARTICIPANT_INDEX) === DEFAULT_PARTICIPANT_INDEX;
     const effectiveWebSearchEnabled = providedEnableWebSearch ?? thread.enableWebSearch;
 
-    // ✅ CRITICAL BUG FIX: Ensure pre-search is created for ALL rounds when web search is enabled
-    // Previous condition was correct, but we add defensive checks and better error handling
     if (effectiveWebSearchEnabled && isFirstParticipant && !regenerateRound) {
       try {
+        // Log pre-search creation attempt for debugging
+        console.log(`[PreSearch] Attempting to create PENDING record for round ${currentRoundNumber} (thread: ${threadId})`);
+
         const existingPreSearch = await db.query.chatPreSearch.findFirst({
           where: and(
             eq(tables.chatPreSearch.threadId, threadId),
@@ -166,8 +159,6 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
           const { ulid } = await import('ulid');
           const preSearchId = ulid();
 
-          // ✅ BUG FIX: Use AnalysisStatuses.PENDING instead of hardcoded string
-          // Ensures consistency with enum values used throughout the codebase
           await db.insert(tables.chatPreSearch).values({
             id: preSearchId,
             threadId,
@@ -177,27 +168,30 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
             createdAt: new Date(),
           });
 
-          // ✅ DEBUG LOGGING: Log successful pre-search creation for debugging
-          console.error(`[PreSearch] Created PENDING pre-search for round ${currentRoundNumber} (ID: ${preSearchId})`);
+          console.log(`[PreSearch] ✅ Created PENDING pre-search for round ${currentRoundNumber} (ID: ${preSearchId})`);
         } else {
-          // ✅ DEBUG LOGGING: Log when pre-search already exists
-          console.error(`[PreSearch] Pre-search already exists for round ${currentRoundNumber} (ID: ${existingPreSearch.id}, Status: ${existingPreSearch.status})`);
+          console.log(`[PreSearch] ℹ️ Pre-search already exists for round ${currentRoundNumber} (status: ${existingPreSearch.status})`);
         }
       } catch (error) {
-        // ✅ BUG FIX: Don't let pre-search creation errors break the streaming flow
-        // Log the error but continue with participant streaming
-        console.error(`[PreSearch] Failed to create pre-search for round ${currentRoundNumber}:`, error);
-        // Continue execution - don't throw
+        // ✅ Non-blocking: Don't let pre-search creation errors break streaming
+        // But DO log the error for debugging
+        console.error(`[PreSearch] ❌ Failed to create pre-search for round ${currentRoundNumber}:`, error);
       }
     } else {
-      // ✅ DEBUG LOGGING: Log why pre-search wasn't created
-      if (!effectiveWebSearchEnabled) {
-        console.error(`[PreSearch] Skipping pre-search creation - web search disabled (thread: ${thread.enableWebSearch}, provided: ${providedEnableWebSearch})`);
-      } else if (!isFirstParticipant) {
-        console.error(`[PreSearch] Skipping pre-search creation - not first participant (index: ${participantIndex})`);
-      } else if (regenerateRound) {
-        console.error(`[PreSearch] Skipping pre-search creation - regenerating round ${regenerateRound}`);
-      }
+      // Log why pre-search creation was skipped
+      console.log(`[PreSearch] ⏭️  Skipping pre-search creation: webSearch=${effectiveWebSearchEnabled}, firstParticipant=${isFirstParticipant}, notRegeneration=${!regenerateRound}`);
+    }
+
+    // =========================================================================
+    // STEP 4: Handle regeneration (delete old round data)
+    // =========================================================================
+    if (regenerateRound) {
+      await handleRoundRegeneration({
+        threadId,
+        regenerateRound,
+        participantIndex: participantIndex ?? DEFAULT_PARTICIPANT_INDEX,
+        db,
+      });
     }
 
     // =========================================================================
@@ -276,7 +270,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
     }
 
     // =========================================================================
-    // STEP 1.6: ✅ LOAD PARTICIPANTS (After Persistence)
+    // STEP 7: Load participants (after persistence)
     // =========================================================================
     const { participants, participant } = await loadParticipantConfiguration({
       threadId,
@@ -287,7 +281,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
     });
 
     // =========================================================================
-    // STEP 3: Load Previous Messages and Prepare for Streaming
+    // STEP 8: Load Previous Messages and Prepare for Streaming
     // =========================================================================
     const previousDbMessages = await db.query.chatMessage.findMany({
       where: eq(tables.chatMessage.threadId, threadId),
@@ -302,7 +296,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
     const previousMessages = await chatMessagesToUIMessages(previousDbMessages);
 
     // =========================================================================
-    // STEP 4: Save New User Message (ONLY first participant)
+    // STEP 9: Save New User Message (ONLY first participant)
     // =========================================================================
     if ((message as UIMessage).role === 'user' && participantIndex === 0) {
       const lastMessage = message as UIMessage;
@@ -362,7 +356,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
     }
 
     // =========================================================================
-    // STEP 5: Initialize OpenRouter and Prepare Messages
+    // STEP 10: Initialize OpenRouter and Prepare Messages
     // =========================================================================
     initializeOpenRouter(c.env);
     const client = openRouterService.getClient();
@@ -410,7 +404,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
     );
 
     // =========================================================================
-    // STEP 7: ✅ OFFICIAL AI SDK v5 STREAMING PATTERN
+    // STEP 11: ✅ OFFICIAL AI SDK v5 STREAMING PATTERN
     // Reference: https://sdk.vercel.ai/docs/ai-sdk-core/generating-text#stream-text
     // Reference: https://sdk.vercel.ai/docs/ai-sdk-core/error-handling
     // =========================================================================

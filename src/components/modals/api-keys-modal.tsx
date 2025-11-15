@@ -103,55 +103,61 @@ export function ApiKeysModal({ open, onOpenChange }: ApiKeysModalProps) {
                 {/* Documentation Links */}
                 <div className="grid gap-2">
                   {/* Interactive Scalar Docs */}
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-auto justify-start text-left"
-                    onClick={() => window.open('/api/v1/scalar', '_blank')}
-                  >
-                    <div className="flex items-center gap-3 w-full">
-                      <FileText className="size-4 shrink-0 text-primary" />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium">{t('apiKeys.docs.links.interactive.title')}</p>
-                        <p className="text-xs text-muted-foreground">{t('apiKeys.docs.links.interactive.description')}</p>
+                  <div className="rounded-md border border-white/10 shadow-lg bg-black/40">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-auto justify-start text-left w-full"
+                      onClick={() => window.open('/api/v1/scalar', '_blank')}
+                    >
+                      <div className="flex items-center gap-3 w-full">
+                        <FileText className="size-4 shrink-0 text-primary" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium">{t('apiKeys.docs.links.interactive.title')}</p>
+                          <p className="text-xs text-muted-foreground">{t('apiKeys.docs.links.interactive.description')}</p>
+                        </div>
+                        <ExternalLink className="size-3 shrink-0 text-muted-foreground" />
                       </div>
-                      <ExternalLink className="size-3 shrink-0 text-muted-foreground" />
-                    </div>
-                  </Button>
+                    </Button>
+                  </div>
 
                   {/* OpenAPI JSON Spec */}
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-auto justify-start text-left"
-                    onClick={() => window.open('/api/v1/doc', '_blank')}
-                  >
-                    <div className="flex items-center gap-3 w-full">
-                      <FileJson className="size-4 shrink-0 text-primary" />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium">{t('apiKeys.docs.links.openapi.title')}</p>
-                        <p className="text-xs text-muted-foreground">{t('apiKeys.docs.links.openapi.description')}</p>
+                  <div className="rounded-md border border-white/10 shadow-lg bg-black/40">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-auto justify-start text-left w-full"
+                      onClick={() => window.open('/api/v1/doc', '_blank')}
+                    >
+                      <div className="flex items-center gap-3 w-full">
+                        <FileJson className="size-4 shrink-0 text-primary" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium">{t('apiKeys.docs.links.openapi.title')}</p>
+                          <p className="text-xs text-muted-foreground">{t('apiKeys.docs.links.openapi.description')}</p>
+                        </div>
+                        <ExternalLink className="size-3 shrink-0 text-muted-foreground" />
                       </div>
-                      <ExternalLink className="size-3 shrink-0 text-muted-foreground" />
-                    </div>
-                  </Button>
+                    </Button>
+                  </div>
 
                   {/* LLM-Friendly Markdown */}
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-auto justify-start text-left"
-                    onClick={() => window.open('/api/v1/llms.txt', '_blank')}
-                  >
-                    <div className="flex items-center gap-3 w-full">
-                      <FileText className="size-4 shrink-0 text-primary" />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium">{t('apiKeys.docs.links.llmText.title')}</p>
-                        <p className="text-xs text-muted-foreground">{t('apiKeys.docs.links.llmText.description')}</p>
+                  <div className="rounded-md border border-white/10 shadow-lg bg-black/40">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-auto justify-start text-left w-full"
+                      onClick={() => window.open('/api/v1/llms.txt', '_blank')}
+                    >
+                      <div className="flex items-center gap-3 w-full">
+                        <FileText className="size-4 shrink-0 text-primary" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium">{t('apiKeys.docs.links.llmText.title')}</p>
+                          <p className="text-xs text-muted-foreground">{t('apiKeys.docs.links.llmText.description')}</p>
+                        </div>
+                        <ExternalLink className="size-3 shrink-0 text-muted-foreground" />
                       </div>
-                      <ExternalLink className="size-3 shrink-0 text-muted-foreground" />
-                    </div>
-                  </Button>
+                    </Button>
+                  </div>
                 </div>
               </div>
             </AccordionContent>

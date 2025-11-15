@@ -6,7 +6,6 @@ import { useTranslations } from 'next-intl';
 import * as React from "react"
 
 import { cn } from "@/lib/ui/cn"
-import { glassCard, glassCardStyles, glassOverlay, glassOverlayStyles } from "@/lib/ui/glassmorphism"
 
 function Dialog({
   ...props
@@ -46,10 +45,10 @@ function DialogOverlay({
       data-slot="dialog-overlay"
       className={cn(
         "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 fixed inset-0 z-50",
-        glass ? glassOverlay : "bg-black/50",
+        glass ? "bg-black/60" : "bg-black/50",
         className
       )}
-      style={glass ? glassOverlayStyles : undefined}
+      style={glass ? { backdropFilter: 'blur(25px)', WebkitBackdropFilter: 'blur(25px)' } : undefined}
       {...props}
     />
   )
@@ -75,13 +74,13 @@ function DialogContent({
       <DialogPrimitive.Content
         data-slot="dialog-content"
         className={cn(
-          "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg p-6 duration-200",
+          "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] duration-200",
           glass
-            ? cn(glassCard("medium"), "border")
-            : "bg-background border shadow-lg",
+            ? cn("bg-black/80 shadow-2xl p-0 gap-0 overflow-hidden rounded-2xl")
+            : "bg-background border shadow-lg gap-4 p-6 rounded-lg",
           className
         )}
-        style={glass ? glassCardStyles.medium : undefined}
+        style={glass ? { backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)' } : undefined}
         {...props}
       >
         {children}
@@ -99,22 +98,35 @@ function DialogContent({
   )
 }
 
-function DialogHeader({ className, ...props }: React.ComponentProps<"div">) {
+type DialogHeaderProps = React.ComponentProps<"div"> & {
+  glass?: boolean;
+};
+
+function DialogHeader({ className, glass = false, ...props }: DialogHeaderProps) {
   return (
     <div
       data-slot="dialog-header"
-      className={cn("flex flex-col gap-2 text-center sm:text-start", className)}
+      className={cn(
+        "flex flex-col gap-2 text-center sm:text-start",
+        glass && "px-6 pt-6 pb-4 bg-black/40",
+        className
+      )}
       {...props}
     />
   )
 }
 
-function DialogFooter({ className, ...props }: React.ComponentProps<"div">) {
+type DialogFooterProps = React.ComponentProps<"div"> & {
+  glass?: boolean;
+};
+
+function DialogFooter({ className, glass = false, ...props }: DialogFooterProps) {
   return (
     <div
       data-slot="dialog-footer"
       className={cn(
         "flex flex-col-reverse gap-2 sm:flex-row sm:justify-end",
+        glass && "px-6 pb-6 pt-4",
         className
       )}
       {...props}

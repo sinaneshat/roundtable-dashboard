@@ -85,7 +85,7 @@ export function BaseModal({
         }}
       >
         {/* Fixed Header */}
-        <DialogHeader className={cn((useScrollArea || !preventScroll) && 'px-6 pt-6 pb-4 shrink-0')}>
+        <DialogHeader className={cn((useScrollArea || !preventScroll) && 'px-6 pt-6 pb-4 shrink-0 bg-black/50 backdrop-blur-lg')}>
           <DialogTitle>{title}</DialogTitle>
           {description && <DialogDescription>{description}</DialogDescription>}
         </DialogHeader>
@@ -93,7 +93,7 @@ export function BaseModal({
         {/* Content area - ScrollArea or native scroll */}
         {useScrollArea
           ? (
-              <ScrollArea className={cn('border-t border-white/10')} style={{ height: scrollAreaHeight }}>
+              <ScrollArea className={cn('border-t border-white/10 bg-black/50 backdrop-blur-lg')} style={{ height: scrollAreaHeight }}>
                 <div className="px-6 py-4">
                   {children}
                 </div>
@@ -102,7 +102,7 @@ export function BaseModal({
           : (
               <div
                 className={cn(
-                  'flex-1',
+                  'flex-1 bg-black/50 backdrop-blur-lg',
                   !preventScroll && 'overflow-y-auto px-6',
                   preventScroll && 'px-6',
                 )}
@@ -113,7 +113,7 @@ export function BaseModal({
 
         {/* Fixed footer */}
         {footer && (
-          <div className="flex justify-end gap-2 px-6 py-4 border-t shrink-0">
+          <div className="flex justify-end gap-2 px-6 py-4 border-t shrink-0 bg-black/50 backdrop-blur-lg">
             {footer}
           </div>
         )}

@@ -17,6 +17,7 @@ import { motion } from 'motion/react';
 import type { ReactNode } from 'react';
 
 import { cn, getZIndexClass } from '@/lib/ui/cn';
+import { heavyGlassCardStyles } from '@/lib/ui/glassmorphism';
 
 type StickyHeaderProps = {
   children: ReactNode;
@@ -60,16 +61,20 @@ export function StickyHeader({
         'sticky top-0',
         getZIndexClass(zIndex),
         !noBackground && [
-          'backdrop-blur-xl',
-          'bg-black/95',
-          'before:absolute before:inset-0 before:-z-10',
-          'before:bg-gradient-to-b before:from-black/60 before:to-black/40',
-          'before:backdrop-blur-md',
-          'shadow-[0_1px_0_0_rgba(255,255,255,0.03)]',
-          'border-b border-white/[0.02]',
+          'bg-black/80',
+          'backdrop-blur-3xl',
+          'shadow-lg',
         ],
         className,
       )}
+      style={
+        !noBackground
+          ? {
+              boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1)',
+              ...heavyGlassCardStyles,
+            }
+          : undefined
+      }
     >
       {children}
     </motion.div>

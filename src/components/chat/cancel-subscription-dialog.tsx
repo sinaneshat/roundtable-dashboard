@@ -50,22 +50,24 @@ export function CancelSubscriptionDialog({
             </AlertDialogTitle>
           </div>
           <AlertDialogDescription className="space-y-4 pt-4">
-            <div className="flex items-center gap-2 rounded-lg bg-muted/50 p-3">
-              <Badge variant="secondary" className="capitalize">
-                {subscriptionTier}
-                {' '}
-                {t('usage.plan')}
-              </Badge>
-              {endDate && (
-                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <Calendar className="size-3.5" />
-                  <span>
-                    {t('billing.cancelSubscription.activeUntil')}
-                    {' '}
-                    {formattedEndDate}
-                  </span>
-                </div>
-              )}
+            <div className="rounded-lg p-3 border border-white/10 shadow-lg bg-black/40">
+              <div className="flex items-center gap-2">
+                <Badge variant="secondary" className="capitalize">
+                  {subscriptionTier}
+                  {' '}
+                  {t('usage.plan')}
+                </Badge>
+                {endDate && (
+                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <Calendar className="size-3.5" />
+                    <span>
+                      {t('billing.cancelSubscription.activeUntil')}
+                      {' '}
+                      {formattedEndDate}
+                    </span>
+                  </div>
+                )}
+              </div>
             </div>
             <div className="space-y-2">
               <p className="text-sm font-medium text-foreground">
@@ -75,59 +77,63 @@ export function CancelSubscriptionDialog({
                 {t('billing.cancelSubscription.description')}
               </p>
             </div>
-            <div className="space-y-3 rounded-lg border border-destructive/20 bg-destructive/5 p-4">
-              <div className="flex items-center gap-2">
-                <AlertCircle className="size-4 text-destructive" />
-                <span className="text-sm font-semibold text-foreground">
-                  {t('billing.cancelSubscription.whatYouWillLose')}
-                </span>
-              </div>
-              <ul className="space-y-2 text-sm text-muted-foreground">
-                <li className="flex items-start gap-2">
-                  <X className="size-4 mt-0.5 shrink-0 text-destructive" />
-                  <span>{t('billing.cancelSubscription.loss.premiumModels')}</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <X className="size-4 mt-0.5 shrink-0 text-destructive" />
-                  <span>{t('billing.cancelSubscription.loss.unlimitedConversations')}</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <X className="size-4 mt-0.5 shrink-0 text-destructive" />
-                  <span>{t('billing.cancelSubscription.loss.prioritySupport')}</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <X className="size-4 mt-0.5 shrink-0 text-destructive" />
-                  <span>{t('billing.cancelSubscription.loss.advancedFeatures')}</span>
-                </li>
-              </ul>
-            </div>
-            {endDate && (
-              <div className="space-y-2 rounded-lg border bg-muted/30 p-4">
-                <p className="text-sm font-semibold text-foreground">
-                  {t('billing.cancelSubscription.timeline.title')}
-                </p>
-                <ul className="space-y-1.5 text-sm text-muted-foreground">
+            <div className="rounded-lg border border-destructive/20 p-4 shadow-lg bg-black/40">
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <AlertCircle className="size-4 text-destructive" />
+                  <span className="text-sm font-semibold text-foreground">
+                    {t('billing.cancelSubscription.whatYouWillLose')}
+                  </span>
+                </div>
+                <ul className="space-y-2 text-sm text-muted-foreground">
                   <li className="flex items-start gap-2">
-                    <span className="font-medium text-foreground">•</span>
-                    <span>
-                      {t('billing.cancelSubscription.timeline.immediate')}
-                    </span>
+                    <X className="size-4 mt-0.5 shrink-0 text-destructive" />
+                    <span>{t('billing.cancelSubscription.loss.premiumModels')}</span>
                   </li>
                   <li className="flex items-start gap-2">
-                    <span className="font-medium text-foreground">•</span>
-                    <span>
-                      {t('billing.cancelSubscription.timeline.accessUntil', {
-                        date: formattedEndDate || 'the end of your billing period',
-                      })}
-                    </span>
+                    <X className="size-4 mt-0.5 shrink-0 text-destructive" />
+                    <span>{t('billing.cancelSubscription.loss.unlimitedConversations')}</span>
                   </li>
                   <li className="flex items-start gap-2">
-                    <span className="font-medium text-foreground">•</span>
-                    <span>
-                      {t('billing.cancelSubscription.timeline.downgrade')}
-                    </span>
+                    <X className="size-4 mt-0.5 shrink-0 text-destructive" />
+                    <span>{t('billing.cancelSubscription.loss.prioritySupport')}</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <X className="size-4 mt-0.5 shrink-0 text-destructive" />
+                    <span>{t('billing.cancelSubscription.loss.advancedFeatures')}</span>
                   </li>
                 </ul>
+              </div>
+            </div>
+            {endDate && (
+              <div className="rounded-lg border border-white/10 p-4 shadow-lg bg-black/40">
+                <div className="space-y-2">
+                  <p className="text-sm font-semibold text-foreground">
+                    {t('billing.cancelSubscription.timeline.title')}
+                  </p>
+                  <ul className="space-y-1.5 text-sm text-muted-foreground">
+                    <li className="flex items-start gap-2">
+                      <span className="font-medium text-foreground">•</span>
+                      <span>
+                        {t('billing.cancelSubscription.timeline.immediate')}
+                      </span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="font-medium text-foreground">•</span>
+                      <span>
+                        {t('billing.cancelSubscription.timeline.accessUntil', {
+                          date: formattedEndDate || 'the end of your billing period',
+                        })}
+                      </span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="font-medium text-foreground">•</span>
+                      <span>
+                        {t('billing.cancelSubscription.timeline.downgrade')}
+                      </span>
+                    </li>
+                  </ul>
+                </div>
               </div>
             )}
             <p className="text-xs text-muted-foreground">

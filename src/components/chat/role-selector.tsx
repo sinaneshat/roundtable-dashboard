@@ -128,7 +128,7 @@ export function RoleSelector({
           <Button
             variant="ghost"
             size="sm"
-            className="h-6 text-xs px-2 text-muted-foreground hover:text-foreground rounded-lg"
+            className="h-6 text-xs px-2 text-muted-foreground rounded-lg"
           >
             {t('addRole')}
           </Button>
@@ -158,7 +158,7 @@ export function RoleSelector({
       <Popover open={rolePopoverOpen} onOpenChange={handleOpenChange}>
         <PopoverTrigger asChild>
           <div
-            className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 bg-secondary text-secondary-foreground shadow-sm hover:bg-secondary/80 h-6 text-xs px-2 pr-1 rounded-lg gap-1 cursor-pointer"
+            className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 bg-secondary text-secondary-foreground shadow-sm h-6 text-xs px-2 pr-1 rounded-lg gap-1 cursor-pointer"
           >
             <span>{participant.role}</span>
             <button
@@ -167,7 +167,7 @@ export function RoleSelector({
                 e.stopPropagation();
                 onClearRole();
               }}
-              className="ml-0.5 rounded-full hover:bg-destructive/10 hover:text-destructive p-0.5 transition-colors"
+              className="ml-0.5 rounded-full p-0.5"
             >
               <Plus className="size-3 rotate-45" />
             </button>
@@ -284,7 +284,7 @@ function RoleSelectorContent({
                     type="button"
                     onClick={e => handleDeleteRole(role.id, role.name, e)}
                     disabled={deleteRoleMutation.isPending}
-                    className="ml-2 opacity-60 sm:opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-sm hover:bg-destructive/10 hover:text-destructive disabled:opacity-50 flex-shrink-0"
+                    className="ml-2 opacity-60 sm:opacity-0 p-1 rounded-sm disabled:opacity-50 flex-shrink-0"
                     aria-label={t('deleteCustomRole')}
                   >
                     {deleteRoleMutation.isPending

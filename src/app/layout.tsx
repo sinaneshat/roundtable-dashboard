@@ -13,6 +13,7 @@ import {
   SoftwareApplicationSchema,
   StructuredData,
 } from '@/components/seo';
+import { LiquidGlassFilters } from '@/components/ui/liquid-glass-filters';
 import { BRAND } from '@/constants/brand';
 import { createMetadata } from '@/utils/metadata';
 
@@ -106,6 +107,9 @@ export default async function Layout({ children, modal }: RootLayoutProps) {
         />
       </head>
       <body>
+        {/* Liquid Glass SVG Filter Definitions (Apple WWDC 2025) */}
+        <LiquidGlassFilters />
+
         <AppProviders
           locale={locale}
           messages={messages}

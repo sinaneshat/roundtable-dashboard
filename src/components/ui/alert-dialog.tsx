@@ -4,7 +4,6 @@ import * as AlertDialogPrimitive from "@radix-ui/react-alert-dialog"
 import * as React from "react"
 
 import { cn } from "@/lib/ui/cn"
-import { glassCard, glassCardStyles, glassOverlay, glassOverlayStyles } from "@/lib/ui/glassmorphism"
 import { buttonVariants } from "@/components/ui/button"
 
 function AlertDialog({
@@ -43,10 +42,10 @@ function AlertDialogOverlay({
       data-slot="alert-dialog-overlay"
       className={cn(
         "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 fixed inset-0 z-50",
-        glass ? glassOverlay : "bg-black/50",
+        glass ? "bg-black/60 backdrop-blur-md" : "bg-black/50",
         className
       )}
-      style={glass ? glassOverlayStyles : undefined}
+      style={glass ? { backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)' } : undefined}
       {...props}
     />
   )
@@ -69,11 +68,11 @@ function AlertDialogContent({
         className={cn(
           "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg p-6 shadow-lg duration-200 sm:max-w-lg",
           glass
-            ? cn(glassCard("medium"), "border")
+            ? cn("bg-black/70 backdrop-blur-xl border border-white/20 shadow-2xl")
             : "bg-background border",
           className
         )}
-        style={glass ? glassCardStyles.medium : undefined}
+        style={glass ? { backdropFilter: 'blur(24px)', WebkitBackdropFilter: 'blur(24px)' } : undefined}
         {...props}
       />
     </AlertDialogPortal>
@@ -87,7 +86,7 @@ function AlertDialogHeader({
   return (
     <div
       data-slot="alert-dialog-header"
-      className={cn("flex flex-col gap-2 text-center sm:text-start", className)}
+      className={cn("flex flex-col gap-2 text-center sm:text-start bg-black/60 backdrop-blur-xl", className)}
       {...props}
     />
   )
@@ -101,7 +100,7 @@ function AlertDialogFooter({
     <div
       data-slot="alert-dialog-footer"
       className={cn(
-        "flex flex-col-reverse gap-2 sm:flex-row sm:justify-end",
+        "flex flex-col-reverse gap-2 sm:flex-row sm:justify-end bg-black/50 backdrop-blur-lg",
         className
       )}
       {...props}

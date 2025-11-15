@@ -78,13 +78,13 @@ export function ModelItem({
           role="button"
           tabIndex={isDisabled ? -1 : 0}
           className={cn(
-            'px-6 py-4 border-b border-white/10 last:border-0 w-full',
-            !isDisabled && 'hover:bg-accent/50 cursor-pointer transition-colors',
+            'px-6 py-4 w-full hover:bg-white/5 transition-colors rounded-xl mx-2 my-1',
+            !isDisabled && 'cursor-pointer',
             isDisabled && 'opacity-50 cursor-not-allowed',
           )}
-          style={{ maxWidth: '512px', boxSizing: 'border-box' }}
-          onClick={isDisabled ? undefined : () => onToggle()}
-          onKeyDown={
+            style={{ maxWidth: '512px', boxSizing: 'border-box' }}
+            onClick={isDisabled ? undefined : () => onToggle()}
+            onKeyDown={
             isDisabled
               ? undefined
               : (e) => {
@@ -100,7 +100,7 @@ export function ModelItem({
               <div
                 className={cn(
                   'flex-shrink-0 text-muted-foreground p-0.5',
-                  !isDisabled && 'cursor-grab active:cursor-grabbing hover:text-foreground touch-none',
+                  !isDisabled && 'cursor-grab active:cursor-grabbing touch-none',
                   isDisabled && 'cursor-not-allowed opacity-30',
                 )}
                 onPointerDown={isDisabled ? undefined : e => controls.start(e)}
@@ -156,11 +156,11 @@ export function ModelItem({
             {isDisabledDueToTier && (
               <Link
                 href="/chat/pricing"
-                className="flex-shrink-0 p-1.5 rounded-md hover:bg-accent/50 transition-colors"
+                className="flex-shrink-0 p-1.5 rounded-md"
                 onClick={e => e.stopPropagation()}
                 aria-label="Upgrade to unlock this model"
               >
-                <Lock className="size-5 text-amber-400/80 hover:text-amber-400" />
+                <Lock className="size-5 text-amber-400" />
               </Link>
             )}
 
@@ -204,7 +204,7 @@ export function ModelItem({
               </p>
               <Link
                 href="/chat/pricing"
-                className="text-xs text-primary font-medium mt-2 inline-block hover:underline"
+                className="text-xs text-primary font-medium mt-2 inline-block"
               >
                 View Pricing Plans →
               </Link>

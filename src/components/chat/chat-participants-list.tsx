@@ -35,6 +35,7 @@ import { useModelsQuery } from '@/hooks/queries/models';
 import { useFuzzySearch } from '@/hooks/utils/use-fuzzy-search';
 import { toastManager } from '@/lib/toast/toast-manager';
 import { cn } from '@/lib/ui/cn';
+import { heavyGlassCardStyles } from '@/lib/ui/glassmorphism';
 import { getProviderIcon } from '@/lib/utils/ai-display';
 
 type ChatParticipantsListProps = {
@@ -348,7 +349,10 @@ export function ChatParticipantsList({
                       <>
                         {selectedModels.length > 0 && (
                           <div className="border-b">
-                            <div className="px-3 py-2 text-xs font-semibold text-foreground bg-primary/10 border-b border-primary/20 sticky top-0 z-20 backdrop-blur-sm shadow-sm">
+                            <div
+                              className="px-3 py-2 text-xs font-semibold text-foreground bg-background/15 border-b border-white/10 sticky top-0 z-20 backdrop-blur-3xl shadow-lg"
+                              style={heavyGlassCardStyles}
+                            >
                               <div className="flex items-center justify-between">
                                 <span className="flex items-center gap-2">
                                   {tModels('selectedModels')}
@@ -395,10 +399,11 @@ export function ChatParticipantsList({
                               <div
                                 className={cn(
                                   'px-3 py-2.5 text-xs font-medium border-b',
-                                  'sticky top-0 z-20 backdrop-blur-sm',
-                                  'bg-accent/50 text-accent-foreground border-accent',
-                                  'shadow-sm',
+                                  'sticky top-0 z-20 backdrop-blur-3xl',
+                                  'bg-background/15 text-accent-foreground border-white/10',
+                                  'shadow-lg',
                                 )}
+                                style={heavyGlassCardStyles}
                               >
                                 <div className="flex items-center justify-between">
                                   <span className="flex items-center gap-2">
@@ -451,15 +456,13 @@ export function ChatParticipantsList({
                                 <div key={tierGroup.tier}>
                                   <div
                                     className={cn(
-                                      'px-3 py-2.5 text-xs font-medium border-b',
+                                      'px-3 py-2.5 text-xs font-medium border-b border-white/10',
                                       'sticky top-0 z-20',
-                                      'backdrop-blur-sm',
-                                      'bg-background/10',
-                                      isUserTier && 'bg-primary/15 text-primary border-primary/20',
-                                      isLowerTier && 'bg-muted/50 text-muted-foreground',
-                                      isHigherTier && 'bg-muted/60 text-muted-foreground border-muted',
-                                      'shadow-sm',
+                                      'backdrop-blur-3xl',
+                                      'bg-background/15',
+                                      'shadow-lg',
                                     )}
+                                    style={heavyGlassCardStyles}
                                   >
                                     <div className="flex items-center justify-between">
                                       <span className="flex items-center gap-2">

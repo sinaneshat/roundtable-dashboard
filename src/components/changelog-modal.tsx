@@ -75,7 +75,7 @@ export function VersionUpdateModal() {
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4">
+        <div className="space-y-4 bg-black/50 backdrop-blur-lg p-6">
           <p className="text-sm text-muted-foreground">
             A new version is available. Click update to refresh and get the latest improvements.
           </p>

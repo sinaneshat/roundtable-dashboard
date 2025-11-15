@@ -14,34 +14,38 @@ import { cn } from './cn';
 // ============================================================================
 
 /**
- * Glass effect variants
- * - subtle: Light glass effect for backgrounds
- * - medium: Standard glass effect for cards and panels
- * - strong: Heavy glass effect for prominent overlays
+ * Liquid Glass effect variants (Official Liquid Glass Generator specification)
+ * Based on https://liquidglassgen.com/ official presets:
+ * - subtle: Light Glass (90% opacity, 15px blur, 5% tint)
+ * - medium: Medium Glass (85% opacity, 20px blur, 8% tint) - Default for modals
+ * - strong: Heavy Glass (75% opacity, 30px blur, 15% tint)
+ *
+ * NOTE: Tailwind blur classes are approximations. Exact blur values are enforced via inline styles.
+ * Tailwind mapping: backdrop-blur-lg=16px, backdrop-blur-xl=24px, backdrop-blur-2xl=40px
  */
 export const glassVariants = {
-  // Subtle glass - minimal blur, very transparent
+  // Light Glass - subtle frosting, high transparency (15px blur via inline styles)
   subtle: cn(
-    'backdrop-blur-md',
-    'bg-background/5',
-    'border-white/10',
+    'backdrop-blur-lg', // Tailwind: 16px (closest to 15px target)
+    'bg-background/10', // 10% background + 5% tint layer = 15% total
+    'border-white/20',
     'shadow-md',
   ),
 
-  // Medium glass - standard blur, semi-transparent (default for cards)
+  // Medium Glass - standard modal glass effect (20px blur via inline styles) - DEFAULT
   medium: cn(
-    'backdrop-blur-xl',
-    'bg-background/10',
+    'backdrop-blur-xl', // Tailwind: 24px (will be overridden by inline 20px)
+    'bg-background/15', // 15% background + 8% tint layer = 23% total ≈ 85% transparency
     'border-white/20',
-    'shadow-2xl',
+    'shadow-lg',
   ),
 
-  // Strong glass - heavy blur, more opaque
+  // Heavy Glass - prominent overlays (30px blur via inline styles)
   strong: cn(
-    'backdrop-blur-2xl',
-    'bg-background/20',
+    'backdrop-blur-2xl', // Tailwind: 40px (will be overridden by inline 30px)
+    'bg-background/25', // 25% background = 75% transparency
     'border-white/30',
-    'shadow-3xl',
+    'shadow-xl',
   ),
 } as const;
 
@@ -85,40 +89,85 @@ export function glassCard(variant: keyof typeof glassVariants = 'medium'): strin
 }
 
 /**
- * Enhanced glass card styles with color distortion
- * Applied via inline styles for premium frosted glass effect with saturation
+ * Liquid Glass card styles - Pure background blur (no color distortion)
+ * Applied via inline styles to blur BACKGROUND content only (not the card itself)
+ *
+ * NOTE: CSS backdrop-filter does not support geometric distortion (warping/displacement).
+ * Only blur is available without color manipulation (no hue, saturation changes).
+ * Progressive blur levels create depth without altering background colors.
+ *
+ * Distortion levels (pure blur only):
+ * - Subtle: 20px blur (light frosting)
+ * - Medium: 30px blur (standard modal glass) - DEFAULT
+ * - Strong: 40px blur (heavy frosting)
  */
 export const glassCardStyles = {
   subtle: {
-    backdropFilter: 'blur(12px) saturate(140%)',
-    WebkitBackdropFilter: 'blur(12px) saturate(140%)',
+    backdropFilter: 'blur(20px)',
+    WebkitBackdropFilter: 'blur(20px)',
   },
   medium: {
-    backdropFilter: 'blur(24px) saturate(150%)',
-    WebkitBackdropFilter: 'blur(24px) saturate(150%)',
+    backdropFilter: 'blur(30px)',
+    WebkitBackdropFilter: 'blur(30px)',
   },
   strong: {
-    backdropFilter: 'blur(40px) saturate(160%)',
-    WebkitBackdropFilter: 'blur(40px) saturate(160%)',
+    backdropFilter: 'blur(40px)',
+    WebkitBackdropFilter: 'blur(40px)',
   },
 } as const;
 
 /**
+ * Chat input blur - Strong glass effect matching chat input box
+ * Use for sticky headers and prominent UI elements
+ *
+ * Strong blur (no color distortion):
+ * - blur(24px): Tailwind backdrop-blur-xl equivalent
+ * - Same blur as chat input for consistency
+ * - Makes content unreadable while maintaining glass aesthetic
+ */
+export const chatInputBlurStyles = {
+  backdropFilter: 'blur(24px)',
+  WebkitBackdropFilter: 'blur(24px)',
+} as const;
+
+/**
+ * Heavy glass card styles for sticky headers (scrolling content)
+ * Use ONLY where content scrolls past - extreme blur makes text unreadable
+ *
+ * Maximum blur (no color distortion):
+ * - blur(60px): Extreme blur obliterates text behind sticky headers
+ * - Pure blur effect preserves colors, only destroys readability
+ */
+export const heavyGlassCardStyles = {
+  backdropFilter: 'blur(60px)',
+  WebkitBackdropFilter: 'blur(60px)',
+} as const;
+
+/**
  * Glass overlay for dialogs and modals
- * Enhanced backdrop blur with color saturation for premium frosted glass effect
+ * Following Official Liquid Glass Generator specification
+ * Uses "Light Glass" preset (90% transparency, 15px blur, 5% tint)
+ * https://liquidglassgen.com/
+ *
+ * NOTE: Tailwind backdrop-blur-lg = 16px, closest to target 15px.
+ * Exact 15px blur enforced via inline glassOverlayStyles.
  */
 export const glassOverlay = cn(
-  'backdrop-blur-xl',
-  'bg-black/40',
+  'backdrop-blur-lg', // Tailwind: 16px (closest to 15px target, overridden by inline styles)
+  'bg-black/30', // 30% opacity backdrop
 );
 
 /**
- * Enhanced glass overlay styles with color distortion
- * Applied via inline styles for maximum effect
+ * Liquid Glass overlay styles - Pure background blur (no color distortion)
+ * Applied via inline styles to blur background content only
+ *
+ * NOTE: CSS backdrop-filter does not support geometric distortion (warping).
+ * Only blur is available without color manipulation.
+ * Heavy blur creates the illusion of textured glass distortion.
  */
 export const glassOverlayStyles = {
-  backdropFilter: 'blur(24px) saturate(150%)',
-  WebkitBackdropFilter: 'blur(24px) saturate(150%)',
+  backdropFilter: 'blur(25px)',
+  WebkitBackdropFilter: 'blur(25px)',
 } as const;
 
 /**

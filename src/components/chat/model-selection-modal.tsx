@@ -18,6 +18,7 @@ import {
 } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/ui/cn';
+import { heavyGlassCardStyles } from '@/lib/ui/glassmorphism';
 import type { ListCustomRolesResponse } from '@/services/api/chat-roles';
 
 import type { OrderedModel } from './model-item';
@@ -217,19 +218,19 @@ export function ModelSelectionModal({
       <DialogContent
         glass={true}
         className={cn(
-          'w-[90vw] min-w-[400px] max-w-[512px] p-0 gap-0 overflow-hidden',
+          'w-[90vw] min-w-[400px] max-w-[512px]',
           className,
         )}
       >
         {/* Fixed Header Section */}
-        <div className="px-6 pt-6 pb-4 space-y-3 shrink-0">
-          <DialogHeader>
+        <div className="space-y-3 shrink-0">
+          <DialogHeader glass>
             <DialogTitle className="text-xl">{t('title')}</DialogTitle>
             <DialogDescription>{t('subtitle')}</DialogDescription>
           </DialogHeader>
 
           {/* Search Input */}
-          <div className="relative">
+          <div className="relative px-6 pb-4">
             <input
               ref={searchInputRef}
               type="text"
@@ -264,7 +265,7 @@ export function ModelSelectionModal({
         </div>
 
         {/* Scrollable Model List */}
-        <ScrollArea className="h-[400px] border-t border-white/10">
+        <ScrollArea className="h-[400px] bg-black/30 border-t border-white/5">
           {groupedModels.length === 0
             ? (
                 <div className="flex flex-col items-center justify-center py-12 text-center px-6 min-w-[280px]">
@@ -272,17 +273,15 @@ export function ModelSelectionModal({
                 </div>
               )
             : groupedModels.map((group, groupIndex) => (
-                <div key={group.title} className={groupIndex > 0 ? 'border-t border-white/10' : ''}>
-                  {/* Sticky Section Header - heavy glass blur with nested structure */}
+                <div key={group.title}>
+                  {/* Sticky Section Header - heavy blur to obscure scrolling content */}
                   <div className="sticky top-0 z-10">
                     <div
                       className={cn(
-                        'backdrop-blur-3xl bg-background/80 border-b border-white/10 px-6 py-2.5 shadow-lg',
+                        'bg-black/80 backdrop-blur-3xl px-6 py-2.5',
                       )}
                       style={{
-                        boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1)',
-                        backdropFilter: 'blur(64px) saturate(150%)',
-                        WebkitBackdropFilter: 'blur(64px) saturate(150%)',
+                        ...heavyGlassCardStyles,
                       }}
                     >
                       <div className="flex items-center justify-between">

@@ -56,7 +56,7 @@ export const RadialGlow = ({
       <motion.div
         initial={{ opacity: 0 }}
         animate={{
-          opacity: animate ? [0.6, 0.8, 0.6] : 0.7,
+          opacity: animate ? [0.85, 1, 0.85] : 0.9,
           scale: animate ? [1, 1.05, 1] : 1,
         }}
         transition={{
@@ -88,7 +88,7 @@ export const RadialGlow = ({
             <motion.div
               className="absolute inset-0 rounded-full will-change-transform"
               style={{
-                background: createRainbowGradient(0.12),
+                background: createRainbowGradient(0.15),
                 filter: 'blur(100px)',
                 transform: 'translateZ(0)',
               }}
@@ -106,7 +106,7 @@ export const RadialGlow = ({
             <motion.div
               className="absolute inset-0 rounded-full will-change-transform"
               style={{
-                background: createRainbowGradient(0.09),
+                background: createRainbowGradient(0.12),
                 filter: 'blur(140px)',
                 transform: 'translateZ(0) scale(1.3)',
               }}
@@ -124,7 +124,7 @@ export const RadialGlow = ({
             <motion.div
               className="absolute inset-0 rounded-full will-change-transform"
               style={{
-                background: createRainbowGradient(0.06),
+                background: createRainbowGradient(0.08),
                 filter: 'blur(180px)',
                 transform: 'translateZ(0) scale(1.6)',
               }}

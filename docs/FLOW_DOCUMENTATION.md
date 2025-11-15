@@ -66,13 +66,16 @@ Roundtable enables users to create conversations where multiple AI models collab
 
 ---
 
-## PART 2: PRE-SEARCH FUNCTIONALITY (WEB SEARCH)
+## PART 2: WEB SEARCH FUNCTIONALITY
 
-### Pre-Search Overview
+> **Terminology Note**: In the codebase, this feature is called "pre-search" (database: `chatPreSearch`, API: `/pre-search`) but is displayed to users as "Web Research" or "Web Search". The "pre" prefix refers to the timing (search happens BEFORE participants respond), not frequency - web search executes on EVERY round when enabled, not just the first round.
+
+### Web Search Overview
 
 **When Enabled:** Users can enable "Web Search" toggle before submitting questions
 **Purpose:** Execute web search BEFORE AI participants respond, providing search results as context
 **Impact:** Adds 8-12 second delay before participant streaming begins
+**Frequency:** Executes on EVERY round when enabled (not just initial round)
 
 ### Pre-Search Flow
 

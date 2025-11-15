@@ -76,19 +76,19 @@ export function ConversationModeModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         glass={true}
-        className={cn('rounded-2xl', className)}
+        className={cn(className)}
         style={{
           width: '90vw',
           minWidth: '320px',
           maxWidth: '440px',
         }}
       >
-        <DialogHeader>
+        <DialogHeader glass>
           <DialogTitle className="text-xl">{t('title')}</DialogTitle>
           <DialogDescription>{t('subtitle')}</DialogDescription>
         </DialogHeader>
 
-        <div className="flex flex-col gap-2.5 py-2">
+        <div className="flex flex-col gap-2.5 py-4 px-6 bg-black/30">
           {enabledModes.map((mode) => {
             const ModeIcon = mode.icon;
             const isSelected = selectedMode === mode.id;
@@ -99,33 +99,33 @@ export function ConversationModeModal({
                 type="button"
                 onClick={() => onModeSelect(mode.id)}
                 className={cn(
-                  'flex items-start gap-4 rounded-2xl p-3.5 text-left transition-all',
-                  'backdrop-blur-xl bg-white/5 border border-white/10',
-                  'hover:bg-white/10 hover:border-white/20',
+                  'flex items-start gap-4 p-4 text-left w-full rounded-xl',
+                  'cursor-pointer hover:bg-white/5',
                   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20',
-                  isSelected && 'border-primary bg-primary/10',
+                  'transition-all duration-200',
+                  isSelected && 'bg-primary/10 hover:bg-primary/15',
                 )}
                 aria-pressed={isSelected}
               >
-                <div
-                  className={cn(
-                    'flex size-10 shrink-0 items-center justify-center rounded-full',
-                    mode.id === 'debating' && 'bg-blue-500/20',
-                    mode.id === 'brainstorming' && 'bg-yellow-500/20',
-                    mode.id === 'solving' && 'bg-green-500/20',
-                    mode.id === 'analyzing' && 'bg-purple-500/20',
-                  )}
-                >
-                  <ModeIcon
+                  <div
                     className={cn(
-                      'size-6',
-                      mode.id === 'debating' && 'text-blue-400',
-                      mode.id === 'brainstorming' && 'text-yellow-400',
-                      mode.id === 'solving' && 'text-green-400',
-                      mode.id === 'analyzing' && 'text-purple-400',
+                      'flex size-10 shrink-0 items-center justify-center rounded-full',
+                      mode.id === 'debating' && 'bg-blue-500/20',
+                      mode.id === 'brainstorming' && 'bg-yellow-500/20',
+                      mode.id === 'solving' && 'bg-green-500/20',
+                      mode.id === 'analyzing' && 'bg-purple-500/20',
                     )}
-                  />
-                </div>
+                  >
+                    <ModeIcon
+                      className={cn(
+                        'size-6',
+                        mode.id === 'debating' && 'text-blue-400',
+                        mode.id === 'brainstorming' && 'text-yellow-400',
+                        mode.id === 'solving' && 'text-green-400',
+                        mode.id === 'analyzing' && 'text-purple-400',
+                      )}
+                    />
+                  </div>
                 <div className="flex-1 space-y-1.5">
                   <h3 className="text-sm font-semibold">{mode.label}</h3>
                   <p className="text-xs text-muted-foreground leading-relaxed">

@@ -1,17 +1,15 @@
 'use client';
 import { Search, X } from 'lucide-react';
-import { AnimatePresence, motion } from 'motion/react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
-import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useThreadsQuery } from '@/hooks/queries/chat';
 import { useDebouncedValue } from '@/hooks/utils';
 import { cn } from '@/lib/ui/cn';
-import { glassCard, glassCardStyles, glassOverlay, glassOverlayStyles } from '@/lib/ui/glassmorphism';
 
 type CommandSearchProps = {
   isOpen: boolean;
@@ -207,53 +205,34 @@ export function CommandSearch({ isOpen, onClose }: CommandSearchProps) {
     return () => viewport.removeEventListener('scroll', handleScroll);
   }, []); // No dependencies - ref always has latest callback
   return (
-    <AnimatePresence>
-      {isOpen && (
-        <>
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.15 }}
-            className={cn('fixed inset-0 z-[60]', glassOverlay)}
-            style={glassOverlayStyles}
+    <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
+      <DialogContent
+        ref={modalRef}
+        glass={true}
+        showCloseButton={false}
+        className="max-w-2xl p-0 gap-0"
+      >
+        {/* Fixed Header Section */}
+        <div className="flex items-center gap-3 px-6 py-4 shrink-0 bg-black/40">
+          <Search className="size-5 text-muted-foreground" />
+          <input
+            ref={searchInputRef}
+            type="text"
+            placeholder={t('chat.searchChats')}
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            className="flex-1 bg-transparent border-none outline-none text-sm placeholder:text-muted-foreground"
           />
-          <div className="fixed inset-0 z-[60] flex items-start justify-center pt-[20vh] overflow-hidden pointer-events-none">
-            <motion.div
-              ref={modalRef}
-              initial={{ opacity: 0, scale: 0.98 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.98 }}
-              transition={{ duration: 0.15 }}
-              className="relative w-full max-w-2xl mx-4 pointer-events-auto"
-            >
-              <div
-                className={cn('flex flex-col border shadow-2xl rounded-lg p-0 gap-0 overflow-hidden', glassCard('medium'))}
-                style={glassCardStyles.medium}
-              >
-                {/* Fixed Header Section */}
-                <div className="flex items-center gap-3 px-4 py-3 border-b border-border shrink-0">
-                  <Search className="size-5 text-muted-foreground" />
-                  <input
-                    ref={searchInputRef}
-                    type="text"
-                    placeholder={t('chat.searchChats')}
-                    value={searchQuery}
-                    onChange={e => setSearchQuery(e.target.value)}
-                    className="flex-1 bg-transparent border-none outline-none text-sm placeholder:text-muted-foreground"
-                  />
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={handleClose}
-                    className="size-8"
-                  >
-                    <X className="size-4" />
-                  </Button>
-                </div>
+          <button
+            onClick={handleClose}
+            className="size-8 flex items-center justify-center hover:bg-white/10 rounded-md transition-colors"
+          >
+            <X className="size-4" />
+          </button>
+        </div>
 
-                {/* Scrollable Results Section */}
-                <ScrollArea ref={scrollAreaRef} className="h-[400px] border-t border-white/10">
+        {/* Scrollable Results Section */}
+        <ScrollArea ref={scrollAreaRef} className="h-[400px] bg-black/30 border-t border-white/5">
                   {isLoading && !threads.length
                     ? (
                         <div className="flex items-center justify-center py-12">
@@ -288,27 +267,23 @@ export function CommandSearch({ isOpen, onClose }: CommandSearchProps) {
                         )}
                 </ScrollArea>
 
-                {/* Fixed Footer Section */}
-                <div className="flex items-center gap-4 px-4 py-2 border-t border-border bg-muted/30 text-xs text-muted-foreground shrink-0">
-                  <div className="flex items-center gap-1">
-                    <kbd className="px-1.5 py-0.5 rounded bg-background border border-border">↑</kbd>
-                    <kbd className="px-1.5 py-0.5 rounded bg-background border border-border">↓</kbd>
-                    <span className="ml-1">{t('navigation.navigation')}</span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <kbd className="px-1.5 py-0.5 rounded bg-background border border-border">↵</kbd>
-                    <span className="ml-1">{t('actions.select')}</span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <kbd className="px-1.5 py-0.5 rounded bg-background border border-border">Esc</kbd>
-                    <span className="ml-1">{t('actions.close')}</span>
-                  </div>
-                </div>
-              </div>
-            </motion.div>
+        {/* Fixed Footer Section */}
+        <div className="flex items-center gap-4 px-6 py-3 border-t border-white/5 text-xs text-muted-foreground shrink-0">
+          <div className="flex items-center gap-1">
+            <kbd className="px-1.5 py-0.5 rounded bg-background border border-border">↑</kbd>
+            <kbd className="px-1.5 py-0.5 rounded bg-background border border-border">↓</kbd>
+            <span className="ml-1">{t('navigation.navigation')}</span>
           </div>
-        </>
-      )}
-    </AnimatePresence>
+          <div className="flex items-center gap-1">
+            <kbd className="px-1.5 py-0.5 rounded bg-background border border-border">↵</kbd>
+            <span className="ml-1">{t('actions.select')}</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <kbd className="px-1.5 py-0.5 rounded bg-background border border-border">Esc</kbd>
+            <span className="ml-1">{t('actions.close')}</span>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }

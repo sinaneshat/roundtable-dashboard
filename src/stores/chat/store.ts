@@ -496,7 +496,10 @@ const createPreSearchSlice: StateCreator<
       preSearches: state.preSearches.filter(ps => ps.roundNumber !== roundNumber),
     }), false, 'preSearch/removePreSearch'),
   clearAllPreSearches: () =>
-    set(PRESEARCH_DEFAULTS, false, 'preSearch/clearAllPreSearches'),
+    set({
+      ...PRESEARCH_DEFAULTS,
+      triggeredPreSearchRounds: new Set<number>(),
+    }, false, 'preSearch/clearAllPreSearches'),
 });
 
 /**
