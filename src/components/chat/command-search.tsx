@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
-import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { Dialog, DialogBody, DialogContent } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useThreadsQuery } from '@/hooks/queries/chat';
 import { useDebouncedValue } from '@/hooks/utils';
@@ -205,7 +205,7 @@ export function CommandSearch({ isOpen, onClose }: CommandSearchProps) {
     return () => viewport.removeEventListener('scroll', handleScroll);
   }, []); // No dependencies - ref always has latest callback
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
+    <Dialog open={isOpen} onOpenChange={open => !open && handleClose()}>
       <DialogContent
         ref={modalRef}
         glass={true}
@@ -213,7 +213,7 @@ export function CommandSearch({ isOpen, onClose }: CommandSearchProps) {
         className="max-w-2xl p-0 gap-0"
       >
         {/* Fixed Header Section */}
-        <div className="flex items-center gap-3 px-6 py-4 shrink-0 bg-black/40">
+        <DialogBody glass className="flex items-center gap-3 px-6 py-4 shrink-0">
           <Search className="size-5 text-muted-foreground" />
           <input
             ref={searchInputRef}
@@ -229,43 +229,45 @@ export function CommandSearch({ isOpen, onClose }: CommandSearchProps) {
           >
             <X className="size-4" />
           </button>
-        </div>
+        </DialogBody>
 
         {/* Scrollable Results Section */}
-        <ScrollArea ref={scrollAreaRef} className="h-[400px] bg-black/30 border-t border-white/5">
-                  {isLoading && !threads.length
-                    ? (
-                        <div className="flex items-center justify-center py-12">
-                          <div className="size-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+        <DialogBody glass className="h-[400px] border-t border-white/5">
+          <ScrollArea ref={scrollAreaRef} className="h-full">
+            {isLoading && !threads.length
+              ? (
+                  <div className="flex items-center justify-center py-12">
+                    <div className="size-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                  </div>
+                )
+              : threads.length > 0
+                ? (
+                    <div>
+                      {threads.map((thread, index) => (
+                        <SearchResultItem
+                          key={thread.id}
+                          thread={thread}
+                          index={index}
+                          selectedIndex={selectedIndex}
+                          onClose={handleClose}
+                          onSelect={setSelectedIndex}
+                        />
+                      ))}
+                      {isFetchingNextPage && (
+                        <div className="flex items-center justify-center py-4">
+                          <div className="size-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
                         </div>
-                      )
-                    : threads.length > 0
-                      ? (
-                          <div>
-                            {threads.map((thread, index) => (
-                              <SearchResultItem
-                                key={thread.id}
-                                thread={thread}
-                                index={index}
-                                selectedIndex={selectedIndex}
-                                onClose={handleClose}
-                                onSelect={setSelectedIndex}
-                              />
-                            ))}
-                            {isFetchingNextPage && (
-                              <div className="flex items-center justify-center py-4">
-                                <div className="size-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-                              </div>
-                            )}
-                          </div>
-                        )
-                      : (
-                          <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
-                            <p className="text-sm text-muted-foreground">{t('chat.noResults')}</p>
-                            <p className="text-xs text-muted-foreground mt-1">{t('chat.noResultsDescription')}</p>
-                          </div>
-                        )}
-                </ScrollArea>
+                      )}
+                    </div>
+                  )
+                : (
+                    <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
+                      <p className="text-sm text-muted-foreground">{t('chat.noResults')}</p>
+                      <p className="text-xs text-muted-foreground mt-1">{t('chat.noResultsDescription')}</p>
+                    </div>
+                  )}
+          </ScrollArea>
+        </DialogBody>
 
         {/* Fixed Footer Section */}
         <div className="flex items-center gap-4 px-6 py-3 border-t border-white/5 text-xs text-muted-foreground shrink-0">

@@ -5,6 +5,7 @@ import type { ReactNode } from 'react';
 
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
   DialogHeader,
@@ -88,7 +89,7 @@ export function ConversationModeModal({
           <DialogDescription>{t('subtitle')}</DialogDescription>
         </DialogHeader>
 
-        <div className="flex flex-col gap-2.5 py-4 px-6 bg-black/30">
+        <DialogBody glass className="flex flex-col gap-2.5 py-4 px-6">
           {enabledModes.map((mode) => {
             const ModeIcon = mode.icon;
             const isSelected = selectedMode === mode.id;
@@ -107,25 +108,25 @@ export function ConversationModeModal({
                 )}
                 aria-pressed={isSelected}
               >
-                  <div
+                <div
+                  className={cn(
+                    'flex size-10 shrink-0 items-center justify-center rounded-full',
+                    mode.id === 'debating' && 'bg-blue-500/20',
+                    mode.id === 'brainstorming' && 'bg-yellow-500/20',
+                    mode.id === 'solving' && 'bg-green-500/20',
+                    mode.id === 'analyzing' && 'bg-purple-500/20',
+                  )}
+                >
+                  <ModeIcon
                     className={cn(
-                      'flex size-10 shrink-0 items-center justify-center rounded-full',
-                      mode.id === 'debating' && 'bg-blue-500/20',
-                      mode.id === 'brainstorming' && 'bg-yellow-500/20',
-                      mode.id === 'solving' && 'bg-green-500/20',
-                      mode.id === 'analyzing' && 'bg-purple-500/20',
+                      'size-6',
+                      mode.id === 'debating' && 'text-blue-400',
+                      mode.id === 'brainstorming' && 'text-yellow-400',
+                      mode.id === 'solving' && 'text-green-400',
+                      mode.id === 'analyzing' && 'text-purple-400',
                     )}
-                  >
-                    <ModeIcon
-                      className={cn(
-                        'size-6',
-                        mode.id === 'debating' && 'text-blue-400',
-                        mode.id === 'brainstorming' && 'text-yellow-400',
-                        mode.id === 'solving' && 'text-green-400',
-                        mode.id === 'analyzing' && 'text-purple-400',
-                      )}
-                    />
-                  </div>
+                  />
+                </div>
                 <div className="flex-1 space-y-1.5">
                   <h3 className="text-sm font-semibold">{mode.label}</h3>
                   <p className="text-xs text-muted-foreground leading-relaxed">
@@ -135,7 +136,7 @@ export function ConversationModeModal({
               </button>
             );
           })}
-        </div>
+        </DialogBody>
 
         {children}
       </DialogContent>

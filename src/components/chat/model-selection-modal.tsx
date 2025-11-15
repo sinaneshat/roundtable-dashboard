@@ -11,6 +11,7 @@ import type { ParticipantConfig } from '@/components/chat/chat-form-schemas';
 import { Badge } from '@/components/ui/badge';
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
   DialogHeader,
@@ -230,7 +231,7 @@ export function ModelSelectionModal({
           </DialogHeader>
 
           {/* Search Input */}
-          <div className="relative px-6 pb-4">
+          <DialogBody glass className="relative px-6 pb-4">
             <input
               ref={searchInputRef}
               type="text"
@@ -261,118 +262,120 @@ export function ModelSelectionModal({
                 </button>
               </div>
             )}
-          </div>
+          </DialogBody>
         </div>
 
         {/* Scrollable Model List */}
-        <ScrollArea className="h-[400px] bg-black/30 border-t border-white/5">
-          {groupedModels.length === 0
-            ? (
-                <div className="flex flex-col items-center justify-center py-12 text-center px-6 min-w-[280px]">
-                  <p className="text-sm text-muted-foreground">{tModels('noModelsFound')}</p>
-                </div>
-              )
-            : groupedModels.map((group, groupIndex) => (
-                <div key={group.title}>
-                  {/* Sticky Section Header - heavy blur to obscure scrolling content */}
-                  <div className="sticky top-0 z-10">
-                    <div
-                      className={cn(
-                        'bg-black/80 backdrop-blur-3xl px-6 py-2.5',
-                      )}
-                      style={{
-                        ...heavyGlassCardStyles,
-                      }}
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className={cn(
-                          'text-xs font-semibold',
-                          groupIndex === 0 && 'text-foreground',
-                          groupIndex === 1 && 'text-accent-foreground',
-                          groupIndex > 1 && 'text-muted-foreground uppercase tracking-wider',
+        <DialogBody glass className="h-[400px] border-t border-white/5">
+          <ScrollArea className="h-full">
+            {groupedModels.length === 0
+              ? (
+                  <div className="flex flex-col items-center justify-center py-12 text-center px-6 min-w-[280px]">
+                    <p className="text-sm text-muted-foreground">{tModels('noModelsFound')}</p>
+                  </div>
+                )
+              : groupedModels.map((group, groupIndex) => (
+                  <div key={group.title}>
+                    {/* Sticky Section Header - heavy blur to obscure scrolling content */}
+                    <div className="sticky top-0 z-10">
+                      <div
+                        className={cn(
+                          'bg-black/80 backdrop-blur-3xl px-6 py-2.5',
                         )}
-                        >
-                          {group.title}
-                        </span>
-                        {groupIndex === 0 && selectedCount > 0 && (
-                          <div className="flex items-center gap-2">
-                            <Badge variant="default" className="text-[10px] px-1.5 py-0 h-4">
-                              {selectedCount}
-                              /
-                              {maxModels}
-                            </Badge>
-                            <span className="text-[10px] opacity-70">{tModels('dragToReorder')}</span>
-                          </div>
-                        )}
-                        {groupIndex === 1 && (
-                          <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4">
-                            {tModels('topModels')}
-                          </Badge>
-                        )}
-                        {groupIndex > 1 && (
-                          <span className="text-[10px] opacity-80">
-                            {group.models.length}
-                            {' '}
-                            {group.models.length === 1 ? tModels('model') : tModels('models')}
+                        style={{
+                          ...heavyGlassCardStyles,
+                        }}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className={cn(
+                            'text-xs font-semibold',
+                            groupIndex === 0 && 'text-foreground',
+                            groupIndex === 1 && 'text-accent-foreground',
+                            groupIndex > 1 && 'text-muted-foreground uppercase tracking-wider',
+                          )}
+                          >
+                            {group.title}
                           </span>
-                        )}
+                          {groupIndex === 0 && selectedCount > 0 && (
+                            <div className="flex items-center gap-2">
+                              <Badge variant="default" className="text-[10px] px-1.5 py-0 h-4">
+                                {selectedCount}
+                                /
+                                {maxModels}
+                              </Badge>
+                              <span className="text-[10px] opacity-70">{tModels('dragToReorder')}</span>
+                            </div>
+                          )}
+                          {groupIndex === 1 && (
+                            <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4">
+                              {tModels('topModels')}
+                            </Badge>
+                          )}
+                          {groupIndex > 1 && (
+                            <span className="text-[10px] opacity-80">
+                              {group.models.length}
+                              {' '}
+                              {group.models.length === 1 ? tModels('model') : tModels('models')}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  </div>
 
-                  {/* Section Models */}
-                  {enableDrag && groupIndex === 0
-                    ? (
-                        <Reorder.Group
-                          axis="y"
-                          values={group.models}
-                          onReorder={(reordered) => {
+                    {/* Section Models */}
+                    {enableDrag && groupIndex === 0
+                      ? (
+                          <Reorder.Group
+                            axis="y"
+                            values={group.models}
+                            onReorder={(reordered) => {
                             // Update only the selected models order
-                            const otherModels = orderedModels.filter(om => om.participant === null);
-                            onReorder([...reordered, ...otherModels]);
-                          }}
-                        >
-                          {group.models.map(orderedModel => (
-                            <ModelItem
-                              key={orderedModel.model.id}
-                              orderedModel={orderedModel}
-                              allParticipants={allParticipants}
-                              customRoles={customRoles}
-                              onToggle={() => handleToggle(orderedModel.model.id)}
-                              onRoleChange={(role, customRoleId) =>
-                                onRoleChange(orderedModel.model.id, role, customRoleId)}
-                              onClearRole={() => onClearRole(orderedModel.model.id)}
-                              selectedCount={selectedCount}
-                              maxModels={maxModels}
-                              enableDrag={enableDrag}
-                              userTierInfo={userTierInfo}
-                            />
-                          ))}
-                        </Reorder.Group>
-                      )
-                    : (
-                        <div>
-                          {group.models.map(orderedModel => (
-                            <ModelItem
-                              key={orderedModel.model.id}
-                              orderedModel={orderedModel}
-                              allParticipants={allParticipants}
-                              customRoles={customRoles}
-                              onToggle={() => handleToggle(orderedModel.model.id)}
-                              onRoleChange={(role, customRoleId) =>
-                                onRoleChange(orderedModel.model.id, role, customRoleId)}
-                              onClearRole={() => onClearRole(orderedModel.model.id)}
-                              selectedCount={selectedCount}
-                              maxModels={maxModels}
-                              enableDrag={false}
-                              userTierInfo={userTierInfo}
-                            />
-                          ))}
-                        </div>
-                      )}
-                </div>
-              ))}
-        </ScrollArea>
+                              const otherModels = orderedModels.filter(om => om.participant === null);
+                              onReorder([...reordered, ...otherModels]);
+                            }}
+                          >
+                            {group.models.map(orderedModel => (
+                              <ModelItem
+                                key={orderedModel.model.id}
+                                orderedModel={orderedModel}
+                                allParticipants={allParticipants}
+                                customRoles={customRoles}
+                                onToggle={() => handleToggle(orderedModel.model.id)}
+                                onRoleChange={(role, customRoleId) =>
+                                  onRoleChange(orderedModel.model.id, role, customRoleId)}
+                                onClearRole={() => onClearRole(orderedModel.model.id)}
+                                selectedCount={selectedCount}
+                                maxModels={maxModels}
+                                enableDrag={enableDrag}
+                                userTierInfo={userTierInfo}
+                              />
+                            ))}
+                          </Reorder.Group>
+                        )
+                      : (
+                          <div>
+                            {group.models.map(orderedModel => (
+                              <ModelItem
+                                key={orderedModel.model.id}
+                                orderedModel={orderedModel}
+                                allParticipants={allParticipants}
+                                customRoles={customRoles}
+                                onToggle={() => handleToggle(orderedModel.model.id)}
+                                onRoleChange={(role, customRoleId) =>
+                                  onRoleChange(orderedModel.model.id, role, customRoleId)}
+                                onClearRole={() => onClearRole(orderedModel.model.id)}
+                                selectedCount={selectedCount}
+                                maxModels={maxModels}
+                                enableDrag={false}
+                                userTierInfo={userTierInfo}
+                              />
+                            ))}
+                          </div>
+                        )}
+                  </div>
+                ))}
+          </ScrollArea>
+        </DialogBody>
 
         {/* Fixed Footer Section */}
         {children && <div className="px-6 pb-4 shrink-0">{children}</div>}

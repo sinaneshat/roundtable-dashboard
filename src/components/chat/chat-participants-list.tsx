@@ -450,7 +450,6 @@ export function ChatParticipantsList({
                                 return null;
                               const isUserTier = tierGroup.is_user_tier;
                               const userTierIndex = tierGroups.findIndex(g => g.is_user_tier);
-                              const isLowerTier = tierIndex < userTierIndex;
                               const isHigherTier = tierIndex > userTierIndex;
                               return (
                                 <div key={tierGroup.tier}>

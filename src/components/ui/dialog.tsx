@@ -107,8 +107,8 @@ function DialogHeader({ className, glass = false, ...props }: DialogHeaderProps)
     <div
       data-slot="dialog-header"
       className={cn(
-        "flex flex-col gap-2 text-center sm:text-start",
-        glass && "px-6 pt-6 pb-4 bg-black/40",
+        "flex flex-col gap-2 text-center sm:text-start px-6 pt-6 pb-4",
+        glass && "bg-black/40",
         className
       )}
       {...props}
@@ -119,6 +119,23 @@ function DialogHeader({ className, glass = false, ...props }: DialogHeaderProps)
 type DialogFooterProps = React.ComponentProps<"div"> & {
   glass?: boolean;
 };
+
+type DialogBodyProps = React.ComponentProps<"div"> & {
+  glass?: boolean;
+};
+
+function DialogBody({ className, glass = false, ...props }: DialogBodyProps) {
+  return (
+    <div
+      data-slot="dialog-body"
+      className={cn(
+        glass && "bg-black/30",
+        className
+      )}
+      {...props}
+    />
+  )
+}
 
 function DialogFooter({ className, glass = false, ...props }: DialogFooterProps) {
   return (
@@ -162,6 +179,7 @@ function DialogDescription({
 
 export {
   Dialog,
+  DialogBody,
   DialogClose,
   DialogContent,
   DialogDescription,
