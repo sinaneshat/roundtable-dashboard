@@ -57,13 +57,16 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
   const storeRef = useRef<ChatStoreApi | null>(null);
   const prevPathnameRef = useRef<string | null>(null);
 
+  // Use ref for queryClient to avoid dependency loops in callbacks
+  // queryClient from useQueryClient() is stable, so we only need to capture it once
+  const queryClientRef = useRef(queryClient);
+
   // Official Zustand Pattern: Initialize store once per provider
   // Store ref initialization during render is intentional and safe
   if (storeRef.current === null) {
     storeRef.current = createChatStore();
   }
 
-  // eslint-disable-next-line react-hooks/refs -- Zustand pattern: read ref during render for initialization
   const store = storeRef.current;
 
   // Get current state for AI SDK hook initialization (minimal subscriptions)
@@ -132,8 +135,20 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
           // This prevents orphaned flags like streamingRoundNumber, isCreatingAnalysis
           // from remaining set and blocking navigation/loading indicators
           currentState.completeStreaming();
-        } catch {
-          // Silent failure - analysis creation is non-blocking
+        } catch (error) {
+          // ✅ CRITICAL FIX: Log errors instead of silent failure
+          // This helps diagnose why analysis creation might fail
+          console.error('[Provider:handleComplete] Analysis creation failed', {
+            error,
+            threadId,
+            mode,
+            messageCount: sdkMessages.length,
+            participantCount: storeParticipants.length,
+            screenMode: currentState.screenMode,
+          });
+
+          // Analysis creation is non-blocking - don't throw
+          // But we now know WHY it failed
         }
       }
     }
@@ -237,12 +252,39 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
   // ✅ QUOTA INVALIDATION: Use refs to capture latest functions and avoid circular deps
   const sendMessageRef = useRef(chat.sendMessage);
   const startRoundRef = useRef(chat.startRound);
+  const retryRef = useRef(chat.retry);
+  const stopRef = useRef(chat.stop);
+  const setMessagesRef = useRef(chat.setMessages);
 
-  // Keep refs in sync
+  // Keep refs in sync with latest chat methods
   useEffect(() => {
     sendMessageRef.current = chat.sendMessage;
     startRoundRef.current = chat.startRound;
-  }, [chat.sendMessage, chat.startRound]);
+    retryRef.current = chat.retry;
+    stopRef.current = chat.stop;
+    setMessagesRef.current = chat.setMessages;
+  }, [chat.sendMessage, chat.startRound, chat.retry, chat.stop, chat.setMessages]);
+
+  // ✅ CRITICAL FIX: Register chat hook functions with store
+  // The pending message effect (line 440) needs access to sendMessage from store state
+  // Without this, messages don't send on thread screen after navigation from overview
+  useEffect(() => {
+    const currentState = store.getState();
+    currentState.setSendMessage(chat.sendMessage);
+    // Wrap startRound and retry to return Promise<void> to match store types
+    currentState.setStartRound(chat.startRound
+      ? async () => {
+          chat.startRound();
+        }
+      : undefined);
+    currentState.setRetry(chat.retry
+      ? async () => {
+          chat.retry();
+        }
+      : undefined);
+    currentState.setStop(chat.stop);
+    currentState.setChatSetMessages(chat.setMessages);
+  }, [store, chat.sendMessage, chat.startRound, chat.retry, chat.stop, chat.setMessages]);
 
   // ✅ ARCHITECTURAL FIX: Provider-side streaming trigger
   // Watches waitingToStartStreaming and calls FRESH startRound
@@ -255,7 +297,7 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
   const storeThread = useStore(store, s => s.thread);
 
   useEffect(() => {
-    if (!waitingToStart || !chat.startRound || storeParticipants.length === 0 || storeMessages.length === 0) {
+    if (!waitingToStart) {
       return;
     }
 
@@ -268,6 +310,12 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
       // Clear the flag to prevent infinite waiting
       store.getState().setWaitingToStartStreaming(false);
       return;
+    }
+
+    // ✅ CRITICAL FIX: Wait for all required conditions before attempting startRound
+    // Only proceed if we have all dependencies ready
+    if (!chat.startRound || storeParticipants.length === 0 || storeMessages.length === 0) {
+      return; // Keep waiting, don't clear flag
     }
 
     // ✅ CRITICAL FIX: Wait for pre-search completion before streaming participants
@@ -294,57 +342,115 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
       }
     }
 
-    // Call fresh startRound with current participants from store
+    // ✅ CRITICAL FIX: Call startRound and let it handle AI SDK readiness
+    // startRound has internal guards for AI SDK status - it will return early if not ready
+    // We keep the flag set so this effect retries until streaming actually begins
+    // The flag is only cleared when isStreaming becomes true (see effect below)
     chat.startRound(storeParticipants);
-    store.getState().setWaitingToStartStreaming(false);
   }, [waitingToStart, chat, storeParticipants, storeMessages, storePreSearches, storeThread, store]);
 
-  // ✅ QUOTA INVALIDATION: Wrap functions to invalidate quota immediately when streaming starts
-  // ✅ QUOTA INVALIDATION: Invalidate usage stats when message streaming starts
+  // ✅ CRITICAL FIX: Clear waitingToStartStreaming flag when streaming actually begins
+  // This separate effect watches for successful stream start and clears the flag
+  // Prevents race condition where startRound is called before AI SDK is ready
+  const chatIsStreaming = useStore(store, s => s.isStreaming);
+  useEffect(() => {
+    if (waitingToStart && chatIsStreaming) {
+      store.getState().setWaitingToStartStreaming(false);
+    }
+  }, [waitingToStart, chatIsStreaming, store]);
+
+  // ✅ CRITICAL FIX: Sync AI SDK hook messages to store during streaming
+  // The hook's internal messages get updated during streaming, but the store's messages don't
+  // This causes the overview screen to show only the user message while streaming
+  // because it reads from store.messages, not from the hook's messages
+  // We sync the hook's messages to the store so components can display them during streaming
+  const prevChatMessagesRef = useRef<UIMessage[]>([]);
+  useEffect(() => {
+    const currentStoreMessages = store.getState().messages;
+
+    // ✅ CRITICAL: Prevent circular updates between store and hook
+    // Problem: AI SDK returns new array reference on every render, even if content unchanged
+    // Solution: Only sync when ACTUAL CONTENT changes, not just reference changes
+
+    // 🚨 CRITICAL BUG FIX: Never sync if AI SDK has FEWER messages than store
+    // This prevents message loss during navigation/initialization when:
+    // 1. Store has messages from server (e.g., round 0 + round 1)
+    // 2. AI SDK temporarily has fewer messages (e.g., only round 1 due to hydration timing)
+    // 3. Sync would overwrite store, losing round 0 messages
+    // INVARIANT: Message count should only increase, never decrease (messages are append-only)
+    if (chat.messages.length < currentStoreMessages.length) {
+      return; // Prevent message loss - AI SDK should never have fewer messages than store
+    }
+
+    // 1. Count changed → new message added or removed
+    const countChanged = chat.messages.length !== currentStoreMessages.length;
+
+    // 2. During streaming, check if last message content actually changed
+    let contentChanged = false;
+    if (chat.isStreaming && chat.messages.length > 0 && currentStoreMessages.length > 0) {
+      const lastHookMessage = chat.messages[chat.messages.length - 1];
+      const lastStoreMessage = currentStoreMessages[currentStoreMessages.length - 1];
+
+      // Compare message IDs and text content (streaming updates content)
+      contentChanged = lastHookMessage?.id !== lastStoreMessage?.id
+        || JSON.stringify(lastHookMessage?.parts) !== JSON.stringify(lastStoreMessage?.parts);
+    }
+
+    const shouldSync = countChanged || contentChanged;
+
+    if (shouldSync) {
+      prevChatMessagesRef.current = chat.messages;
+      store.getState().setMessages(chat.messages);
+    }
+  }, [chat.messages, chat.isStreaming, store]); // Store included for exhaustive deps
+
+  // Sync other reactive values from hook to store for component access
+  useEffect(() => {
+    const currentState = store.getState();
+
+    // Only update if values actually changed
+    if (currentState.isStreaming !== chat.isStreaming) {
+      currentState.setIsStreaming(chat.isStreaming);
+    }
+
+    if (currentState.currentParticipantIndex !== chat.currentParticipantIndex) {
+      currentState.setCurrentParticipantIndex(chat.currentParticipantIndex);
+    }
+  }, [chat.isStreaming, chat.currentParticipantIndex, store]);
+
+  // ✅ QUOTA INVALIDATION: Stable callbacks using refs (no dependencies)
+  // All callbacks use refs for both chat methods and queryClient to avoid dependency loops
   const sendMessageWithQuotaInvalidation = useCallback(async (content: string) => {
-    // ✅ Invalidate usage stats immediately when message streaming starts
-    queryClient.invalidateQueries({ queryKey: queryKeys.usage.stats() });
-
-    // ✅ PRE-SEARCH: Handled server-side in streaming handler
-    // Backend automatically triggers pre-search if enableWebSearch is true
-    // Results are saved to DB and included in participant conversation context
-
+    // Use queryClientRef to avoid dependency on queryClient
+    queryClientRef.current.invalidateQueries({ queryKey: queryKeys.usage.stats() });
     return sendMessageRef.current(content);
-  }, [queryClient]);
+  }, []); // Empty deps = stable reference
 
   const startRoundWithQuotaInvalidation = useCallback(async () => {
-    // ✅ Invalidate usage stats immediately when round starts
-    queryClient.invalidateQueries({ queryKey: queryKeys.usage.stats() });
+    // Use queryClientRef to avoid dependency on queryClient
+    queryClientRef.current.invalidateQueries({ queryKey: queryKeys.usage.stats() });
+    return startRoundRef.current();
+  }, []) as () => Promise<void>; // Empty deps = stable reference
 
-    return await startRoundRef.current();
-  }, [queryClient]) as () => Promise<void>;
-
-  // Wrap retry to match Promise<void> signature
   const retryWithPromise = useCallback(async () => {
-    chat.retry();
-  }, [chat]);
+    retryRef.current();
+  }, []); // Empty deps = stable reference
 
+  // Sync callbacks to store ONCE on mount only
+  // Callbacks have empty deps so they're stable - no need to sync on every change
   useEffect(() => {
     storeRef.current?.setState({
       sendMessage: sendMessageWithQuotaInvalidation,
       startRound: startRoundWithQuotaInvalidation,
       retry: retryWithPromise,
-      stop: chat.stop,
-      chatSetMessages: chat.setMessages,
-      messages: chat.messages,
-      isStreaming: chat.isStreaming,
-      currentParticipantIndex: chat.currentParticipantIndex,
+      stop: stopRef.current,
+      chatSetMessages: setMessagesRef.current,
+      // NOTE: Reactive values (messages, isStreaming, currentParticipantIndex) are synced
+      // in dedicated effects above (lines 329-354) with proper change detection
+      // This prevents infinite loops while keeping store and hook in sync
     });
-  }, [
-    sendMessageWithQuotaInvalidation,
-    startRoundWithQuotaInvalidation,
-    retryWithPromise,
-    chat.stop,
-    chat.setMessages,
-    chat.messages,
-    chat.isStreaming,
-    chat.currentParticipantIndex,
-  ]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Empty deps = run once on mount (callbacks are stable with empty deps)
 
   // ✅ REMOVED: Duplicate streaming trigger - store subscription (store.ts:1076-1163) handles this
   // The subscription has proper guard protection and identical pre-search waiting logic
@@ -392,6 +498,13 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
       return;
     }
 
+    // ✅ CRITICAL FIX: Guard against sendMessage being undefined
+    // The sendMessage callback wrapper always exists, but the underlying ref might not be ready
+    // Check the ref directly to ensure AI SDK hook has initialized
+    if (!sendMessage || !sendMessageRef.current) {
+      return; // Wait for sendMessage to be available
+    }
+
     // Compare participant model IDs
     const currentModelIds = storeParticipants
       .filter(p => p.isEnabled)
@@ -425,14 +538,32 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
       return; // Don't send message yet - wait for pre-search to complete
     }
 
-    // All conditions met - send the message
+    // ✅ CRITICAL FIX: Set flags and send message atomically
+    // Set hasSentPendingMessage BEFORE calling sendMessage to prevent duplicate sends
+    // If sendMessage fails, we'll catch the error and reset the flag
     setHasSentPendingMessage(true);
     setStreamingRoundNumber(newRoundNumber);
     setHasPendingConfigChanges(false);
 
     // Send message in next tick (prevents blocking)
     queueMicrotask(() => {
-      sendMessage?.(statePendingMessage);
+      // Call sendMessage and handle potential errors
+      // NOTE: We do NOT reset hasSentPendingMessage on error to prevent infinite retry loops
+      // The flag is only reset when user submits a new message via prepareForNewMessage
+      try {
+        const result = sendMessage(statePendingMessage);
+
+        // If sendMessage returns a promise, log rejection but don't reset flag
+        if (result && typeof result.catch === 'function') {
+          result.catch((error: Error) => {
+            console.error('[Provider:pendingMessage] sendMessage failed:', error);
+            // Don't reset flag - prevents infinite retry loop
+          });
+        }
+      } catch (error) {
+        console.error('[Provider:pendingMessage] sendMessage threw error:', error);
+        // Don't reset flag - prevents infinite retry loop
+      }
     });
   }, [
     store,

@@ -42,8 +42,6 @@ export const ChatModeSchema = z.enum(CHAT_MODES).openapi({
 
 export type ChatMode = z.infer<typeof ChatModeSchema>;
 
-export const CHAT_MODE_ENUM_VALUES = CHAT_MODES as unknown as [ChatMode, ...ChatMode[]];
-
 export const ChatModes = {
   ANALYZING: 'analyzing' as const,
   BRAINSTORMING: 'brainstorming' as const,
@@ -64,8 +62,6 @@ export const ThreadStatusSchema = z.enum(THREAD_STATUSES).openapi({
 
 export type ThreadStatus = z.infer<typeof ThreadStatusSchema>;
 
-export const THREAD_STATUS_ENUM_VALUES = THREAD_STATUSES as unknown as [ThreadStatus, ...ThreadStatus[]];
-
 // ============================================================================
 // CHANGELOG
 // ============================================================================
@@ -78,8 +74,6 @@ export const ChangelogTypeSchema = z.enum(CHANGELOG_TYPES).openapi({
 });
 
 export type ChangelogType = z.infer<typeof ChangelogTypeSchema>;
-
-export const CHANGELOG_TYPES_ENUM_VALUES = CHANGELOG_TYPES as unknown as [ChangelogType, ...ChangelogType[]];
 
 export const ChangelogTypes = {
   ADDED: 'added' as const,
@@ -155,8 +149,6 @@ export const MessageRoleSchema = z.enum(MESSAGE_ROLES).openapi({
 
 export type MessageRole = z.infer<typeof MessageRoleSchema>;
 
-export const MESSAGE_ROLES_ENUM_VALUES = MESSAGE_ROLES as unknown as [MessageRole, ...MessageRole[]];
-
 export const MessageRoles = {
   USER: 'user' as const,
   ASSISTANT: 'assistant' as const,
@@ -195,8 +187,6 @@ export const AnalysisStatusSchema = z.enum(ANALYSIS_STATUSES).openapi({
 });
 
 export type AnalysisStatus = z.infer<typeof AnalysisStatusSchema>;
-
-export const ANALYSIS_STATUSES_ENUM_VALUES = ANALYSIS_STATUSES as unknown as [AnalysisStatus, ...AnalysisStatus[]];
 
 export const AnalysisStatuses = {
   PENDING: 'pending' as const,
@@ -262,8 +252,6 @@ export const FeedbackTypeSchema = z.enum(FEEDBACK_TYPES).openapi({
 });
 
 export type FeedbackType = z.infer<typeof FeedbackTypeSchema>;
-
-export const FEEDBACK_TYPES_ENUM_VALUES = FEEDBACK_TYPES as unknown as [FeedbackType, ...FeedbackType[]];
 
 export const FeedbackTypes = {
   LIKE: 'like' as const,

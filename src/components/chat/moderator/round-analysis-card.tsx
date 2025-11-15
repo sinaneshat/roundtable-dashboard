@@ -153,20 +153,24 @@ export function RoundAnalysisCard({
         disabled={isStreamingOrPending}
         className={cn(isStreamingOrPending && 'cursor-default')}
       >
-        <ChainOfThoughtHeader>
-          <div className="flex items-center gap-2.5 w-full">
-            <Clock className="size-4 text-muted-foreground flex-shrink-0" />
-            <span className="text-sm font-medium">
-              {t('roundAnalysis', { number: getDisplayRoundNumber(analysis.roundNumber) })}
-            </span>
-            <Badge variant="outline" className={cn('text-xs h-6', config.color)}>
-              {config.label}
-            </Badge>
-            <span className="hidden md:inline text-sm text-muted-foreground">•</span>
-            <span className="hidden md:inline text-xs text-muted-foreground capitalize">
-              {t(`mode.${analysis.mode}`)}
-            </span>
-            {(analysis.status === AnalysisStatuses.FAILED || isRoundIncomplete) && (
+        <div className="relative">
+          <ChainOfThoughtHeader>
+            <div className="flex items-center gap-2.5 w-full pr-24">
+              <Clock className="size-4 text-muted-foreground flex-shrink-0" />
+              <span className="text-sm font-medium">
+                {t('roundAnalysis', { number: getDisplayRoundNumber(analysis.roundNumber) })}
+              </span>
+              <Badge variant="outline" className={cn('text-xs h-6', config.color)}>
+                {config.label}
+              </Badge>
+              <span className="hidden md:inline text-sm text-muted-foreground">•</span>
+              <span className="hidden md:inline text-xs text-muted-foreground capitalize">
+                {t(`mode.${analysis.mode}`)}
+              </span>
+            </div>
+          </ChainOfThoughtHeader>
+          {(analysis.status === AnalysisStatuses.FAILED || isRoundIncomplete) && (
+            <div className="absolute right-4 top-3 z-10">
               <button
                 type="button"
                 onClick={(e) => {
@@ -175,7 +179,7 @@ export function RoundAnalysisCard({
                 }}
                 disabled={isRetrying}
                 className={cn(
-                  'ml-auto flex items-center gap-1.5 px-2 py-1 text-xs font-medium rounded-md transition-colors',
+                  'flex items-center gap-1.5 px-2 py-1 text-xs font-medium rounded-md transition-colors',
                   'text-primary hover:text-primary/80 hover:bg-primary/10',
                   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
                   'disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent',
@@ -185,9 +189,9 @@ export function RoundAnalysisCard({
                 <RotateCcw className={cn('size-3.5', isRetrying && 'animate-spin')} />
                 <span className="hidden sm:inline">{isRoundIncomplete ? t('retryRound') : t('retryAnalysis')}</span>
               </button>
-            )}
-          </div>
-        </ChainOfThoughtHeader>
+            </div>
+          )}
+        </div>
         <ChainOfThoughtContent>
           <div className="space-y-4">
             {analysis.userQuestion && analysis.userQuestion !== 'N/A' && (

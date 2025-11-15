@@ -45,6 +45,7 @@ import { showApiErrorToast } from '@/lib/toast';
 type ApiKeysListProps = {
   apiKeys: ApiKey[];
   isLoading: boolean;
+  error?: Error | string | null;
   onCreateNew: () => void;
 };
 
@@ -57,7 +58,7 @@ type ApiKeysListProps = {
  * Following chat-nav.tsx pattern for ScrollArea usage
  * Reuses ApiKeyCard for consistency
  */
-export function ApiKeysList({ apiKeys, isLoading, onCreateNew }: ApiKeysListProps) {
+export function ApiKeysList({ apiKeys, isLoading, error, onCreateNew }: ApiKeysListProps) {
   const t = useTranslations();
   const [deleteKeyId, setDeleteKeyId] = useState<string | null>(null);
   const deleteMutation = useDeleteApiKeyMutation();
@@ -82,6 +83,24 @@ export function ApiKeysList({ apiKeys, isLoading, onCreateNew }: ApiKeysListProp
       <div className="flex items-center justify-center py-12">
         <Loader2 className="size-8 animate-spin text-muted-foreground" />
       </div>
+    );
+  }
+
+  // Error state
+  if (error) {
+    const errorMessage = typeof error === 'string' ? error : error.message;
+    return (
+      <Empty className="border-dashed border-destructive/50">
+        <EmptyHeader>
+          <EmptyMedia variant="icon">
+            <Key className="text-destructive" />
+          </EmptyMedia>
+          <EmptyTitle>{t('apiKeys.list.errorTitle')}</EmptyTitle>
+          <EmptyDescription className="text-destructive">
+            {errorMessage}
+          </EmptyDescription>
+        </EmptyHeader>
+      </Empty>
     );
   }
 

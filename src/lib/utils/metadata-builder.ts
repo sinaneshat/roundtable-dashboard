@@ -178,18 +178,6 @@ export function createStreamingMetadata(
 /**
  * Update streaming metadata when stream finishes
  * Used in AI SDK messageMetadata callback with type='finish'
- *
- * @param streamMetadata - Initial metadata from createStreamingMetadata
- * @param finishResult - AI SDK finishResult from onFinish callback
- * @param finishResult.finishReason - Reason the stream finished
- * @param finishResult.usage - Token usage statistics
- * @param finishResult.usage.promptTokens - Tokens used in prompt
- * @param finishResult.usage.completionTokens - Tokens used in completion
- * @param finishResult.usage.totalTokens - Total tokens used
- * @param finishResult.totalUsage - Alternative total usage (fallback for some models)
- * @param finishResult.totalUsage.promptTokens - Tokens used in prompt
- * @param finishResult.totalUsage.completionTokens - Tokens used in completion
- * @param finishResult.totalUsage.totalTokens - Total tokens used
  */
 export function completeStreamingMetadata(
   streamMetadata: DbAssistantMessageMetadata,

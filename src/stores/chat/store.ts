@@ -297,8 +297,10 @@ const createAnalysisSlice: StateCreator<
 
         return {
           ...a,
-          ...data,
-          mode,
+          analysisData: {
+            ...data,
+            mode,
+          },
           status: AnalysisStatuses.COMPLETE,
         };
       }),
@@ -373,6 +375,44 @@ const createAnalysisSlice: StateCreator<
 
     if (!allMessagesFromCorrectRound) {
       return;
+    }
+
+    // ✅ VALIDATION: Check if message IDs match their metadata (warning only)
+    // Logs mismatches but doesn't block analysis creation
+    // Metadata is the source of truth, not message IDs
+    const messageIdMismatches = participantMessages.filter((msg) => {
+      // Extract round number from message ID pattern: {threadId}_r{roundNumber}_p{participantIndex}
+      const idMatch = msg.id.match(/_r(\d+)_p(\d+)/);
+      if (!idMatch) {
+        // Message ID doesn't follow expected pattern
+        return true; // This is a mismatch
+      }
+
+      const roundFromId = Number.parseInt(idMatch[1]!);
+      const participantIndexFromId = Number.parseInt(idMatch[2]!);
+
+      // Verify ID matches metadata
+      const msgRound = getRoundNumber(msg.metadata);
+      const msgParticipantIndex = msg.metadata && typeof msg.metadata === 'object' && msg.metadata !== null && 'participantIndex' in msg.metadata
+        ? (msg.metadata.participantIndex as number | undefined)
+        : undefined;
+
+      // Check if round and participant index match
+      return roundFromId !== msgRound || participantIndexFromId !== msgParticipantIndex;
+    });
+
+    // ✅ LOG WARNING: Log mismatches for debugging, but don't block analysis
+    // This can happen during retry or edge cases - metadata is the source of truth
+    if (messageIdMismatches.length > 0) {
+      console.warn('[createPendingAnalysis] Message ID/metadata mismatch detected', {
+        roundNumber,
+        threadId,
+        mismatches: messageIdMismatches.map(msg => ({
+          id: msg.id,
+          metadata: msg.metadata,
+        })),
+      });
+      // Continue with analysis creation - don't block it
     }
 
     // Generate unique analysis ID

@@ -22,7 +22,12 @@ import type { UIMessage } from 'ai';
 
 import { MessagePartTypes, MessageRoles } from '@/api/core/enums';
 import type { ChatMessage } from '@/api/routes/chat/schema';
-import type { DbMessageMetadata, DbPreSearchMessageMetadata } from '@/db/schemas/chat-metadata';
+import type {
+  DbAssistantMessageMetadata,
+  DbMessageMetadata,
+  DbPreSearchMessageMetadata,
+  DbUserMessageMetadata,
+} from '@/db/schemas/chat-metadata';
 import {
   DbAssistantMessageMetadataSchema,
   DbPreSearchMessageMetadataSchema,
@@ -47,6 +52,7 @@ import {
   getMessageMetadata,
   getParticipantId,
   getRoundNumber,
+  getUserMetadata,
   hasParticipantEnrichment,
   isPreSearch,
 } from './metadata';
@@ -240,10 +246,6 @@ export function chatMessagesToUIMessages(
           roundNumber: currentRound ?? 0,
         };
 
-        if (message.role === MessageRoles.USER) {
-          currentRound += 1;
-        }
-
         return {
           ...message,
           metadata: updated,
@@ -292,7 +294,7 @@ export function chatMessagesToUIMessages(
           enrichedMetadata = null;
         }
       } else {
-        enrichedMetadata = message.metadata;
+        enrichedMetadata = message.metadata as DbMessageMetadata;
       }
     } else {
       enrichedMetadata = null;

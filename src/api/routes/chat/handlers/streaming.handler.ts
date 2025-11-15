@@ -130,6 +130,36 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
     const currentRoundNumber = roundResult.roundNumber;
 
     // =========================================================================
+    // STEP 4.5: Create PENDING pre-search record if web search enabled
+    // =========================================================================
+    // ✅ FIX: Create pre-search record for subsequent rounds (not just round 0)
+    // Only create if:
+    // 1. Web search is enabled on thread
+    // 2. This is the first participant (participantIndex === 0)
+    // 3. This is NOT a regeneration (regeneration clears existing pre-search)
+    // 4. Pre-search record doesn't already exist for this round
+    if (thread.enableWebSearch && participantIndex === 0 && !regenerateRound) {
+      const existingPreSearch = await db.query.chatPreSearch.findFirst({
+        where: and(
+          eq(tables.chatPreSearch.threadId, threadId),
+          eq(tables.chatPreSearch.roundNumber, currentRoundNumber),
+        ),
+      });
+
+      if (!existingPreSearch) {
+        const { ulid } = await import('ulid');
+        await db.insert(tables.chatPreSearch).values({
+          id: ulid(),
+          threadId,
+          roundNumber: currentRoundNumber,
+          userQuery: extractTextFromParts(message.parts),
+          status: 'pending',
+          createdAt: new Date(),
+        });
+      }
+    }
+
+    // =========================================================================
     // STEP 5: Handle mode change (if provided)
     // =========================================================================
     if (providedMode && providedMode !== thread.mode && participantIndex === 0) {

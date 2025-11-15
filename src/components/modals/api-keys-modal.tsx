@@ -16,8 +16,10 @@
 import { Book, ExternalLink, FileJson, FileText } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useState } from 'react';
+import { z } from 'zod';
 
 import type { ApiKey } from '@/api/routes/api-keys/schema';
+import { ApiKeySchema } from '@/api/routes/api-keys/schema';
 import { BaseModal } from '@/components/modals/base-modal';
 import { ApiKeyForm } from '@/components/settings/api-key-form';
 import {
@@ -37,15 +39,33 @@ type ApiKeysModalProps = {
   onOpenChange: (open: boolean) => void;
 };
 
+// Zod schema for validating API keys array
+const ApiKeysArraySchema = z.array(ApiKeySchema);
+
 export function ApiKeysModal({ open, onOpenChange }: ApiKeysModalProps) {
   const [activeTab, setActiveTab] = useState<'list' | 'create'>('list');
-  const { data: apiKeysResponse, isLoading, isFetching } = useApiKeysQuery(open);
+  const { data: apiKeysResponse, isLoading, isFetching, error } = useApiKeysQuery(open);
   const t = useTranslations();
 
-  // Extract API keys from response
-  const apiKeys = apiKeysResponse?.success && apiKeysResponse.data?.items
-    ? apiKeysResponse.data.items
-    : [];
+  // Extract and validate API keys from response
+  let apiKeys: ApiKey[] = [];
+  let validationError: string | null = null;
+
+  if (apiKeysResponse?.success && apiKeysResponse.data?.items) {
+    try {
+      // Validate API keys array with Zod before passing to component
+      apiKeys = ApiKeysArraySchema.parse(apiKeysResponse.data.items);
+    } catch (err) {
+      // Handle validation errors gracefully
+      if (err instanceof z.ZodError) {
+        validationError = `Invalid API key data: ${err.issues.map(issue => issue.message).join(', ')}`;
+      } else {
+        validationError = 'Failed to validate API key data';
+      }
+      console.error('[ApiKeysModal] Validation error:', err);
+      apiKeys = [];
+    }
+  }
 
   const handleCreated = () => {
     setActiveTab('list');
@@ -146,8 +166,9 @@ export function ApiKeysModal({ open, onOpenChange }: ApiKeysModalProps) {
           </TabsList>
           <TabsContent value="list" className="mt-4">
             <ApiKeysList
-              apiKeys={apiKeys as unknown as ApiKey[]}
+              apiKeys={apiKeys}
               isLoading={isLoading || isFetching}
+              error={error || validationError}
               onCreateNew={() => setActiveTab('create')}
             />
           </TabsContent>

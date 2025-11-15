@@ -2,13 +2,13 @@ import { relations, sql } from 'drizzle-orm';
 import { check, index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
 
 import {
-  ANALYSIS_STATUSES_ENUM_VALUES,
-  CHANGELOG_TYPES_ENUM_VALUES,
-  CHAT_MODE_ENUM_VALUES,
+  ANALYSIS_STATUSES,
+  CHANGELOG_TYPES,
+  CHAT_MODES,
   DEFAULT_CHAT_MODE,
-  FEEDBACK_TYPES_ENUM_VALUES,
-  MESSAGE_ROLES_ENUM_VALUES,
-  THREAD_STATUS_ENUM_VALUES,
+  FEEDBACK_TYPES,
+  MESSAGE_ROLES,
+  THREAD_STATUSES,
 } from '@/api/core/enums';
 import type {
   DbChangelogData,
@@ -37,10 +37,10 @@ export const chatThread = sqliteTable('chat_thread', {
 
   title: text('title').notNull(),
   slug: text('slug').notNull().unique(), // SEO-friendly URL slug (e.g., "product-strategy-abc123")
-  mode: text('mode', { enum: CHAT_MODE_ENUM_VALUES })
+  mode: text('mode', { enum: CHAT_MODES })
     .notNull()
     .default(DEFAULT_CHAT_MODE),
-  status: text('status', { enum: THREAD_STATUS_ENUM_VALUES })
+  status: text('status', { enum: THREAD_STATUSES })
     .notNull()
     .default('active'),
   isFavorite: integer('is_favorite', { mode: 'boolean' })
@@ -176,7 +176,7 @@ export const chatThreadChangelog = sqliteTable('chat_thread_changelog', {
   roundNumber: integer('round_number')
     .notNull()
     .default(0), // ✅ 0-BASED: Default to round 0
-  changeType: text('change_type', { enum: CHANGELOG_TYPES_ENUM_VALUES }).notNull(),
+  changeType: text('change_type', { enum: CHANGELOG_TYPES }).notNull(),
   changeSummary: text('change_summary').notNull(), // Human-readable summary
   // ✅ TYPE-SAFE: Discriminated union by 'type' field - no escape hatches
   // Four change types: 'participant', 'participant_role', 'mode_change', 'participant_reorder'
@@ -210,7 +210,7 @@ export const chatMessage = sqliteTable('chat_message', {
     .references(() => chatThread.id, { onDelete: 'cascade' }),
   participantId: text('participant_id')
     .references(() => chatParticipant.id, { onDelete: 'set null' }), // null for user messages
-  role: text('role', { enum: MESSAGE_ROLES_ENUM_VALUES })
+  role: text('role', { enum: MESSAGE_ROLES })
     .notNull()
     .default('assistant'),
 
@@ -288,11 +288,11 @@ export const chatModeratorAnalysis = sqliteTable('chat_moderator_analysis', {
     .notNull()
     .references(() => chatThread.id, { onDelete: 'cascade' }),
   roundNumber: integer('round_number').notNull(), // ✅ 0-BASED: First round is 0
-  mode: text('mode', { enum: CHAT_MODE_ENUM_VALUES }).notNull(), // Mode when analysis was performed
+  mode: text('mode', { enum: CHAT_MODES }).notNull(), // Mode when analysis was performed
   userQuestion: text('user_question').notNull(), // The user's question/prompt for this round
   // ✅ CRITICAL: Status field for idempotency and state tracking
   // Prevents duplicate analysis generation on page refresh
-  status: text('status', { enum: ANALYSIS_STATUSES_ENUM_VALUES })
+  status: text('status', { enum: ANALYSIS_STATUSES })
     .notNull()
     .default('pending'), // pending -> streaming -> complete/failed
   // Store the full analysis as JSON (leaderboard, participant analyses, summary, conclusion)
@@ -382,7 +382,7 @@ export const chatRoundFeedback = sqliteTable('chat_round_feedback', {
     .notNull()
     .references(() => user.id, { onDelete: 'cascade' }),
   roundNumber: integer('round_number').notNull(), // ✅ 0-BASED: First round is 0
-  feedbackType: text('feedback_type', { enum: FEEDBACK_TYPES_ENUM_VALUES }), // null = no feedback
+  feedbackType: text('feedback_type', { enum: FEEDBACK_TYPES }), // null = no feedback
   createdAt: integer('created_at', { mode: 'timestamp' })
     .defaultNow()
     .notNull(),
@@ -412,7 +412,7 @@ export const chatPreSearch = sqliteTable('chat_pre_search', {
   // ✅ CRITICAL: Status field for idempotency and state tracking
   // Prevents duplicate searches on page refresh
   // Uses ANALYSIS_STATUSES for consistency (pending/streaming/completed/failed)
-  status: text('status', { enum: ANALYSIS_STATUSES_ENUM_VALUES })
+  status: text('status', { enum: ANALYSIS_STATUSES })
     .notNull()
     .default('pending'), // pending -> streaming -> completed/failed
   // Store the full search results as JSON

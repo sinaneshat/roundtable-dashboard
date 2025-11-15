@@ -18,7 +18,7 @@ type AppProvidersProps = {
   locale: string;
   messages: AbstractIntlMessages;
   timeZone: string;
-  now: Date;
+  now?: Date; // ✅ Optional to prevent hydration mismatch
   env: {
     NEXT_PUBLIC_WEBAPP_ENV?: string;
     NEXT_PUBLIC_MAINTENANCE?: string;

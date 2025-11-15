@@ -191,6 +191,7 @@ const ChatCustomRoleSchema = chatCustomRoleSelectSchema
     metadata: DbCustomRoleMetadataSchema.nullable().optional(),
   })
   .openapi('ChatCustomRole');
+
 export const CreateThreadRequestSchema = chatThreadInsertSchema
   .pick({
     title: true,
@@ -258,8 +259,12 @@ const ThreadDetailPayloadSchema = z.object({
   participants: z.array(ChatParticipantSchema),
   messages: z.array(ChatMessageSchema),
   changelog: z.array(ChatThreadChangelogSchema),
-  analyses: z.array(z.any()).optional(), // ModeratorAnalysis - optional for public threads
-  feedback: z.array(z.any()).optional(), // RoundFeedback - optional for public threads
+  analyses: z.array(chatModeratorAnalysisSelectSchema).optional().openapi({
+    description: 'Moderator analyses for each round (optional - excluded for public threads)',
+  }),
+  feedback: z.array(chatRoundFeedbackSelectSchema).optional().openapi({
+    description: 'User feedback for each round (optional - excluded for public threads)',
+  }),
   user: userSelectSchema.pick({
     id: true,
     name: true,
@@ -267,7 +272,9 @@ const ThreadDetailPayloadSchema = z.object({
   }),
 }).openapi('ThreadDetailPayload');
 export const ThreadListResponseSchema = createCursorPaginatedResponseSchema(ChatThreadSchema).openapi('ThreadListResponse');
+export type ThreadListResponse = z.infer<typeof ThreadListResponseSchema>;
 export const ThreadDetailResponseSchema = createApiResponseSchema(ThreadDetailPayloadSchema).openapi('ThreadDetailResponse');
+export type ThreadDetailResponse = z.infer<typeof ThreadDetailResponseSchema>;
 
 // Thread slug status payload (lightweight for polling during AI title generation)
 const ThreadSlugStatusPayloadSchema = z.object({
@@ -319,6 +326,7 @@ const ParticipantDetailPayloadSchema = z.object({
   participant: ChatParticipantSchema,
 }).openapi('ParticipantDetailPayload');
 export const ParticipantDetailResponseSchema = createApiResponseSchema(ParticipantDetailPayloadSchema).openapi('ParticipantDetailResponse');
+export type ParticipantDetailResponse = z.infer<typeof ParticipantDetailResponseSchema>;
 /**
  * AI SDK UIMessage schema for OpenAPI documentation
  * This is a simplified representation - actual runtime validation uses AI SDK's validateUIMessages()
@@ -600,6 +608,7 @@ const PreSearchListPayloadSchema = z.object({
 }).openapi('PreSearchListPayload');
 
 export const PreSearchListResponseSchema = createApiResponseSchema(PreSearchListPayloadSchema).openapi('PreSearchListResponse');
+export type PreSearchListResponse = z.infer<typeof PreSearchListResponseSchema>;
 
 // ============================================================================
 // CHAT STREAMING SCHEMAS
@@ -636,6 +645,7 @@ const MessagesListPayloadSchema = z.object({
   count: z.number().int().nonnegative(),
 }).openapi('MessagesListPayload');
 export const MessagesListResponseSchema = createApiResponseSchema(MessagesListPayloadSchema).openapi('MessagesListResponse');
+export type MessagesListResponse = z.infer<typeof MessagesListResponseSchema>;
 export const CreateCustomRoleRequestSchema = chatCustomRoleInsertSchema
   .pick({
     name: true,
@@ -662,6 +672,7 @@ const ChangelogListPayloadSchema = z.object({
   count: z.number().int().nonnegative(),
 }).openapi('ChangelogListPayload');
 export const ChangelogListResponseSchema = createApiResponseSchema(ChangelogListPayloadSchema).openapi('ChangelogListResponse');
+export type ChangelogListResponse = z.infer<typeof ChangelogListResponseSchema>;
 export const CreateChangelogParamsSchema = z.object({
   threadId: CoreSchemas.id(),
   roundNumber: RoundNumberSchema, // ✅ 0-BASED: Allow round 0
@@ -780,6 +791,8 @@ export const AnalysisAcceptedPayloadSchema = z.object({
   message: z.string().optional().describe('Optional message about polling for completion'),
 }).openapi('AnalysisAcceptedPayload');
 export const AnalysisAcceptedResponseSchema = AnalysisAcceptedPayloadSchema.openapi('AnalysisAcceptedResponse');
+
+// ✅ TYPE-SAFE: Stored moderator analysis with properly typed analysis data
 export const StoredModeratorAnalysisSchema = chatModeratorAnalysisSelectSchema
   .extend({
     analysisData: z.object({
@@ -789,11 +802,13 @@ export const StoredModeratorAnalysisSchema = chatModeratorAnalysisSelectSchema
     }).nullable().optional(),
   })
   .openapi('StoredModeratorAnalysis');
+
 const ModeratorAnalysisListPayloadSchema = z.object({
   items: z.array(StoredModeratorAnalysisSchema),
   count: z.number().int().nonnegative(),
 }).openapi('ModeratorAnalysisListPayload');
 export const ModeratorAnalysisListResponseSchema = createApiResponseSchema(ModeratorAnalysisListPayloadSchema).openapi('ModeratorAnalysisListResponse');
+export type ModeratorAnalysisListResponse = z.infer<typeof ModeratorAnalysisListResponseSchema>;
 
 // Export schemas for store usage
 export { ChatParticipantSchema, ChatThreadSchema };

@@ -367,6 +367,7 @@ export function useFlowStateMachine(
         case 'CREATE_ANALYSIS': {
           // Create pending analysis when participants finish
           const { threadId, currentRound } = context;
+
           if (threadId && messages.length > 0) {
             // ✅ CRITICAL FIX: Check if analysis already created before proceeding
             // Prevents duplicate analysis creation when both provider and flow-state-machine trigger

@@ -1,24 +1,15 @@
 /**
  * Test Utilities for React Testing Library
  *
- * This file provides a custom render function with simplified provider setup for testing.
- * For full provider integration (QueryClient, i18n, etc.), uncomment the provider imports
- * and TestProviders implementation below once ESM module transformation is configured.
+ * This file provides a custom render function with provider setup for testing.
+ * Wraps components with necessary providers (QueryClient, mocked i18n).
  */
 
 import type { RenderOptions } from '@testing-library/react';
 import { render } from '@testing-library/react';
 import type { ReactElement } from 'react';
 
-// TODO: Uncomment these imports when ESM module support is fully configured
-// import type { AbstractIntlMessages } from 'next-intl';
-// import { NextIntlClientProvider } from 'next-intl';
-// import { NuqsAdapter } from 'nuqs/adapters/next/app';
-// import { ChatStoreProvider } from '@/components/providers/chat-store-provider';
-// import QueryClientProvider from '@/components/providers/query-client-provider';
-
-// Simplified render for basic component testing
-// When you need full providers, uncomment the TestProviders implementation below
+import { TestProviders } from './test-providers';
 
 type CustomRenderOptions = Omit<RenderOptions, 'wrapper'> & {
   // Add provider-specific options here as needed
@@ -37,19 +28,14 @@ type CustomRenderOptions = Omit<RenderOptions, 'wrapper'> & {
  * });
  * ```
  *
- * Note: This is a simplified version. To test components that require providers
- * (QueryClient, i18n, Zustand stores), uncomment the TestProviders implementation
- * and configure ESM module transformation in jest.config.ts.
+ * Automatically wraps components with:
+ * - QueryClientProvider (TanStack Query)
+ * - Mocked i18n (next-intl)
  */
 function customRender(
   ui: ReactElement,
   options?: CustomRenderOptions,
 ) {
-  // Simple render without providers for now
-  // Uncomment the wrapper version below when providers are needed
-  return render(ui, options);
-
-  /* Full provider version - uncomment when ESM modules work:
   return render(ui, {
     wrapper: ({ children }) => (
       <TestProviders>
@@ -58,7 +44,6 @@ function customRender(
     ),
     ...options,
   });
-  */
 }
 
 // Re-export everything from React Testing Library

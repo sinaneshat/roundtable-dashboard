@@ -21,8 +21,9 @@
 import * as HttpStatusCodes from 'stoker/http-status-codes';
 import { z } from 'zod';
 
-// Import our unified type-safe error context instead of generic Record
+// Import our unified type-safe error context and schema
 import type { ErrorContext } from '@/api/core';
+import { ErrorContextSchema } from '@/api/core/schemas';
 
 // ============================================================================
 // ZOD SCHEMAS FOR ERROR TYPES
@@ -117,7 +118,7 @@ export const AppErrorConfigSchema = z.object({
   statusCode: z.number().int().min(100).max(599),
   severity: ErrorSeveritySchema.optional().default('medium'),
   details: z.unknown().optional(),
-  context: z.any().optional(), // ErrorContext type is complex, use any for now
+  context: ErrorContextSchema.optional(),
   correlationId: z.string().optional(),
 });
 

@@ -106,7 +106,7 @@ export const ListProjectsQuerySchema = CursorPaginationQuerySchema.extend({
  * Multipart form data for file uploads
  */
 export const UploadFileRequestSchema = z.object({
-  file: z.any().openapi({
+  file: z.instanceof(File).openapi({
     description: 'File to upload (multipart/form-data)',
     type: 'string',
     format: 'binary',

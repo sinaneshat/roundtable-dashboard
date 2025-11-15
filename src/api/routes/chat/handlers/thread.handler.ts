@@ -585,6 +585,40 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
       await logModeChange(id, nextRoundNumber, thread.mode, body.mode);
     }
 
+    // ✅ CREATE CHANGELOG ENTRY for web search toggle
+    if (body.enableWebSearch !== undefined && body.enableWebSearch !== thread.enableWebSearch) {
+      // Need to get latest roundNumber from messages
+      const latestMessagesForWebSearch = await db.query.chatMessage.findMany({
+        where: eq(tables.chatMessage.threadId, id),
+        orderBy: [desc(tables.chatMessage.createdAt)],
+        limit: 1,
+      });
+
+      // roundNumber is a column, not in metadata
+      // ✅ 0-BASED FIX: Default to 0 for first round (was: 1)
+      const currentRoundNumber = latestMessagesForWebSearch.length > 0 && latestMessagesForWebSearch[0]
+        ? latestMessagesForWebSearch[0].roundNumber
+        : 0;
+
+      // ✅ CRITICAL FIX: Changelog should appear BEFORE the next round
+      // Web search toggle applies to the next round, not the current one
+      const nextRoundNumber = currentRoundNumber + 1;
+
+      // Create changelog entry for web search toggle
+      await db.insert(tables.chatThreadChangelog).values({
+        id: ulid(),
+        threadId: id,
+        roundNumber: nextRoundNumber,
+        changeType: ChangelogTypes.MODIFIED,
+        changeSummary: body.enableWebSearch ? 'Enabled web search' : 'Disabled web search',
+        changeData: {
+          type: 'web_search' as const,
+          enabled: body.enableWebSearch,
+        },
+        createdAt: now,
+      });
+    }
+
     const updateData: {
       title?: string;
       mode?: ChatMode;

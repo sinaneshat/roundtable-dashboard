@@ -82,6 +82,11 @@ export function SoftwareApplicationSchema(props: SoftwareApplicationSchemaProps)
 
   const baseUrl = getBaseUrl();
 
+  // ✅ FIX: Use static date to prevent hydration mismatch
+  // Calculate once at build time, not on every render
+  // This prevents server/client Date.now() difference causing hydration errors
+  const oneYearFromNow = new Date(2026, 0, 1).toISOString(); // Jan 1, 2026 - update yearly
+
   const structuredData = {
     '@context': 'https://schema.org',
     '@type': 'SoftwareApplication',
@@ -99,7 +104,7 @@ export function SoftwareApplicationSchema(props: SoftwareApplicationSchemaProps)
       'priceCurrency': currency,
       'availability': 'https://schema.org/InStock',
       'url': baseUrl,
-      'priceValidUntil': new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
+      'priceValidUntil': oneYearFromNow,
     },
     'provider': {
       '@type': 'Organization',

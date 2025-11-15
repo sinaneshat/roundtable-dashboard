@@ -61,7 +61,10 @@ export default async function Layout({ children, modal }: RootLayoutProps) {
   // Static locale configuration (English-only app)
   const locale = 'en';
   const timeZone = 'UTC';
-  const now = new Date();
+  // ✅ FIX: Use undefined instead of new Date() to prevent hydration mismatch
+  // Server and client will have different Date() values, causing hydration error
+  // next-intl handles undefined gracefully
+  const now = undefined;
 
   return (
     <html
@@ -86,8 +89,7 @@ export default async function Layout({ children, modal }: RootLayoutProps) {
             tAeo('relatedQuestions.howToUse', { brand: BRAND.displayName }),
           ]}
         />
-      </head>
-      <body>
+
         {/* Core structured data for web application */}
         <StructuredData type="WebApplication" />
 
@@ -102,7 +104,8 @@ export default async function Layout({ children, modal }: RootLayoutProps) {
             tFeatures('multipleParticipants'),
           ]}
         />
-
+      </head>
+      <body>
         <AppProviders
           locale={locale}
           messages={messages}

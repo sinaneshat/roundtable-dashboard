@@ -326,6 +326,15 @@ const DbParticipantReorderDataSchema = z.object({
 });
 
 /**
+ * Web Search Toggle Metadata
+ * For enabling/disabling web search mid-conversation
+ */
+const DbWebSearchChangeDataSchema = z.object({
+  type: z.literal('web_search'),
+  enabled: z.boolean(),
+});
+
+/**
  * Complete Changelog Data Schema - Discriminated Union
  *
  * ✅ TYPE-SAFE DISCRIMINATION: Use 'type' field to determine change type
@@ -335,6 +344,7 @@ export const DbChangelogDataSchema = z.discriminatedUnion('type', [
   DbParticipantRoleChangeDataSchema,
   DbModeChangeDataSchema,
   DbParticipantReorderDataSchema,
+  DbWebSearchChangeDataSchema,
 ]);
 
 export type DbChangelogData = z.infer<typeof DbChangelogDataSchema>;

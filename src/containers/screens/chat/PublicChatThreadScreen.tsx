@@ -5,7 +5,7 @@ import { useTranslations } from 'next-intl';
 import { useMemo } from 'react';
 
 import type { FeedbackType } from '@/api/core/enums';
-import type { ChatParticipant, RoundFeedback as RoundFeedbackType } from '@/api/routes/chat/schema';
+import type { ChatParticipant, RoundFeedbackData, StoredModeratorAnalysis } from '@/api/routes/chat/schema';
 import { ThreadTimeline } from '@/components/chat/thread-timeline';
 import { UnifiedErrorBoundary } from '@/components/chat/unified-error-boundary';
 import { Button } from '@/components/ui/button';
@@ -39,13 +39,17 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
     updatedAt: new Date(p.updatedAt),
   })), [rawParticipants]);
 
-  // Use analyses as-is from backend (already has correct shape)
-  const analyses = useMemo(() => rawAnalyses, [rawAnalyses]);
+  // Transform analyses - convert string dates to Date objects
+  const analyses = useMemo(() => rawAnalyses?.map((analysis: { createdAt: string; completedAt: string | null; [key: string]: unknown }) => ({
+    ...analysis,
+    createdAt: new Date(analysis.createdAt),
+    completedAt: analysis.completedAt ? new Date(analysis.completedAt) : null,
+  })) as unknown as StoredModeratorAnalysis[] || [], [rawAnalyses]);
 
-  // Build feedback map for quick lookup
+  // Build feedback map for quick lookup - transform dates
   const feedbackByRound = useMemo(() => {
     const map = new Map<number, FeedbackType>();
-    rawFeedback.forEach((fb: RoundFeedbackType) => {
+    rawFeedback?.forEach((fb: RoundFeedbackData) => {
       if (fb.feedbackType) {
         map.set(fb.roundNumber, fb.feedbackType);
       }

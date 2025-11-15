@@ -400,6 +400,10 @@ export function useMultiParticipantChat(
     [prepareSendMessagesRequest],
   );
 
+  // ✅ CRITICAL FIX: NEVER pass messages prop - use uncontrolled AI SDK
+  // Problem: Passing messages makes useChat controlled, causing updates to be overwritten
+  // Solution: Let AI SDK manage its own state via id-based persistence
+  // We'll sync external messages using setMessages in an effect below
   const {
     messages,
     sendMessage: aiSendMessage,
@@ -410,10 +414,8 @@ export function useMultiParticipantChat(
   } = useChat({
     id: threadId,
     transport,
-    // AI SDK v5 Pattern: Pass messages (renamed from initialMessages in v5.0)
-    // When provided from backend after thread creation, these hydrate the chat
-    // Reference: https://github.com/vercel/ai/blob/ai_5_0_0/content/docs/08-migration-guides/26-migration-guide-5-0.mdx
-    ...(initialMessages && initialMessages.length > 0 ? { messages: initialMessages } : {}),
+    // ✅ NEVER pass messages - let AI SDK be uncontrolled
+    // Initial hydration happens via setMessages effect below
 
     /**
      * Handle participant errors - create error UI and continue to next participant
@@ -524,7 +526,10 @@ export function useMultiParticipantChat(
 
         // ✅ SINGLE SOURCE OF TRUTH: Use extraction utility for type-safe metadata access
         const backendRoundNumber = getRoundNumber(data.message.metadata);
-        const finalRoundNumber = backendRoundNumber || currentRoundRef.current;
+        const finalRoundNumber = backendRoundNumber ?? currentRoundRef.current;
+
+        // 🐛 DEBUG: Log message ID received from AI SDK
+        const expectedId = `${threadId}_r${finalRoundNumber}_p${currentIndex}`;
 
         // ✅ STRICT TYPING: mergeParticipantMetadata now requires roundNumber parameter
         // Returns complete AssistantMessageMetadata with ALL required fields
@@ -540,8 +545,28 @@ export function useMultiParticipantChat(
         // eslint-disable-next-line react-dom/no-flush-sync -- Required for multi-participant chat synchronization
         flushSync(() => {
           setMessages((prev) => {
+            // ✅ CRITICAL FIX: Correct message ID if AI SDK sent wrong ID
+            // AI SDK sometimes reuses message IDs from previous rounds
+            // Backend sends correct ID in metadata, so use that as source of truth
+            const receivedId = data.message.id;
+            const correctId = expectedId;
+            const needsIdCorrection = receivedId !== correctId;
+
+            if (needsIdCorrection) {
+              // This is expected behavior in multi-round conversations
+              // AI SDK v5 caches messages by threadId and may reuse IDs from previous rounds
+              // We correct this using the backend's deterministic ID format
+              console.debug('[onCompletion] Corrected AI SDK message ID:', {
+                receivedId,
+                correctId,
+                roundNumber: finalRoundNumber,
+                participantIndex: currentIndex,
+              });
+            }
+
             const completeMessage: UIMessage = {
               ...data.message,
+              id: correctId, // ✅ Use correct ID from backend metadata
               metadata: completeMetadata, // ✅ Now uses strictly typed metadata
             };
 
@@ -549,8 +574,45 @@ export function useMultiParticipantChat(
             // Backend generates IDs using composite key: {threadId}_r{roundNumber}_p{participantId}
             // Each participant can only respond ONCE per round - collisions are impossible
             // No defensive suffix generation required
-            const originalMessageId = data.message.id;
-            const idToSearchFor = originalMessageId;
+            const idToSearchFor = correctId; // Search for correct ID, not wrong one from AI SDK
+
+            // ✅ CRITICAL FIX: Handle AI SDK message ID mismatch
+            // If AI SDK sent wrong ID, we need to:
+            // 1. Remove the wrongly-ID'd streaming message (if it exists)
+            // 2. Add/update the message with the correct ID
+            if (needsIdCorrection) {
+              // Remove any message with the wrong ID from this participant AND this round
+              // ✅ CRITICAL FIX: Must check BOTH participant AND round to avoid removing messages from other rounds
+              const filteredMessages = prev.filter((msg: UIMessage) => {
+                if (msg.id !== receivedId)
+                  return true; // Keep messages with different IDs
+
+                const msgMetadata = msg.metadata as DbAssistantMessageMetadata | undefined;
+                const msgRoundNumber = getRoundNumber(msgMetadata);
+
+                // Remove ONLY if it's from the same participant AND same round
+                // This prevents removing legitimate messages from other rounds with the same ID pattern
+                const sameParticipant = msgMetadata?.participantId === participant.id;
+                const sameRound = msgRoundNumber === finalRoundNumber;
+
+                // Remove if BOTH participant and round match (this is the wrongly-ID'd streaming message)
+                // Keep if either doesn't match (legitimate message from another round)
+                return !(sameParticipant && sameRound);
+              });
+
+              // Check if correct ID already exists (from previous completion or DB load)
+              const correctIdExists = filteredMessages.some(msg => msg.id === correctId);
+
+              if (correctIdExists) {
+                // Update existing message with correct ID
+                return filteredMessages.map((msg: UIMessage) =>
+                  msg.id === correctId ? completeMessage : msg,
+                );
+              } else {
+                // Add new message with correct ID
+                return [...filteredMessages, completeMessage];
+              }
+            }
 
             // ✅ STRICT TYPING FIX: Check if message exists AND belongs to current participant AND current round
             // No more loose optional chaining - completeMetadata has ALL required fields
@@ -638,23 +700,36 @@ export function useMultiParticipantChat(
   }, [messages, aiSendMessage, participants]);
 
   /**
-   * ✅ CRITICAL FIX: Sync external messages prop when it changes
+   * ✅ CRITICAL FIX: Sync external messages ONLY for initial hydration
    *
-   * For ChatOverviewScreen pattern:
-   * 1. Hook initializes with empty messages (before thread created)
-   * 2. Thread created → backend returns messages
-   * 3. Provider passes new messages prop
-   * 4. We MUST sync these into hook's internal state
+   * Problem: Syncing continuously overwrites AI SDK's internal updates from sendMessage
+   * Solution: Only sync when AI SDK is empty and we have messages to hydrate
    *
-   * AI SDK's `messages` prop only hydrates on mount, not on updates.
-   * Use setMessages() to sync external changes.
+   * Scenarios:
+   * 1. ChatOverviewScreen → Thread created → Backend returns messages → Hydrate AI SDK
+   * 2. ChatThreadScreen loads → Fetch thread → Backend returns messages → Hydrate AI SDK
+   * 3. After hydration → AI SDK manages its own state → DON'T sync again
+   *
+   * AI SDK persists state per threadId, so we only need to hydrate on first load,
+   * not on every prop change.
    */
+  const hasHydratedRef = useRef(false);
   useLayoutEffect(() => {
-    // Only sync if we have external messages and they differ from current
-    if (initialMessages && initialMessages.length > 0 && messages.length === 0) {
+    // Only hydrate if:
+    // 1. Haven't hydrated yet for this hook instance
+    // 2. AI SDK has no messages (empty state)
+    // 3. We have external messages to hydrate with
+    const shouldHydrate =
+      !hasHydratedRef.current &&
+      messages.length === 0 &&
+      initialMessages &&
+      initialMessages.length > 0;
+
+    if (shouldHydrate) {
       setMessages(initialMessages);
+      hasHydratedRef.current = true;
     }
-  }, [initialMessages, messages.length, setMessages]);
+  }, [messages.length, initialMessages, setMessages]);
 
   /**
    * Start a new round with existing participants
@@ -674,21 +749,31 @@ export function useMultiParticipantChat(
     // Subscription can pass participants directly from store.getState()
     const currentParticipants = participantsOverride || participantsRef.current;
 
-    // Guard: Prevent concurrent rounds
-    if (isExplicitlyStreaming) {
+    // Guard: Prevent concurrent rounds - check both manual flag AND AI SDK status
+    if (isExplicitlyStreaming || status !== AiSdkStatuses.READY) {
       return;
     }
+
+    // Guard: Prevent concurrent calls using triggering lock
+    if (isTriggeringRef.current) {
+      return;
+    }
+
+    // Set lock to prevent concurrent calls
+    isTriggeringRef.current = true;
 
     const uniqueParticipants = deduplicateParticipants(currentParticipants);
     const enabled = uniqueParticipants.filter(p => p.isEnabled);
 
     if (enabled.length === 0) {
+      isTriggeringRef.current = false;
       return;
     }
 
     const lastUserMessage = messages.findLast(m => m.role === MessageRoles.USER);
 
     if (!lastUserMessage) {
+      isTriggeringRef.current = false;
       return;
     }
 
@@ -696,6 +781,7 @@ export function useMultiParticipantChat(
     const userText = textPart && 'text' in textPart ? textPart.text : '';
 
     if (!userText.trim()) {
+      isTriggeringRef.current = false;
       return;
     }
 
@@ -708,7 +794,6 @@ export function useMultiParticipantChat(
     // These refs are used in prepareSendMessagesRequest and must be set before the API call
     currentIndexRef.current = DEFAULT_PARTICIPANT_INDEX;
     roundParticipantsRef.current = enabled;
-    isTriggeringRef.current = false;
     currentRoundRef.current = roundNumber;
     lastUsedParticipantIndex.current = null; // Reset for new round
 
@@ -734,7 +819,13 @@ export function useMultiParticipantChat(
         isParticipantTrigger: true,
       },
     });
-  }, [messages, resetErrorTracking, isExplicitlyStreaming, aiSendMessage]);
+
+    // Release lock after message is sent
+    // Use requestAnimationFrame to release after browser paint cycle
+    requestAnimationFrame(() => {
+      isTriggeringRef.current = false;
+    });
+  }, [messages, resetErrorTracking, isExplicitlyStreaming, aiSendMessage, status]);
   // Note: participantsOverride comes from caller, not deps
 
   /**
@@ -749,16 +840,25 @@ export function useMultiParticipantChat(
         return;
       }
 
+      // Guard: Prevent concurrent calls using triggering lock
+      if (isTriggeringRef.current) {
+        return;
+      }
+
       const trimmed = content.trim();
       if (!trimmed) {
         return;
       }
+
+      // Set lock to prevent concurrent calls
+      isTriggeringRef.current = true;
 
       // AI SDK v5 Pattern: Simple, straightforward participant filtering
       const uniqueParticipants = deduplicateParticipants(participants);
       const enabled = uniqueParticipants.filter(p => p.isEnabled);
 
       if (enabled.length === 0) {
+        isTriggeringRef.current = false;
         throw new Error('No enabled participants');
       }
 
@@ -766,13 +866,24 @@ export function useMultiParticipantChat(
       // These refs are used in prepareSendMessagesRequest and must be set before the API call
       currentIndexRef.current = DEFAULT_PARTICIPANT_INDEX;
       roundParticipantsRef.current = enabled;
-      isTriggeringRef.current = false;
       lastUsedParticipantIndex.current = null; // Reset for new round
 
-      // Use regenerate round number if retrying, otherwise calculate next
-      const newRoundNumber = regenerateRoundNumberRef.current !== null
-        ? regenerateRoundNumberRef.current
+      // ✅ CRITICAL FIX: Validate regenerate round matches current round
+      // If regenerateRoundNumberRef is set but doesn't match current round,
+      // it's stale state from a previous operation - clear it
+      const currentRound = getCurrentRoundNumber(messages);
+      const isActuallyRegenerating = regenerateRoundNumberRef.current !== null
+        && regenerateRoundNumberRef.current === currentRound;
+
+      // Use regenerate round number if retrying current round, otherwise calculate next
+      const newRoundNumber = isActuallyRegenerating
+        ? regenerateRoundNumberRef.current!
         : calculateNextRoundNumber(messages);
+
+      // Clear regenerate flag if we're not actually regenerating
+      if (!isActuallyRegenerating) {
+        regenerateRoundNumberRef.current = null;
+      }
 
       // CRITICAL: Update round number in ref BEFORE sending message
       // This ensures the backend receives the correct round number
@@ -817,6 +928,12 @@ export function useMultiParticipantChat(
           role: 'user',
           roundNumber: newRoundNumber,
         },
+      });
+
+      // Release lock after message is sent
+      // Use requestAnimationFrame to release after browser paint cycle
+      requestAnimationFrame(() => {
+        isTriggeringRef.current = false;
       });
     },
     [participants, status, aiSendMessage, messages, resetErrorTracking, isExplicitlyStreaming],
