@@ -224,6 +224,7 @@ export function CommandSearch({ isOpen, onClose }: CommandSearchProps) {
             className="flex-1 bg-transparent border-none outline-none text-sm placeholder:text-muted-foreground"
           />
           <button
+            type="button"
             onClick={handleClose}
             className="size-8 flex items-center justify-center hover:bg-white/10 rounded-md transition-colors"
           >

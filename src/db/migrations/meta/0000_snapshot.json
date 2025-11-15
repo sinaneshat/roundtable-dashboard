@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "0cdd460d-e0b4-4551-8841-ba4e8cccc657",
+  "id": "823d9419-5e37-443d-804e-daf8dc9386ef",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "account": {
@@ -1601,7 +1601,7 @@
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false,
-          "default": 1
+          "default": 0
         },
         "tool_calls": {
           "name": "tool_calls",
@@ -2453,7 +2453,7 @@
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false,
-          "default": 1
+          "default": 0
         },
         "change_type": {
           "name": "change_type",
@@ -2473,7 +2473,7 @@
           "name": "change_data",
           "type": "text",
           "primaryKey": false,
-          "notNull": false,
+          "notNull": true,
           "autoincrement": false
         },
         "created_at": {

@@ -82,9 +82,9 @@ export function ModelItem({
             !isDisabled && 'cursor-pointer',
             isDisabled && 'opacity-50 cursor-not-allowed',
           )}
-            style={{ maxWidth: '512px', boxSizing: 'border-box' }}
-            onClick={isDisabled ? undefined : () => onToggle()}
-            onKeyDown={
+          style={{ maxWidth: '512px', boxSizing: 'border-box' }}
+          onClick={isDisabled ? undefined : () => onToggle()}
+          onKeyDown={
             isDisabled
               ? undefined
               : (e) => {

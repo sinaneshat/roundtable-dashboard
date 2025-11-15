@@ -229,7 +229,7 @@ CREATE TABLE `chat_message` (
 	`participant_id` text,
 	`role` text DEFAULT 'assistant' NOT NULL,
 	`parts` text NOT NULL,
-	`round_number` integer DEFAULT 1 NOT NULL,
+	`round_number` integer DEFAULT 0 NOT NULL,
 	`tool_calls` text,
 	`metadata` text,
 	`created_at` integer DEFAULT (cast((julianday('now') - 2440587.5)*86400000 as integer)) NOT NULL,
@@ -346,10 +346,10 @@ CREATE INDEX `chat_thread_public_idx` ON `chat_thread` (`is_public`);--> stateme
 CREATE TABLE `chat_thread_changelog` (
 	`id` text PRIMARY KEY NOT NULL,
 	`thread_id` text NOT NULL,
-	`round_number` integer DEFAULT 1 NOT NULL,
+	`round_number` integer DEFAULT 0 NOT NULL,
 	`change_type` text NOT NULL,
 	`change_summary` text NOT NULL,
-	`change_data` text,
+	`change_data` text NOT NULL,
 	`created_at` integer DEFAULT (cast((julianday('now') - 2440587.5)*86400000 as integer)) NOT NULL,
 	FOREIGN KEY (`thread_id`) REFERENCES `chat_thread`(`id`) ON UPDATE no action ON DELETE cascade
 );

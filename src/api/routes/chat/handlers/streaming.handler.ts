@@ -146,7 +146,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
     if (effectiveWebSearchEnabled && isFirstParticipant && !regenerateRound) {
       try {
         // Log pre-search creation attempt for debugging
-        console.log(`[PreSearch] Attempting to create PENDING record for round ${currentRoundNumber} (thread: ${threadId})`);
+        // console.log(`[PreSearch] Attempting to create PENDING record for round ${currentRoundNumber} (thread: ${threadId})`);
 
         const existingPreSearch = await db.query.chatPreSearch.findFirst({
           where: and(
@@ -168,9 +168,9 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
             createdAt: new Date(),
           });
 
-          console.log(`[PreSearch] ✅ Created PENDING pre-search for round ${currentRoundNumber} (ID: ${preSearchId})`);
+          // console.log(`[PreSearch] ✅ Created PENDING pre-search for round ${currentRoundNumber} (ID: ${preSearchId})`);
         } else {
-          console.log(`[PreSearch] ℹ️ Pre-search already exists for round ${currentRoundNumber} (status: ${existingPreSearch.status})`);
+          // console.log(`[PreSearch] ℹ️ Pre-search already exists for round ${currentRoundNumber} (status: ${existingPreSearch.status})`);
         }
       } catch (error) {
         // ✅ Non-blocking: Don't let pre-search creation errors break streaming
@@ -179,7 +179,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
       }
     } else {
       // Log why pre-search creation was skipped
-      console.log(`[PreSearch] ⏭️  Skipping pre-search creation: webSearch=${effectiveWebSearchEnabled}, firstParticipant=${isFirstParticipant}, notRegeneration=${!regenerateRound}`);
+      // console.log(`[PreSearch] ⏭️  Skipping pre-search creation: webSearch=${effectiveWebSearchEnabled}, firstParticipant=${isFirstParticipant}, notRegeneration=${!regenerateRound}`);
     }
 
     // =========================================================================

@@ -428,7 +428,7 @@ describe('web Search UI Components', () => {
     it('should show separators between multiple searches', () => {
       const searchData = createMockSearchData({ numQueries: 3, includeResults: true });
 
-      const { container } = render(
+      render(
         <PreSearchPanel preSearch={searchData} />,
         { messages: createMockMessages() },
       );

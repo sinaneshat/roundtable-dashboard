@@ -14,7 +14,7 @@
 
 import type { RouteConfig, RouteHandler } from '@hono/zod-openapi';
 import type { BatchItem } from 'drizzle-orm/batch';
-import type { Context, Env } from 'hono';
+import type { Context } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import * as HttpStatusCodes from 'stoker/http-status-codes';
 import type { z } from 'zod';
@@ -96,7 +96,7 @@ export type HandlerConfig<
  * Enhanced context with validated data
  */
 export type HandlerContext<
-  TEnv extends Env = ApiEnv,
+  TEnv extends ApiEnv = ApiEnv,
   TBody extends z.ZodSchema = never,
   TQuery extends z.ZodSchema = never,
   TParams extends z.ZodSchema = never,
@@ -116,7 +116,7 @@ export type HandlerContext<
 // Handler function types
 export type RegularHandler<
   _TRoute extends RouteConfig,
-  TEnv extends Env = ApiEnv,
+  TEnv extends ApiEnv = ApiEnv,
   TBody extends z.ZodSchema = never,
   TQuery extends z.ZodSchema = never,
   TParams extends z.ZodSchema = never,
@@ -143,7 +143,7 @@ export type BatchContext = {
 
 export type BatchHandler<
   _TRoute extends RouteConfig,
-  TEnv extends Env = ApiEnv,
+  TEnv extends ApiEnv = ApiEnv,
   TBody extends z.ZodSchema = never,
   TQuery extends z.ZodSchema = never,
   TParams extends z.ZodSchema = never,
@@ -335,7 +335,7 @@ async function validateRequest<
  */
 export function createHandler<
   TRoute extends RouteConfig,
-  TEnv extends Env = ApiEnv,
+  TEnv extends ApiEnv = ApiEnv,
   TBody extends z.ZodSchema = never,
   TQuery extends z.ZodSchema = never,
   TParams extends z.ZodSchema = never,
@@ -488,7 +488,7 @@ export function createHandler<
  */
 export function createHandlerWithBatch<
   TRoute extends RouteConfig,
-  TEnv extends Env = ApiEnv,
+  TEnv extends ApiEnv = ApiEnv,
   TBody extends z.ZodSchema = never,
   TQuery extends z.ZodSchema = never,
   TParams extends z.ZodSchema = never,

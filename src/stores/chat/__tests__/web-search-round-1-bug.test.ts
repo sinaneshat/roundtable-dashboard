@@ -14,13 +14,14 @@
  * This test verifies store-level behavior. Backend behavior is logged via console in streaming.handler.ts.
  */
 
-import { describe, it, expect, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
+
 import { AnalysisStatuses } from '@/api/core/enums';
 import { createMockPreSearch } from '@/lib/testing';
 import { createChatStore } from '@/stores/chat';
 import type { ChatStore } from '@/stores/chat/store';
 
-describe('Web Search Round 1 Bug - CRITICAL', () => {
+describe('web search round 1 bug - CRITICAL', () => {
   let store: ReturnType<typeof createChatStore>;
   let getState: () => ChatStore;
 
@@ -185,7 +186,7 @@ describe('Web Search Round 1 Bug - CRITICAL', () => {
         roundNumber: 0,
         userQuery: 'First message',
         status: AnalysisStatuses.COMPLETE,
-      })
+      }),
     );
 
     expect(getState().preSearches).toHaveLength(1);

@@ -1,15 +1,13 @@
 // Learn more: https://vitest.dev/guide/
+import '@testing-library/jest-dom/vitest';
+
 import { TextDecoder as NodeTextDecoder, TextEncoder as NodeTextEncoder } from 'node:util';
 
-import * as matchers from '@testing-library/jest-dom/matchers';
-import { expect, vi } from 'vitest';
+import { vi } from 'vitest';
 
 // Mock CSS imports (CSS modules, regular CSS, etc.)
 vi.mock('*.css', () => ({}));
 vi.mock('*.scss', () => ({}));
-
-// Extend Vitest's expect with jest-dom matchers
-expect.extend(matchers);
 
 // Polyfill TextDecoder/TextEncoder for streaming tests
 // Node.js and DOM types are compatible at runtime but slightly different in TypeScript

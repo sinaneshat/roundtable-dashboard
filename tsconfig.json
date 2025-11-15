@@ -41,9 +41,6 @@
       }
     ]
   },
-  "types": [
-    "@cloudflare/workers-types/2025-03-25"
-  ],
   "include": [
     "next-env.d.ts",
     "**/*.ts",
