@@ -82,13 +82,26 @@ export function shouldSendPendingMessage(state: PendingMessageState): Validation
   // Calculate next round number
   const newRoundNumber = calculateNextRoundNumber(state.messages);
 
-  // Check pre-search completion if web search enabled
+  // ✅ CRITICAL FIX: Only wait for pre-search if it's STREAMING
+  // Previous logic created chicken-and-egg problem:
+  // - Frontend waited for COMPLETE pre-search before sending message
+  // - Backend only creates PENDING pre-search WHEN message is sent
+  // - Result: Message never sends for rounds 1+
+  //
+  // New logic:
+  // - No pre-search record? → Send (backend creates PENDING in streaming handler)
+  // - Pre-search PENDING? → Send (orchestrator will start it)
+  // - Pre-search STREAMING? → Wait (avoid race conditions)
+  // - Pre-search COMPLETE? → Send (use results)
+  // - Pre-search FAILED? → Send (don't block on search failures)
   const webSearchEnabled = state.thread?.enableWebSearch ?? state.enableWebSearch;
 
   if (webSearchEnabled) {
     const preSearchForRound = state.preSearches.find(ps => ps.roundNumber === newRoundNumber);
 
-    if (!preSearchForRound || preSearchForRound.status !== AnalysisStatuses.COMPLETE) {
+    // Only block if pre-search is actively STREAMING
+    // This prevents sending duplicate messages while search is in progress
+    if (preSearchForRound && preSearchForRound.status === AnalysisStatuses.STREAMING) {
       return { shouldSend: false, roundNumber: newRoundNumber, reason: 'waiting for pre-search' };
     }
   }
@@ -120,6 +133,9 @@ export function participantsMatch(
 /**
  * Checks if pre-search needs to complete before proceeding
  *
+ * ✅ CRITICAL FIX: Only wait if pre-search is STREAMING
+ * Previous logic created chicken-and-egg problem.
+ *
  * Extracted for reusability across multiple locations.
  */
 export function shouldWaitForPreSearch(params: {
@@ -133,5 +149,8 @@ export function shouldWaitForPreSearch(params: {
 
   const preSearch = params.preSearches.find(ps => ps.roundNumber === params.roundNumber);
 
-  return !preSearch || preSearch.status !== AnalysisStatuses.COMPLETE;
+  // Only wait if pre-search is actively STREAMING
+  // This prevents chicken-and-egg problem where message can't send because
+  // pre-search doesn't exist, but pre-search is only created when message is sent
+  return preSearch ? preSearch.status === AnalysisStatuses.STREAMING : false;
 }

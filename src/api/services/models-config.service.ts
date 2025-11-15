@@ -43,47 +43,43 @@ import { ModelCategorySchema } from '@/api/core/enums';
  * This is the single source of truth for what models are allowed in the app
  */
 export const ModelIdEnum = z.enum([
-  // Google Models - VERIFIED OpenRouter IDs (Text-only, multimodal text+vision)
+  // Google Models - ACTUAL OpenRouter IDs (verified from openrouter.ai/google)
   'google/gemini-2.5-pro',
   'google/gemini-2.5-flash',
   'google/gemini-2.5-flash-lite',
-  'google/gemini-2.0-flash-exp',
-  'google/gemini-2.0-flash-exp:free',
+  'google/gemini-2.0-flash-001',
 
-  // OpenAI Models - VERIFIED OpenRouter IDs
+  // OpenAI Models - ACTUAL OpenRouter IDs (verified from openrouter.ai/openai)
   'openai/gpt-5',
   'openai/gpt-5.1',
-  'openai/gpt-5-pro',
   'openai/gpt-5-mini',
   'openai/gpt-5-nano',
-  'openai/gpt-4.5-preview',
-  'openai/chatgpt-4o-latest',
-  'openai/gpt-4-turbo',
+  'openai/gpt-4o',
+  'openai/o1',
   'openai/o3-mini',
   'openai/o3-mini-high',
   'openai/o4-mini',
   'openai/o4-mini-high',
-  'openai/o1',
+  'openai/gpt-4-turbo',
 
-  // Anthropic Models - VERIFIED OpenRouter IDs
+  // Anthropic Models - ACTUAL OpenRouter IDs (verified from openrouter.ai/anthropic)
   'anthropic/claude-sonnet-4.5',
   'anthropic/claude-haiku-4.5',
-  'anthropic/claude-4-sonnet-20250522',
+  'anthropic/claude-sonnet-4',
+  'anthropic/claude-opus-4',
+  'anthropic/claude-opus-4.1',
   'anthropic/claude-3.7-sonnet',
   'anthropic/claude-3.7-sonnet:thinking',
   'anthropic/claude-3.5-sonnet',
-  'anthropic/claude-3-opus',
 
-  // xAI Models - VERIFIED OpenRouter IDs
+  // xAI Models - ACTUAL OpenRouter IDs (verified from openrouter.ai/x-ai)
   'x-ai/grok-4',
   'x-ai/grok-4-fast',
-  'x-ai/grok-4-fast:free',
   'x-ai/grok-3',
   'x-ai/grok-3-mini',
   'x-ai/grok-code-fast-1',
 
-  // DeepSeek Models - VERIFIED OpenRouter IDs
-  'deepseek/deepseek-chat',
+  // DeepSeek Models - ACTUAL OpenRouter IDs (verified from openrouter.ai/deepseek)
   'deepseek/deepseek-chat-v3.1',
   'deepseek/deepseek-chat-v3.1:free',
   'deepseek/deepseek-v3.1-terminus',
@@ -93,17 +89,19 @@ export const ModelIdEnum = z.enum([
   'deepseek/deepseek-chat-v3-0324',
   'deepseek/deepseek-chat-v3-0324:free',
 
-  // Qwen/Alibaba Models - VERIFIED OpenRouter IDs
-  'qwen/qwen-max',
-  'qwen/qwen3-coder',
+  // Qwen/Alibaba Models - ACTUAL OpenRouter IDs (verified from openrouter.ai/qwen)
+  'qwen/qwen3-max',
+  'qwen/qwen3-coder-plus',
   'qwen/qwen3-32b',
 
-  // Meta Models - VERIFIED OpenRouter IDs
+  // Meta Models - ACTUAL OpenRouter IDs (verified from openrouter.ai/meta-llama)
   'meta-llama/llama-4-scout',
+  'meta-llama/llama-4-scout:free',
   'meta-llama/llama-4-maverick',
+  'meta-llama/llama-4-maverick:free',
   'meta-llama/llama-3.3-70b-instruct:free',
 
-  // MoonshotAI Models - VERIFIED OpenRouter IDs
+  // MoonshotAI Models - ACTUAL OpenRouter IDs (verified from API)
   'moonshotai/kimi-k2-0905',
 ]);
 
@@ -220,7 +218,7 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
     created: 1709251200, // March 2025
     pricing: {
       prompt: '0.00000125', // $1.25 per 1M tokens
-      completion: '0.00000500', // $5.00 per 1M tokens
+      completion: '0.00001000', // $10.00 per 1M tokens
     },
     top_provider: {
       context_length: 2000000,
@@ -243,7 +241,7 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
     },
     pricing_display: {
       input: '$1.25/1M tokens',
-      output: '$5.00/1M tokens',
+      output: '$10/1M tokens',
     },
     is_free: false,
     supports_vision: true,
@@ -258,8 +256,8 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
     context_length: 256000,
     created: 1723046400, // August 2025
     pricing: {
-      prompt: '0.00001500', // $15 per 1M tokens
-      completion: '0.00006000', // $60 per 1M tokens
+      prompt: '0.00000125', // $1.25 per 1M tokens
+      completion: '0.00001000', // $10.00 per 1M tokens
     },
     top_provider: {
       context_length: 256000,
@@ -281,8 +279,8 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
       tools: true,
     },
     pricing_display: {
-      input: '$15/1M tokens',
-      output: '$60/1M tokens',
+      input: '$1.25/1M tokens',
+      output: '$10/1M tokens',
     },
     is_free: false,
     supports_vision: true,
@@ -328,52 +326,13 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
     is_reasoning_model: false,
   },
 
-  {
-    id: 'deepseek/deepseek-chat',
-    name: 'DeepSeek V3',
-    description:
-      'Best open-weight generalist model. Exceptional math and coding performance using mixture-of-experts design. Rivals leading closed-source models.',
-    context_length: 64000,
-    created: 1704067200, // Jan 2025
-    pricing: {
-      prompt: '0.00000030', // $0.30 per 1M tokens
-      completion: '0.00000120', // $1.20 per 1M tokens
-    },
-    top_provider: {
-      context_length: 64000,
-      max_completion_tokens: 8192,
-      is_moderated: false,
-    },
-    per_request_limits: null,
-    architecture: {
-      modality: 'text->text',
-      tokenizer: 'DeepSeek',
-      instruct_type: 'chatml',
-    },
-    provider: 'deepseek',
-    category: 'general',
-    capabilities: {
-      vision: false,
-      reasoning: true,
-      streaming: true,
-      tools: true,
-    },
-    pricing_display: {
-      input: '$0.30/1M tokens',
-      output: '$1.20/1M tokens',
-    },
-    is_free: false,
-    supports_vision: false,
-    is_reasoning_model: false,
-  },
-
   // ========== PREMIUM MODELS (Rank 6-12) ==========
 
   {
-    id: 'anthropic/claude-3-opus',
-    name: 'Claude 3 Opus',
+    id: 'anthropic/claude-opus-4',
+    name: 'Claude 4 Opus',
     description:
-      'Anthropic\'s most powerful Claude 3 model. Exceptional for complex reasoning, creative tasks, and detailed analysis.',
+      'Anthropic\'s most powerful Claude 4 model. Exceptional for complex reasoning, creative tasks, and detailed analysis.',
     context_length: 200000,
     created: 1709251200, // March 2024
     pricing: {
@@ -409,15 +368,15 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
   },
 
   {
-    id: 'openai/chatgpt-4o-latest',
+    id: 'openai/gpt-4o',
     name: 'GPT-4o',
     description:
       'OpenAI\'s most popular chatbot model with 60.4% market share. Balanced performance for general-purpose tasks with vision capabilities.',
     context_length: 128000,
     created: 1715385600, // May 2024
     pricing: {
-      prompt: '0.00000500', // $5.00 per 1M tokens
-      completion: '0.00001500', // $15.00 per 1M tokens
+      prompt: '0.00000250', // $2.50 per 1M tokens
+      completion: '0.00001000', // $10.00 per 1M tokens
     },
     top_provider: {
       context_length: 128000,
@@ -439,8 +398,8 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
       tools: true,
     },
     pricing_display: {
-      input: '$5.00/1M tokens',
-      output: '$15.00/1M tokens',
+      input: '$2.50/1M tokens',
+      output: '$10/1M tokens',
     },
     is_free: false,
     supports_vision: true,
@@ -487,15 +446,15 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
   },
 
   {
-    id: 'qwen/qwen-max',
-    name: 'Qwen Max',
+    id: 'qwen/qwen3-max',
+    name: 'Qwen3 Max',
     description:
       'Alibaba\'s flagship trillion-parameter class model with strong coding and agentic capabilities. Competitive with leading Western models.',
     context_length: 128000,
     created: 1709251200, // March 2025
     pricing: {
-      prompt: '0.00000160', // $1.60 per 1M tokens
-      completion: '0.00000640', // $6.40 per 1M tokens
+      prompt: '0.00000120', // $1.20 per 1M tokens
+      completion: '0.00000600', // $6.00 per 1M tokens
     },
     top_provider: {
       context_length: 128000,
@@ -517,8 +476,8 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
       tools: true,
     },
     pricing_display: {
-      input: '$1.60/1M tokens',
-      output: '$6.40/1M tokens',
+      input: '$1.20/1M tokens',
+      output: '$6.00/1M tokens',
     },
     is_free: false,
     supports_vision: false,
@@ -606,7 +565,7 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
   // ========== ANTHROPIC MODELS ==========
 
   {
-    id: 'anthropic/claude-4-sonnet-20250522',
+    id: 'anthropic/claude-sonnet-4',
     name: 'Claude 4 Sonnet',
     description:
       'Anthropic\'s Claude 4 balanced model. Strong performance across reasoning, coding, and creative tasks with excellent reliability.',
@@ -881,8 +840,8 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
   },
 
   {
-    id: 'qwen/qwen3-coder',
-    name: 'Qwen3 Coder',
+    id: 'qwen/qwen3-coder-plus',
+    name: 'Qwen3 Coder Plus',
     description:
       '480B MoE model optimized for code generation. Excellent for agentic coding tasks, function calling, and repository reasoning.',
     context_length: 128000,
@@ -998,8 +957,8 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
   },
 
   {
-    id: 'google/gemini-2.0-flash-exp',
-    name: 'Gemini 2.0 Flash Experimental',
+    id: 'google/gemini-2.0-flash-001',
+    name: 'Gemini 2.0 Flash',
     description:
       'Fast Gemini 2.0 experimental model with multimodal capabilities. Excellent for high-throughput tasks requiring vision and text.',
     context_length: 1000000,
@@ -1032,45 +991,6 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
       output: '$0.40/1M tokens',
     },
     is_free: false,
-    supports_vision: true,
-    is_reasoning_model: false,
-  },
-
-  {
-    id: 'google/gemini-2.0-flash-exp:free',
-    name: 'Gemini 2.0 Flash (Free)',
-    description:
-      'Free tier Gemini 2.0 Flash with multimodal capabilities. Rate-limited but perfect for development and testing.',
-    context_length: 1000000,
-    created: 1702252800, // Dec 2023
-    pricing: {
-      prompt: '0', // Free
-      completion: '0', // Free
-    },
-    top_provider: {
-      context_length: 1000000,
-      max_completion_tokens: 8192,
-      is_moderated: false,
-    },
-    per_request_limits: null,
-    architecture: {
-      modality: 'text+image->text',
-      tokenizer: 'Gemini',
-      instruct_type: 'gemini',
-    },
-    provider: 'google',
-    category: 'general',
-    capabilities: {
-      vision: true,
-      reasoning: true,
-      streaming: true,
-      tools: true,
-    },
-    pricing_display: {
-      input: 'Free',
-      output: 'Free',
-    },
-    is_free: true,
     supports_vision: true,
     is_reasoning_model: false,
   },
@@ -1196,45 +1116,6 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
   },
 
   {
-    id: 'openai/gpt-5-pro',
-    name: 'GPT-5 Pro',
-    description:
-      'OpenAI\'s most advanced GPT-5 variant with extended capabilities for complex reasoning and problem-solving tasks.',
-    context_length: 400000,
-    created: 1735689600, // Jan 2025
-    pricing: {
-      prompt: '0.00001500', // $15 per 1M tokens
-      completion: '0.00012000', // $120 per 1M tokens
-    },
-    top_provider: {
-      context_length: 400000,
-      max_completion_tokens: 128000,
-      is_moderated: true,
-    },
-    per_request_limits: null,
-    architecture: {
-      modality: 'text+image+file->text',
-      tokenizer: 'o200k_base',
-      instruct_type: 'chatml',
-    },
-    provider: 'openai',
-    category: 'general',
-    capabilities: {
-      vision: true,
-      reasoning: true,
-      streaming: true,
-      tools: true,
-    },
-    pricing_display: {
-      input: '$15/1M tokens',
-      output: '$120/1M tokens',
-    },
-    is_free: false,
-    supports_vision: true,
-    is_reasoning_model: false,
-  },
-
-  {
     id: 'openai/gpt-5-mini',
     name: 'GPT-5 Mini',
     description:
@@ -1309,45 +1190,6 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
     },
     is_free: false,
     supports_vision: false,
-    is_reasoning_model: false,
-  },
-
-  {
-    id: 'openai/gpt-4.5-preview',
-    name: 'GPT-4.5 Preview',
-    description:
-      'Research preview of GPT-4.5 with advanced reasoning, creativity, and multi-turn conversation capabilities.',
-    context_length: 128000,
-    created: 1733097600, // Dec 2024
-    pricing: {
-      prompt: '0.00000500', // $5.00 per 1M tokens (estimated)
-      completion: '0.00001500', // $15.00 per 1M tokens (estimated)
-    },
-    top_provider: {
-      context_length: 128000,
-      max_completion_tokens: 16384,
-      is_moderated: true,
-    },
-    per_request_limits: null,
-    architecture: {
-      modality: 'text+image->text',
-      tokenizer: 'cl100k_base',
-      instruct_type: 'chatml',
-    },
-    provider: 'openai',
-    category: 'general',
-    capabilities: {
-      vision: true,
-      reasoning: true,
-      streaming: true,
-      tools: true,
-    },
-    pricing_display: {
-      input: '$5.00/1M tokens',
-      output: '$15.00/1M tokens',
-    },
-    is_free: false,
-    supports_vision: true,
     is_reasoning_model: false,
   },
 
@@ -1472,7 +1314,7 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
   // Anthropic Claude Models
   {
     id: 'anthropic/claude-sonnet-4.5',
-    name: 'Claude Sonnet 4.5',
+    name: 'Claude 4.5 Sonnet',
     description:
       'Anthropic\'s Claude Sonnet 4.5 with enhanced coding performance (77.2% on SWE-bench). Industry-leading for complex reasoning and agentic tasks.',
     context_length: 200000,
@@ -1511,7 +1353,7 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
 
   {
     id: 'anthropic/claude-haiku-4.5',
-    name: 'Claude Haiku 4.5',
+    name: 'Claude 4.5 Haiku',
     description:
       'Anthropic\'s fastest model delivering near-frontier intelligence at low cost and latency. >73% on SWE-bench, among the world\'s best coding models.',
     context_length: 200000,
@@ -1627,45 +1469,6 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
   },
 
   // xAI Grok Models
-  {
-    id: 'x-ai/grok-4-fast:free',
-    name: 'Grok 4 Fast (Free)',
-    description:
-      'Free tier xAI Grok 4 Fast with SOTA cost-efficiency and 2M token context. Multimodal model optimized for speed.',
-    context_length: 2000000,
-    created: 1706832000, // Feb 2025
-    pricing: {
-      prompt: '0', // Free
-      completion: '0', // Free
-    },
-    top_provider: {
-      context_length: 2000000,
-      max_completion_tokens: 8192,
-      is_moderated: false,
-    },
-    per_request_limits: null,
-    architecture: {
-      modality: 'text+image->text',
-      tokenizer: 'Grok',
-      instruct_type: 'grok',
-    },
-    provider: 'x-ai',
-    category: 'general',
-    capabilities: {
-      vision: true,
-      reasoning: true,
-      streaming: true,
-      tools: true,
-    },
-    pricing_display: {
-      input: 'Free',
-      output: 'Free',
-    },
-    is_free: true,
-    supports_vision: true,
-    is_reasoning_model: false,
-  },
-
   {
     id: 'x-ai/grok-3',
     name: 'Grok 3',
@@ -1980,51 +1783,12 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
     is_reasoning_model: false,
   },
 
-  {
-    id: 'qwen/qwen3-235b',
-    name: 'Qwen3 235B',
-    description:
-      'Qwen3-235B MoE model (22B active) optimized for complex reasoning with 262k token context. High-performance open-weight model.',
-    context_length: 262144,
-    created: 1730419200, // Nov 2024
-    pricing: {
-      prompt: '0.00000100', // $1.00 per 1M tokens (estimated)
-      completion: '0.00000300', // $3.00 per 1M tokens (estimated)
-    },
-    top_provider: {
-      context_length: 262144,
-      max_completion_tokens: 8192,
-      is_moderated: false,
-    },
-    per_request_limits: null,
-    architecture: {
-      modality: 'text->text',
-      tokenizer: 'Qwen',
-      instruct_type: 'chatml',
-    },
-    provider: 'qwen',
-    category: 'general',
-    capabilities: {
-      vision: false,
-      reasoning: true,
-      streaming: true,
-      tools: true,
-    },
-    pricing_display: {
-      input: '$1.00/1M tokens',
-      output: '$3.00/1M tokens',
-    },
-    is_free: false,
-    supports_vision: false,
-    is_reasoning_model: false,
-  },
-
   // Meta Llama Models
   {
     id: 'meta-llama/llama-4-maverick',
-    name: 'Llama 4 Maverick 17B',
+    name: 'Llama 4 Maverick',
     description:
-      'Llama 4 Maverick 17B high-capacity multimodal MoE model with 128 experts and 17B active parameters (400B total).',
+      'Llama 4 Maverick high-capacity multimodal MoE model with 128 experts and 17B active parameters (400B total).',
     context_length: 128000,
     created: 1743638400, // April 2025
     pricing: {
@@ -2093,45 +1857,6 @@ export const HARDCODED_MODELS: readonly HardcodedModel[] = [
     pricing_display: {
       input: '$0.39/1M tokens',
       output: '$1.90/1M tokens',
-    },
-    is_free: false,
-    supports_vision: false,
-    is_reasoning_model: false,
-  },
-
-  {
-    id: 'moonshotai/kimi-k2-turbo',
-    name: 'Kimi K2 Turbo',
-    description:
-      'Kimi K2 Turbo variant optimized for faster inference while maintaining strong agentic and coding capabilities.',
-    context_length: 262144,
-    created: 1725494400, // Sept 2025
-    pricing: {
-      prompt: '0.00000020', // $0.20 per 1M tokens (estimated)
-      completion: '0.00000060', // $0.60 per 1M tokens (estimated)
-    },
-    top_provider: {
-      context_length: 262144,
-      max_completion_tokens: 8192,
-      is_moderated: false,
-    },
-    per_request_limits: null,
-    architecture: {
-      modality: 'text->text',
-      tokenizer: 'Kimi',
-      instruct_type: 'chatml',
-    },
-    provider: 'moonshotai',
-    category: 'general',
-    capabilities: {
-      vision: false,
-      reasoning: true,
-      streaming: true,
-      tools: true,
-    },
-    pricing_display: {
-      input: '$0.20/1M tokens',
-      output: '$0.60/1M tokens',
     },
     is_free: false,
     supports_vision: false,

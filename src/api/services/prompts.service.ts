@@ -38,35 +38,48 @@ export const TITLE_GENERATION_PROMPT = 'Generate a concise, descriptive title (5
  * Used by:
  * - /src/api/services/web-search.service.ts - streamSearchQuery()
  */
-export const WEB_SEARCH_COMPLEXITY_ANALYSIS_PROMPT = `You are an expert web search strategist. Analyze the user's query and determine the optimal search strategy.
+export const WEB_SEARCH_COMPLEXITY_ANALYSIS_PROMPT = `You are an expert search query optimizer. Transform user questions into search-engine-optimized queries that maximize relevance and findability.
 
 **CRITICAL**: You MUST respond with VALID JSON matching the required schema. Do not include any explanation or text outside the JSON object.
+
+**QUERY TRANSFORMATION RULES**:
+Transform natural language questions into optimized search queries by:
+1. REMOVE question words (what, how, why, when, where, who, which)
+2. EXTRACT core concepts and key terms
+3. ADD relevant qualifiers (guide, tutorial, comparison, best practices, 2025)
+4. USE keywords instead of complete sentences
+5. INCLUDE technical terms and domain-specific language
+6. ADD year (2025) for current/trending topics
+
+**TRANSFORMATION EXAMPLES**:
+- "What are the best practices for React state management?" → "React state management best practices 2025 guide"
+- "How do I set up Docker on Ubuntu?" → "Docker Ubuntu installation setup tutorial 2025"
+- "Why should I use TypeScript?" → "TypeScript benefits advantages comparison JavaScript 2025"
+- "Tell me about microservices architecture" → "microservices architecture patterns design best practices"
 
 **COMPLEXITY ANALYSIS**:
 Determine if this is:
 1. BASIC: Simple factual questions, definitions, quick lookups
-   - Examples: "What is the capital of France?", "Current USD to EUR rate", "Python version command"
+   - User: "What is the capital of France?" → Query: "France capital city"
+   - User: "Current USD to EUR rate" → Query: "USD EUR exchange rate 2025"
    - Strategy: Shallow search, 1-2 sources, snippets may suffice
 
 2. MODERATE: Comparisons, how-to guides, current events
-   - Examples: "Best React state management", "How to setup Docker", "Latest AI news"
+   - User: "Best React state management libraries" → Query: "React state management libraries comparison 2025 Redux Zustand"
+   - User: "How to setup Docker" → Query: "Docker setup installation guide tutorial 2025"
    - Strategy: Standard search, 2-3 sources, need some content depth
 
 3. DEEP: Complex research, technical analysis, multi-faceted topics
-   - Examples: "Microservices vs monolith tradeoffs", "Quantum computing applications", "Climate change impacts"
+   - User: "Microservices vs monolith tradeoffs" → Query: "microservices monolithic architecture comparison tradeoffs scalability performance"
+   - User: "Quantum computing applications" → Query: "quantum computing practical applications industry use cases 2025"
    - Strategy: Deep search, 3-5 sources, full content extraction essential
-
-**SEARCH OPTIMIZATION**:
-- For BASIC: Use direct keywords, may add "definition" or "what is"
-- For MODERATE: Add qualifiers like "guide", "tutorial", "comparison", year if relevant
-- For DEEP: Use comprehensive terms, add "analysis", "research", "detailed"
 
 **SOURCE SELECTION**:
 - BASIC: 1-2 authoritative sources (Wikipedia, official docs)
 - MODERATE: 2-3 diverse sources (tutorials, blogs, documentation)
 - DEEP: 3-5 comprehensive sources (research papers, expert analysis, case studies)
 
-Analyze the query and provide search strategy with appropriate depth. Return ONLY valid JSON.`;
+Transform the user's question into an optimized search query and provide search strategy. Return ONLY valid JSON.`;
 
 /**
  * Web search query generation user prompt template
@@ -82,13 +95,17 @@ Analyze the query and provide search strategy with appropriate depth. Return ONL
 export function buildWebSearchQueryPrompt(userMessage: string): string {
   return `User question: "${userMessage}"
 
+TRANSFORM this question into a search-engine-optimized query following the transformation rules above.
+
 Generate a JSON object with:
-- query: ONE optimized search query (string)
+- query: ONE optimized search query (string) - MUST be transformed from the user's natural language question into keyword-based search terms
 - complexity: "BASIC", "MODERATE", or "DEEP" (string)
-- rationale: Why this strategy is optimal (string, min 10 chars)
+- rationale: Why this search strategy and transformation is optimal (string, min 10 chars)
 - sourceCount: Number of sources needed 1-5 (number)
 - requiresFullContent: Whether full page content extraction is needed (boolean)
 - analysis: Analysis of user intent and information needs (string, min 10 chars)
+
+IMPORTANT: The "query" field should NOT be the same as the user's question. Transform it into search-optimized keywords.
 
 Return ONLY the JSON object, no additional text.`;
 }

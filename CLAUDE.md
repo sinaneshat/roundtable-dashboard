@@ -137,9 +137,9 @@ src/
 - All user text through `useTranslations()` - NO hardcoded strings (English-only)
 - Dark theme only (no theme switching)
 
-### Testing Layer (Jest + React Testing Library)
-**Test Infrastructure** (`jest.config.ts`, `jest.setup.ts`):
-- Jest configured with `next/jest` for Next.js support
+### Testing Layer (Vitest + React Testing Library)
+**Test Infrastructure** (`vitest.config.ts`, `vitest.setup.ts`):
+- Vitest v4 configured with Vite for Next.js support
 - JSDOM environment for DOM testing
 - Global mocks: `matchMedia`, `IntersectionObserver`, `ResizeObserver`
 - Testing utilities in `src/lib/testing/` following project architecture
@@ -274,8 +274,8 @@ NEXT_PUBLIC_SES_VERIFIED_EMAIL=noreply@your-domain.com
 - **Testing Documentation**: `/docs/TESTING_SETUP.md` - Comprehensive testing setup guide
   - `/src/__tests__/README.md` - Testing patterns and examples
 - **Configuration Files**:
-  - `/jest.config.ts` - Jest configuration with Next.js integration
-  - `/jest.setup.ts` - Global test setup and mocks
+  - `/vitest.config.ts` - Vitest v4 configuration with Next.js integration
+  - `/vitest.setup.ts` - Global test setup and mocks
 - **Testing Utilities**: `/src/lib/testing/` - Testing library following project architecture
   - `index.ts` - Barrel export for all testing utilities
   - `render.tsx` - Custom render utilities with providers

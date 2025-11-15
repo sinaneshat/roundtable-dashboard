@@ -8,7 +8,6 @@ import React from 'react';
 
 import type { ToastVariant } from '@/api/core/enums';
 import { ToastVariants } from '@/api/core/enums';
-import type { ToastActionElement } from '@/components/ui/toast';
 import { ToastAction } from '@/components/ui/toast';
 import { toast as baseToast } from '@/hooks/utils';
 
@@ -129,10 +128,10 @@ function showToastInternal(options: ToastOptions): void {
       : variant,
     duration,
     action: action
-      ? (React.createElement(ToastAction, {
-          altText: action.label,
-          onClick: action.onClick,
-        }, action.label) as unknown as ToastActionElement)
+      ? React.createElement(ToastAction, {
+        altText: action.label,
+        onClick: action.onClick,
+      }, action.label) as unknown as React.ReactElement<typeof ToastAction>
       : undefined,
   };
 
@@ -433,8 +432,33 @@ export const toastManager = {
 // (createProgressToast is already exported above)
 export default toastManager;
 
-// Auto-process queue when module loads
-if (typeof window !== 'undefined') {
-  // Set up periodic queue processing
-  setInterval(processToastQueue, 500);
+// ✅ MEMORY LEAK FIX: Make queue processing stoppable
+// Original code had setInterval that NEVER gets cleared - major memory leak
+let queueProcessingInterval: NodeJS.Timeout | null = null;
+
+function startQueueProcessing() {
+  if (queueProcessingInterval) {
+    return; // Already running
+  }
+  queueProcessingInterval = setInterval(processToastQueue, 500);
 }
+
+function stopQueueProcessing() {
+  if (queueProcessingInterval) {
+    clearInterval(queueProcessingInterval);
+    queueProcessingInterval = null;
+  }
+}
+
+// Auto-process queue when module loads (can be stopped if needed)
+if (typeof window !== 'undefined') {
+  startQueueProcessing();
+
+  // ✅ MEMORY LEAK FIX: Cleanup on page unload (browser navigating away)
+  if (typeof window !== 'undefined') {
+    window.addEventListener('beforeunload', stopQueueProcessing);
+  }
+}
+
+// Export stop function for testing/cleanup
+export { startQueueProcessing, stopQueueProcessing };

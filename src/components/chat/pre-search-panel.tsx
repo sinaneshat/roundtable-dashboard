@@ -1,17 +1,13 @@
 'use client';
-import { Brain, CheckCircle, Globe, Search } from 'lucide-react';
-import { useTranslations } from 'next-intl';
+import { Search, Sparkles } from 'lucide-react';
 
-import { ChainOfThoughtStepStatuses, WebSearchDepths } from '@/api/core/enums';
+import { WebSearchDepths } from '@/api/core/enums';
 import type { PreSearchDataPayload } from '@/api/routes/chat/schema';
-import {
-  ChainOfThoughtSearchResult,
-  ChainOfThoughtSearchResults,
-  ChainOfThoughtStep,
-} from '@/components/ai-elements/chain-of-thought';
 import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
+import { cn } from '@/lib/ui/cn';
 
-import { WebSearchResultCard } from './web-search-result-card';
+import { WebSearchResultItem } from './web-search-result-item';
 
 type PreSearchPanelProps = {
   preSearch: PreSearchDataPayload;
@@ -19,111 +15,84 @@ type PreSearchPanelProps = {
 };
 
 export function PreSearchPanel({ preSearch, className }: PreSearchPanelProps) {
-  const t = useTranslations();
+  if (!preSearch.results || preSearch.results.length === 0) {
+    return null;
+  }
 
   return (
-    <div className={className}>
+    <div className={cn('space-y-6', className)}>
       {preSearch.results.map((searchResult, searchIndex) => {
         const query = preSearch.queries[searchIndex];
+        const hasResults = searchResult.results && searchResult.results.length > 0;
 
         return (
-          <div key={searchResult.query} className="space-y-3 mb-4">
-            {/* Step 1: Understanding */}
-            <ChainOfThoughtStep
-              icon={Brain}
-              label={t('chat.preSearch.steps.understanding')}
-              description={query?.rationale}
-              status={ChainOfThoughtStepStatuses.COMPLETE}
-              badge={query?.searchDepth && (
-                <Badge
-                  variant={query.searchDepth === WebSearchDepths.ADVANCED ? 'default' : 'outline'}
-                  className="text-xs"
-                >
-                  {t(`chat.preSearch.searchDepth.${query.searchDepth}`)}
-                </Badge>
-              )}
-            >
-              {query?.query && (
-                <div className="p-2.5 rounded-lg bg-muted/50 border border-border/40">
-                  <div className="flex items-start gap-2">
-                    <Search className="size-3.5 text-muted-foreground mt-0.5 flex-shrink-0" />
-                    <p className="text-xs font-medium text-foreground/90">{query.query}</p>
-                  </div>
+          <div key={searchResult.query || `search-${searchIndex}`} className="space-y-3">
+            {/* Query header with mode */}
+            <div className="space-y-2">
+              <div className="flex items-start gap-2">
+                <Search className="size-4 text-primary/70 mt-0.5 flex-shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-foreground">
+                    {query?.query || searchResult.query}
+                  </p>
                 </div>
-              )}
-            </ChainOfThoughtStep>
-
-            {/* Step 2: Search Results */}
-            <ChainOfThoughtStep
-              icon={Globe}
-              label={t('chat.preSearch.steps.searchComplete')}
-              status={ChainOfThoughtStepStatuses.COMPLETE}
-              metadata={(
-                <>
-                  <Badge variant="outline" className="text-xs">
-                    {searchResult.results?.length || 0}
-                    {' '}
-                    {searchResult.results?.length === 1 ? t('chat.tools.webSearch.source.singular') : t('chat.tools.webSearch.source.plural')}
-                  </Badge>
+                <div className="flex items-center gap-2">
+                  {query?.searchDepth && (
+                    <Badge variant={query.searchDepth === WebSearchDepths.ADVANCED ? 'default' : 'secondary'} className="text-xs">
+                      {query.searchDepth === WebSearchDepths.ADVANCED ? 'Advanced' : 'Simple'}
+                    </Badge>
+                  )}
                   {searchResult.responseTime && (
                     <Badge variant="outline" className="text-xs text-muted-foreground">
                       {Math.round(searchResult.responseTime)}
                       ms
                     </Badge>
                   )}
-                </>
-              )}
-            >
-              {searchResult.results && searchResult.results.length > 0 && (
-                <ChainOfThoughtSearchResults>
-                  {searchResult.results.slice(0, 5).map(result => (
-                    <ChainOfThoughtSearchResult key={result.url}>
-                      {new URL(result.url).hostname.replace('www.', '')}
-                    </ChainOfThoughtSearchResult>
-                  ))}
-                  {searchResult.results.length > 5 && (
-                    <ChainOfThoughtSearchResult>
-                      +
-                      {searchResult.results.length - 5}
-                      {' '}
-                      more
-                    </ChainOfThoughtSearchResult>
-                  )}
-                </ChainOfThoughtSearchResults>
-              )}
-            </ChainOfThoughtStep>
-
-            {/* Step 3: Analysis */}
-            <ChainOfThoughtStep
-              icon={CheckCircle}
-              label={t('chat.preSearch.steps.results')}
-              status={ChainOfThoughtStepStatuses.COMPLETE}
-            >
-              {searchResult.answer && (
-                <div className="p-3 rounded-lg border border-border/50 bg-background/30">
-                  <p className="text-xs text-muted-foreground leading-relaxed">
-                    {searchResult.answer}
-                  </p>
                 </div>
-              )}
+              </div>
 
-              {searchResult.results && searchResult.results.length > 0 && (
-                <div className="space-y-2">
-                  <span className="text-xs font-semibold text-foreground/90">
-                    {t('chat.preSearch.steps.sources')}
-                    {' '}
-                    (
-                    {searchResult.results.length}
-                    ):
-                  </span>
-                  <div className="space-y-2.5">
-                    {searchResult.results.map((result, idx) => (
-                      <WebSearchResultCard key={result.url} result={result} index={idx} />
-                    ))}
+              {/* Result count */}
+              {hasResults && (
+                <p className="text-xs text-muted-foreground pl-6">
+                  {searchResult.results.length}
+                  {' '}
+                  {searchResult.results.length === 1 ? 'source found' : 'sources found'}
+                </p>
+              )}
+            </div>
+
+            {/* Results list */}
+            {hasResults && (
+              <div className="pl-6 space-y-0">
+                {searchResult.results.map((result, idx) => (
+                  <WebSearchResultItem
+                    key={result.url}
+                    result={result}
+                    showDivider={idx < searchResult.results.length - 1}
+                  />
+                ))}
+              </div>
+            )}
+
+            {/* Summary */}
+            {searchResult.answer && (
+              <div className="pl-6">
+                <div className="flex items-start gap-2 p-3 rounded-lg bg-primary/5 border border-primary/10">
+                  <Sparkles className="size-4 text-primary/70 mt-0.5 flex-shrink-0" />
+                  <div className="flex-1 min-w-0 space-y-1">
+                    <p className="text-xs font-medium text-foreground/90">Summary</p>
+                    <p className="text-xs text-muted-foreground leading-relaxed">
+                      {searchResult.answer}
+                    </p>
                   </div>
                 </div>
-              )}
-            </ChainOfThoughtStep>
+              </div>
+            )}
+
+            {/* Separator between searches */}
+            {searchIndex < preSearch.results.length - 1 && (
+              <Separator className="!mt-6" />
+            )}
           </div>
         );
       })}

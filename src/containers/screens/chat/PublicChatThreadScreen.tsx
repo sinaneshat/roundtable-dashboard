@@ -5,7 +5,7 @@ import { useTranslations } from 'next-intl';
 import { useMemo } from 'react';
 
 import type { FeedbackType } from '@/api/core/enums';
-import type { ChatParticipant, RoundFeedbackData, StoredModeratorAnalysis } from '@/api/routes/chat/schema';
+import type { ChatParticipant, RoundFeedbackData } from '@/api/routes/chat/schema';
 import { ThreadTimeline } from '@/components/chat/thread-timeline';
 import { UnifiedErrorBoundary } from '@/components/chat/unified-error-boundary';
 import { Button } from '@/components/ui/button';
@@ -13,6 +13,7 @@ import { BRAND } from '@/constants';
 import { usePublicThreadQuery } from '@/hooks/queries/chat';
 import type { TimelineItem } from '@/hooks/utils';
 import { useThreadTimeline } from '@/hooks/utils';
+import { transformModeratorAnalysis } from '@/lib/utils/date-transforms';
 import { chatMessagesToUIMessages } from '@/lib/utils/message-transforms';
 
 export default function PublicChatThreadScreen({ slug }: { slug: string }) {
@@ -39,12 +40,12 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
     updatedAt: new Date(p.updatedAt),
   })), [rawParticipants]);
 
-  // Transform analyses - convert string dates to Date objects
-  const analyses = useMemo(() => rawAnalyses?.map((analysis: { createdAt: string; completedAt: string | null; [key: string]: unknown }) => ({
-    ...analysis,
-    createdAt: new Date(analysis.createdAt),
-    completedAt: analysis.completedAt ? new Date(analysis.completedAt) : null,
-  })) as unknown as StoredModeratorAnalysis[] || [], [rawAnalyses]);
+  // Transform analyses - convert string dates to Date objects using Zod validation
+  // ✅ SINGLE SOURCE OF TRUTH: Use transformModeratorAnalysis for type-safe date conversion
+  const analyses = useMemo(
+    () => rawAnalyses?.map(analysis => transformModeratorAnalysis(analysis)) || [],
+    [rawAnalyses],
+  );
 
   // Build feedback map for quick lookup - transform dates
   const feedbackByRound = useMemo(() => {

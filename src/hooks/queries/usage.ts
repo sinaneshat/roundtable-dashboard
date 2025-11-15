@@ -60,7 +60,17 @@ export function useUsageStatsQuery(options?: { forceEnabled?: boolean }) {
     queryKey: queryKeys.usage.stats(),
     queryFn: getUserUsageStatsService,
     staleTime: STALE_TIMES.quota, // 10 seconds - fresh data for UI blocking
-    refetchInterval: 30 * 1000, // Refetch every 30s for quota changes
+    // ✅ PERFORMANCE FIX: Reduce polling frequency and pause when tab hidden
+    // Original: 30s always - wasteful when user not looking
+    // New: 60s when visible, false when hidden
+    refetchInterval: () => {
+      // Don't poll if tab is hidden
+      if (typeof document !== 'undefined' && document.hidden) {
+        return false;
+      }
+      // Poll every 60s when tab is visible (reduced from 30s)
+      return 60 * 1000;
+    },
     retry: false,
     enabled: options?.forceEnabled ?? isAuthenticated,
     throwOnError: false,

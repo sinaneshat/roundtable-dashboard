@@ -40,3 +40,6 @@ export { useThreadActions } from './actions/thread-actions';
 // Store
 export type { ChatStore, ChatStoreApi } from './store';
 export { createChatStore } from './store';
+
+// Re-export commonly used types for tests
+export type { ChatThread } from '@/db/validation';

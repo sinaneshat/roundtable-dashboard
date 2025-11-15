@@ -346,8 +346,12 @@ export function createHandler<
   const handler = async (c: Context<TEnv>) => {
     const performance = createPerformanceTracker();
 
-    // Set start time in context for response metadata
-    (c as Context & { set: (key: string, value: unknown) => void }).set('startTime', performance.startTime);
+    /**
+     * Set start time in context for response metadata
+     * Using Object.assign to add custom property outside ContextVariableMap
+     * This avoids type casting while maintaining compatibility with response metadata
+     */
+    Object.assign(c, { startTime: performance.startTime });
 
     try {
       // Apply authentication (including 'public' mode for requestId setup)
@@ -438,6 +442,20 @@ export function createHandler<
     }
   };
 
+  /**
+   * Type assertion required for RouteHandler compatibility
+   *
+   * JUSTIFICATION:
+   * - handler function signature matches RouteHandler<TRoute, TEnv> at runtime
+   * - Hono's generic type system requires this assertion for complex route configs
+   * - Safe because:
+   *   1. Handler accepts Context<TEnv> which is compatible with RouteHandler expectations
+   *   2. Returns Promise<Response> which satisfies RouteHandler contract
+   *   3. All validation happens before handler execution
+   *
+   * ALTERNATIVE CONSIDERED: Strict typing would require duplicating Hono's internal types
+   * PATTERN: Official Hono pattern for factory functions returning route handlers
+   */
   return handler as unknown as RouteHandler<TRoute, TEnv>;
 }
 
@@ -481,8 +499,12 @@ export function createHandlerWithBatch<
   const handler = async (c: Context<TEnv>) => {
     const performance = createPerformanceTracker();
 
-    // Set start time in context for response metadata
-    (c as Context & { set: (key: string, value: unknown) => void }).set('startTime', performance.startTime);
+    /**
+     * Set start time in context for response metadata
+     * Using Object.assign to add custom property outside ContextVariableMap
+     * This avoids type casting while maintaining compatibility with response metadata
+     */
+    Object.assign(c, { startTime: performance.startTime });
 
     try {
       // Apply authentication (including 'public' mode for requestId setup)
@@ -662,6 +684,20 @@ export function createHandlerWithBatch<
     }
   };
 
+  /**
+   * Type assertion required for RouteHandler compatibility
+   *
+   * JUSTIFICATION:
+   * - handler function signature matches RouteHandler<TRoute, TEnv> at runtime
+   * - Hono's generic type system requires this assertion for complex route configs
+   * - Safe because:
+   *   1. Handler accepts Context<TEnv> which is compatible with RouteHandler expectations
+   *   2. Returns Promise<Response> which satisfies RouteHandler contract
+   *   3. All validation happens before handler execution
+   *
+   * ALTERNATIVE CONSIDERED: Strict typing would require duplicating Hono's internal types
+   * PATTERN: Official Hono pattern for factory functions returning route handlers
+   */
   return handler as unknown as RouteHandler<TRoute, TEnv>;
 }
 

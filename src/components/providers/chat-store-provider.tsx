@@ -211,12 +211,14 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
     // calculateNextRoundNumber handles this correctly: -1 + 1 = 0 for first round
     const newRoundNumber = calculateNextRoundNumber(storeMessages);
 
-    // Check if pre-search is needed for this round
+    // ✅ CRITICAL FIX: Only wait for pre-search if it's STREAMING
+    // Previous logic created chicken-and-egg problem where message couldn't send
+    // because pre-search didn't exist, but pre-search is only created when message is sent
     const webSearchEnabled = storeThread?.enableWebSearch ?? enableWebSearch;
     const preSearchForRound = preSearches.find(ps => ps.roundNumber === newRoundNumber);
 
-    // If web search is enabled and pre-search hasn't completed, wait
-    if (webSearchEnabled && (!preSearchForRound || preSearchForRound.status !== AnalysisStatuses.COMPLETE)) {
+    // Only block if pre-search is actively STREAMING
+    if (webSearchEnabled && preSearchForRound && preSearchForRound.status === AnalysisStatuses.STREAMING) {
       return; // Don't send message yet - wait for pre-search to complete
     }
 
@@ -368,7 +370,10 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
   // This causes the overview screen to show only the user message while streaming
   // because it reads from store.messages, not from the hook's messages
   // We sync the hook's messages to the store so components can display them during streaming
+  // ✅ MEMORY LEAK FIX: Use lightweight comparison to prevent excessive re-renders
   const prevChatMessagesRef = useRef<UIMessage[]>([]);
+  const prevMessageCountRef = useRef<number>(0);
+
   useEffect(() => {
     const currentStoreMessages = store.getState().messages;
 
@@ -387,22 +392,30 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
     }
 
     // 1. Count changed → new message added or removed
-    const countChanged = chat.messages.length !== currentStoreMessages.length;
+    const countChanged = chat.messages.length !== prevMessageCountRef.current;
 
-    // 2. During streaming, check if last message content actually changed
+    // 2. During streaming, check if last message content changed (lightweight comparison)
+    // ✅ MEMORY LEAK FIX: Replace JSON.stringify with simple ID + parts comparison
+    // JSON.stringify on large message objects causes excessive GC pressure
     let contentChanged = false;
-    if (chat.isStreaming && chat.messages.length > 0 && currentStoreMessages.length > 0) {
+    if (chat.isStreaming && chat.messages.length > 0) {
       const lastHookMessage = chat.messages[chat.messages.length - 1];
       const lastStoreMessage = currentStoreMessages[currentStoreMessages.length - 1];
 
-      // Compare message IDs and text content (streaming updates content)
-      contentChanged = lastHookMessage?.id !== lastStoreMessage?.id
-        || JSON.stringify(lastHookMessage?.parts) !== JSON.stringify(lastStoreMessage?.parts);
+      // Check if last message has different parts (content is streaming in)
+      // This handles the case where the ID stays the same but content grows
+      const hookParts = lastHookMessage?.parts;
+      const storeParts = lastStoreMessage?.parts;
+
+      // Simple reference check - if parts array is different, content changed
+      // This is lightweight but catches all streaming updates (parts is a new array each stream chunk)
+      contentChanged = hookParts !== storeParts;
     }
 
     const shouldSync = countChanged || contentChanged;
 
     if (shouldSync) {
+      prevMessageCountRef.current = chat.messages.length;
       prevChatMessagesRef.current = chat.messages;
       store.getState().setMessages(chat.messages);
     }
@@ -427,12 +440,41 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
   const sendMessageWithQuotaInvalidation = useCallback(async (content: string) => {
     // Use queryClientRef to avoid dependency on queryClient
     queryClientRef.current.invalidateQueries({ queryKey: queryKeys.usage.stats() });
+
+    // ✅ FIX: Invalidate pre-searches query to sync newly created PENDING records
+    // When web search is enabled and user sends a message, backend creates a PENDING pre-search
+    // But the orchestrator won't know about it unless we invalidate the query
+    // This ensures pre-searches are refetched and synced to store for ALL rounds, not just round 0
+    const currentThread = storeRef.current?.getState().thread;
+    const threadId = currentThread?.id || storeRef.current?.getState().createdThreadId;
+    const webSearchEnabled = currentThread?.enableWebSearch ?? storeRef.current?.getState().enableWebSearch;
+
+    if (webSearchEnabled && threadId) {
+      queryClientRef.current.invalidateQueries({
+        queryKey: queryKeys.threads.preSearches(threadId),
+      });
+    }
+
     return sendMessageRef.current(content);
   }, []); // Empty deps = stable reference
 
   const startRoundWithQuotaInvalidation = useCallback(async () => {
     // Use queryClientRef to avoid dependency on queryClient
     queryClientRef.current.invalidateQueries({ queryKey: queryKeys.usage.stats() });
+
+    // ✅ FIX: Invalidate pre-searches query to sync newly created PENDING records
+    // When web search is enabled and startRound is called, backend creates a PENDING pre-search
+    // This ensures pre-searches are refetched and synced to store for ALL rounds
+    const currentThread = storeRef.current?.getState().thread;
+    const threadId = currentThread?.id || storeRef.current?.getState().createdThreadId;
+    const webSearchEnabled = currentThread?.enableWebSearch ?? storeRef.current?.getState().enableWebSearch;
+
+    if (webSearchEnabled && threadId) {
+      queryClientRef.current.invalidateQueries({
+        queryKey: queryKeys.threads.preSearches(threadId),
+      });
+    }
+
     return startRoundRef.current();
   }, []) as () => Promise<void>; // Empty deps = stable reference
 
@@ -533,12 +575,14 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
     // calculateNextRoundNumber handles this correctly: -1 + 1 = 0 for first round
     const newRoundNumber = calculateNextRoundNumber(storeMessages);
 
-    // Check if pre-search is needed for this round
+    // ✅ CRITICAL FIX: Only wait for pre-search if it's STREAMING
+    // Previous logic created chicken-and-egg problem where message couldn't send
+    // because pre-search didn't exist, but pre-search is only created when message is sent
     const webSearchEnabled = storeThread?.enableWebSearch ?? stateEnableWebSearch;
     const preSearchForRound = statePreSearches.find(ps => ps.roundNumber === newRoundNumber);
 
-    // If web search is enabled and pre-search hasn't completed, wait
-    if (webSearchEnabled && (!preSearchForRound || preSearchForRound.status !== AnalysisStatuses.COMPLETE)) {
+    // Only block if pre-search is actively STREAMING
+    if (webSearchEnabled && preSearchForRound && preSearchForRound.status === AnalysisStatuses.STREAMING) {
       return; // Don't send message yet - wait for pre-search to complete
     }
 
@@ -581,8 +625,8 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
     storePreSearchesForSend,
   ]);
 
-  // ✅ CLEANUP: Only stop streaming on navigation, don't reset state
-  // Screen components manage their own state via useScreenInitialization and thread.id changes
+  // ✅ CLEANUP: Comprehensive navigation cleanup
+  // Stops streaming, clears pending operations, and resets state when appropriate
   useEffect(() => {
     const prevPath = prevPathnameRef.current;
 
@@ -597,10 +641,40 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
       return;
     }
 
-    // Stop any ongoing streaming before navigation
     const currentState = storeRef.current?.getState();
-    if (currentState?.isStreaming) {
+    if (!currentState) {
+      prevPathnameRef.current = pathname;
+      return;
+    }
+
+    // ✅ CRITICAL FIX: Detect specific navigation patterns
+    const isLeavingThread = prevPath?.startsWith('/chat/') && prevPath !== '/chat';
+    const isGoingToOverview = pathname === '/chat';
+    const isNavigatingBetweenThreads = prevPath?.startsWith('/chat/') && pathname?.startsWith('/chat/') && prevPath !== pathname;
+
+    // ✅ FIX 1: Stop any ongoing streaming immediately
+    if (currentState.isStreaming) {
       currentState.stop?.();
+    }
+
+    // ✅ FIX 2: Clear waitingToStartStreaming to prevent deferred streaming from triggering
+    if (currentState.waitingToStartStreaming) {
+      currentState.setWaitingToStartStreaming(false);
+    }
+
+    // ✅ FIX 3: Reset to overview when navigating from thread to overview
+    // This ensures all state is cleared before the overview screen mounts
+    // Note: Overview screen also has its own resetToOverview() call in useLayoutEffect
+    // This is defensive - ensures state is clean even if screen effect doesn't run
+    if (isLeavingThread && isGoingToOverview) {
+      currentState.resetToOverview();
+    }
+
+    // ✅ FIX 4: Reset thread state when navigating between different threads
+    // This clears flags and tracking without clearing the entire store
+    // The new thread screen will initialize fresh state via useScreenInitialization
+    if (isNavigatingBetweenThreads) {
+      currentState.resetThreadState();
     }
 
     // Update previous pathname

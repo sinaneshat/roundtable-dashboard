@@ -133,14 +133,6 @@ export function PreSearchCard({
   // Pattern from round-analysis-card.tsx:86
   const isOpen = isManuallyControlled ? manuallyOpen : isLatest;
 
-  // Show progress for completed state
-  const completedCount = isCompleted && preSearch.searchData
-    ? preSearch.searchData.successCount
-    : 0;
-  const totalCount = isCompleted && preSearch.searchData
-    ? preSearch.searchData.successCount + preSearch.searchData.failureCount
-    : 0;
-
   return (
     <div className={cn('py-1.5', className)}>
       <ChainOfThought
@@ -155,15 +147,6 @@ export function PreSearchCard({
             <span className="text-sm font-medium">
               {t('chat.preSearch.title')}
             </span>
-
-            {/* Show summary badge for completed */}
-            {isCompleted && totalCount > 0 && (
-              <Badge variant="secondary" className="text-xs">
-                {completedCount}
-                /
-                {totalCount}
-              </Badge>
-            )}
 
             {/* Status badges */}
             {isStreamingOrPending && (

@@ -15,6 +15,7 @@ import { and, asc, eq } from 'drizzle-orm';
 import { executeBatch } from '@/api/common/batch-operations';
 import { createError, structureAIProviderError } from '@/api/common/error-handling';
 import { createHandler } from '@/api/core';
+import { AnalysisStatuses } from '@/api/core/enums';
 import { saveStreamedMessage } from '@/api/services/message-persistence.service';
 import { getModelById } from '@/api/services/models-config.service';
 import { initializeOpenRouter, openRouterService } from '@/api/services/openrouter.service';
@@ -33,13 +34,14 @@ import {
 import { buildParticipantSystemPrompt } from '@/api/services/prompts.service';
 import { handleRoundRegeneration } from '@/api/services/regeneration.service';
 import { calculateRoundNumber } from '@/api/services/round.service';
+import type { CloudflareAiBinding } from '@/api/services/streaming-orchestration.service';
 import {
   buildSystemPromptWithContext,
   extractUserQuery,
   loadParticipantConfiguration,
   prepareValidatedMessages,
 } from '@/api/services/streaming-orchestration.service';
-import { logModeChange } from '@/api/services/thread-changelog.service';
+import { logModeChange, logWebSearchToggle } from '@/api/services/thread-changelog.service';
 import {
   enforceMessageQuota,
   getUserTier,
@@ -68,7 +70,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
   },
   async (c) => {
     const { user } = c.auth();
-    const { message, id: threadId, participantIndex, participants: providedParticipants, regenerateRound, mode: providedMode } = c.validated.body;
+    const { message, id: threadId, participantIndex, participants: providedParticipants, regenerateRound, mode: providedMode, enableWebSearch: providedEnableWebSearch } = c.validated.body;
 
     // =========================================================================
     // STEP 1: Validate incoming message
@@ -134,28 +136,67 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
     // =========================================================================
     // ✅ FIX: Create pre-search record for subsequent rounds (not just round 0)
     // Only create if:
-    // 1. Web search is enabled on thread
+    // 1. Web search is enabled on thread (or being enabled via providedEnableWebSearch)
     // 2. This is the first participant (participantIndex === 0)
     // 3. This is NOT a regeneration (regeneration clears existing pre-search)
     // 4. Pre-search record doesn't already exist for this round
-    if (thread.enableWebSearch && participantIndex === 0 && !regenerateRound) {
-      const existingPreSearch = await db.query.chatPreSearch.findFirst({
-        where: and(
-          eq(tables.chatPreSearch.threadId, threadId),
-          eq(tables.chatPreSearch.roundNumber, currentRoundNumber),
-        ),
-      });
+    //
+    // ✅ CRITICAL FIX: Use DEFAULT_PARTICIPANT_INDEX constant instead of hardcoded 0
+    // This ensures consistency with participant index validation throughout the codebase
+    //
+    // ✅ MID-CONVERSATION WEB SEARCH FIX: Check providedEnableWebSearch FIRST
+    // If user is enabling web search mid-conversation, providedEnableWebSearch will be true
+    // but thread.enableWebSearch is still false (not updated yet, that happens in STEP 5.5)
+    // So we need to check: providedEnableWebSearch ?? thread.enableWebSearch
+    const isFirstParticipant = (participantIndex ?? DEFAULT_PARTICIPANT_INDEX) === DEFAULT_PARTICIPANT_INDEX;
+    const effectiveWebSearchEnabled = providedEnableWebSearch ?? thread.enableWebSearch;
 
-      if (!existingPreSearch) {
-        const { ulid } = await import('ulid');
-        await db.insert(tables.chatPreSearch).values({
-          id: ulid(),
-          threadId,
-          roundNumber: currentRoundNumber,
-          userQuery: extractTextFromParts(message.parts),
-          status: 'pending',
-          createdAt: new Date(),
+    // ✅ CRITICAL BUG FIX: Ensure pre-search is created for ALL rounds when web search is enabled
+    // Previous condition was correct, but we add defensive checks and better error handling
+    if (effectiveWebSearchEnabled && isFirstParticipant && !regenerateRound) {
+      try {
+        const existingPreSearch = await db.query.chatPreSearch.findFirst({
+          where: and(
+            eq(tables.chatPreSearch.threadId, threadId),
+            eq(tables.chatPreSearch.roundNumber, currentRoundNumber),
+          ),
         });
+
+        if (!existingPreSearch) {
+          const { ulid } = await import('ulid');
+          const preSearchId = ulid();
+
+          // ✅ BUG FIX: Use AnalysisStatuses.PENDING instead of hardcoded string
+          // Ensures consistency with enum values used throughout the codebase
+          await db.insert(tables.chatPreSearch).values({
+            id: preSearchId,
+            threadId,
+            roundNumber: currentRoundNumber,
+            userQuery: extractTextFromParts(message.parts),
+            status: AnalysisStatuses.PENDING,
+            createdAt: new Date(),
+          });
+
+          // ✅ DEBUG LOGGING: Log successful pre-search creation for debugging
+          console.log(`[PreSearch] Created PENDING pre-search for round ${currentRoundNumber} (ID: ${preSearchId})`);
+        } else {
+          // ✅ DEBUG LOGGING: Log when pre-search already exists
+          console.log(`[PreSearch] Pre-search already exists for round ${currentRoundNumber} (ID: ${existingPreSearch.id}, Status: ${existingPreSearch.status})`);
+        }
+      } catch (error) {
+        // ✅ BUG FIX: Don't let pre-search creation errors break the streaming flow
+        // Log the error but continue with participant streaming
+        console.error(`[PreSearch] Failed to create pre-search for round ${currentRoundNumber}:`, error);
+        // Continue execution - don't throw
+      }
+    } else {
+      // ✅ DEBUG LOGGING: Log why pre-search wasn't created
+      if (!effectiveWebSearchEnabled) {
+        console.log(`[PreSearch] Skipping pre-search creation - web search disabled (thread: ${thread.enableWebSearch}, provided: ${providedEnableWebSearch})`);
+      } else if (!isFirstParticipant) {
+        console.log(`[PreSearch] Skipping pre-search creation - not first participant (index: ${participantIndex})`);
+      } else if (regenerateRound) {
+        console.log(`[PreSearch] Skipping pre-search creation - regenerating round ${regenerateRound}`);
       }
     }
 
@@ -180,6 +221,28 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
       await logModeChange(threadId, nextRoundNumber, thread.mode, providedMode);
 
       thread.mode = providedMode;
+    }
+
+    // =========================================================================
+    // STEP 5.5: Handle web search toggle (if provided)
+    // =========================================================================
+    if (providedEnableWebSearch !== undefined && providedEnableWebSearch !== thread.enableWebSearch && participantIndex === 0) {
+      // ✅ CRITICAL FIX: Use nextRoundNumber for consistency with thread.handler.ts
+      // Changelog should appear BEFORE the next round
+      const nextRoundNumber = currentRoundNumber + 1;
+
+      // Update thread web search setting
+      await db.update(tables.chatThread)
+        .set({
+          enableWebSearch: providedEnableWebSearch,
+          updatedAt: new Date(),
+        })
+        .where(eq(tables.chatThread.id, threadId));
+
+      // ✅ SERVICE LAYER: Use thread-changelog.service for changelog creation
+      await logWebSearchToggle(threadId, nextRoundNumber, providedEnableWebSearch);
+
+      thread.enableWebSearch = providedEnableWebSearch;
     }
 
     // =========================================================================
@@ -331,7 +394,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
       userQuery,
       previousDbMessages,
       currentRoundNumber,
-      env: { AI: c.env.AI },
+      env: { AI: c.env.AI as unknown as CloudflareAiBinding },
       db,
     });
 
@@ -375,14 +438,14 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
     //
     // Parameters for streamText
     const streamParams = {
-      model: client(participant.modelId),
+      model: client.chat(participant.modelId),
       system: systemPrompt,
       messages: modelMessages,
       maxOutputTokens,
       ...(modelSupportsTemperature && { temperature: temperatureValue }),
       maxRetries: AI_RETRY_CONFIG.maxAttempts, // AI SDK handles retries
       abortSignal: AbortSignal.any([
-        (c.req as unknown as { raw: Request }).raw.signal,
+        c.req.raw.signal,
         AbortSignal.timeout(AI_TIMEOUT_CONFIG.perAttemptMs),
       ]),
       // ✅ AI SDK V5 TELEMETRY: Enable experimental telemetry for OpenTelemetry integration

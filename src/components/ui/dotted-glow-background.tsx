@@ -213,7 +213,8 @@ export function DottedGlowBackground({
 
       // optional subtle background fade for depth (defaults to 0 = transparent)
       if (backgroundOpacity > 0) {
-        const grad = ctx.createRadialGradient(
+        // createRadialGradient returns CanvasGradient - properly typed
+        const gradient: CanvasGradient = ctx.createRadialGradient(
           width * 0.5,
           height * 0.4,
           Math.min(width, height) * 0.1,
@@ -221,12 +222,12 @@ export function DottedGlowBackground({
           height * 0.5,
           Math.max(width, height) * 0.7,
         );
-        grad.addColorStop(0, "rgba(0,0,0,0)");
-        grad.addColorStop(
+        gradient.addColorStop(0, "rgba(0,0,0,0)");
+        gradient.addColorStop(
           1,
           `rgba(0,0,0,${Math.min(Math.max(backgroundOpacity, 0), 1)})`,
         );
-        ctx.fillStyle = grad as unknown as CanvasGradient;
+        ctx.fillStyle = gradient;
         ctx.fillRect(0, 0, width, height);
       }
 

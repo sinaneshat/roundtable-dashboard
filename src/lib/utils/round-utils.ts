@@ -21,7 +21,6 @@ import { MessageRoles } from '@/api/core/enums';
 import {
   calculateNextRound,
   DEFAULT_ROUND_NUMBER,
-  extractRoundNumber,
   NO_ROUND_SENTINEL,
 } from '@/lib/schemas/round-schemas';
 
@@ -51,7 +50,8 @@ export function calculateNextRoundNumber(messages: UIMessage[]): number {
 
   messages.forEach((message) => {
     if (message.role === MessageRoles.USER) {
-      const roundNumber = extractRoundNumber(message.metadata, NO_ROUND_SENTINEL);
+      // Use type-safe metadata extraction (handles unknown metadata from AI SDK)
+      const roundNumber = getRoundNumber(message.metadata) ?? NO_ROUND_SENTINEL;
       if (roundNumber > maxRoundNumber) {
         maxRoundNumber = roundNumber;
       }
@@ -79,7 +79,8 @@ export function getMaxRoundNumber(messages: UIMessage[]): number {
   let max = NO_ROUND_SENTINEL;
 
   messages.forEach((message) => {
-    const roundNumber = extractRoundNumber(message.metadata, NO_ROUND_SENTINEL);
+    // Use type-safe metadata extraction (handles unknown metadata from AI SDK)
+    const roundNumber = getRoundNumber(message.metadata) ?? NO_ROUND_SENTINEL;
     if (roundNumber > max) {
       max = roundNumber;
     }
@@ -107,12 +108,14 @@ export function getRoundNumberFromMetadata(
   messageOrMetadata: UIMessage | unknown,
   defaultValue = DEFAULT_ROUND_NUMBER,
 ): number {
-  // If it's a UIMessage, extract metadata
+  // If it's a UIMessage, extract metadata using type-safe utility
   if (messageOrMetadata && typeof messageOrMetadata === 'object' && 'metadata' in messageOrMetadata) {
-    return extractRoundNumber((messageOrMetadata as UIMessage).metadata, defaultValue);
+    const roundNumber = getRoundNumber((messageOrMetadata as UIMessage).metadata);
+    return roundNumber ?? defaultValue;
   }
   // Otherwise treat it as raw metadata
-  return extractRoundNumber(messageOrMetadata, defaultValue);
+  const roundNumber = getRoundNumber(messageOrMetadata);
+  return roundNumber ?? defaultValue;
 }
 
 /**

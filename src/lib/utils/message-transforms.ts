@@ -138,12 +138,11 @@ export function chatMessageToUIMessage(
     ? message.createdAt.toISOString()
     : message.createdAt;
 
-  // Preserve pre-search metadata exactly as-is
-  const messageMetadata = message.metadata as Record<string, unknown> | null | undefined;
-  const isPreSearchMsg = messageMetadata
-    && typeof messageMetadata === 'object'
-    && 'isPreSearch' in messageMetadata
-    && messageMetadata.isPreSearch === true;
+  // ✅ TYPE-SAFE: Check for pre-search metadata without force casting
+  const isPreSearchMsg = message.metadata !== null
+    && typeof message.metadata === 'object'
+    && 'isPreSearch' in message.metadata
+    && message.metadata.isPreSearch === true;
 
   // ✅ CRITICAL FIX: Always preserve roundNumber from database column
   // Even when metadata exists, ensure roundNumber from column takes precedence
@@ -420,8 +419,8 @@ export function getParticipantMessagesForRound(
       return false;
     }
 
-    const metadata = m.metadata as Record<string, unknown> | null | undefined;
-    if (metadata && typeof metadata === 'object' && metadata.role === 'system') {
+    // ✅ TYPE-SAFE: Check role field without force casting
+    if (m.metadata && typeof m.metadata === 'object' && 'role' in m.metadata && m.metadata.role === 'system') {
       return false;
     }
 

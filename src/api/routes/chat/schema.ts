@@ -440,11 +440,17 @@ export type WebSearchResult = z.infer<typeof WebSearchResultSchema>;
 
 /**
  * Generated search query schema
+ * Used by web-search.service.ts AI generation
  */
 export const GeneratedSearchQuerySchema = z.object({
   query: z.string().describe('The generated search query'),
   rationale: z.string().describe('Explanation for why this query will help answer the user question'),
   searchDepth: WebSearchDepthSchema.describe('Recommended search depth for this query'),
+  // Additional fields from AI generation (optional for backward compatibility)
+  complexity: WebSearchComplexitySchema.optional().describe('Query complexity level'),
+  sourceCount: z.number().min(1).max(5).optional().describe('Number of sources to extract'),
+  requiresFullContent: z.boolean().optional().describe('Whether full content extraction is needed'),
+  analysis: z.string().optional().describe('Analysis of user intent and information needs'),
 }).openapi('GeneratedSearchQuery');
 
 export type GeneratedSearchQuery = z.infer<typeof GeneratedSearchQuerySchema>;
@@ -638,6 +644,10 @@ export const StreamChatRequestSchema = z.object({
   mode: ChatModeSchema.optional().openapi({
     description: 'Conversation mode for this thread. If changed, generates changelog entry.',
     example: 'brainstorming',
+  }),
+  enableWebSearch: z.boolean().optional().openapi({
+    description: 'Enable/disable web search for this thread. If changed, generates changelog entry.',
+    example: true,
   }),
 }).openapi('StreamChatRequest');
 const MessagesListPayloadSchema = z.object({
@@ -1078,3 +1088,57 @@ export const MessageWithParticipantSchema = chatMessageSelectSchema
   .openapi('MessageWithParticipant');
 
 export type MessageWithParticipant = z.infer<typeof MessageWithParticipantSchema>;
+
+// ============================================================================
+// COMPONENT PROP SCHEMAS (UI Layer)
+// ============================================================================
+
+/**
+ * Web search flat display component props schema
+ * Single source of truth for component prop validation
+ */
+export const WebSearchFlatDisplayPropsSchema = z.object({
+  results: z.array(WebSearchResultItemSchema),
+  className: z.string().optional(),
+  meta: WebSearchResultMetaSchema.optional(),
+  complexity: WebSearchComplexitySchema.optional(),
+}).openapi('WebSearchFlatDisplayProps');
+
+export type WebSearchFlatDisplayProps = z.infer<typeof WebSearchFlatDisplayPropsSchema>;
+
+/**
+ * Search result item component props schema
+ * Used for rendering individual search results
+ */
+export const SearchResultItemPropsSchema = z.object({
+  result: WebSearchResultItemSchema,
+  index: RoundNumberSchema,
+  totalCount: z.number().int().positive(),
+}).openapi('SearchResultItemProps');
+
+export type SearchResultItemProps = z.infer<typeof SearchResultItemPropsSchema>;
+
+/**
+ * Web search display component props schema (card-based variant)
+ * Single source of truth for card-based display component prop validation
+ */
+export const WebSearchDisplayPropsSchema = z.object({
+  results: z.array(WebSearchResultItemSchema),
+  className: z.string().optional(),
+  meta: WebSearchResultMetaSchema.optional(),
+  complexity: WebSearchComplexitySchema.optional(),
+}).openapi('WebSearchDisplayProps');
+
+export type WebSearchDisplayProps = z.infer<typeof WebSearchDisplayPropsSchema>;
+
+/**
+ * Web search result item component props schema (simple variant)
+ * Used for rendering individual search results with avatar
+ */
+export const WebSearchResultItemPropsSchema = z.object({
+  result: WebSearchResultItemSchema,
+  showDivider: z.boolean().optional().default(true),
+  className: z.string().optional(),
+}).openapi('WebSearchResultItemProps');
+
+export type WebSearchResultItemProps = z.infer<typeof WebSearchResultItemPropsSchema>;

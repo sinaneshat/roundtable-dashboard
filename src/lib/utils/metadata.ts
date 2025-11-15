@@ -16,6 +16,7 @@
  * 4. Support both frontend (UIMessage) and backend (ChatMessage) types
  */
 
+import type { UIMessage } from 'ai';
 import { z } from 'zod';
 
 import type {
@@ -32,7 +33,6 @@ import {
   isParticipantMessageMetadata,
 } from '@/db/schemas/chat-metadata';
 import type { ChatMessage } from '@/db/validation';
-import type { UIMessage } from '@/lib/schemas/ui-message-schemas';
 
 // Convenience type aliases for backward compatibility
 type MessageMetadata = DbMessageMetadata;

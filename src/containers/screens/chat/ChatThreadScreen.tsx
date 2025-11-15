@@ -18,11 +18,9 @@ import { StreamingParticipantsLoader } from '@/components/chat/streaming-partici
 import { useThreadHeader } from '@/components/chat/thread-header-context';
 import { ThreadTimeline } from '@/components/chat/thread-timeline';
 import { UnifiedErrorBoundary } from '@/components/chat/unified-error-boundary';
-import { UnifiedQuotaWarning } from '@/components/chat/unified-quota-warning';
 import { WebSearchToggle } from '@/components/chat/web-search-toggle';
 import { useChatStore } from '@/components/providers/chat-store-provider';
 import { Button } from '@/components/ui/button';
-import { useUsageStatsQuery } from '@/hooks/queries';
 import { useCustomRolesQuery, useThreadChangelogQuery, useThreadFeedbackQuery } from '@/hooks/queries/chat';
 import { useModelsQuery } from '@/hooks/queries/models';
 import type { TimelineItem } from '@/hooks/utils';
@@ -126,7 +124,6 @@ export default function ChatThreadScreen({
   // Query for models and custom roles (for modals)
   const { data: modelsData } = useModelsQuery();
   const { data: customRolesData } = useCustomRolesQuery(isModelModalOpen.value);
-  const { data: statsData } = useUsageStatsQuery();
   const messages = useChatStore(s => s.messages);
   const isStreaming = useChatStore(s => s.isStreaming);
   const currentParticipantIndex = useChatStore(s => s.currentParticipantIndex);
@@ -268,30 +265,21 @@ export default function ChatThreadScreen({
   // ✅ SAFETY MECHANISM: Auto-complete stuck analyses after timeout
   // Prevents analyses stuck at 'streaming' from blocking new rounds
   // ✅ Enum Pattern: Use AnalysisStatuses constants instead of string literals
+  // ✅ MEMORY LEAK FIX: Use ref to track interval and ensure cleanup
+  const stuckAnalysisIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
   useEffect(() => {
     const ANALYSIS_TIMEOUT_MS = 90000; // 90 seconds
-    const stuckAnalyses = analyses.filter((analysis) => {
-      // ✅ Enum Pattern: Use AnalysisStatuses.STREAMING constant
-      if (analysis.status !== AnalysisStatuses.STREAMING)
-        return false;
-      const createdTime = analysis.createdAt instanceof Date
-        ? analysis.createdAt.getTime()
-        : new Date(analysis.createdAt).getTime();
-      const elapsed = Date.now() - createdTime;
-      return elapsed > ANALYSIS_TIMEOUT_MS;
-    });
 
-    if (stuckAnalyses.length > 0) {
-      stuckAnalyses.forEach((analysis) => {
-        // ✅ Enum Pattern: Use AnalysisStatuses.COMPLETE constant
-        // Mark as complete even without data to unblock the UI
-        updateAnalysisStatus(analysis.roundNumber, AnalysisStatuses.COMPLETE);
-      });
+    // ✅ MEMORY LEAK FIX: Clear any existing interval before creating new one
+    // Prevents interval accumulation if effect re-runs
+    if (stuckAnalysisIntervalRef.current) {
+      clearInterval(stuckAnalysisIntervalRef.current);
+      stuckAnalysisIntervalRef.current = null;
     }
 
-    // Check every 10 seconds
-    const interval = setInterval(() => {
-      const currentStuck = analyses.filter((analysis) => {
+    const checkStuckAnalyses = () => {
+      const stuckAnalyses = analyses.filter((analysis) => {
         // ✅ Enum Pattern: Use AnalysisStatuses.STREAMING constant
         if (analysis.status !== AnalysisStatuses.STREAMING)
           return false;
@@ -302,15 +290,28 @@ export default function ChatThreadScreen({
         return elapsed > ANALYSIS_TIMEOUT_MS;
       });
 
-      if (currentStuck.length > 0) {
-        currentStuck.forEach((analysis) => {
+      if (stuckAnalyses.length > 0) {
+        stuckAnalyses.forEach((analysis) => {
           // ✅ Enum Pattern: Use AnalysisStatuses.COMPLETE constant
+          // Mark as complete even without data to unblock the UI
           updateAnalysisStatus(analysis.roundNumber, AnalysisStatuses.COMPLETE);
         });
       }
-    }, 10000);
+    };
 
-    return () => clearInterval(interval);
+    // Check immediately on mount
+    checkStuckAnalyses();
+
+    // Check every 10 seconds
+    stuckAnalysisIntervalRef.current = setInterval(checkStuckAnalyses, 10000);
+
+    return () => {
+      // ✅ MEMORY LEAK FIX: Always clear interval on cleanup
+      if (stuckAnalysisIntervalRef.current) {
+        clearInterval(stuckAnalysisIntervalRef.current);
+        stuckAnalysisIntervalRef.current = null;
+      }
+    };
   }, [analyses, updateAnalysisStatus]);
 
   // ✅ FIX: Declare selectedMode early so it can be used in useScreenInitialization
@@ -487,9 +488,6 @@ export default function ChatThreadScreen({
   // Get web search toggle state from store (form state, not DB)
   const enableWebSearch = useChatStore(s => s.enableWebSearch);
 
-  // Check message quota (thread screen sends messages in existing threads)
-  const isQuotaExceeded = statsData?.success ? statsData.data.messages.remaining === 0 : false;
-
   // AI SDK v5 Pattern: Initialize thread on mount and when thread ID changes
   // Following crash course Exercise 01.07, 04.02, 04.03:
   // - Server provides initialMessages via props
@@ -643,17 +641,16 @@ export default function ChatThreadScreen({
             className="sticky bottom-0 z-50 bg-gradient-to-t from-background via-background to-transparent pt-4 sm:pt-6 pb-3 sm:pb-4 mt-auto"
           >
             <div className="container max-w-3xl mx-auto px-3 sm:px-4 md:px-6">
-              <UnifiedQuotaWarning checkType="messages" />
               <ChatInput
                 value={inputValue}
                 onChange={setInputValue}
                 onSubmit={handlePromptSubmit}
                 status={isRoundInProgress ? 'submitted' : 'ready'}
                 onStop={stopStreaming}
-                placeholder={isQuotaExceeded ? t('input.placeholderQuotaExceeded') : t('input.placeholder')}
-                disabled={isQuotaExceeded}
+                placeholder={t('input.placeholder')}
                 participants={selectedParticipants}
                 currentParticipantIndex={currentParticipantIndex}
+                quotaCheckType="messages"
                 onRemoveParticipant={isRoundInProgress
                   ? undefined
                   : (participantId) => {

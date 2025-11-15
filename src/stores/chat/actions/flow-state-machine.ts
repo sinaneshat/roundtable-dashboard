@@ -17,7 +17,7 @@
 'use client';
 
 import { useQueryClient } from '@tanstack/react-query';
-import type { UIMessage } from 'ai';
+import type { TextPart, UIMessage } from 'ai';
 import { useRouter } from 'next/navigation';
 import { startTransition, useEffect, useMemo, useRef, useState } from 'react';
 
@@ -377,10 +377,17 @@ export function useFlowStateMachine(
             }
 
             const userMessage = messages.findLast((m: UIMessage) => m.role === 'user');
+            // ✅ TYPE-SAFE: Use AI SDK TextPart type for text content extraction
             const userQuestion = userMessage?.parts
-              ?.find((p: unknown): p is { type: 'text'; text: string } => {
-                const part = p as Record<string, unknown>;
-                return part.type === 'text' && 'text' in part;
+              ?.find((p): p is TextPart => {
+                return (
+                  typeof p === 'object'
+                  && p !== null
+                  && 'type' in p
+                  && p.type === 'text'
+                  && 'text' in p
+                  && typeof p.text === 'string'
+                );
               })
               ?.text || '';
 

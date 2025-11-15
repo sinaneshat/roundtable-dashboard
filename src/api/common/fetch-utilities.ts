@@ -272,7 +272,8 @@ export async function fetchWithRetry<T = unknown>(
 
         // Type handling based on schema presence:
         // - With schema: parseResult.data is validated T (no casting needed)
-        // - Without schema: parseResult.data is unknown, consumer assumes responsibility for type T
+        // - Without schema: parseResult.data is unknown, consumer casts to T at their own risk
+        // This is the contract of the function - callers must provide schema for type safety
         const data = parseResult.data as T;
 
         const duration = Date.now() - startTime;

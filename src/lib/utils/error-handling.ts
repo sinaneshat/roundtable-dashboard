@@ -100,92 +100,91 @@ export function getApiErrorDetails(error: unknown): ApiErrorDetails {
   }
 
   // Handle non-object errors
-  if (typeof error !== 'object') {
+  if (typeof error !== 'object' || error === null) {
     return { message: String(error) };
   }
 
-  const errorObj = error as Record<string, unknown>;
+  // ✅ TYPE-SAFE: Use type guard for error object
   const result: ApiErrorDetails = {
     message: 'An unknown error occurred',
   };
 
   // Try to extract HTTP status code from error object
-  if (typeof errorObj.status === 'number') {
-    result.status = errorObj.status;
+  if ('status' in error && typeof error.status === 'number') {
+    result.status = error.status;
   }
 
   // Try to extract status from nested response object (Hono client errors)
-  if (errorObj.response && typeof errorObj.response === 'object') {
-    const response = errorObj.response as Record<string, unknown>;
-    if (typeof response.status === 'number' && !result.status) {
-      result.status = response.status;
+  if ('response' in error && typeof error.response === 'object' && error.response !== null) {
+    if ('status' in error.response && typeof error.response.status === 'number' && !result.status) {
+      result.status = error.response.status;
     }
   }
 
   // PRIMARY: Check for standardized API error response format
   // Format: { success: false, error: { code, message, context, validation }, meta }
-  if (errorObj.error && typeof errorObj.error === 'object') {
-    const apiError = errorObj.error as Record<string, unknown>;
+  if ('error' in error && typeof error.error === 'object' && error.error !== null) {
+    const apiError = error.error;
 
     // Extract error message (REQUIRED field in API error format)
-    if (typeof apiError.message === 'string' && apiError.message.length > 0) {
+    if ('message' in apiError && typeof apiError.message === 'string' && apiError.message.length > 0) {
       result.message = apiError.message;
     }
 
     // Extract error code (e.g., "VALIDATION_ERROR", "UNAUTHENTICATED")
-    if (typeof apiError.code === 'string' && apiError.code.length > 0) {
+    if ('code' in apiError && typeof apiError.code === 'string' && apiError.code.length > 0) {
       result.code = apiError.code;
     }
 
     // Extract validation errors array
-    if (Array.isArray(apiError.validation)) {
+    if ('validation' in apiError && Array.isArray(apiError.validation)) {
       result.validationErrors = apiError.validation
         .filter((v): v is Record<string, unknown> => typeof v === 'object' && v !== null)
         .map(v => ({
-          field: typeof v.field === 'string' ? v.field : 'unknown',
-          message: typeof v.message === 'string' ? v.message : 'Validation failed',
-          code: typeof v.code === 'string' ? v.code : undefined,
+          field: 'field' in v && typeof v.field === 'string' ? v.field : 'unknown',
+          message: 'message' in v && typeof v.message === 'string' ? v.message : 'Validation failed',
+          code: 'code' in v && typeof v.code === 'string' ? v.code : undefined,
         }));
     }
 
     // Extract additional error details
-    if (apiError.details !== undefined) {
+    if ('details' in apiError && apiError.details !== undefined) {
       result.details = apiError.details;
     }
 
     // Extract error context (type-safe discriminated union in backend)
     // This is available for debugging but not typically shown to users
-    if (apiError.context && typeof apiError.context === 'object') {
+    if ('context' in apiError && typeof apiError.context === 'object' && apiError.context !== null) {
       // Context is available in result.details for advanced error handling
       result.details = result.details || apiError.context;
     }
   }
 
   // FALLBACK: Check for direct message property (non-API standard errors)
-  if (result.message === 'An unknown error occurred' && typeof errorObj.message === 'string' && errorObj.message.length > 0) {
+  if (result.message === 'An unknown error occurred' && 'message' in error && typeof error.message === 'string' && error.message.length > 0) {
     // Filter out generic "HTTP error!" messages from Hono client
-    if (!errorObj.message.startsWith('HTTP error!')) {
-      result.message = errorObj.message;
+    if (!error.message.startsWith('HTTP error!')) {
+      result.message = error.message;
     }
 
     // Extract code if available at top level
-    if (typeof errorObj.code === 'string' && errorObj.code.length > 0) {
-      result.code = errorObj.code;
+    if ('code' in error && typeof error.code === 'string' && error.code.length > 0) {
+      result.code = error.code;
     }
   }
 
   // FALLBACK: Check for statusText as last resort
-  if (result.message === 'An unknown error occurred' && typeof errorObj.statusText === 'string' && errorObj.statusText.length > 0) {
-    result.message = errorObj.statusText;
+  if (result.message === 'An unknown error occurred' && 'statusText' in error && typeof error.statusText === 'string' && error.statusText.length > 0) {
+    result.message = error.statusText;
   }
 
   // Extract metadata from API error response
-  if (errorObj.meta && typeof errorObj.meta === 'object') {
-    const meta = errorObj.meta as Record<string, unknown>;
+  if ('meta' in error && typeof error.meta === 'object' && error.meta !== null) {
+    const meta = error.meta;
     result.meta = {
-      requestId: typeof meta.requestId === 'string' ? meta.requestId : undefined,
-      timestamp: typeof meta.timestamp === 'string' ? meta.timestamp : undefined,
-      correlationId: typeof meta.correlationId === 'string' ? meta.correlationId : undefined,
+      requestId: 'requestId' in meta && typeof meta.requestId === 'string' ? meta.requestId : undefined,
+      timestamp: 'timestamp' in meta && typeof meta.timestamp === 'string' ? meta.timestamp : undefined,
+      correlationId: 'correlationId' in meta && typeof meta.correlationId === 'string' ? meta.correlationId : undefined,
     };
   }
 

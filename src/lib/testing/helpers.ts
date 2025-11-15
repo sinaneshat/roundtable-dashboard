@@ -1,8 +1,8 @@
-import type { UIMessage } from 'ai';
 import type { AbstractIntlMessages } from 'next-intl';
 
-import { MessageRoles } from '@/api/core/enums';
+import { MessageRoles, UIMessageRoles } from '@/api/core/enums';
 import type { DbAssistantMessageMetadata, DbUserMessageMetadata } from '@/db/schemas/chat-metadata';
+import type { UIMessage } from '@/lib/schemas/ui-message-schemas';
 
 /**
  * Common test utilities and helpers
@@ -15,14 +15,22 @@ import type { DbAssistantMessageMetadata, DbUserMessageMetadata } from '@/db/sch
 /**
  * Type alias for test messages with user metadata
  * Follows pattern from src/lib/utils/message-transforms.ts
+ * ✅ ENUM PATTERN: Uses UIMessage with discriminated union by role
  */
-export type TestUserMessage = UIMessage & { metadata: DbUserMessageMetadata };
+export type TestUserMessage = UIMessage & {
+  role: typeof UIMessageRoles.USER;
+  metadata: DbUserMessageMetadata;
+};
 
 /**
  * Type alias for test messages with assistant metadata
  * Follows pattern from src/lib/utils/message-transforms.ts
+ * ✅ ENUM PATTERN: Uses UIMessage with discriminated union by role
  */
-export type TestAssistantMessage = UIMessage & { metadata: DbAssistantMessageMetadata };
+export type TestAssistantMessage = UIMessage & {
+  role: typeof UIMessageRoles.ASSISTANT;
+  metadata: DbAssistantMessageMetadata;
+};
 
 /**
  * Creates user message metadata
@@ -83,7 +91,8 @@ export function createTestUIMessage(data: {
 
 /**
  * Creates a properly typed UIMessage for testing with user metadata
- * ✅ ENUM PATTERN: Uses MessageRoles.USER constant
+ * ✅ ENUM PATTERN: Uses UIMessageRoles.USER for UI messages (5-part pattern)
+ * ✅ ENUM PATTERN: Uses MessageRoles.USER for metadata (database pattern)
  * Pattern from: src/lib/utils/message-transforms.ts:57
  */
 export function createTestUserMessage(data: {
@@ -94,10 +103,10 @@ export function createTestUserMessage(data: {
 }): TestUserMessage {
   return {
     id: data.id,
-    role: MessageRoles.USER,
+    role: UIMessageRoles.USER, // ✅ UI message role enum
     parts: [{ type: 'text', text: data.content }],
     metadata: {
-      role: MessageRoles.USER,
+      role: MessageRoles.USER, // ✅ Database metadata role enum
       roundNumber: data.roundNumber,
       createdAt: data.createdAt,
     },
@@ -106,7 +115,8 @@ export function createTestUserMessage(data: {
 
 /**
  * Creates a properly typed UIMessage for testing with assistant metadata
- * ✅ ENUM PATTERN: Uses MessageRoles.ASSISTANT constant
+ * ✅ ENUM PATTERN: Uses UIMessageRoles.ASSISTANT for UI messages (5-part pattern)
+ * ✅ ENUM PATTERN: Uses MessageRoles.ASSISTANT for metadata (database pattern)
  * Pattern from: src/lib/utils/message-transforms.ts:57
  */
 export function createTestAssistantMessage(data: {
@@ -122,10 +132,10 @@ export function createTestAssistantMessage(data: {
 }): TestAssistantMessage {
   return {
     id: data.id,
-    role: MessageRoles.ASSISTANT,
+    role: UIMessageRoles.ASSISTANT, // ✅ UI message role enum
     parts: [{ type: 'text', text: data.content }],
     metadata: {
-      role: MessageRoles.ASSISTANT,
+      role: MessageRoles.ASSISTANT, // ✅ Database metadata role enum
       roundNumber: data.roundNumber,
       participantId: data.participantId,
       participantIndex: data.participantIndex,

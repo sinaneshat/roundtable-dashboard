@@ -130,11 +130,9 @@ export function extractParticipantIndex(
     return fallback;
   }
 
-  const metadataObj = metadata as Record<string, unknown>;
-  const participantIndex = metadataObj.participantIndex;
-
-  if (typeof participantIndex === 'number' && participantIndex >= 0) {
-    return participantIndex;
+  // ✅ TYPE-SAFE: Check for field existence before access
+  if ('participantIndex' in metadata && typeof metadata.participantIndex === 'number' && metadata.participantIndex >= 0) {
+    return metadata.participantIndex;
   }
 
   return fallback;
@@ -195,11 +193,9 @@ export function extractParticipantId(metadata: unknown): string | null {
     return null;
   }
 
-  const metadataObj = metadata as Record<string, unknown>;
-  const participantId = metadataObj.participantId;
-
-  if (typeof participantId === 'string' && participantId.length > 0) {
-    return participantId;
+  // ✅ TYPE-SAFE: Check for field existence before access
+  if ('participantId' in metadata && typeof metadata.participantId === 'string' && metadata.participantId.length > 0) {
+    return metadata.participantId;
   }
 
   return null;
@@ -222,11 +218,9 @@ export function extractParticipantRole(metadata: unknown): string | null {
     return null;
   }
 
-  const metadataObj = metadata as Record<string, unknown>;
-  const participantRole = metadataObj.participantRole;
-
-  if (typeof participantRole === 'string') {
-    return participantRole;
+  // ✅ TYPE-SAFE: Check for field existence before access
+  if ('participantRole' in metadata && typeof metadata.participantRole === 'string') {
+    return metadata.participantRole;
   }
 
   return null;
@@ -249,11 +243,9 @@ export function extractModel(metadata: unknown): string | null {
     return null;
   }
 
-  const metadataObj = metadata as Record<string, unknown>;
-  const model = metadataObj.model;
-
-  if (typeof model === 'string' && model.length > 0) {
-    return model;
+  // ✅ TYPE-SAFE: Check for field existence before access
+  if ('model' in metadata && typeof metadata.model === 'string' && metadata.model.length > 0) {
+    return metadata.model;
   }
 
   return null;

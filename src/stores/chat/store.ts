@@ -400,10 +400,10 @@ const createAnalysisSlice: StateCreator<
       return roundFromId !== msgRound || participantIndexFromId !== msgParticipantIndex;
     });
 
-    // ✅ LOG WARNING: Log mismatches for debugging, but don't block analysis
-    // This can happen during retry or edge cases - metadata is the source of truth
+    // ✅ REJECT ANALYSIS: Block analysis creation if message ID/metadata mismatch detected
+    // This prevents bugs where backend generates duplicate IDs or incorrect round numbers
     if (messageIdMismatches.length > 0) {
-      console.error('[createPendingAnalysis] Message ID/metadata mismatch detected', {
+      console.error('[createPendingAnalysis] Message ID/metadata mismatch detected - rejecting analysis', {
         roundNumber,
         threadId,
         mismatches: messageIdMismatches.map(msg => ({
@@ -411,7 +411,8 @@ const createAnalysisSlice: StateCreator<
           metadata: msg.metadata,
         })),
       });
-      // Continue with analysis creation - don't block it
+      // ✅ RETURN EARLY - Do not create analysis when IDs don't match metadata
+      return;
     }
 
     // Generate unique analysis ID

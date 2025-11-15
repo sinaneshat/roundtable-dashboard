@@ -114,36 +114,80 @@ const InfiniteQueryDataSchema = z.object({
 /**
  * Safely parse and validate unknown cache data
  * Returns null if data doesn't match expected schema
+ *
+ * ✅ RUNTIME ZOD VALIDATION: Ensures cache data integrity
+ * - Validates API response structure
+ * - Validates usage stats data shape
+ * - Returns null on validation failure (safe fallback)
  */
 function parseUsageStatsData(data: unknown) {
   const response = ApiResponseSchema.safeParse(data);
-  if (!response.success || !response.data.success)
+  if (!response.success || !response.data.success) {
+    if (process.env.NODE_ENV === 'development') {
+      console.error('Invalid API response structure for usage stats:', response.error);
+    }
     return null;
+  }
 
   const usageData = UsageStatsDataSchema.safeParse(response.data.data);
-  return usageData.success ? usageData.data : null;
+  if (!usageData.success) {
+    if (process.env.NODE_ENV === 'development') {
+      console.error('Invalid usage stats data structure:', usageData.error);
+    }
+    return null;
+  }
+
+  return usageData.data;
 }
 
 /**
  * Safely parse thread detail data from cache
  * Returns null if data doesn't match expected schema
+ *
+ * ✅ RUNTIME ZOD VALIDATION: Ensures thread detail cache integrity
+ * - Validates API response wrapper
+ * - Validates thread detail payload
+ * - Returns null on validation failure (safe fallback)
  */
 function parseThreadDetailData(data: unknown) {
   const response = ApiResponseSchema.safeParse(data);
-  if (!response.success || !response.data.success)
+  if (!response.success || !response.data.success) {
+    if (process.env.NODE_ENV === 'development') {
+      console.error('Invalid API response structure for thread detail:', response.error);
+    }
     return null;
+  }
 
   const threadData = ThreadDetailDataSchema.safeParse(response.data.data);
-  return threadData.success ? threadData.data : null;
+  if (!threadData.success) {
+    if (process.env.NODE_ENV === 'development') {
+      console.error('Invalid thread detail data structure:', threadData.error);
+    }
+    return null;
+  }
+
+  return threadData.data;
 }
 
 /**
  * Safely parse infinite query data from cache
  * Returns null if data doesn't match expected schema
+ *
+ * ✅ RUNTIME ZOD VALIDATION: Ensures infinite query cache integrity
+ * - Validates infinite query structure (pages + pageParams)
+ * - Validates each page's response structure
+ * - Returns null on validation failure (safe fallback)
  */
 function parseInfiniteQueryData(data: unknown) {
   const queryData = InfiniteQueryDataSchema.safeParse(data);
-  return queryData.success ? queryData.data : null;
+  if (!queryData.success) {
+    if (process.env.NODE_ENV === 'development') {
+      console.error('Invalid infinite query data structure:', queryData.error);
+    }
+    return null;
+  }
+
+  return queryData.data;
 }
 
 // ============================================================================

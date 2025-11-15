@@ -277,8 +277,8 @@ function ModeratorAnalysisStreamComponent({
    * This is an established pattern when bridging streaming (partial) and
    * complete types - similar to how AI SDK itself handles streaming text.
    */
-  const validLeaderboard = leaderboard.filter((item): item is NonNullable<typeof item> => item != null) as ModeratorAnalysisPayload['leaderboard'];
-  const validParticipantAnalyses = participantAnalyses.filter((item): item is NonNullable<typeof item> => item != null) as ModeratorAnalysisPayload['participantAnalyses'];
+  const validLeaderboard = leaderboard.filter((item: unknown): item is NonNullable<typeof item> => item != null) as ModeratorAnalysisPayload['leaderboard'];
+  const validParticipantAnalyses = participantAnalyses.filter((item: unknown): item is NonNullable<typeof item> => item != null) as ModeratorAnalysisPayload['participantAnalyses'];
   const validRoundSummary = roundSummary as ModeratorAnalysisPayload['roundSummary'];
   return (
     <motion.div

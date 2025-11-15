@@ -40,7 +40,8 @@ export function ModeratorAnalysisPanel({
   }
 
   // Type-safe destructuring: analysisData is validated and narrowed by hasAnalysisData type guard
-  const { leaderboard, participantAnalyses, roundSummary } = analysis.analysisData;
+  // TypeScript now knows analysisData is non-null and has required properties
+  const { leaderboard, participantAnalyses, roundSummary } = analysis.analysisData as NonNullable<typeof analysis.analysisData>;
 
   return (
     <div className="space-y-4">

@@ -34,6 +34,7 @@ import type { UseQueryResult } from '@tanstack/react-query';
 import { useEffect, useMemo, useRef } from 'react';
 
 import { hasStateChanged, mergeServerClientState } from '@/lib/utils/state-merge';
+import type { ChatStore } from '@/stores/chat/store-schemas';
 
 /**
  * Configuration for creating an orchestrator hook
@@ -61,13 +62,13 @@ export type OrchestratorConfig<
    * Zustand store selector to get current items from store
    * @example s => s.analyses
    */
-  storeSelector: (store: unknown) => TItem[];
+  storeSelector: (store: ChatStore) => TItem[];
 
   /**
    * Zustand store setter to update items in store
    * @example s => s.setAnalyses
    */
-  storeSetter: (store: unknown) => (items: TItem[]) => void;
+  storeSetter: (store: ChatStore) => (items: TItem[]) => void;
 
   /**
    * Extract items array from query response
@@ -207,13 +208,17 @@ export function createOrchestrator<
   return function useOrchestrator(
     options: OrchestratorOptions<TQueryArgs>,
   ): OrchestratorReturn {
-    const { threadId, enabled = true, queryArgs = [] as unknown as TQueryArgs } = options;
+    // ✅ TYPE SAFETY NOTE: Generic array defaults require temporary variable
+    // TypeScript limitation: Destructuring defaults with generics cause inference errors
+    // Solution: Extract queryArgs separately with explicit type assertion
+    const { threadId, enabled = true } = options;
+    const queryArgs = options.queryArgs ?? ([] as unknown as TQueryArgs);
 
     // Get store state and actions (using generic hook pattern)
-    const useStore = <T>(selector: (store: unknown) => T): T => {
+    const useStore = <T>(selector: (store: ChatStore) => T): T => {
       // eslint-disable-next-line ts/no-require-imports
       const { useChatStore } = require('@/components/providers/chat-store-provider') as {
-        useChatStore: <U>(selector: (store: unknown) => U) => U;
+        useChatStore: <U>(selector: (store: ChatStore) => U) => U;
       };
       return useChatStore(selector);
     };

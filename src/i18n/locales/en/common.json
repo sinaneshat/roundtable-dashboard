@@ -436,6 +436,8 @@
       "added": "Added",
       "modified": "Modified",
       "removed": "Removed",
+      "webSearchEnabled": "Web search enabled",
+      "webSearchDisabled": "Web search disabled",
       "actionSummary": {
         "added": "added",
         "modified": "modified",

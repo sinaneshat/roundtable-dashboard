@@ -19,17 +19,14 @@ import { ChatQuickStart } from '@/components/chat/chat-quick-start';
 import { ConversationModeModal } from '@/components/chat/conversation-mode-modal';
 import { ModelSelectionModal } from '@/components/chat/model-selection-modal';
 import { RoundAnalysisCard } from '@/components/chat/moderator/round-analysis-card';
-import { PreSearchCard } from '@/components/chat/pre-search-card';
 import { StreamingParticipantsLoader } from '@/components/chat/streaming-participants-loader';
 import { useThreadHeader } from '@/components/chat/thread-header-context';
 import { UnifiedErrorBoundary } from '@/components/chat/unified-error-boundary';
-import { UnifiedQuotaWarning } from '@/components/chat/unified-quota-warning';
 import { WebSearchToggle } from '@/components/chat/web-search-toggle';
 import { useChatStore } from '@/components/providers/chat-store-provider';
 import { Button } from '@/components/ui/button';
 import { RadialGlow } from '@/components/ui/radial-glow';
 import { BRAND } from '@/constants/brand';
-import { useUsageStatsQuery } from '@/hooks/queries';
 import { useCustomRolesQuery } from '@/hooks/queries/chat';
 import { useModelsQuery } from '@/hooks/queries/models';
 import {
@@ -110,7 +107,8 @@ export default function ChatOverviewScreen() {
   const preSearches = useChatStore(s => s.preSearches);
 
   // Data state
-  const streamingRoundNumber = useChatStore(s => s.streamingRoundNumber);
+  // ✅ REMOVED: streamingRoundNumber no longer needed after removing duplicate PreSearchCard
+  // const _streamingRoundNumber = useChatStore(s => s.streamingRoundNumber);
 
   // Analysis actions
   const updateAnalysisData = useChatStore(s => s.updateAnalysisData);
@@ -156,7 +154,6 @@ export default function ChatOverviewScreen() {
   // Model selection modal data
   const { data: modelsData } = useModelsQuery();
   const { data: customRolesData } = useCustomRolesQuery(modelModal.value && !isStreaming);
-  const { data: statsData } = useUsageStatsQuery();
   const participantIdCounterRef = useRef(0);
 
   const allEnabledModels = useMemo(
@@ -327,9 +324,6 @@ export default function ChatOverviewScreen() {
   }, [retry]);
 
   const currentStreamingParticipant = contextParticipants[currentParticipantIndex] || null;
-
-  // Check thread quota (overview screen creates new threads)
-  const isQuotaExceeded = statsData?.success ? statsData.data.threads.remaining === 0 : false;
 
   // React 19 Pattern: Initialize thread header on mount, update when title changes
   useEffect(() => {
@@ -540,17 +534,16 @@ export default function ChatOverviewScreen() {
                     exit={{ opacity: 0 }}
                     transition={{ delay: 0.5, duration: 0.3 }}
                   >
-                    <UnifiedQuotaWarning checkType="threads" />
                     <ChatInput
                       value={inputValue}
                       onChange={setInputValue}
                       onSubmit={handlePromptSubmit}
                       status={isCreatingThread || isStreaming ? 'submitted' : 'ready'}
                       onStop={stopStreaming}
-                      placeholder={isQuotaExceeded ? t('chat.input.placeholderThreadQuotaExceeded') : t('chat.input.placeholder')}
-                      disabled={isQuotaExceeded}
+                      placeholder={t('chat.input.placeholder')}
                       participants={selectedParticipants}
                       currentParticipantIndex={currentParticipantIndex}
+                      quotaCheckType="threads"
                       onRemoveParticipant={isStreaming ? undefined : removeParticipant}
                       toolbar={(
                         <>
@@ -623,19 +616,12 @@ export default function ChatOverviewScreen() {
                     preSearches={preSearches}
                   />
 
-                  {/* Pre-search progress - unified container for streaming & hydrated states */}
-                  {/* ✅ CONDITIONAL: Only show if web search is enabled for this thread */}
-                  {/* ✅ 0-BASED: First round is round 0 */}
-                  {createdThreadId && currentThread?.enableWebSearch && preSearches.find(ps => ps.roundNumber === 0) && (
-                    <PreSearchCard
-                      threadId={createdThreadId}
-                      preSearch={preSearches.find(ps => ps.roundNumber === 0)!}
-                      isLatest
-                      streamingRoundNumber={streamingRoundNumber}
-                    />
-                  )}
+                  {/* ✅ CRITICAL FIX: Do NOT pass preSearches to assistant messages list
+                      PreSearchCard should only render after user messages (handled by first ChatMessageList).
+                      Passing preSearches to both lists was causing duplicate pre-search accordion rendering.
+                  */}
 
-                  {/* Assistant messages appear after pre-search */}
+                  {/* Assistant messages */}
                   <ChatMessageList
                     messages={messages.filter((m: UIMessage) => m.role !== MessageRoles.USER)}
                     user={{
@@ -645,7 +631,6 @@ export default function ChatOverviewScreen() {
                     participants={contextParticipants}
                     isStreaming={isStreaming}
                     currentParticipantIndex={currentParticipantIndex}
-                    preSearches={preSearches}
                     currentStreamingParticipant={currentStreamingParticipant}
                     threadId={createdThreadId}
                   />
@@ -728,17 +713,16 @@ export default function ChatOverviewScreen() {
               className="sticky bottom-0 z-50 bg-gradient-to-t from-background via-background to-transparent pt-4 sm:pt-6 pb-3 sm:pb-4 mt-auto"
             >
               <div className="container max-w-3xl mx-auto px-3 sm:px-4 md:px-6">
-                <UnifiedQuotaWarning checkType="threads" />
                 <ChatInput
                   value={inputValue}
                   onChange={setInputValue}
                   onSubmit={handlePromptSubmit}
                   status={isCreatingThread || isStreaming ? 'submitted' : 'ready'}
                   onStop={stopStreaming}
-                  placeholder={isQuotaExceeded ? t('chat.input.placeholderThreadQuotaExceeded') : t('chat.input.placeholder')}
-                  disabled={isQuotaExceeded}
+                  placeholder={t('chat.input.placeholder')}
                   participants={selectedParticipants}
                   currentParticipantIndex={currentParticipantIndex}
+                  quotaCheckType="threads"
                   onRemoveParticipant={isStreaming ? undefined : removeParticipant}
                   toolbar={(
                     <>

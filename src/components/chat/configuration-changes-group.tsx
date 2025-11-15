@@ -1,5 +1,5 @@
 'use client';
-import { ArrowRight, Clock, Minus, Pencil, Plus } from 'lucide-react';
+import { ArrowRight, Clock, Globe, Minus, Pencil, Plus } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
 import type { ChangelogType } from '@/api/core/enums';
@@ -120,7 +120,7 @@ export function ConfigurationChangesGroup({ group, className }: ConfigurationCha
 }
 // Simplified change data structure - discriminated by 'type' field
 type ChangeDataBase = {
-  type: 'participant' | 'participant_role' | 'mode_change';
+  type: 'participant' | 'participant_role' | 'mode_change' | 'web_search';
 };
 
 type ParticipantChangeData = ChangeDataBase & {
@@ -144,9 +144,15 @@ type ModeChangeData = ChangeDataBase & {
   newMode: string;
 };
 
-type ChangeData = ParticipantChangeData | ParticipantRoleChangeData | ModeChangeData;
+type WebSearchChangeData = ChangeDataBase & {
+  type: 'web_search';
+  enabled: boolean;
+};
+
+type ChangeData = ParticipantChangeData | ParticipantRoleChangeData | ModeChangeData | WebSearchChangeData;
 
 function ChangeItem({ change }: { change: ChatThreadChangelog | (Omit<ChatThreadChangelog, 'createdAt'> & { createdAt: string | Date }) }) {
+  const t = useTranslations('chat.configuration');
   const { data: modelsData } = useModelsQuery();
   const allModels = modelsData?.data?.items || [];
 
@@ -161,6 +167,7 @@ function ChangeItem({ change }: { change: ChatThreadChangelog | (Omit<ChatThread
   const isParticipant = changeData.type === 'participant';
   const isParticipantRole = changeData.type === 'participant_role';
   const isModeChange = changeData.type === 'mode_change';
+  const isWebSearchChange = changeData.type === 'web_search';
 
   const modelId = (isParticipant || isParticipantRole) ? (changeData as ParticipantChangeData | ParticipantRoleChangeData).modelId : undefined;
   const role = isParticipant ? (changeData as ParticipantChangeData).role : undefined;
@@ -168,6 +175,7 @@ function ChangeItem({ change }: { change: ChatThreadChangelog | (Omit<ChatThread
   const newRole = isParticipantRole ? (changeData as ParticipantRoleChangeData).newRole : undefined;
   const oldMode = isModeChange ? (changeData as ModeChangeData).oldMode : undefined;
   const newMode = isModeChange ? (changeData as ModeChangeData).newMode : undefined;
+  const enabled = isWebSearchChange ? (changeData as WebSearchChangeData).enabled : undefined;
 
   const model = modelId ? allModels.find(m => m.id === modelId) : undefined;
   const showMissingModelFallback = (change.changeType === ChangelogTypes.ADDED || change.changeType === ChangelogTypes.REMOVED) && modelId && !model;
@@ -278,6 +286,22 @@ function ChangeItem({ change }: { change: ChatThreadChangelog | (Omit<ChatThread
           {newMode && (
             <span className="text-[10px] sm:text-xs font-medium">{newMode}</span>
           )}
+        </div>
+      )}
+
+      {/* Web search toggle changes */}
+      {isWebSearchChange && enabled !== undefined && (
+        <div
+          className={cn(
+            'flex items-center gap-1.5 sm:gap-2 px-2 sm:px-2.5 py-1 sm:py-1.5 shrink-0',
+            'backdrop-blur-md border rounded-lg shadow-md',
+            'bg-background/10 border-white/30 dark:border-white/20',
+          )}
+        >
+          <Globe className="size-3.5 sm:size-4 text-muted-foreground shrink-0" />
+          <span className="text-[10px] sm:text-xs font-medium">
+            {enabled ? t('webSearchEnabled') : t('webSearchDisabled')}
+          </span>
         </div>
       )}
     </>

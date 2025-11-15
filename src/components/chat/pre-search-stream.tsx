@@ -1,22 +1,17 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { Brain, CheckCircle, Globe, Loader2, Search } from 'lucide-react';
-import { useTranslations } from 'next-intl';
+import { Search, Sparkles } from 'lucide-react';
 import { memo, useEffect, useRef, useState } from 'react';
 
-import { AnalysisStatuses, ChainOfThoughtStepStatuses, WebSearchDepths } from '@/api/core/enums';
+import { AnalysisStatuses, WebSearchDepths } from '@/api/core/enums';
 import type { PreSearchDataPayload, StoredPreSearch } from '@/api/routes/chat/schema';
-import {
-  ChainOfThoughtSearchResult,
-  ChainOfThoughtSearchResults,
-  ChainOfThoughtStep,
-} from '@/components/ai-elements/chain-of-thought';
 import { ChatLoading } from '@/components/chat/chat-loading';
 import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
 import { useBoolean } from '@/hooks/utils';
 
-import { WebSearchResultCard } from './web-search-result-card';
+import { WebSearchResultItem } from './web-search-result-item';
 
 type PreSearchStreamProps = {
   threadId: string;
@@ -55,13 +50,12 @@ function PreSearchStreamComponent({
   onStreamComplete,
   onStreamStart,
 }: PreSearchStreamProps) {
-  const t = useTranslations();
   const is409Conflict = useBoolean(false);
 
   // Local streaming state
   const [partialSearchData, setPartialSearchData] = useState<Partial<PreSearchDataPayload> | null>(null);
   const [error, setError] = useState<Error | null>(null);
-  const eventSourceRef = useRef<EventSource | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   // ✅ DEBUG: Track component renders
   const renderCountRef = useRef(0);
@@ -113,7 +107,8 @@ function PreSearchStreamComponent({
     }
 
     const abortController = new AbortController();
-    eventSourceRef.current = abortController as unknown as EventSource;
+    // Store controller for cleanup - we use AbortController API for fetch-based streaming
+    abortControllerRef.current = abortController;
 
     // Track partial data accumulation
     const queries: Array<PreSearchDataPayload['queries'][number]> = [];
@@ -236,7 +231,7 @@ function PreSearchStreamComponent({
 
       // Clean up the ref but DON'T abort the fetch
       // Let it complete in background - results will sync via orchestrator
-      eventSourceRef.current = null;
+      abortControllerRef.current = null;
     };
     // ✅ FIX: Removed preSearch.status from dependencies to prevent effect re-run when backend updates status
     // The effect should only run once per unique search (id + roundNumber)
@@ -318,12 +313,13 @@ function PreSearchStreamComponent({
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      className="space-y-4"
+      className="space-y-6"
     >
       {validResults.map((searchResult, searchIndex) => {
         const query = validQueries[searchIndex];
         const hasResult = !!searchResult;
         const uniqueKey = searchResult?.query || query?.query || `${preSearch.id}-search-${searchIndex}`;
+        const hasResults = hasResult && searchResult.results && searchResult.results.length > 0;
 
         return (
           <motion.div
@@ -333,127 +329,90 @@ function PreSearchStreamComponent({
             transition={{ duration: 0.3, delay: 0.1 * searchIndex }}
             className="space-y-3"
           >
-            {/* Step 1: Understanding */}
-            <ChainOfThoughtStep
-              icon={Brain}
-              label={t('chat.preSearch.steps.understanding')}
-              description={query?.rationale}
-              status={isStreamingNow && !hasResult ? ChainOfThoughtStepStatuses.ACTIVE : ChainOfThoughtStepStatuses.COMPLETE}
-              badge={query?.searchDepth && (
-                <Badge
-                  variant={query.searchDepth === WebSearchDepths.ADVANCED ? 'default' : 'outline'}
-                  className="text-xs"
-                >
-                  {t(`chat.preSearch.searchDepth.${query.searchDepth}`)}
-                </Badge>
-              )}
-            >
-              {query?.query && (
-                <div className="p-2.5 rounded-lg bg-muted/50 border border-border/40">
-                  <div className="flex items-start gap-2">
-                    <Search className="size-3.5 text-muted-foreground mt-0.5 flex-shrink-0" />
-                    <p className="text-xs font-medium text-foreground/90">{query.query}</p>
-                  </div>
+            {/* Query header with mode */}
+            <div className="space-y-2">
+              <div className="flex items-start gap-2">
+                <Search className="size-4 text-primary/70 mt-0.5 flex-shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-foreground">
+                    {query?.query || searchResult?.query}
+                  </p>
                 </div>
-              )}
-            </ChainOfThoughtStep>
-
-            {/* Step 2: Searching */}
-            <ChainOfThoughtStep
-              icon={isStreamingNow && !hasResult ? Loader2 : Globe}
-              label={isStreamingNow && !hasResult ? t('chat.preSearch.steps.searching') : t('chat.preSearch.steps.searchComplete')}
-              description={isStreamingNow && !hasResult
-                ? (
-                    <div className="flex items-center gap-1.5">
-                      <span>{t('chat.preSearch.steps.searchingDesc')}</span>
-                      <div className="flex items-center gap-1 ml-1">
-                        {[0, 1, 2].map(i => (
-                          <motion.div
-                            key={i}
-                            className="size-1.5 bg-muted-foreground/40 rounded-full"
-                            animate={{
-                              scale: [1, 1.3, 1],
-                              opacity: [0.4, 1, 0.4],
-                            }}
-                            transition={{
-                              repeat: Infinity,
-                              duration: 1.2,
-                              delay: i * 0.2,
-                            }}
-                          />
-                        ))}
-                      </div>
+                <div className="flex items-center gap-2">
+                  {query?.searchDepth && (
+                    <Badge variant={query.searchDepth === WebSearchDepths.ADVANCED ? 'default' : 'secondary'} className="text-xs">
+                      {query.searchDepth === WebSearchDepths.ADVANCED ? 'Advanced' : 'Simple'}
+                    </Badge>
+                  )}
+                  {isStreamingNow && !hasResult && (
+                    <div className="flex items-center gap-1">
+                      {[0, 1, 2].map(i => (
+                        <motion.div
+                          key={i}
+                          className="size-1.5 bg-primary/40 rounded-full"
+                          animate={{
+                            scale: [1, 1.3, 1],
+                            opacity: [0.4, 1, 0.4],
+                          }}
+                          transition={{
+                            repeat: Infinity,
+                            duration: 1.2,
+                            delay: i * 0.2,
+                          }}
+                        />
+                      ))}
                     </div>
-                  )
-                : undefined}
-              status={isStreamingNow && !hasResult ? ChainOfThoughtStepStatuses.ACTIVE : ChainOfThoughtStepStatuses.COMPLETE}
-              metadata={hasResult && (
-                <>
-                  <Badge variant="outline" className="text-xs">
-                    {searchResult.results?.length || 0}
-                    {' '}
-                    {searchResult.results?.length === 1 ? t('chat.tools.webSearch.source.singular') : t('chat.tools.webSearch.source.plural')}
-                  </Badge>
-                  {searchResult.responseTime && (
+                  )}
+                  {hasResult && searchResult.responseTime && (
                     <Badge variant="outline" className="text-xs text-muted-foreground">
                       {Math.round(searchResult.responseTime)}
                       ms
                     </Badge>
                   )}
-                </>
-              )}
-            >
-              {hasResult && searchResult.results && searchResult.results.length > 0 && (
-                <ChainOfThoughtSearchResults>
-                  {searchResult.results.slice(0, 5).map(result => (
-                    <ChainOfThoughtSearchResult key={result.url}>
-                      {new URL(result.url).hostname.replace('www.', '')}
-                    </ChainOfThoughtSearchResult>
-                  ))}
-                  {searchResult.results.length > 5 && (
-                    <ChainOfThoughtSearchResult>
-                      +
-                      {searchResult.results.length - 5}
-                      {' '}
-                      more
-                    </ChainOfThoughtSearchResult>
-                  )}
-                </ChainOfThoughtSearchResults>
-              )}
-            </ChainOfThoughtStep>
+                </div>
+              </div>
 
-            {/* Step 3: Analysis */}
-            {hasResult && (
-              <ChainOfThoughtStep
-                icon={CheckCircle}
-                label={t('chat.preSearch.steps.results')}
-                status={ChainOfThoughtStepStatuses.COMPLETE}
-              >
-                {searchResult.answer && (
-                  <div className="p-3 rounded-lg border border-border/50 bg-background/30">
+              {/* Result count */}
+              {hasResults && (
+                <p className="text-xs text-muted-foreground pl-6">
+                  {searchResult.results.length}
+                  {' '}
+                  {searchResult.results.length === 1 ? 'source found' : 'sources found'}
+                </p>
+              )}
+            </div>
+
+            {/* Results list */}
+            {hasResults && (
+              <div className="pl-6 space-y-0">
+                {searchResult.results.map((result, idx) => (
+                  <WebSearchResultItem
+                    key={result.url}
+                    result={result}
+                    showDivider={idx < searchResult.results.length - 1}
+                  />
+                ))}
+              </div>
+            )}
+
+            {/* Summary */}
+            {hasResult && searchResult.answer && (
+              <div className="pl-6">
+                <div className="flex items-start gap-2 p-3 rounded-lg bg-primary/5 border border-primary/10">
+                  <Sparkles className="size-4 text-primary/70 mt-0.5 flex-shrink-0" />
+                  <div className="flex-1 min-w-0 space-y-1">
+                    <p className="text-xs font-medium text-foreground/90">Summary</p>
                     <p className="text-xs text-muted-foreground leading-relaxed">
                       {searchResult.answer}
                     </p>
                   </div>
-                )}
+                </div>
+              </div>
+            )}
 
-                {searchResult.results && searchResult.results.length > 0 && (
-                  <div className="space-y-2">
-                    <span className="text-xs font-semibold text-foreground/90">
-                      {t('chat.preSearch.steps.sources')}
-                      {' '}
-                      (
-                      {searchResult.results.length}
-                      ):
-                    </span>
-                    <div className="space-y-2.5">
-                      {searchResult.results.map((result, idx) => (
-                        <WebSearchResultCard key={result.url} result={result} index={idx} />
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </ChainOfThoughtStep>
+            {/* Separator between searches */}
+            {searchIndex < validResults.length - 1 && (
+              <Separator className="!mt-6" />
             )}
           </motion.div>
         );

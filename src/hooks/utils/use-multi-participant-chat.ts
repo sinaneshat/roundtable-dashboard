@@ -513,11 +513,11 @@ export function useMultiParticipantChat(
         // ✅ CRITICAL FIX: Skip metadata merge for pre-search messages
         // Pre-search messages have isPreSearch: true and complete metadata from backend
         // They should NOT be modified with participant metadata
-        const messageMetadata = data.message.metadata as Record<string, unknown> | null | undefined;
-        const isPreSearch = messageMetadata
-          && typeof messageMetadata === 'object'
-          && 'isPreSearch' in messageMetadata
-          && messageMetadata.isPreSearch === true;
+        // ✅ TYPE-SAFE: Check for pre-search metadata without force casting
+        const isPreSearch = data.message.metadata !== null
+          && typeof data.message.metadata === 'object'
+          && 'isPreSearch' in data.message.metadata
+          && data.message.metadata.isPreSearch === true;
 
         if (isPreSearch) {
           // Pre-search messages already have complete metadata - skip this flow entirely

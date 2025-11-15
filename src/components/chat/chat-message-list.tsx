@@ -12,6 +12,7 @@ import type { EnhancedModelResponse } from '@/api/routes/models/schema';
 import type { SubscriptionTier } from '@/api/services/product-logic.service';
 import { canAccessModelByPricing } from '@/api/services/product-logic.service';
 import { ModelMessageCard } from '@/components/chat/model-message-card';
+import { PreSearchCard } from '@/components/chat/pre-search-card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { isAssistantMessageMetadata } from '@/db/schemas/chat-metadata';
 import { useUsageStatsQuery } from '@/hooks/queries/usage';
@@ -360,6 +361,7 @@ type ChatMessageListProps = {
   userAvatar?: { src: string; name: string };
   threadId?: string | null; // Optional threadId for pre-search hydration
   preSearches?: StoredPreSearch[]; // Pre-searches from store
+  streamingRoundNumber?: number | null; // Pass through from ThreadTimeline
 };
 export const ChatMessageList = memo(
   ({
@@ -374,6 +376,7 @@ export const ChatMessageList = memo(
     userAvatar,
     threadId: _threadId,
     preSearches: _preSearches = EMPTY_PRE_SEARCHES,
+    streamingRoundNumber: _streamingRoundNumber = null,
   }: ChatMessageListProps) => {
     const t = useTranslations();
     // Consolidated model lookup hook
@@ -591,97 +594,146 @@ export const ChatMessageList = memo(
       return groups;
     }, [messagesWithParticipantInfo, findModel, userTier, userInfo, userAvatarSrc, userAvatarName]);
 
+    // Group messages by round for pre-search injection
+    const messageGroupsByRound = new Map<number, MessageGroup[]>();
+    messageGroups.forEach((group) => {
+      const roundNumber = group.type === 'user-group'
+        ? getRoundNumber(group.messages[0]?.message.metadata) ?? 0
+        : group.type === 'assistant-group'
+          ? getRoundNumber(group.messages[0]?.message.metadata) ?? 0
+          : 0;
+
+      if (!messageGroupsByRound.has(roundNumber)) {
+        messageGroupsByRound.set(roundNumber, []);
+      }
+      messageGroupsByRound.get(roundNumber)!.push(group);
+    });
+
     return (
       <>
         {messageGroups.map((group, groupIndex) => {
+          const roundNumber = group.type === 'user-group'
+            ? getRoundNumber(group.messages[0]?.message.metadata) ?? 0
+            : group.type === 'assistant-group'
+              ? getRoundNumber(group.messages[0]?.message.metadata) ?? 0
+              : 0;
+
+          // Check if this is the user message group for this round
+          const isUserGroupForRound = group.type === 'user-group';
+          const preSearch = isUserGroupForRound && _threadId
+            ? _preSearches.find(ps => ps.roundNumber === roundNumber)
+            : null;
+
           // User message group with header inside message box
           if (group.type === 'user-group') {
             return (
-              <div key={`user-group-${group.messages[0]?.index}`} className="mb-4 flex justify-end">
-                <div className="max-w-[80%]">
-                  {/* Header at top of message box */}
-                  <motion.div
-                    initial={{ opacity: 0, y: -8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{
-                      type: 'spring',
-                      stiffness: 500,
-                      damping: 40,
-                    }}
-                    className="flex items-center gap-2 py-3 flex-row-reverse"
-                  >
-                    <div className="relative flex-shrink-0 drop-shadow-[0_0_12px_hsl(var(--white)/0.3)]">
-                      <Avatar className="size-8 ring-1 ring-border">
-                        <AvatarImage alt="" className="mt-0 mb-0" src={group.headerInfo.avatarSrc} />
-                        <AvatarFallback>{group.headerInfo.avatarName?.slice(0, 2) || 'ME'}</AvatarFallback>
-                      </Avatar>
-                    </div>
-                    <span className="text-base font-semibold tracking-tight truncate text-white">
-                      {group.headerInfo.displayName}
-                    </span>
-                  </motion.div>
-                  {/* Message content */}
-                  <div className="space-y-3">
-                    {group.messages.map(({ message, index }) => {
-                      const messageKey = keyForMessage(message, index);
-                      return (
-                        <div key={messageKey} className="text-sm text-foreground">
-                          {message.parts.map((part) => {
-                            if (part.type === MessagePartTypes.TEXT) {
-                              return (
-                                <Streamdown
-                                  key={`${message.id}-text-${part.text.substring(0, 20)}`}
-                                  className="size-full [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
-                                >
-                                  {part.text}
-                                </Streamdown>
-                              );
-                            }
-                            if (part.type === 'file' && part.mediaType?.startsWith('image/')) {
-                              return (
-                                <div key={`${message.id}-image-${part.url}`} className="my-2">
-                                  <Image
-                                    src={part.url}
-                                    alt={part.filename || 'Attachment'}
-                                    className="max-w-full max-h-[400px] rounded-lg border border-border"
-                                    width={800}
-                                    height={400}
-                                    unoptimized
-                                  />
-                                  {part.filename && (
-                                    <p className="mt-1 text-xs text-muted-foreground">{part.filename}</p>
-                                  )}
-                                </div>
-                              );
-                            }
-                            if (part.type === 'file') {
-                              return (
-                                <div key={`${message.id}-file-${part.filename || part.url}`} className="my-2 p-3 border border-border rounded-lg">
-                                  <div className="flex items-center gap-2">
-                                    <div className="flex-1">
-                                      <p className="text-sm font-medium">{part.filename || 'File'}</p>
-                                      {part.mediaType && (
-                                        <p className="text-xs text-muted-foreground">{part.mediaType}</p>
-                                      )}
-                                    </div>
-                                    <a
-                                      href={part.url}
-                                      download={part.filename}
-                                      className="text-xs text-primary hover:underline"
-                                    >
-                                      {t('actions.download')}
-                                    </a>
+              <div key={`user-group-wrapper-${group.messages[0]?.index}`}>
+                <div key={`user-group-${group.messages[0]?.index}`} className="mb-4 flex justify-end">
+                  <div className="max-w-[80%]">
+                    {/* Header at top of message box */}
+                    <motion.div
+                      initial={{ opacity: 0, y: -8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{
+                        type: 'spring',
+                        stiffness: 500,
+                        damping: 40,
+                      }}
+                      className="flex items-center gap-2 py-3 flex-row-reverse"
+                    >
+                      <div className="relative flex-shrink-0 drop-shadow-[0_0_12px_hsl(var(--white)/0.3)]">
+                        <Avatar className="size-8 ring-1 ring-border">
+                          <AvatarImage alt="" className="mt-0 mb-0" src={group.headerInfo.avatarSrc} />
+                          <AvatarFallback>{group.headerInfo.avatarName?.slice(0, 2) || 'ME'}</AvatarFallback>
+                        </Avatar>
+                      </div>
+                      <span className="text-base font-semibold tracking-tight truncate text-white">
+                        {group.headerInfo.displayName}
+                      </span>
+                    </motion.div>
+                    {/* Message content */}
+                    <div className="space-y-3">
+                      {group.messages.map(({ message, index }) => {
+                        const messageKey = keyForMessage(message, index);
+                        return (
+                          <div key={messageKey} className="text-sm text-foreground">
+                            {message.parts.map((part) => {
+                              if (part.type === MessagePartTypes.TEXT) {
+                                return (
+                                  <Streamdown
+                                    key={`${message.id}-text-${part.text.substring(0, 20)}`}
+                                    className="size-full [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
+                                  >
+                                    {part.text}
+                                  </Streamdown>
+                                );
+                              }
+                              if (part.type === 'file' && part.mediaType?.startsWith('image/')) {
+                                return (
+                                  <div key={`${message.id}-image-${part.url}`} className="my-2">
+                                    <Image
+                                      src={part.url}
+                                      alt={part.filename || 'Attachment'}
+                                      className="max-w-full max-h-[400px] rounded-lg border border-border"
+                                      width={800}
+                                      height={400}
+                                      unoptimized
+                                    />
+                                    {part.filename && (
+                                      <p className="mt-1 text-xs text-muted-foreground">{part.filename}</p>
+                                    )}
                                   </div>
-                                </div>
-                              );
-                            }
-                            return null;
-                          })}
-                        </div>
-                      );
-                    })}
+                                );
+                              }
+                              if (part.type === 'file') {
+                                return (
+                                  <div key={`${message.id}-file-${part.filename || part.url}`} className="my-2 p-3 border border-border rounded-lg">
+                                    <div className="flex items-center gap-2">
+                                      <div className="flex-1">
+                                        <p className="text-sm font-medium">{part.filename || 'File'}</p>
+                                        {part.mediaType && (
+                                          <p className="text-xs text-muted-foreground">{part.mediaType}</p>
+                                        )}
+                                      </div>
+                                      <a
+                                        href={part.url}
+                                        download={part.filename}
+                                        className="text-xs text-primary hover:underline"
+                                      >
+                                        {t('actions.download')}
+                                      </a>
+                                    </div>
+                                  </div>
+                                );
+                              }
+                              return null;
+                            })}
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
+
+                {/* CRITICAL FIX: Render PreSearchCard immediately after user message, before assistant messages */}
+                {preSearch && (
+                  <PreSearchCard
+                    key={`pre-search-${roundNumber}`}
+                    threadId={_threadId!}
+                    preSearch={preSearch}
+                    isLatest={roundNumber === (() => {
+                      const lastGroup = messageGroups[messageGroups.length - 1];
+                      if (!lastGroup)
+                        return 0;
+                      return lastGroup.type === 'user-group'
+                        ? getRoundNumber(lastGroup.messages[0]?.message.metadata) ?? 0
+                        : lastGroup.type === 'assistant-group'
+                          ? getRoundNumber(lastGroup.messages[0]?.message.metadata) ?? 0
+                          : 0;
+                    })()}
+                    streamingRoundNumber={_streamingRoundNumber}
+                  />
+                )}
               </div>
             );
           }

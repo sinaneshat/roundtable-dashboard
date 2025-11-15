@@ -1121,7 +1121,7 @@ export const generateResponsesToolHandler: RouteHandler<typeof generateResponses
         const streamMessageId = ulid();
 
         const finishResult = await streamText({
-          model: client(participant.modelId),
+          model: client.chat(participant.modelId),
           system: systemPrompt,
           messages: modelMessages,
           maxOutputTokens,
@@ -1488,7 +1488,7 @@ export const regenerateRoundToolHandler: RouteHandler<typeof regenerateRoundTool
           const streamMessageId = ulid();
 
           const finishResult = await streamText({
-            model: client(participant.modelId),
+            model: client.chat(participant.modelId),
             system: systemPrompt,
             messages: modelMessages,
             maxOutputTokens,

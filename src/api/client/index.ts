@@ -61,8 +61,7 @@ export async function createApiClient(options?: { bypassCache?: boolean }) {
 
     if (options?.bypassCache) {
       headers['Cache-Control'] = 'no-cache';
-      // eslint-disable-next-line dot-notation
-      headers['Pragma'] = 'no-cache';
+      headers.Pragma = 'no-cache';
     }
 
     if (cookieHeader) {
@@ -79,8 +78,7 @@ export async function createApiClient(options?: { bypassCache?: boolean }) {
 
   if (options?.bypassCache) {
     headers['Cache-Control'] = 'no-cache';
-    // eslint-disable-next-line dot-notation
-    headers['Pragma'] = 'no-cache';
+    headers.Pragma = 'no-cache';
   }
 
   return hc<AppType>(getBaseUrl(), {

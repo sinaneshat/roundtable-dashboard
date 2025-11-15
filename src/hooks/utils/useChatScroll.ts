@@ -115,6 +115,7 @@ export function useChatScroll({
   );
 
   // Effect 1: Track user scroll position (near bottom detection)
+  // ✅ MEMORY LEAK FIX: Use AbortController for guaranteed cleanup
   useEffect(() => {
     if (!enableNearBottomDetection) {
       // Always consider near bottom if detection is disabled
@@ -122,7 +123,15 @@ export function useChatScroll({
       return undefined;
     }
 
+    // ✅ MEMORY LEAK FIX: AbortController ensures listener is removed even during fast unmounts
+    const abortController = new AbortController();
+    let cleanedUp = false;
+
     const handleScroll = () => {
+      // ✅ MEMORY LEAK FIX: Prevent execution after cleanup
+      if (cleanedUp)
+        return;
+
       // Throttle scroll events for better performance
       const now = Date.now();
       if (now - lastScrollTimeRef.current < scrollThrottleMs) {
@@ -135,12 +144,20 @@ export function useChatScroll({
       isNearBottomRef.current = distanceFromBottom < autoScrollThreshold;
     };
 
-    window.addEventListener('scroll', handleScroll, { passive: true });
+    // ✅ MEMORY LEAK FIX: Use AbortController signal for automatic cleanup
+    window.addEventListener('scroll', handleScroll, {
+      passive: true,
+      signal: abortController.signal,
+    });
 
     // Run once on mount to set initial state
     handleScroll();
 
-    return () => window.removeEventListener('scroll', handleScroll);
+    return () => {
+      // ✅ MEMORY LEAK FIX: Mark as cleaned up and abort all listeners
+      cleanedUp = true;
+      abortController.abort();
+    };
   }, [enableNearBottomDetection, autoScrollThreshold, scrollThrottleMs]);
 
   // Effect 2: Auto-scroll on new analyses or during streaming

@@ -12,6 +12,11 @@ const ThreadHeaderContext = createContext<ThreadHeaderContextValue | undefined>(
 export function ThreadHeaderProvider({ children }: { children: ReactNode }) {
   const [threadActions, setThreadActions] = useState<ReactNode | null>(null);
   const [threadTitle, setThreadTitle] = useState<string | null>(null);
+
+  // ✅ RENDER OPTIMIZATION FIX: Remove setState functions from useMemo deps
+  // setState functions from useState are STABLE and never change
+  // Including them in deps causes useMemo to re-run on every render
+  // This triggers unnecessary re-renders of all consumers
   const value = useMemo(
     () => ({
       threadActions,
@@ -19,7 +24,7 @@ export function ThreadHeaderProvider({ children }: { children: ReactNode }) {
       threadTitle,
       setThreadTitle,
     }),
-    [threadActions, threadTitle],
+    [threadActions, threadTitle], // Only state values, NOT setters
   );
   return (
     <ThreadHeaderContext

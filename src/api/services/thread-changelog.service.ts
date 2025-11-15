@@ -221,3 +221,23 @@ export async function logParticipantsReordered(
     },
   });
 }
+
+/**
+ * Helper: Create changelog entry for web search toggle
+ */
+export async function logWebSearchToggle(
+  threadId: string,
+  roundNumber: number,
+  enabled: boolean,
+): Promise<string> {
+  return createChangelogEntry({
+    threadId,
+    roundNumber,
+    changeType: ChangelogTypes.MODIFIED,
+    changeSummary: enabled ? 'Enabled web search' : 'Disabled web search',
+    changeData: {
+      type: 'web_search',
+      enabled,
+    },
+  });
+}

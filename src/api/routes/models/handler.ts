@@ -20,6 +20,7 @@
 import type { RouteHandler } from '@hono/zod-openapi';
 
 import { createHandler, Responses } from '@/api/core';
+import { isRestrictedFreeModel } from '@/api/services/model-validation.service';
 import { getAllModels } from '@/api/services/models-config.service';
 import { canAccessModelByPricing, getFlagshipScore, getMaxModelsForTier, getRequiredTierForModel, getTierName, getTiersInOrder, SUBSCRIPTION_TIER_NAMES } from '@/api/services/product-logic.service';
 import { getUserTier } from '@/api/services/usage-tracking.service';
@@ -92,7 +93,12 @@ export const listModelsHandler: RouteHandler<typeof listModelsRoute, ApiEnv> = c
     // - Starter: $0.50/M (6 models) - DeepSeek + fast models (excellent value)
     // - Pro: $3.00/M (8 models) - Claude, GPT-4o, flagships ← MAIN UPSELL
     // - Power: Unlimited (4 models) - GPT-5, Claude Opus, ultra-premium
-    const enhancedModels = getAllModels();
+    const allModels = getAllModels();
+
+    // ✅ FILTER OUT RESTRICTED FREE MODELS
+    // Remove models that require special OpenRouter privacy policy settings
+    // These models fail with 404 "No endpoints found matching your data policy"
+    const enhancedModels = allModels.filter(model => !isRestrictedFreeModel(model.id));
 
     // ============================================================================
     // ✅ SERVER-COMPUTED TIER ACCESS: Use existing pricing-based tier detection

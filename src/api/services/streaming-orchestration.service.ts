@@ -48,13 +48,51 @@ export type LoadParticipantConfigResult = {
   participant: ChatParticipant;
 };
 
+/**
+ * Cloudflare AI binding interface
+ *
+ * TYPE SAFETY NOTE:
+ * - Cloudflare AI binding is declared in cloudflare-env.d.ts as `Ai` type
+ * - AutoRAG is a Cloudflare AI feature for retrieval-augmented generation
+ * - This interface matches the runtime API without importing internal Cloudflare types
+ *
+ * JUSTIFICATION:
+ * - Cloudflare `Ai` type doesn't expose autorag() in public type definitions
+ * - Runtime API exists and works correctly in production
+ * - Defining interface here avoids dependency on internal Cloudflare types
+ * - Safe because:
+ *   1. AutoRAG is a documented Cloudflare AI feature
+ *   2. Interface only used when env.AI exists (runtime check)
+ *   3. Errors caught and handled gracefully in try-catch blocks
+ *
+ * REFERENCE: Cloudflare Workers AI documentation
+ */
+export type CloudflareAiBinding = {
+  autorag: (instanceId: string) => {
+    aiSearch: (params: {
+      query: string;
+      max_num_results: number;
+      rewrite_query: boolean;
+      stream: boolean;
+      filters?: {
+        type: string;
+        filters: Array<{
+          key: string;
+          type: string;
+          value: string;
+        }>;
+      };
+    }) => Promise<{ response?: string }>;
+  };
+};
+
 export type BuildSystemPromptParams = {
   participant: ChatParticipant;
   thread: Pick<ChatThread, 'projectId' | 'enableWebSearch'>;
   userQuery: string;
   previousDbMessages: ChatMessage[];
   currentRoundNumber: number;
-  env: { AI?: unknown };
+  env: { AI?: CloudflareAiBinding };
   db: Awaited<ReturnType<typeof getDbAsync>>;
   logger?: TypedLogger;
 };
@@ -181,7 +219,15 @@ export async function buildSystemPromptWithContext(
         // Add AutoRAG context
         if (project.autoragInstanceId && env.AI) {
           try {
-            const ragResponse = await (env.AI as { autorag: (id: string) => { aiSearch: (params: unknown) => Promise<{ response?: string }> } }).autorag(project.autoragInstanceId).aiSearch({
+            /**
+             * Cloudflare AI AutoRAG retrieval
+             *
+             * TYPE SAFETY:
+             * - env.AI is typed as CloudflareAiBinding (defined above)
+             * - autorag() and aiSearch() are now fully typed
+             * - No type assertion needed - interface provides compile-time safety
+             */
+            const ragResponse = await env.AI.autorag(project.autoragInstanceId).aiSearch({
               query: userQuery,
               max_num_results: 5,
               rewrite_query: true,
@@ -195,9 +241,8 @@ export async function buildSystemPromptWithContext(
               },
             });
 
-            const ragData = ragResponse as { response?: string };
-            if (ragData.response) {
-              systemPrompt = `${systemPrompt}\n\n## Project Knowledge\n\n${ragData.response}\n\n---\n\nUse the above knowledge from the project when relevant to the conversation. Provide natural, coherent responses.`;
+            if (ragResponse.response) {
+              systemPrompt = `${systemPrompt}\n\n## Project Knowledge\n\n${ragResponse.response}\n\n---\n\nUse the above knowledge from the project when relevant to the conversation. Provide natural, coherent responses.`;
             }
           } catch (error) {
             logger?.warn('AutoRAG retrieval failed', {

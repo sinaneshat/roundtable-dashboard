@@ -251,19 +251,17 @@ export function hasRequiredParticipantFields(
   if (!metadata || typeof metadata !== 'object')
     return false;
 
-  const m = metadata as Record<string, unknown>;
-
-  // Check all required fields exist
+  // ✅ TYPE-SAFE: Check all required fields exist without force casting
   return (
-    typeof m.roundNumber === 'number'
-    && typeof m.participantId === 'string'
-    && typeof m.participantIndex === 'number'
-    && (m.participantRole === null || typeof m.participantRole === 'string')
-    && typeof m.model === 'string'
-    && typeof m.finishReason === 'string'
-    && typeof m.usage === 'object'
-    && typeof m.hasError === 'boolean'
-    && typeof m.isTransient === 'boolean'
-    && typeof m.isPartialResponse === 'boolean'
+    'roundNumber' in metadata && typeof metadata.roundNumber === 'number'
+    && 'participantId' in metadata && typeof metadata.participantId === 'string'
+    && 'participantIndex' in metadata && typeof metadata.participantIndex === 'number'
+    && 'participantRole' in metadata && (metadata.participantRole === null || typeof metadata.participantRole === 'string')
+    && 'model' in metadata && typeof metadata.model === 'string'
+    && 'finishReason' in metadata && typeof metadata.finishReason === 'string'
+    && 'usage' in metadata && typeof metadata.usage === 'object'
+    && 'hasError' in metadata && typeof metadata.hasError === 'boolean'
+    && 'isTransient' in metadata && typeof metadata.isTransient === 'boolean'
+    && 'isPartialResponse' in metadata && typeof metadata.isPartialResponse === 'boolean'
   );
 }

@@ -166,6 +166,9 @@ export function extractRoundNumber(metadata: unknown, fallback: number = DEFAULT
     return fallback;
   }
 
-  const obj = metadata as Record<string, unknown>;
-  return safeParseRoundNumber(obj.roundNumber, fallback);
+  // ✅ TYPE-SAFE: Check for field existence before access
+  if ('roundNumber' in metadata) {
+    return safeParseRoundNumber(metadata.roundNumber, fallback);
+  }
+  return fallback;
 }

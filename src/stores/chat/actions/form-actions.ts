@@ -209,8 +209,32 @@ export function useChatFormActions(): UseChatFormActionsReturn {
         // Update participants optimistically
         actions.updateParticipants(optimisticParticipants);
 
-        if (updateResult.hasTemporaryIds) {
-          // Wait for response when creating new participants
+        // ✅ BUG FIX: Wait for PATCH completion when web search is enabled OR changes
+        // Bug report: "enabling web search mid convo won't have a record made for it
+        // and afterwards is not causing the initial searches to happen"
+        //
+        // ROOT CAUSE: Fire-and-forget pattern causes race condition
+        // When web search is toggled but participants unchanged (no temp IDs):
+        // 1. PATCH request fires (async, not awaited)
+        // 2. Message immediately prepares and sends
+        // 3. Streaming handler fetches thread (PATCH may not have completed)
+        // 4. Thread still has old enableWebSearch value
+        // 5. No pre-search record created → participants respond without search context
+        //
+        // ✅ EXTENDED FIX: Also wait when web search is CURRENTLY ENABLED (not just changed)
+        // Even if web search didn't change between rounds, if participants/mode changed,
+        // the fire-and-forget PATCH might not complete before streaming starts
+        // This ensures thread.enableWebSearch is updated before streaming starts
+        // Streaming handler will then correctly create pre-search record (streaming.handler.ts:141-160)
+        //
+        // Performance impact: Minimal (PATCH typically completes in <100ms)
+        // Correctness impact: Critical (prevents broken web search functionality)
+        const needsWait = updateResult.hasTemporaryIds || webSearchChanged || formState.enableWebSearch;
+        if (needsWait) {
+          // Wait for response when:
+          // 1. Creating new participants (temporary IDs)
+          // 2. Web search state changed
+          // 3. Web search is currently enabled (prevents race condition on subsequent rounds)
           const response = await updateThreadMutation.mutateAsync({
             param: { id: threadId },
             json: {

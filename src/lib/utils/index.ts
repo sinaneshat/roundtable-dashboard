@@ -45,3 +45,4 @@ export * from './state-merge';
 // Core Type Utilities
 // ============================================================================
 export * from './type-guards';
+export * from './web-search-utils'; // Web search URL parsing and utilities

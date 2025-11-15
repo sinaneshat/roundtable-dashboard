@@ -137,22 +137,49 @@ export const PreSearchQueryStatuses = {
 } as const;
 
 // ============================================================================
-// MESSAGE ROLE
+// MESSAGE ROLE (Database - includes 'tool' for tool invocations)
 // ============================================================================
 
+// 1️⃣ ARRAY CONSTANT - Database message roles (includes tool)
 export const MESSAGE_ROLES = ['user', 'assistant', 'tool'] as const;
 
+// 3️⃣ ZOD SCHEMA - Runtime validation for database
 export const MessageRoleSchema = z.enum(MESSAGE_ROLES).openapi({
   description: 'Message role (user input, AI response, or tool result)',
   example: 'assistant',
 });
 
+// 4️⃣ TYPESCRIPT TYPE - Database message role
 export type MessageRole = z.infer<typeof MessageRoleSchema>;
 
+// 5️⃣ CONSTANT OBJECT - For database operations
 export const MessageRoles = {
   USER: 'user' as const,
   ASSISTANT: 'assistant' as const,
   TOOL: 'tool' as const,
+} as const;
+
+// ============================================================================
+// UI MESSAGE ROLE (AI SDK v5 - only 'user', 'assistant', 'system')
+// ============================================================================
+
+// 1️⃣ ARRAY CONSTANT - AI SDK UIMessage roles (no 'tool', has 'system')
+export const UI_MESSAGE_ROLES = ['user', 'assistant', 'system'] as const;
+
+// 3️⃣ ZOD SCHEMA - Runtime validation for AI SDK UIMessage
+export const UIMessageRoleSchema = z.enum(UI_MESSAGE_ROLES).openapi({
+  description: 'AI SDK UIMessage role (user, assistant, or system)',
+  example: 'assistant',
+});
+
+// 4️⃣ TYPESCRIPT TYPE - UI message role (AI SDK compatible)
+export type UIMessageRole = z.infer<typeof UIMessageRoleSchema>;
+
+// 5️⃣ CONSTANT OBJECT - For UI message operations
+export const UIMessageRoles = {
+  USER: 'user' as const,
+  ASSISTANT: 'assistant' as const,
+  SYSTEM: 'system' as const,
 } as const;
 
 // ============================================================================

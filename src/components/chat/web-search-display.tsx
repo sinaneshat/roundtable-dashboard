@@ -4,8 +4,7 @@ import { AlertCircle, ChevronDown, ChevronUp, Globe, Search, Sparkles, TrendingU
 import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 
-import type { WebSearchComplexity } from '@/api/core/enums';
-import type { WebSearchResultItem, WebSearchResultMeta } from '@/api/routes/chat/schema';
+import type { WebSearchDisplayProps } from '@/api/routes/chat/schema';
 import { WebSearchResultCard } from '@/components/chat/web-search-result-card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
@@ -15,13 +14,6 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/ui/cn';
-
-type WebSearchDisplayProps = {
-  results: WebSearchResultItem[];
-  className?: string;
-  meta?: WebSearchResultMeta;
-  complexity?: WebSearchComplexity;
-};
 
 // Export the flat version as default (no nested cards)
 export { WebSearchFlatDisplay as default } from './web-search-flat-display';

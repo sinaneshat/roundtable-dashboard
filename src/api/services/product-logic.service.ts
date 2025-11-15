@@ -262,14 +262,60 @@ export function getMaxModelsForTier(tier: SubscriptionTier): number {
 
 /**
  * Get the subscription tier from a product ID
+ *
+ * ✅ FIX: Case-insensitive matching and correct tier detection order
+ *
+ * Common Stripe product ID patterns:
+ * - prod_starter_monthly → starter
+ * - prod_pro_annual → pro
+ * - prod_power_tier → power
+ * - prod-pro-tier → pro (hyphen delimiter)
+ * - prod_QxRpbPJ8pro → pro (random suffix)
+ * - prod_unknown → free (default)
+ *
+ * Bug fixes:
+ * 1. Case-insensitive: handles prod_STARTER, prod_Pro, etc.
+ * 2. Order matters: Check "power" before "pro" (power > pro in specificity)
+ * 3. Avoid "prod_" and "prod-" prefixes: Use word boundaries
  */
 export function getTierFromProductId(productId: string): SubscriptionTier {
-  if (productId.includes('starter'))
+  const normalized = productId.toLowerCase();
+
+  // Check in order of specificity
+  // "starter" is most specific - check first
+  if (normalized.includes('starter'))
     return 'starter';
-  if (productId.includes('pro'))
-    return 'pro';
-  if (productId.includes('power'))
+
+  // "power" must be checked BEFORE "pro" to avoid false matches
+  // Example: "prod_power_tier" should be "power", not "pro"
+  if (normalized.includes('power'))
     return 'power';
+
+  // "pro" matching: Match with delimiters (_, -, or word boundaries)
+  // Avoid matching "pro" from "prod_", "prod-" prefix, or words like "product", "professional"
+  // Support patterns:
+  // - prod_pro_annual → _pro_
+  // - prod_pro → _pro (end)
+  // - prod-pro-tier → -pro-
+  // - prod-pro → -pro (end)
+  // - prod_QxRpbPJ8pro456 → [0-9]pro[0-9] - number before "pro", number/end after
+  //
+  // Regex pattern explanation:
+  // - (^|[^a-z]) - Start of string OR non-letter before "pro"
+  // - pro - The tier keyword
+  // - ($|[^a-z]) - End of string OR non-letter after "pro"
+  // This avoids matching "pro" inside words like "product" (which would have letter after "pro")
+  if (
+    normalized.includes('_pro_') // Middle with underscore: prod_pro_annual
+    || normalized.endsWith('_pro') // End with underscore: prod_pro (NOT includes to avoid "_product_id")
+    || normalized.includes('-pro-') // Middle with hyphen: prod-pro-tier
+    || normalized.endsWith('-pro') // End with hyphen: prod-pro (NOT includes to avoid false matches)
+    || /(?:^|[^a-z])pro(?:$|[^a-z])/.test(normalized) // Word boundary match: avoids "product", "professional"
+  ) {
+    return 'pro';
+  }
+
+  // Default to free tier for unknown or invalid product IDs
   return 'free';
 }
 

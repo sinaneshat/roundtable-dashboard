@@ -2,8 +2,6 @@ import antfu from '@antfu/eslint-config';
 import nextPlugin from '@next/eslint-plugin-next';
 import pluginQuery from '@tanstack/eslint-plugin-query';
 import drizzlePlugin from 'eslint-plugin-drizzle';
-import jestPlugin from 'eslint-plugin-jest';
-import jestDomPlugin from 'eslint-plugin-jest-dom';
 import jsxA11y from 'eslint-plugin-jsx-a11y';
 import simpleImportSort from 'eslint-plugin-simple-import-sort';
 import testingLibraryPlugin from 'eslint-plugin-testing-library';
@@ -71,21 +69,18 @@ export default antfu(
     },
   },
   {
-    files: ['**/__tests__/**/*', '**/*.test.*', '**/*.spec.*', '**/test-*.{ts,tsx}', 'src/lib/testing/**/*', 'jest.setup.ts'],
+    files: ['**/__tests__/**/*', '**/*.test.*', '**/*.spec.*', '**/test-*.{ts,tsx}', 'src/lib/testing/**/*', 'vitest.setup.ts'],
     plugins: {
-      'jest': jestPlugin,
-      'jest-dom': jestDomPlugin,
       'testing-library': testingLibraryPlugin,
     },
     rules: {
-      // Jest rules
-      'jest/no-disabled-tests': 'warn',
-      'jest/no-focused-tests': 'error',
-      'jest/no-identical-title': 'error',
-      'jest/prefer-to-have-length': 'warn',
-      'jest/valid-expect': 'error',
-      'jest/no-conditional-expect': 'error',
-      'jest/no-standalone-expect': 'error',
+      // Vitest rules (plugin provided by antfu config as 'test')
+      'test/no-disabled-tests': 'warn',
+      'test/no-focused-tests': 'error',
+      'test/no-identical-title': 'error',
+      'test/prefer-to-have-length': 'warn',
+      'test/valid-expect': 'error',
+      'test/no-conditional-expect': 'error',
 
       // Testing Library rules
       'testing-library/await-async-queries': 'error',
@@ -93,12 +88,6 @@ export default antfu(
       'testing-library/no-debugging-utils': 'warn',
       'testing-library/prefer-screen-queries': 'warn',
       'testing-library/prefer-user-event': 'warn',
-
-      // Jest-DOM rules
-      'jest-dom/prefer-checked': 'warn',
-      'jest-dom/prefer-enabled-disabled': 'warn',
-      'jest-dom/prefer-focus': 'warn',
-      'jest-dom/prefer-required': 'warn',
 
       // Relax some rules for test files
       'ts/no-explicit-any': 'off',

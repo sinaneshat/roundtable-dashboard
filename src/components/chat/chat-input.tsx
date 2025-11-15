@@ -3,10 +3,12 @@ import type { ChatStatus } from 'ai';
 import { ArrowUp, Mic, Square } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import type { FormEvent } from 'react';
-import { useCallback, useEffect, useRef } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 
 import type { ParticipantConfig } from '@/components/chat/chat-form-schemas';
+import { QuotaAlertExtension } from '@/components/chat/quota-alert-extension';
 import { Button } from '@/components/ui/button';
+import { useUsageStatsQuery } from '@/hooks/queries';
 import {
   useAutoResizeTextarea,
   useSpeechRecognition,
@@ -33,9 +35,14 @@ type ChatInputProps = {
   enableSpeech?: boolean;
   minHeight?: number;
   maxHeight?: number;
+  // Quota alert extension
+  quotaCheckType?: 'threads' | 'messages';
 };
 
-export function ChatInput({
+// ✅ RENDER OPTIMIZATION: Memoize ChatInput to prevent unnecessary re-renders
+// ChatInput is used in multiple places and re-renders frequently due to parent state changes
+// Memoizing prevents re-renders when props haven't changed
+export const ChatInput = memo(({
   value,
   onChange,
   onSubmit,
@@ -53,7 +60,9 @@ export function ChatInput({
   enableSpeech = true,
   minHeight = 80,
   maxHeight = 240,
-}: ChatInputProps) {
+  // Quota alert extension
+  quotaCheckType,
+}: ChatInputProps) => {
   const t = useTranslations();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const isStreaming = status !== 'ready';
@@ -61,7 +70,41 @@ export function ChatInput({
     = isStreaming && currentParticipantIndex !== undefined && participants.length > 1
       ? `${currentParticipantIndex}/${participants.length}`
       : null;
-  const isDisabled = disabled || isStreaming;
+
+  // Check if quota is exceeded (from quota alert extension)
+  const { data: statsData } = useUsageStatsQuery();
+  const isQuotaExceeded = useMemo(() => {
+    // Type guard: ensure statsData has the expected shape
+    if (
+      !quotaCheckType
+      || !statsData
+      || typeof statsData !== 'object'
+      || !('success' in statsData)
+      || !statsData.success
+      || !('data' in statsData)
+      || !statsData.data
+    ) {
+      return false;
+    }
+
+    const data = statsData.data as {
+      threads: { remaining: number };
+      messages: { remaining: number };
+    };
+
+    if (quotaCheckType === 'threads') {
+      return data.threads.remaining === 0;
+    }
+
+    if (quotaCheckType === 'messages') {
+      return data.messages.remaining === 0;
+    }
+
+    return false;
+  }, [quotaCheckType, statsData]);
+
+  // Disable input if disabled prop, streaming, OR quota exceeded
+  const isDisabled = disabled || isStreaming || isQuotaExceeded;
   const hasValidInput = value.trim().length > 0 && participants.length > 0;
 
   // Auto-resizing textarea
@@ -117,7 +160,27 @@ export function ChatInput({
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       if (!isDisabled && hasValidInput) {
-        onSubmit(e as unknown as FormEvent);
+        // Create a properly typed synthetic FormEvent
+        // FormEvent requires minimal properties: currentTarget, preventDefault, and type
+        const form = e.currentTarget.form || e.currentTarget;
+        const syntheticEvent: FormEvent<HTMLFormElement | HTMLTextAreaElement> = {
+          bubbles: e.bubbles,
+          cancelable: e.cancelable,
+          currentTarget: form,
+          defaultPrevented: true,
+          eventPhase: e.eventPhase,
+          isTrusted: e.isTrusted,
+          nativeEvent: e.nativeEvent as Event,
+          target: form,
+          timeStamp: e.timeStamp,
+          type: 'submit',
+          preventDefault: () => {}, // No-op since already prevented above
+          isDefaultPrevented: () => true,
+          stopPropagation: () => e.stopPropagation(),
+          isPropagationStopped: () => false,
+          persist: () => {},
+        };
+        onSubmit(syntheticEvent);
       }
     }
   };
@@ -131,11 +194,14 @@ export function ChatInput({
           'border border-transparent',
           'bg-gradient-to-r from-white/10 via-white/5 to-white/10 p-px',
           'shadow-lg',
-          isDisabled && 'opacity-60 cursor-not-allowed',
+          isDisabled && !isQuotaExceeded && 'opacity-60 cursor-not-allowed',
           className,
         )}
       >
         <div className="flex flex-col rounded-2xl bg-white/5 backdrop-blur-xl overflow-hidden h-full">
+          {/* Quota Alert Extension - appears at top when quota exceeded */}
+          {quotaCheckType && <QuotaAlertExtension checkType={quotaCheckType} />}
+
           <form
             onSubmit={(e) => {
               if (isDisabled || !hasValidInput) {
@@ -144,7 +210,10 @@ export function ChatInput({
               }
               onSubmit(e);
             }}
-            className="flex flex-col h-full"
+            className={cn(
+              'flex flex-col h-full',
+              isQuotaExceeded && 'opacity-50 pointer-events-none',
+            )}
           >
             {/* Textarea */}
             <div className="relative flex items-end px-3 py-2">
@@ -220,4 +289,4 @@ export function ChatInput({
       </div>
     </div>
   );
-}
+});

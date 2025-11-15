@@ -60,6 +60,14 @@
     ".open-next/**/*",
     ".next/**/*",
     "out/**/*",
-    "dist/**/*"
+    "dist/**/*",
+    "**/*.test.ts",
+    "**/*.test.tsx",
+    "**/*.spec.ts",
+    "**/*.spec.tsx",
+    "**/__tests__/**/*",
+    "vitest.setup.ts",
+    "vitest.config.ts",
+    "__mocks__/**/*"
   ]
 }

@@ -22,7 +22,6 @@ import { DEFAULT_ROUND_NUMBER, extractRoundNumber } from '@/lib/schemas/round-sc
 import { ChatMessageList } from './chat-message-list';
 import { ConfigurationChangesGroup } from './configuration-changes-group';
 import { RoundAnalysisCard } from './moderator/round-analysis-card';
-import { PreSearchCard } from './pre-search-card';
 import { RoundFeedback } from './round-feedback';
 import { UnifiedErrorBoundary } from './unified-error-boundary';
 
@@ -184,24 +183,11 @@ export function ThreadTimeline({
                     currentStreamingParticipant={currentStreamingParticipant}
                     threadId={threadId}
                     preSearches={preSearches}
+                    streamingRoundNumber={streamingRoundNumber}
                   />
                 </UnifiedErrorBoundary>
 
-                {/* Render pre-search after user message if exists in store */}
-                {(() => {
-                  const preSearch = preSearches.find(ps => ps.roundNumber === roundNumber);
-                  return preSearch
-                    ? (
-                        <PreSearchCard
-                          key={`pre-search-${roundNumber}`}
-                          threadId={threadId}
-                          preSearch={preSearch}
-                          isLatest={roundNumber === (timelineItems[timelineItems.length - 1]?.roundNumber || 0)}
-                          streamingRoundNumber={streamingRoundNumber}
-                        />
-                      )
-                    : null;
-                })()}
+                {/* PreSearchCard now rendered inside ChatMessageList between user and assistant messages */}
 
                 {!isStreaming && (() => {
                   const hasRoundError = item.data.some((msg) => {

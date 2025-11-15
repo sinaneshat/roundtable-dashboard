@@ -11,7 +11,7 @@
 
 import { z } from 'zod';
 
-import { MessageRoleSchema } from '@/api/core/enums';
+import { UIMessageRoleSchema } from '@/api/core/enums';
 
 import { MessageMetadataSchema } from './message-metadata';
 import { MessagePartSchema } from './message-schemas';
@@ -30,10 +30,12 @@ import { MessagePartSchema } from './message-schemas';
  *
  * NOTE: AI SDK UIMessage only supports 'user', 'assistant', 'system' roles.
  * Tool invocations are handled via toolInvocations array, not role='tool'.
+ *
+ * ✅ ENUM PATTERN: Uses UIMessageRoleSchema (5-part pattern from enums.ts)
  */
 export const UIMessageSchema = z.object({
   id: z.string(),
-  role: MessageRoleSchema.or(z.literal('system')), // ✅ Uses MESSAGE_ROLES from enums + system for AI SDK
+  role: UIMessageRoleSchema, // ✅ Uses UI_MESSAGE_ROLES enum (user, assistant, system)
   parts: z.array(MessagePartSchema).optional(), // Modern message parts
   metadata: MessageMetadataSchema,
   createdAt: z.union([z.string().datetime(), z.date()]).optional(),

@@ -1,6 +1,6 @@
 import type { RouteHandler } from '@hono/zod-openapi';
 import type { SQL } from 'drizzle-orm';
-import { and, asc, desc, eq, inArray, ne } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, ne, sql } from 'drizzle-orm';
 import type { BatchItem } from 'drizzle-orm/batch';
 import Fuse from 'fuse.js';
 import { ulid } from 'ulid';
@@ -29,7 +29,7 @@ import {
   SUBSCRIPTION_TIER_NAMES,
 } from '@/api/services/product-logic.service';
 import { generateUniqueSlug } from '@/api/services/slug-generator.service';
-import { logModeChange } from '@/api/services/thread-changelog.service';
+import { logModeChange, logWebSearchToggle } from '@/api/services/thread-changelog.service';
 import { generateTitleFromMessage, updateThreadTitleAndSlug } from '@/api/services/title-generator.service';
 import {
   enforceMessageQuota,
@@ -344,14 +344,25 @@ export const getThreadHandler: RouteHandler<typeof getThreadRoute, ApiEnv> = cre
       ),
       orderBy: [tables.chatParticipant.priority, tables.chatParticipant.id],
     });
-    const messages = await db.query.chatMessage.findMany({
-      where: eq(tables.chatMessage.threadId, id),
-      orderBy: [
+    // ✅ CRITICAL FIX: Exclude pre-search messages from messages array
+    // Pre-search messages are stored in chat_message table for historical reasons,
+    // but they're rendered separately using the pre_search table via PreSearchCard.
+    // Including them here causes ordering issues and duplicate rendering logic.
+    // Filter criteria: Exclude messages where id starts with 'pre-search-'
+    const messages = await db
+      .select()
+      .from(tables.chatMessage)
+      .where(
+        and(
+          eq(tables.chatMessage.threadId, id),
+          sql`${tables.chatMessage.id} NOT LIKE 'pre-search-%'`,
+        ),
+      )
+      .orderBy(
         asc(tables.chatMessage.roundNumber),
         asc(tables.chatMessage.createdAt),
         asc(tables.chatMessage.id),
-      ],
-    });
+      );
     const changelog = await db.query.chatThreadChangelog.findMany({
       where: eq(tables.chatThreadChangelog.threadId, id),
       orderBy: [desc(tables.chatThreadChangelog.createdAt)],
@@ -604,19 +615,8 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
       // Web search toggle applies to the next round, not the current one
       const nextRoundNumber = currentRoundNumber + 1;
 
-      // Create changelog entry for web search toggle
-      await db.insert(tables.chatThreadChangelog).values({
-        id: ulid(),
-        threadId: id,
-        roundNumber: nextRoundNumber,
-        changeType: ChangelogTypes.MODIFIED,
-        changeSummary: body.enableWebSearch ? 'Enabled web search' : 'Disabled web search',
-        changeData: {
-          type: 'web_search' as const,
-          enabled: body.enableWebSearch,
-        },
-        createdAt: now,
-      });
+      // ✅ SERVICE LAYER: Use thread-changelog.service for changelog creation
+      await logWebSearchToggle(id, nextRoundNumber, body.enableWebSearch);
     }
 
     const updateData: {
@@ -739,14 +739,25 @@ export const getPublicThreadHandler: RouteHandler<typeof getPublicThreadRoute, A
       ),
       orderBy: [tables.chatParticipant.priority, tables.chatParticipant.id],
     });
-    const messages = await db.query.chatMessage.findMany({
-      where: eq(tables.chatMessage.threadId, thread.id),
-      orderBy: [
+    // ✅ CRITICAL FIX: Exclude pre-search messages from messages array
+    // Pre-search messages are stored in chat_message table for historical reasons,
+    // but they're rendered separately using the pre_search table via PreSearchCard.
+    // Including them here causes ordering issues and duplicate rendering logic.
+    // Filter criteria: Exclude messages where id starts with 'pre-search-'
+    const messages = await db
+      .select()
+      .from(tables.chatMessage)
+      .where(
+        and(
+          eq(tables.chatMessage.threadId, thread.id),
+          sql`${tables.chatMessage.id} NOT LIKE 'pre-search-%'`,
+        ),
+      )
+      .orderBy(
         asc(tables.chatMessage.roundNumber),
         asc(tables.chatMessage.createdAt),
         asc(tables.chatMessage.id),
-      ],
-    });
+      );
     const changelog = await db.query.chatThreadChangelog.findMany({
       where: eq(tables.chatThreadChangelog.threadId, thread.id),
       orderBy: [desc(tables.chatThreadChangelog.createdAt)],
@@ -804,14 +815,25 @@ export const getThreadBySlugHandler: RouteHandler<typeof getThreadBySlugRoute, A
       where: eq(tables.chatParticipant.threadId, thread.id),
       orderBy: [tables.chatParticipant.priority, tables.chatParticipant.id],
     });
-    const messages = await db.query.chatMessage.findMany({
-      where: eq(tables.chatMessage.threadId, thread.id),
-      orderBy: [
+    // ✅ CRITICAL FIX: Exclude pre-search messages from messages array
+    // Pre-search messages are stored in chat_message table for historical reasons,
+    // but they're rendered separately using the pre_search table via PreSearchCard.
+    // Including them here causes ordering issues and duplicate rendering logic.
+    // Filter criteria: Exclude messages where id starts with 'pre-search-'
+    const messages = await db
+      .select()
+      .from(tables.chatMessage)
+      .where(
+        and(
+          eq(tables.chatMessage.threadId, thread.id),
+          sql`${tables.chatMessage.id} NOT LIKE 'pre-search-%'`,
+        ),
+      )
+      .orderBy(
         asc(tables.chatMessage.roundNumber),
         asc(tables.chatMessage.createdAt),
         asc(tables.chatMessage.id),
-      ],
-    });
+      );
     return Responses.ok(c, {
       thread,
       participants,

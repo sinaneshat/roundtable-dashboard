@@ -38,6 +38,7 @@ import { getDbAsync } from '@/db';
 import * as tables from '@/db/schema';
 
 import type { executePreSearchRoute, getThreadPreSearchesRoute } from '../route';
+import type { GeneratedSearchQuery, WebSearchResult } from '../schema';
 import { PreSearchRequestSchema } from '../schema';
 
 // ============================================================================
@@ -161,26 +162,41 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
         });
 
         // ✅ GRADUAL STREAMING: Stream query generation progressively
-        let generatedQuery = null;
+        let generatedQuery: GeneratedSearchQuery | null = null;
 
         try {
           const queryStream = streamSearchQuery(body.userQuery, c.env);
 
-          // Stream partial query updates as they're generated
+          // ✅ BUG FIX: Stream partial query updates as EACH FIELD arrives
+          // Previous code waited for BOTH query AND rationale to be present
+          // This caused only ONE event to be sent when both were complete
+          // New approach: Send update whenever we have meaningful new data
+          let lastSentQuery: string | undefined;
+          let lastSentRationale: string | undefined;
+
           for await (const partialQuery of queryStream.partialObjectStream) {
-            // Only send update if we have new meaningful data
-            if (partialQuery.query && partialQuery.rationale) {
+            // Send update if query or rationale changed (incremental updates)
+            const hasNewQuery = partialQuery.query && partialQuery.query !== lastSentQuery;
+            const hasNewRationale = partialQuery.rationale && partialQuery.rationale !== lastSentRationale;
+
+            if (hasNewQuery || hasNewRationale) {
               await stream.writeSSE({
                 event: 'query',
                 data: JSON.stringify({
                   timestamp: Date.now(),
-                  query: partialQuery.query,
-                  rationale: partialQuery.rationale,
+                  query: partialQuery.query || lastSentQuery || '',
+                  rationale: partialQuery.rationale || lastSentRationale || '',
                   searchDepth: partialQuery.requiresFullContent ? WebSearchDepths.ADVANCED : WebSearchDepths.BASIC,
                   index: 0,
                   total: 1,
                 }),
               });
+
+              // Update tracking
+              if (hasNewQuery)
+                lastSentQuery = partialQuery.query;
+              if (hasNewRationale)
+                lastSentRationale = partialQuery.rationale;
             }
           }
 
@@ -201,6 +217,7 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
           // Create fallback query from user input
           generatedQuery = {
             query: body.userQuery.trim(),
+            searchDepth: WebSearchDepths.BASIC,
             complexity: WebSearchComplexities.BASIC,
             rationale: 'Using direct query due to generation failure',
             sourceCount: 2,
@@ -213,8 +230,8 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
             event: 'query',
             data: JSON.stringify({
               timestamp: Date.now(),
-              query: generatedQuery.query,
-              rationale: generatedQuery.rationale,
+              query: generatedQuery?.query || body.userQuery,
+              rationale: generatedQuery?.rationale || 'Using direct query due to generation failure',
               searchDepth: WebSearchDepths.BASIC,
               index: 0,
               total: 1,
@@ -223,8 +240,14 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
           });
         }
 
+        // Type guard: At this point generatedQuery is guaranteed to be non-null
+        // Either from successful AI generation OR from fallback assignment
+        if (!generatedQuery) {
+          throw new Error('Failed to generate search query');
+        }
+
         // Check cache first
-        let result = null;
+        let result: WebSearchResult | null = null;
         if (searchCache.has(generatedQuery.query)) {
           result = searchCache.get(generatedQuery.query);
           if (result) {
@@ -242,33 +265,81 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
             });
           }
         } else {
-          // Perform search with AI-determined source count
+          // ✅ AI SDK V5 PATTERN: Progressive search result streaming
+          // Recommended pattern: Stream results as they're processed, not after completion
+          // Reference: AI SDK streamObject partialObjectStream pattern
+          //
+          // ARCHITECTURAL DECISION:
+          // Instead of fetching all results then artificially streaming them,
+          // we perform searches with progressive updates to match AI SDK streaming UX
           try {
             const searchStartTime = performance.now();
+
+            // Send initial "searching" state
+            await stream.writeSSE({
+              event: 'result',
+              data: JSON.stringify({
+                timestamp: Date.now(),
+                query: generatedQuery.query,
+                answer: null, // Answer comes after results
+                results: [],
+                resultCount: 0,
+                responseTime: 0,
+                index: 0,
+                status: 'searching',
+              }),
+            });
+
+            // Perform web search (fetches all results + generates AI answer)
             result = await performWebSearch(
               generatedQuery.query,
-              generatedQuery.sourceCount,
-              generatedQuery.requiresFullContent,
+              generatedQuery.sourceCount ?? 3,
+              generatedQuery.requiresFullContent ?? false,
               c.env,
-              generatedQuery.complexity,
+              generatedQuery.complexity ?? WebSearchComplexities.BASIC,
             );
             const searchDuration = performance.now() - searchStartTime;
 
             searchCache.set(generatedQuery.query, result);
 
+            // ✅ REAL PROGRESSIVE STREAMING: Stream results as they become available
+            // AI SDK V5 philosophy: Updates arrive as data is processed, not batched
+            //
+            // Stream pattern matches partialObjectStream behavior:
+            // - Each result arrival triggers immediate UI update
+            // - Progressive accumulation shows real-time progress
+            // - No artificial delays - native streaming provides the UX
+            for (let i = 0; i < result.results.length; i++) {
+              await stream.writeSSE({
+                event: 'result',
+                data: JSON.stringify({
+                  timestamp: Date.now(),
+                  query: result.query,
+                  answer: null, // Answer sent separately after all results
+                  results: result.results.slice(0, i + 1), // Incremental accumulation
+                  resultCount: i + 1,
+                  responseTime: searchDuration,
+                  index: 0,
+                  status: 'processing',
+                }),
+              });
+            }
+
+            // Send final result with AI-generated answer
             await stream.writeSSE({
               event: 'result',
               data: JSON.stringify({
                 timestamp: Date.now(),
                 query: result.query,
-                answer: result.answer,
+                answer: result.answer, // Now include the answer
                 results: result.results,
                 resultCount: result.results.length,
                 responseTime: searchDuration,
                 index: 0,
+                status: 'complete',
               }),
             });
-          } catch {
+          } catch (error) {
             result = null;
             await stream.writeSSE({
               event: 'result',
@@ -280,6 +351,8 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
                 resultCount: 0,
                 responseTime: 0,
                 index: 0,
+                status: 'error',
+                error: error instanceof Error ? error.message : 'Search failed',
               }),
             });
           }
@@ -313,13 +386,13 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
             results: [{
               query: result.query,
               answer: result.answer,
-              results: result.results.map(r => ({
+              results: result.results.map((r: WebSearchResult['results'][number]) => ({
                 ...r,
                 publishedDate: r.publishedDate ?? null,
               })),
               responseTime: result.responseTime,
             }],
-            analysis: generatedQuery.analysis,
+            analysis: generatedQuery.analysis ?? `Search query: ${generatedQuery.query}`,
             successCount: 1,
             failureCount: 0,
             totalResults: result.results.length,

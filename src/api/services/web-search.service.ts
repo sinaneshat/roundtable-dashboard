@@ -23,13 +23,16 @@
  */
 
 import { streamObject } from 'ai';
-import { z } from 'zod';
 
 import { createError, normalizeError } from '@/api/common/error-handling';
 import { AIModels } from '@/api/core/ai-models';
 import type { WebSearchComplexity } from '@/api/core/enums';
-import { WebSearchComplexities } from '@/api/core/enums';
 import type { WebSearchResult, WebSearchResultItem } from '@/api/routes/chat/schema';
+// ============================================================================
+// Zod Schemas
+// ============================================================================
+// Import schema from route definitions for consistency
+import { GeneratedSearchQuerySchema } from '@/api/routes/chat/schema';
 import { initializeOpenRouter, openRouterService } from '@/api/services/openrouter.service';
 import { buildWebSearchQueryPrompt, WEB_SEARCH_COMPLEXITY_ANALYSIS_PROMPT } from '@/api/services/prompts.service';
 import type { ApiEnv } from '@/api/types';
@@ -42,28 +45,9 @@ import type { TypedLogger } from '@/api/types/logger';
 // Re-export types for external use
 export type { WebSearchDepth } from '@/api/core/enums';
 export type { WebSearchResult, WebSearchResultItem };
+export type { GeneratedSearchQuery } from '@/api/routes/chat/schema';
 
-export type GeneratedSearchQuery = {
-  query: string;
-  complexity: WebSearchComplexity;
-  rationale: string;
-  sourceCount: number;
-  requiresFullContent: boolean;
-  analysis: string;
-};
-
-// ============================================================================
-// Zod Schemas
-// ============================================================================
-
-const GeneratedSearchQueriesSchema = z.object({
-  query: z.string().min(1).describe('The optimized search query'),
-  complexity: z.enum([WebSearchComplexities.BASIC, WebSearchComplexities.MODERATE, WebSearchComplexities.DEEP] as const).describe('Query complexity level'),
-  rationale: z.string().min(10).describe('Why this search strategy is optimal'),
-  sourceCount: z.number().min(1).max(5).describe('Number of sources to extract'),
-  requiresFullContent: z.boolean().describe('Whether full content extraction is needed'),
-  analysis: z.string().min(10).describe('Analysis of user intent and information needs'),
-});
+// Schema consolidated into GeneratedSearchQuerySchema in route schema file
 
 // ============================================================================
 // Query Generation
@@ -96,9 +80,10 @@ export function streamSearchQuery(
 
     // ✅ AI SDK v5: streamObject for gradual query generation
     // Pattern from /src/api/routes/chat/handlers/analysis.handler.ts:91
+    // Using internal schema that matches API contract
     return streamObject({
-      model: client(AIModels.WEB_SEARCH),
-      schema: GeneratedSearchQueriesSchema,
+      model: client.chat(AIModels.WEB_SEARCH),
+      schema: GeneratedSearchQuerySchema, // Use API schema for consistency
       mode: 'json', // ✅ CRITICAL: Force JSON mode for OpenRouter compatibility
       system: WEB_SEARCH_COMPLEXITY_ANALYSIS_PROMPT,
       prompt: buildWebSearchQueryPrompt(userMessage),
