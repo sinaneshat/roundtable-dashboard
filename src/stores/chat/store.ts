@@ -404,7 +404,7 @@ const createAnalysisSlice: StateCreator<
     // ✅ LOG WARNING: Log mismatches for debugging, but don't block analysis
     // This can happen during retry or edge cases - metadata is the source of truth
     if (messageIdMismatches.length > 0) {
-      console.warn('[createPendingAnalysis] Message ID/metadata mismatch detected', {
+      console.error('[createPendingAnalysis] Message ID/metadata mismatch detected', {
         roundNumber,
         threadId,
         mismatches: messageIdMismatches.map(msg => ({

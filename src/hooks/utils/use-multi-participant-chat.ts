@@ -556,6 +556,7 @@ export function useMultiParticipantChat(
               // This is expected behavior in multi-round conversations
               // AI SDK v5 caches messages by threadId and may reuse IDs from previous rounds
               // We correct this using the backend's deterministic ID format
+              // eslint-disable-next-line no-console -- Debug logging for ID correction
               console.debug('[onCompletion] Corrected AI SDK message ID:', {
                 receivedId,
                 correctId,
@@ -719,11 +720,11 @@ export function useMultiParticipantChat(
     // 1. Haven't hydrated yet for this hook instance
     // 2. AI SDK has no messages (empty state)
     // 3. We have external messages to hydrate with
-    const shouldHydrate =
-      !hasHydratedRef.current &&
-      messages.length === 0 &&
-      initialMessages &&
-      initialMessages.length > 0;
+    const shouldHydrate
+      = !hasHydratedRef.current
+        && messages.length === 0
+        && initialMessages
+        && initialMessages.length > 0;
 
     if (shouldHydrate) {
       setMessages(initialMessages);
