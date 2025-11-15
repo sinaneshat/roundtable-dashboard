@@ -1,8 +1,8 @@
+import type { UIMessage } from 'ai';
 import type { AbstractIntlMessages } from 'next-intl';
 
 import { MessageRoles, UIMessageRoles } from '@/api/core/enums';
 import type { DbAssistantMessageMetadata, DbUserMessageMetadata } from '@/db/schemas/chat-metadata';
-import type { UIMessage } from '@/lib/schemas/ui-message-schemas';
 
 /**
  * Common test utilities and helpers
@@ -15,21 +15,27 @@ import type { UIMessage } from '@/lib/schemas/ui-message-schemas';
 /**
  * Type alias for test messages with user metadata
  * Follows pattern from src/lib/utils/message-transforms.ts
- * ✅ ENUM PATTERN: Uses UIMessage with discriminated union by role
+ * ✅ ENUM PATTERN: Uses explicit literal type for role to match AI SDK UIMessage
+ * ✅ TYPE SAFETY: parts is required (never undefined) for test messages
+ * ✅ OVERRIDE: Explicitly narrows parts from UIMessage's optional to required array
  */
 export type TestUserMessage = UIMessage & {
-  role: typeof UIMessageRoles.USER;
+  role: 'user'; // ✅ Explicit literal prevents type widening
   metadata: DbUserMessageMetadata;
+  parts: Array<{ type: 'text'; text: string }> & {}; // ✅ Required non-undefined array
 };
 
 /**
  * Type alias for test messages with assistant metadata
  * Follows pattern from src/lib/utils/message-transforms.ts
- * ✅ ENUM PATTERN: Uses UIMessage with discriminated union by role
+ * ✅ ENUM PATTERN: Uses explicit literal type for role to match AI SDK UIMessage
+ * ✅ TYPE SAFETY: parts is required (never undefined) for test messages
+ * ✅ OVERRIDE: Explicitly narrows parts from UIMessage's optional to required array
  */
 export type TestAssistantMessage = UIMessage & {
-  role: typeof UIMessageRoles.ASSISTANT;
+  role: 'assistant'; // ✅ Explicit literal prevents type widening
   metadata: DbAssistantMessageMetadata;
+  parts: Array<{ type: 'text'; text: string }> & {}; // ✅ Required non-undefined array
 };
 
 /**
@@ -74,17 +80,19 @@ export function createAssistantMetadata(
 /**
  * Creates a test UIMessage with flexible metadata
  * ✅ ENUM PATTERN: Uses MessageRole type from established enums
+ * ✅ TYPE SAFETY: Always provides parts array (never undefined)
  */
 export function createTestUIMessage(data: {
   id: string;
   role: 'user' | 'assistant' | 'system';
   content: string;
   metadata: DbUserMessageMetadata | DbAssistantMessageMetadata;
+  parts?: Array<{ type: 'text'; text: string }>;
 }): UIMessage {
   return {
     id: data.id,
     role: data.role,
-    parts: [{ type: 'text', text: data.content }],
+    parts: data.parts ?? [{ type: 'text', text: data.content }],
     metadata: data.metadata,
   };
 }
@@ -93,6 +101,8 @@ export function createTestUIMessage(data: {
  * Creates a properly typed UIMessage for testing with user metadata
  * ✅ ENUM PATTERN: Uses UIMessageRoles.USER for UI messages (5-part pattern)
  * ✅ ENUM PATTERN: Uses MessageRoles.USER for metadata (database pattern)
+ * ✅ TYPE SAFETY: Always provides parts array (never undefined)
+ * ✅ STRICT: Return type guarantees parts is never undefined
  * Pattern from: src/lib/utils/message-transforms.ts:57
  */
 export function createTestUserMessage(data: {
@@ -100,11 +110,13 @@ export function createTestUserMessage(data: {
   content: string;
   roundNumber: number;
   createdAt?: string;
+  parts?: Array<{ type: 'text'; text: string }>;
 }): TestUserMessage {
+  const parts: Array<{ type: 'text'; text: string }> = data.parts ?? [{ type: 'text', text: data.content }];
   return {
     id: data.id,
     role: UIMessageRoles.USER, // ✅ UI message role enum
-    parts: [{ type: 'text', text: data.content }],
+    parts, // ✅ Explicitly typed as non-undefined array
     metadata: {
       role: MessageRoles.USER, // ✅ Database metadata role enum
       roundNumber: data.roundNumber,
@@ -117,6 +129,8 @@ export function createTestUserMessage(data: {
  * Creates a properly typed UIMessage for testing with assistant metadata
  * ✅ ENUM PATTERN: Uses UIMessageRoles.ASSISTANT for UI messages (5-part pattern)
  * ✅ ENUM PATTERN: Uses MessageRoles.ASSISTANT for metadata (database pattern)
+ * ✅ TYPE SAFETY: Always provides parts array (never undefined)
+ * ✅ STRICT: Return type guarantees parts is never undefined
  * Pattern from: src/lib/utils/message-transforms.ts:57
  */
 export function createTestAssistantMessage(data: {
@@ -129,11 +143,13 @@ export function createTestAssistantMessage(data: {
   finishReason?: DbAssistantMessageMetadata['finishReason'];
   hasError?: boolean;
   createdAt?: string;
+  parts?: Array<{ type: 'text'; text: string }>;
 }): TestAssistantMessage {
+  const parts: Array<{ type: 'text'; text: string }> = data.parts ?? [{ type: 'text', text: data.content }];
   return {
     id: data.id,
     role: UIMessageRoles.ASSISTANT, // ✅ UI message role enum
-    parts: [{ type: 'text', text: data.content }],
+    parts, // ✅ Explicitly typed as non-undefined array
     metadata: {
       role: MessageRoles.ASSISTANT, // ✅ Database metadata role enum
       roundNumber: data.roundNumber,
