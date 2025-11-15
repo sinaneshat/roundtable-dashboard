@@ -338,10 +338,13 @@ function getParticipantInfoForMessage({
 
   // Fallback for messages that haven't finished yet but aren't actively streaming
   // This can happen briefly during state transitions
+  const fallbackParticipantIndex = assistantMetadata?.participantIndex ?? currentParticipantIndex;
+  const fallbackParticipant = participants[fallbackParticipantIndex];
+
   return {
-    participantIndex: assistantMetadata?.participantIndex ?? currentParticipantIndex,
-    modelId: assistantMetadata?.model,
-    role: assistantMetadata?.participantRole || null,
+    participantIndex: fallbackParticipantIndex,
+    modelId: assistantMetadata?.model || fallbackParticipant?.modelId,
+    role: assistantMetadata?.participantRole || fallbackParticipant?.role || null,
     isStreaming: false,
   };
 }
@@ -387,17 +390,20 @@ export const ChatMessageList = memo(
     const userAvatarSrc = userAvatar?.src || userInfo.image || '/avatars/user.png';
     const userAvatarName = userAvatar?.name || userInfo.name;
 
-    // ✅ DEDUPLICATION: Focus on user messages to prevent duplicate triggers
-    // According to FLOW_DOCUMENTATION: One user message → All participants respond → One analysis
-    // Also filters out participant trigger messages (created when orchestrating sequential responses)
+    // ✅ DEDUPLICATION: Prevent duplicate message IDs and filter participant trigger messages
+    // Note: Component supports grouping multiple consecutive user messages for UI flexibility
     const deduplicatedMessages = useMemo(() => {
-      const seenRounds = new Map<number, UIMessage>(); // roundNumber -> first user message
+      const seenMessageIds = new Set<string>(); // Track message IDs to prevent actual duplicates
       const result: UIMessage[] = [];
 
       for (const message of messages) {
-      // For user messages, deduplicate by round number and filter participant triggers
+        // Skip if we've already processed this exact message ID (prevents duplicates)
+        if (seenMessageIds.has(message.id)) {
+          continue;
+        }
+
+        // For user messages, filter out participant trigger messages
         if (message.role === MessageRoles.USER) {
-          const roundNumber = getRoundNumber(message.metadata);
           const userMeta = getUserMetadata(message.metadata);
 
           // ✅ TYPE-SAFE: Check isParticipantTrigger using validated metadata schema
@@ -408,18 +414,12 @@ export const ChatMessageList = memo(
             continue;
           }
 
-          // For regular user messages, keep only first per round
-          if (roundNumber !== null && roundNumber !== undefined) {
-            if (!seenRounds.has(roundNumber)) {
-              seenRounds.set(roundNumber, message);
-              result.push(message);
-            }
-          } else {
-          // Messages without round numbers (shouldn't happen, but keep them)
-            result.push(message);
-          }
+          // Add all non-trigger user messages (allow multiple in same round for grouping)
+          seenMessageIds.add(message.id);
+          result.push(message);
         } else {
-        // For assistant/system messages, keep all (participants can have multiple messages)
+          // For assistant/system messages, keep all (participants can have multiple messages)
+          seenMessageIds.add(message.id);
           result.push(message);
         }
       }
@@ -518,6 +518,7 @@ export const ChatMessageList = memo(
               },
             };
           } else {
+            // Add to existing user group
             currentUserGroup.messages.push({ message, index });
           }
           continue;

@@ -178,10 +178,10 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
           });
 
           // ✅ DEBUG LOGGING: Log successful pre-search creation for debugging
-          console.log(`[PreSearch] Created PENDING pre-search for round ${currentRoundNumber} (ID: ${preSearchId})`);
+          console.error(`[PreSearch] Created PENDING pre-search for round ${currentRoundNumber} (ID: ${preSearchId})`);
         } else {
           // ✅ DEBUG LOGGING: Log when pre-search already exists
-          console.log(`[PreSearch] Pre-search already exists for round ${currentRoundNumber} (ID: ${existingPreSearch.id}, Status: ${existingPreSearch.status})`);
+          console.error(`[PreSearch] Pre-search already exists for round ${currentRoundNumber} (ID: ${existingPreSearch.id}, Status: ${existingPreSearch.status})`);
         }
       } catch (error) {
         // ✅ BUG FIX: Don't let pre-search creation errors break the streaming flow
@@ -192,11 +192,11 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
     } else {
       // ✅ DEBUG LOGGING: Log why pre-search wasn't created
       if (!effectiveWebSearchEnabled) {
-        console.log(`[PreSearch] Skipping pre-search creation - web search disabled (thread: ${thread.enableWebSearch}, provided: ${providedEnableWebSearch})`);
+        console.error(`[PreSearch] Skipping pre-search creation - web search disabled (thread: ${thread.enableWebSearch}, provided: ${providedEnableWebSearch})`);
       } else if (!isFirstParticipant) {
-        console.log(`[PreSearch] Skipping pre-search creation - not first participant (index: ${participantIndex})`);
+        console.error(`[PreSearch] Skipping pre-search creation - not first participant (index: ${participantIndex})`);
       } else if (regenerateRound) {
-        console.log(`[PreSearch] Skipping pre-search creation - regenerating round ${regenerateRound}`);
+        console.error(`[PreSearch] Skipping pre-search creation - regenerating round ${regenerateRound}`);
       }
     }
 

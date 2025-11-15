@@ -5,6 +5,7 @@ import { useState } from 'react';
 import type { WebSearchResultItemProps } from '@/api/routes/chat/schema';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/ui/cn';
 import { buildGoogleFaviconUrl, safeExtractDomain } from '@/lib/utils';
 
@@ -40,34 +41,42 @@ export function WebSearchResultItem({ result, showDivider = true, className }: W
     <div className={cn('flex gap-3 py-2.5', showDivider && 'border-b border-border/20', className)}>
       {/* Avatar with multi-level favicon fallback */}
       <Avatar className="size-8 flex-shrink-0 mt-0.5">
-        {faviconSrc && (
-          <AvatarImage
-            src={faviconSrc}
-            alt={cleanDomain}
-            onError={() => {
-              if (!faviconError) {
-                setFaviconError(true);
-              } else {
-                setFallbackFaviconError(true);
-              }
-            }}
-          />
-        )}
-        <AvatarFallback className="bg-muted/50 text-muted-foreground">
-          <Globe className="size-4" />
+        <AvatarImage
+          src={faviconSrc || ''}
+          alt={cleanDomain}
+          role="img"
+          onError={() => {
+            if (!faviconError) {
+              setFaviconError(true);
+            } else {
+              setFallbackFaviconError(true);
+            }
+          }}
+        />
+        <AvatarFallback className="bg-muted/50 text-muted-foreground" role="img" aria-label={cleanDomain}>
+          <Globe className="size-4" aria-hidden="true" />
         </AvatarFallback>
       </Avatar>
 
       {/* Content */}
       <div className="flex-1 min-w-0 space-y-0.5">
-        <a
-          href={result.url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="font-medium text-sm hover:text-primary transition-colors line-clamp-1 block"
-        >
-          {result.title}
-        </a>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <a
+                href={result.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-medium text-sm hover:text-primary transition-colors line-clamp-1 block"
+              >
+                {result.title}
+              </a>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>{result.title}</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
 
         <p className="text-xs text-muted-foreground truncate">{cleanDomain}</p>
 

@@ -2,6 +2,7 @@
 
 import { motion } from 'framer-motion';
 import { Search, Sparkles } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { memo, useEffect, useRef, useState } from 'react';
 
 import { AnalysisStatuses, WebSearchDepths } from '@/api/core/enums';
@@ -50,6 +51,7 @@ function PreSearchStreamComponent({
   onStreamComplete,
   onStreamStart,
 }: PreSearchStreamProps) {
+  const t = useTranslations('chat.preSearch');
   const is409Conflict = useBoolean(false);
 
   // Local streaming state
@@ -110,9 +112,9 @@ function PreSearchStreamComponent({
     // Store controller for cleanup - we use AbortController API for fetch-based streaming
     abortControllerRef.current = abortController;
 
-    // Track partial data accumulation
-    const queries: Array<PreSearchDataPayload['queries'][number]> = [];
-    const results: Array<PreSearchDataPayload['results'][number]> = [];
+    // Track partial data accumulation using Maps to avoid sparse arrays
+    const queriesMap = new Map<number, PreSearchDataPayload['queries'][number]>();
+    const resultsMap = new Map<number, PreSearchDataPayload['results'][number]>();
 
     // Start fetch-based SSE stream (backend uses POST)
     const startStream = async () => {
@@ -173,23 +175,29 @@ function PreSearchStreamComponent({
                   onStreamStartRef.current?.();
                 } else if (currentEvent === 'query') {
                   const queryData = JSON.parse(currentData);
-                  queries[queryData.index] = {
+                  queriesMap.set(queryData.index, {
                     query: queryData.query,
                     rationale: queryData.rationale,
                     searchDepth: queryData.searchDepth || WebSearchDepths.BASIC,
                     index: queryData.index,
                     total: queryData.total,
-                  };
-                  setPartialSearchData({ queries: [...queries], results: [...results] });
+                  });
+                  // Convert Maps to arrays sorted by index
+                  const queries = Array.from(queriesMap.values()).sort((a, b) => a.index - b.index);
+                  const results = Array.from(resultsMap.values());
+                  setPartialSearchData({ queries, results });
                 } else if (currentEvent === 'result') {
                   const resultData = JSON.parse(currentData);
-                  results[resultData.index] = {
+                  resultsMap.set(resultData.index, {
                     query: resultData.query,
                     answer: resultData.answer,
                     results: resultData.results || [],
                     responseTime: resultData.responseTime,
-                  };
-                  setPartialSearchData({ queries: [...queries], results: [...results] });
+                  });
+                  // Convert Maps to arrays sorted by index
+                  const queries = Array.from(queriesMap.values()).sort((a, b) => a.index - b.index);
+                  const results = Array.from(resultsMap.values());
+                  setPartialSearchData({ queries, results });
                 } else if (currentEvent === 'done') {
                   const finalData = JSON.parse(currentData) as PreSearchDataPayload;
                   setPartialSearchData(finalData);
@@ -315,10 +323,10 @@ function PreSearchStreamComponent({
       animate={{ opacity: 1 }}
       className="space-y-6"
     >
-      {validResults.map((searchResult, searchIndex) => {
-        const query = validQueries[searchIndex];
+      {validQueries.map((query, queryIndex) => {
+        const searchResult = validResults.find(r => r?.query === query?.query);
         const hasResult = !!searchResult;
-        const uniqueKey = searchResult?.query || query?.query || `${preSearch.id}-search-${searchIndex}`;
+        const uniqueKey = query?.query || `${preSearch.id}-search-${queryIndex}`;
         const hasResults = hasResult && searchResult.results && searchResult.results.length > 0;
 
         return (
@@ -326,7 +334,7 @@ function PreSearchStreamComponent({
             key={uniqueKey}
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3, delay: 0.1 * searchIndex }}
+            transition={{ duration: 0.3, delay: 0.1 * queryIndex }}
             className="space-y-3"
           >
             {/* Query header with mode */}
@@ -335,7 +343,7 @@ function PreSearchStreamComponent({
                 <Search className="size-4 text-primary/70 mt-0.5 flex-shrink-0" />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-foreground">
-                    {query?.query || searchResult?.query}
+                    {query?.query}
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -372,12 +380,17 @@ function PreSearchStreamComponent({
                 </div>
               </div>
 
-              {/* Result count */}
-              {hasResults && (
+              {/* Result count or searching indicator */}
+              {!hasResult && (
+                <p className="text-xs text-muted-foreground pl-6">
+                  {t('steps.searchingDesc')}
+                </p>
+              )}
+              {hasResult && (
                 <p className="text-xs text-muted-foreground pl-6">
                   {searchResult.results.length}
                   {' '}
-                  {searchResult.results.length === 1 ? 'source found' : 'sources found'}
+                  {searchResult.results.length === 1 ? 'source' : 'sources'}
                 </p>
               )}
             </div>
@@ -411,7 +424,7 @@ function PreSearchStreamComponent({
             )}
 
             {/* Separator between searches */}
-            {searchIndex < validResults.length - 1 && (
+            {queryIndex < validQueries.length - 1 && (
               <Separator className="!mt-6" />
             )}
           </motion.div>

@@ -162,3 +162,19 @@ export function partsToContent(parts: unknown[]): string {
     .map(part => part.text)
     .join(' ');
 }
+
+// ============================================================================
+// RE-EXPORTS FROM API SCHEMA
+// ============================================================================
+
+/**
+ * ✅ RE-EXPORTS: API response types for testing and components
+ *
+ * These types are defined in /src/api/routes/chat/schema.ts but re-exported
+ * here for convenience in tests and components.
+ */
+export type {
+  MessagesListResponse,
+  ModeratorAnalysisListResponse,
+  ThreadDetailResponse,
+} from '@/api/routes/chat/schema';
