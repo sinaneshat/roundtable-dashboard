@@ -101,9 +101,9 @@ export function ConversationModeModal({
                 onClick={() => onModeSelect(mode.id)}
                 className={cn(
                   'flex items-start gap-4 p-4 text-left w-full rounded-xl',
-                  'cursor-pointer hover:bg-white/5',
+                  'cursor-pointer transition-all duration-200',
                   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20',
-                  'transition-all duration-200',
+                  !isSelected && 'hover:bg-white/10',
                   isSelected && 'bg-primary/10 hover:bg-primary/15',
                 )}
                 aria-pressed={isSelected}

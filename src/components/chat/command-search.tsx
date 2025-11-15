@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
-import { Dialog, DialogBody, DialogContent } from '@/components/ui/dialog';
+import { Dialog, DialogBody, DialogContent, DialogHeader } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useThreadsQuery } from '@/hooks/queries/chat';
 import { useDebouncedValue } from '@/hooks/utils';
@@ -213,7 +213,7 @@ export function CommandSearch({ isOpen, onClose }: CommandSearchProps) {
         className="max-w-2xl p-0 gap-0"
       >
         {/* Fixed Header Section */}
-        <DialogBody glass className="flex items-center gap-3 px-6 py-4 shrink-0">
+        <DialogHeader glass className="!flex-row items-center gap-3">
           <Search className="size-5 text-muted-foreground" />
           <input
             ref={searchInputRef}
@@ -229,7 +229,7 @@ export function CommandSearch({ isOpen, onClose }: CommandSearchProps) {
           >
             <X className="size-4" />
           </button>
-        </DialogBody>
+        </DialogHeader>
 
         {/* Scrollable Results Section */}
         <DialogBody glass className="h-[400px] border-t border-white/5">
