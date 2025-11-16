@@ -218,7 +218,9 @@ export function ModelSelectionModal({
       <DialogContent
         glass={true}
         className={cn(
-          'overflow-hidden gap-0 p-0 max-h-[85vh] max-w-[768px] w-[calc(100vw-2.5rem)] flex flex-col',
+          'overflow-hidden gap-0 p-0 flex flex-col',
+          'max-h-[85vh] sm:max-h-[90vh]',
+          'max-w-[768px] w-[calc(100vw-1rem)] sm:w-[calc(100vw-2.5rem)]',
           className,
         )}
       >
@@ -230,7 +232,7 @@ export function ModelSelectionModal({
           </DialogHeader>
 
           {/* Search Input */}
-          <DialogBody glass className="py-4">
+          <DialogBody glass className="py-3 sm:py-4">
             <div className="relative w-full">
               <input
                 ref={searchInputRef}
@@ -239,11 +241,11 @@ export function ModelSelectionModal({
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
                 className={cn(
-                  'flex h-9 w-full rounded-md border border-input bg-transparent py-1 text-sm shadow-xs transition-[color,box-shadow] outline-none',
+                  'flex h-10 sm:h-9 w-full rounded-lg sm:rounded-md border border-input bg-transparent py-2 sm:py-1 text-base sm:text-sm shadow-xs transition-[color,box-shadow] outline-none',
                   'placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground dark:bg-input/30',
                   'focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]',
                   'disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50',
-                  searchQuery ? 'pl-3 pr-9' : 'px-3',
+                  searchQuery ? 'pl-3 pr-10 sm:pr-9' : 'px-3',
                 )}
               />
               {searchQuery && (
@@ -267,7 +269,7 @@ export function ModelSelectionModal({
         {/* Scrollable Model List */}
         <ScrollArea
           className="border-t border-white/5 bg-black/30 w-full overflow-hidden"
-          style={{ height: 'clamp(300px, 50vh, 500px)' }}
+          style={{ height: 'clamp(250px, 60vh, 600px)' }}
         >
           <div className="w-full">
             {groupedModels.length === 0
@@ -279,10 +281,10 @@ export function ModelSelectionModal({
               : groupedModels.map((group, groupIndex) => (
                   <div key={group.title} className="w-full">
                     {/* Group Header - Sticky */}
-                    <div className="sticky top-0 z-10 w-full bg-black/80 backdrop-blur-[60px] px-4 sm:px-5 md:px-6 py-2.5 border-b border-white/5">
-                      <div className="flex items-center justify-between gap-2">
+                    <div className="sticky top-0 z-10 w-full bg-black/90 backdrop-blur-xl px-3 sm:px-4 md:px-6 py-2 sm:py-2.5 border-b border-white/10">
+                      <div className="flex items-center justify-between gap-1.5 sm:gap-2">
                         <span className={cn(
-                          'text-xs font-semibold truncate',
+                          'text-xs sm:text-xs font-semibold truncate',
                           groupIndex === 0 && 'text-foreground',
                           groupIndex === 1 && 'text-accent-foreground',
                           groupIndex > 1 && 'text-muted-foreground uppercase tracking-wider',
@@ -291,22 +293,22 @@ export function ModelSelectionModal({
                           {group.title}
                         </span>
                         {groupIndex === 0 && selectedCount > 0 && (
-                          <div className="flex items-center gap-2 shrink-0">
-                            <Badge variant="default" className="text-[10px] px-1.5 py-0 h-4">
+                          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+                            <Badge variant="default" className="text-[9px] sm:text-[10px] px-1.5 py-0 h-4">
                               {selectedCount}
                               /
                               {maxModels}
                             </Badge>
-                            <span className="text-[10px] opacity-70 hidden sm:inline whitespace-nowrap">{tModels('dragToReorder')}</span>
+                            <span className="text-[9px] sm:text-[10px] opacity-70 hidden sm:inline whitespace-nowrap">{tModels('dragToReorder')}</span>
                           </div>
                         )}
                         {groupIndex === 1 && (
-                          <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 shrink-0">
+                          <Badge variant="secondary" className="text-[9px] sm:text-[10px] px-1.5 py-0 h-4 shrink-0">
                             {tModels('topModels')}
                           </Badge>
                         )}
                         {groupIndex > 1 && (
-                          <span className="text-[10px] opacity-80 shrink-0 whitespace-nowrap">
+                          <span className="text-[9px] sm:text-[10px] opacity-80 shrink-0 whitespace-nowrap">
                             {group.models.length}
                             {' '}
                             {group.models.length === 1 ? tModels('model') : tModels('models')}
@@ -326,7 +328,7 @@ export function ModelSelectionModal({
                               const otherModels = orderedModels.filter(om => om.participant === null);
                               onReorder([...reordered, ...otherModels]);
                             }}
-                            className="flex flex-col gap-2 w-full px-4 sm:px-5 md:px-6 py-2"
+                            className="flex flex-col gap-1.5 sm:gap-2 w-full px-2 sm:px-4 md:px-6 py-1.5 sm:py-2"
                           >
                             {group.models.map(orderedModel => (
                               <ModelItem
@@ -347,7 +349,7 @@ export function ModelSelectionModal({
                           </Reorder.Group>
                         )
                       : (
-                          <div className="flex flex-col gap-2 w-full px-4 sm:px-5 md:px-6 py-2">
+                          <div className="flex flex-col gap-1.5 sm:gap-2 w-full px-2 sm:px-4 md:px-6 py-1.5 sm:py-2">
                             {group.models.map(orderedModel => (
                               <ModelItem
                                 key={orderedModel.model.id}
