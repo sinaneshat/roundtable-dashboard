@@ -132,7 +132,7 @@ export function ModelItem({
                 </Badge>
               )}
             </div>
-            <div className="text-[11px] sm:text-xs text-muted-foreground truncate w-full min-w-0 hidden sm:block">
+            <div className="text-[11px] sm:text-xs text-muted-foreground line-clamp-2 sm:line-clamp-1 w-full min-w-0">
               {model.description}
             </div>
           </div>
