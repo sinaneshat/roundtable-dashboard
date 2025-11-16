@@ -509,10 +509,14 @@ export const GeneratedSearchQuerySchema = z.object({
   query: z.string().describe('The generated search query'),
   rationale: z.string().describe('Explanation for why this query will help answer the user question'),
   searchDepth: WebSearchDepthSchema.describe('Recommended search depth for this query'),
-  // Additional fields from AI generation (optional for backward compatibility)
+  // ✅ TAVILY-STYLE: AI-driven advanced parameters
   complexity: WebSearchComplexitySchema.optional().describe('Query complexity level'),
-  sourceCount: z.number().min(1).max(5).optional().describe('Number of sources to extract'),
+  sourceCount: z.number().min(1).max(10).optional().describe('Optimal number of sources to extract (1-10, AI-determined)'),
   requiresFullContent: z.boolean().optional().describe('Whether full content extraction is needed'),
+  chunksPerSource: z.number().int().min(1).max(3).optional().describe('Number of content chunks per source for deep research (1-3)'),
+  topic: WebSearchTopicSchema.optional().describe('Auto-detected topic category'),
+  timeRange: WebSearchTimeRangeSchema.optional().describe('Auto-detected time relevance'),
+  needsAnswer: z.union([z.boolean(), WebSearchAnswerModeSchema]).optional().describe('Whether to generate AI answer summary (boolean or mode: basic/advanced)'),
   analysis: z.string().optional().describe('Analysis of user intent and information needs'),
 }).openapi('GeneratedSearchQuery');
 

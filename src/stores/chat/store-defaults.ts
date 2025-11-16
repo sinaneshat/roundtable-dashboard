@@ -29,7 +29,7 @@ export const FORM_DEFAULTS = {
   inputValue: '',
   selectedMode: 'analyzing' as ChatModeId | null, // ✅ FIX: Default to 'analyzing' mode
   selectedParticipants: [] as ParticipantConfig[],
-  enableWebSearch: false,
+  enableWebSearch: false, // ⚠️ NOTE: This is ONLY used for new chats - thread screen syncs from thread.enableWebSearch
 } as const;
 
 // ============================================================================

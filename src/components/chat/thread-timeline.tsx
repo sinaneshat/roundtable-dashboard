@@ -115,11 +115,13 @@ export function ThreadTimeline({
 
   // ✅ VIRTUALIZATION: Window-level virtualization with streaming protection
   // Reduces DOM nodes from ~100+ messages to ~10-15 visible items for performance
+  // ✅ RELAXED OVERSCAN: Increased from 5 to 15 to prevent text collision during fast scrolling
+  const ESTIMATE_SIZE = 400; // Estimated height per timeline item
   const { virtualItems, totalSizeWithPadding, measureElement } = useVirtualizedTimeline({
     timelineItems,
     scrollContainerId,
-    estimateSize: 400,
-    overscan: 5, // Increased overscan for smoother scrolling during streams
+    estimateSize: ESTIMATE_SIZE,
+    overscan: 15, // ✅ INCREASED: 15 items above/below viewport prevents overlapping during fast scrolls
     bottomPadding: 200,
     streamingRounds, // Pass streaming rounds to prevent unmounting during streams
   });
@@ -156,6 +158,8 @@ export function ThreadTimeline({
               left: 0,
               width: '100%',
               transform: `translateY(${virtualItem.start}px)`,
+              minHeight: `${ESTIMATE_SIZE * 0.5}px`, // ✅ Minimum height prevents collapse during fast scrolls
+              paddingBottom: '8px', // ✅ Gap between items prevents text collision
             }}
           >
             {item.type === 'changelog' && item.data.length > 0 && (

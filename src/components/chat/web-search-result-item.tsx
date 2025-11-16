@@ -14,6 +14,7 @@ import {
 import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 
+import { UNKNOWN_DOMAIN, WebSearchContentTypes } from '@/api/core/enums';
 import type { WebSearchResultItemProps } from '@/api/routes/chat/schema';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
@@ -26,13 +27,13 @@ import { buildGoogleFaviconUrl, safeExtractDomain } from '@/lib/utils';
 // Helper function to get content type icon
 function getContentTypeIcon(contentType?: string) {
   switch (contentType) {
-    case 'news':
+    case WebSearchContentTypes.NEWS:
       return Newspaper;
-    case 'article':
+    case WebSearchContentTypes.ARTICLE:
       return FileText;
-    case 'research':
+    case WebSearchContentTypes.RESEARCH:
       return BookOpen;
-    case 'blog':
+    case WebSearchContentTypes.BLOG:
       return TrendingUp;
     default:
       return Globe;
@@ -51,7 +52,7 @@ export function WebSearchResultItem({
   const [isExpanded, setIsExpanded] = useState(false);
 
   // ✅ TYPE-SAFE: Extract domain with safe URL parsing (no throws)
-  const domain = result.domain || safeExtractDomain(result.url, 'unknown');
+  const domain = result.domain || safeExtractDomain(result.url, UNKNOWN_DOMAIN);
   const cleanDomain = domain.replace('www.', '');
   const fallbackFaviconUrl = buildGoogleFaviconUrl(cleanDomain, 64);
 

@@ -492,6 +492,7 @@ export default function ChatOverviewScreen() {
                       src={BRAND.logos.main}
                       alt={BRAND.name}
                       fill
+                      sizes="(max-width: 480px) 80px, (max-width: 640px) 112px, (max-width: 768px) 128px, (max-width: 1024px) 128px, 144px"
                       className="object-contain relative z-10"
                       priority
                     />

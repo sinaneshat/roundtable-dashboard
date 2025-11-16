@@ -281,10 +281,17 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
       const threadId = threadState.createdThreadId;
 
       if (slug && threadId) {
-        // Invalidate analyses query before navigation
-        queryClient.invalidateQueries({
-          queryKey: queryKeys.threads.analyses(threadId),
-        });
+        // ✅ FIX: Don't invalidate analyses query before navigation
+        // The orchestrator on thread screen will naturally sync server data with store
+        // Premature invalidation causes race condition where:
+        // 1. Query cache gets cleared
+        // 2. Thread screen mounts and orchestrator fetches
+        // 3. Server returns incomplete data (analysis still being persisted)
+        // 4. Incomplete server data overwrites complete client data in store
+        // 5. Accordion content disappears (analysisData becomes null)
+        //
+        // The merge logic in useThreadAnalysesQuery already preserves cached analyses
+        // that aren't on server yet, so invalidation is unnecessary and harmful here.
 
         startTransition(() => {
           queueMicrotask(() => {

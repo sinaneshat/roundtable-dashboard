@@ -17,7 +17,6 @@ import { getQueryClient } from '@/lib/data/query-client';
 import { queryKeys } from '@/lib/data/query-keys';
 import { cn } from '@/lib/ui/cn';
 
-import { PreSearchPanel } from './pre-search-panel';
 import { PreSearchStream } from './pre-search-stream';
 
 type PreSearchCardProps = {
@@ -58,6 +57,12 @@ export function PreSearchCard({
     }
   }, [streamingRoundNumber, isLatest, preSearch.roundNumber]);
 
+  // Stream start callback: Update status to STREAMING when backend starts processing
+  // This ensures the UI reflects the actual streaming state and maintains loading indicator visibility
+  const handleStreamStart = useCallback(() => {
+    updatePreSearchStatus(preSearch.roundNumber, AnalysisStatuses.STREAMING);
+  }, [preSearch.roundNumber, updatePreSearchStatus]);
+
   // Stream completion callback: Update store and invalidate queries
   // Pattern from round-analysis-card.tsx:37-47 (onStreamComplete prop)
   const handleStreamComplete = useCallback((completedData?: PreSearchDataPayload) => {
@@ -77,7 +82,6 @@ export function PreSearchCard({
 
   const isStreamingOrPending = preSearch.status === AnalysisStatuses.PENDING || preSearch.status === AnalysisStatuses.STREAMING;
   const hasError = preSearch.status === AnalysisStatuses.FAILED;
-  const isCompleted = preSearch.status === AnalysisStatuses.COMPLETE;
 
   // Disable interaction during streaming
   // Pattern from round-analysis-card.tsx:91-98
@@ -127,18 +131,14 @@ export function PreSearchCard({
 
         <ChainOfThoughtContent>
           <div className="space-y-4">
-            {/* Streaming state - show PreSearchStream with callbacks */}
-            {isStreamingOrPending && (
+            {/* PreSearchStream handles all states: PENDING, STREAMING, and COMPLETE */}
+            {!hasError && (
               <PreSearchStream
                 threadId={threadId}
                 preSearch={preSearch}
+                onStreamStart={handleStreamStart}
                 onStreamComplete={handleStreamComplete}
               />
-            )}
-
-            {/* Completed state - show PreSearchPanel with data from DB */}
-            {isCompleted && preSearch.searchData && (
-              <PreSearchPanel preSearch={preSearch.searchData} />
             )}
 
             {/* Failed state */}

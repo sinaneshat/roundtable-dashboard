@@ -46,7 +46,6 @@ declare namespace Cloudflare {
 		UPLOADS_R2_BUCKET: R2Bucket;
 		DB: D1Database;
 		NEXT_TAG_CACHE_D1: D1Database;
-		TITLE_GENERATION_QUEUE: Queue;
 		BROWSER: Fetcher;
 		AI: Ai;
 		ASSETS: Fetcher;

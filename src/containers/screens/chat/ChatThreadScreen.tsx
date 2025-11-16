@@ -540,6 +540,23 @@ export default function ChatThreadScreen({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [thread.id]);
 
+  // ✅ CRITICAL FIX: Sync form state when thread properties update
+  // When web search toggle changes mid-conversation and PATCH completes,
+  // the thread object updates but form state stays stale
+  // This causes subsequent rounds to use old form state instead of DB state
+  useEffect(() => {
+    // Skip if no pending config changes (form is already in sync)
+    if (!state.flags.hasPendingConfigChanges) {
+      // Sync form state with thread state when thread updates
+      if (thread?.mode) {
+        setSelectedMode(thread.mode as ChatModeId);
+      }
+      setEnableWebSearch(thread.enableWebSearch || false);
+    }
+    // Only sync when thread properties change, not on every render
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [thread.enableWebSearch, thread.mode, state.flags.hasPendingConfigChanges]);
+
   // ✅ REMOVED: Virtualization removed, so streamingRoundNumber management not needed
   // Components stay mounted regardless of streaming state
   const handlePromptSubmit = useCallback(

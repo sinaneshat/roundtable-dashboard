@@ -97,19 +97,87 @@ export function buildWebSearchQueryPrompt(userMessage: string): string {
 
 TRANSFORM this question into a search-engine-optimized query following the transformation rules above.
 
-Generate a JSON object with:
+Generate a JSON object with ALL fields for MAXIMUM Tavily-style search capabilities:
+
+**REQUIRED FIELDS**:
 - query: ONE optimized search query (string) - MUST be transformed from the user's natural language question into keyword-based search terms
 - complexity: "BASIC", "MODERATE", or "DEEP" (string)
 - rationale: Why this search strategy and transformation is optimal (string, min 10 chars)
-- sourceCount: Number of sources needed 1-5 (number)
-- requiresFullContent: Whether full page content extraction is needed (boolean) - DEFAULT to false unless research/analysis requires deep content
 - analysis: Analysis of user intent and information needs (string, min 10 chars)
 
-IMPORTANT RULES:
+**ADVANCED TAVILY PARAMETERS** (Choose optimal values):
+- sourceCount: Number of sources needed 1-10 (number) - Scale based on query complexity
+  * BASIC: 2-3 sources
+  * MODERATE: 3-5 sources
+  * DEEP: 5-10 sources
+
+- searchDepth: "basic" or "advanced" (string)
+  * "basic": Quick search, snippets only
+  * "advanced": Deep content extraction with full text
+
+- requiresFullContent: Whether full page content extraction is needed (boolean)
+  * true for: research, analysis, comparisons, technical docs, detailed guides
+  * false for: facts, news, simple questions, definitions
+
+- chunksPerSource: Number of content chunks per source 1-3 (number)
+  * 1: Single best excerpt per source (quick research)
+  * 2: Two key sections per source (moderate depth)
+  * 3: Multiple excerpts for comprehensive analysis
+
+- topic: Topic category (string, optional) - Choose from:
+  * "general", "news", "finance", "science", "technology", "health", "sports", "entertainment"
+
+- timeRange: Time relevance (string, optional) - Choose from:
+  * "day" (24 hours), "week", "month", "year", "anytime"
+  * Use "day"/"week" for: current events, trending topics, news
+  * Use "month"/"year" for: recent developments, 2025 content
+  * Use "anytime" for: timeless concepts, historical info
+
+- needsAnswer: AI-generated answer summary (string or boolean)
+  * "basic": Quick summary answer
+  * "advanced": Comprehensive synthesis with citations
+  * false: No answer generation (raw results only)
+  * DEFAULT to "advanced" for research questions, "basic" for simple queries
+
+**OPTIMIZATION RULES**:
 1. The "query" field should NOT be the same as the user's question. Transform it into search-optimized keywords.
-2. Set requiresFullContent to TRUE only for: research papers, detailed analysis, comparing multiple sources, technical documentation
-3. Set requiresFullContent to FALSE for: quick facts, simple questions, news, definitions, basic information
-4. Prefer BASIC search (requiresFullContent: false) unless the user explicitly needs deep analysis
+2. Scale sourceCount based on complexity: more sources = better coverage
+3. Use searchDepth "advanced" for research/analysis, "basic" for quick lookups
+4. Set chunksPerSource higher (2-3) for comprehensive research
+5. Auto-detect topic from user question (tech, news, science, etc.)
+6. Auto-detect timeRange if user mentions "latest", "recent", "current", "2025", etc.
+7. Generate AI answers ("basic" or "advanced") for most queries - helps users quickly understand results
+
+**EXAMPLES**:
+User: "What are Van Gogh paintings like?"
+{
+  "query": "Van Gogh paintings style characteristics famous works",
+  "complexity": "MODERATE",
+  "rationale": "Art history query needs multiple authoritative sources",
+  "sourceCount": 4,
+  "searchDepth": "advanced",
+  "requiresFullContent": true,
+  "chunksPerSource": 2,
+  "topic": "entertainment",
+  "timeRange": "anytime",
+  "needsAnswer": "advanced",
+  "analysis": "User seeks understanding of Van Gogh's artistic style and notable works"
+}
+
+User: "Latest AI developments 2025"
+{
+  "query": "AI developments 2025 latest breakthroughs artificial intelligence",
+  "complexity": "DEEP",
+  "rationale": "Current tech research needs comprehensive recent sources",
+  "sourceCount": 7,
+  "searchDepth": "advanced",
+  "requiresFullContent": true,
+  "chunksPerSource": 3,
+  "topic": "technology",
+  "timeRange": "month",
+  "needsAnswer": "advanced",
+  "analysis": "User wants comprehensive overview of cutting-edge AI progress"
+}
 
 Return ONLY the JSON object, no additional text.`;
 }

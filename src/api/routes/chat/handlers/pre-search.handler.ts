@@ -25,7 +25,7 @@ import { ulid } from 'ulid';
 import { createError } from '@/api/common/error-handling';
 import { verifyThreadOwnership } from '@/api/common/permissions';
 import { createHandler, Responses, STREAMING_CONFIG } from '@/api/core';
-import { AnalysisStatuses, WebSearchComplexities, WebSearchDepths } from '@/api/core/enums';
+import { AnalysisStatuses, PreSearchSseEvents, WebSearchComplexities, WebSearchDepths } from '@/api/core/enums';
 import { IdParamSchema, ThreadRoundParamSchema } from '@/api/core/schemas';
 import ErrorMetadataService from '@/api/services/error-metadata.service';
 import { simpleOptimizeQuery } from '@/api/services/query-optimizer.service';
@@ -167,7 +167,7 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
 
         // Send start event
         await stream.writeSSE({
-          event: 'start',
+          event: PreSearchSseEvents.START,
           data: JSON.stringify({
             timestamp: Date.now(),
             userQuery: body.userQuery,
@@ -206,7 +206,7 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
 
             if (hasNewQuery || hasNewRationale) {
               await stream.writeSSE({
-                event: 'query',
+                event: PreSearchSseEvents.QUERY,
                 data: JSON.stringify({
                   timestamp: Date.now(),
                   query: partialQuery.query || lastSentQuery || '',
@@ -257,7 +257,7 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
 
           // Notify frontend about fallback with optimized query
           await stream.writeSSE({
-            event: 'query',
+            event: PreSearchSseEvents.QUERY,
             data: JSON.stringify({
               timestamp: Date.now(),
               query: generatedQuery.query, // ✅ Uses optimized query, not raw user input
@@ -282,7 +282,7 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
           result = searchCache.get(generatedQuery.query);
           if (result) {
             await stream.writeSSE({
-              event: 'result',
+              event: PreSearchSseEvents.RESULT,
               data: JSON.stringify({
                 timestamp: Date.now(),
                 query: result.query,
@@ -302,7 +302,7 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
 
             // Send initial "searching" state
             await stream.writeSSE({
-              event: 'result',
+              event: PreSearchSseEvents.RESULT,
               data: JSON.stringify({
                 timestamp: Date.now(),
                 query: generatedQuery.query,
@@ -315,23 +315,34 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
               }),
             });
 
-            // ✅ IMPROVED: Perform web search and get complete result
-            // NOTE: Current architecture fetches all sources via Promise.all()
-            // Future improvement: Modify performWebSearch to yield sources as they arrive
+            // ✅ TAVILY-STYLE: Use ALL AI-driven parameters for maximum search capability
+            // AI dynamically chooses: source count, depth, chunks, topic, time range, answer mode
+            // This provides Tavily-level comprehensive search with intelligent optimization
             result = await performWebSearch(
               {
                 query: generatedQuery.query,
-                maxResults: generatedQuery.sourceCount ?? 3,
-                searchDepth: (generatedQuery.requiresFullContent ?? false) ? WebSearchDepths.ADVANCED : WebSearchDepths.BASIC,
-                chunksPerSource: 1,
-                includeImages: false,
-                includeImageDescriptions: false,
-                includeAnswer: false,
+                // ✅ AI-DRIVEN: Dynamic source count (1-10) based on query complexity
+                maxResults: generatedQuery.sourceCount ?? 5, // Default to 5 for better coverage
+                // ✅ AI-DRIVEN: Search depth from AI analysis
+                searchDepth: generatedQuery.searchDepth ?? WebSearchDepths.ADVANCED,
+                // ✅ AI-DRIVEN: Dynamic chunks per source for research depth
+                chunksPerSource: generatedQuery.chunksPerSource ?? 2,
+                // ✅ TAVILY FEATURES: Images with AI descriptions
+                includeImages: true,
+                includeImageDescriptions: true,
+                // ✅ AI-DRIVEN: Answer generation mode from AI decision
+                includeAnswer: generatedQuery.needsAnswer ?? 'advanced',
+                // ✅ TAVILY FEATURES: Favicons and raw content
                 includeFavicon: true,
+                includeRawContent: generatedQuery.requiresFullContent ?? true ? 'markdown' : false,
+                // ✅ AI-DRIVEN: Topic and time range auto-detection
+                topic: generatedQuery.topic,
+                timeRange: generatedQuery.timeRange,
+                // ✅ DISABLE: Let AI decide all parameters instead of auto-detect
                 autoParameters: false,
               },
               c.env,
-              generatedQuery.complexity ?? WebSearchComplexities.BASIC,
+              generatedQuery.complexity ?? WebSearchComplexities.MODERATE,
             );
             const searchDuration = performance.now() - searchStartTime;
 
@@ -343,7 +354,7 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
             if (result.results.length > 0) {
               for (let i = 0; i < result.results.length; i++) {
                 await stream.writeSSE({
-                  event: 'result',
+                  event: PreSearchSseEvents.RESULT,
                   data: JSON.stringify({
                     timestamp: Date.now(),
                     query: result.query,
@@ -366,7 +377,7 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
 
             // Send final result without answer (will stream answer separately)
             await stream.writeSSE({
-              event: 'result',
+              event: PreSearchSseEvents.RESULT,
               data: JSON.stringify({
                 timestamp: Date.now(),
                 query: result.query,
@@ -381,7 +392,7 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
           } catch (error) {
             result = null;
             await stream.writeSSE({
-              event: 'result',
+              event: PreSearchSseEvents.RESULT,
               data: JSON.stringify({
                 timestamp: Date.now(),
                 query: generatedQuery.query,
@@ -428,7 +439,7 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
               // Send buffered chunks every 100ms
               if (Date.now() - lastSendTime > CHUNK_INTERVAL) {
                 await stream.writeSSE({
-                  event: 'answer_chunk',
+                  event: PreSearchSseEvents.ANSWER_CHUNK,
                   data: JSON.stringify({ chunk: buffer }),
                 });
                 buffer = '';
@@ -439,14 +450,14 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
             // Send remaining buffer
             if (buffer) {
               await stream.writeSSE({
-                event: 'answer_chunk',
+                event: PreSearchSseEvents.ANSWER_CHUNK,
                 data: JSON.stringify({ chunk: buffer }),
               });
             }
 
             // Send completion event with full answer
             await stream.writeSSE({
-              event: 'answer_complete',
+              event: PreSearchSseEvents.ANSWER_COMPLETE,
               data: JSON.stringify({
                 answer: finalAnswer,
                 mode: answerMode,
@@ -456,7 +467,7 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
           } catch (answerError) {
             // ✅ GRACEFUL DEGRADATION: Continue without answer on streaming failure
             await stream.writeSSE({
-              event: 'answer_error',
+              event: PreSearchSseEvents.ANSWER_ERROR,
               data: JSON.stringify({
                 error: 'Failed to generate answer',
                 message: answerError instanceof Error ? answerError.message : 'Please try again',
@@ -470,7 +481,7 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
 
         // Send complete event
         await stream.writeSSE({
-          event: 'complete',
+          event: PreSearchSseEvents.COMPLETE,
           data: JSON.stringify({
             timestamp: Date.now(),
             totalSearches: 1,
@@ -540,7 +551,7 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
 
           // Send final done event with complete data
           await stream.writeSSE({
-            event: 'done',
+            event: PreSearchSseEvents.DONE,
             data: JSON.stringify(searchData),
           });
         } else {
@@ -560,7 +571,7 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
             .where(eq(tables.chatPreSearch.id, existingSearch.id));
 
           await stream.writeSSE({
-            event: 'failed',
+            event: PreSearchSseEvents.FAILED,
             data: JSON.stringify({
               error: errorMetadata.errorMessage || 'No successful searches completed',
               errorCategory: errorMetadata.errorCategory,
@@ -585,7 +596,7 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
           .where(eq(tables.chatPreSearch.id, existingSearch.id));
 
         await stream.writeSSE({
-          event: 'failed',
+          event: PreSearchSseEvents.FAILED,
           data: JSON.stringify({
             error: errorMetadata.errorMessage || (error instanceof Error ? error.message : 'Pre-search failed'),
             errorCategory: errorMetadata.errorCategory,

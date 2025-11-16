@@ -312,9 +312,7 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
         message: error instanceof Error ? error.message : String(error),
         stack: error instanceof Error ? error.stack : undefined,
         threadId,
-        userId: user.id,
       });
-      // Continue with default title from thread creation
     }
 
     return Responses.ok(c, {

@@ -413,10 +413,18 @@ export const WebSearchDepths = {
 } as const;
 
 // ============================================================================
+// WEB SEARCH CONSTANTS
+// ============================================================================
+
+export const UNKNOWN_DOMAIN = 'unknown' as const;
+
+// ============================================================================
 // WEB SEARCH CONTENT TYPE
 // ============================================================================
 
-export const WEB_SEARCH_CONTENT_TYPES = ['article', 'comparison', 'guide', 'data', 'news', 'general'] as const;
+export const WEB_SEARCH_CONTENT_TYPES = ['article', 'comparison', 'guide', 'data', 'news', 'blog', 'research', 'general'] as const;
+
+export const DEFAULT_WEB_SEARCH_CONTENT_TYPE: WebSearchContentType = 'general';
 
 export const WebSearchContentTypeSchema = z.enum(WEB_SEARCH_CONTENT_TYPES).openapi({
   description: 'Content type classification for search results',
@@ -424,6 +432,17 @@ export const WebSearchContentTypeSchema = z.enum(WEB_SEARCH_CONTENT_TYPES).opena
 });
 
 export type WebSearchContentType = z.infer<typeof WebSearchContentTypeSchema>;
+
+export const WebSearchContentTypes = {
+  ARTICLE: 'article' as const,
+  COMPARISON: 'comparison' as const,
+  GUIDE: 'guide' as const,
+  DATA: 'data' as const,
+  NEWS: 'news' as const,
+  BLOG: 'blog' as const,
+  RESEARCH: 'research' as const,
+  GENERAL: 'general' as const,
+} as const;
 
 // ============================================================================
 // WEB SEARCH TOPIC
@@ -694,6 +713,31 @@ export const HttpMethods = {
   PATCH: 'PATCH' as const,
   HEAD: 'HEAD' as const,
   OPTIONS: 'OPTIONS' as const,
+} as const;
+
+// ============================================================================
+// PRE-SEARCH SSE EVENT NAMES
+// ============================================================================
+
+export const PRE_SEARCH_SSE_EVENTS = ['start', 'query', 'result', 'answer_chunk', 'answer_complete', 'answer_error', 'complete', 'done', 'failed'] as const;
+
+export const PreSearchSseEventSchema = z.enum(PRE_SEARCH_SSE_EVENTS).openapi({
+  description: 'Server-Sent Events (SSE) event names for pre-search streaming',
+  example: 'query',
+});
+
+export type PreSearchSseEvent = z.infer<typeof PreSearchSseEventSchema>;
+
+export const PreSearchSseEvents = {
+  START: 'start' as const,
+  QUERY: 'query' as const,
+  RESULT: 'result' as const,
+  ANSWER_CHUNK: 'answer_chunk' as const,
+  ANSWER_COMPLETE: 'answer_complete' as const,
+  ANSWER_ERROR: 'answer_error' as const,
+  COMPLETE: 'complete' as const,
+  DONE: 'done' as const,
+  FAILED: 'failed' as const,
 } as const;
 
 // ============================================================================

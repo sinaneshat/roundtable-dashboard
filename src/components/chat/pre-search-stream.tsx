@@ -1,13 +1,14 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { Search, Sparkles } from 'lucide-react';
+import { Search } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { memo, useEffect, useRef, useState } from 'react';
 
-import { AnalysisStatuses, WebSearchDepths } from '@/api/core/enums';
+import { AnalysisStatuses, PreSearchSseEvents, WebSearchDepths } from '@/api/core/enums';
 import type { PreSearchDataPayload, StoredPreSearch } from '@/api/routes/chat/schema';
 import { ChatLoading } from '@/components/chat/chat-loading';
+import { WebSearchImageGallery } from '@/components/chat/web-search-image-gallery';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { useBoolean } from '@/hooks/utils';
@@ -171,9 +172,9 @@ function PreSearchStreamComponent({
             } else if (line === '' && currentEvent && currentData) {
               // Process complete event
               try {
-                if (currentEvent === 'start') {
+                if (currentEvent === PreSearchSseEvents.START) {
                   onStreamStartRef.current?.();
-                } else if (currentEvent === 'query') {
+                } else if (currentEvent === PreSearchSseEvents.QUERY) {
                   const queryData = JSON.parse(currentData);
                   queriesMap.set(queryData.index, {
                     query: queryData.query,
@@ -186,7 +187,7 @@ function PreSearchStreamComponent({
                   const queries = Array.from(queriesMap.values()).sort((a, b) => a.index - b.index);
                   const results = Array.from(resultsMap.values());
                   setPartialSearchData({ queries, results });
-                } else if (currentEvent === 'result') {
+                } else if (currentEvent === PreSearchSseEvents.RESULT) {
                   const resultData = JSON.parse(currentData);
                   resultsMap.set(resultData.index, {
                     query: resultData.query,
@@ -198,11 +199,11 @@ function PreSearchStreamComponent({
                   const queries = Array.from(queriesMap.values()).sort((a, b) => a.index - b.index);
                   const results = Array.from(resultsMap.values());
                   setPartialSearchData({ queries, results });
-                } else if (currentEvent === 'done') {
-                  const finalData = JSON.parse(currentData) as PreSearchDataPayload;
+                } else if (currentEvent === PreSearchSseEvents.DONE) {
+                  const finalData = JSON.parse(currentData);
                   setPartialSearchData(finalData);
                   onStreamCompleteRef.current?.(finalData);
-                } else if (currentEvent === 'failed') {
+                } else if (currentEvent === PreSearchSseEvents.FAILED) {
                   const errorData = JSON.parse(currentData);
                   setError(new Error(errorData.error || 'Pre-search failed'));
                 }
@@ -300,6 +301,12 @@ function PreSearchStreamComponent({
     (displayData.queries && displayData.queries.length > 0)
     || (displayData.results && displayData.results.length > 0)
   );
+
+  // For COMPLETE status, only show if there are actual results (not just queries)
+  const hasResults = displayData && displayData.results && displayData.results.length > 0;
+  if (preSearch.status === AnalysisStatuses.COMPLETE && !hasResults) {
+    return null;
+  }
 
   // Show loading indicator for PENDING/STREAMING with no stream data yet
   if ((preSearch.status === AnalysisStatuses.PENDING || preSearch.status === AnalysisStatuses.STREAMING) && !hasData) {
@@ -408,18 +415,63 @@ function PreSearchStreamComponent({
               </div>
             )}
 
+            {/* Image Gallery - Show all images from search results */}
+            {hasResults && (
+              <div className="pl-6">
+                <WebSearchImageGallery results={searchResult.results} />
+              </div>
+            )}
+
+            {/* Search Statistics */}
+            {hasResults && (() => {
+              const totalImages = searchResult.results.reduce(
+                (sum, r) => sum + (r.images?.length || 0) + (r.metadata?.imageUrl ? 1 : 0),
+                0,
+              );
+              const totalWords = searchResult.results.reduce(
+                (sum, r) => sum + (r.metadata?.wordCount || 0),
+                0,
+              );
+              const resultsWithContent = searchResult.results.filter(r => r.fullContent);
+              const hasMetadata = totalImages > 0 || totalWords > 0 || resultsWithContent.length > 0;
+
+              if (!hasMetadata)
+                return null;
+
+              return (
+                <div className="pl-6 flex items-center gap-2 flex-wrap text-xs text-muted-foreground">
+                  {totalImages > 0 && (
+                    <Badge variant="outline" className="text-xs">
+                      {totalImages}
+                      {' '}
+                      {totalImages === 1 ? 'image' : 'images'}
+                    </Badge>
+                  )}
+                  {totalWords > 0 && (
+                    <Badge variant="outline" className="text-xs">
+                      {totalWords.toLocaleString()}
+                      {' '}
+                      words extracted
+                    </Badge>
+                  )}
+                  {resultsWithContent.length > 0 && (
+                    <Badge variant="outline" className="text-xs bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20">
+                      {resultsWithContent.length}
+                      {' '}
+                      full content
+                    </Badge>
+                  )}
+                </div>
+              );
+            })()}
+
             {/* Summary */}
             {hasResult && searchResult.answer && (
-              <div className="pl-6">
-                <div className="flex items-start gap-2 p-3 rounded-lg bg-primary/5 border border-primary/10">
-                  <Sparkles className="size-4 text-primary/70 mt-0.5 flex-shrink-0" />
-                  <div className="flex-1 min-w-0 space-y-1">
-                    <p className="text-xs font-medium text-foreground/90">Summary</p>
-                    <p className="text-xs text-muted-foreground leading-relaxed">
-                      {searchResult.answer}
-                    </p>
-                  </div>
-                </div>
+              <div className="pl-6 space-y-1">
+                <p className="text-xs font-medium text-foreground/90">Summary</p>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  {searchResult.answer}
+                </p>
               </div>
             )}
 

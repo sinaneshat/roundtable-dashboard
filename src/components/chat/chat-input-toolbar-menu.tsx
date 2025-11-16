@@ -2,7 +2,7 @@
 
 import { ChevronDown, MessagesSquare, Sparkles } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { memo } from 'react';
+import { memo, useEffect, useState } from 'react';
 
 import type { ChatMode } from '@/api/core/enums';
 import type { EnhancedModelResponse } from '@/api/routes/models/schema';
@@ -52,11 +52,19 @@ export const ChatInputToolbarMenu = memo(({
 }: ChatInputToolbarMenuProps) => {
   const t = useTranslations();
   const isDesktop = useMediaQuery('(min-width: 768px)');
+  const [mounted, setMounted] = useState(false);
 
   const currentMode = getChatModeById(selectedMode);
   const ModeIcon = currentMode?.icon;
 
-  if (isDesktop) {
+  // Prevent hydration mismatch by only showing responsive behavior after mount
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect, react-hooks-extra/no-direct-set-state-in-use-effect -- Required pattern to prevent SSR hydration mismatch
+    setMounted(true);
+  }, []);
+
+  // After mount, show desktop version
+  if (mounted && isDesktop) {
     return (
       <div className="flex items-center gap-2">
         <Button
@@ -95,7 +103,7 @@ export const ChatInputToolbarMenu = memo(({
     );
   }
 
-  // Mobile: Show dropdown menu
+  // Mobile version (default during SSR and for mobile devices)
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>

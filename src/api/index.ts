@@ -642,9 +642,7 @@ appRoutes.get('/llms.txt', async (c) => {
 // Step 8: Export the app (default export for Cloudflare Workers/Bun)
 // ============================================================================
 
-export default {
-  fetch: appRoutes.fetch,
-};
+export default appRoutes;
 
 // ============================================================================
 // Cloudflare Workflows - REMOVED

@@ -35,7 +35,8 @@ export type UseVirtualizedTimelineOptions = {
   /**
    * Number of items to render outside the visible viewport
    * Higher values = smoother scrolling but more DOM elements
-   * Default: 1 (aggressive - renders 1 item above and below viewport)
+   * Default: 10 (relaxed - renders 10 items above and below viewport for smooth fast scrolling)
+   * Previous: 1 (too aggressive, caused overlapping during fast scrolls)
    */
   overscan?: number;
 
@@ -173,7 +174,7 @@ export function useVirtualizedTimeline({
   timelineItems,
   scrollContainerId = 'chat-scroll-container',
   estimateSize = 400,
-  overscan = 1,
+  overscan = 10, // ✅ INCREASED from 1 to 10 for smoother fast scrolling
   enabled = true,
   onScrollOffsetChange,
   enableSmoothScroll = true,
@@ -247,9 +248,17 @@ export function useVirtualizedTimeline({
   // - Message items (participant responses)
   // - Analysis items (moderator analysis)
   // - Pre-search items (rendered within message blocks)
+  //
+  // BUFFER ZONE: Adds extra items around viewport range to prevent overlapping during fast scrolls
   const rangeExtractor = useCallback(
     (range: { startIndex: number; endIndex: number; overscan: number; count: number }) => {
       const indexes: number[] = [];
+
+      // ✅ BUFFER ZONE: Add extra items beyond overscan for smoother fast scrolling
+      // This prevents text collision and overlap when users scroll rapidly
+      const EXTRA_BUFFER = 3; // Additional items beyond standard overscan
+      const bufferedStart = Math.max(0, range.startIndex - EXTRA_BUFFER);
+      const bufferedEnd = Math.min(range.count - 1, range.endIndex + EXTRA_BUFFER);
 
       // Always include streaming round indexes (prevent virtualization removal)
       if (streamingRounds && streamingRounds.size > 0) {
@@ -287,8 +296,8 @@ export function useVirtualizedTimeline({
         });
       }
 
-      // Include viewport range (standard virtualization)
-      for (let i = range.startIndex; i <= range.endIndex; i++) {
+      // Include buffered viewport range (standard virtualization with buffer)
+      for (let i = bufferedStart; i <= bufferedEnd; i++) {
         if (!indexes.includes(i)) {
           indexes.push(i);
         }

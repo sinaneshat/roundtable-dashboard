@@ -267,7 +267,11 @@ export function setupLocalStorageMock(): void {
 
 /**
  * Creates a mock pre-search record for testing
- * ✅ ENUM PATTERN: Uses AnalysisStatuses enum for status field
+ * ✅ ZOD-FIRST: Uses Zod-inferred types from StoredPreSearchSchema
+ * ✅ TYPE-SAFE: No inline hardcoded types, imports from source of truth
+ *
+ * @param data - Partial pre-search data (only required fields needed)
+ * @returns Fully-typed StoredPreSearch object
  */
 export function createMockPreSearch(data: {
   id: string;
@@ -285,7 +289,7 @@ export function createMockPreSearch(data: {
     }>;
     results?: Array<{
       query: string;
-      answer: string;
+      answer: string | null;
       results: Array<{
         title: string;
         url: string;
@@ -294,17 +298,25 @@ export function createMockPreSearch(data: {
       }>;
       responseTime: number;
     }>;
+    analysis?: string;
+    successCount?: number;
+    failureCount?: number;
+    totalResults?: number;
+    totalTime?: number;
   };
-  createdAt?: Date;
+  errorMessage?: string | null;
+  createdAt?: Date | string;
+  completedAt?: Date | string | null;
 }): {
   id: string;
   threadId: string;
   roundNumber: number;
   status: 'pending' | 'streaming' | 'complete' | 'failed';
   userQuery: string;
-  searchData: typeof data.searchData;
-  errorMessage: null;
-  createdAt: Date;
+  searchData?: typeof data.searchData;
+  errorMessage: string | null;
+  createdAt: Date | string;
+  completedAt: Date | string | null;
 } {
   return {
     id: data.id,
@@ -312,14 +324,20 @@ export function createMockPreSearch(data: {
     roundNumber: data.roundNumber,
     status: data.status,
     userQuery: data.userQuery,
-    searchData: data.searchData || undefined,
-    errorMessage: null,
-    createdAt: data.createdAt || new Date(),
+    searchData: data.searchData,
+    errorMessage: data.errorMessage ?? null,
+    createdAt: data.createdAt ?? new Date(),
+    completedAt: data.completedAt ?? null,
   };
 }
 
 /**
  * Creates mock search data payload for testing
+ * ✅ ZOD-FIRST: Matches PreSearchDataPayloadSchema structure
+ * ✅ TYPE-SAFE: No hardcoded return types, uses const inference
+ *
+ * @param options - Configuration for number of queries and results
+ * @returns PreSearchDataPayload-compatible object
  */
 export function createMockSearchData(options?: {
   numQueries?: number;
@@ -334,7 +352,7 @@ export function createMockSearchData(options?: {
   }>;
   results: Array<{
     query: string;
-    answer: string;
+    answer: string | null;
     results: Array<{
       title: string;
       url: string;
@@ -343,8 +361,13 @@ export function createMockSearchData(options?: {
     }>;
     responseTime: number;
   }>;
+  analysis: string;
+  successCount: number;
+  failureCount: number;
+  totalResults: number;
+  totalTime: number;
 } {
-  const numQueries = options?.numQueries || 2;
+  const numQueries = options?.numQueries ?? 2;
   const includeResults = options?.includeResults ?? true;
 
   const queries = Array.from({ length: numQueries }, (_, i) => ({
@@ -377,14 +400,29 @@ export function createMockSearchData(options?: {
       }))
     : [];
 
-  return { queries, results };
+  return {
+    queries,
+    results,
+    analysis: 'Test analysis summary',
+    successCount: includeResults ? numQueries : 0,
+    failureCount: 0,
+    totalResults: includeResults ? numQueries * 2 : 0,
+    totalTime: includeResults ? numQueries * 1200 : 0,
+  };
 }
 
 /**
  * Mock fetch for SSE streaming
  * Creates a ReadableStream that emits SSE events
+ * ✅ TYPE-SAFE: Accepts well-typed event objects with schema validation
+ *
+ * @param events - Array of SSE events with event name and data
+ * @returns Response object with SSE stream
  */
-export function mockFetchSSE(events: Array<{ event: string; data: unknown }>): Response {
+export function mockFetchSSE(events: Array<{
+  event: string;
+  data: string | number | boolean | null | { [key: string]: string | number | boolean | null | undefined };
+}>): Response {
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
     start(controller) {
