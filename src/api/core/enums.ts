@@ -414,6 +414,89 @@ export const WebSearchContentTypeSchema = z.enum(WEB_SEARCH_CONTENT_TYPES).opena
 export type WebSearchContentType = z.infer<typeof WebSearchContentTypeSchema>;
 
 // ============================================================================
+// WEB SEARCH TOPIC
+// ============================================================================
+
+export const WEB_SEARCH_TOPICS = ['general', 'news', 'finance', 'health', 'scientific', 'travel'] as const;
+
+export const WebSearchTopicSchema = z.enum(WEB_SEARCH_TOPICS).openapi({
+  description: 'Search topic category for specialized search optimization',
+  example: 'general',
+});
+
+export type WebSearchTopic = z.infer<typeof WebSearchTopicSchema>;
+
+export const WebSearchTopics = {
+  GENERAL: 'general' as const,
+  NEWS: 'news' as const,
+  FINANCE: 'finance' as const,
+  HEALTH: 'health' as const,
+  SCIENTIFIC: 'scientific' as const,
+  TRAVEL: 'travel' as const,
+} as const;
+
+// ============================================================================
+// WEB SEARCH TIME RANGE
+// ============================================================================
+
+export const WEB_SEARCH_TIME_RANGES = ['day', 'week', 'month', 'year', 'd', 'w', 'm', 'y'] as const;
+
+export const WebSearchTimeRangeSchema = z.enum(WEB_SEARCH_TIME_RANGES).openapi({
+  description: 'Time range filter for search results',
+  example: 'week',
+});
+
+export type WebSearchTimeRange = z.infer<typeof WebSearchTimeRangeSchema>;
+
+export const WebSearchTimeRanges = {
+  DAY: 'day' as const,
+  WEEK: 'week' as const,
+  MONTH: 'month' as const,
+  YEAR: 'year' as const,
+  D: 'd' as const,
+  W: 'w' as const,
+  M: 'm' as const,
+  Y: 'y' as const,
+} as const;
+
+// ============================================================================
+// WEB SEARCH RAW CONTENT FORMAT
+// ============================================================================
+
+export const WEB_SEARCH_RAW_CONTENT_FORMATS = ['markdown', 'text'] as const;
+
+export const WebSearchRawContentFormatSchema = z.enum(WEB_SEARCH_RAW_CONTENT_FORMATS).openapi({
+  description: 'Format for raw content extraction',
+  example: 'markdown',
+});
+
+export type WebSearchRawContentFormat = z.infer<typeof WebSearchRawContentFormatSchema>;
+
+export const WebSearchRawContentFormats = {
+  MARKDOWN: 'markdown' as const,
+  TEXT: 'text' as const,
+} as const;
+
+// ============================================================================
+// WEB SEARCH ANSWER MODE
+// ============================================================================
+
+export const WEB_SEARCH_ANSWER_MODES = ['none', 'basic', 'advanced'] as const;
+
+export const WebSearchAnswerModeSchema = z.enum(WEB_SEARCH_ANSWER_MODES).openapi({
+  description: 'LLM-generated answer summary mode',
+  example: 'basic',
+});
+
+export type WebSearchAnswerMode = z.infer<typeof WebSearchAnswerModeSchema>;
+
+export const WebSearchAnswerModes = {
+  NONE: 'none' as const,
+  BASIC: 'basic' as const,
+  ADVANCED: 'advanced' as const,
+} as const;
+
+// ============================================================================
 // CHAIN OF THOUGHT STEP STATUS
 // ============================================================================
 
@@ -446,6 +529,70 @@ export const AiSdkStatuses = {
   READY: 'ready' as const,
   STREAMING: 'streaming' as const,
   AWAITING_MESSAGE: 'awaiting_message' as const,
+} as const;
+
+// ============================================================================
+// FINISH REASON (AI SDK Response Completion Status)
+// ============================================================================
+
+export const FINISH_REASONS = [
+  'stop',
+  'length',
+  'tool-calls',
+  'content-filter',
+  'failed',
+  'other',
+  'unknown',
+] as const;
+
+export const FinishReasonSchema = z.enum(FINISH_REASONS).openapi({
+  description: 'AI SDK finish reason indicating how/why completion ended',
+  example: 'stop',
+});
+
+export type FinishReason = z.infer<typeof FinishReasonSchema>;
+
+export const FinishReasons = {
+  STOP: 'stop' as const,
+  LENGTH: 'length' as const,
+  TOOL_CALLS: 'tool-calls' as const,
+  CONTENT_FILTER: 'content-filter' as const,
+  FAILED: 'failed' as const,
+  OTHER: 'other' as const,
+  UNKNOWN: 'unknown' as const,
+} as const;
+
+// ============================================================================
+// ERROR TYPE (AI Operation Error Classification)
+// ============================================================================
+
+export const ERROR_TYPES = [
+  'rate_limit',
+  'context_length',
+  'api_error',
+  'network',
+  'timeout',
+  'model_unavailable',
+  'empty_response',
+  'unknown',
+] as const;
+
+export const ErrorTypeSchema = z.enum(ERROR_TYPES).openapi({
+  description: 'Type of error that occurred during AI operations',
+  example: 'api_error',
+});
+
+export type ErrorType = z.infer<typeof ErrorTypeSchema>;
+
+export const ErrorTypes = {
+  RATE_LIMIT: 'rate_limit' as const,
+  CONTEXT_LENGTH: 'context_length' as const,
+  API_ERROR: 'api_error' as const,
+  NETWORK: 'network' as const,
+  TIMEOUT: 'timeout' as const,
+  MODEL_UNAVAILABLE: 'model_unavailable' as const,
+  EMPTY_RESPONSE: 'empty_response' as const,
+  UNKNOWN: 'unknown' as const,
 } as const;
 
 // ============================================================================

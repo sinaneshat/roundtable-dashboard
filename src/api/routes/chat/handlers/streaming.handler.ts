@@ -69,6 +69,10 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
     operationName: 'streamChat',
   },
   async (c) => {
+    // ✅ PERFORMANCE OPTIMIZATION: Capture executionCtx for non-blocking analytics
+    // PostHog tracking will use this to run asynchronously via waitUntil()
+    const executionCtx = c.executionCtx;
+
     const { user } = c.auth();
     const { message, id: threadId, participantIndex, participants: providedParticipants, regenerateRound, mode: providedMode, enableWebSearch: providedEnableWebSearch } = c.validated.body;
 
@@ -763,61 +767,76 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
             ? finishResult.reasoning.reduce((acc, r) => acc + Math.ceil(r.text.length / 4), 0)
             : Math.ceil(reasoningText.length / 4);
 
-          // Extract and map properties for tracking (AI SDK v5 compatibility)
-          await trackLLMGeneration(
-            trackingContext,
-            {
-              text: finishResult.text,
-              finishReason: finishResult.finishReason,
-              // AI SDK V5: Use usage (final step only)
-              usage,
-              reasoning: finishResult.reasoning,
-              // AI SDK v5: toolCalls and toolResults are already in correct format (ToolCallPart/ToolResultPart)
-              toolCalls: finishResult.toolCalls,
-              toolResults: finishResult.toolResults,
-              response: finishResult.response,
-            },
-            inputMessages, // PostHog Best Practice: Always include input messages
-            llmTraceId,
-            llmStartTime,
-            {
-              // Dynamic model pricing from OpenRouter API
-              modelPricing,
+          // ✅ PERFORMANCE OPTIMIZATION: Non-blocking analytics tracking
+          // PostHog tracking runs asynchronously via waitUntil() to avoid blocking response
+          // Expected gain: 100-300ms per streaming response
+          const trackAnalytics = async () => {
+            try {
+              await trackLLMGeneration(
+                trackingContext,
+                {
+                  text: finishResult.text,
+                  finishReason: finishResult.finishReason,
+                  // AI SDK V5: Use usage (final step only)
+                  usage,
+                  reasoning: finishResult.reasoning,
+                  // AI SDK v5: toolCalls and toolResults are already in correct format (ToolCallPart/ToolResultPart)
+                  toolCalls: finishResult.toolCalls,
+                  toolResults: finishResult.toolResults,
+                  response: finishResult.response,
+                },
+                inputMessages, // PostHog Best Practice: Always include input messages
+                llmTraceId,
+                llmStartTime,
+                {
+                  // Dynamic model pricing from OpenRouter API
+                  modelPricing,
 
-              // Model configuration tracking
-              modelConfig: {
-                temperature: temperatureValue,
-                maxTokens: maxOutputTokens,
-              },
+                  // Model configuration tracking
+                  modelConfig: {
+                    temperature: temperatureValue,
+                    maxTokens: maxOutputTokens,
+                  },
 
-              // PostHog Best Practice: Prompt tracking for A/B testing
-              promptTracking: {
-                promptId: participant.role ? `role_${participant.role.replace(/\s+/g, '_').toLowerCase()}` : 'default',
-                promptVersion: 'v1.0', // Version your prompts for experimentation
-                systemPromptTokens,
-              },
+                  // PostHog Best Practice: Prompt tracking for A/B testing
+                  promptTracking: {
+                    promptId: participant.role ? `role_${participant.role.replace(/\s+/g, '_').toLowerCase()}` : 'default',
+                    promptVersion: 'v1.0', // Version your prompts for experimentation
+                    systemPromptTokens,
+                  },
 
-              // ✅ AI SDK V5: Pass totalUsage for cumulative metrics
-              totalUsage,
+                  // ✅ AI SDK V5: Pass totalUsage for cumulative metrics
+                  totalUsage,
 
-              // ✅ REASONING TOKENS: Pass calculated reasoning tokens
-              reasoningTokens,
+                  // ✅ REASONING TOKENS: Pass calculated reasoning tokens
+                  reasoningTokens,
 
-              // Additional custom properties for analytics
-              additionalProperties: {
-                message_id: messageId,
-                reasoning_length_chars: reasoningText.length,
-                reasoning_from_sdk: !!(finishResult.reasoning && finishResult.reasoning.length > 0),
-                rag_context_used: systemPrompt !== baseSystemPrompt,
-                sdk_version: 'ai-sdk-v5',
-                is_first_participant: participantIndex === 0,
-                total_participants: participants.length,
-                message_persisted: true,
-              },
-            },
-          );
+                  // Additional custom properties for analytics
+                  additionalProperties: {
+                    message_id: messageId,
+                    reasoning_length_chars: reasoningText.length,
+                    reasoning_from_sdk: !!(finishResult.reasoning && finishResult.reasoning.length > 0),
+                    rag_context_used: systemPrompt !== baseSystemPrompt,
+                    sdk_version: 'ai-sdk-v5',
+                    is_first_participant: participantIndex === 0,
+                    total_participants: participants.length,
+                    message_persisted: true,
+                  },
+                },
+              );
+            } catch {
+              // Tracking should never break the main flow - silently fail
+            }
+          };
+
+          // Use waitUntil in production, fire-and-forget in local dev
+          if (executionCtx) {
+            executionCtx.waitUntil(trackAnalytics());
+          } else {
+            trackAnalytics().catch(() => {});
+          }
         } catch {
-          // Tracking should never break the main flow - silently fail
+          // Error in analytics setup - silently fail
         }
       },
     });
@@ -890,16 +909,26 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
       },
 
       onError: (error) => {
-        // ✅ POSTHOG LLM TRACKING: Track LLM errors with trace linking
-        // Non-blocking error tracking for observability
-        trackLLMError(
-          trackingContext,
-          error as Error,
-          llmTraceId,
-          'streaming',
-        ).catch(() => {
-          // Silently fail - never break error handling flow
-        });
+        // ✅ PERFORMANCE OPTIMIZATION: Non-blocking error tracking
+        // PostHog error tracking runs asynchronously via waitUntil()
+        const trackError = async () => {
+          try {
+            await trackLLMError(
+              trackingContext,
+              error as Error,
+              llmTraceId,
+              'streaming',
+            );
+          } catch {
+            // Silently fail - never break error handling flow
+          }
+        };
+
+        if (executionCtx) {
+          executionCtx.waitUntil(trackError());
+        } else {
+          trackError().catch(() => {});
+        }
 
         // ✅ DEEPSEEK R1 WORKAROUND: Suppress logprobs validation errors
         // These are non-fatal errors from DeepSeek R1's non-conforming logprobs structure

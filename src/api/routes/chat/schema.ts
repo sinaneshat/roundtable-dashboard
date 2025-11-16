@@ -5,9 +5,13 @@ import {
   ChatModeSchema,
   DEFAULT_CHAT_MODE,
   PreSearchQueryStatusSchema,
+  WebSearchAnswerModeSchema,
   WebSearchComplexitySchema,
   WebSearchContentTypeSchema,
   WebSearchDepthSchema,
+  WebSearchRawContentFormatSchema,
+  WebSearchTimeRangeSchema,
+  WebSearchTopicSchema,
 } from '@/api/core/enums';
 import {
   CoreSchemas,
@@ -370,19 +374,48 @@ const UIMessageSchema = z.object({
 // ============================================================================
 
 /**
- * Web search parameters schema
+ * Web search parameters schema (Tavily-enhanced)
+ * All fields optional for backward compatibility
  */
 export const WebSearchParametersSchema = z.object({
+  // Core search parameters
   query: z.string().min(1).describe('Search query to find information on the web'),
-  maxResults: z.number().int().positive().max(5).optional().default(3).describe('Maximum number of search results to return (1-5, default 3)'),
+  maxResults: z.number().int().positive().min(1).max(20).optional().default(5).describe('Maximum number of search results to return (1-20, default 5)'),
   searchDepth: WebSearchDepthSchema.optional().default('basic').describe('Search depth: basic for fast results, advanced for comprehensive search'),
-  includeAnswer: z.boolean().optional().default(true).describe('Whether to include an AI-generated answer summary'),
+
+  // Topic and content filtering
+  topic: WebSearchTopicSchema.optional().describe('Search topic category for specialized search optimization'),
+  timeRange: WebSearchTimeRangeSchema.optional().describe('Filter results by time range (day, week, month, year)'),
+  days: z.number().int().positive().max(365).optional().describe('Filter results by specific number of days (for news topic)'),
+  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe('Start date for date range filter (YYYY-MM-DD)'),
+  endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe('End date for date range filter (YYYY-MM-DD)'),
+
+  // Content extraction options
+  chunksPerSource: z.number().int().min(1).max(3).optional().default(1).describe('Number of content chunks per source (1-3, for advanced search)'),
+  includeImages: z.boolean().optional().default(false).describe('Include images from search results'),
+  includeImageDescriptions: z.boolean().optional().default(false).describe('Generate AI descriptions for images'),
+  includeRawContent: z.union([z.boolean(), WebSearchRawContentFormatSchema]).optional().describe('Include raw page content (boolean or format: markdown/text)'),
+  maxTokens: z.number().int().positive().optional().describe('Maximum tokens for content extraction'),
+
+  // Answer generation
+  includeAnswer: z.union([z.boolean(), WebSearchAnswerModeSchema]).optional().default(false).describe('Include AI-generated answer summary (boolean or mode: basic/advanced)'),
+
+  // Domain filtering
+  includeDomains: z.array(z.string()).optional().describe('Only search within these domains'),
+  excludeDomains: z.array(z.string()).optional().describe('Exclude these domains from search'),
+
+  // Geographic and metadata
+  country: z.string().length(2).optional().describe('ISO 3166-1 alpha-2 country code for geographic prioritization'),
+  includeFavicon: z.boolean().optional().default(false).describe('Include website favicons in results'),
+
+  // Auto-parameters mode
+  autoParameters: z.boolean().optional().default(false).describe('Automatically detect and apply optimal search parameters'),
 }).openapi('WebSearchParameters');
 
 export type WebSearchParameters = z.infer<typeof WebSearchParametersSchema>;
 
 /**
- * Individual search result schema
+ * Individual search result schema (Tavily-enhanced)
  */
 export const WebSearchResultItemSchema = z.object({
   title: z.string().describe('Title of the search result'),
@@ -391,9 +424,10 @@ export const WebSearchResultItemSchema = z.object({
   url: z.string().min(1).describe('URL of the search result'),
   content: z.string().describe('Content snippet from the page'),
   excerpt: z.string().optional().describe('Short snippet from search results'),
-  fullContent: z.string().optional().describe('Full scraped content from actual page (up to 10000 chars)'),
+  fullContent: z.string().optional().describe('Full scraped content from actual page (up to 15000 chars)'),
+  rawContent: z.string().optional().describe('Raw content in markdown or text format (Tavily-style)'),
   score: z.number().min(0).max(1).describe('Relevance score (0-1)'),
-  publishedDate: z.string().nullable().optional().describe('Publication date if available'),
+  publishedDate: z.string().nullable().optional().describe('Publication date if available (ISO 8601)'),
   domain: z.string().optional().describe('Domain extracted from URL'),
   metadata: z.object({
     author: z.string().optional().describe('Article/page author'),
@@ -405,34 +439,63 @@ export const WebSearchResultItemSchema = z.object({
   }).optional().describe('Additional metadata extracted from the page'),
   contentType: WebSearchContentTypeSchema.optional().describe('Content type classification'),
   keyPoints: z.array(z.string()).optional().describe('Key points extracted from content'),
+  // Tavily-specific fields
+  images: z.array(z.object({
+    url: z.string().describe('Image URL'),
+    description: z.string().optional().describe('AI-generated image description'),
+    alt: z.string().optional().describe('Image alt text'),
+  })).optional().describe('Images found in the result with optional AI descriptions'),
 }).openapi('WebSearchResultItem');
 
 export type WebSearchResultItem = z.infer<typeof WebSearchResultItemSchema>;
 
 /**
  * Search result metadata schema
+ * Includes cache performance tracking and usage limits
  */
 export const WebSearchResultMetaSchema = z.object({
+  // Cache metadata
   cached: z.boolean().optional().describe('Whether result was retrieved from cache'),
+  cacheAge: z.number().optional().describe('Age of cached result in milliseconds (only for cached results)'),
+  cacheHitRate: z.number().min(0).max(1).optional().describe('Overall cache hit rate (0-1)'),
+
+  // Usage limits
   limitReached: z.boolean().optional().describe('Whether participant has reached search limit'),
   searchesUsed: z.number().int().min(0).optional().describe('Number of searches used by participant'),
   maxSearches: z.number().int().positive().optional().describe('Maximum searches allowed per participant'),
   remainingSearches: z.number().int().min(0).optional().describe('Remaining searches for participant'),
+
+  // Error tracking
   error: z.boolean().optional().describe('Whether search encountered an error'),
   message: z.string().optional().describe('Additional message or error description'),
+
+  // Performance
   complexity: WebSearchComplexitySchema.optional().describe('Search complexity level used'),
 }).openapi('WebSearchResultMeta');
 
 export type WebSearchResultMeta = z.infer<typeof WebSearchResultMetaSchema>;
 
 /**
- * Complete web search result schema
+ * Complete web search result schema (Tavily-enhanced)
  */
 export const WebSearchResultSchema = z.object({
   query: z.string().describe('The search query that was executed'),
   answer: z.string().nullable().describe('AI-generated answer summary'),
   results: z.array(WebSearchResultItemSchema).describe('Array of search results'),
   responseTime: z.number().describe('API response time in milliseconds'),
+  requestId: z.string().optional().describe('Unique request ID for tracking and debugging'),
+  // Tavily-style images array
+  images: z.array(z.object({
+    url: z.string().describe('Image URL'),
+    description: z.string().optional().describe('AI-generated image description'),
+  })).optional().describe('Consolidated images from all results with AI descriptions'),
+  // Auto-detected parameters
+  autoParameters: z.object({
+    topic: WebSearchTopicSchema.optional().describe('Auto-detected search topic'),
+    timeRange: WebSearchTimeRangeSchema.optional().describe('Auto-detected time range'),
+    searchDepth: WebSearchDepthSchema.optional().describe('Auto-detected search depth'),
+    reasoning: z.string().optional().describe('Explanation of why these parameters were chosen'),
+  }).optional().describe('Auto-detected search parameters based on query analysis'),
   _meta: WebSearchResultMetaSchema.optional().describe('Search metadata (cache status, limits, etc.)'),
 }).openapi('WebSearchResult');
 
@@ -1095,6 +1158,7 @@ export type MessageWithParticipant = z.infer<typeof MessageWithParticipantSchema
  */
 export const WebSearchFlatDisplayPropsSchema = z.object({
   results: z.array(WebSearchResultItemSchema),
+  answer: z.string().nullable().optional().describe('AI-generated answer summary'),
   className: z.string().optional(),
   meta: WebSearchResultMetaSchema.optional(),
   complexity: WebSearchComplexitySchema.optional(),
@@ -1120,6 +1184,7 @@ export type SearchResultItemProps = z.infer<typeof SearchResultItemPropsSchema>;
  */
 export const WebSearchDisplayPropsSchema = z.object({
   results: z.array(WebSearchResultItemSchema),
+  answer: z.string().nullable().optional().describe('AI-generated answer summary'),
   className: z.string().optional(),
   meta: WebSearchResultMetaSchema.optional(),
   complexity: WebSearchComplexitySchema.optional(),

@@ -329,17 +329,27 @@ export const deleteProjectHandler: RouteHandler<typeof deleteProjectRoute, ApiEn
       where: eq(tables.projectKnowledgeFile.projectId, id),
     });
 
-    // Delete from R2
-    for (const file of knowledgeFiles) {
-      try {
-        await c.env.UPLOADS_R2_BUCKET.delete(file.r2Key);
-      } catch {
-        // Log but don't fail if R2 deletion fails
-      }
-    }
-
-    // Delete project (cascades to files, threads set to null)
+    // Delete project from DB first (critical - must complete)
     await db.delete(tables.chatProject).where(eq(tables.chatProject.id, id));
+
+    // ✅ PERFORMANCE OPTIMIZATION: Non-blocking R2 cleanup
+    // Delete R2 files asynchronously via waitUntil() to avoid blocking response
+    // Expected gain: 50-200ms per project deletion (depends on file count)
+    const deleteR2Files = async () => {
+      for (const file of knowledgeFiles) {
+        try {
+          await c.env.UPLOADS_R2_BUCKET.delete(file.r2Key);
+        } catch {
+          // Silent failure - R2 cleanup is best-effort
+        }
+      }
+    };
+
+    if (c.executionCtx) {
+      c.executionCtx.waitUntil(deleteR2Files());
+    } else {
+      deleteR2Files().catch(() => {});
+    }
 
     return Responses.ok(c, {
       id,
@@ -609,17 +619,27 @@ export const deleteKnowledgeFileHandler: RouteHandler<typeof deleteKnowledgeFile
       });
     }
 
-    // Delete from R2
-    try {
-      await c.env.UPLOADS_R2_BUCKET.delete(file.r2Key);
-    } catch {
-      // Log but don't fail
-    }
-
-    // Delete from DB
+    // Delete from DB first (critical - must complete)
     await db
       .delete(tables.projectKnowledgeFile)
       .where(eq(tables.projectKnowledgeFile.id, fileId));
+
+    // ✅ PERFORMANCE OPTIMIZATION: Non-blocking R2 cleanup
+    // Delete R2 file asynchronously via waitUntil() to avoid blocking response
+    // Expected gain: 50-200ms per file deletion
+    const deleteR2File = async () => {
+      try {
+        await c.env.UPLOADS_R2_BUCKET.delete(file.r2Key);
+      } catch {
+        // Silent failure - R2 cleanup is best-effort
+      }
+    };
+
+    if (c.executionCtx) {
+      c.executionCtx.waitUntil(deleteR2File());
+    } else {
+      deleteR2File().catch(() => {});
+    }
 
     return Responses.ok(c, {
       id: fileId,

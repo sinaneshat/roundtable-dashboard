@@ -13,6 +13,8 @@ type StructuredDataProps = {
   description?: string;
   /** URL of the entity */
   url?: string;
+  /** Base URL for the application (prevents hydration mismatch) */
+  baseUrl?: string;
   /** Logo URL for the entity */
   logo?: string;
   /** Image URL for the entity */

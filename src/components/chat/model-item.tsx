@@ -78,11 +78,10 @@ export function ModelItem({
           role="button"
           tabIndex={isDisabled ? -1 : 0}
           className={cn(
-            'px-6 py-4 w-full hover:bg-white/5 transition-colors rounded-xl mx-2 my-1',
+            'px-3 py-3 sm:px-4 sm:py-3.5 hover:bg-white/5 transition-colors rounded-xl mx-2 my-1 block w-full max-w-[512px]',
             !isDisabled && 'cursor-pointer',
             isDisabled && 'opacity-50 cursor-not-allowed',
           )}
-          style={{ maxWidth: '512px', boxSizing: 'border-box' }}
           onClick={isDisabled ? undefined : () => onToggle()}
           onKeyDown={
             isDisabled
@@ -95,11 +94,11 @@ export function ModelItem({
                 }
           }
         >
-          <div className="flex items-center gap-3 w-full min-w-0" style={{ maxWidth: '100%' }}>
+          <div className="flex items-center gap-2 sm:gap-3 w-full min-w-0 max-w-[512px]">
             {enableDrag && (
               <div
                 className={cn(
-                  'flex-shrink-0 text-muted-foreground p-0.5',
+                  'shrink-0 text-muted-foreground p-0.5',
                   !isDisabled && 'cursor-grab active:cursor-grabbing touch-none',
                   isDisabled && 'cursor-not-allowed opacity-30',
                 )}
@@ -122,31 +121,31 @@ export function ModelItem({
               checked={isSelected}
               onCheckedChange={isDisabled ? undefined : onToggle}
               disabled={isDisabled}
-              className="flex-shrink-0"
+              className="shrink-0"
               onClick={e => e.stopPropagation()}
             />
-            <div className="flex items-center gap-3 flex-1 min-w-0">
-              <Avatar className="size-9 flex-shrink-0">
+            <div className="flex items-center gap-2 flex-1 min-w-0 max-w-[512px] overflow-hidden">
+              <Avatar className="size-8 sm:size-9 shrink-0">
                 <AvatarImage src={getProviderIcon(model.provider)} alt={model.name} />
                 <AvatarFallback className="text-xs">
                   {model.name.slice(0, 2).toUpperCase()}
                 </AvatarFallback>
               </Avatar>
-              <div className="flex-1 min-w-0 overflow-hidden space-y-1">
-                <div className="flex items-center gap-1.5 min-w-0">
-                  <span className="text-sm font-semibold truncate flex-shrink">{model.name}</span>
+              <div className="flex-1 min-w-0 max-w-[512px] overflow-hidden space-y-1">
+                <div className="flex items-center gap-1.5 min-w-0 max-w-[512px] overflow-hidden">
+                  <span className="text-sm font-semibold truncate min-w-0">{model.name}</span>
                   {isDisabledDueToTier && (model.required_tier_name || model.required_tier) && (
-                    <Badge variant="secondary" className="text-[10px] px-1.5 py-0.5 h-4 font-semibold bg-amber-500/20 text-amber-400 border-amber-500/30 shrink-0 uppercase">
+                    <Badge variant="secondary" className="text-[9px] sm:text-[10px] px-1 sm:px-1.5 py-0.5 h-4 font-semibold bg-amber-500/20 text-amber-400 border-amber-500/30 shrink-0 uppercase">
                       {model.required_tier_name || model.required_tier}
                     </Badge>
                   )}
                   {isDisabledDueToLimit && !isDisabledDueToTier && (
-                    <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 border-warning/50 text-warning shrink-0">
+                    <Badge variant="outline" className="text-[9px] sm:text-[10px] px-1 sm:px-1.5 py-0 h-4 border-warning/50 text-warning shrink-0">
                       {tModels('limitReached')}
                     </Badge>
                   )}
                 </div>
-                <div className="text-xs text-muted-foreground truncate">
+                <div className="text-xs text-muted-foreground truncate w-full min-w-0">
                   {model.description}
                 </div>
               </div>
@@ -156,18 +155,18 @@ export function ModelItem({
             {isDisabledDueToTier && (
               <Link
                 href="/chat/pricing"
-                className="flex-shrink-0 p-1.5 rounded-md"
+                className="shrink-0 p-1 sm:p-1.5 rounded-md"
                 onClick={e => e.stopPropagation()}
                 aria-label="Upgrade to unlock this model"
               >
-                <Lock className="size-5 text-amber-400" />
+                <Lock className="size-4 sm:size-5 text-amber-400" />
               </Link>
             )}
 
             {/* Role Selector - Only show for selected or accessible models */}
             {!isDisabledDueToTier && (isSelected || !isDisabled) && (
               <div
-                className="flex-shrink-0"
+                className="shrink-0"
                 onClick={e => e.stopPropagation()}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' || e.key === ' ') {
@@ -220,11 +219,11 @@ export function ModelItem({
         value={orderedModel}
         dragListener={false}
         dragControls={controls}
-        style={{ maxWidth: '512px', width: '100%' }}
+        className="block w-full min-w-0 max-w-[512px] overflow-hidden"
       >
         {itemContent}
       </Reorder.Item>
     );
   }
-  return <div style={{ maxWidth: '512px', width: '100%' }}>{itemContent}</div>;
+  return <div className="block w-full min-w-0 max-w-[512px] overflow-hidden">{itemContent}</div>;
 }

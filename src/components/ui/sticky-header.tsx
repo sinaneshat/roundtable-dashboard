@@ -7,7 +7,7 @@
  * Features:
  * - Smooth fade-in animation on mount
  * - Configurable z-index for proper layering
- * - Automatic glassmorphism styling
+ * - Gradient background styling
  * - Type-safe and composable
  */
 
@@ -17,7 +17,6 @@ import { motion } from 'motion/react';
 import type { ReactNode } from 'react';
 
 import { cn, getZIndexClass } from '@/lib/ui/cn';
-import { heavyGlassCardStyles } from '@/lib/ui/glassmorphism';
 
 type StickyHeaderProps = {
   children: ReactNode;
@@ -60,18 +59,13 @@ export function StickyHeader({
       className={cn(
         'sticky top-0',
         getZIndexClass(zIndex),
-        !noBackground && [
-          'bg-black/80',
-          'backdrop-blur-3xl',
-          'shadow-lg',
-        ],
+        !noBackground && 'bg-gradient-to-t from-black/90 to-transparent',
         className,
       )}
       style={
         !noBackground
           ? {
-              boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1)',
-              ...heavyGlassCardStyles,
+              boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
             }
           : undefined
       }

@@ -107,7 +107,7 @@ function DialogHeader({ className, glass = false, ...props }: DialogHeaderProps)
     <div
       data-slot="dialog-header"
       className={cn(
-        "flex flex-col gap-2 text-center sm:text-start px-6 pt-6 pb-4",
+        "flex flex-col gap-2 text-center sm:text-start px-3 sm:px-6 pt-4 sm:pt-6 pb-3 sm:pb-4",
         glass && "bg-black/40",
         className
       )}

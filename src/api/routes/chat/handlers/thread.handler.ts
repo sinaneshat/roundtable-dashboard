@@ -282,7 +282,9 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
     // Can start as soon as thread is created without waiting for AI responses
     // ✅ CRITICAL FIX: Use getDbAsync() instead of batch.db for fire-and-forget async operations
     // batch.db is only valid within the handler scope, but this async block runs after handler returns
-    (async () => {
+    // ✅ CRITICAL FIX 2: Use c.executionCtx.waitUntil() to ensure async operation completes
+    // Without waitUntil(), Cloudflare Workers can terminate before title generation finishes
+    const generateTitleAsync = async () => {
       try {
         const aiTitle = await generateTitleFromMessage(body.firstMessage, c.env);
         // ✅ Update both title AND slug atomically using updateThreadTitleAndSlug
@@ -291,9 +293,18 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
         const freshDb = await getDbAsync();
         await invalidateThreadCache(freshDb, user.id);
       } catch {
+        // Silent failure - title generation doesn't block thread creation
       }
-    })().catch(() => {
-    });
+    };
+
+    // Use Cloudflare Workers async processing if available (production)
+    // Otherwise process synchronously (local development)
+    if (c.executionCtx) {
+      c.executionCtx.waitUntil(generateTitleAsync());
+    } else {
+      // In local dev, run async but don't block response
+      generateTitleAsync().catch(() => {});
+    }
     return Responses.ok(c, {
       thread,
       participants,

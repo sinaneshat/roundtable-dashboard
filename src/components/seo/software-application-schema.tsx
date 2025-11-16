@@ -1,5 +1,4 @@
 import { BRAND } from '@/constants/brand';
-import { getBaseUrl } from '@/utils/helpers';
 
 // Stable default values to prevent re-renders
 const DEFAULT_FEATURES = [
@@ -10,13 +9,14 @@ const DEFAULT_FEATURES = [
   'Usage tracking',
 ];
 const DEFAULT_LANGUAGES = ['en-US'];
-const DEFAULT_SCREENSHOTS = [`${getBaseUrl()}/static/og-image.png`];
 
 /**
  * Props for the SoftwareApplicationSchema component
  * Enhanced for 2025 AI search optimization
  */
 type SoftwareApplicationSchemaProps = {
+  /** Base URL for the application (prevents hydration mismatch) */
+  baseUrl?: string;
   /** Application name (defaults to brand name) */
   name?: string;
   /** Application description */
@@ -64,6 +64,7 @@ type SoftwareApplicationSchemaProps = {
  */
 export function SoftwareApplicationSchema(props: SoftwareApplicationSchemaProps) {
   const {
+    baseUrl = 'https://app.roundtable.now',
     name = BRAND.fullName,
     description = BRAND.description,
     version = '1.0.0',
@@ -76,11 +77,12 @@ export function SoftwareApplicationSchema(props: SoftwareApplicationSchemaProps)
     features = DEFAULT_FEATURES,
     inLanguage = DEFAULT_LANGUAGES,
     softwareRequirements = 'Requires JavaScript. Requires HTML5. Works on any modern browser.',
-    supportUrl = `${getBaseUrl()}/support`,
-    screenshots = DEFAULT_SCREENSHOTS,
+    supportUrl = `${baseUrl}/support`,
+    screenshots,
   } = props;
 
-  const baseUrl = getBaseUrl();
+  // Compute default screenshots after baseUrl is available
+  const screenshotUrls = screenshots || [`${baseUrl}/static/og-image.png`];
 
   // ✅ FIX: Use static date to prevent hydration mismatch
   // Calculate once at build time, not on every render
@@ -124,7 +126,7 @@ export function SoftwareApplicationSchema(props: SoftwareApplicationSchemaProps)
       '@type': 'Organization',
       'name': BRAND.venture,
     },
-    'screenshot': screenshots.map(url => ({
+    'screenshot': screenshotUrls.map(url => ({
       '@type': 'ImageObject',
       'url': url,
       'contentUrl': url,

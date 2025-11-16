@@ -119,7 +119,7 @@ export function QuotaAlertExtension({ checkType }: QuotaAlertExtensionProps) {
           <Button
             variant="destructive"
             size="sm"
-            className="h-6 px-3 text-[10px] font-semibold shrink-0 rounded-md"
+            className="h-6 px-3 text-[10px] font-semibold shrink-0 rounded-full"
             onClick={() => router.push('/chat/pricing')}
           >
             Upgrade

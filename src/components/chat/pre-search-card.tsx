@@ -1,8 +1,8 @@
 'use client';
 
-import { RotateCcw, Zap } from 'lucide-react';
+import { Zap } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 import { AnalysisStatuses } from '@/api/core/enums';
 import type { PreSearchDataPayload, StoredPreSearch } from '@/api/routes/chat/schema';
@@ -44,8 +44,6 @@ export function PreSearchCard({
   // Manual control state for accordion (follows RoundAnalysisCard pattern)
   const [isManuallyControlled, setIsManuallyControlled] = useState(false);
   const [manuallyOpen, setManuallyOpen] = useState(false);
-  const [isRetrying, setIsRetrying] = useState(false);
-  const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Auto-close logic: Close older searches when newer round streams
   // Pattern from round-analysis-card.tsx:74-85
@@ -76,43 +74,6 @@ export function PreSearchCard({
       });
     }
   }, [threadId, preSearch.roundNumber, updatePreSearchData, updatePreSearchStatus]);
-
-  // Retry failed search
-  // Pattern from round-analysis-card.tsx:99-130
-  const handleRetry = useCallback(async () => {
-    if (isRetrying)
-      return;
-    if (retryTimeoutRef.current) {
-      clearTimeout(retryTimeoutRef.current);
-    }
-    setIsRetrying(true);
-
-    try {
-      // Retry pre-search generation
-      await fetch(`/api/v1/chat/threads/${threadId}/rounds/${preSearch.roundNumber}/pre-search`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userQuery: preSearch.userQuery,
-        }),
-      });
-    } catch {
-      // Error handled by stream hook
-    }
-
-    retryTimeoutRef.current = setTimeout(() => {
-      setIsRetrying(false);
-    }, 2000);
-  }, [threadId, preSearch.roundNumber, preSearch.userQuery, isRetrying]);
-
-  // Cleanup timeout on unmount
-  useEffect(() => {
-    return () => {
-      if (retryTimeoutRef.current) {
-        clearTimeout(retryTimeoutRef.current);
-      }
-    };
-  }, []);
 
   const isStreamingOrPending = preSearch.status === AnalysisStatuses.PENDING || preSearch.status === AnalysisStatuses.STREAMING;
   const hasError = preSearch.status === AnalysisStatuses.FAILED;
@@ -162,30 +123,6 @@ export function PreSearchCard({
               )}
             </div>
           </ChainOfThoughtHeader>
-
-          {/* Retry button for failed searches - positioned absolutely to avoid nesting inside trigger button */}
-          {/* Pattern from round-analysis-card.tsx:168-187 */}
-          {hasError && (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                handleRetry();
-              }}
-              disabled={isRetrying}
-              className={cn(
-                'absolute right-4 top-1/2 -translate-y-1/2 z-10',
-                'flex items-center gap-1.5 px-2 py-1 text-xs font-medium rounded-md transition-colors',
-                'text-primary hover:text-primary/80 hover:bg-primary/10',
-                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
-                'disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent',
-              )}
-              aria-label={t('chat.preSearch.retry')}
-            >
-              <RotateCcw className={cn('size-3.5', isRetrying && 'animate-spin')} />
-              <span className="hidden sm:inline">{t('chat.preSearch.retry')}</span>
-            </button>
-          )}
         </div>
 
         <ChainOfThoughtContent>
@@ -206,24 +143,9 @@ export function PreSearchCard({
 
             {/* Failed state */}
             {hasError && preSearch.errorMessage && (
-              <div className="space-y-3">
-                <div className="flex items-center gap-2 py-1.5 text-xs text-destructive">
-                  <span className="size-1.5 rounded-full bg-destructive/80" />
-                  <span>{preSearch.errorMessage}</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={handleRetry}
-                  disabled={isRetrying}
-                  className={cn(
-                    'inline-flex items-center gap-2 px-3 py-1.5 text-xs font-medium transition-colors',
-                    'text-primary hover:text-primary/80',
-                    'disabled:opacity-50 disabled:cursor-not-allowed',
-                  )}
-                >
-                  <RotateCcw className={cn('size-3.5', isRetrying && 'animate-spin')} />
-                  {t('chat.preSearch.retry')}
-                </button>
+              <div className="flex items-center gap-2 py-1.5 text-xs text-destructive">
+                <span className="size-1.5 rounded-full bg-destructive/80" />
+                <span>{preSearch.errorMessage}</span>
               </div>
             )}
           </div>

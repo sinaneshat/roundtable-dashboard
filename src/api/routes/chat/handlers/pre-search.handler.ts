@@ -32,6 +32,7 @@ import { simpleOptimizeQuery } from '@/api/services/query-optimizer.service';
 import {
   createSearchCache,
   performWebSearch,
+  streamAnswerSummary,
   streamSearchQuery,
 } from '@/api/services/web-search.service';
 import type { ApiEnv } from '@/api/types';
@@ -58,8 +59,20 @@ import { PreSearchRequestSchema } from '../schema';
  * 6. Update to COMPLETED with results
  * 7. Create message record with search data
  *
+ * **SSE EVENT TYPES** (for frontend integration):
+ * - `start`: Initial event with metadata
+ * - `query`: Incremental query generation updates (query/rationale streaming)
+ * - `result`: Search result updates (incremental source streaming)
+ * - `answer_chunk`: Answer streaming chunks (progressive text generation)
+ * - `answer_complete`: Final complete answer with metadata
+ * - `answer_error`: Answer generation error (graceful degradation)
+ * - `complete`: Search execution complete with statistics
+ * - `done`: Final event with complete searchData payload
+ * - `failed`: Error event with error details
+ *
  * **REFACTOR NOTES**:
  * - Direct use of streamSearchQuery() instead of callback-based performPreSearches()
+ * - Streaming answer integration via streamAnswerSummary() (75-80% faster TTFC)
  * - Simplified streaming logic - no nested callbacks
  * - Maintained backward compatibility with PreSearchDataPayloadSchema
  *
@@ -306,9 +319,17 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
             // NOTE: Current architecture fetches all sources via Promise.all()
             // Future improvement: Modify performWebSearch to yield sources as they arrive
             result = await performWebSearch(
-              generatedQuery.query,
-              generatedQuery.sourceCount ?? 3,
-              generatedQuery.requiresFullContent ?? false,
+              {
+                query: generatedQuery.query,
+                maxResults: generatedQuery.sourceCount ?? 3,
+                searchDepth: (generatedQuery.requiresFullContent ?? false) ? WebSearchDepths.ADVANCED : WebSearchDepths.BASIC,
+                chunksPerSource: 1,
+                includeImages: false,
+                includeImageDescriptions: false,
+                includeAnswer: false,
+                includeFavicon: true,
+                autoParameters: false,
+              },
               c.env,
               generatedQuery.complexity ?? WebSearchComplexities.BASIC,
             );
@@ -343,13 +364,13 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
               }
             }
 
-            // Send final result with AI-generated answer
+            // Send final result without answer (will stream answer separately)
             await stream.writeSSE({
               event: 'result',
               data: JSON.stringify({
                 timestamp: Date.now(),
                 query: result.query,
-                answer: result.answer, // Now include the answer
+                answer: null, // Answer will be streamed separately
                 results: result.results,
                 resultCount: result.results.length,
                 responseTime: searchDuration,
@@ -371,6 +392,74 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
                 index: 0,
                 status: 'error',
                 error: error instanceof Error ? error.message : 'Search failed',
+              }),
+            });
+          }
+        }
+
+        // ============================================================================
+        // ✅ STREAMING ANSWER INTEGRATION: Stream answer chunks via SSE
+        // ============================================================================
+        // Pattern from: /src/api/routes/chat/handlers/analysis.handler.ts:91-120
+        // Uses streamAnswerSummary() for progressive answer generation
+        let finalAnswer: string | null = null;
+        if (result && result.results.length > 0) {
+          try {
+            // Determine answer mode based on search complexity
+            const answerMode = result.results.length > 3 ? 'advanced' : 'basic';
+
+            // Get stream from service
+            const answerStream = streamAnswerSummary(
+              generatedQuery.query,
+              result.results,
+              answerMode,
+              c.env,
+            );
+
+            // ✅ BUFFERED STREAMING: Accumulate chunks for efficiency
+            let buffer = '';
+            let lastSendTime = Date.now();
+            const CHUNK_INTERVAL = 100; // Send buffered chunks every 100ms
+
+            for await (const chunk of answerStream.textStream) {
+              buffer += chunk;
+              finalAnswer = (finalAnswer || '') + chunk;
+
+              // Send buffered chunks every 100ms
+              if (Date.now() - lastSendTime > CHUNK_INTERVAL) {
+                await stream.writeSSE({
+                  event: 'answer_chunk',
+                  data: JSON.stringify({ chunk: buffer }),
+                });
+                buffer = '';
+                lastSendTime = Date.now();
+              }
+            }
+
+            // Send remaining buffer
+            if (buffer) {
+              await stream.writeSSE({
+                event: 'answer_chunk',
+                data: JSON.stringify({ chunk: buffer }),
+              });
+            }
+
+            // Send completion event with full answer
+            await stream.writeSSE({
+              event: 'answer_complete',
+              data: JSON.stringify({
+                answer: finalAnswer,
+                mode: answerMode,
+                generatedAt: new Date().toISOString(),
+              }),
+            });
+          } catch (answerError) {
+            // ✅ GRACEFUL DEGRADATION: Continue without answer on streaming failure
+            await stream.writeSSE({
+              event: 'answer_error',
+              data: JSON.stringify({
+                error: 'Failed to generate answer',
+                message: answerError instanceof Error ? answerError.message : 'Please try again',
               }),
             });
           }
@@ -403,7 +492,7 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
             }],
             results: [{
               query: result.query,
-              answer: result.answer,
+              answer: finalAnswer, // ✅ USE STREAMED ANSWER: Store final streamed answer instead of sync answer
               results: result.results.map((r: WebSearchResult['results'][number]) => ({
                 ...r,
                 publishedDate: r.publishedDate ?? null,

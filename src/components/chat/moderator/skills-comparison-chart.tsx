@@ -119,34 +119,36 @@ export function SkillsComparisonChart({ participants }: SkillsComparisonChartPro
           );
         })}
       </div>
-      <ChartContainer
-        config={chartConfig}
-        className="mx-auto aspect-square h-[250px]"
-      >
-        <RadarChart data={chartData}>
-          <ChartTooltip
-            cursor={false}
-            content={<ChartTooltipContent indicator="line" />}
-          />
-          <PolarAngleAxis dataKey="skill" />
-          <PolarGrid />
-          {participants.map((participant, index) => {
-            const key = `participant${participant?.participantIndex ?? index}`;
-            const fillOpacity = index === 0 ? 0.45 : 0.25;
-            const strokeWidth = index === 0 ? 2.5 : 2;
-            return (
-              <Radar
-                key={key}
-                dataKey={key}
-                fill={`var(--color-${key})`}
-                fillOpacity={fillOpacity}
-                stroke={`var(--color-${key})`}
-                strokeWidth={strokeWidth}
-              />
-            );
-          })}
-        </RadarChart>
-      </ChartContainer>
+      <div className="mx-auto w-full max-w-[300px]">
+        <ChartContainer
+          config={chartConfig}
+          className="aspect-square w-full"
+        >
+          <RadarChart data={chartData}>
+            <ChartTooltip
+              cursor={false}
+              content={<ChartTooltipContent indicator="line" />}
+            />
+            <PolarAngleAxis dataKey="skill" />
+            <PolarGrid />
+            {participants.map((participant, index) => {
+              const key = `participant${participant?.participantIndex ?? index}`;
+              const fillOpacity = index === 0 ? 0.45 : 0.25;
+              const strokeWidth = index === 0 ? 2.5 : 2;
+              return (
+                <Radar
+                  key={key}
+                  dataKey={key}
+                  fill={`var(--color-${key})`}
+                  fillOpacity={fillOpacity}
+                  stroke={`var(--color-${key})`}
+                  strokeWidth={strokeWidth}
+                />
+              );
+            })}
+          </RadarChart>
+        </ChartContainer>
+      </div>
     </motion.div>
   );
 }

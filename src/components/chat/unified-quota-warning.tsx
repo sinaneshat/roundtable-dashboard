@@ -111,7 +111,7 @@ export function UnifiedQuotaWarning({ checkType, className }: UnifiedQuotaWarnin
       <Button
         variant="default"
         size="sm"
-        className="h-7 rounded-lg text-xs font-medium shrink-0"
+        className="h-7 rounded-full text-xs font-medium shrink-0"
         onClick={() => router.push('/chat/pricing')}
       >
         {t('usage.upgrade')}

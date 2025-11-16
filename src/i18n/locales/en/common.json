@@ -420,6 +420,42 @@
         "show": "Show",
         "hide": "Hide",
         "details": "details",
+        "relevanceLabel": "Relevance",
+        "relevanceTooltip": "This result is {score}% relevant to your query",
+        "keyPoints": "Key Points",
+        "searching": "Searching",
+        "loading": "Loading",
+        "cached": "Cached",
+        "wordsExtracted": "words extracted",
+        "requestId": "Request ID",
+        "llmAnswer": {
+          "title": "AI-Generated Summary",
+          "generating": "Generating"
+        },
+        "images": {
+          "title": "Related Images",
+          "aiAnalysis": "AI Analysis",
+          "visionApi": "Vision API",
+          "author": "Author",
+          "published": "Published",
+          "viewSource": "View Source"
+        },
+        "relevance": {
+          "high": "Highly relevant to your query",
+          "medium": "Moderately relevant to your query",
+          "low": "Somewhat relevant to your query"
+        },
+        "metadata": {
+          "minRead": "min read",
+          "words": "words"
+        },
+        "contentType": {
+          "news": "News",
+          "article": "Article",
+          "research": "Research",
+          "blog": "Blog",
+          "general": "Web Page"
+        },
         "error": {
           "failedToLoad": "{count, plural, =1 {# page could not be loaded} other {# pages could not be loaded}}"
         }

@@ -219,19 +219,19 @@ export function ModelSelectionModal({
       <DialogContent
         glass={true}
         className={cn(
-          'w-[90vw] min-w-[400px] max-w-[512px]',
+          'w-[95vw] sm:w-[90vw] max-w-[512px] overflow-hidden',
           className,
         )}
       >
         {/* Fixed Header Section */}
-        <div className="space-y-3 shrink-0">
-          <DialogHeader glass>
-            <DialogTitle className="text-xl">{t('title')}</DialogTitle>
-            <DialogDescription>{t('subtitle')}</DialogDescription>
+        <div className="space-y-2 sm:space-y-3 shrink-0">
+          <DialogHeader glass className="px-3 sm:px-4 md:px-6 pt-3 sm:pt-4 md:pt-6 pb-2 sm:pb-3">
+            <DialogTitle className="text-base sm:text-lg md:text-xl">{t('title')}</DialogTitle>
+            <DialogDescription className="text-xs sm:text-sm">{t('subtitle')}</DialogDescription>
           </DialogHeader>
 
           {/* Search Input */}
-          <DialogBody glass className="relative px-6 pb-4">
+          <DialogBody glass className="relative px-3 sm:px-4 md:px-6 pb-4">
             <input
               ref={searchInputRef}
               type="text"
@@ -247,14 +247,14 @@ export function ModelSelectionModal({
               )}
             />
             {searchQuery && (
-              <div className="absolute right-3 top-0 bottom-0 flex items-center justify-center">
+              <div className="absolute right-0 top-0 bottom-0 flex items-center justify-center pr-3">
                 <button
                   type="button"
                   onClick={() => {
                     setSearchQuery('');
                     searchInputRef.current?.focus();
                   }}
-                  className="text-muted-foreground hover:text-foreground transition-colors [&_svg]:size-4 [&_svg]:shrink-0"
+                  className="text-muted-foreground hover:text-foreground transition-colors p-1 [&_svg]:size-4 [&_svg]:shrink-0"
                   tabIndex={-1}
                   aria-label="Clear search"
                 >
@@ -266,29 +266,26 @@ export function ModelSelectionModal({
         </div>
 
         {/* Scrollable Model List */}
-        <DialogBody glass className="h-[400px] border-t border-white/5">
-          <ScrollArea className="h-full">
+        <DialogBody glass className="h-[50vh] sm:h-[320px] max-h-[400px] border-t border-white/5 overflow-hidden">
+          <ScrollArea className="h-full w-full max-w-[512px]">
             {groupedModels.length === 0
               ? (
-                  <div className="flex flex-col items-center justify-center py-12 text-center px-6 min-w-[280px]">
+                  <div className="flex flex-col items-center justify-center py-8 sm:py-12 text-center px-3 sm:px-4 md:px-6">
                     <p className="text-sm text-muted-foreground">{tModels('noModelsFound')}</p>
                   </div>
                 )
               : groupedModels.map((group, groupIndex) => (
-                  <div key={group.title}>
-                    {/* Sticky Section Header - heavy blur to obscure scrolling content */}
-                    <div className="sticky top-0 z-10">
+                  <div key={group.title} className="w-full max-w-[512px] min-w-0 overflow-hidden">
+                    <div className="sticky top-0 z-10 w-full max-w-[512px] overflow-hidden">
                       <div
-                        className={cn(
-                          'bg-black/80 backdrop-blur-3xl px-6 py-2.5',
-                        )}
+                        className={cn('bg-black/80 backdrop-blur-3xl px-3 sm:px-4 md:px-6 py-2.5')}
                         style={{
                           ...heavyGlassCardStyles,
                         }}
                       >
-                        <div className="flex items-center justify-between">
+                        <div className="flex items-center justify-between gap-2 min-w-0">
                           <span className={cn(
-                            'text-xs font-semibold',
+                            'text-xs font-semibold truncate',
                             groupIndex === 0 && 'text-foreground',
                             groupIndex === 1 && 'text-accent-foreground',
                             groupIndex > 1 && 'text-muted-foreground uppercase tracking-wider',
@@ -297,22 +294,22 @@ export function ModelSelectionModal({
                             {group.title}
                           </span>
                           {groupIndex === 0 && selectedCount > 0 && (
-                            <div className="flex items-center gap-2">
-                              <Badge variant="default" className="text-[10px] px-1.5 py-0 h-4">
+                            <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+                              <Badge variant="default" className="text-[9px] sm:text-[10px] px-1 sm:px-1.5 py-0 h-3.5 sm:h-4">
                                 {selectedCount}
                                 /
                                 {maxModels}
                               </Badge>
-                              <span className="text-[10px] opacity-70">{tModels('dragToReorder')}</span>
+                              <span className="text-[9px] sm:text-[10px] opacity-70 hidden sm:inline whitespace-nowrap">{tModels('dragToReorder')}</span>
                             </div>
                           )}
                           {groupIndex === 1 && (
-                            <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4">
+                            <Badge variant="secondary" className="text-[9px] sm:text-[10px] px-1 sm:px-1.5 py-0 h-3.5 sm:h-4 shrink-0">
                               {tModels('topModels')}
                             </Badge>
                           )}
                           {groupIndex > 1 && (
-                            <span className="text-[10px] opacity-80">
+                            <span className="text-[9px] sm:text-[10px] opacity-80 shrink-0 whitespace-nowrap">
                               {group.models.length}
                               {' '}
                               {group.models.length === 1 ? tModels('model') : tModels('models')}
@@ -333,6 +330,7 @@ export function ModelSelectionModal({
                               const otherModels = orderedModels.filter(om => om.participant === null);
                               onReorder([...reordered, ...otherModels]);
                             }}
+                            className="block w-full min-w-0 max-w-[512px] overflow-hidden"
                           >
                             {group.models.map(orderedModel => (
                               <ModelItem
@@ -353,7 +351,7 @@ export function ModelSelectionModal({
                           </Reorder.Group>
                         )
                       : (
-                          <div>
+                          <div className="block w-full min-w-0 max-w-[512px] overflow-hidden">
                             {group.models.map(orderedModel => (
                               <ModelItem
                                 key={orderedModel.model.id}
@@ -378,7 +376,7 @@ export function ModelSelectionModal({
         </DialogBody>
 
         {/* Fixed Footer Section */}
-        {children && <div className="px-6 pb-4 shrink-0">{children}</div>}
+        {children && <div className="px-3 sm:px-4 md:px-6 pb-4 shrink-0">{children}</div>}
       </DialogContent>
     </Dialog>
   );

@@ -122,7 +122,7 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
   return (
     <div className="relative flex flex-1 flex-col min-h-0 h-full">
       <UnifiedErrorBoundary context="chat">
-        <div className="flex flex-col min-h-screen relative">
+        <div className="flex flex-col min-h-dvh relative">
           <div
             id="public-chat-scroll-container"
             className="container max-w-3xl mx-auto px-3 sm:px-4 md:px-6 pt-16 sm:pt-20 pb-24 sm:pb-32 flex-1"

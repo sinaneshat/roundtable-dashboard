@@ -1,6 +1,6 @@
 'use client';
 
-import { Clock, RotateCcw } from 'lucide-react';
+import { Clock } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
@@ -30,10 +30,6 @@ type RoundAnalysisCardProps = {
   onStreamComplete?: (completedAnalysisData?: ModeratorAnalysisPayload | null, error?: unknown) => void;
   streamingRoundNumber?: number | null;
   onActionClick?: (action: RecommendedAction) => void;
-  /** Callback to regenerate entire round (participants + analysis) */
-  onRetry?: (roundNumber: number) => void;
-  /** Whether round has incomplete participant responses */
-  isRoundIncomplete?: boolean;
 };
 export function RoundAnalysisCard({
   analysis,
@@ -44,8 +40,6 @@ export function RoundAnalysisCard({
   onStreamComplete,
   streamingRoundNumber,
   onActionClick,
-  onRetry,
-  isRoundIncomplete = false,
 }: RoundAnalysisCardProps) {
   const t = useTranslations('moderator');
   const statusConfig = {
@@ -69,8 +63,6 @@ export function RoundAnalysisCard({
   const config = statusConfig[analysis.status];
   const [isManuallyControlled, setIsManuallyControlled] = useState(false);
   const [manuallyOpen, setManuallyOpen] = useState(false);
-  const [isRetrying, setIsRetrying] = useState(false);
-  const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // React 19 Pattern: Effect runs when streamingRoundNumber changes (dependency array handles detection)
   // No need for ref to track previous value - effect dependencies already do this
@@ -97,50 +89,8 @@ export function RoundAnalysisCard({
     setIsManuallyControlled(true);
     setManuallyOpen(open);
   }, [isStreamingOrPending]);
-  const handleRetry = useCallback(async () => {
-    if (isRetrying)
-      return;
-    if (retryTimeoutRef.current) {
-      clearTimeout(retryTimeoutRef.current);
-    }
-    setIsRetrying(true);
-
-    // ✅ CRITICAL FIX: If onRetry provided, call it for FAILED analysis or incomplete rounds
-    // Previously only called onRetry when isRoundIncomplete was true
-    // But onRetry should also be called when analysis FAILED and user clicks retry
-    // This allows parent component to handle retry logic (e.g., regenerate entire round)
-    if (onRetry && (isRoundIncomplete || analysis.status === AnalysisStatuses.FAILED)) {
-      onRetry(analysis.roundNumber);
-      retryTimeoutRef.current = setTimeout(() => {
-        setIsRetrying(false);
-      }, 1000);
-      return;
-    }
-
-    // Otherwise, just retry analysis generation via API
-    try {
-      await fetch(`/api/v1/chat/threads/${threadId}/rounds/${analysis.roundNumber}/analyze`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          participantMessageIds: analysis.participantMessageIds,
-        }),
-      });
-    } catch {
-    }
-    retryTimeoutRef.current = setTimeout(() => {
-      setIsRetrying(false);
-    }, 2000);
-  }, [threadId, analysis.roundNumber, analysis.participantMessageIds, analysis.status, isRetrying, onRetry, isRoundIncomplete]);
   const containerRef = useRef<HTMLDivElement>(null);
   const previousStatusRef = useRef(analysis.status);
-  useEffect(() => {
-    return () => {
-      if (retryTimeoutRef.current) {
-        clearTimeout(retryTimeoutRef.current);
-      }
-    };
-  }, []);
   useEffect(() => {
     // ✅ FIX: REMOVED forced scrollIntoView on analysis completion
     // Previously: Forced scroll to analysis card when it completed, overriding user position
@@ -172,28 +122,6 @@ export function RoundAnalysisCard({
               </span>
             </div>
           </ChainOfThoughtHeader>
-          {(analysis.status === AnalysisStatuses.FAILED || isRoundIncomplete) && (
-            <div className="absolute right-4 top-3 z-10">
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleRetry();
-                }}
-                disabled={isRetrying}
-                className={cn(
-                  'flex items-center gap-1.5 px-2 py-1 text-xs font-medium rounded-md transition-colors',
-                  'text-primary hover:text-primary/80 hover:bg-primary/10',
-                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
-                  'disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent',
-                )}
-                aria-label={t('retryAnalysis')}
-              >
-                <RotateCcw className={cn('size-3.5', isRetrying && 'animate-spin')} />
-                <span className="hidden sm:inline">{isRoundIncomplete ? t('retryRound') : t('retryAnalysis')}</span>
-              </button>
-            </div>
-          )}
         </div>
         <ChainOfThoughtContent>
           <div className="space-y-4">
@@ -245,21 +173,9 @@ export function RoundAnalysisCard({
                   )
                 : analysis.status === AnalysisStatuses.FAILED
                   ? (
-                      <div className="space-y-3">
-                        <div className="flex items-center gap-2 py-1.5 text-xs text-destructive">
-                          <span className="size-1.5 rounded-full bg-destructive/80" />
-                          <span>{analysis.errorMessage || t('errorAnalyzing')}</span>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={handleRetry}
-                          className="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-primary hover:text-primary/80 transition-colors"
-                        >
-                          <svg className="size-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                          </svg>
-                          {t('retryAnalysis')}
-                        </button>
+                      <div className="flex items-center gap-2 py-1.5 text-xs text-destructive">
+                        <span className="size-1.5 rounded-full bg-destructive/80" />
+                        <span>{analysis.errorMessage || t('errorAnalyzing')}</span>
                       </div>
                     )
                   : null}

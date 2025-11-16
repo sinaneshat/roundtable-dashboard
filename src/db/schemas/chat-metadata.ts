@@ -20,49 +20,20 @@
 
 import { z } from 'zod';
 
-import { ChatModeSchema, WebSearchContentTypeSchema, WebSearchDepthSchema } from '@/api/core/enums';
+import {
+  ChatModeSchema,
+  ErrorTypeSchema,
+  FinishReasonSchema,
+  WebSearchContentTypeSchema,
+  WebSearchDepthSchema,
+} from '@/api/core/enums';
 import { RoundNumberSchema } from '@/lib/schemas/round-schemas';
 
 // ============================================================================
 // SHARED SCHEMAS - Used across message and chat metadata
 // ============================================================================
-// These schemas are defined here to break circular dependency between
-// chat-metadata.ts and message-metadata.ts
-
-/**
- * AI SDK finish reason enum
- * Zod-first pattern: Schema is source of truth, reused across all metadata schemas
- *
- * @see https://sdk.vercel.ai/docs/ai-sdk-core/stream-text
- */
-export const FinishReasonSchema = z.enum([
-  'stop',
-  'length',
-  'tool-calls',
-  'content-filter',
-  'failed',
-  'other',
-  'unknown',
-]);
-
-export type FinishReason = z.infer<typeof FinishReasonSchema>;
-
-/**
- * Error type enum for categorizing AI operation errors
- * Zod-first pattern: Schema defines valid error types
- */
-export const ErrorTypeSchema = z.enum([
-  'rate_limit',
-  'context_length',
-  'api_error',
-  'network',
-  'timeout',
-  'model_unavailable',
-  'empty_response',
-  'unknown',
-]);
-
-export type ErrorType = z.infer<typeof ErrorTypeSchema>;
+// NOTE: FinishReasonSchema, ErrorTypeSchema, and their types are now
+// centralized in /src/api/core/enums.ts following the 5-part enum pattern
 
 /**
  * Token usage schema - reusable across message metadata and API responses

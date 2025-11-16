@@ -22,11 +22,13 @@ export type CreateMetadataProps = {
 
 // Generate JSON-LD structured data for SEO
 // Enhanced with Article support and additional fields
+// ✅ FIX: Accept baseUrl to prevent hydration mismatch from getBaseUrl() using window.location
 export function createJsonLd(props: {
   type?: 'WebApplication' | 'Organization' | 'Product' | 'Article';
   name?: string;
   description?: string;
   url?: string;
+  baseUrl?: string;
   logo?: string;
   image?: string;
   sameAs?: string[];
@@ -40,9 +42,10 @@ export function createJsonLd(props: {
     type = 'WebApplication',
     name = BRAND.fullName,
     description = BRAND.description,
-    url = getBaseUrl(),
-    logo = `${getBaseUrl()}/static/logo.png`,
-    image = `${getBaseUrl()}/static/og-image.png`,
+    baseUrl: providedBaseUrl,
+    url = providedBaseUrl || getBaseUrl(),
+    logo = `${providedBaseUrl || getBaseUrl()}/static/logo.png`,
+    image = `${providedBaseUrl || getBaseUrl()}/static/og-image.png`,
     sameAs = [
       BRAND.social.twitter,
       BRAND.social.linkedin,

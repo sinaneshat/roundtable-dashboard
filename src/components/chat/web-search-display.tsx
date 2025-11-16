@@ -5,6 +5,8 @@ import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 
 import type { WebSearchDisplayProps } from '@/api/routes/chat/schema';
+import { LLMAnswerDisplay } from '@/components/chat/llm-answer-display';
+import { WebSearchImageGallery } from '@/components/chat/web-search-image-gallery';
 import { WebSearchResultCard } from '@/components/chat/web-search-result-card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
@@ -12,17 +14,60 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Progress } from '@/components/ui/progress';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/ui/cn';
 
 // Export the flat version as default (no nested cards)
 export { WebSearchFlatDisplay as default } from './web-search-flat-display';
 
 // Card-based display component (alternative to flat display)
-export function WebSearchDisplay({ results, className, meta }: WebSearchDisplayProps) {
+export function WebSearchDisplay({
+  results,
+  className,
+  meta,
+  answer,
+  isStreaming = false,
+  requestId,
+}: WebSearchDisplayProps & { isStreaming?: boolean; requestId?: string }) {
   const t = useTranslations('chat.tools.webSearch');
   const [isOpen, setIsOpen] = useState(true);
   const [viewMode, setViewMode] = useState<'cards' | 'compact'>('cards');
+
+  // Show loading state while streaming
+  if (isStreaming && (!results || results.length === 0)) {
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        className={cn('relative', className)}
+      >
+        <Card className="overflow-hidden border-primary/10 bg-gradient-to-br from-primary/5 via-background to-background">
+          <div className="p-4">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="relative">
+                <Globe className="size-5 text-primary animate-pulse" />
+                <Sparkles className="size-3 text-yellow-500 absolute -top-1 -right-1 animate-pulse" />
+              </div>
+              <span className="text-base font-semibold bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
+                {t('title')}
+              </span>
+              <Badge variant="secondary" className="text-xs">
+                <Sparkles className="size-3 mr-1 animate-pulse" />
+                {t('searching')}
+              </Badge>
+            </div>
+            <div className="space-y-3">
+              <Skeleton className="h-24 w-full" />
+              <Skeleton className="h-20 w-full" />
+              <Skeleton className="h-20 w-full" />
+            </div>
+          </div>
+        </Card>
+      </motion.div>
+    );
+  }
 
   if (!results || results.length === 0) {
     return null;
@@ -43,6 +88,9 @@ export function WebSearchDisplay({ results, className, meta }: WebSearchDisplayP
 
   // Calculate total words extracted
   const totalWords = successfulResults.reduce((sum, r) => sum + (r.metadata?.wordCount || 0), 0);
+
+  // Check if we have images
+  const hasImages = successfulResults.some(r => r.metadata?.imageUrl);
 
   return (
     <motion.div
@@ -167,7 +215,14 @@ export function WebSearchDisplay({ results, className, meta }: WebSearchDisplayP
                   </div>
 
                   {/* Results display */}
-                  <div className="p-4">
+                  <div className="p-4 space-y-4">
+                    {/* LLM Answer - Display prominently at top with streaming support */}
+                    {(answer || isStreaming) && <LLMAnswerDisplay answer={answer ?? null} isStreaming={isStreaming} />}
+
+                    {/* Image Gallery */}
+                    {hasImages && <WebSearchImageGallery results={successfulResults} />}
+
+                    {/* Search Results */}
                     {viewMode === 'cards'
                       ? (
                           <div className="space-y-4">
@@ -255,6 +310,35 @@ export function WebSearchDisplay({ results, className, meta }: WebSearchDisplayP
                             className="h-2"
                           />
                         </div>
+                      </div>
+                    )}
+
+                    {/* Request ID footer (subtle) */}
+                    {requestId && (
+                      <div className="mt-4 pt-3 border-t border-border/20">
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <div className="flex items-center gap-2 text-xs text-muted-foreground/60">
+                                <span>
+                                  {t('requestId')}
+                                  :
+                                </span>
+                                <code className="font-mono text-xs bg-muted/30 px-1.5 py-0.5 rounded">
+                                  {requestId.slice(0, 12)}
+                                  ...
+                                </code>
+                              </div>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <div className="space-y-1">
+                                <p className="font-medium">Full Request ID</p>
+                                <code className="text-xs">{requestId}</code>
+                                <p className="text-xs text-muted-foreground">For support and debugging</p>
+                              </div>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
                       </div>
                     )}
                   </div>

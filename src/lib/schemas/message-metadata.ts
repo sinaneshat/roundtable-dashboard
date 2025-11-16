@@ -16,26 +16,26 @@
 
 import { z } from 'zod';
 
-import { WebSearchContentTypeSchema, WebSearchDepthSchema } from '@/api/core/enums';
-/* eslint-disable perfectionist/sort-named-imports */
-import type {
-  DbMessageMetadata as MessageMetadata,
-  ErrorType,
-  FinishReason,
-  Usage,
-} from '@/db/schemas/chat-metadata';
+import type { ErrorType, FinishReason } from '@/api/core/enums';
 import {
   ErrorTypeSchema,
   FinishReasonSchema,
+  WebSearchContentTypeSchema,
+  WebSearchDepthSchema,
+} from '@/api/core/enums';
+import type {
+  DbMessageMetadata as MessageMetadata,
+  Usage,
+} from '@/db/schemas/chat-metadata';
+import {
   isAssistantMessageMetadata as isAssistantMetadata,
   UsageSchema,
 } from '@/db/schemas/chat-metadata';
-/* eslint-enable perfectionist/sort-named-imports */
 
 // ============================================================================
 // Re-export Shared Schemas (for backward compatibility)
 // ============================================================================
-// These schemas are now defined in chat-metadata.ts to break circular dependency
+// ErrorTypeSchema and FinishReasonSchema are centralized in @/api/core/enums
 // Re-exporting here so existing imports continue to work
 export { ErrorTypeSchema, FinishReasonSchema, UsageSchema };
 export type { ErrorType, FinishReason, Usage };

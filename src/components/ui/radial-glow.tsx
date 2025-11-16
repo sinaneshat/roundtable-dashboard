@@ -54,17 +54,16 @@ export const RadialGlow = ({
       }}
     >
       <motion.div
-        initial={{ opacity: 0 }}
+        initial={{ opacity: 0.85 }}
         animate={{
           opacity: animate ? [0.85, 1, 0.85] : 0.9,
           scale: animate ? [1, 1.05, 1] : 1,
         }}
         transition={{
           opacity: {
-            duration,
-            repeat: animate ? Infinity : 0,
-            repeatType: "reverse",
-            ease: "easeInOut",
+            duration: 0.6,
+            delay: 0.1,
+            ease: "easeOut",
           },
           scale: {
             duration,
@@ -80,6 +79,8 @@ export const RadialGlow = ({
           left: `${-size / 2}px`,
           top: `calc(-50% + ${offsetY}px)`,
           transform: 'translateZ(0)', // Force GPU acceleration
+          backfaceVisibility: 'hidden',
+          WebkitFontSmoothing: 'antialiased',
         }}
       >
         {useLogoColors ? (
@@ -91,7 +92,9 @@ export const RadialGlow = ({
                 background: createRainbowGradient(0.15),
                 filter: 'blur(100px)',
                 transform: 'translateZ(0)',
+                backfaceVisibility: 'hidden',
               }}
+              initial={{ scale: 1 }}
               animate={animate ? {
                 scale: [1, 1.1, 1],
               } : {}}
@@ -99,6 +102,7 @@ export const RadialGlow = ({
                 duration: duration * 2,
                 repeat: Infinity,
                 ease: "easeInOut",
+                delay: 0.2,
               }}
             />
 
@@ -109,7 +113,9 @@ export const RadialGlow = ({
                 background: createRainbowGradient(0.12),
                 filter: 'blur(140px)',
                 transform: 'translateZ(0) scale(1.3)',
+                backfaceVisibility: 'hidden',
               }}
+              initial={{ scale: 1 }}
               animate={animate ? {
                 scale: [1, 1.15, 1],
               } : {}}
@@ -117,6 +123,7 @@ export const RadialGlow = ({
                 duration: duration * 2.5,
                 repeat: Infinity,
                 ease: "easeInOut",
+                delay: 0.3,
               }}
             />
 
@@ -127,7 +134,9 @@ export const RadialGlow = ({
                 background: createRainbowGradient(0.08),
                 filter: 'blur(180px)',
                 transform: 'translateZ(0) scale(1.6)',
+                backfaceVisibility: 'hidden',
               }}
+              initial={{ scale: 1 }}
               animate={animate ? {
                 scale: [1, 1.2, 1],
               } : {}}
@@ -135,6 +144,7 @@ export const RadialGlow = ({
                 duration: duration * 3,
                 repeat: Infinity,
                 ease: "easeInOut",
+                delay: 0.4,
               }}
             />
           </>

@@ -19,10 +19,24 @@ function createApiHandler() {
       duplex: 'half',
     } as RequestInit);
 
+    // Create a mock ExecutionContext for local development
+    // In production (Cloudflare Workers), this is provided automatically
+    // In local dev (Next.js), we need to create a mock to prevent errors
+    const mockExecutionCtx = {
+      waitUntil: (promise: Promise<unknown>) => {
+        // In local dev, just run the promise without blocking the response
+        promise.catch(() => {
+          // Silently handle errors in background tasks
+        });
+      },
+      passThroughOnException: () => {},
+      props: {} as unknown,
+    } as ExecutionContext;
+
     // All requests go to the main API (now includes docs)
     // IMPORTANT: Return the Response directly without awaiting to preserve streaming
     // The Response object may contain a ReadableStream that must not be buffered
-    const response = await api.fetch(request, process.env);
+    const response = await api.fetch(request, process.env, mockExecutionCtx);
 
     // For streaming responses, we need to ensure Next.js doesn't buffer the response
     // AI SDK v5 streaming uses various content types depending on the protocol

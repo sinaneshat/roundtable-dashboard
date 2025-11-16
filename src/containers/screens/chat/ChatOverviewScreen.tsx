@@ -281,12 +281,30 @@ export default function ChatOverviewScreen() {
   // When user clicks "New Chat" from thread view, createdThreadId gets reset by resetToOverview()
   const shouldInitializeThread = Boolean(createdThreadId && currentThread);
 
+  // ✅ CRITICAL FIX: Disable orchestrator during ANY active streaming
+  // Previously only checked isStreaming & isCreatingAnalysis, but missed:
+  // - Pre-search streaming (happens before AI streaming starts)
+  // - Analysis streaming (happens after AI streaming completes)
+  // This caused unnecessary API calls polling /pre-searches and /analyses during streaming
+  const hasActivePreSearch = preSearches.some(
+    ps => ps.status === 'pending' || ps.status === 'streaming',
+  );
+  const hasStreamingAnalysis = analyses.some(
+    a => a.status === 'pending' || a.status === 'streaming',
+  );
+
   useScreenInitialization({
     mode: 'overview',
     thread: shouldInitializeThread ? currentThread : null,
     participants: shouldInitializeThread ? contextParticipants : [],
     chatMode: selectedMode,
-    enableOrchestrator: !isStreaming && !isCreatingAnalysis && shouldInitializeThread,
+    enableOrchestrator: (
+      !isStreaming
+      && !isCreatingAnalysis
+      && !hasActivePreSearch
+      && !hasStreamingAnalysis
+      && shouldInitializeThread
+    ),
   });
 
   // Handle form submission
@@ -429,23 +447,24 @@ export default function ChatOverviewScreen() {
 
   return (
     <UnifiedErrorBoundary context="chat">
-      <div className={`flex flex-col relative ${showInitialUI ? '' : 'min-h-screen'}`}>
+      <div className={`flex flex-col relative ${showInitialUI ? '' : 'min-h-dvh'}`}>
         {/* Radial glow - fixed positioning, doesn't affect layout */}
-        <AnimatePresence>
+        <AnimatePresence mode="wait">
           {showInitialUI && (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={{ duration: 0.3 }}
+              transition={{ duration: 0.5, ease: 'easeOut' }}
               className="fixed inset-0 pointer-events-none overflow-hidden"
-              style={{ zIndex: 0 }}
+              style={{ zIndex: 0, willChange: 'opacity' }}
             >
               {/* Position at logo center: pt-4 (1rem mobile) + logo half (2rem mobile, 3.5rem sm, 4rem md, 4.5rem lg) */}
               <div
                 className="absolute left-1/2 -translate-x-1/2"
                 style={{
                   top: 'calc(1rem + 2rem)', // Mobile: pt-4 + half of h-16
+                  willChange: 'transform',
                 }}
               >
                 <RadialGlow
@@ -468,24 +487,24 @@ export default function ChatOverviewScreen() {
               : 'pt-0 pb-32 sm:pb-36'
           }`}
         >
-          <AnimatePresence>
+          <AnimatePresence mode="wait">
             {showInitialUI && (
               <motion.div
                 key="initial-ui"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
                 exit={{ opacity: 0, y: -20 }}
-                transition={{ duration: 0.3 }}
+                transition={{ duration: 0.4, ease: 'easeOut' }}
                 className="w-full"
               >
                 <div className="flex flex-col items-center gap-3 sm:gap-4 md:gap-6 text-center relative">
 
                   <motion.div
                     className="relative h-16 w-16 xs:h-20 xs:w-20 sm:h-28 sm:w-28 md:h-32 md:w-32 lg:h-36 lg:w-36 z-10"
-                    initial={{ scale: 0.8, opacity: 0 }}
+                    initial={{ scale: 0.9, opacity: 0 }}
                     animate={{ scale: 1, opacity: 1 }}
                     exit={{ scale: 0.5, opacity: 0, y: -50 }}
-                    transition={{ delay: 0.1, duration: 0.4 }}
+                    transition={{ delay: 0.1, duration: 0.5, ease: 'easeOut' }}
                   >
                     <Image
                       src={BRAND.logos.main}
@@ -498,30 +517,30 @@ export default function ChatOverviewScreen() {
 
                   <motion.h1
                     className="text-xl xs:text-2xl sm:text-4xl md:text-5xl lg:text-6xl font-bold text-gray-900 dark:text-white px-4"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -30 }}
-                    transition={{ delay: 0.2, duration: 0.3 }}
+                    transition={{ delay: 0.25, duration: 0.4, ease: 'easeOut' }}
                   >
                     {BRAND.name}
                   </motion.h1>
 
                   <motion.p
                     className="text-sm xs:text-base sm:text-xl md:text-2xl text-gray-600 dark:text-gray-300 max-w-2xl px-4"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -30 }}
-                    transition={{ delay: 0.3, duration: 0.3 }}
+                    transition={{ delay: 0.35, duration: 0.4, ease: 'easeOut' }}
                   >
                     {BRAND.tagline}
                   </motion.p>
 
                   <motion.div
                     className="w-full mt-3 sm:mt-4 md:mt-8"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, scale: 0.95 }}
-                    transition={{ delay: 0.4, duration: 0.3 }}
+                    transition={{ delay: 0.45, duration: 0.4, ease: 'easeOut' }}
                   >
                     <ChatQuickStart onSuggestionClick={overviewActions.handleSuggestionClick} />
                   </motion.div>
@@ -529,10 +548,10 @@ export default function ChatOverviewScreen() {
                   {/* Chat input - positioned below suggestions in initial UI */}
                   <motion.div
                     className="w-full mt-6 sm:mt-8"
-                    initial={{ opacity: 0, y: 20 }}
+                    initial={{ opacity: 0, y: 15 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0 }}
-                    transition={{ delay: 0.5, duration: 0.3 }}
+                    transition={{ delay: 0.55, duration: 0.4, ease: 'easeOut' }}
                   >
                     <ChatInput
                       value={inputValue}
@@ -669,8 +688,6 @@ export default function ChatOverviewScreen() {
                           // Navigation handled by overview-actions.ts effect
                         }}
                         onActionClick={recommendedActions.handleActionClick}
-                        onRetry={handleRetryRound}
-                        isRoundIncomplete={firstRoundIncomplete}
                       />
                     </div>
                   );

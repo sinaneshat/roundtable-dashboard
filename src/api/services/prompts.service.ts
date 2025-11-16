@@ -102,10 +102,14 @@ Generate a JSON object with:
 - complexity: "BASIC", "MODERATE", or "DEEP" (string)
 - rationale: Why this search strategy and transformation is optimal (string, min 10 chars)
 - sourceCount: Number of sources needed 1-5 (number)
-- requiresFullContent: Whether full page content extraction is needed (boolean)
+- requiresFullContent: Whether full page content extraction is needed (boolean) - DEFAULT to false unless research/analysis requires deep content
 - analysis: Analysis of user intent and information needs (string, min 10 chars)
 
-IMPORTANT: The "query" field should NOT be the same as the user's question. Transform it into search-optimized keywords.
+IMPORTANT RULES:
+1. The "query" field should NOT be the same as the user's question. Transform it into search-optimized keywords.
+2. Set requiresFullContent to TRUE only for: research papers, detailed analysis, comparing multiple sources, technical documentation
+3. Set requiresFullContent to FALSE for: quick facts, simple questions, news, definitions, basic information
+4. Prefer BASIC search (requiresFullContent: false) unless the user explicitly needs deep analysis
 
 Return ONLY the JSON object, no additional text.`;
 }

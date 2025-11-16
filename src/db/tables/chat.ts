@@ -417,6 +417,7 @@ export const chatPreSearch = sqliteTable('chat_pre_search', {
     .default('pending'), // pending -> streaming -> completed/failed
   // Store the full search results as JSON
   // ✅ NULLABLE: Only populated once search completes successfully
+  // ✅ TAVILY-ENHANCED: Includes images, auto-parameters, enhanced metadata
   searchData: text('search_data', { mode: 'json' }).$type<{
     queries: Array<{
       query: string;
@@ -432,15 +433,41 @@ export const chatPreSearch = sqliteTable('chat_pre_search', {
         title: string;
         url: string;
         content: string;
+        excerpt?: string;
+        fullContent?: string;
+        rawContent?: string;
         score: number;
         publishedDate: string | null;
         domain?: string;
-        fullContent?: string;
         contentType?: string;
         keyPoints?: string[];
-        wordCount?: number;
+        metadata?: {
+          author?: string;
+          readingTime?: number;
+          wordCount?: number;
+          description?: string;
+          imageUrl?: string;
+          faviconUrl?: string;
+        };
+        images?: Array<{
+          url: string;
+          description?: string;
+          alt?: string;
+        }>;
       }>;
       responseTime: number;
+      // Tavily-style images array
+      images?: Array<{
+        url: string;
+        description?: string;
+      }>;
+      // Auto-detected parameters
+      autoParameters?: {
+        topic?: import('@/api/core/enums').WebSearchTopic;
+        timeRange?: import('@/api/core/enums').WebSearchTimeRange;
+        searchDepth?: import('@/api/core/enums').WebSearchDepth;
+        reasoning?: string;
+      };
     }>;
     analysis: string; // Overall analysis of why these queries were chosen
     successCount: number;

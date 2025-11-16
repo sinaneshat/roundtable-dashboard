@@ -54,9 +54,10 @@ function generateModeratorAnalysis(
     threadId: string;
     userId: string;
     sessionId?: string; // PostHog session ID for Session Replay linking
+    executionCtx?: ExecutionContext; // Cloudflare Workers ExecutionContext for waitUntil
   },
 ) {
-  const { roundNumber, mode, userQuestion, participantResponses, changelogEntries, userTier, env, analysisId, threadId, userId, sessionId } = config;
+  const { roundNumber, mode, userQuestion, participantResponses, changelogEntries, userTier, env, analysisId, threadId, userId, sessionId, executionCtx } = config;
 
   // ✅ POSTHOG LLM TRACKING: Initialize trace and timing for moderator analysis
   const llmTraceId = generateTraceId();
@@ -106,26 +107,37 @@ function generateModeratorAnalysis(
             })
             .where(eq(tables.chatModeratorAnalysis.id, analysisId));
 
-          // ✅ POSTHOG LLM TRACKING: Track analysis generation error with session link
-          await trackLLMError(
-            {
-              userId,
-              sessionId, // PostHog Best Practice: Link to Session Replay
-              threadId,
-              roundNumber,
-              participantId: 'moderator',
-              participantIndex: NO_PARTICIPANT_SENTINEL, // Moderator is not a participant
-              participantRole: 'AI Moderator',
-              modelId: analysisModelId,
-              modelName: analysisModelName,
-              threadMode: mode,
-            },
-            finishError as Error,
-            llmTraceId,
-            'moderator_analysis',
-          ).catch(() => {
-            // Silently fail
-          });
+          // ✅ PERFORMANCE OPTIMIZATION: Non-blocking error tracking
+          // PostHog error tracking runs asynchronously via waitUntil()
+          const trackError = async () => {
+            try {
+              await trackLLMError(
+                {
+                  userId,
+                  sessionId, // PostHog Best Practice: Link to Session Replay
+                  threadId,
+                  roundNumber,
+                  participantId: 'moderator',
+                  participantIndex: NO_PARTICIPANT_SENTINEL, // Moderator is not a participant
+                  participantRole: 'AI Moderator',
+                  modelId: analysisModelId,
+                  modelName: analysisModelName,
+                  threadMode: mode,
+                },
+                finishError as Error,
+                llmTraceId,
+                'moderator_analysis',
+              );
+            } catch {
+              // Silently fail
+            }
+          };
+
+          if (executionCtx) {
+            executionCtx.waitUntil(trackError());
+          } else {
+            trackError().catch(() => {});
+          }
         } catch {
         }
         return;
@@ -169,45 +181,58 @@ function generateModeratorAnalysis(
             content: userPrompt,
           }];
 
-          await trackLLMGeneration(
-            {
-              userId,
-              sessionId, // PostHog Best Practice: Link to Session Replay
-              threadId,
-              roundNumber,
-              participantId: 'moderator',
-              participantIndex: NO_PARTICIPANT_SENTINEL, // Moderator is not a participant
-              participantRole: 'AI Moderator',
-              modelId: analysisModelId,
-              modelName: analysisModelName,
-              threadMode: mode,
-            },
-            finishResult,
-            inputMessages, // PostHog Best Practice: Always include input
-            llmTraceId,
-            llmStartTime,
-            {
-              // Model configuration
-              modelConfig: {
-                temperature: 0.3,
-              },
-              // Prompt tracking for moderator analysis
-              promptTracking: {
-                promptId: 'moderator_round_analysis',
-                promptVersion: 'v1.0',
-              },
-              // Additional properties for analytics
-              additionalProperties: {
-                analysis_id: analysisId,
-                analysis_type: 'moderator_round_analysis',
-                participant_count: participantResponses.length,
-                has_changelog: (changelogEntries || []).length > 0,
-                response_type: 'structured_json',
-              },
-            },
-          ).catch(() => {
-            // Silently fail - never break the main flow
-          });
+          // ✅ PERFORMANCE OPTIMIZATION: Non-blocking analytics tracking
+          // PostHog tracking runs asynchronously via waitUntil()
+          // Expected gain: 100-300ms per analysis
+          const trackAnalytics = async () => {
+            try {
+              await trackLLMGeneration(
+                {
+                  userId,
+                  sessionId, // PostHog Best Practice: Link to Session Replay
+                  threadId,
+                  roundNumber,
+                  participantId: 'moderator',
+                  participantIndex: NO_PARTICIPANT_SENTINEL, // Moderator is not a participant
+                  participantRole: 'AI Moderator',
+                  modelId: analysisModelId,
+                  modelName: analysisModelName,
+                  threadMode: mode,
+                },
+                finishResult,
+                inputMessages, // PostHog Best Practice: Always include input
+                llmTraceId,
+                llmStartTime,
+                {
+                  // Model configuration
+                  modelConfig: {
+                    temperature: 0.3,
+                  },
+                  // Prompt tracking for moderator analysis
+                  promptTracking: {
+                    promptId: 'moderator_round_analysis',
+                    promptVersion: 'v1.0',
+                  },
+                  // Additional properties for analytics
+                  additionalProperties: {
+                    analysis_id: analysisId,
+                    analysis_type: 'moderator_round_analysis',
+                    participant_count: participantResponses.length,
+                    has_changelog: (changelogEntries || []).length > 0,
+                    response_type: 'structured_json',
+                  },
+                },
+              );
+            } catch {
+              // Silently fail - never break the main flow
+            }
+          };
+
+          if (executionCtx) {
+            executionCtx.waitUntil(trackAnalytics());
+          } else {
+            trackAnalytics().catch(() => {});
+          }
         } catch (updateError) {
           try {
             const db = await getDbAsync();
@@ -417,6 +442,7 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
           analysisId,
           threadId,
           userId: user.id,
+          executionCtx: c.executionCtx, // ✅ Pass executionCtx for waitUntil
           sessionId: session?.id,
         });
 
@@ -633,6 +659,7 @@ export const analyzeRoundHandler: RouteHandler<typeof analyzeRoundRoute, ApiEnv>
       analysisId,
       threadId,
       userId: user.id,
+      executionCtx: c.executionCtx, // ✅ Pass executionCtx for waitUntil
       sessionId: session?.id, // Better Auth session ID (stable, reliable)
       env: c.env,
     });

@@ -67,6 +67,10 @@ export default async function Layout({ children, modal }: RootLayoutProps) {
   // next-intl handles undefined gracefully
   const now = undefined;
 
+  // ✅ FIX: Get base URL once for SEO components to ensure consistency
+  // This prevents hydration mismatch from getBaseUrl() using window.location on client
+  const baseUrl = env.NEXT_PUBLIC_APP_URL || 'https://app.roundtable.now';
+
   return (
     <html
       lang="en"
@@ -92,10 +96,11 @@ export default async function Layout({ children, modal }: RootLayoutProps) {
         />
 
         {/* Core structured data for web application */}
-        <StructuredData type="WebApplication" />
+        <StructuredData type="WebApplication" baseUrl={baseUrl} />
 
         {/* Enhanced SoftwareApplication schema for AI search engines */}
         <SoftwareApplicationSchema
+          baseUrl={baseUrl}
           features={[
             tFeatures('multiModelCollaboration'),
             tFeatures('realtimeChat'),

@@ -251,7 +251,7 @@ export const ChatInput = memo(({
                     onClick={toggleSpeech}
                     disabled={isDisabled}
                     className={cn(
-                      'size-9 shrink-0',
+                      'size-8 sm:size-9 shrink-0',
                       isListening && 'animate-pulse',
                     )}
                     title={t('chat.input.voiceInput')}
@@ -272,7 +272,7 @@ export const ChatInput = memo(({
                         type="button"
                         size="icon"
                         onClick={onStop}
-                        className="size-9 rounded-full shrink-0 relative touch-manipulation active:scale-95 transition-transform bg-white text-black hover:bg-white/90"
+                        className="size-8 sm:size-9 rounded-full shrink-0 relative touch-manipulation active:scale-95 transition-transform bg-white text-black hover:bg-white/90"
                       >
                         <Square className="size-4" />
                         {streamingProgress && (
@@ -287,7 +287,7 @@ export const ChatInput = memo(({
                         type="submit"
                         size="icon"
                         disabled={isDisabled || !hasValidInput}
-                        className="size-9 rounded-full shrink-0 touch-manipulation active:scale-95 transition-transform disabled:active:scale-100 bg-white text-black hover:bg-white/90 disabled:bg-white/20 disabled:text-white/40"
+                        className="size-8 sm:size-9 rounded-full shrink-0 touch-manipulation active:scale-95 transition-transform disabled:active:scale-100 bg-white text-black hover:bg-white/90 disabled:bg-white/20 disabled:text-white/40"
                       >
                         <ArrowUp className="size-4" />
                       </Button>

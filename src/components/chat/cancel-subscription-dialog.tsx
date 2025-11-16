@@ -40,7 +40,7 @@ export function CancelSubscriptionDialog({
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
       <AlertDialogContent glass={true} className="max-w-lg">
-        <AlertDialogHeader>
+        <AlertDialogHeader glass>
           <div className="flex items-center gap-3">
             <div className="flex size-10 items-center justify-center rounded-full bg-destructive/10">
               <XCircle className="size-5 text-destructive" />
@@ -141,7 +141,7 @@ export function CancelSubscriptionDialog({
             </p>
           </AlertDialogDescription>
         </AlertDialogHeader>
-        <AlertDialogFooter>
+        <AlertDialogFooter glass>
           <AlertDialogCancel disabled={isProcessing}>
             {t('actions.cancel')}
           </AlertDialogCancel>

@@ -325,6 +325,18 @@ export default function ChatThreadScreen({
 
   // Message refetch and pending message send now handled by useThreadActions hook
 
+  // ✅ CRITICAL FIX: Disable orchestrator during ANY active streaming
+  // Previously only checked isStreaming & isRegenerating, but missed:
+  // - Pre-search streaming (happens before AI streaming starts)
+  // - Analysis streaming (happens after AI streaming completes)
+  // This caused unnecessary API calls polling /pre-searches and /analyses during streaming
+  const hasActivePreSearch = preSearches.some(
+    ps => ps.status === 'pending' || ps.status === 'streaming',
+  );
+  const hasStreamingAnalysis = analyses.some(
+    a => a.status === 'pending' || a.status === 'streaming',
+  );
+
   // Unified screen initialization with regeneration support
   useScreenInitialization({
     mode: 'thread',
@@ -344,7 +356,12 @@ export default function ChatThreadScreen({
     // The orchestrator's merge logic (analysis-orchestrator.ts) handles both:
     // 1. Initial hydration: Syncs prefetched analyses from query cache to store
     // 2. Real-time updates: Syncs new analyses as they're created/completed
-    enableOrchestrator: !isStreaming && !state.flags.isRegenerating,
+    enableOrchestrator: (
+      !isStreaming
+      && !state.flags.isRegenerating
+      && !hasActivePreSearch
+      && !hasStreamingAnalysis
+    ),
     // ✅ REMOVED: Analysis callbacks (onBeforeAnalysisCreate, onAfterAnalysisCreate, onAllParticipantsFailed)
     // These are now handled automatically by store subscriptions in store.ts
   });
@@ -566,7 +583,7 @@ export default function ChatThreadScreen({
   return (
     <>
       <UnifiedErrorBoundary context="chat">
-        <div className="flex flex-col min-h-screen relative">
+        <div className="flex flex-col min-h-dvh relative">
           <div
             id="chat-scroll-container"
             className="container max-w-3xl mx-auto px-3 sm:px-4 md:px-6 pt-0 pb-32 sm:pb-36 flex-1"
