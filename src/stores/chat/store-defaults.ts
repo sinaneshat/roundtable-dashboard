@@ -115,11 +115,14 @@ export const DATA_DEFAULTS = {
 // TRACKING SLICE DEFAULTS
 // ============================================================================
 
+// 🚨 BUG FIX: Removed `as const` to allow fresh Set instances on each reset
+// Without this fix, all resets reuse the same Set instances created at module load,
+// causing state pollution across thread navigations
 export const TRACKING_DEFAULTS = {
   hasSentPendingMessage: false,
   createdAnalysisRounds: new Set<number>(),
   triggeredPreSearchRounds: new Set<number>(),
-} as const;
+} satisfies Pick<import('./store-schemas').ChatStore, 'hasSentPendingMessage' | 'createdAnalysisRounds' | 'triggeredPreSearchRounds'>;
 
 // ============================================================================
 // CALLBACKS SLICE DEFAULTS
@@ -192,8 +195,9 @@ export const COMPLETE_RESET_STATE = {
   currentRoundNumber: DATA_DEFAULTS.currentRoundNumber,
   // Tracking state
   hasSentPendingMessage: TRACKING_DEFAULTS.hasSentPendingMessage,
-  createdAnalysisRounds: TRACKING_DEFAULTS.createdAnalysisRounds,
-  triggeredPreSearchRounds: TRACKING_DEFAULTS.triggeredPreSearchRounds,
+  // 🚨 BUG FIX: Create fresh Set instances for each complete reset
+  createdAnalysisRounds: new Set<number>(),
+  triggeredPreSearchRounds: new Set<number>(),
   // Callbacks state
   onComplete: CALLBACKS_DEFAULTS.onComplete,
   // Screen state
@@ -208,6 +212,9 @@ export const COMPLETE_RESET_STATE = {
  * Used by: resetThreadState (when unmounting thread screen)
  */
 export const THREAD_RESET_STATE = {
+  // UI state - 🚨 BUG FIX: Added missing streaming state properties
+  waitingToStartStreaming: UI_DEFAULTS.waitingToStartStreaming,
+  isStreaming: THREAD_DEFAULTS.isStreaming,
   // Flags state
   hasInitiallyLoaded: FLAGS_DEFAULTS.hasInitiallyLoaded,
   isRegenerating: FLAGS_DEFAULTS.isRegenerating,
@@ -222,8 +229,9 @@ export const THREAD_RESET_STATE = {
   currentRoundNumber: DATA_DEFAULTS.currentRoundNumber,
   // Tracking state
   hasSentPendingMessage: TRACKING_DEFAULTS.hasSentPendingMessage,
-  createdAnalysisRounds: TRACKING_DEFAULTS.createdAnalysisRounds,
-  triggeredPreSearchRounds: TRACKING_DEFAULTS.triggeredPreSearchRounds,
+  // 🚨 BUG FIX: Create fresh Set instances for each thread reset
+  createdAnalysisRounds: new Set<number>(),
+  triggeredPreSearchRounds: new Set<number>(),
   // AI SDK methods (thread-related)
   sendMessage: THREAD_DEFAULTS.sendMessage,
   startRound: THREAD_DEFAULTS.startRound,

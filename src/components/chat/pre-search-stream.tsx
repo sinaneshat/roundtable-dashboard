@@ -304,11 +304,11 @@ function PreSearchStreamComponent({
   }
 
   // Handle streaming state properly
-  // PENDING/STREAMING: Show partialSearchData (actual stream data)
+  // PENDING/STREAMING: Show partialSearchData (actual stream data), fallback to preSearch.searchData
   // COMPLETED: Show stored searchData
   const displayData = preSearch.status === AnalysisStatuses.COMPLETE
     ? preSearch.searchData
-    : partialSearchData;
+    : (partialSearchData || preSearch.searchData);
 
   const hasData = displayData && (
     (displayData.queries && displayData.queries.length > 0)
@@ -479,7 +479,7 @@ function PreSearchStreamComponent({
             })()}
 
             {/* AI-Generated Answer Summary */}
-            {hasResult && searchResult.answer && (
+            {hasResult && (
               <div className="pl-6">
                 <LLMAnswerDisplay
                   answer={searchResult.answer}

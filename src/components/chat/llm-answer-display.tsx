@@ -80,16 +80,16 @@ export function LLMAnswerDisplay({ answer, isStreaming = false, className, sourc
   // Show skeleton before first chunk arrives
   if (!answer && isStreaming) {
     return (
-      <div className={cn('space-y-2', className)}>
+      <div className={cn('space-y-2 llm-answer-skeleton', className)}>
         <div className="flex items-center gap-2 mb-3">
           <Badge variant="secondary" className="text-xs">
             <Sparkles className="size-3 mr-1 animate-pulse" />
             AI synthesizing answer...
           </Badge>
         </div>
-        <Skeleton className="h-4 w-full" />
-        <Skeleton className="h-4 w-5/6" />
-        <Skeleton className="h-4 w-4/6" />
+        <Skeleton className="h-4 w-full skeleton-line" />
+        <Skeleton className="h-4 w-5/6 skeleton-line" />
+        <Skeleton className="h-4 w-4/6 skeleton-line" />
         <Separator className="!mt-3" />
       </div>
     );

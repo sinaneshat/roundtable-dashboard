@@ -277,25 +277,10 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
     setMessagesRef.current = chat.setMessages;
   }, [chat.sendMessage, chat.startRound, chat.stop, chat.setMessages]);
 
-  // ✅ CRITICAL FIX: Register chat hook functions with store
-  // The pending message effect (line 440) needs access to sendMessage from store state
-  // Without this, messages don't send on thread screen after navigation from overview
-  useEffect(() => {
-    const currentState = store.getState();
-    currentState.setSendMessage(chat.sendMessage);
-    // Wrap startRound and retry to return Promise<void> to match store types
-    currentState.setStartRound(chat.startRound
-      ? async () => {
-        chat.startRound();
-      }
-      : undefined);
-    currentState.setStop(chat.stop);
-    currentState.setChatSetMessages(chat.setMessages);
-  // Note: 'chat' object not in deps - we only depend on its methods which are listed
-  // Adding 'chat' would cause unnecessary re-runs since it's a new object on every render
-  // We correctly depend on the stable method references: sendMessage, startRound, retry, stop, setMessages
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [store, chat.sendMessage, chat.startRound, chat.retry, chat.stop, chat.setMessages]);
+  // ✅ REMOVED: Old effect that stored unwrapped chat methods
+  // This effect was overwriting the wrapped versions with quota/pre-search invalidation
+  // The wrapped versions are now stored in the effect below (lines 500-511)
+  // which runs once on mount with stable callbacks that include query invalidation logic
 
   // ✅ ARCHITECTURAL FIX: Provider-side streaming trigger
   // Watches waitingToStartStreaming and calls FRESH startRound
