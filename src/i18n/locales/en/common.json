@@ -533,12 +533,25 @@
           "performance": "Performance Metrics",
           "queryDetails": "Query Details",
           "rationale": "Rationale",
-          "complexity": "Complexity",
+          "complexity": {
+            "label": "Complexity",
+            "simple": "Simple",
+            "moderate": "Moderate",
+            "complex": "Complex"
+          },
           "sources": "Sources",
           "depth": "Search Depth",
           "autoDetectedParams": "AI-Detected Parameters",
           "queriesGenerated": "queries generated",
-          "perQuery": "per query"
+          "perQuery": "per query",
+          "searchDepth": {
+            "basic": "Basic",
+            "advanced": "Advanced"
+          },
+          "sourceCount": {
+            "optimal": "{{count}} sources optimal",
+            "label": "Recommended Sources"
+          }
         },
         "contentPreview": {
           "title": "Full Content",

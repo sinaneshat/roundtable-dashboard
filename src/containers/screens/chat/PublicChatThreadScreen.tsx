@@ -5,14 +5,14 @@ import { useTranslations } from 'next-intl';
 import { useMemo } from 'react';
 
 import type { FeedbackType } from '@/api/core/enums';
-import type { ChatParticipant, RoundFeedbackData } from '@/api/routes/chat/schema';
+import type { ChatParticipant, RoundFeedbackData, StoredPreSearch } from '@/api/routes/chat/schema';
 import { ThreadTimeline } from '@/components/chat/thread-timeline';
 import { UnifiedErrorBoundary } from '@/components/chat/unified-error-boundary';
 import { Button } from '@/components/ui/button';
 import { BRAND } from '@/constants';
 import { usePublicThreadQuery } from '@/hooks/queries/chat';
 import type { TimelineItem } from '@/hooks/utils';
-import { useThreadTimeline } from '@/hooks/utils';
+import { useChatScroll, useThreadTimeline } from '@/hooks/utils';
 import { transformModeratorAnalysis } from '@/lib/utils/date-transforms';
 import { chatMessagesToUIMessages } from '@/lib/utils/message-transforms';
 
@@ -47,6 +47,9 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
     [rawAnalyses],
   );
 
+  // Public threads don't include pre-searches
+  const preSearches: StoredPreSearch[] = [];
+
   // Build feedback map for quick lookup - transform dates
   const feedbackByRound = useMemo(() => {
     const map = new Map<number, FeedbackType>();
@@ -62,6 +65,17 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
     messages,
     changelog,
     analyses,
+  });
+
+  // ✅ ADD: Auto-scroll management for public chat view
+  // Matches ChatThreadScreen behavior but without streaming (public is read-only)
+  // Auto-scrolls when user is near bottom during analysis rendering
+  useChatScroll({
+    messages,
+    analyses,
+    isStreaming: false, // Public view never streams (read-only)
+    scrollContainerId: 'public-chat-scroll-container',
+    enableNearBottomDetection: true,
   });
 
   if (isLoadingThread) {
@@ -153,6 +167,7 @@ export default function PublicChatThreadScreen({ slug }: { slug: string }) {
                       threadId={thread.id}
                       feedbackByRound={feedbackByRound}
                       isReadOnly={true}
+                      preSearches={preSearches}
                     />
 
                     <div className="mt-12 sm:mt-16 mb-6 sm:mb-8">

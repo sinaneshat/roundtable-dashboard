@@ -66,6 +66,7 @@ export function WebSearchConfigurationDisplay({
 }: WebSearchConfigurationDisplayProps) {
   const t = useTranslations('chat.tools.webSearch.configuration');
   const tPreSearch = useTranslations('chat.preSearch.plan');
+  const tDepth = useTranslations('chat.preSearch.searchDepth');
   const [isOpen, setIsOpen] = useState(false);
   const [isPlanExpanded, setIsPlanExpanded] = useState(true);
 
@@ -327,21 +328,19 @@ export function WebSearchConfigurationDisplay({
                                     className="text-xs"
                                   >
                                     <Layers className="size-3 mr-1" />
-                                    {query.searchDepth === 'advanced' ? 'Advanced' : 'Basic'}
+                                    {tDepth(query.searchDepth)}
                                   </Badge>
                                 )}
                                 {query.complexity && (
                                   <Badge variant="outline" className="text-xs capitalize">
                                     <TrendingUp className="size-3 mr-1" />
-                                    {query.complexity}
+                                    {t(`complexity.${query.complexity}`, { defaultValue: query.complexity })}
                                   </Badge>
                                 )}
                                 {query.sourceCount !== undefined && (
                                   <Badge variant="outline" className="text-xs">
                                     <Hash className="size-3 mr-1" />
-                                    {query.sourceCount}
-                                    {' '}
-                                    {t('sources')}
+                                    {t('sourceCount.optimal', { count: query.sourceCount })}
                                   </Badge>
                                 )}
                               </div>

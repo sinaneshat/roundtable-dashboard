@@ -315,18 +315,12 @@
     display: none;
   }
 
-  /* Mobile keyboard support: VirtualKeyboard API and safe areas */
-  /* Use env() to access keyboard-inset CSS variables */
-  .pb-keyboard-safe {
-    padding-bottom: max(env(safe-area-inset-bottom, 0px), env(keyboard-inset-height, 0px));
-  }
-
-  .mb-keyboard-safe {
-    margin-bottom: max(env(safe-area-inset-bottom, 0px), env(keyboard-inset-height, 0px));
-  }
-
-  .bottom-keyboard-safe {
-    bottom: max(env(safe-area-inset-bottom, 0px), env(keyboard-inset-height, 0px));
+  /* iOS Safe Area Support - applies only on desktop (md+) */
+  /* On mobile, we use normal document flow which naturally adapts to keyboard */
+  @supports (padding-bottom: env(safe-area-inset-bottom)) {
+    .md\:pb-keyboard-safe {
+      padding-bottom: env(safe-area-inset-bottom);
+    }
   }
 
   /* Safe area utilities for iOS notches */

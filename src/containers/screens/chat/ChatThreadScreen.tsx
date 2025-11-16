@@ -25,7 +25,6 @@ import {
   useBoolean,
   useChatScroll,
   useFlowLoading,
-  useMobileKeyboardPosition,
   useThreadTimeline,
 } from '@/hooks/utils';
 import type { ChatModeId } from '@/lib/config/chat-modes';
@@ -217,12 +216,6 @@ export default function ChatThreadScreen({
     markConfigChanged: true,
   });
 
-  // Mobile keyboard positioning: Move chatbox above keyboard when it opens
-  useMobileKeyboardPosition(inputContainerRef, {
-    enabled: true,
-    minKeyboardHeight: 100,
-  });
-
   // Transform initial messages once (memoized to prevent re-creation)
   // ✅ CRITICAL FIX: Pass participants to enrich messages with model metadata
   // This ensures backend messages are "complete" and never need participant lookups from current state
@@ -325,14 +318,24 @@ export default function ChatThreadScreen({
 
   // Message refetch and pending message send now handled by useThreadActions hook
 
-  // ✅ CRITICAL FIX: Disable orchestrator during ANY active streaming
-  // Previously only checked isStreaming & isRegenerating, but missed:
-  // - Pre-search streaming (happens before AI streaming starts)
-  // - Analysis streaming (happens after AI streaming completes)
-  // This caused unnecessary API calls polling /pre-searches and /analyses during streaming
-  const hasActivePreSearch = preSearches.some(
-    ps => ps.status === 'pending' || ps.status === 'streaming',
-  );
+  // ✅ CRITICAL FIX: Only disable orchestrator during regeneration
+  // Pre-search orchestrator MUST continue polling during participant streaming
+  // to detect and sync newly created pre-searches for round 1+
+  //
+  // BUG FIX: Previously disabled orchestrator when isStreaming=true, preventing
+  // round 1+ pre-searches from syncing to store. Backend creates PENDING pre-search
+  // during streaming (streaming.handler.ts:166-173) but orchestrator was disabled.
+  //
+  // CORRECT FLOW:
+  // 1. User sends round 1+ message
+  // 2. Participants begin streaming (isStreaming=true)
+  // 3. Backend creates PENDING pre-search (streaming.handler.ts:166-173)
+  // 4. Query invalidated (chat-store-provider.tsx:454-458)
+  // 5. Orchestrator MUST poll to sync new pre-search to store
+  // 6. PreSearchCard renders with new pre-search
+  // 7. Pre-search executes: PENDING → STREAMING → COMPLETE
+  //
+  // Analysis orchestrator handles analyses separately (different polling intervals)
   const hasStreamingAnalysis = analyses.some(
     a => a.status === 'pending' || a.status === 'streaming',
   );
@@ -352,14 +355,13 @@ export default function ChatThreadScreen({
     // Previously: Waiting for hasInitiallyLoaded prevented prefetched data from syncing to store
     // On page refresh: Server prefetches analyses → query cache populated → orchestrator disabled
     // Result: Prefetched analyses never appeared in UI until orchestrator enabled later
-    // Solution: Enable orchestrator immediately, only disable during active streaming/regeneration
+    // Solution: Enable orchestrator immediately, only disable during regeneration or analysis streaming
     // The orchestrator's merge logic (analysis-orchestrator.ts) handles both:
     // 1. Initial hydration: Syncs prefetched analyses from query cache to store
     // 2. Real-time updates: Syncs new analyses as they're created/completed
+    // ✅ REMOVED: !isStreaming and !hasActivePreSearch checks - orchestrator must poll during streaming
     enableOrchestrator: (
-      !isStreaming
-      && !state.flags.isRegenerating
-      && !hasActivePreSearch
+      !state.flags.isRegenerating
       && !hasStreamingAnalysis
     ),
     // ✅ REMOVED: Analysis callbacks (onBeforeAnalysisCreate, onAfterAnalysisCreate, onAllParticipantsFailed)
@@ -656,7 +658,7 @@ export default function ChatThreadScreen({
           </div>
           <div
             ref={inputContainerRef}
-            className="sticky bottom-0 z-50 bg-gradient-to-t from-background via-background to-transparent pt-4 sm:pt-6 pb-3 sm:pb-4 pb-keyboard-safe mt-auto"
+            className="md:sticky md:bottom-0 z-50 bg-gradient-to-t from-background via-background to-transparent pt-4 sm:pt-6 pb-3 sm:pb-4 md:pb-keyboard-safe mt-auto"
           >
             <div className="container max-w-3xl mx-auto px-2 sm:px-4 md:px-6">
               <ChatInput
