@@ -8,6 +8,7 @@ import { memo, useEffect, useRef, useState } from 'react';
 import { AnalysisStatuses, PreSearchSseEvents, WebSearchDepths } from '@/api/core/enums';
 import type { PreSearchDataPayload, StoredPreSearch } from '@/api/routes/chat/schema';
 import { ChatLoading } from '@/components/chat/chat-loading';
+import { LLMAnswerDisplay } from '@/components/chat/llm-answer-display';
 import { WebSearchImageGallery } from '@/components/chat/web-search-image-gallery';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
@@ -477,13 +478,14 @@ function PreSearchStreamComponent({
               );
             })()}
 
-            {/* Summary */}
+            {/* AI-Generated Answer Summary */}
             {hasResult && searchResult.answer && (
-              <div className="pl-6 space-y-1">
-                <p className="text-xs font-medium text-foreground/90">Summary</p>
-                <p className="text-xs text-muted-foreground leading-relaxed">
-                  {searchResult.answer}
-                </p>
+              <div className="pl-6">
+                <LLMAnswerDisplay
+                  answer={searchResult.answer}
+                  isStreaming={isStreamingNow}
+                  sources={searchResult.results.map(r => ({ url: r.url, title: r.title }))}
+                />
               </div>
             )}
 

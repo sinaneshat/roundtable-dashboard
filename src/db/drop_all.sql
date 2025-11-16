@@ -15,6 +15,7 @@ DROP TABLE IF EXISTS chat_moderator_analysis;
 DROP TABLE IF EXISTS chat_round_feedback;
 DROP TABLE IF EXISTS chat_message;
 DROP TABLE IF EXISTS chat_participant;
+DROP TABLE IF EXISTS chat_pre_search;
 DROP TABLE IF EXISTS chat_thread_changelog;
 DROP TABLE IF EXISTS chat_thread;
 DROP TABLE IF EXISTS chat_custom_role;
