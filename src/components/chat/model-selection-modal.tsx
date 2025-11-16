@@ -218,65 +218,67 @@ export function ModelSelectionModal({
       <DialogContent
         glass={true}
         className={cn(
-          '!flex !flex-col !w-full !max-w-3xl !max-h-[85vh] !gap-0 !p-0 !overflow-hidden',
+          'overflow-hidden gap-0 p-0',
           className,
         )}
-        style={{ maxHeight: '85vh' }}
+        style={{ maxHeight: '85vh', maxWidth: '768px', width: '100%' }}
       >
-        {/* Header - Fixed */}
-        <DialogHeader glass className="!flex-none">
-          <DialogTitle className="text-xl">{t('title')}</DialogTitle>
-          <DialogDescription>{t('subtitle')}</DialogDescription>
-        </DialogHeader>
+        {/* Fixed Header Section */}
+        <div className="shrink-0">
+          <DialogHeader glass>
+            <DialogTitle className="text-xl">{t('title')}</DialogTitle>
+            <DialogDescription>{t('subtitle')}</DialogDescription>
+          </DialogHeader>
 
-        {/* Search Input - Fixed */}
-        <DialogBody className="!flex-none py-4 bg-black/30">
-          <div className="relative w-full">
-            <input
-              ref={searchInputRef}
-              type="text"
-              placeholder={t('searchPlaceholder')}
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              className={cn(
-                'flex h-9 w-full rounded-md border border-input bg-transparent py-1 text-sm shadow-xs transition-[color,box-shadow] outline-none',
-                'placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground dark:bg-input/30',
-                'focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]',
-                'disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50',
-                searchQuery ? 'pl-3 pr-9' : 'px-3',
+          {/* Search Input */}
+          <DialogBody glass className="py-4">
+            <div className="relative w-full">
+              <input
+                ref={searchInputRef}
+                type="text"
+                placeholder={t('searchPlaceholder')}
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                className={cn(
+                  'flex h-9 w-full rounded-md border border-input bg-transparent py-1 text-sm shadow-xs transition-[color,box-shadow] outline-none',
+                  'placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground dark:bg-input/30',
+                  'focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]',
+                  'disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50',
+                  searchQuery ? 'pl-3 pr-9' : 'px-3',
+                )}
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchQuery('');
+                    searchInputRef.current?.focus();
+                  }}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors p-1"
+                  tabIndex={-1}
+                  aria-label="Clear search"
+                >
+                  <X className="size-4" />
+                </button>
               )}
-            />
-            {searchQuery && (
-              <button
-                type="button"
-                onClick={() => {
-                  setSearchQuery('');
-                  searchInputRef.current?.focus();
-                }}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors p-1"
-                tabIndex={-1}
-                aria-label="Clear search"
-              >
-                <X className="size-4" />
-              </button>
-            )}
-          </div>
-        </DialogBody>
+            </div>
+          </DialogBody>
+        </div>
 
-        {/* Scrollable Content Area */}
-        <div className="!flex-1 !min-h-0 !overflow-hidden border-t border-white/5 bg-black/30" style={{ height: '100%' }}>
-          <ScrollArea className="!h-full !w-full" style={{ height: '100%' }}>
-            <div className="w-full">
+        {/* Scrollable Model List */}
+        <div className="bg-black/30 border-t border-white/5 overflow-hidden" style={{ height: '500px', maxHeight: '500px', minHeight: '300px', width: '768px', maxWidth: '100%' }}>
+          <ScrollArea className="w-full" style={{ height: '500px', width: '768px', maxWidth: '100%' }}>
+            <div style={{ width: '768px', maxWidth: '100%' }}>
               {groupedModels.length === 0
                 ? (
-                    <div className="flex flex-col items-start justify-center py-12 px-4">
+                    <div className="flex flex-col items-start justify-center py-12 px-4 sm:px-5 md:px-6">
                       <p className="text-sm text-muted-foreground">{tModels('noModelsFound')}</p>
                     </div>
                   )
                 : groupedModels.map((group, groupIndex) => (
                     <div key={group.title} className="w-full">
                       {/* Group Header - Sticky */}
-                      <div className="sticky top-0 z-10 bg-black/80 backdrop-blur-[60px] px-4 py-2.5 border-b border-white/5">
+                      <div className="sticky top-0 z-10 w-full bg-black/80 backdrop-blur-[60px] px-4 sm:px-5 md:px-6 py-2.5 border-b border-white/5">
                         <div className="flex items-center justify-between gap-2">
                           <span className={cn(
                             'text-xs font-semibold truncate',
@@ -323,7 +325,7 @@ export function ModelSelectionModal({
                                 const otherModels = orderedModels.filter(om => om.participant === null);
                                 onReorder([...reordered, ...otherModels]);
                               }}
-                              className="flex flex-col gap-2 px-4 py-2"
+                              className="flex flex-col gap-2 px-4 sm:px-5 md:px-6 py-2"
                             >
                               {group.models.map(orderedModel => (
                                 <ModelItem
@@ -344,7 +346,7 @@ export function ModelSelectionModal({
                             </Reorder.Group>
                           )
                         : (
-                            <div className="flex flex-col gap-2 px-4 py-2">
+                            <div className="flex flex-col gap-2 px-4 sm:px-5 md:px-6 py-2">
                               {group.models.map(orderedModel => (
                                 <ModelItem
                                   key={orderedModel.model.id}
@@ -371,7 +373,7 @@ export function ModelSelectionModal({
 
         {/* Footer - Fixed (if children provided) */}
         {children && (
-          <div className="flex-none">
+          <div className="shrink-0">
             {children}
           </div>
         )}

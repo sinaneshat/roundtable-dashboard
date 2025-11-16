@@ -94,7 +94,7 @@ export function ModelItem({
                 }
           }
         >
-          <div className="flex items-center gap-3 w-full max-w-[1148px] min-w-0">
+          <div className="flex items-center gap-3 w-full max-w-3xl min-w-0" style={{ maxWidth: '768px' }}>
             {enableDrag && (
               <div
                 className={cn(

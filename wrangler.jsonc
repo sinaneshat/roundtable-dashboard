@@ -66,6 +66,23 @@
   "ai": {
     "binding": "AI"
   },
+  "queues": {
+    "producers": [
+      {
+        "queue": "title-generation-queue",
+        "binding": "TITLE_GENERATION_QUEUE"
+      }
+    ],
+    "consumers": [
+      {
+        "queue": "title-generation-queue",
+        "max_batch_size": 10,
+        "max_batch_timeout": 5,
+        "max_retries": 3,
+        "retry_delay": 60
+      }
+    ]
+  },
   "durable_objects": {
     "bindings": [
       {
@@ -158,6 +175,23 @@
       "ai": {
         "binding": "AI"
       },
+      "queues": {
+        "producers": [
+          {
+            "queue": "title-generation-queue",
+            "binding": "TITLE_GENERATION_QUEUE"
+          }
+        ],
+        "consumers": [
+          {
+            "queue": "title-generation-queue",
+            "max_batch_size": 10,
+            "max_batch_timeout": 5,
+            "max_retries": 3,
+            "retry_delay": 60
+          }
+        ]
+      },
       "durable_objects": {
         "bindings": [
           {
@@ -243,6 +277,23 @@
       },
       "ai": {
         "binding": "AI"
+      },
+      "queues": {
+        "producers": [
+          {
+            "queue": "title-generation-queue",
+            "binding": "TITLE_GENERATION_QUEUE"
+          }
+        ],
+        "consumers": [
+          {
+            "queue": "title-generation-queue",
+            "max_batch_size": 10,
+            "max_batch_timeout": 5,
+            "max_retries": 3,
+            "retry_delay": 60
+          }
+        ]
       },
       "durable_objects": {
         "bindings": [

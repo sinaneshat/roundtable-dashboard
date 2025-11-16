@@ -30,7 +30,6 @@ import {
 } from '@/api/services/product-logic.service';
 import { generateUniqueSlug } from '@/api/services/slug-generator.service';
 import { logModeChange, logWebSearchToggle } from '@/api/services/thread-changelog.service';
-import { generateTitleFromMessage, updateThreadTitleAndSlug } from '@/api/services/title-generator.service';
 import {
   enforceMessageQuota,
   enforceThreadQuota,
@@ -277,33 +276,33 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
       });
     }
 
-    // ✅ START TITLE GENERATION IMMEDIATELY
-    // Title generation only depends on the first user message, not on streaming/searches/CoT
-    // Can start as soon as thread is created without waiting for AI responses
-    // ✅ CRITICAL FIX: Use getDbAsync() instead of batch.db for fire-and-forget async operations
-    // batch.db is only valid within the handler scope, but this async block runs after handler returns
-    // ✅ CRITICAL FIX 2: Use c.executionCtx.waitUntil() to ensure async operation completes
-    // Without waitUntil(), Cloudflare Workers can terminate before title generation finishes
-    const generateTitleAsync = async () => {
-      try {
-        const aiTitle = await generateTitleFromMessage(body.firstMessage, c.env);
-        // ✅ Update both title AND slug atomically using updateThreadTitleAndSlug
-        await updateThreadTitleAndSlug(threadId, aiTitle);
-        // Get fresh db connection for cache invalidation (batch.db no longer valid here)
-        const freshDb = await getDbAsync();
-        await invalidateThreadCache(freshDb, user.id);
-      } catch {
-        // Silent failure - title generation doesn't block thread creation
-      }
-    };
-
-    // Use Cloudflare Workers async processing if available (production)
-    // Otherwise process synchronously (local development)
-    if (c.executionCtx) {
-      c.executionCtx.waitUntil(generateTitleAsync());
-    } else {
-      // In local dev, run async but don't block response
-      generateTitleAsync().catch(() => {});
+    // ✅ QUEUE-BASED TITLE GENERATION (Non-blocking, Reliable)
+    // Send message to Cloudflare Queue for background processing
+    // Queue consumer will handle title generation with automatic retries
+    //
+    // Benefits over waitUntil():
+    // - Guaranteed delivery: Queue ensures message is processed even if worker times out
+    // - Automatic retries: Up to 3 attempts with 60s delay between retries
+    // - Non-blocking: Response returns immediately without waiting for AI
+    // - Independent execution: Runs in separate worker invocation with fresh resources
+    // - No CPU time limits: Consumer has its own execution context
+    //
+    // Queue configuration (wrangler.jsonc):
+    // - max_batch_size: 10 messages processed together
+    // - max_batch_timeout: 5 seconds to collect batch
+    // - max_retries: 3 attempts before dead letter
+    // - retry_delay: 60 seconds between attempts
+    try {
+      await c.env.TITLE_GENERATION_QUEUE.send({
+        threadId,
+        userId: user.id,
+        firstMessage: body.firstMessage,
+        queuedAt: new Date().toISOString(),
+      });
+    } catch (error) {
+      // Log queue error but don't block thread creation
+      // Title generation is a nice-to-have, not critical for thread creation
+      console.error('Failed to queue title generation:', error);
     }
     return Responses.ok(c, {
       thread,
