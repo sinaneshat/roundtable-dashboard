@@ -118,11 +118,14 @@ export const ChatInput = memo(({
   });
 
   // Mobile keyboard handling: Comprehensive solution
+  // Pass scroll container ID so the hook can scroll the container, not just the input
   useKeyboardAwareScroll(textareaRef, {
     enabled: true,
     scrollDelay: 300,
     scrollBehavior: 'smooth',
     scrollBlock: 'center',
+    scrollContainerId: 'chat-scroll-container',
+    additionalOffset: 20,
   });
 
   // Speech recognition

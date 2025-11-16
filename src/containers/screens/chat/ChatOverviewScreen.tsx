@@ -31,6 +31,7 @@ import {
   useBoolean,
   useChatScroll,
   useFlowLoading,
+  useMobileKeyboardPosition,
   useModelLookup,
 } from '@/hooks/utils';
 import { useSession } from '@/lib/auth/client';
@@ -419,6 +420,12 @@ export default function ChatOverviewScreen() {
   const isAnalyzing = loadingDetails.isStreamingAnalysis;
 
   const inputContainerRef = useRef<HTMLDivElement | null>(null);
+
+  // Mobile keyboard positioning: Move chatbox above keyboard when it opens
+  useMobileKeyboardPosition(inputContainerRef, {
+    enabled: true,
+    minKeyboardHeight: 100,
+  });
 
   return (
     <UnifiedErrorBoundary context="chat">

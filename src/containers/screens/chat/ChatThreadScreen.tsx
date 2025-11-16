@@ -25,6 +25,7 @@ import {
   useBoolean,
   useChatScroll,
   useFlowLoading,
+  useMobileKeyboardPosition,
   useThreadTimeline,
 } from '@/hooks/utils';
 import type { ChatModeId } from '@/lib/config/chat-modes';
@@ -197,7 +198,7 @@ export default function ChatThreadScreen({
   // Feedback actions hook
   const feedbackActions = useFeedbackActions({ threadId: thread.id });
 
-  // Refs for input container (used by recommended actions hook)
+  // Refs for input container (used by recommended actions hook + mobile keyboard positioning)
   const inputContainerRef = useRef<HTMLDivElement | null>(null);
 
   // ✅ FIX: Track initial mount to prevent state reset on page refresh
@@ -214,6 +215,12 @@ export default function ChatThreadScreen({
     inputContainerRef,
     enableScroll: true,
     markConfigChanged: true,
+  });
+
+  // Mobile keyboard positioning: Move chatbox above keyboard when it opens
+  useMobileKeyboardPosition(inputContainerRef, {
+    enabled: true,
+    minKeyboardHeight: 100,
   });
 
   // Transform initial messages once (memoized to prevent re-creation)

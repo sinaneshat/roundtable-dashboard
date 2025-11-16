@@ -11,6 +11,7 @@ import type { RouteHandler } from '@hono/zod-openapi';
 import type { UIMessage } from 'ai';
 import { RetryError, streamText } from 'ai';
 import { and, asc, eq } from 'drizzle-orm';
+import { ulid } from 'ulid';
 
 import { executeBatch } from '@/api/common/batch-operations';
 import { createError, structureAIProviderError } from '@/api/common/error-handling';
@@ -160,7 +161,6 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
         });
 
         if (!existingPreSearch) {
-          const { ulid } = await import('ulid');
           const preSearchId = ulid();
 
           await db.insert(tables.chatPreSearch).values({

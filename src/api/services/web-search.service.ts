@@ -25,7 +25,7 @@
  * @module api/services/web-search
  */
 
-import { generateId, streamObject, streamText } from 'ai';
+import { generateId, generateText, streamObject, streamText } from 'ai';
 
 import { createError, normalizeError } from '@/api/common/error-handling';
 import { AIModels } from '@/api/core/ai-models';
@@ -761,8 +761,6 @@ async function generateImageDescriptions(
             // ✅ FIX: Use AI SDK v5 multimodal pattern with actual vision API
             // Reference: AI SDK v5 documentation - multimodal messages
             // https://sdk.vercel.ai/docs/ai-sdk-core/generating-text#multi-modal-messages
-            const { generateText } = await import('ai');
-
             const result = await generateText({
               model: client.chat(AIModels.WEB_SEARCH), // Use vision-capable model
               messages: [

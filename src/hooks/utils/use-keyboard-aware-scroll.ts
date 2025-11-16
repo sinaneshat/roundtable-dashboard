@@ -23,6 +23,7 @@ declare global {
  * - VirtualKeyboard API with keyboard-inset-height CSS variable
  * - Visual Viewport API for cross-browser support
  * - ScrollIntoView on focus with proper timing
+ * - Aggressive scroll container handling for sticky elements
  *
  * @param inputRef - Ref to the input/textarea element that should remain visible
  * @param options - Configuration options
@@ -30,6 +31,8 @@ declare global {
  * @param options.scrollDelay - Delay in ms before scrolling (default: 300)
  * @param options.scrollBehavior - Scroll behavior: 'smooth' or 'auto' (default: 'smooth')
  * @param options.scrollBlock - Vertical alignment: 'start', 'center', 'end', or 'nearest' (default: 'center')
+ * @param options.scrollContainerId - Optional ID of the scroll container to scroll (for sticky elements)
+ * @param options.additionalOffset - Additional offset in pixels to add to the scroll (default: 20)
  */
 export function useKeyboardAwareScroll<T extends HTMLElement>(
   inputRef: React.RefObject<T | null>,
@@ -38,6 +41,8 @@ export function useKeyboardAwareScroll<T extends HTMLElement>(
     scrollDelay?: number;
     scrollBehavior?: ScrollBehavior;
     scrollBlock?: ScrollLogicalPosition;
+    scrollContainerId?: string;
+    additionalOffset?: number;
   } = {},
 ) {
   const {
@@ -45,10 +50,13 @@ export function useKeyboardAwareScroll<T extends HTMLElement>(
     scrollDelay = 300,
     scrollBehavior = 'smooth',
     scrollBlock = 'center',
+    scrollContainerId,
+    additionalOffset = 20,
   } = options;
 
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isKeyboardVisibleRef = useRef(false);
+  const initialViewportHeightRef = useRef<number>(0);
 
   useEffect(() => {
     if (!enabled || typeof window === 'undefined')
@@ -57,6 +65,9 @@ export function useKeyboardAwareScroll<T extends HTMLElement>(
     const input = inputRef.current;
     if (!input)
       return;
+
+    // Store initial viewport height for comparison
+    initialViewportHeightRef.current = window.visualViewport?.height ?? window.innerHeight;
 
     // VirtualKeyboard API: Opt into overlay mode to get keyboard-inset-height
     // This makes the keyboard overlay the content instead of resizing the viewport
@@ -69,24 +80,78 @@ export function useKeyboardAwareScroll<T extends HTMLElement>(
       }
     }
 
-    // Focus handler: Scroll input into view when keyboard opens
-    const handleFocus = () => {
-      isKeyboardVisibleRef.current = true;
-
+    // Helper function to scroll the nearest scroll container or the entire page
+    const scrollToInput = (delayMs: number = 0) => {
       // Clear any existing timeout
       if (timeoutRef.current) {
         clearTimeout(timeoutRef.current);
         timeoutRef.current = null;
       }
 
-      // Delay to allow keyboard animation to start
       timeoutRef.current = setTimeout(() => {
-        input.scrollIntoView({
-          behavior: scrollBehavior,
-          block: scrollBlock,
-          inline: 'nearest',
-        });
-      }, scrollDelay);
+        const rect = input.getBoundingClientRect();
+        const visualViewport = window.visualViewport;
+        const viewportHeight = visualViewport?.height ?? window.innerHeight;
+
+        // Check if we have a specific scroll container
+        const scrollContainer = scrollContainerId
+          ? document.getElementById(scrollContainerId)
+          : null;
+
+        if (scrollContainer) {
+          // Scroll the container to bring the input into view
+          const containerRect = scrollContainer.getBoundingClientRect();
+          const relativeBottom = rect.bottom - containerRect.top;
+
+          // Calculate how much we need to scroll
+          // We want the input to be visible with some additional offset
+          const targetScroll = relativeBottom - viewportHeight + additionalOffset;
+
+          if (targetScroll > 0) {
+            scrollContainer.scrollBy({
+              top: targetScroll,
+              behavior: scrollBehavior,
+            });
+          }
+        } else {
+          // Fallback to scrollIntoView for the input element
+          input.scrollIntoView({
+            behavior: scrollBehavior,
+            block: scrollBlock,
+            inline: 'nearest',
+          });
+        }
+
+        // Additional aggressive scroll for edge cases
+        // If input is still hidden after scrollIntoView, scroll window to bottom
+        const aggressiveScrollTimer = setTimeout(() => {
+          const updatedRect = input.getBoundingClientRect();
+          const currentViewportHeight = visualViewport?.height ?? window.innerHeight;
+
+          if (updatedRect.bottom > currentViewportHeight - additionalOffset) {
+            window.scrollBy({
+              top: updatedRect.bottom - currentViewportHeight + additionalOffset,
+              behavior: scrollBehavior,
+            });
+          }
+        }, 100);
+
+        // Store timeout for cleanup
+        return () => clearTimeout(aggressiveScrollTimer);
+      }, delayMs);
+    };
+
+    // Focus handler: Scroll input into view when keyboard opens
+    const handleFocus = () => {
+      isKeyboardVisibleRef.current = true;
+      scrollToInput(scrollDelay);
+    };
+
+    // Input handler: Re-scroll on input to handle growing textarea
+    const handleInput = () => {
+      if (isKeyboardVisibleRef.current) {
+        scrollToInput(50); // Shorter delay for input events
+      }
     };
 
     // Blur handler: Track keyboard visibility
@@ -101,19 +166,12 @@ export function useKeyboardAwareScroll<T extends HTMLElement>(
       if (!isKeyboardVisibleRef.current)
         return;
 
-      // Check if input is hidden by keyboard
-      const rect = input.getBoundingClientRect();
-      const viewportHeight = visualViewport?.height ?? window.innerHeight;
-      const scrollY = visualViewport?.offsetTop ?? 0;
+      const currentHeight = visualViewport?.height ?? window.innerHeight;
+      const heightDifference = initialViewportHeightRef.current - currentHeight;
 
-      // If input is below visible area, scroll it into view
-      if (rect.bottom > viewportHeight + scrollY) {
-        // Use 'end' to position at bottom of viewport
-        input.scrollIntoView({
-          behavior: scrollBehavior,
-          block: 'end',
-          inline: 'nearest',
-        });
+      // If viewport height decreased significantly (keyboard opened)
+      if (heightDifference > 100) {
+        scrollToInput(100);
       }
     };
 
@@ -123,14 +181,16 @@ export function useKeyboardAwareScroll<T extends HTMLElement>(
       visualViewport.addEventListener('resize', handleViewportResize);
     }
 
-    // Add focus/blur listeners
+    // Add focus/blur/input listeners
     input.addEventListener('focus', handleFocus);
     input.addEventListener('blur', handleBlur);
+    input.addEventListener('input', handleInput);
 
     // Cleanup
     return () => {
       input.removeEventListener('focus', handleFocus);
       input.removeEventListener('blur', handleBlur);
+      input.removeEventListener('input', handleInput);
 
       if (visualViewport) {
         visualViewport.removeEventListener('resize', handleViewportResize);
@@ -141,5 +201,5 @@ export function useKeyboardAwareScroll<T extends HTMLElement>(
         timeoutRef.current = null;
       }
     };
-  }, [enabled, inputRef, scrollDelay, scrollBehavior, scrollBlock]);
+  }, [enabled, inputRef, scrollDelay, scrollBehavior, scrollBlock, scrollContainerId, additionalOffset]);
 }
