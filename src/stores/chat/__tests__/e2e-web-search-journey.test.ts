@@ -201,9 +201,11 @@ describe('chat journey - first round with web search', () => {
     const roundNumber = getCurrentRoundNumber(state.messages);
     expect(roundNumber).toBe(0);
 
-    // No pre-search exists yet - should allow sending (backend creates PENDING)
+    // ✅ FIX: No pre-search exists yet - should WAIT (optimistic wait for backend creation)
+    // This prevents race condition where message sends before pre-search is synced
     const validation = shouldSendPendingMessage(state);
-    expect(validation.shouldSend).toBe(true);
+    expect(validation.shouldSend).toBe(false); // Changed from true
+    expect(validation.reason).toBe('waiting for pre-search creation');
     expect(validation.roundNumber).toBe(0);
 
     // After backend creates PENDING record, verify wait logic
@@ -212,9 +214,11 @@ describe('chat journey - first round with web search', () => {
       preSearches: [createMockPreSearch(0, AnalysisStatuses.PENDING)],
     });
 
-    // PENDING status should allow sending (not STREAMING)
+    // ✅ FIX: PENDING status should WAIT (execution hasn't started yet)
+    // PreSearchStream component will trigger execution (PENDING → STREAMING)
     const validationWithPending = shouldSendPendingMessage(withPendingSearch);
-    expect(validationWithPending.shouldSend).toBe(true);
+    expect(validationWithPending.shouldSend).toBe(false); // Changed from true
+    expect(validationWithPending.reason).toBe('waiting for pre-search');
 
     // Simulate search starting (STREAMING)
     const withStreamingSearch = createPendingMessageState({
@@ -252,13 +256,14 @@ describe('chat journey - first round with web search', () => {
     });
     expect(shouldWaitStreaming).toBe(true);
 
-    // Pre-search is PENDING - should NOT wait (backend will start it)
+    // ✅ FIX: Pre-search is PENDING - should WAIT (execution hasn't started)
+    // PreSearchStream component hasn't triggered execution yet
     const shouldWaitPending = shouldWaitForPreSearch({
       webSearchEnabled: true,
       preSearches: [createMockPreSearch(roundNumber, AnalysisStatuses.PENDING)],
       roundNumber,
     });
-    expect(shouldWaitPending).toBe(false);
+    expect(shouldWaitPending).toBe(true); // Changed from false
 
     // Pre-search is COMPLETED - should NOT wait
     const shouldWaitCompleted = shouldWaitForPreSearch({
@@ -400,9 +405,10 @@ describe('chat journey - multi-round web search', () => {
     const nextRound = getCurrentRoundNumber(state.messages) + 1;
     expect(nextRound).toBe(1);
 
-    // No pre-search for round 1 yet - should allow sending
+    // ✅ FIX: No pre-search for round 1 yet - should WAIT (optimistic wait)
     const validation = shouldSendPendingMessage(state);
-    expect(validation.shouldSend).toBe(true);
+    expect(validation.shouldSend).toBe(false); // Changed from true
+    expect(validation.reason).toBe('waiting for pre-search creation');
     expect(validation.roundNumber).toBe(1);
 
     // After creating PENDING search for round 1
@@ -414,9 +420,10 @@ describe('chat journey - multi-round web search', () => {
       ],
     });
 
-    // PENDING for round 1 should still allow sending
+    // ✅ FIX: PENDING for round 1 should WAIT (execution not started)
     const validationRound1 = shouldSendPendingMessage(withRound1Search);
-    expect(validationRound1.shouldSend).toBe(true);
+    expect(validationRound1.shouldSend).toBe(false); // Changed from true
+    expect(validationRound1.reason).toBe('waiting for pre-search');
 
     // Search starts streaming for round 1
     const withStreamingRound1 = createPendingMessageState({
@@ -486,9 +493,10 @@ describe('chat journey - multi-round web search', () => {
     const nextRound = getCurrentRoundNumber(state.messages) + 1;
     expect(nextRound).toBe(2);
 
-    // Should allow sending for round 2
+    // ✅ FIX: Should WAIT for round 2 (no pre-search exists yet)
     const validation = shouldSendPendingMessage(state);
-    expect(validation.shouldSend).toBe(true);
+    expect(validation.shouldSend).toBe(false); // Changed from true
+    expect(validation.reason).toBe('waiting for pre-search creation');
     expect(validation.roundNumber).toBe(2);
   });
 
@@ -578,9 +586,10 @@ describe('chat journey - mid-conversation enable', () => {
       },
     });
 
-    // Should allow sending for round 1
+    // ✅ FIX: Should WAIT for round 1 (no pre-search exists yet)
     const validation = shouldSendPendingMessage(afterToggle);
-    expect(validation.shouldSend).toBe(true);
+    expect(validation.shouldSend).toBe(false); // Changed from true
+    expect(validation.reason).toBe('waiting for pre-search creation');
     expect(validation.roundNumber).toBe(1);
 
     // After backend creates PENDING search for round 1
@@ -589,9 +598,10 @@ describe('chat journey - mid-conversation enable', () => {
       preSearches: [createMockPreSearch(1, AnalysisStatuses.PENDING)],
     });
 
-    // PENDING should still allow sending (not blocking)
+    // ✅ FIX: PENDING should WAIT (execution not started)
     const validationWithPending = shouldSendPendingMessage(withPendingSearch);
-    expect(validationWithPending.shouldSend).toBe(true);
+    expect(validationWithPending.shouldSend).toBe(false); // Changed from true
+    expect(validationWithPending.reason).toBe('waiting for pre-search');
 
     // Search starts streaming
     const withStreamingSearch = createPendingMessageState({
@@ -631,9 +641,10 @@ describe('chat journey - mid-conversation enable', () => {
       },
     });
 
-    // Should now allow sending
+    // ✅ FIX: Should WAIT after PATCH (no pre-search exists yet)
     const validationAfterPatch = shouldSendPendingMessage(afterPatch);
-    expect(validationAfterPatch.shouldSend).toBe(true);
+    expect(validationAfterPatch.shouldSend).toBe(false); // Changed from true
+    expect(validationAfterPatch.reason).toBe('waiting for pre-search creation');
   });
 
   it('should create search record after PATCH completes', () => {
@@ -665,9 +676,10 @@ describe('chat journey - mid-conversation enable', () => {
       isWaitingForChangelog: false, // PATCH completed
     });
 
-    // Should allow creating search record
+    // ✅ FIX: Should WAIT for search record creation (optimistic wait)
     const validation = shouldSendPendingMessage(state);
-    expect(validation.shouldSend).toBe(true);
+    expect(validation.shouldSend).toBe(false); // Changed from true
+    expect(validation.reason).toBe('waiting for pre-search creation');
     expect(validation.roundNumber).toBe(0);
 
     // Verify web search is enabled from thread
@@ -825,9 +837,10 @@ describe('chat journey - configuration changes', () => {
       ],
     });
 
-    // Should allow sending for round 1
+    // ✅ FIX: Should WAIT for round 1 (no pre-search exists yet)
     const validation = shouldSendPendingMessage(state);
-    expect(validation.shouldSend).toBe(true);
+    expect(validation.shouldSend).toBe(false); // Changed from true
+    expect(validation.reason).toBe('waiting for pre-search creation');
     expect(validation.roundNumber).toBe(1);
 
     // Verify all 3 participants are enabled
@@ -899,9 +912,10 @@ describe('chat journey - configuration changes', () => {
       ],
     });
 
-    // Should allow sending for round 1
+    // ✅ FIX: Should WAIT for round 1 (no pre-search exists yet)
     const validation = shouldSendPendingMessage(state);
-    expect(validation.shouldSend).toBe(true);
+    expect(validation.shouldSend).toBe(false); // Changed from true
+    expect(validation.reason).toBe('waiting for pre-search creation');
     expect(validation.roundNumber).toBe(1);
 
     // Verify only 2 participants enabled
@@ -946,9 +960,10 @@ describe('chat journey - configuration changes', () => {
       ],
     });
 
-    // Should allow sending for round 1
+    // ✅ FIX: Should WAIT for round 1 (no pre-search exists yet)
     const validation = shouldSendPendingMessage(state);
-    expect(validation.shouldSend).toBe(true);
+    expect(validation.shouldSend).toBe(false); // Changed from true
+    expect(validation.reason).toBe('waiting for pre-search creation');
     expect(validation.roundNumber).toBe(1);
 
     // Verify mode changed
@@ -1015,9 +1030,12 @@ describe('chat journey - regeneration', () => {
       ],
     });
 
-    // New PENDING search should allow sending
+    // ✅ FIX: New PENDING search should WAIT - but it's checking round 1, not round 0
+    // calculateNextRoundNumber returns 1, but pre-search exists for round 0
+    // So it doesn't find a pre-search for round 1, triggers optimistic wait
     const validation = shouldSendPendingMessage(afterRetry);
-    expect(validation.shouldSend).toBe(true);
+    expect(validation.shouldSend).toBe(false); // Changed from true
+    expect(validation.reason).toBe('waiting for pre-search creation');
     // calculateNextRoundNumber returns 1 because round 0 user message exists
     expect(validation.roundNumber).toBe(1);
   });

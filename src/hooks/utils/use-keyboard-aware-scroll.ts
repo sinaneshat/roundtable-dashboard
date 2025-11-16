@@ -1,5 +1,20 @@
 import { useEffect, useRef } from 'react';
 
+// VirtualKeyboard API type definitions (not yet in lib.dom.d.ts)
+type VirtualKeyboard = EventTarget & {
+  overlaysContent: boolean;
+  boundingRect: DOMRect;
+  show: () => void;
+  hide: () => void;
+};
+
+declare global {
+  // eslint-disable-next-line ts/consistent-type-definitions
+  interface Navigator {
+    virtualKeyboard?: VirtualKeyboard;
+  }
+}
+
 /**
  * Custom hook for handling mobile keyboard visibility and ensuring input remains visible
  * Combines VirtualKeyboard API, Visual Viewport API, and focus handling
@@ -11,9 +26,13 @@ import { useEffect, useRef } from 'react';
  *
  * @param inputRef - Ref to the input/textarea element that should remain visible
  * @param options - Configuration options
+ * @param options.enabled - Whether the keyboard-aware scroll is enabled (default: true)
+ * @param options.scrollDelay - Delay in ms before scrolling (default: 300)
+ * @param options.scrollBehavior - Scroll behavior: 'smooth' or 'auto' (default: 'smooth')
+ * @param options.scrollBlock - Vertical alignment: 'start', 'center', 'end', or 'nearest' (default: 'center')
  */
 export function useKeyboardAwareScroll<T extends HTMLElement>(
-  inputRef: React.RefObject<T>,
+  inputRef: React.RefObject<T | null>,
   options: {
     enabled?: boolean;
     scrollDelay?: number;

@@ -32,6 +32,16 @@ function createTestQueryClient() {
 // Mock i18n messages for testing
 const mockMessages = {
   common: {},
+  chat: {
+    tools: {
+      webSearch: {
+        llmAnswer: {
+          title: 'AI-Generated Summary',
+          generating: 'Generating',
+        },
+      },
+    },
+  },
 };
 
 export function TestProviders({ children }: TestProvidersProps) {

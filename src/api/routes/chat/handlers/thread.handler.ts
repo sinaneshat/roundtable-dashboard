@@ -277,7 +277,7 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
       });
     }
 
-    // ✅ QUEUE-BASED TITLE GENERATION (Non-blocking, Reliable)
+    // ✅ BACKGROUND TITLE GENERATION (Non-blocking, Reliable)
     // Background title generation using waitUntil()
     // AI title generation is non-critical, so waitUntil() is appropriate:
     // - Non-blocking: Response returns immediately without waiting for AI
@@ -288,17 +288,29 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
     // - Non-critical operations (title generation enhances UX but isn't required)
     // - Quick operations after main response (AI calls ~1-5 seconds)
     // - Operations that don't need guaranteed delivery
+    console.error(`🔄 Starting background title generation for thread ${threadId}`);
     c.executionCtx.waitUntil(
       (async () => {
         try {
+          console.error(`📝 Generating title from message: "${body.firstMessage.substring(0, 100)}..."`);
           const aiTitle = await generateTitleFromMessage(body.firstMessage, c.env);
+          console.error(`✨ AI title generated: "${aiTitle}"`);
+
           await updateThreadTitleAndSlug(threadId, aiTitle);
+          console.error(`💾 Title and slug updated in database`);
+
           const db = await getDbAsync();
           await invalidateThreadCache(db, user.id);
-          console.error(`✅ Title generated: "${aiTitle}"`);
+          console.error(`✅ Title generation complete: "${aiTitle}" for thread ${threadId}`);
         } catch (error) {
-          // Log error but don't throw - thread creation already succeeded
-          console.error('Failed to generate title:', error);
+          // Log detailed error but don't throw - thread creation already succeeded
+          console.error(`❌ Failed to generate title for thread ${threadId}:`, error);
+          console.error('Error details:', {
+            message: error instanceof Error ? error.message : String(error),
+            stack: error instanceof Error ? error.stack : undefined,
+            threadId,
+            userId: user.id,
+          });
         }
       })(),
     );

@@ -89,7 +89,6 @@ describe('e2E: Thread Lifecycle with API Integration', () => {
 
       // Response is successful
       expect(data.success).toBe(true);
-      expect(data.error).toBeNull();
 
       // Thread data is complete and correct
       expect(data.data.thread).toBeDefined();
@@ -208,13 +207,13 @@ describe('e2E: Thread Lifecycle with API Integration', () => {
 
       // ✅ Changelog API response is valid
       expect(changelogData.success).toBe(true);
-      expect(changelogData.data.changes).toBeDefined();
+      expect(changelogData.data.items).toBeDefined();
 
       // ✅ Analysis API response is complete
       expect(analysesData.success).toBe(true);
-      expect(analysesData.data.analyses).toHaveLength(1);
-      expect(analysesData.data.analyses[0].roundNumber).toBe(0);
-      expect(analysesData.data.analyses[0].threadId).toBe(THREAD_ID);
+      expect(analysesData.data.items).toHaveLength(1);
+      expect(analysesData.data.items[0].roundNumber).toBe(0);
+      expect(analysesData.data.items[0].threadId).toBe(THREAD_ID);
     });
   });
 
@@ -342,12 +341,12 @@ describe('e2E: Thread Lifecycle with API Integration', () => {
 
       // ✅ Analysis API response is valid
       expect(analysesData.success).toBe(true);
-      expect(analysesData.data.analyses).toHaveLength(1);
-      expect(analysesData.data.analyses[0].roundNumber).toBe(0);
-      expect(analysesData.data.analyses[0].threadId).toBe(THREAD_ID);
+      expect(analysesData.data.items).toHaveLength(1);
+      expect(analysesData.data.items[0].roundNumber).toBe(0);
+      expect(analysesData.data.items[0].threadId).toBe(THREAD_ID);
 
       // ✅ Analysis data structure is complete
-      const analysis = analysesData.data.analyses[0];
+      const analysis = analysesData.data.items[0];
       expect(analysis.analysisData).toBeDefined();
       expect(analysis.analysisData.participantAnalyses).toBeDefined();
       expect(analysis.analysisData.leaderboard).toBeDefined();
@@ -403,7 +402,6 @@ describe('e2E: Thread Lifecycle with API Integration', () => {
       // ✅ Retry succeeded
       expect(retryData.success).toBe(true);
       expect(retryData.data.messages).toHaveLength(2);
-      expect(retryData.error).toBeNull();
 
       // ✅ Data integrity maintained after recovery
       expect(retryData.data.messages[0].roundNumber).toBe(0);

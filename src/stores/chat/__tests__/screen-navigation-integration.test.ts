@@ -256,7 +256,7 @@ describe('screen navigation integration', () => {
      */
     it('should receive complete thread data from server on initial load', () => {
       // Server provides these props to ThreadScreen via SSR/Server Component
-      const thread = createMockThread();
+      const thread = createMockThread({ id: THREAD_ID });
       const participants = createMockParticipants(2);
 
       // Messages from server (already in UIMessage format via chatMessagesToUIMessages)

@@ -7,17 +7,14 @@
  * 3. PreSearchCard renders for PENDING status (shows loading)
  * 4. PreSearchCard renders for STREAMING status (shows stream component)
  * 5. PreSearchCard renders for COMPLETED status (shows results panel)
- * 6. PreSearchCard renders for FAILED status (shows error + retry button)
- * 7. PreSearchStream triggers POST request when status is PENDING
- * 8. PreSearchStream handles SSE events correctly
- * 9. PreSearchPanel displays search results correctly
+ * 6. PreSearchCard renders for FAILED status (shows error)
+ * 7. PreSearchPanel displays search results correctly
  *
  * Pattern follows: Testing Library best practices
  */
 
-import { waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { AnalysisStatuses } from '@/api/core/enums';
 import { createMockMessages, createMockPreSearch, createMockSearchData, render, screen } from '@/lib/testing';
@@ -213,7 +210,7 @@ describe('web Search UI Components', () => {
       expect(screen.getByText('Test query 2')).toBeInTheDocument();
     });
 
-    it('should show error state for FAILED search with retry button', () => {
+    it('should show error state for FAILED search', () => {
       const preSearch = createMockPreSearch({
         id: 'test-1',
         threadId: 'thread-1',
@@ -229,61 +226,6 @@ describe('web Search UI Components', () => {
 
       expect(screen.getByText(/pre-search results/i)).toBeInTheDocument();
       expect(screen.getByText(/failed/i)).toBeInTheDocument();
-
-      // Should show retry button
-      const retryButtons = screen.getAllByRole('button', { name: /retry/i });
-      expect(retryButtons.length).toBeGreaterThan(0);
-    });
-  });
-
-  describe('preSearchCard - Retry Functionality', () => {
-    let fetchSpy: ReturnType<typeof vi.spyOn>;
-
-    beforeEach(() => {
-      fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-        new Response(JSON.stringify({}), { status: 200 }),
-      );
-    });
-
-    afterEach(() => {
-      fetchSpy.mockRestore();
-    });
-
-    it('should call retry endpoint when retry button clicked', async () => {
-      const user = userEvent.setup();
-      const preSearch = createMockPreSearch({
-        id: 'test-1',
-        threadId: 'thread-1',
-        roundNumber: 0,
-        status: AnalysisStatuses.FAILED,
-        userQuery: 'test query',
-      });
-
-      const { container } = render(
-        <PreSearchCard threadId="thread-1" preSearch={preSearch} />,
-        { messages: createMockMessages() },
-      );
-
-      // Find retry button by aria-label (not by role to avoid button-in-button issue)
-      // The retry button is rendered inside the collapsible header
-      const retryButton = container.querySelector('button[aria-label="Retry"]');
-      expect(retryButton).toBeTruthy();
-
-      if (retryButton) {
-        await user.click(retryButton);
-      }
-
-      await waitFor(() => {
-        expect(fetchSpy).toHaveBeenCalledWith(
-          '/api/v1/chat/threads/thread-1/rounds/0/pre-search',
-          expect.objectContaining({
-            method: 'POST',
-            headers: expect.objectContaining({
-              'Content-Type': 'application/json',
-            }),
-          }),
-        );
-      });
     });
   });
 

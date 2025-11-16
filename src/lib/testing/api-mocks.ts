@@ -9,7 +9,7 @@
  * and ensuring proper data flow from API → Store → UI State
  */
 
-import { AnalysisStatuses, ChatModes, MessageRoles, PreSearchStatuses } from '@/api/core/enums';
+import { AnalysisStatuses, ChatModes, MessageRoles, PreSearchStatuses, ThreadStatuses } from '@/api/core/enums';
 import type {
   ChangelogListResponse,
   MessagesListResponse,
@@ -39,7 +39,7 @@ export function createMockThread(overrides?: Partial<ChatThread>): ChatThread {
     title: 'Test Thread',
     slug: 'test-thread-abc123',
     mode: ChatModes.DEBATING,
-    status: 'active',
+    status: ThreadStatuses.ACTIVE,
     isFavorite: false,
     isPublic: false,
     isAiGeneratedTitle: false,
@@ -358,11 +358,19 @@ export function createMockAnalysesListResponse(
 /**
  * Mock response for GET /chat/threads/:id/pre-searches
  * ✅ FOLLOWS: PreSearchListResponseSchema
+ * ✅ ENHANCED: Supports Tavily-like features (fullContent, metadata, etc.)
  */
 export function createMockPreSearchesListResponse(
   threadId: string,
   roundNumber: number = 0,
+  options?: {
+    includeFullContent?: boolean;
+    includeMetadata?: boolean;
+    includeAnswer?: boolean;
+  },
 ): PreSearchListResponse {
+  const { includeFullContent = false, includeMetadata = false, includeAnswer = false } = options || {};
+
   return {
     success: true,
     data: {
@@ -386,13 +394,27 @@ export function createMockPreSearchesListResponse(
             results: [
               {
                 query: 'test search query',
-                answer: 'Test answer',
+                answer: includeAnswer ? 'AI-generated answer based on search results' : 'Test answer',
                 results: [
                   {
                     title: 'Test Result',
                     url: 'https://example.com',
                     content: 'Test content',
+                    excerpt: 'Test content',
+                    fullContent: includeFullContent ? 'Full article content with comprehensive information...' : undefined,
                     score: 0.9,
+                    publishedDate: null,
+                    domain: 'example.com',
+                    metadata: includeMetadata
+                      ? {
+                          author: 'Test Author',
+                          readingTime: 5,
+                          wordCount: 1000,
+                          description: 'Test article description',
+                          imageUrl: 'https://example.com/image.jpg',
+                          faviconUrl: 'https://example.com/favicon.ico',
+                        }
+                      : undefined,
                   },
                 ],
                 responseTime: 100,
@@ -453,4 +475,46 @@ export function createMockFetchError(
     },
     status,
   );
+}
+
+/**
+ * Create a mock StoredModeratorAnalysis for testing
+ * ✅ FOLLOWS: StoredModeratorAnalysis schema
+ */
+export function createMockAnalysis(overrides?: Partial<import('@/api/routes/chat/schema').StoredModeratorAnalysis>): import('@/api/routes/chat/schema').StoredModeratorAnalysis {
+  const now = new Date();
+
+  return {
+    id: 'analysis_test_123',
+    threadId: 'thread_123',
+    roundNumber: 0,
+    mode: ChatModes.DEBATING,
+    userQuestion: 'Test question',
+    status: AnalysisStatuses.COMPLETE,
+    participantMessageIds: [],
+    analysisData: {
+      participantAnalyses: [],
+      leaderboard: [],
+      roundSummary: {
+        keyInsights: [],
+        consensusPoints: [],
+        divergentApproaches: [],
+        comparativeAnalysis: {
+          strengthsByCategory: [],
+          tradeoffs: [],
+        },
+        decisionFramework: {
+          criteriaToConsider: [],
+          scenarioRecommendations: [],
+        },
+        overallSummary: '',
+        conclusion: '',
+        recommendedActions: [],
+      },
+    },
+    errorMessage: null,
+    createdAt: now,
+    completedAt: now,
+    ...overrides,
+  };
 }
