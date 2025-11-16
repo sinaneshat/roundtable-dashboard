@@ -9,6 +9,7 @@ import { AnalysisStatuses, PreSearchSseEvents, WebSearchDepths } from '@/api/cor
 import type { PreSearchDataPayload, StoredPreSearch } from '@/api/routes/chat/schema';
 import { ChatLoading } from '@/components/chat/chat-loading';
 import { LLMAnswerDisplay } from '@/components/chat/llm-answer-display';
+import { WebSearchConfigurationDisplay } from '@/components/chat/web-search-configuration-display';
 import { WebSearchImageGallery } from '@/components/chat/web-search-image-gallery';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
@@ -331,11 +332,14 @@ function PreSearchStreamComponent({
     return null;
   }
 
-  const { queries = [], results = [] } = displayData;
+  const { queries = [], results = [], successCount, failureCount, totalResults, totalTime } = displayData;
   const validQueries = queries.filter((q): q is NonNullable<typeof q> => q != null);
   const validResults = results.filter((r): r is NonNullable<typeof r> => r != null);
 
   const isStreamingNow = preSearch.status === AnalysisStatuses.STREAMING;
+
+  // Calculate metrics for configuration display
+  const hasCompleteMetrics = successCount !== undefined && failureCount !== undefined && totalTime !== undefined;
 
   return (
     <motion.div
@@ -343,6 +347,22 @@ function PreSearchStreamComponent({
       animate={{ opacity: 1 }}
       className="space-y-6"
     >
+      {/* Configuration Summary - Show at top when we have query data */}
+      {validQueries.length > 0 && hasCompleteMetrics && (
+        <WebSearchConfigurationDisplay
+          queries={validQueries.map(q => ({
+            query: q.query,
+            rationale: q.rationale,
+            searchDepth: q.searchDepth as 'basic' | 'advanced',
+            index: q.index,
+          }))}
+          totalResults={totalResults}
+          successCount={successCount}
+          failureCount={failureCount}
+          totalTime={totalTime}
+        />
+      )}
+
       {validQueries.map((query, queryIndex) => {
         const searchResult = validResults.find(r => r?.query === query?.query);
         const hasResult = !!searchResult;

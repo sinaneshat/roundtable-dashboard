@@ -439,11 +439,19 @@
         },
         "images": {
           "title": "Related Images",
+          "count": "{{count}} images found",
+          "viewFull": "View full size",
+          "openSource": "View source page",
+          "copyUrl": "Copy image URL",
+          "loadError": "Failed to load image",
+          "noImages": "No images found",
           "aiAnalysis": "AI Analysis",
           "visionApi": "Vision API",
           "author": "Author",
           "published": "Published",
-          "viewSource": "View Source"
+          "viewSource": "View Source",
+          "urlCopied": "Image URL copied",
+          "urlCopiedDescription": "Image URL has been copied to clipboard"
         },
         "relevance": {
           "high": "Highly relevant to your query",
@@ -463,6 +471,63 @@
         },
         "error": {
           "failedToLoad": "{count, plural, =1 {# page could not be loaded} other {# pages could not be loaded}}"
+        },
+        "parameters": {
+          "title": "Search Parameters",
+          "query": "Search Query",
+          "autoDetected": "Auto-detected Parameters",
+          "depth": {
+            "label": "Search Depth",
+            "basic": "Basic",
+            "advanced": "Advanced"
+          },
+          "topic": {
+            "label": "Topic"
+          },
+          "timeRange": {
+            "label": "Time Range"
+          },
+          "reasoning": "AI Reasoning"
+        },
+        "statistics": {
+          "title": "Search Statistics",
+          "totalResults": "Total Results",
+          "totalResultsDesc": "Total number of sources found",
+          "fullContent": "Full Content",
+          "totalWords": "Total Words",
+          "totalImages": "Images",
+          "avgReadTime": "Avg. Read Time",
+          "responseTime": "Response Time",
+          "qualityMetrics": "Quality Metrics",
+          "avgRelevance": "Avg. Relevance"
+        },
+        "configuration": {
+          "title": "Search Configuration",
+          "queries": "Queries",
+          "generatedQueries": "Generated Queries",
+          "results": "Results",
+          "searchTime": "Search Time",
+          "successRate": "Success Rate",
+          "successful": "Successful",
+          "failed": "Failed",
+          "totalTime": "Total Time",
+          "avgTime": "Avg. Time",
+          "performance": "Performance Metrics",
+          "queryDetails": "Query Details",
+          "rationale": "Rationale",
+          "complexity": "Complexity",
+          "sources": "Sources",
+          "depth": "Search Depth",
+          "autoDetectedParams": "AI-Detected Parameters",
+          "queriesGenerated": "queries generated",
+          "perQuery": "per query"
+        },
+        "contentPreview": {
+          "title": "Full Content",
+          "copy": "Copy content",
+          "copied": "Copied!",
+          "openSource": "Open source",
+          "tableOfContents": "Table of Contents"
         }
       }
     },
@@ -1294,5 +1359,65 @@
   "user": {
     "defaultName": "User"
   },
-  "value": "Value"
+  "value": "Value",
+  "webSearch": {
+    "images": {
+      "title": "Images from Search",
+      "count": "{{count}} images found",
+      "viewFull": "View full size",
+      "openSource": "View source page",
+      "copyUrl": "Copy image URL",
+      "copiedUrl": "Image URL copied!",
+      "loadError": "Failed to load image",
+      "noImages": "No images found",
+      "from": "From {{source}}"
+    },
+    "result": {
+      "author": "By {{name}}",
+      "publishedDate": "Published {{date}}",
+      "readingTime": "{{minutes}} min read",
+      "wordCount": "{{count}} words",
+      "showFullContent": "Show full content",
+      "showLess": "Show less",
+      "keyPoints": "Key Points",
+      "relevanceScore": "Relevance: {{score}}%",
+      "openExternal": "Open in new tab",
+      "copyLink": "Copy link"
+    },
+    "config": {
+      "title": "Search Configuration",
+      "queries": "Queries",
+      "results": "Results",
+      "time": "Search Time",
+      "avgTime": "Avg Response Time",
+      "successRate": "Success Rate",
+      "successful": "Successful",
+      "failed": "Failed",
+      "totalResults": "Total Results",
+      "autoDetected": "AI-Detected Parameters",
+      "generatedQueries": "Generated Queries",
+      "rationale": "Rationale",
+      "complexity": "Complexity",
+      "sources": "Sources requested",
+      "searchDepth": "Search Depth",
+      "topic": "Topic",
+      "timeRange": "Time Range",
+      "showConfig": "Show search details",
+      "hideConfig": "Hide search details"
+    },
+    "content": {
+      "preview": "Content Preview",
+      "full": "Full Content",
+      "copied": "Content copied!",
+      "copyContent": "Copy content",
+      "noContent": "No content available",
+      "tableOfContents": "Table of Contents"
+    },
+    "status": {
+      "searching": "Searching...",
+      "complete": "Search complete",
+      "failed": "Search failed",
+      "cached": "From cache"
+    }
+  }
 }

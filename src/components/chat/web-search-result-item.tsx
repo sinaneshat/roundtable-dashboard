@@ -3,6 +3,7 @@ import {
   BookOpen,
   Calendar,
   ChevronDown,
+  Clock,
   FileText,
   Globe,
   Lightbulb,
@@ -16,6 +17,7 @@ import { useState } from 'react';
 
 import { UNKNOWN_DOMAIN, WebSearchContentTypes } from '@/api/core/enums';
 import type { WebSearchResultItemProps } from '@/api/routes/chat/schema';
+import { WebSearchContentPreview } from '@/components/chat/web-search-content-preview';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -76,6 +78,23 @@ export function WebSearchResultItem({
 
   // Calculate relevance percentage (score is 0-1)
   const relevancePercentage = Math.round(result.score * 100);
+
+  // Format date relative or absolute
+  const formatDate = (dateString: string): string => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffDays = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
+
+    if (diffDays === 0)
+      return 'Today';
+    if (diffDays === 1)
+      return 'Yesterday';
+    if (diffDays < 7)
+      return `${diffDays} days ago`;
+    if (diffDays < 30)
+      return `${Math.floor(diffDays / 7)} week${Math.floor(diffDays / 7) > 1 ? 's' : ''} ago`;
+    return date.toLocaleDateString();
+  };
 
   return (
     <div className={cn('flex gap-3 py-2.5', showDivider && 'border-b border-border/20', className)}>
@@ -159,6 +178,13 @@ export function WebSearchResultItem({
             </Badge>
           )}
         </div>
+
+        {/* Description Preview */}
+        {result.metadata?.description && (
+          <p className="text-xs text-muted-foreground italic line-clamp-2 pt-0.5">
+            {result.metadata.description}
+          </p>
+        )}
 
         {/* Featured Image from scraped content - Show inline */}
         {result.metadata?.imageUrl && (
@@ -306,14 +332,14 @@ export function WebSearchResultItem({
             {result.publishedDate && (
               <Badge variant="outline" className="text-xs h-5">
                 <Calendar className="size-3 mr-1" />
-                {new Date(result.publishedDate).toLocaleDateString()}
+                {formatDate(result.publishedDate)}
               </Badge>
             )}
 
             {/* Reading Time Badge */}
             {result.metadata?.readingTime && (
               <Badge variant="outline" className="text-xs h-5">
-                <BookOpen className="size-3 mr-1" />
+                <Clock className="size-3 mr-1" />
                 {result.metadata.readingTime}
                 {' '}
                 {t('metadata.minRead')}
@@ -345,6 +371,13 @@ export function WebSearchResultItem({
                 </li>
               ))}
             </ul>
+          </div>
+        )}
+
+        {/* Full Content Preview - Show for results with fullContent or rawContent */}
+        {(result.fullContent || result.rawContent) && (
+          <div className="pt-2">
+            <WebSearchContentPreview result={result} />
           </div>
         )}
       </div>

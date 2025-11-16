@@ -1,7 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { ExternalLink, Image as ImageIcon, Sparkles } from 'lucide-react';
+import { Copy, ExternalLink, Image as ImageIcon, Sparkles } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 
@@ -15,6 +15,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { Skeleton } from '@/components/ui/skeleton';
+import { toast } from '@/hooks/utils';
 import { cn } from '@/lib/ui/cn';
 
 type WebSearchImageGalleryProps = {
@@ -35,8 +37,10 @@ type ImageItem = {
 };
 
 export function WebSearchImageGallery({ results, className }: WebSearchImageGalleryProps) {
-  const t = useTranslations('chat.tools.webSearch');
+  const tImages = useTranslations('chat.tools.webSearch.images');
   const [selectedImage, setSelectedImage] = useState<ImageItem | null>(null);
+  const [loadingImages, setLoadingImages] = useState<Set<string>>(new Set());
+  const [failedImages, setFailedImages] = useState<Set<string>>(new Set());
 
   // Collect all images from results (both metadata.imageUrl and images[])
   const allImages: ImageItem[] = results.flatMap((result) => {
@@ -74,6 +78,38 @@ export function WebSearchImageGallery({ results, className }: WebSearchImageGall
     return images;
   });
 
+  const handleCopyUrl = async (url: string) => {
+    try {
+      await navigator.clipboard.writeText(url);
+      toast({
+        title: tImages('urlCopied'),
+        description: tImages('urlCopiedDescription'),
+      });
+    } catch {
+      toast({
+        title: tImages('loadError'),
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleImageLoad = (url: string) => {
+    setLoadingImages((prev) => {
+      const next = new Set(prev);
+      next.delete(url);
+      return next;
+    });
+  };
+
+  const handleImageError = (url: string) => {
+    setLoadingImages((prev) => {
+      const next = new Set(prev);
+      next.delete(url);
+      return next;
+    });
+    setFailedImages(prev => new Set([...prev, url]));
+  };
+
   if (allImages.length === 0) {
     return null;
   }
@@ -83,53 +119,77 @@ export function WebSearchImageGallery({ results, className }: WebSearchImageGall
       <div className={cn('space-y-2', className)}>
         <div className="flex items-center gap-2">
           <ImageIcon className="size-4 text-primary" />
-          <span className="text-sm font-medium">{t('images.title')}</span>
+          <span className="text-sm font-medium">{tImages('title')}</span>
           <Badge variant="secondary" className="text-xs">
-            {allImages.length}
+            {tImages('count', { count: allImages.length })}
           </Badge>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2.5">
-          {allImages.map((image, idx) => (
-            <motion.div
-              key={image.url}
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: idx * 0.03 }}
-              className="group relative aspect-square rounded-lg overflow-hidden border border-border/50 bg-muted cursor-pointer hover:border-primary/50 hover:shadow-lg transition-all duration-200"
-              onClick={() => setSelectedImage(image)}
-            >
-              {/* eslint-disable-next-line next/no-img-element -- External image from search result */}
-              <img
-                src={image.url}
-                alt={image.alt || image.title}
-                className="object-cover size-full transition-transform duration-300 group-hover:scale-110"
-                loading="lazy"
-                onError={(e) => {
-                  // Hide broken images
-                  e.currentTarget.style.display = 'none';
-                }}
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-background/90 via-background/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                <div className="absolute bottom-0 left-0 right-0 p-2">
-                  <p className="text-xs font-medium text-foreground line-clamp-2">
-                    {image.title}
-                  </p>
-                  <p className="text-xs text-muted-foreground truncate mt-0.5">
-                    {image.domain || image.source}
-                  </p>
-                </div>
-              </div>
-              {/* AI Description indicator */}
-              {image.description && (
-                <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <Badge variant="secondary" className="text-xs bg-purple-500/20 text-purple-600 dark:text-purple-400 border-purple-500/30">
-                    <Sparkles className="size-2.5 mr-1" />
-                    AI
-                  </Badge>
-                </div>
-              )}
-            </motion.div>
-          ))}
+          {allImages.map((image, idx) => {
+            const isLoading = loadingImages.has(image.url);
+            const hasFailed = failedImages.has(image.url);
+
+            return (
+              <motion.div
+                key={image.url}
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: idx * 0.03 }}
+                className="group relative aspect-square rounded-lg overflow-hidden border border-border/50 bg-muted cursor-pointer hover:border-primary/50 hover:shadow-lg transition-all duration-200"
+                onClick={() => !hasFailed && setSelectedImage(image)}
+              >
+                {/* Loading skeleton */}
+                {isLoading && <Skeleton className="absolute inset-0" />}
+
+                {/* Failed state */}
+                {hasFailed && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-muted/30">
+                    <div className="text-center space-y-1">
+                      <ImageIcon className="size-6 text-muted-foreground mx-auto" />
+                      <p className="text-xs text-muted-foreground px-2">{tImages('loadError')}</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Image */}
+                {!hasFailed && (
+                  <>
+                    {/* eslint-disable-next-line next/no-img-element -- External image from search result */}
+                    <img
+                      src={image.url}
+                      alt={image.alt || image.title}
+                      className={cn(
+                        'object-cover size-full transition-all duration-300 group-hover:scale-110',
+                        isLoading && 'opacity-0',
+                      )}
+                      loading="lazy"
+                      onLoad={() => handleImageLoad(image.url)}
+                      onError={() => handleImageError(image.url)}
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-background/90 via-background/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                      <div className="absolute bottom-0 left-0 right-0 p-2">
+                        <p className="text-xs font-medium text-foreground line-clamp-2">
+                          {image.title}
+                        </p>
+                        <p className="text-xs text-muted-foreground truncate mt-0.5">
+                          {image.domain || image.source}
+                        </p>
+                      </div>
+                    </div>
+                    {/* AI Description indicator */}
+                    {image.description && (
+                      <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Badge variant="secondary" className="text-xs bg-purple-500/20 text-purple-600 dark:text-purple-400 border-purple-500/30">
+                          <Sparkles className="size-2.5 mr-1" />
+                          AI
+                        </Badge>
+                      </div>
+                    )}
+                  </>
+                )}
+              </motion.div>
+            );
+          })}
         </div>
       </div>
 
@@ -178,9 +238,9 @@ export function WebSearchImageGallery({ results, className }: WebSearchImageGall
                       <div className="flex items-center justify-center size-7 rounded-full bg-purple-500/10">
                         <Sparkles className="size-4 text-purple-600 dark:text-purple-400" />
                       </div>
-                      <h3 className="font-semibold text-sm">{t('images.aiAnalysis')}</h3>
+                      <h3 className="font-semibold text-sm">{tImages('aiAnalysis')}</h3>
                       <Badge variant="outline" className="text-xs bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20">
-                        {t('images.visionApi')}
+                        {tImages('visionApi')}
                       </Badge>
                     </div>
 
@@ -199,7 +259,7 @@ export function WebSearchImageGallery({ results, className }: WebSearchImageGall
                     {selectedImage.author && (
                       <div className="flex items-center gap-2 text-sm">
                         <span className="text-muted-foreground">
-                          {t('images.author')}
+                          {tImages('author')}
                           :
                         </span>
                         <span className="font-medium">{selectedImage.author}</span>
@@ -208,7 +268,7 @@ export function WebSearchImageGallery({ results, className }: WebSearchImageGall
                     {selectedImage.publishedDate && (
                       <div className="flex items-center gap-2 text-sm">
                         <span className="text-muted-foreground">
-                          {t('images.published')}
+                          {tImages('published')}
                           :
                         </span>
                         <span className="font-medium">
@@ -235,8 +295,17 @@ export function WebSearchImageGallery({ results, className }: WebSearchImageGall
                       className="flex items-center gap-2"
                     >
                       <ExternalLink className="size-4" />
-                      {t('images.viewSource')}
+                      {tImages('viewSource')}
                     </a>
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full"
+                    onClick={() => handleCopyUrl(selectedImage.url)}
+                  >
+                    <Copy className="size-4" />
+                    {tImages('copyUrl')}
                   </Button>
                   <Button asChild variant="outline" size="sm" className="w-full">
                     <a
@@ -246,7 +315,7 @@ export function WebSearchImageGallery({ results, className }: WebSearchImageGall
                       className="flex items-center gap-2"
                     >
                       <ImageIcon className="size-4" />
-                      Open Image
+                      {tImages('viewFull')}
                     </a>
                   </Button>
                 </div>

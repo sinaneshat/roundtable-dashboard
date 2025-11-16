@@ -7,7 +7,9 @@ import { useState } from 'react';
 import type { WebSearchDisplayProps } from '@/api/routes/chat/schema';
 import { LLMAnswerDisplay } from '@/components/chat/llm-answer-display';
 import { WebSearchImageGallery } from '@/components/chat/web-search-image-gallery';
+import { WebSearchParametersDisplay } from '@/components/chat/web-search-parameters-display';
 import { WebSearchResultItem } from '@/components/chat/web-search-result-item';
+import { WebSearchStatistics } from '@/components/chat/web-search-statistics';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -241,54 +243,11 @@ export function WebSearchDisplay({
                 >
                   {/* Results display */}
                   <div className="p-4 space-y-4">
-                    {/* Search Query Display */}
-                    {query && (
-                      <div className="flex items-start gap-2 p-3 rounded-lg bg-muted/30 border border-border/40">
-                        <div className="flex-shrink-0 pt-0.5">
-                          <div className="size-6 rounded-full bg-primary/10 flex items-center justify-center">
-                            <Globe className="size-3.5 text-primary" />
-                          </div>
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-medium text-muted-foreground mb-1">Search Query</p>
-                          <p className="text-sm font-medium text-foreground">
-                            &quot;
-                            {query}
-                            &quot;
-                          </p>
-                          {autoParameters?.reasoning && (
-                            <p className="text-xs text-muted-foreground/80 mt-1.5 italic">{autoParameters.reasoning}</p>
-                          )}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Auto-detected Parameters */}
-                    {autoParameters && (autoParameters.topic || autoParameters.searchDepth || autoParameters.timeRange) && (
-                      <div className="flex flex-wrap gap-1.5">
-                        {autoParameters.topic && (
-                          <Badge variant="secondary" className="text-xs">
-                            Topic:
-                            {' '}
-                            {autoParameters.topic}
-                          </Badge>
-                        )}
-                        {autoParameters.searchDepth && (
-                          <Badge variant="secondary" className="text-xs">
-                            Depth:
-                            {' '}
-                            {autoParameters.searchDepth}
-                          </Badge>
-                        )}
-                        {autoParameters.timeRange && (
-                          <Badge variant="secondary" className="text-xs">
-                            Time:
-                            {' '}
-                            {autoParameters.timeRange}
-                          </Badge>
-                        )}
-                      </div>
-                    )}
+                    {/* Search Parameters Display - Enhanced collapsible component */}
+                    <WebSearchParametersDisplay
+                      autoParameters={autoParameters}
+                      query={query}
+                    />
 
                     {/* LLM Answer - Display prominently at top with streaming support */}
                     {(answer || isStreaming) && (
@@ -312,6 +271,13 @@ export function WebSearchDisplay({
                           {autoParameters.reasoning}
                         </p>
                       </div>
+                    )}
+
+                    {/* Search Statistics - Show comprehensive metrics */}
+                    {!isStreaming && successfulResults.length > 0 && (
+                      <WebSearchStatistics
+                        results={successfulResults}
+                      />
                     )}
 
                     {/* Image Gallery */}

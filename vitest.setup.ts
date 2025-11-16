@@ -29,9 +29,36 @@ vi.mock('next-intl', () => {
   // Translation map for common keys used in tests
   const translationMap: Record<string, string> = {
     strengths: 'strengths',
-    areasForImprovement: 'areas for improvement',
     summary: 'summary',
-    // Add more as needed
+    // Moderator namespace translations
+    skillsComparison: 'Skills Comparison',
+    leaderboard: 'Leaderboard',
+    overallRating: 'Overall Rating',
+    rating: 'Rating',
+    outOfTen: 'out of 10',
+    rank: 'Rank #{rank}',
+    analyzeRound: 'Analyze Round',
+    analyzing: 'Analyzing',
+    roundAnalysis: 'Round {number} Analysis',
+    skillsMatrix: 'Skills Matrix',
+    areasForImprovement: 'Areas for Improvement',
+    conclusion: 'Conclusion',
+    keyInsights: 'Key Insights',
+    consensus: 'Points of Agreement',
+    consensusPoints: 'Points of Agreement',
+    divergentApproaches: 'Different Perspectives',
+    comparativeAnalysis: 'Comparative Analysis',
+    strengthsByCategory: 'Strengths by Category',
+    tradeoffs: 'Trade-offs & Considerations',
+    decisionFramework: 'Decision Framework',
+    criteriaToConsider: 'Criteria to Consider',
+    scenarioRecommendations: 'Scenario-Based Recommendations',
+    recommendedActions: 'Recommended Next Steps',
+    topPerformer: 'Top Performer',
+    participantNumber: 'Participant #{number}',
+    participants: 'Participants',
+    noParticipants: 'No participants to display',
+    noAnalysis: 'Click \'Analyze Round\' to get AI-powered insights on participant responses',
   };
 
   // Create mock functions with 'mock' prefix to avoid ESLint hook warnings
