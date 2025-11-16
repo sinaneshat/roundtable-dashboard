@@ -51,7 +51,7 @@ export function ParticipantAnalysisCard({ analysis, rank }: ParticipantAnalysisC
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <h3 className="text-sm font-medium text-foreground">
-              {avatarProps.name}
+              {analysis.modelName ?? avatarProps.name}
             </h3>
             {analysis.participantRole && (
               <span className="text-xs text-muted-foreground">

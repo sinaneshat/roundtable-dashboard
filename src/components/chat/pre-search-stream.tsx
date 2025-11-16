@@ -1,17 +1,17 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { Search } from 'lucide-react';
+import { Loader2, Search } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { memo, useEffect, useRef, useState } from 'react';
 
 import { AnalysisStatuses, PreSearchSseEvents, WebSearchDepths } from '@/api/core/enums';
 import type { PreSearchDataPayload, StoredPreSearch } from '@/api/routes/chat/schema';
-import { ChatLoading } from '@/components/chat/chat-loading';
 import { LLMAnswerDisplay } from '@/components/chat/llm-answer-display';
 import { WebSearchConfigurationDisplay } from '@/components/chat/web-search-configuration-display';
 import { WebSearchImageGallery } from '@/components/chat/web-search-image-gallery';
 import { Badge } from '@/components/ui/badge';
+import { Progress } from '@/components/ui/progress';
 import { Separator } from '@/components/ui/separator';
 import { useBoolean } from '@/hooks/utils';
 
@@ -322,9 +322,51 @@ function PreSearchStreamComponent({
     return null;
   }
 
+  // Progressive Streaming Stages - Show clear stages like Tavily
+  const getStreamingStage = () => {
+    const hasQueries = displayData?.queries && displayData.queries.length > 0;
+    const hasResults = displayData?.results && displayData.results.length > 0;
+    const queriesCount = displayData?.queries?.length || 0;
+    const resultsCount = displayData?.results?.length || 0;
+
+    if (!hasQueries) {
+      return { stage: 'plan', label: t('steps.generatingQueries'), progress: 0 };
+    }
+    if (!hasResults) {
+      return { stage: 'search', label: t('steps.executingSearch'), progress: queriesCount > 0 ? 33 : 0 };
+    }
+    if (hasResults && resultsCount < queriesCount) {
+      return {
+        stage: 'extracting',
+        label: t('steps.extractingContent'),
+        progress: 33 + ((resultsCount / queriesCount) * 34),
+      };
+    }
+    return { stage: 'answer', label: t('steps.generatingAnswer'), progress: 67 };
+  };
+
+  const streamingStage = getStreamingStage();
+
   // Show loading indicator for PENDING/STREAMING with no stream data yet
   if ((preSearch.status === AnalysisStatuses.PENDING || preSearch.status === AnalysisStatuses.STREAMING) && !hasData) {
-    return <ChatLoading text="Generating search queries..." />;
+    return (
+      <div className="flex flex-col gap-3 py-3">
+        <div className="flex items-center gap-2">
+          <Loader2 className="size-4 text-primary animate-spin" />
+          <span className="text-sm font-medium text-foreground">{streamingStage.label}</span>
+        </div>
+        <Progress value={streamingStage.progress} className="h-1.5" />
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <span>Stage:</span>
+          <Badge variant="outline" className="text-xs">
+            {streamingStage.stage === 'plan' && 'Generating Plan'}
+            {streamingStage.stage === 'search' && 'Searching Web'}
+            {streamingStage.stage === 'extracting' && 'Extracting Content'}
+            {streamingStage.stage === 'answer' && 'Generating Summary'}
+          </Badge>
+        </div>
+      </div>
+    );
   }
 
   // Don't render if no data
@@ -332,14 +374,11 @@ function PreSearchStreamComponent({
     return null;
   }
 
-  const { queries = [], results = [], successCount, failureCount, totalResults, totalTime } = displayData;
+  const { queries = [], results = [], analysis, successCount, failureCount, totalResults, totalTime } = displayData;
   const validQueries = queries.filter((q): q is NonNullable<typeof q> => q != null);
   const validResults = results.filter((r): r is NonNullable<typeof r> => r != null);
 
   const isStreamingNow = preSearch.status === AnalysisStatuses.STREAMING;
-
-  // Calculate metrics for configuration display
-  const hasCompleteMetrics = successCount !== undefined && failureCount !== undefined && totalTime !== undefined;
 
   return (
     <motion.div
@@ -347,8 +386,8 @@ function PreSearchStreamComponent({
       animate={{ opacity: 1 }}
       className="space-y-6"
     >
-      {/* Configuration Summary - Show at top when we have query data */}
-      {validQueries.length > 0 && hasCompleteMetrics && (
+      {/* Search Plan & Configuration Summary - Show at top when we have query data */}
+      {validQueries.length > 0 && (
         <WebSearchConfigurationDisplay
           queries={validQueries.map(q => ({
             query: q.query,
@@ -356,6 +395,8 @@ function PreSearchStreamComponent({
             searchDepth: q.searchDepth as 'basic' | 'advanced',
             index: q.index,
           }))}
+          searchPlan={analysis}
+          isStreamingPlan={isStreamingNow && !analysis}
           totalResults={totalResults}
           successCount={successCount}
           failureCount={failureCount}
@@ -377,14 +418,32 @@ function PreSearchStreamComponent({
             transition={{ duration: 0.3, delay: 0.1 * queryIndex }}
             className="space-y-3"
           >
-            {/* Query header with mode */}
+            {/* Query header with mode and progress indicator */}
             <div className="space-y-2">
               <div className="flex items-start gap-2">
                 <Search className="size-4 text-primary/70 mt-0.5 flex-shrink-0" />
                 <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    {query?.index !== undefined && query?.total !== undefined && (
+                      <Badge variant="outline" className="text-xs shrink-0">
+                        Query
+                        {' '}
+                        {query.index + 1}
+                        {' '}
+                        of
+                        {' '}
+                        {query.total}
+                      </Badge>
+                    )}
+                  </div>
                   <p className="text-sm font-medium text-foreground">
                     {query?.query}
                   </p>
+                  {query?.rationale && (
+                    <p className="text-xs text-muted-foreground mt-1 italic">
+                      {query.rationale}
+                    </p>
+                  )}
                 </div>
                 <div className="flex items-center gap-2">
                   {query?.searchDepth && (

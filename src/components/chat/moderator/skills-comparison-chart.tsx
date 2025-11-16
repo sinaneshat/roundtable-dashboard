@@ -78,7 +78,7 @@ export function SkillsComparisonChart({ participants }: SkillsComparisonChartPro
     return {
       participantIndex: participant?.participantIndex ?? index,
       modelId: participant?.modelId ?? '',
-      modelName: avatarProps.name,
+      modelName: participant?.modelName ?? avatarProps.name,
       provider: model?.provider ?? '',
       avatarSrc: avatarProps.src,
       avatarName: avatarProps.name,

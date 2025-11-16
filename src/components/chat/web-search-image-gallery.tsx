@@ -39,8 +39,8 @@ type ImageItem = {
 export function WebSearchImageGallery({ results, className }: WebSearchImageGalleryProps) {
   const tImages = useTranslations('chat.tools.webSearch.images');
   const [selectedImage, setSelectedImage] = useState<ImageItem | null>(null);
-  const [loadingImages, setLoadingImages] = useState<Set<string>>(new Set());
-  const [failedImages, setFailedImages] = useState<Set<string>>(new Set());
+  const [loadingImages, setLoadingImages] = useState(() => new Set<string>());
+  const [failedImages, setFailedImages] = useState(() => new Set<string>());
 
   // Collect all images from results (both metadata.imageUrl and images[])
   const allImages: ImageItem[] = results.flatMap((result) => {

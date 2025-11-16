@@ -70,7 +70,7 @@ export function LeaderboardCard({ leaderboard }: LeaderboardCardProps) {
       return {
         participantIndex: entry.participantIndex,
         modelId: entry.modelId ?? '',
-        modelName: avatarProps.name,
+        modelName: entry.modelName ?? model?.name ?? avatarProps.name,
         provider: model?.provider ?? '',
         rank: entry.rank ?? 999,
         rating: entry.overallRating ?? 0,

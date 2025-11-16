@@ -241,63 +241,78 @@ export function WebSearchDisplay({
                   transition={{ duration: 0.2 }}
                   className="border-t border-border/50"
                 >
-                  {/* Results display */}
+                  {/* Results display - Reorganized to match Tavily pattern */}
                   <div className="p-4 space-y-4">
-                    {/* Search Parameters Display - Enhanced collapsible component */}
-                    <WebSearchParametersDisplay
-                      autoParameters={autoParameters}
-                      query={query}
-                    />
-
-                    {/* LLM Answer - Display prominently at top with streaming support */}
-                    {(answer || isStreaming) && (
-                      <LLMAnswerDisplay
-                        answer={answer ?? null}
-                        isStreaming={isStreaming}
-                        sources={successfulResults.map(r => ({ url: r.url, title: r.title }))}
-                      />
-                    )}
-
-                    {/* Search Plan/Reasoning - Show if available from metadata */}
-                    {autoParameters?.reasoning && !isStreaming && (
-                      <div className="p-3 rounded-lg bg-muted/30 border border-border/40 space-y-2">
+                    {/* 1. Search Plan/Reasoning - Show prominently at TOP if available */}
+                    {autoParameters?.reasoning && (
+                      <div className="p-3 rounded-lg bg-primary/5 border border-primary/20 space-y-2">
                         <div className="flex items-center gap-2">
                           <div className="size-5 rounded-full bg-primary/10 flex items-center justify-center">
                             <Sparkles className="size-3 text-primary" />
                           </div>
-                          <p className="text-xs font-medium text-foreground">Search Strategy</p>
+                          <p className="text-sm font-medium text-foreground">Search Plan</p>
+                          {isStreaming && (
+                            <Badge variant="secondary" className="text-xs animate-pulse">
+                              Generating...
+                            </Badge>
+                          )}
                         </div>
-                        <p className="text-xs text-muted-foreground leading-relaxed pl-7">
+                        <p className="text-sm text-foreground/90 leading-relaxed pl-7">
                           {autoParameters.reasoning}
                         </p>
                       </div>
                     )}
 
-                    {/* Search Statistics - Show comprehensive metrics */}
+                    {/* 2. AI Answer Summary - Display prominently with streaming support */}
+                    {(answer || isStreaming) && (
+                      <div className="p-4 rounded-lg bg-muted/10 border border-border/30">
+                        <LLMAnswerDisplay
+                          answer={answer ?? null}
+                          isStreaming={isStreaming}
+                          sources={successfulResults.map(r => ({ url: r.url, title: r.title }))}
+                        />
+                      </div>
+                    )}
+
+                    {/* 3. Search Statistics - Show comprehensive metrics */}
                     {!isStreaming && successfulResults.length > 0 && (
                       <WebSearchStatistics
                         results={successfulResults}
                       />
                     )}
 
-                    {/* Image Gallery */}
+                    {/* 4. Search Parameters Display - Collapsible details */}
+                    <WebSearchParametersDisplay
+                      autoParameters={autoParameters}
+                      query={query}
+                    />
+
+                    {/* 5. Image Gallery */}
                     {hasImages && <WebSearchImageGallery results={successfulResults} />}
 
-                    {/* Search Results with enhanced header */}
+                    {/* 6. Detailed Sources - Expandable detailed results */}
                     <div className="space-y-2">
-                      <div className="flex items-center justify-between py-2">
-                        <p className="text-xs font-medium text-muted-foreground">
-                          {successfulResults.length}
-                          {' '}
-                          {successfulResults.length === 1 ? 'source found' : 'sources found'}
-                        </p>
-                        {hasFullContent && (
-                          <Badge variant="outline" className="text-xs">
-                            {resultsWithContent.length}
+                      <div className="flex items-center justify-between py-2 border-t border-border/20 pt-4">
+                        <div className="flex items-center gap-2">
+                          <Search className="size-4 text-muted-foreground" />
+                          <p className="text-sm font-medium text-foreground">
+                            Detailed Sources
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Badge variant="secondary" className="text-xs">
+                            {successfulResults.length}
                             {' '}
-                            with full content
+                            {successfulResults.length === 1 ? 'source' : 'sources'}
                           </Badge>
-                        )}
+                          {hasFullContent && (
+                            <Badge variant="outline" className="text-xs bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/20">
+                              {resultsWithContent.length}
+                              {' '}
+                              with full content
+                            </Badge>
+                          )}
+                        </div>
                       </div>
                       <div className="space-y-0">
                         {successfulResults.map((result, index) => (

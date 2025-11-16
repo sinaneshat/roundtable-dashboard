@@ -411,7 +411,25 @@
         "searchComplete": "Web sources found",
         "searchingDesc": "Finding relevant sources...",
         "results": "Analysis & Results",
-        "sources": "Sources"
+        "sources": "Sources",
+        "generatingPlan": "Generating search plan...",
+        "generatingQueries": "Creating search queries...",
+        "executingSearch": "Searching web...",
+        "extractingContent": "Extracting content...",
+        "generatingAnswer": "Generating answer summary...",
+        "queryProgress": "Query {current} of {total}"
+      },
+      "plan": {
+        "title": "Search Plan",
+        "show": "Show search plan",
+        "hide": "Hide search plan"
+      },
+      "config": {
+        "title": "Search Configuration",
+        "numResults": "Number of results",
+        "searchDepth": "Search depth",
+        "numQueries": "Number of queries",
+        "configure": "Configure search"
       }
     },
     "tools": {
