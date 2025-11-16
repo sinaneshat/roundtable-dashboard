@@ -45,7 +45,7 @@ import { createChatStore } from '@/stores/chat';
 // CONTEXT (Official Pattern)
 // ============================================================================
 
-const ChatStoreContext = createContext<ChatStoreApi | undefined>(undefined);
+export const ChatStoreContext = createContext<ChatStoreApi | undefined>(undefined);
 
 export type ChatStoreProviderProps = {
   children: ReactNode;
@@ -211,15 +211,26 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
     // calculateNextRoundNumber handles this correctly: -1 + 1 = 0 for first round
     const newRoundNumber = calculateNextRoundNumber(storeMessages);
 
-    // ✅ CRITICAL FIX: Only wait for pre-search if it's STREAMING
-    // Previous logic created chicken-and-egg problem where message couldn't send
-    // because pre-search didn't exist, but pre-search is only created when message is sent
+    // ✅ CRITICAL FIX: Wait for pre-search if it's PENDING or STREAMING
+    // ❌ REMOVED DEADLOCK: Don't wait for pre-search to exist before sending message
+    // Previous bug: Waited for pre-search to exist, but pre-search only created when sendMessage called
+    // New flow:
+    //   1. Send message immediately (backend creates PENDING pre-search during handling)
+    //   2. Orchestrator syncs pre-search to store
+    //   3. If pre-search is PENDING/STREAMING, participants wait for completion
+    //   4. When COMPLETE, participants start streaming
     const webSearchEnabled = storeThread?.enableWebSearch ?? enableWebSearch;
     const preSearchForRound = preSearches.find(ps => ps.roundNumber === newRoundNumber);
 
-    // Only block if pre-search is actively STREAMING
-    if (webSearchEnabled && preSearchForRound && preSearchForRound.status === AnalysisStatuses.STREAMING) {
-      return; // Don't send message yet - wait for pre-search to complete
+    // ✅ CORRECT: Only wait if pre-search exists AND is actively running
+    // Don't block if pre-search doesn't exist yet - backend will create it
+    if (webSearchEnabled && preSearchForRound) {
+      // If pre-search exists and is PENDING or STREAMING, wait for completion
+      if (preSearchForRound.status === AnalysisStatuses.PENDING || preSearchForRound.status === AnalysisStatuses.STREAMING) {
+        return; // Don't send message yet - wait for pre-search to complete
+      }
+
+      // If pre-search is COMPLETE or FAILED, continue with sending message
     }
 
     // All conditions met - send the message
@@ -311,11 +322,25 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
     // ChatThreadScreen uses sendMessage flow (pendingMessage effect) instead
     // This prevents duplicate message creation and ensures correct roundNumber
     const currentScreenMode = store.getState().screenMode;
-    if (currentScreenMode !== 'overview') {
+
+    // ✅ CRITICAL FIX: Don't clear flag if screenMode is null (during initialization)
+    // Only clear if we're explicitly on a different screen (like 'thread')
+    // This prevents race condition where:
+    // 1. Thread created, waitingToStartStreaming set to true
+    // 2. Provider effect runs BEFORE screen initialization sets screenMode
+    // 3. screenMode is null, condition fails, flag gets cleared
+    // 4. Screen initialization sets screenMode to 'overview'
+    // 5. But flag is already cleared → participants never start
+    if (currentScreenMode !== null && currentScreenMode !== 'overview') {
       // Not on overview screen - don't trigger startRound
       // Clear the flag to prevent infinite waiting
       store.getState().setWaitingToStartStreaming(false);
       return;
+    }
+
+    // If screenMode is null, wait for screen initialization to set it
+    if (currentScreenMode === null) {
+      return; // Keep waiting, don't clear flag
     }
 
     // ✅ CRITICAL FIX: Wait for all required conditions before attempting startRound
@@ -324,28 +349,26 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
       return; // Keep waiting, don't clear flag
     }
 
-    // ✅ CRITICAL FIX: Wait for pre-search completion before streaming participants
-    // ✅ 0-BASED: Check pre-search status for round 0 (first round)
+    // ✅ CRITICAL FIX: Wait for CURRENT round's pre-search completion before streaming participants
+    // ✅ FIXED: Use getCurrentRoundNumber to check current round's pre-search, not hardcoded round 0
     const webSearchEnabled = storeThread?.enableWebSearch ?? false;
     if (webSearchEnabled) {
-      const round0PreSearch = storePreSearches.find(ps => ps.roundNumber === 0);
+      // Determine the current round from messages (0-based indexing)
+      const currentRound = getCurrentRoundNumber(storeMessages);
+      const currentRoundPreSearch = storePreSearches.find(ps => ps.roundNumber === currentRound);
 
       // If pre-search doesn't exist yet, wait for orchestrator to sync it
       // Backend creates PENDING pre-search during thread creation, orchestrator syncs it
-      if (!round0PreSearch) {
+      if (!currentRoundPreSearch) {
         return; // Don't trigger participants yet - waiting for pre-search to be synced
       }
 
       // If pre-search exists and is still pending or streaming, wait
-      if (round0PreSearch.status === AnalysisStatuses.PENDING || round0PreSearch.status === AnalysisStatuses.STREAMING) {
+      if (currentRoundPreSearch.status === AnalysisStatuses.PENDING || currentRoundPreSearch.status === AnalysisStatuses.STREAMING) {
         return; // Don't trigger participants yet - pre-search still running
       }
 
-      // ✅ ERROR: If pre-search failed, log error and proceed anyway
-      if (round0PreSearch.status === AnalysisStatuses.FAILED) {
-        // Pre-search failed - continuing with participants
-        // Continue to start participants even if pre-search failed
-      }
+      // If pre-search failed, continue anyway - participants can work without it
     }
 
     // ✅ CRITICAL FIX: Call startRound and let it handle AI SDK readiness
@@ -575,15 +598,26 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
     // calculateNextRoundNumber handles this correctly: -1 + 1 = 0 for first round
     const newRoundNumber = calculateNextRoundNumber(storeMessages);
 
-    // ✅ CRITICAL FIX: Only wait for pre-search if it's STREAMING
-    // Previous logic created chicken-and-egg problem where message couldn't send
-    // because pre-search didn't exist, but pre-search is only created when message is sent
+    // ✅ CRITICAL FIX: Wait for pre-search if it's PENDING or STREAMING
+    // ❌ REMOVED DEADLOCK: Don't wait for pre-search to exist before sending message
+    // Previous bug: Waited for pre-search to exist, but pre-search only created when sendMessage called
+    // New flow:
+    //   1. Send message immediately (backend creates PENDING pre-search during handling)
+    //   2. Orchestrator syncs pre-search to store
+    //   3. If pre-search is PENDING/STREAMING, participants wait for completion
+    //   4. When COMPLETE, participants start streaming
     const webSearchEnabled = storeThread?.enableWebSearch ?? stateEnableWebSearch;
     const preSearchForRound = statePreSearches.find(ps => ps.roundNumber === newRoundNumber);
 
-    // Only block if pre-search is actively STREAMING
-    if (webSearchEnabled && preSearchForRound && preSearchForRound.status === AnalysisStatuses.STREAMING) {
-      return; // Don't send message yet - wait for pre-search to complete
+    // ✅ CORRECT: Only wait if pre-search exists AND is actively running
+    // Don't block if pre-search doesn't exist yet - backend will create it
+    if (webSearchEnabled && preSearchForRound) {
+      // If pre-search exists and is PENDING or STREAMING, wait for completion
+      if (preSearchForRound.status === AnalysisStatuses.PENDING || preSearchForRound.status === AnalysisStatuses.STREAMING) {
+        return; // Don't send message yet - wait for pre-search to complete
+      }
+
+      // If pre-search is COMPLETE or FAILED, continue with sending message
     }
 
     // ✅ CRITICAL FIX: Set flags and send message atomically

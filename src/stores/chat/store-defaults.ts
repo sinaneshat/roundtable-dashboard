@@ -27,7 +27,7 @@ import type { ScreenMode } from './actions/screen-initialization';
 
 export const FORM_DEFAULTS = {
   inputValue: '',
-  selectedMode: null as ChatModeId | null,
+  selectedMode: 'analyzing' as ChatModeId | null, // ✅ FIX: Default to 'analyzing' mode
   selectedParticipants: [] as ParticipantConfig[],
   enableWebSearch: false,
 } as const;

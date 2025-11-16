@@ -211,18 +211,28 @@ function getNextAction(
   // Transition: creating_analysis → streaming_analysis (handled by analysis component)
   // No action needed here
 
-  // Transition: streaming_analysis → navigating
+  // Transition: streaming_analysis → navigating (cache invalidation)
+  // ✅ PRIORITY 1: Invalidate cache BEFORE navigating
   if (
     prevState === 'streaming_analysis'
     && currentState === 'navigating'
     && context.threadSlug
+    && !context.hasNavigated
   ) {
     return { type: 'INVALIDATE_CACHE' };
   }
 
-  // Transition: navigating → complete
-  if (prevState === 'navigating' && currentState === 'navigating' && !context.hasNavigated) {
-    return { type: 'NAVIGATE', slug: context.threadSlug! };
+  // Transition: * → navigating (navigation execution)
+  // ✅ PRIORITY 2: Execute navigation when in navigating state and not yet navigated
+  // Handles both:
+  // 1. Direct jump to navigating (prevState !== 'navigating')
+  // 2. After cache invalidation (prevState === 'navigating', currentState === 'navigating')
+  if (currentState === 'navigating' && !context.hasNavigated && context.threadSlug) {
+    // Skip if we just returned INVALIDATE_CACHE (will be handled in next effect run)
+    if (prevState === 'streaming_analysis') {
+      return null;
+    }
+    return { type: 'NAVIGATE', slug: context.threadSlug };
   }
 
   return null;
@@ -410,6 +420,17 @@ export function useFlowStateMachine(
           if (context.threadId) {
             queryClient.invalidateQueries({
               queryKey: queryKeys.threads.analyses(context.threadId),
+            });
+          }
+
+          // ✅ CRITICAL FIX: After invalidating cache, execute navigation in same effect run
+          // This handles the streaming_analysis → navigating transition where we need both actions
+          if (mode === 'overview' && context.threadSlug && !context.hasNavigated) {
+            startTransition(() => {
+              setHasNavigated(true);
+              queueMicrotask(() => {
+                router.push(`/chat/${context.threadSlug}`);
+              });
             });
           }
           break;

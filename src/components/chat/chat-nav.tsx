@@ -49,6 +49,7 @@ import { BRAND } from '@/constants/brand';
 import { useDeleteThreadMutation } from '@/hooks/mutations/chat-mutations';
 import { useThreadsQuery } from '@/hooks/queries/chat';
 import { useUsageStatsQuery } from '@/hooks/queries/usage';
+import { useNavigationReset } from '@/hooks/utils/use-navigation-reset';
 import { toastManager } from '@/lib/toast/toast-manager';
 
 function AppSidebarComponent({ ...props }: React.ComponentProps<typeof Sidebar>) {
@@ -57,6 +58,7 @@ function AppSidebarComponent({ ...props }: React.ComponentProps<typeof Sidebar>)
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const sidebarContentRef = useRef<HTMLDivElement>(null);
   const { isMobile, setOpenMobile } = useSidebar();
+  const handleNavigationReset = useNavigationReset();
   const {
     data: threadsData,
     fetchNextPage,
@@ -110,12 +112,23 @@ function AppSidebarComponent({ ...props }: React.ComponentProps<typeof Sidebar>)
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []); // No dependencies - ref always has latest callback
-  const handleNavLinkClick = useCallback(() => {
+  const handleNavLinkClick = useCallback((e: React.MouseEvent) => {
+    // ✅ CRITICAL: Prevent default link navigation
+    // We need to reset FIRST, then navigate manually
+    e.preventDefault();
+
+    // ✅ CRITICAL: Reset store SYNCHRONOUSLY before navigating
+    // Cancels streams, clears state, prevents memory leaks
+    handleNavigationReset();
+
+    // ✅ IMMEDIATE NAVIGATION: Navigate to /chat after reset
+    router.push('/chat');
+
     // Close mobile sidebar when navigating
     if (isMobile) {
       setOpenMobile(false);
     }
-  }, [isMobile, setOpenMobile]);
+  }, [handleNavigationReset, router, isMobile, setOpenMobile]);
   const handleDeleteChat = (chatId: string) => {
     const chat = chats.find(c => c.id === chatId);
     const chatSlug = chat?.slug;

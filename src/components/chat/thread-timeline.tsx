@@ -52,7 +52,7 @@ type ThreadTimelineProps = {
 
   // Analysis handlers (optional - view-only for public)
   onAnalysisStreamStart?: (roundNumber: number) => void;
-  onAnalysisStreamComplete?: (roundNumber: number, data?: ModeratorAnalysisPayload) => void;
+  onAnalysisStreamComplete?: (roundNumber: number, data?: ModeratorAnalysisPayload | null, error?: Error) => void;
   onActionClick?: (action: RecommendedAction) => void;
 
   // Error retry (optional)
@@ -233,8 +233,8 @@ export function ThreadTimeline({
                   onStreamStart={() => {
                     onAnalysisStreamStart?.(item.data.roundNumber);
                   }}
-                  onStreamComplete={(completedData) => {
-                    onAnalysisStreamComplete?.(item.data.roundNumber, completedData);
+                  onStreamComplete={(completedData, error) => {
+                    onAnalysisStreamComplete?.(item.data.roundNumber, completedData, error);
                   }}
                   onActionClick={isReadOnly ? undefined : onActionClick}
                 />

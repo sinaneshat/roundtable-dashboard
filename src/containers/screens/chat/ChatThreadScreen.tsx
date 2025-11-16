@@ -260,6 +260,7 @@ export default function ChatThreadScreen({
   // Analysis actions
   const updateAnalysisData = useChatStore(s => s.updateAnalysisData);
   const updateAnalysisStatus = useChatStore(s => s.updateAnalysisStatus);
+  const updateAnalysisError = useChatStore(s => s.updateAnalysisError);
   const removePendingAnalysis = useChatStore(s => s.removeAnalysis);
 
   // ✅ SAFETY MECHANISM: Auto-complete stuck analyses after timeout
@@ -593,7 +594,7 @@ export default function ChatThreadScreen({
                 // ✅ Invalidate usage quota immediately when analysis streaming starts
                 queryClient.invalidateQueries({ queryKey: queryKeys.usage.stats() });
               }}
-              onAnalysisStreamComplete={(roundNumber, completedData) => {
+              onAnalysisStreamComplete={(roundNumber, completedData, error) => {
                 // ✅ FIX: Update store with completed analysis (includes status update to 'complete')
                 if (completedData) {
                   updateAnalysisData(
@@ -601,11 +602,10 @@ export default function ChatThreadScreen({
                     completedData as ModeratorAnalysisPayload,
                   );
                 } else {
-                  // ✅ CRITICAL FIX: Handle error case where no data returned
-                  // Mark analysis as failed to show error badge and unblock UI
-                  // This happens when streaming fails with validation errors, network errors, etc.
-                  // ✅ Enum Pattern: Use AnalysisStatuses.FAILED constant
-                  updateAnalysisStatus(roundNumber, AnalysisStatuses.FAILED);
+                  // ✅ CRITICAL FIX: Preserve error message when analysis fails
+                  // Use dedicated updateAnalysisError action to atomically update status + error
+                  const errorMessage = error?.message || 'Analysis failed. Please try again.';
+                  updateAnalysisError(roundNumber, errorMessage);
                 }
 
                 // ✅ PROPER FIX: Don't invalidate immediately - let orchestrator handle merge

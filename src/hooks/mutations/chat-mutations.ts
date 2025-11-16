@@ -119,8 +119,15 @@ const InfiniteQueryDataSchema = z.object({
  * - Validates API response structure
  * - Validates usage stats data shape
  * - Returns null on validation failure (safe fallback)
+ *
+ * ✅ DEFENSIVE HANDLING: Silently handles uninitialized queries
  */
 function parseUsageStatsData(data: unknown) {
+  // ✅ Handle uninitialized queries silently
+  if (data === undefined || data === null) {
+    return null;
+  }
+
   const response = ApiResponseSchema.safeParse(data);
   if (!response.success || !response.data.success) {
     if (process.env.NODE_ENV === 'development') {
@@ -148,8 +155,15 @@ function parseUsageStatsData(data: unknown) {
  * - Validates API response wrapper
  * - Validates thread detail payload
  * - Returns null on validation failure (safe fallback)
+ *
+ * ✅ DEFENSIVE HANDLING: Silently handles uninitialized queries
  */
 function parseThreadDetailData(data: unknown) {
+  // ✅ Handle uninitialized queries silently
+  if (data === undefined || data === null) {
+    return null;
+  }
+
   const response = ApiResponseSchema.safeParse(data);
   if (!response.success || !response.data.success) {
     if (process.env.NODE_ENV === 'development') {
@@ -177,12 +191,24 @@ function parseThreadDetailData(data: unknown) {
  * - Validates infinite query structure (pages + pageParams)
  * - Validates each page's response structure
  * - Returns null on validation failure (safe fallback)
+ *
+ * ✅ DEFENSIVE HANDLING: Distinguishes between uninitialized and malformed data
+ * - Silently handles undefined data (uninitialized queries are expected)
+ * - Only logs errors for malformed data (actual data corruption)
  */
 function parseInfiniteQueryData(data: unknown) {
+  // ✅ CRITICAL FIX: Handle uninitialized queries silently
+  // setQueriesData iterates over ALL matching queries, including uninitialized ones
+  // This is expected behavior - don't pollute console with errors for undefined data
+  if (data === undefined || data === null) {
+    return null;
+  }
+
   const queryData = InfiniteQueryDataSchema.safeParse(data);
   if (!queryData.success) {
+    // Only log errors for actual data corruption (non-undefined invalid data)
     if (process.env.NODE_ENV === 'development') {
-      console.error('Invalid infinite query data structure:', queryData.error);
+      console.error('Invalid infinite query data structure (malformed data, not uninitialized):', queryData.error);
     }
     return null;
   }

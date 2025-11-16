@@ -141,49 +141,52 @@ export function PreSearchCard({
         disabled={isStreamingOrPending}
         className={cn(isStreamingOrPending && 'cursor-default')}
       >
-        <ChainOfThoughtHeader>
-          <div className="flex items-center gap-2.5 w-full">
-            <Zap className="size-4 text-blue-500 flex-shrink-0" />
-            <span className="text-sm font-medium">
-              {t('chat.preSearch.title')}
-            </span>
+        <div className="relative">
+          <ChainOfThoughtHeader>
+            <div className="flex items-center gap-2.5 w-full">
+              <Zap className="size-4 text-blue-500 flex-shrink-0" />
+              <span className="text-sm font-medium">
+                {t('chat.preSearch.title')}
+              </span>
 
-            {/* Status badges */}
-            {isStreamingOrPending && (
-              <Badge variant="outline" className="text-xs bg-blue-500/10 text-blue-500 border-blue-500/20">
-                {t('chat.preSearch.searching')}
-              </Badge>
-            )}
-            {hasError && (
-              <Badge variant="outline" className="text-xs bg-red-500/10 text-red-500 border-red-500/20">
-                {t('chat.preSearch.error')}
-              </Badge>
-            )}
+              {/* Status badges */}
+              {isStreamingOrPending && (
+                <Badge variant="outline" className="text-xs bg-blue-500/10 text-blue-500 border-blue-500/20">
+                  {t('chat.preSearch.searching')}
+                </Badge>
+              )}
+              {hasError && (
+                <Badge variant="outline" className="text-xs bg-red-500/10 text-red-500 border-red-500/20">
+                  {t('chat.preSearch.error')}
+                </Badge>
+              )}
+            </div>
+          </ChainOfThoughtHeader>
 
-            {/* Retry button for failed searches */}
-            {/* Pattern from round-analysis-card.tsx:168-187 */}
-            {hasError && (
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleRetry();
-                }}
-                disabled={isRetrying}
-                className={cn(
-                  'ml-auto flex items-center gap-1.5 px-2 py-1 text-xs font-medium rounded-md transition-colors',
-                  'text-primary hover:text-primary/80 hover:bg-primary/10',
-                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
-                  'disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent',
-                )}
-                aria-label={t('chat.preSearch.retry')}
-              >
-                <RotateCcw className={cn('size-3.5', isRetrying && 'animate-spin')} />
-                <span className="hidden sm:inline">{t('chat.preSearch.retry')}</span>
-              </button>
-            )}
-          </div>
-        </ChainOfThoughtHeader>
+          {/* Retry button for failed searches - positioned absolutely to avoid nesting inside trigger button */}
+          {/* Pattern from round-analysis-card.tsx:168-187 */}
+          {hasError && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleRetry();
+              }}
+              disabled={isRetrying}
+              className={cn(
+                'absolute right-4 top-1/2 -translate-y-1/2 z-10',
+                'flex items-center gap-1.5 px-2 py-1 text-xs font-medium rounded-md transition-colors',
+                'text-primary hover:text-primary/80 hover:bg-primary/10',
+                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+                'disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent',
+              )}
+              aria-label={t('chat.preSearch.retry')}
+            >
+              <RotateCcw className={cn('size-3.5', isRetrying && 'animate-spin')} />
+              <span className="hidden sm:inline">{t('chat.preSearch.retry')}</span>
+            </button>
+          )}
+        </div>
 
         <ChainOfThoughtContent>
           <div className="space-y-4">

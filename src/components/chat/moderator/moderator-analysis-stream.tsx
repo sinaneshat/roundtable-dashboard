@@ -19,7 +19,7 @@ import { SkillsComparisonChart } from './skills-comparison-chart';
 type ModeratorAnalysisStreamProps = {
   threadId: string;
   analysis: StoredModeratorAnalysis;
-  onStreamComplete?: (completedAnalysisData?: ModeratorAnalysisPayload) => void;
+  onStreamComplete?: (completedAnalysisData?: ModeratorAnalysisPayload | null, error?: Error) => void;
   onStreamStart?: () => void;
   onActionClick?: (action: RecommendedAction) => void;
 };
@@ -121,9 +121,10 @@ function ModeratorAnalysisStreamComponent({
         // Store error type for UI display
         streamErrorTypeRef.current = errorType;
 
-        // ✅ CRITICAL FIX: Always call completion callback to prevent stuck 'streaming' status
-        // This ensures the analysis status gets updated even when validation or other errors occur
-        onStreamCompleteRef.current?.();
+        // ✅ CRITICAL FIX: Pass error information to parent callback
+        // Pass null for data and the error object so parent can store error message
+        // This prevents silent failures with null errorMessage in the store
+        onStreamCompleteRef.current?.(null, streamError || new Error(errorMessage));
         return;
       }
 

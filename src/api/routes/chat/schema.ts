@@ -522,13 +522,9 @@ export const ValidatedPreSearchDataSchema = z.object({
   results: z.array(z.object({
     query: z.string(),
     answer: z.string().nullable(),
-    results: z.array(z.object({
-      title: z.string(),
-      url: z.string(),
-      content: z.string(),
-      score: z.number().min(0).max(1),
-      publishedDate: z.string().nullable().optional(),
-    })),
+    // ✅ FULL CONTENT SUPPORT: Use complete WebSearchResultItemSchema for all fields
+    // This ensures fullContent, metadata, domain, etc. are available for participant exposure
+    results: z.array(WebSearchResultItemSchema),
     responseTime: z.number(),
   })),
 }).openapi('ValidatedPreSearchData');

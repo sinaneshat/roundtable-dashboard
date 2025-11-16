@@ -140,8 +140,12 @@ function extractValidatedPreSearchData(
 /**
  * Build search context for current round
  *
- * Provides full details: queries, AI summaries, sources with content snippets.
+ * Provides full details: queries, AI summaries, sources with FULL CONTENT.
  * This gives participants maximum context for the current question.
+ *
+ * ✅ FULL CONTENT EXPOSURE: Uses fullContent field (up to 15,000 chars per source)
+ * instead of limiting to 200 chars. This ensures participants have complete
+ * website content for comprehensive analysis and accurate responses.
  *
  * **REPLACES**: streaming.handler.ts:887-907
  *
@@ -164,8 +168,35 @@ function buildCurrentRoundSearchContext(preSearch: ValidatedPreSearchData): stri
     for (const result of searchResult.results.slice(0, 3)) {
       context += `- **${result.title}**\n`;
       context += `  URL: ${result.url}\n`;
-      // Limit content snippet to 200 chars
-      context += `  ${result.content.slice(0, 200)}...\n\n`;
+
+      // ✅ FULL CONTENT EXPOSURE: Use fullContent when available (up to 15,000 chars)
+      // Falls back to content (800 chars) or excerpt if fullContent not available
+      // This provides complete website content for comprehensive participant analysis
+      const contentToExpose = result.fullContent || result.content || result.excerpt || '';
+
+      if (contentToExpose) {
+        // ✅ NO ARTIFICIAL LIMIT: Expose full content to participants
+        // Context window management is handled by model's native token limit
+        // Participants need complete information for accurate, well-sourced responses
+        context += `  **Content:**\n  ${contentToExpose}\n\n`;
+      }
+
+      // Add metadata if available
+      if (result.metadata) {
+        const metaParts: string[] = [];
+        if (result.metadata.author) {
+          metaParts.push(`Author: ${result.metadata.author}`);
+        }
+        if (result.metadata.wordCount) {
+          metaParts.push(`${result.metadata.wordCount.toLocaleString()} words`);
+        }
+        if (result.metadata.readingTime) {
+          metaParts.push(`${result.metadata.readingTime} min read`);
+        }
+        if (metaParts.length > 0) {
+          context += `  *${metaParts.join(' • ')}*\n\n`;
+        }
+      }
     }
   }
 

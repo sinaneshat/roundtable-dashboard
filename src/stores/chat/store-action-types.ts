@@ -105,6 +105,7 @@ export type SetAnalyses = (analyses: StoredModeratorAnalysis[]) => void;
 export type AddAnalysis = (analysis: StoredModeratorAnalysis) => void;
 export type UpdateAnalysisData = (roundNumber: number, data: ModeratorAnalysisPayload) => void;
 export type UpdateAnalysisStatus = (roundNumber: number, status: AnalysisStatus) => void;
+export type UpdateAnalysisError = (roundNumber: number, errorMessage: string) => void;
 export type RemoveAnalysis = (roundNumber: number) => void;
 export type ClearAllAnalyses = () => void;
 
@@ -317,6 +318,17 @@ export type StartRegeneration = (roundNumber: number) => void;
  */
 export type CompleteRegeneration = (roundNumber: number) => void;
 
+/**
+ * ✅ NAVIGATION CLEANUP: Reset to new chat state
+ *
+ * Cancels ongoing streams and resets all state to defaults.
+ * Used when navigating to new chat via:
+ * - "New Chat" button click
+ * - Logo/home link click
+ * - Direct navigation to /chat route
+ */
+export type ResetToNewChat = () => void;
+
 // ============================================================================
 // AGGREGATED ACTION TYPES BY SLICE
 // ============================================================================
@@ -355,6 +367,7 @@ export type AnalysisActionsType = {
   addAnalysis: AddAnalysis;
   updateAnalysisData: UpdateAnalysisData;
   updateAnalysisStatus: UpdateAnalysisStatus;
+  updateAnalysisError: UpdateAnalysisError;
   removeAnalysis: RemoveAnalysis;
   clearAllAnalyses: ClearAllAnalyses;
   createPendingAnalysis: CreatePendingAnalysis;

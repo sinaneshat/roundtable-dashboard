@@ -378,10 +378,16 @@ export function useMultiParticipantChat(
         participants: participantsRef.current,
         ...(regenerateRoundNumberRef.current && { regenerateRound: regenerateRoundNumberRef.current }),
         ...(mode && { mode }),
+        // ✅ CRITICAL FIX: Pass enableWebSearch to backend for ALL rounds
+        // BUG FIX: Previously only round 0 (thread creation) included enableWebSearch
+        // Now all subsequent rounds will also trigger pre-search when enabled
+        // Backend uses this to create PENDING pre-search records before participant streaming
+        enableWebSearch: callbackRefs.enableWebSearch.current,
       };
 
       return { body };
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- callbackRefs is stable (useSyncedRefs), accessed via .current
     [mode],
   );
 

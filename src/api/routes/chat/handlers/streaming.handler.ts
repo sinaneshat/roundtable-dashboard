@@ -168,9 +168,18 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
             createdAt: new Date(),
           });
 
-          // console.log(`[PreSearch] ✅ Created PENDING pre-search for round ${currentRoundNumber} (ID: ${preSearchId})`);
+          // ✅ CRITICAL FIX: Check if pre-search should block participant streaming
+          // For OVERVIEW screen (round 0): Pre-search is created during thread creation
+          // - Frontend waits for COMPLETE before calling startRound
+          // For THREAD screen (round N > 0): Pre-search is created HERE
+          // - But we continue to create user message below
+          // - Frontend pending message effect will wait for PENDING → COMPLETE before sending
+          // - This allows user message to be saved while web search executes
+        } else if (existingPreSearch.status === AnalysisStatuses.PENDING || existingPreSearch.status === AnalysisStatuses.STREAMING) {
+          // Pre-search exists and is in progress - continue
+          // Frontend will wait for completion before triggering participants
         } else {
-          // console.log(`[PreSearch] ℹ️ Pre-search already exists for round ${currentRoundNumber} (status: ${existingPreSearch.status})`);
+          // Pre-search complete or failed - OK to proceed with participants
         }
       } catch (error) {
         // ✅ Non-blocking: Don't let pre-search creation errors break streaming

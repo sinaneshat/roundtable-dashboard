@@ -586,7 +586,8 @@ export async function performWebSearch(
     // Take only the requested number of sources
     const sourcesToExtract = searchResults.slice(0, Math.min(sourceCount, searchResults.length));
 
-    // Process results based on depth requirement
+    // ✅ ALWAYS EXTRACT FULL CONTENT: Process all results with full content extraction
+    // This ensures participants have complete context and UI can display full text
     const results: WebSearchResultItem[] = await Promise.all(
       sourcesToExtract.map(async (result) => {
         const domain = extractDomain(result.url);
@@ -602,51 +603,52 @@ export async function performWebSearch(
           domain,
         };
 
-        // Only extract full content if required (DEEP searches)
-        // For BASIC searches, just use snippets
-        if (requiresFullContent) {
-          try {
-            const extracted = await extractPageContent(result.url, env, 10000);
-            if (extracted.content) {
-              baseResult.fullContent = extracted.content;
-              baseResult.content = extracted.content.substring(0, 800); // Longer preview for deep searches
-              baseResult.metadata = {
-                author: extracted.metadata.author,
-                readingTime: extracted.metadata.readingTime,
-                wordCount: extracted.metadata.wordCount,
-                description: extracted.metadata.description,
-                imageUrl: extracted.metadata.imageUrl,
-                faviconUrl: extracted.metadata.faviconUrl,
-              };
-              if (extracted.metadata.publishedDate) {
-                baseResult.publishedDate = extracted.metadata.publishedDate;
-              }
-              // Use better title from page if available
-              if (extracted.metadata.title && extracted.metadata.title.length > 0) {
-                baseResult.title = extracted.metadata.title;
-              }
+        // ✅ ALWAYS SCRAPE FULL CONTENT: Extract full page content for ALL searches
+        // This provides:
+        // 1. Complete context for AI participants (via fullContent field)
+        // 2. Read more/read less functionality in UI
+        // 3. Better answer quality from comprehensive information
+        try {
+          const extracted = await extractPageContent(result.url, env, 10000);
+          if (extracted.content) {
+            // Store full content (up to 15,000 chars)
+            baseResult.fullContent = extracted.content;
+            // Keep preview for backwards compatibility (800 chars)
+            baseResult.content = extracted.content.substring(0, 800);
+            // Add complete metadata
+            baseResult.metadata = {
+              author: extracted.metadata.author,
+              readingTime: extracted.metadata.readingTime,
+              wordCount: extracted.metadata.wordCount,
+              description: extracted.metadata.description,
+              imageUrl: extracted.metadata.imageUrl,
+              faviconUrl: extracted.metadata.faviconUrl,
+            };
+            if (extracted.metadata.publishedDate) {
+              baseResult.publishedDate = extracted.metadata.publishedDate;
             }
-          } catch (extractError) {
-            // ✅ LOG: Content extraction failure (edge case)
-            if (logger) {
-              logger.warn('Failed to extract page content', {
-                logType: 'edge_case',
-                url: result.url,
-                error: normalizeError(extractError),
-              });
+            // Use better title from page if available
+            if (extracted.metadata.title && extracted.metadata.title.length > 0) {
+              baseResult.title = extracted.metadata.title;
             }
-            // Keep using snippet as fallback
           }
-        } else {
-          // For BASIC searches, try to at least get favicon
+        } catch (extractError) {
+          // ✅ LOG: Content extraction failure (edge case)
+          if (logger) {
+            logger.warn('Failed to extract page content', {
+              logType: 'edge_case',
+              url: result.url,
+              error: normalizeError(extractError),
+            });
+          }
+          // Fallback: Try to at least get favicon for better UI
           try {
-            // Quick metadata extraction without full content
             const faviconUrl = `https://${domain}/favicon.ico`;
             baseResult.metadata = {
               faviconUrl,
             };
           } catch {
-            // Ignore favicon errors for basic searches (not worth logging)
+            // Ignore favicon errors (not critical)
           }
         }
 

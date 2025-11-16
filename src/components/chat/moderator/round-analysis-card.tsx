@@ -27,7 +27,7 @@ type RoundAnalysisCardProps = {
   isLatest?: boolean;
   className?: string;
   onStreamStart?: () => void;
-  onStreamComplete?: (completedAnalysisData?: ModeratorAnalysisPayload) => void;
+  onStreamComplete?: (completedAnalysisData?: ModeratorAnalysisPayload | null, error?: Error) => void;
   streamingRoundNumber?: number | null;
   onActionClick?: (action: RecommendedAction) => void;
   /** Callback to regenerate entire round (participants + analysis) */
@@ -105,8 +105,11 @@ export function RoundAnalysisCard({
     }
     setIsRetrying(true);
 
-    // If onRetry provided and round is incomplete, regenerate entire round
-    if (onRetry && isRoundIncomplete) {
+    // ✅ CRITICAL FIX: If onRetry provided, call it for FAILED analysis or incomplete rounds
+    // Previously only called onRetry when isRoundIncomplete was true
+    // But onRetry should also be called when analysis FAILED and user clicks retry
+    // This allows parent component to handle retry logic (e.g., regenerate entire round)
+    if (onRetry && (isRoundIncomplete || analysis.status === AnalysisStatuses.FAILED)) {
       onRetry(analysis.roundNumber);
       retryTimeoutRef.current = setTimeout(() => {
         setIsRetrying(false);
@@ -114,7 +117,7 @@ export function RoundAnalysisCard({
       return;
     }
 
-    // Otherwise, just retry analysis generation
+    // Otherwise, just retry analysis generation via API
     try {
       await fetch(`/api/v1/chat/threads/${threadId}/rounds/${analysis.roundNumber}/analyze`, {
         method: 'POST',
@@ -128,7 +131,7 @@ export function RoundAnalysisCard({
     retryTimeoutRef.current = setTimeout(() => {
       setIsRetrying(false);
     }, 2000);
-  }, [threadId, analysis.roundNumber, analysis.participantMessageIds, isRetrying, onRetry, isRoundIncomplete]);
+  }, [threadId, analysis.roundNumber, analysis.participantMessageIds, analysis.status, isRetrying, onRetry, isRoundIncomplete]);
   const containerRef = useRef<HTMLDivElement>(null);
   const previousStatusRef = useRef(analysis.status);
   useEffect(() => {

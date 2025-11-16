@@ -312,6 +312,14 @@ const createAnalysisSlice: StateCreator<
           : a,
       ),
     }), false, 'analysis/updateAnalysisStatus'),
+  updateAnalysisError: (roundNumber: number, errorMessage: string) =>
+    set(state => ({
+      analyses: state.analyses.map(a =>
+        a.roundNumber === roundNumber
+          ? { ...a, status: AnalysisStatuses.FAILED, errorMessage }
+          : a,
+      ),
+    }), false, 'analysis/updateAnalysisError'),
   removeAnalysis: (roundNumber: number) =>
     set(state => ({
       analyses: state.analyses.filter(a => a.roundNumber !== roundNumber),
@@ -491,6 +499,14 @@ const createPreSearchSlice: StateCreator<
           : ps,
       ),
     }), false, 'preSearch/updatePreSearchStatus'),
+  updatePreSearchError: (roundNumber: number, errorMessage: string | null) =>
+    set(state => ({
+      preSearches: state.preSearches.map(ps =>
+        ps.roundNumber === roundNumber
+          ? { ...ps, errorMessage }
+          : ps,
+      ),
+    }), false, 'preSearch/updatePreSearchError'),
   removePreSearch: (roundNumber: number) =>
     set(state => ({
       preSearches: state.preSearches.filter(ps => ps.roundNumber !== roundNumber),
@@ -751,6 +767,35 @@ const createOperationsSlice: StateCreator<
       streamingRoundNumber: null,
       currentRoundNumber: null,
     }, false, 'operations/completeRegeneration'),
+
+  /**
+   * ✅ NAVIGATION CLEANUP: Reset store to new chat state
+   *
+   * Called when:
+   * - User clicks "New Chat" button
+   * - User clicks logo/home link
+   * - User navigates to /chat route
+   *
+   * Ensures complete cleanup:
+   * - Cancels ongoing streams
+   * - Resets all state to defaults
+   * - Clears tracking Sets
+   * - Aborts pending operations
+   */
+  resetToNewChat: () => {
+    const state = get();
+
+    // ✅ CRITICAL: Stop any ongoing streams first
+    state.stop?.();
+
+    // ✅ RESET: Apply complete reset state
+    set({
+      ...COMPLETE_RESET_STATE,
+      // ✅ CRITICAL: Reset tracking Sets (need new instances)
+      createdAnalysisRounds: new Set(),
+      triggeredPreSearchRounds: new Set(),
+    }, false, 'operations/resetToNewChat');
+  },
 });
 
 // ============================================================================
@@ -792,20 +837,6 @@ export function createChatStore() {
       },
     ),
   );
-
-  // Debug: Verify devtools connection
-  if (typeof window !== 'undefined') {
-    const hasExtension = !!(window as typeof window & { __REDUX_DEVTOOLS_EXTENSION__?: unknown }).__REDUX_DEVTOOLS_EXTENSION__;
-    console.error('[ChatStore] Redux DevTools Extension available:', hasExtension);
-    console.error('[ChatStore] Store created with devtools middleware');
-    console.error('[ChatStore] Store has devtools property:', 'devtools' in store);
-
-    // Trigger a test action to ensure store appears in devtools
-    setTimeout(() => {
-      store.setState({ showInitialUI: true }, false, 'devtools/initialization-test');
-      console.error('[ChatStore] Test action dispatched to verify devtools connection');
-    }, 100);
-  }
 
   // ============================================================================
   // Store Subscriptions (Removed)

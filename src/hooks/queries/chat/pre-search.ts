@@ -40,7 +40,20 @@ export function useThreadPreSearchesQuery(
     staleTime: STALE_TIMES.preSearch,
     placeholderData: previousData => previousData,
     enabled: enabled !== undefined ? enabled : (isAuthenticated && !!threadId),
-    refetchInterval: false,
+    // ✅ CRITICAL FIX: Poll for pre-search status updates in preview environments
+    // In Cloudflare Workers edge environments, query invalidation may not propagate immediately
+    // Poll every 2s when pre-search is pending/streaming to catch status updates quickly
+    // Stop polling once all pre-searches are complete/failed
+    refetchInterval: (query) => {
+      // Check if any pre-search is pending or streaming
+      const hasActivePreSearch = query.state.data?.data?.items?.some(
+        ps => ps.status === 'pending' || ps.status === 'streaming',
+      );
+
+      // Poll every 2s if there are active pre-searches, otherwise don't poll
+      return hasActivePreSearch ? 2000 : false;
+    },
+    refetchIntervalInBackground: false, // Only poll when tab is active
   });
 
   return query;
