@@ -72,16 +72,10 @@
         "queue": "title-generation-queue",
         "binding": "TITLE_GENERATION_QUEUE"
       }
-    ],
-    "consumers": [
-      {
-        "queue": "title-generation-queue",
-        "max_batch_size": 10,
-        "max_batch_timeout": 5,
-        "max_retries": 3,
-        "retry_delay": 60
-      }
     ]
+    // NOTE: Queue consumer removed - OpenNext.js doesn't support custom queue consumers
+    // Consumer must be deployed as separate Cloudflare Worker
+    // See: docs/cloudflare-queues-migration.md for setup instructions
   },
   "durable_objects": {
     "bindings": [
@@ -181,16 +175,10 @@
             "queue": "title-generation-queue",
             "binding": "TITLE_GENERATION_QUEUE"
           }
-        ],
-        "consumers": [
-          {
-            "queue": "title-generation-queue",
-            "max_batch_size": 10,
-            "max_batch_timeout": 5,
-            "max_retries": 3,
-            "retry_delay": 60
-          }
         ]
+        // NOTE: Queue consumer removed - OpenNext.js doesn't support custom queue consumers
+        // Consumer must be deployed as separate Cloudflare Worker
+        // See: docs/cloudflare-queues-migration.md for setup instructions
       },
       "durable_objects": {
         "bindings": [
@@ -284,16 +272,10 @@
             "queue": "title-generation-queue",
             "binding": "TITLE_GENERATION_QUEUE"
           }
-        ],
-        "consumers": [
-          {
-            "queue": "title-generation-queue",
-            "max_batch_size": 10,
-            "max_batch_timeout": 5,
-            "max_retries": 3,
-            "retry_delay": 60
-          }
         ]
+        // NOTE: Queue consumer removed - OpenNext.js doesn't support custom queue consumers
+        // Consumer must be deployed as separate Cloudflare Worker
+        // See: docs/cloudflare-queues-migration.md for setup instructions
       },
       "durable_objects": {
         "bindings": [

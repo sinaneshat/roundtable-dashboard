@@ -218,10 +218,9 @@ export function ModelSelectionModal({
       <DialogContent
         glass={true}
         className={cn(
-          'overflow-hidden gap-0 p-0',
+          'overflow-hidden gap-0 p-0 max-h-[85vh] max-w-[768px] w-[calc(100vw-2.5rem)]',
           className,
         )}
-        style={{ maxHeight: '85vh', maxWidth: '768px', width: 'calc(100vw - 2.5rem)' }}
       >
         {/* Fixed Header Section */}
         <div className="shrink-0">
@@ -266,8 +265,8 @@ export function ModelSelectionModal({
         </div>
 
         {/* Scrollable Model List */}
-        <div className="border-t border-white/5 bg-black/30" style={{ height: '500px', maxHeight: '500px', minHeight: '300px' }}>
-          <ScrollArea className="h-full w-full">
+        <div className="border-t border-white/5 bg-black/30 h-[500px] max-h-[500px] min-h-[300px]">
+          <ScrollArea className="h-full w-full [&_[data-slot=scroll-area-viewport]>div]:block!">
             <div className="w-full">
               {groupedModels.length === 0
                 ? (
