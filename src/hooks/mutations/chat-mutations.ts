@@ -340,9 +340,20 @@ export function useUpdateThreadMutation() {
         },
       );
 
-      // Optimistically update all thread list queries
+      // ✅ CRITICAL FIX: Only update infinite queries (lists), not detail/analyses/etc queries
+      // Using queryKeys.threads.all matches ALL queries starting with ['threads']
+      // This includes detail queries, analyses, changelog, etc. that don't have pages array
+      // Use predicate to check if query key matches infinite query pattern
       queryClient.setQueriesData(
-        { queryKey: queryKeys.threads.all },
+        {
+          queryKey: queryKeys.threads.all,
+          predicate: (query) => {
+            // Only update queries that are infinite queries (have 'list' in the key)
+            // ['threads', 'list'] or ['threads', 'list', 'search', 'term']
+            const key = query.queryKey as string[];
+            return key.length >= 2 && key[1] === 'list';
+          },
+        },
         (old: unknown) => {
           const parsedQuery = parseInfiniteQueryData(old);
           if (!parsedQuery)
@@ -462,9 +473,20 @@ export function useDeleteThreadMutation() {
       const previousThreads = queryClient.getQueryData(queryKeys.threads.all);
       const previousUsage = queryClient.getQueryData(queryKeys.usage.stats());
 
-      // Optimistically remove thread from all thread list queries
+      // ✅ CRITICAL FIX: Only update infinite queries (lists), not detail/analyses/etc queries
+      // Using queryKeys.threads.all matches ALL queries starting with ['threads']
+      // This includes detail queries, analyses, changelog, etc. that don't have pages array
+      // Use predicate to check if query key matches infinite query pattern
       queryClient.setQueriesData(
-        { queryKey: queryKeys.threads.all },
+        {
+          queryKey: queryKeys.threads.all,
+          predicate: (query) => {
+            // Only update queries that are infinite queries (have 'list' in the key)
+            // ['threads', 'list'] or ['threads', 'list', 'search', 'term']
+            const key = query.queryKey as string[];
+            return key.length >= 2 && key[1] === 'list';
+          },
+        },
         (old: unknown) => {
           const parsedQuery = parseInfiniteQueryData(old);
           if (!parsedQuery)

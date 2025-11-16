@@ -128,6 +128,7 @@ export type SetPreSearches = (preSearches: StoredPreSearch[]) => void;
 export type AddPreSearch = (preSearch: StoredPreSearch) => void;
 export type UpdatePreSearchData = (roundNumber: number, data: PreSearchDataPayload) => void;
 export type UpdatePreSearchStatus = (roundNumber: number, status: AnalysisStatus) => void;
+export type UpdatePreSearchError = (roundNumber: number, errorMessage: string | null) => void;
 export type RemovePreSearch = (roundNumber: number) => void;
 export type ClearAllPreSearches = () => void;
 
@@ -378,6 +379,7 @@ export type PreSearchActionsType = {
   addPreSearch: AddPreSearch;
   updatePreSearchData: UpdatePreSearchData;
   updatePreSearchStatus: UpdatePreSearchStatus;
+  updatePreSearchError: UpdatePreSearchError;
   removePreSearch: RemovePreSearch;
   clearAllPreSearches: ClearAllPreSearches;
 };
