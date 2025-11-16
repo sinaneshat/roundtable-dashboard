@@ -221,7 +221,7 @@ export function ModelSelectionModal({
           'overflow-hidden gap-0 p-0',
           className,
         )}
-        style={{ maxHeight: '85vh', maxWidth: '768px', width: '100%' }}
+        style={{ maxHeight: '85vh', maxWidth: '768px', width: 'calc(100vw - 2.5rem)' }}
       >
         {/* Fixed Header Section */}
         <div className="shrink-0">
@@ -266,9 +266,9 @@ export function ModelSelectionModal({
         </div>
 
         {/* Scrollable Model List */}
-        <div className="bg-black/30 border-t border-white/5 overflow-hidden" style={{ height: '500px', maxHeight: '500px', minHeight: '300px', width: '768px', maxWidth: '100%' }}>
-          <ScrollArea className="w-full" style={{ height: '500px', width: '768px', maxWidth: '100%' }}>
-            <div style={{ width: '768px', maxWidth: '100%' }}>
+        <div className="border-t border-white/5 bg-black/30" style={{ height: '500px', maxHeight: '500px', minHeight: '300px' }}>
+          <ScrollArea className="h-full w-full">
+            <div className="w-full">
               {groupedModels.length === 0
                 ? (
                     <div className="flex flex-col items-start justify-center py-12 px-4 sm:px-5 md:px-6">
@@ -325,7 +325,7 @@ export function ModelSelectionModal({
                                 const otherModels = orderedModels.filter(om => om.participant === null);
                                 onReorder([...reordered, ...otherModels]);
                               }}
-                              className="flex flex-col gap-2 px-4 sm:px-5 md:px-6 py-2"
+                              className="flex flex-col gap-2 w-full px-4 sm:px-5 md:px-6 py-2"
                             >
                               {group.models.map(orderedModel => (
                                 <ModelItem
@@ -346,7 +346,7 @@ export function ModelSelectionModal({
                             </Reorder.Group>
                           )
                         : (
-                            <div className="flex flex-col gap-2 px-4 sm:px-5 md:px-6 py-2">
+                            <div className="flex flex-col gap-2 w-full px-4 sm:px-5 md:px-6 py-2">
                               {group.models.map(orderedModel => (
                                 <ModelItem
                                   key={orderedModel.model.id}

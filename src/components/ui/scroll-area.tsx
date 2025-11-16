@@ -5,23 +5,20 @@ import * as React from "react"
 
 import { cn } from "@/lib/ui/cn"
 
-const ScrollArea = React.forwardRef<
-  HTMLDivElement,
-  React.ComponentProps<typeof ScrollAreaPrimitive.Root>
->(({ className, children, ...props }, ref) => {
+function ScrollArea({
+  className,
+  children,
+  ...props
+}: React.ComponentProps<typeof ScrollAreaPrimitive.Root>) {
   return (
     <ScrollAreaPrimitive.Root
       data-slot="scroll-area"
-      className={cn("relative overflow-hidden", className)}
+      className={cn("relative", className)}
       {...props}
     >
       <ScrollAreaPrimitive.Viewport
-        ref={ref}
         data-slot="scroll-area-viewport"
-        className="focus-visible:ring-ring/50 size-full rounded-[inherit] transition-[color,box-shadow] outline-none focus-visible:ring-[3px] focus-visible:outline-1 [&>div]:!block [&>div]:!w-full [&>div]:!min-w-0 [&>div]:!max-w-full"
-        style={{
-          ['--radix-scroll-area-viewport-width' as string]: '100%',
-        }}
+        className="focus-visible:ring-ring/50 size-full rounded-[inherit] transition-[color,box-shadow] outline-none focus-visible:ring-[3px] focus-visible:outline-1"
       >
         {children}
       </ScrollAreaPrimitive.Viewport>
@@ -29,9 +26,7 @@ const ScrollArea = React.forwardRef<
       <ScrollAreaPrimitive.Corner />
     </ScrollAreaPrimitive.Root>
   )
-})
-
-ScrollArea.displayName = "ScrollArea"
+}
 
 function ScrollBar({
   className,
@@ -61,4 +56,3 @@ function ScrollBar({
 }
 
 export { ScrollArea, ScrollBar }
-
