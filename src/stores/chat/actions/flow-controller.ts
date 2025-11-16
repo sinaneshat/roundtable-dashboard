@@ -204,7 +204,7 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
 
       // Invalidate thread list to update sidebar with AI-generated title
       queryClient.invalidateQueries({
-        queryKey: queryKeys.threads.lists(),
+        queryKey: queryKeys.threads.all,
       });
 
       // Update thread in store

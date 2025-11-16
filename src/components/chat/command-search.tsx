@@ -209,11 +209,7 @@ export function CommandSearch({ isOpen, onClose }: CommandSearchProps) {
         ref={modalRef}
         glass={true}
         showCloseButton={false}
-        className="!max-w-2xl p-0 gap-0"
-        style={{
-          width: 'calc(100vw - 2.5rem)',
-          maxWidth: '672px',
-        }}
+        className="!max-w-2xl !w-[calc(100vw-2.5rem)] p-0 gap-0"
       >
         {/* Fixed Header Section */}
         <DialogHeader className="flex flex-row items-center gap-3 bg-black/40 px-4 sm:px-5 md:px-6 py-4">

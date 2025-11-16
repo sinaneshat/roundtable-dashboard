@@ -77,7 +77,7 @@ export function ConversationModeModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         glass={true}
-        className={cn('sm:max-w-md', className)}
+        className={cn('!max-w-md !w-[calc(100vw-2.5rem)]', className)}
       >
         <DialogHeader glass>
           <DialogTitle className="text-xl">{t('title')}</DialogTitle>

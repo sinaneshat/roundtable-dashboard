@@ -370,14 +370,13 @@ app.use('/billing/subscriptions/:id/cancel', csrfProtection, requireSession);
 
 // Protected chat endpoints (ChatGPT pattern with smart access control)
 // POST /chat/threads - create thread (requires auth + CSRF)
-app.use('/chat/threads', csrfProtection, requireSession);
+// GET /chat/threads - list threads (requires auth, no CSRF for safe method)
+app.on('POST', '/chat/threads', csrfProtection, requireSession);
+app.on('GET', '/chat/threads', requireSession);
 
 // POST /chat - stream AI response (AI SDK v5 pattern - requires auth + CSRF)
 // This is the OFFICIAL AI SDK endpoint for streaming chat responses
-app.use('/chat', csrfProtection, requireSession);
-
-// POST /chat/pre-search - execute web search before streaming (requires auth + CSRF)
-app.use('/chat/pre-search', csrfProtection, requireSession);
+app.on('POST', '/chat', csrfProtection, requireSession);
 
 // /chat/threads/:id - mixed access pattern
 // GET: public access for public threads (handler checks ownership/public status)
@@ -390,6 +389,12 @@ app.use('/chat/threads/slug/:slug', requireSession);
 // GET /chat/threads/:id/messages - get messages (requires auth)
 app.use('/chat/threads/:id/messages', requireSession);
 
+// GET /chat/threads/:id/changelog - get thread configuration changelog (requires auth)
+app.use('/chat/threads/:id/changelog', requireSession);
+
+// GET /chat/threads/:id/slug-status - poll for slug updates (requires auth)
+app.use('/chat/threads/:id/slug-status', requireSession);
+
 // Participant management routes (protected)
 app.use('/chat/threads/:id/participants', csrfProtection, requireSession);
 app.use('/chat/participants/:id', csrfProtection, requireSession);
@@ -398,9 +403,17 @@ app.use('/chat/participants/:id', csrfProtection, requireSession);
 app.use('/chat/custom-roles', csrfProtection, requireSession);
 app.use('/chat/custom-roles/:id', csrfProtection, requireSession);
 
+// Pre-search routes (protected)
+app.use('/chat/threads/:threadId/rounds/:roundNumber/pre-search', csrfProtection, requireSession);
+app.use('/chat/threads/:id/pre-searches', requireSession); // GET pre-searches for thread
+
 // Moderator analysis routes (protected)
 app.use('/chat/threads/:threadId/rounds/:roundNumber/analyze', csrfProtection, requireSession);
 app.use('/chat/threads/:id/analyses', requireSession); // GET analyses for thread
+
+// Round feedback routes (protected)
+app.use('/chat/threads/:threadId/rounds/:roundNumber/feedback', csrfProtection, requireSession);
+app.use('/chat/threads/:id/feedback', requireSession); // GET feedback for thread
 
 // Project routes (protected)
 app.use('/projects', csrfProtection, requireSession);

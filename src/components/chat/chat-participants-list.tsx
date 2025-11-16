@@ -35,7 +35,6 @@ import { useModelsQuery } from '@/hooks/queries/models';
 import { useFuzzySearch } from '@/hooks/utils/use-fuzzy-search';
 import { toastManager } from '@/lib/toast/toast-manager';
 import { cn } from '@/lib/ui/cn';
-import { heavyGlassCardStyles } from '@/lib/ui/glassmorphism';
 import { getProviderIcon } from '@/lib/utils/ai-display';
 
 type ChatParticipantsListProps = {
@@ -350,8 +349,7 @@ export function ChatParticipantsList({
                         {selectedModels.length > 0 && (
                           <div className="border-b">
                             <div
-                              className="px-3 py-2 text-xs font-semibold text-foreground bg-background/15 border-b border-white/10 sticky top-0 z-20 backdrop-blur-3xl shadow-lg"
-                              style={heavyGlassCardStyles}
+                              className="px-3 py-2 text-xs font-semibold text-foreground bg-background/15 border-b border-white/10 sticky top-0 z-20 backdrop-blur-[60px] shadow-lg"
                             >
                               <div className="flex items-center justify-between">
                                 <span className="flex items-center gap-2">
@@ -399,11 +397,10 @@ export function ChatParticipantsList({
                               <div
                                 className={cn(
                                   'px-3 py-2.5 text-xs font-medium border-b',
-                                  'sticky top-0 z-20 backdrop-blur-3xl',
+                                  'sticky top-0 z-20 backdrop-blur-[60px]',
                                   'bg-background/15 text-accent-foreground border-white/10',
                                   'shadow-lg',
                                 )}
-                                style={heavyGlassCardStyles}
                               >
                                 <div className="flex items-center justify-between">
                                   <span className="flex items-center gap-2">
@@ -457,11 +454,10 @@ export function ChatParticipantsList({
                                     className={cn(
                                       'px-3 py-2.5 text-xs font-medium border-b border-white/10',
                                       'sticky top-0 z-20',
-                                      'backdrop-blur-3xl',
+                                      'backdrop-blur-[60px]',
                                       'bg-background/15',
                                       'shadow-lg',
                                     )}
-                                    style={heavyGlassCardStyles}
                                   >
                                     <div className="flex items-center justify-between">
                                       <span className="flex items-center gap-2">

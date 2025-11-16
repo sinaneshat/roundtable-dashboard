@@ -56,18 +56,24 @@ export function NavUser() {
   const user = session?.user;
   // ✅ FIX: Prevent hydration mismatch by deferring initials calculation to client
   // Server has no session, client does - causes 'U' (server) vs 'AB' (client) mismatch
-  const [userInitials, setUserInitials] = React.useState<string>('U');
+  const [isMounted, setIsMounted] = React.useState(false);
 
   React.useEffect(() => {
-    const initials = user?.name
+    // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- Standard mounted flag pattern
+    setIsMounted(true);
+  }, []);
+
+  const userInitials = React.useMemo(() => {
+    if (!isMounted)
+      return 'U'; // Prevent hydration mismatch
+    return user?.name
       ? user.name
           .split(' ')
           .map((n: string) => n[0])
           .join('')
           .toUpperCase()
       : user?.email?.[0]?.toUpperCase() || 'U';
-    setUserInitials(initials);
-  }, [user?.name, user?.email]);
+  }, [isMounted, user]);
   const subscriptions = subscriptionsData?.success ? subscriptionsData.data?.items || [] : [];
   const activeSubscription = subscriptions.find(
     sub => (sub.status === StripeSubscriptionStatuses.ACTIVE || sub.status === StripeSubscriptionStatuses.TRIALING) && !sub.cancelAtPeriodEnd,

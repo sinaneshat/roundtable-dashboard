@@ -78,7 +78,7 @@ export function ModelItem({
           role="button"
           tabIndex={isDisabled ? -1 : 0}
           className={cn(
-            'px-4 py-3 hover:bg-white/5 transition-colors rounded-xl mx-2 my-1 block w-full',
+            'px-4 py-3 hover:bg-white/5 transition-colors rounded-xl mx-2 my-1 block w-full max-w-[1148px]',
             !isDisabled && 'cursor-pointer',
             isDisabled && 'opacity-50 cursor-not-allowed',
           )}
@@ -94,7 +94,7 @@ export function ModelItem({
                 }
           }
         >
-          <div className="flex items-center gap-3 w-full min-w-0">
+          <div className="flex items-center gap-3 w-full max-w-[1148px] min-w-0">
             {enableDrag && (
               <div
                 className={cn(
@@ -124,16 +124,16 @@ export function ModelItem({
               className="shrink-0"
               onClick={e => e.stopPropagation()}
             />
-            <div className="flex items-center gap-2 flex-1 min-w-0 overflow-hidden">
+            <div className="flex items-center gap-2 flex-1 max-w-[1148px] min-w-0 overflow-hidden">
               <Avatar className="size-9 shrink-0">
                 <AvatarImage src={getProviderIcon(model.provider)} alt={model.name} />
                 <AvatarFallback className="text-xs">
                   {model.name.slice(0, 2).toUpperCase()}
                 </AvatarFallback>
               </Avatar>
-              <div className="flex-1 min-w-0 overflow-hidden space-y-1">
-                <div className="flex items-center gap-1.5 min-w-0 overflow-hidden">
-                  <span className="text-sm font-semibold truncate min-w-0">{model.name}</span>
+              <div className="flex-1 max-w-[1148px] min-w-0 overflow-hidden space-y-1">
+                <div className="flex items-center gap-1.5 max-w-[1148px] min-w-0 overflow-hidden">
+                  <span className="text-sm font-semibold truncate max-w-[1148px] min-w-0">{model.name}</span>
                   {isDisabledDueToTier && (model.required_tier_name || model.required_tier) && (
                     <Badge variant="secondary" className="text-[10px] px-1.5 py-0.5 h-4 font-semibold bg-amber-500/20 text-amber-400 border-amber-500/30 shrink-0 uppercase">
                       {model.required_tier_name || model.required_tier}
@@ -145,7 +145,7 @@ export function ModelItem({
                     </Badge>
                   )}
                 </div>
-                <div className="text-xs text-muted-foreground truncate w-full min-w-0">
+                <div className="text-xs text-muted-foreground truncate max-w-[1148px] w-full min-w-0">
                   {model.description}
                 </div>
               </div>
@@ -219,11 +219,11 @@ export function ModelItem({
         value={orderedModel}
         dragListener={false}
         dragControls={controls}
-        className="block w-full min-w-0 overflow-hidden"
+        className="block w-full max-w-[1148px] min-w-0 overflow-hidden"
       >
         {itemContent}
       </Reorder.Item>
     );
   }
-  return <div className="block w-full min-w-0 overflow-hidden">{itemContent}</div>;
+  return <div className="block w-full max-w-[1148px] min-w-0 overflow-hidden">{itemContent}</div>;
 }

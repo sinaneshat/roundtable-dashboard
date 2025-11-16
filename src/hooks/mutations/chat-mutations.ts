@@ -1085,9 +1085,8 @@ export function useUpdateCustomRoleMutation() {
     mutationFn: updateCustomRoleService,
     onSuccess: (_data, data) => {
       // Invalidate specific role and lists
-      invalidationPatterns.customRoleDetail(data.param.id).forEach((key) => {
-        queryClient.invalidateQueries({ queryKey: key });
-      });
+      queryClient.invalidateQueries({ queryKey: queryKeys.customRoles.detail(data.param.id) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.customRoles.lists() });
     },
     onError: () => {
       // Error is handled by throwOnError: false

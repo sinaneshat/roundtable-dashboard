@@ -19,7 +19,6 @@ import {
 } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/ui/cn';
-import { heavyGlassCardStyles } from '@/lib/ui/glassmorphism';
 import type { ListCustomRolesResponse } from '@/services/api/chat-roles';
 
 import type { OrderedModel } from './model-item';
@@ -218,16 +217,20 @@ export function ModelSelectionModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         glass={true}
-        className={cn('sm:max-w-3xl overflow-hidden flex flex-col p-0 gap-0', className)}
+        className={cn(
+          '!flex !flex-col !w-full !max-w-3xl !max-h-[85vh] !gap-0 !p-0 !overflow-hidden',
+          className,
+        )}
         style={{ maxHeight: '85vh' }}
       >
-        <DialogHeader glass className="shrink-0">
+        {/* Header - Fixed */}
+        <DialogHeader glass className="!flex-none">
           <DialogTitle className="text-xl">{t('title')}</DialogTitle>
           <DialogDescription>{t('subtitle')}</DialogDescription>
         </DialogHeader>
 
-        {/* Search Input */}
-        <DialogBody className="relative py-4 bg-black/30 px-4 sm:px-5 md:px-6 shrink-0">
+        {/* Search Input - Fixed */}
+        <DialogBody className="!flex-none py-4 bg-black/30">
           <div className="relative w-full">
             <input
               ref={searchInputRef}
@@ -244,43 +247,37 @@ export function ModelSelectionModal({
               )}
             />
             {searchQuery && (
-              <div className="absolute right-0 top-0 bottom-0 flex items-center justify-center pr-3">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSearchQuery('');
-                    searchInputRef.current?.focus();
-                  }}
-                  className="text-muted-foreground hover:text-foreground transition-colors p-1 [&_svg]:size-4 [&_svg]:shrink-0"
-                  tabIndex={-1}
-                  aria-label="Clear search"
-                >
-                  <X />
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchQuery('');
+                  searchInputRef.current?.focus();
+                }}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors p-1"
+                tabIndex={-1}
+                aria-label="Clear search"
+              >
+                <X className="size-4" />
+              </button>
             )}
           </div>
         </DialogBody>
 
-        {/* Scrollable Model List */}
-        <div className="flex-1 border-t border-white/5 bg-black/30 min-h-0">
-          <ScrollArea className="w-full" style={{ height: '420px' }}>
-            {groupedModels.length === 0
-              ? (
-                  <div className="flex flex-col items-start justify-center py-12 px-4">
-                    <p className="text-sm text-muted-foreground">{tModels('noModelsFound')}</p>
-                  </div>
-                )
-              : groupedModels.map((group, groupIndex) => (
-                  <div key={group.title} className="w-full min-w-0">
-                    <div className="sticky top-0 z-10 w-full">
-                      <div
-                        className={cn('bg-black/80 backdrop-blur-3xl px-4 py-2.5')}
-                        style={{
-                          ...heavyGlassCardStyles,
-                        }}
-                      >
-                        <div className="flex items-center justify-between gap-2 min-w-0">
+        {/* Scrollable Content Area */}
+        <div className="!flex-1 !min-h-0 !overflow-hidden border-t border-white/5 bg-black/30" style={{ height: '100%' }}>
+          <ScrollArea className="!h-full !w-full" style={{ height: '100%' }}>
+            <div className="w-full">
+              {groupedModels.length === 0
+                ? (
+                    <div className="flex flex-col items-start justify-center py-12 px-4">
+                      <p className="text-sm text-muted-foreground">{tModels('noModelsFound')}</p>
+                    </div>
+                  )
+                : groupedModels.map((group, groupIndex) => (
+                    <div key={group.title} className="w-full">
+                      {/* Group Header - Sticky */}
+                      <div className="sticky top-0 z-10 bg-black/80 backdrop-blur-[60px] px-4 py-2.5 border-b border-white/5">
+                        <div className="flex items-center justify-between gap-2">
                           <span className={cn(
                             'text-xs font-semibold truncate',
                             groupIndex === 0 && 'text-foreground',
@@ -314,65 +311,70 @@ export function ModelSelectionModal({
                           )}
                         </div>
                       </div>
-                    </div>
 
-                    {/* Section Models */}
-                    {enableDrag && groupIndex === 0
-                      ? (
-                          <Reorder.Group
-                            axis="y"
-                            values={group.models}
-                            onReorder={(reordered) => {
-                            // Update only the selected models order
-                              const otherModels = orderedModels.filter(om => om.participant === null);
-                              onReorder([...reordered, ...otherModels]);
-                            }}
-                            className="flex flex-col gap-2 w-full px-4 py-2"
-                          >
-                            {group.models.map(orderedModel => (
-                              <ModelItem
-                                key={orderedModel.model.id}
-                                orderedModel={orderedModel}
-                                allParticipants={allParticipants}
-                                customRoles={customRoles}
-                                onToggle={() => handleToggle(orderedModel.model.id)}
-                                onRoleChange={(role, customRoleId) =>
-                                  onRoleChange(orderedModel.model.id, role, customRoleId)}
-                                onClearRole={() => onClearRole(orderedModel.model.id)}
-                                selectedCount={selectedCount}
-                                maxModels={maxModels}
-                                enableDrag={enableDrag}
-                                userTierInfo={userTierInfo}
-                              />
-                            ))}
-                          </Reorder.Group>
-                        )
-                      : (
-                          <div className="flex flex-col gap-2 w-full px-4 py-2">
-                            {group.models.map(orderedModel => (
-                              <ModelItem
-                                key={orderedModel.model.id}
-                                orderedModel={orderedModel}
-                                allParticipants={allParticipants}
-                                customRoles={customRoles}
-                                onToggle={() => handleToggle(orderedModel.model.id)}
-                                onRoleChange={(role, customRoleId) =>
-                                  onRoleChange(orderedModel.model.id, role, customRoleId)}
-                                onClearRole={() => onClearRole(orderedModel.model.id)}
-                                selectedCount={selectedCount}
-                                maxModels={maxModels}
-                                enableDrag={false}
-                                userTierInfo={userTierInfo}
-                              />
-                            ))}
-                          </div>
-                        )}
-                  </div>
-                ))}
+                      {/* Group Models */}
+                      {enableDrag && groupIndex === 0
+                        ? (
+                            <Reorder.Group
+                              axis="y"
+                              values={group.models}
+                              onReorder={(reordered) => {
+                                // Update only the selected models order
+                                const otherModels = orderedModels.filter(om => om.participant === null);
+                                onReorder([...reordered, ...otherModels]);
+                              }}
+                              className="flex flex-col gap-2 px-4 py-2"
+                            >
+                              {group.models.map(orderedModel => (
+                                <ModelItem
+                                  key={orderedModel.model.id}
+                                  orderedModel={orderedModel}
+                                  allParticipants={allParticipants}
+                                  customRoles={customRoles}
+                                  onToggle={() => handleToggle(orderedModel.model.id)}
+                                  onRoleChange={(role, customRoleId) =>
+                                    onRoleChange(orderedModel.model.id, role, customRoleId)}
+                                  onClearRole={() => onClearRole(orderedModel.model.id)}
+                                  selectedCount={selectedCount}
+                                  maxModels={maxModels}
+                                  enableDrag={enableDrag}
+                                  userTierInfo={userTierInfo}
+                                />
+                              ))}
+                            </Reorder.Group>
+                          )
+                        : (
+                            <div className="flex flex-col gap-2 px-4 py-2">
+                              {group.models.map(orderedModel => (
+                                <ModelItem
+                                  key={orderedModel.model.id}
+                                  orderedModel={orderedModel}
+                                  allParticipants={allParticipants}
+                                  customRoles={customRoles}
+                                  onToggle={() => handleToggle(orderedModel.model.id)}
+                                  onRoleChange={(role, customRoleId) =>
+                                    onRoleChange(orderedModel.model.id, role, customRoleId)}
+                                  onClearRole={() => onClearRole(orderedModel.model.id)}
+                                  selectedCount={selectedCount}
+                                  maxModels={maxModels}
+                                  enableDrag={false}
+                                  userTierInfo={userTierInfo}
+                                />
+                              ))}
+                            </div>
+                          )}
+                    </div>
+                  ))}
+            </div>
           </ScrollArea>
         </div>
 
-        {children}
+        {/* Footer - Fixed (if children provided) */}
+        {children && (
+          <div className="flex-none">
+            {children}
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );

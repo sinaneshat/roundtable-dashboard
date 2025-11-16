@@ -45,6 +45,7 @@ import { createChatStore } from '@/stores/chat';
 // CONTEXT (Official Pattern)
 // ============================================================================
 
+// eslint-disable-next-line react-refresh/only-export-components -- Context export required for provider pattern
 export const ChatStoreContext = createContext<ChatStoreApi | undefined>(undefined);
 
 export type ChatStoreProviderProps = {
