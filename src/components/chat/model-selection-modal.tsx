@@ -218,7 +218,7 @@ export function ModelSelectionModal({
       <DialogContent
         glass={true}
         className={cn(
-          'overflow-hidden gap-0 p-0 max-h-[85vh] max-w-[768px] w-[calc(100vw-2.5rem)]',
+          'overflow-hidden gap-0 p-0 max-h-[85vh] max-w-[768px] w-[calc(100vw-2.5rem)] flex flex-col',
           className,
         )}
       >
@@ -265,7 +265,7 @@ export function ModelSelectionModal({
         </div>
 
         {/* Scrollable Model List */}
-        <div className="border-t border-white/5 bg-black/30 h-[500px] max-h-[500px] min-h-[300px]">
+        <div className="border-t border-white/5 bg-black/30 flex-1 min-h-0">
           <ScrollArea className="h-full w-full [&_[data-slot=scroll-area-viewport]>div]:block!">
             <div className="w-full">
               {groupedModels.length === 0

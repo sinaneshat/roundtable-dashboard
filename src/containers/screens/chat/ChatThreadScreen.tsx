@@ -632,7 +632,7 @@ export default function ChatThreadScreen({
           </div>
           <div
             ref={inputContainerRef}
-            className="sticky bottom-0 z-50 bg-gradient-to-t from-background via-background to-transparent pt-4 sm:pt-6 pb-3 sm:pb-4 mt-auto"
+            className="sticky bottom-0 z-50 bg-gradient-to-t from-background via-background to-transparent pt-4 sm:pt-6 pb-3 sm:pb-4 pb-keyboard-safe mt-auto"
           >
             <div className="container max-w-3xl mx-auto px-2 sm:px-4 md:px-6">
               <ChatInput

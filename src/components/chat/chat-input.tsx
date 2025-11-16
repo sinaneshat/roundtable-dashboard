@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { useUsageStatsQuery } from '@/hooks/queries';
 import {
   useAutoResizeTextarea,
+  useKeyboardAwareScroll,
   useSpeechRecognition,
 } from '@/hooks/utils';
 import { cn } from '@/lib/ui/cn';
@@ -114,6 +115,14 @@ export const ChatInput = memo(({
     value,
     minHeight,
     maxHeight,
+  });
+
+  // Mobile keyboard handling: Comprehensive solution
+  useKeyboardAwareScroll(textareaRef, {
+    enabled: true,
+    scrollDelay: 300,
+    scrollBehavior: 'smooth',
+    scrollBlock: 'center',
   });
 
   // Speech recognition

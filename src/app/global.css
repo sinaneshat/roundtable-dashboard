@@ -314,4 +314,35 @@
   .scrollbar-hide::-webkit-scrollbar {
     display: none;
   }
+
+  /* Mobile keyboard support: VirtualKeyboard API and safe areas */
+  /* Use env() to access keyboard-inset CSS variables */
+  .pb-keyboard-safe {
+    padding-bottom: max(env(safe-area-inset-bottom, 0px), env(keyboard-inset-height, 0px));
+  }
+
+  .mb-keyboard-safe {
+    margin-bottom: max(env(safe-area-inset-bottom, 0px), env(keyboard-inset-height, 0px));
+  }
+
+  .bottom-keyboard-safe {
+    bottom: max(env(safe-area-inset-bottom, 0px), env(keyboard-inset-height, 0px));
+  }
+
+  /* Safe area utilities for iOS notches */
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  .pt-safe {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+
+  .pl-safe {
+    padding-left: env(safe-area-inset-left, 0px);
+  }
+
+  .pr-safe {
+    padding-right: env(safe-area-inset-right, 0px);
+  }
 }

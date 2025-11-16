@@ -27,7 +27,6 @@ import { attachSession, csrfProtection, errorLogger, protectMutations, requireSe
 import { ensureOpenRouterInitialized } from './middleware/openrouter';
 import { RateLimiterFactory } from './middleware/rate-limiter-factory';
 import { ensureStripeInitialized } from './middleware/stripe';
-import { handleTitleGenerationQueue } from './queues/title-generation.consumer';
 // API Keys routes
 import {
   createApiKeyHandler,
@@ -645,9 +644,6 @@ appRoutes.get('/llms.txt', async (c) => {
 
 export default {
   fetch: appRoutes.fetch,
-  // ✅ Queue consumer handler for title generation background tasks
-  // Cloudflare Workers automatically routes queue messages to this handler
-  queue: handleTitleGenerationQueue,
 };
 
 // ============================================================================

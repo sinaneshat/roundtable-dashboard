@@ -22,7 +22,9 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
+  viewportFit: 'cover', // iOS safe area support
   themeColor: 'black', // Dark theme only
+  interactiveWidget: 'resizes-content', // Mobile keyboard handling
 };
 
 export async function generateMetadata(): Promise<Metadata> {

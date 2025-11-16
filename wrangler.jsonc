@@ -66,17 +66,6 @@
   "ai": {
     "binding": "AI"
   },
-  "queues": {
-    "producers": [
-      {
-        "queue": "title-generation-queue",
-        "binding": "TITLE_GENERATION_QUEUE"
-      }
-    ]
-    // NOTE: Queue consumer removed - OpenNext.js doesn't support custom queue consumers
-    // Consumer must be deployed as separate Cloudflare Worker
-    // See: docs/cloudflare-queues-migration.md for setup instructions
-  },
   "durable_objects": {
     "bindings": [
       {
@@ -169,17 +158,6 @@
       "ai": {
         "binding": "AI"
       },
-      "queues": {
-        "producers": [
-          {
-            "queue": "title-generation-queue",
-            "binding": "TITLE_GENERATION_QUEUE"
-          }
-        ]
-        // NOTE: Queue consumer removed - OpenNext.js doesn't support custom queue consumers
-        // Consumer must be deployed as separate Cloudflare Worker
-        // See: docs/cloudflare-queues-migration.md for setup instructions
-      },
       "durable_objects": {
         "bindings": [
           {
@@ -265,17 +243,6 @@
       },
       "ai": {
         "binding": "AI"
-      },
-      "queues": {
-        "producers": [
-          {
-            "queue": "title-generation-queue",
-            "binding": "TITLE_GENERATION_QUEUE"
-          }
-        ]
-        // NOTE: Queue consumer removed - OpenNext.js doesn't support custom queue consumers
-        // Consumer must be deployed as separate Cloudflare Worker
-        // See: docs/cloudflare-queues-migration.md for setup instructions
       },
       "durable_objects": {
         "bindings": [
