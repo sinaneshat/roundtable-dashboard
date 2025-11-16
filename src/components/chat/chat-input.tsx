@@ -104,6 +104,8 @@ export const ChatInput = memo(({
   }, [quotaCheckType, statsData]);
 
   // Disable input if disabled prop, streaming, OR quota exceeded
+  // ✅ CRITICAL: When streaming, users CANNOT submit new messages
+  // Participants must complete their responses before new input is accepted
   const isDisabled = disabled || isStreaming || isQuotaExceeded;
   const hasValidInput = value.trim().length > 0 && participants.length > 0;
 
@@ -194,7 +196,9 @@ export const ChatInput = memo(({
           'border border-transparent',
           'bg-gradient-to-r from-white/10 via-white/5 to-white/10 p-px',
           'shadow-lg',
+          'transition-opacity duration-200',
           isDisabled && !isQuotaExceeded && 'opacity-60 cursor-not-allowed',
+          isStreaming && 'ring-2 ring-primary/20', // Visual indicator during streaming
           className,
         )}
       >
@@ -223,9 +227,15 @@ export const ChatInput = memo(({
                 onChange={e => onChange(e.target.value)}
                 onKeyDown={handleKeyDown}
                 disabled={isDisabled}
-                placeholder={placeholder || t('chat.input.placeholder')}
-                className="flex-1 bg-transparent border-0 text-base focus:outline-none focus:ring-0 placeholder:text-muted-foreground/60 disabled:opacity-50 disabled:cursor-not-allowed resize-none overflow-y-auto"
+                placeholder={
+                  isStreaming
+                    ? t('chat.input.streamingPlaceholder')
+                    : placeholder || t('chat.input.placeholder')
+                }
+                className="flex-1 bg-transparent border-0 text-base focus:outline-none focus:ring-0 placeholder:text-muted-foreground/60 disabled:opacity-50 disabled:cursor-not-allowed resize-none overflow-y-auto transition-all duration-200"
                 style={{ minHeight: `${minHeight}px` }}
+                aria-disabled={isDisabled}
+                aria-label={isStreaming ? t('chat.input.streamingLabel') : t('chat.input.label')}
               />
             </div>
 

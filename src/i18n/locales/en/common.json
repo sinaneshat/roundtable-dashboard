@@ -560,7 +560,9 @@
       "placeholderThreadQuotaExceeded": "Thread quota reached - upgrade to create more threads...",
       "submit": "Send message",
       "threadPlaceholder": "Continue the conversation...",
-      "voiceInput": "Voice input"
+      "voiceInput": "Voice input",
+      "label": "Message input",
+      "streamingLabel": "Message input (disabled while AI responds)"
     },
     "disclaimer": "AI can make mistakes. Please double-check responses.",
     "sources": {

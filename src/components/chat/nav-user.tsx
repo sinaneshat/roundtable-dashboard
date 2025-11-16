@@ -3,6 +3,7 @@ import { ChevronsUpDown, CreditCard, Key, Loader2, LogOut, Sparkles } from 'luci
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
+import * as React from 'react';
 
 import { StripeSubscriptionStatuses } from '@/api/core/enums';
 import type { SubscriptionTier } from '@/api/services/product-logic.service';
@@ -53,13 +54,20 @@ export function NavUser() {
   const customerPortalMutation = useCreateCustomerPortalSessionMutation();
   const cancelSubscriptionMutation = useCancelSubscriptionMutation();
   const user = session?.user;
-  const userInitials = user?.name
-    ? user.name
-        .split(' ')
-        .map((n: string) => n[0])
-        .join('')
-        .toUpperCase()
-    : user?.email?.[0]?.toUpperCase() || 'U';
+  // ✅ FIX: Prevent hydration mismatch by deferring initials calculation to client
+  // Server has no session, client does - causes 'U' (server) vs 'AB' (client) mismatch
+  const [userInitials, setUserInitials] = React.useState<string>('U');
+
+  React.useEffect(() => {
+    const initials = user?.name
+      ? user.name
+          .split(' ')
+          .map((n: string) => n[0])
+          .join('')
+          .toUpperCase()
+      : user?.email?.[0]?.toUpperCase() || 'U';
+    setUserInitials(initials);
+  }, [user?.name, user?.email]);
   const subscriptions = subscriptionsData?.success ? subscriptionsData.data?.items || [] : [];
   const activeSubscription = subscriptions.find(
     sub => (sub.status === StripeSubscriptionStatuses.ACTIVE || sub.status === StripeSubscriptionStatuses.TRIALING) && !sub.cancelAtPeriodEnd,
