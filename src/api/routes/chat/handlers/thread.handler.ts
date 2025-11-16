@@ -277,49 +277,44 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
       });
     }
 
-    // ✅ BACKGROUND TITLE GENERATION (Non-blocking, Reliable)
-    // Background title generation using waitUntil()
-    // AI title generation is non-critical, so waitUntil() is appropriate:
-    // - Non-blocking: Response returns immediately without waiting for AI
-    // - Best-effort execution: Cloudflare extends request lifetime
-    // - No separate worker needed: Runs in same execution context
+    // ✅ BLOCKING TITLE GENERATION (Synchronous, Immediate)
+    // Generate AI title before returning response - user gets title immediately
+    // This blocks the request until title generation completes (~1-5 seconds)
     //
-    // Per Cloudflare docs, waitUntil() is recommended for:
-    // - Non-critical operations (title generation enhances UX but isn't required)
-    // - Quick operations after main response (AI calls ~1-5 seconds)
-    // - Operations that don't need guaranteed delivery
-    // CRITICAL: Check executionCtx availability (undefined in local dev/OpenNext.js)
-    if (c.executionCtx) {
-      console.error(`🔄 Starting background title generation for thread ${threadId}`);
-      c.executionCtx.waitUntil(
-        (async () => {
-          try {
-            console.error(`📝 Generating title from message: "${body.firstMessage.substring(0, 100)}..."`);
-            const aiTitle = await generateTitleFromMessage(body.firstMessage, c.env);
-            console.error(`✨ AI title generated: "${aiTitle}"`);
+    // Benefits:
+    // - User sees real title immediately (no "New Thread" placeholder)
+    // - No need for frontend polling or refresh
+    // - Guaranteed title in response
+    // - Simpler code path (no background processing)
+    console.error(`🔄 Generating AI title for thread ${threadId}`);
+    try {
+      console.error(`📝 Calling AI with message: "${body.firstMessage.substring(0, 100)}..."`);
+      const aiTitle = await generateTitleFromMessage(body.firstMessage, c.env);
+      console.error(`✨ AI title generated: "${aiTitle}"`);
 
-            await updateThreadTitleAndSlug(threadId, aiTitle);
-            console.error(`💾 Title and slug updated in database`);
+      const { title, slug } = await updateThreadTitleAndSlug(threadId, aiTitle);
+      console.error(`💾 Title and slug updated in database`);
 
-            const db = await getDbAsync();
-            await invalidateThreadCache(db, user.id);
-            console.error(`✅ Title generation complete: "${aiTitle}" for thread ${threadId}`);
-          } catch (error) {
-            // Log detailed error but don't throw - thread creation already succeeded
-            console.error(`❌ Failed to generate title for thread ${threadId}:`, error);
-            console.error('Error details:', {
-              message: error instanceof Error ? error.message : String(error),
-              stack: error instanceof Error ? error.stack : undefined,
-              threadId,
-              userId: user.id,
-            });
-          }
-        })(),
-      );
-    } else {
-      // Local dev fallback - executionCtx not available
-      console.error(`⚠️  executionCtx not available (local dev) - skipping background title generation for thread ${threadId}`);
+      // Update thread object with AI-generated title for response
+      thread.title = title;
+      thread.slug = slug;
+
+      const db = await getDbAsync();
+      await invalidateThreadCache(db, user.id);
+      console.error(`✅ Title generation complete: "${aiTitle}" for thread ${threadId}`);
+    } catch (error) {
+      // Log error but don't fail request - thread is already created
+      // Return with default "New Thread" title
+      console.error(`❌ Failed to generate title for thread ${threadId}:`, error);
+      console.error('Error details:', {
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        threadId,
+        userId: user.id,
+      });
+      // Continue with default title from thread creation
     }
+
     return Responses.ok(c, {
       thread,
       participants,
