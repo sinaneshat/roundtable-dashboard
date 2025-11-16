@@ -20,7 +20,7 @@ type LLMAnswerDisplayProps = {
 // Custom markdown components for rich rendering
 const markdownComponents: Partial<Components> = {
   // Style links with external link icon
-  a: ({ href, children, ...props }) => (
+  a: ({ href, children, ...props }: { href?: string; children?: React.ReactNode }) => (
     <a
       href={href}
       target="_blank"
@@ -33,18 +33,18 @@ const markdownComponents: Partial<Components> = {
     </a>
   ),
   // Style paragraphs
-  p: ({ children }) => (
+  p: ({ children }: { children?: React.ReactNode }) => (
     <p className="leading-relaxed mb-2 last:mb-0">
       {children}
     </p>
   ),
   // Style lists
-  ul: ({ children }) => (
+  ul: ({ children }: { children?: React.ReactNode }) => (
     <ul className="list-disc list-inside space-y-1 my-2">
       {children}
     </ul>
   ),
-  ol: ({ children }) => (
+  ol: ({ children }: { children?: React.ReactNode }) => (
     <ol className="list-decimal list-inside space-y-1 my-2">
       {children}
     </ol>
@@ -65,15 +65,15 @@ const markdownComponents: Partial<Components> = {
     );
   },
   // Style blockquotes
-  blockquote: ({ children }) => (
+  blockquote: ({ children }: { children?: React.ReactNode }) => (
     <blockquote className="border-l-4 border-primary/30 pl-4 py-1 my-2 italic text-muted-foreground">
       {children}
     </blockquote>
   ),
   // Style headings
-  h1: ({ children }) => <h1 className="text-xl font-bold mt-4 mb-2">{children}</h1>,
-  h2: ({ children }) => <h2 className="text-lg font-semibold mt-3 mb-2">{children}</h2>,
-  h3: ({ children }) => <h3 className="text-base font-semibold mt-2 mb-1">{children}</h3>,
+  h1: ({ children }: { children?: React.ReactNode }) => <h1 className="text-xl font-bold mt-4 mb-2">{children}</h1>,
+  h2: ({ children }: { children?: React.ReactNode }) => <h2 className="text-lg font-semibold mt-3 mb-2">{children}</h2>,
+  h3: ({ children }: { children?: React.ReactNode }) => <h3 className="text-base font-semibold mt-2 mb-1">{children}</h3>,
 };
 
 export function LLMAnswerDisplay({ answer, isStreaming = false, className, sources }: LLMAnswerDisplayProps) {
@@ -100,56 +100,49 @@ export function LLMAnswerDisplay({ answer, isStreaming = false, className, sourc
   }
 
   return (
-    <div className={cn('space-y-3', className)}>
-      {/* AI Answer Badge */}
-      <div className="flex items-center gap-2">
-        <Badge variant="secondary" className="text-xs">
-          <Sparkles className="size-3 mr-1" />
-          AI Answer
-        </Badge>
-        {isStreaming && (
-          <Badge variant="outline" className="text-xs">
-            Streaming...
-          </Badge>
-        )}
+    <div className={cn('space-y-2', className)}>
+      {/* Simplified header */}
+      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+        <Sparkles className="size-3" />
+        <span>AI Summary</span>
+        {isStreaming && <span className="animate-pulse">•••</span>}
       </div>
 
-      {/* Markdown-rendered answer with rich formatting */}
-      <div className="prose prose-sm dark:prose-invert max-w-none">
+      {/* Markdown content - clean, no wrapper */}
+      <div className="prose prose-sm dark:prose-invert max-w-none text-sm">
         <ReactMarkdown components={markdownComponents}>
           {answer}
         </ReactMarkdown>
         {isStreaming && (
           <motion.span
-            className="inline-block w-1.5 h-4 ml-0.5 bg-primary/70 rounded-sm align-middle"
+            className="inline-block w-1 h-3 ml-0.5 bg-primary rounded-sm align-middle"
             animate={{ opacity: [0, 1, 0] }}
             transition={{ duration: 0.8, repeat: Infinity }}
           />
         )}
       </div>
 
-      {/* Source citations (if provided separately) */}
+      {/* Compact source list - no border */}
       {sources && sources.length > 0 && (
-        <div className="mt-4 pt-3 border-t border-border/30">
-          <p className="text-xs font-medium text-muted-foreground mb-2">Sources cited:</p>
-          <div className="flex flex-wrap gap-1.5">
-            {sources.map((source, idx) => (
-              <a
-                key={idx}
-                href={source.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 text-xs text-primary hover:text-primary/80 bg-primary/5 hover:bg-primary/10 px-2 py-1 rounded-md transition-colors group"
-              >
-                <span className="truncate max-w-[200px]">{source.title}</span>
-                <ExternalLink className="size-3 opacity-50 group-hover:opacity-100 flex-shrink-0" />
-              </a>
-            ))}
-          </div>
+        <div className="flex flex-wrap gap-1 mt-3">
+          {sources.map((source, idx) => (
+            <a
+              key={source.url}
+              href={source.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-0.5 text-xs text-muted-foreground hover:text-primary transition-colors"
+            >
+              <span className="truncate max-w-[150px]">
+                [
+                {idx + 1}
+                ]
+              </span>
+              <ExternalLink className="size-2.5" />
+            </a>
+          ))}
         </div>
       )}
-
-      <Separator className="!mt-3" />
     </div>
   );
 }

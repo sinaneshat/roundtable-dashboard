@@ -218,15 +218,16 @@ export function ModelSelectionModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         glass={true}
-        className={cn('sm:max-w-3xl', className)}
+        className={cn('sm:max-w-3xl overflow-hidden flex flex-col p-0 gap-0', className)}
+        style={{ maxHeight: '85vh' }}
       >
-        <DialogHeader glass>
+        <DialogHeader glass className="shrink-0">
           <DialogTitle className="text-xl">{t('title')}</DialogTitle>
           <DialogDescription>{t('subtitle')}</DialogDescription>
         </DialogHeader>
 
         {/* Search Input */}
-        <DialogBody className="relative py-4 bg-black/30 px-4 sm:px-5 md:px-6">
+        <DialogBody className="relative py-4 bg-black/30 px-4 sm:px-5 md:px-6 shrink-0">
           <div className="relative w-full">
             <input
               ref={searchInputRef}
@@ -262,8 +263,8 @@ export function ModelSelectionModal({
         </DialogBody>
 
         {/* Scrollable Model List */}
-        <DialogBody className="h-[420px] border-t border-white/5 bg-black/30 !px-0">
-          <ScrollArea className="h-full w-full">
+        <div className="flex-1 border-t border-white/5 bg-black/30 min-h-0">
+          <ScrollArea className="w-full" style={{ height: '420px' }}>
             {groupedModels.length === 0
               ? (
                   <div className="flex flex-col items-start justify-center py-12 px-4">
@@ -369,7 +370,7 @@ export function ModelSelectionModal({
                   </div>
                 ))}
           </ScrollArea>
-        </DialogBody>
+        </div>
 
         {children}
       </DialogContent>

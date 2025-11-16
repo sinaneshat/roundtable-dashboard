@@ -11,7 +11,6 @@ import { WebSearchResultItem } from '@/components/chat/web-search-result-item';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -44,34 +43,51 @@ export function WebSearchDisplay({
 
   // Show loading state while streaming
   if (isStreaming && (!results || results.length === 0)) {
+    // Determine current stage based on available data
+    const currentStage = !query
+      ? 'query'
+      : !answer
+          ? 'search'
+          : 'synthesize';
+
     return (
       <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
-        className={cn('relative', className)}
+        className={cn('relative py-2', className)}
       >
-        <Card className="overflow-hidden border-primary/10 bg-gradient-to-br from-primary/5 via-background to-background">
-          <div className="p-4">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="relative">
-                <Globe className="size-5 text-primary animate-pulse" />
-                <Sparkles className="size-3 text-yellow-500 absolute -top-1 -right-1 animate-pulse" />
-              </div>
-              <span className="text-base font-semibold bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
-                {t('title')}
-              </span>
-              <Badge variant="secondary" className="text-xs">
-                <Sparkles className="size-3 mr-1 animate-pulse" />
-                {t('searching')}
-              </Badge>
+        <div>
+          <div className="mb-3">
+            {/* Simple header */}
+            <div className="flex items-center gap-2 mb-2">
+              <Globe className="size-4 text-muted-foreground animate-pulse" />
+              <span className="text-sm font-medium text-foreground">{t('title')}</span>
+              <span className="text-xs text-muted-foreground animate-pulse">searching...</span>
             </div>
-            <div className="space-y-3">
-              <Skeleton className="h-24 w-full" />
-              <Skeleton className="h-20 w-full" />
-              <Skeleton className="h-20 w-full" />
+
+            {/* Compact stages */}
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <span className={cn(currentStage === 'query' && 'font-medium animate-pulse')}>
+                Query
+              </span>
+              <span>→</span>
+              <span className={cn(currentStage === 'search' && 'font-medium animate-pulse')}>
+                Search
+              </span>
+              <span>→</span>
+              <span className={cn(currentStage === 'synthesize' && 'font-medium animate-pulse')}>
+                Answer
+              </span>
             </div>
           </div>
-        </Card>
+
+          {/* Simplified skeletons */}
+          <div className="space-y-2">
+            <Skeleton className="h-16 w-full" />
+            <Skeleton className="h-12 w-full" />
+            <Skeleton className="h-12 w-5/6" />
+          </div>
+        </div>
       </motion.div>
     );
   }
@@ -103,28 +119,39 @@ export function WebSearchDisplay({
     <motion.div
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      className={cn('relative', className)}
+      className={cn('relative py-2', className)}
     >
-      <Card className="overflow-hidden border-primary/10 bg-gradient-to-br from-primary/5 via-background to-background">
+      <div className="border-l-2 border-primary/20 pl-3">
         <Collapsible open={isOpen} onOpenChange={setIsOpen}>
           <CollapsibleTrigger asChild>
             <Button
               variant="ghost"
-              className="w-full justify-between p-4 h-auto hover:bg-primary/5 rounded-t-lg"
+              className="w-full justify-between px-2 py-1.5 h-auto hover:bg-muted/30"
             >
-              <div className="flex items-center gap-3 flex-wrap">
-                <div className="flex items-center gap-2">
-                  <div className="relative">
-                    <Globe className="size-5 text-primary" />
-                    <Sparkles className="size-3 text-yellow-500 absolute -top-1 -right-1" />
-                  </div>
-                  <span className="text-base font-semibold bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
-                    {t('title')}
-                  </span>
+              <div className="flex items-center gap-2 flex-wrap text-sm">
+                <div className="flex items-center gap-1.5">
+                  <Globe className="size-4 text-muted-foreground" />
+                  <span className="font-medium">{t('title')}</span>
                 </div>
 
                 {/* Results summary badges */}
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
+                  {/* Search depth indicator */}
+                  {autoParameters?.searchDepth && (
+                    <Badge
+                      variant="secondary"
+                      className={cn(
+                        'text-xs',
+                        autoParameters.searchDepth === 'advanced'
+                          ? 'bg-purple-500/10 text-purple-700 dark:text-purple-400'
+                          : 'bg-blue-500/10 text-blue-700 dark:text-blue-400',
+                      )}
+                    >
+                      {autoParameters.searchDepth === 'advanced' ? '🔬 Advanced Search' : '⚡ Quick Search'}
+                    </Badge>
+                  )}
+
+                  {/* Results count */}
                   <Badge variant="secondary" className="text-xs">
                     <Search className="size-3 mr-1" />
                     {successfulResults.length}
@@ -154,6 +181,13 @@ export function WebSearchDisplay({
                     <Badge variant="secondary" className="text-xs bg-yellow-500/10 text-yellow-600 dark:text-yellow-400">
                       <Zap className="size-3 mr-1" />
                       Cached
+                    </Badge>
+                  )}
+
+                  {/* Query display */}
+                  {query && (
+                    <Badge variant="outline" className="text-xs bg-muted/50 max-w-[200px]">
+                      <span className="truncate">{query}</span>
                     </Badge>
                   )}
 
@@ -257,20 +291,58 @@ export function WebSearchDisplay({
                     )}
 
                     {/* LLM Answer - Display prominently at top with streaming support */}
-                    {(answer || isStreaming) && <LLMAnswerDisplay answer={answer ?? null} isStreaming={isStreaming} />}
+                    {(answer || isStreaming) && (
+                      <LLMAnswerDisplay
+                        answer={answer ?? null}
+                        isStreaming={isStreaming}
+                        sources={successfulResults.map(r => ({ url: r.url, title: r.title }))}
+                      />
+                    )}
+
+                    {/* Search Plan/Reasoning - Show if available from metadata */}
+                    {autoParameters?.reasoning && !isStreaming && (
+                      <div className="p-3 rounded-lg bg-muted/30 border border-border/40 space-y-2">
+                        <div className="flex items-center gap-2">
+                          <div className="size-5 rounded-full bg-primary/10 flex items-center justify-center">
+                            <Sparkles className="size-3 text-primary" />
+                          </div>
+                          <p className="text-xs font-medium text-foreground">Search Strategy</p>
+                        </div>
+                        <p className="text-xs text-muted-foreground leading-relaxed pl-7">
+                          {autoParameters.reasoning}
+                        </p>
+                      </div>
+                    )}
 
                     {/* Image Gallery */}
                     {hasImages && <WebSearchImageGallery results={successfulResults} />}
 
-                    {/* Search Results */}
-                    <div className="space-y-0">
-                      {successfulResults.map((result, index) => (
-                        <WebSearchResultItem
-                          key={result.url}
-                          result={result}
-                          showDivider={index < successfulResults.length - 1}
-                        />
-                      ))}
+                    {/* Search Results with enhanced header */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between py-2">
+                        <p className="text-xs font-medium text-muted-foreground">
+                          {successfulResults.length}
+                          {' '}
+                          {successfulResults.length === 1 ? 'source found' : 'sources found'}
+                        </p>
+                        {hasFullContent && (
+                          <Badge variant="outline" className="text-xs">
+                            {resultsWithContent.length}
+                            {' '}
+                            with full content
+                          </Badge>
+                        )}
+                      </div>
+                      <div className="space-y-0">
+                        {successfulResults.map((result, index) => (
+                          <WebSearchResultItem
+                            key={result.url}
+                            result={result}
+                            showDivider={index < successfulResults.length - 1}
+                            citationNumber={index + 1}
+                          />
+                        ))}
+                      </div>
                     </div>
 
                     {/* Error display */}
@@ -343,7 +415,7 @@ export function WebSearchDisplay({
             )}
           </AnimatePresence>
         </Collapsible>
-      </Card>
+      </div>
     </motion.div>
   );
 }

@@ -39,7 +39,12 @@ function getContentTypeIcon(contentType?: string) {
   }
 }
 
-export function WebSearchResultItem({ result, showDivider = true, className }: WebSearchResultItemProps) {
+export function WebSearchResultItem({
+  result,
+  showDivider = true,
+  className,
+  citationNumber,
+}: WebSearchResultItemProps & { citationNumber?: number }) {
   const t = useTranslations('chat.tools.webSearch');
   const [faviconError, setFaviconError] = useState(false);
   const [fallbackFaviconError, setFallbackFaviconError] = useState(false);
@@ -73,24 +78,34 @@ export function WebSearchResultItem({ result, showDivider = true, className }: W
 
   return (
     <div className={cn('flex gap-3 py-2.5', showDivider && 'border-b border-border/20', className)}>
-      {/* Avatar with multi-level favicon fallback */}
-      <Avatar className="size-8 flex-shrink-0 mt-0.5">
-        <AvatarImage
-          src={faviconSrc || ''}
-          alt={cleanDomain}
-          role="img"
-          onError={() => {
-            if (!faviconError) {
-              setFaviconError(true);
-            } else {
-              setFallbackFaviconError(true);
-            }
-          }}
-        />
-        <AvatarFallback className="bg-muted/50 text-muted-foreground" role="img" aria-label={cleanDomain}>
-          <Globe className="size-4" aria-hidden="true" />
-        </AvatarFallback>
-      </Avatar>
+      {/* Citation number or Avatar */}
+      {citationNumber
+        ? (
+            <div className="flex-shrink-0 mt-0.5">
+              <div className="size-8 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center">
+                <span className="text-xs font-bold text-primary">{citationNumber}</span>
+              </div>
+            </div>
+          )
+        : (
+            <Avatar className="size-8 flex-shrink-0 mt-0.5">
+              <AvatarImage
+                src={faviconSrc || ''}
+                alt={cleanDomain}
+                role="img"
+                onError={() => {
+                  if (!faviconError) {
+                    setFaviconError(true);
+                  } else {
+                    setFallbackFaviconError(true);
+                  }
+                }}
+              />
+              <AvatarFallback className="bg-muted/50 text-muted-foreground" role="img" aria-label={cleanDomain}>
+                <Globe className="size-4" aria-hidden="true" />
+              </AvatarFallback>
+            </Avatar>
+          )}
 
       {/* Content */}
       <div className="flex-1 min-w-0 space-y-1">
@@ -163,8 +178,8 @@ export function WebSearchResultItem({ result, showDivider = true, className }: W
         {/* Additional images from scraped content */}
         {result.images && result.images.length > 0 && (
           <div className="grid grid-cols-3 gap-1.5 my-1.5">
-            {result.images.slice(0, 3).map((img, idx) => (
-              <div key={idx} className="rounded overflow-hidden border border-border/30 bg-muted/30 aspect-video">
+            {result.images.slice(0, 3).map(img => (
+              <div key={img.url} className="rounded overflow-hidden border border-border/30 bg-muted/30 aspect-video">
                 {/* eslint-disable-next-line next/no-img-element -- External images from search results */}
                 <img
                   src={img.url}
