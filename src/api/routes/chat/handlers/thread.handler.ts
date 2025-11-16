@@ -286,14 +286,9 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
     // - No need for frontend polling or refresh
     // - Guaranteed title in response
     // - Simpler code path (no background processing)
-    console.error(`🔄 Generating AI title for thread ${threadId}`);
     try {
-      console.error(`📝 Calling AI with message: "${body.firstMessage.substring(0, 100)}..."`);
       const aiTitle = await generateTitleFromMessage(body.firstMessage, c.env);
-      console.error(`✨ AI title generated: "${aiTitle}"`);
-
       const { title, slug } = await updateThreadTitleAndSlug(threadId, aiTitle);
-      console.error(`💾 Title and slug updated in database`);
 
       // Update thread object with AI-generated title for response
       if (thread) {
@@ -303,16 +298,9 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
 
       const db = await getDbAsync();
       await invalidateThreadCache(db, user.id);
-      console.error(`✅ Title generation complete: "${aiTitle}" for thread ${threadId}`);
-    } catch (error) {
-      // Log error but don't fail request - thread is already created
+    } catch {
+      // Silent failure - thread is already created
       // Return with default "New Thread" title
-      console.error(`❌ Failed to generate title for thread ${threadId}:`, error);
-      console.error('Error details:', {
-        message: error instanceof Error ? error.message : String(error),
-        stack: error instanceof Error ? error.stack : undefined,
-        threadId,
-      });
     }
 
     return Responses.ok(c, {
