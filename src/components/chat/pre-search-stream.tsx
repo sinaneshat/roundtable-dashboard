@@ -151,6 +151,52 @@ function PreSearchStreamComponent({
         }
 
         let buffer = '';
+        let currentEvent = '';
+        let currentData = '';
+
+        // ✅ CRITICAL FIX: Process events helper function
+        // Extracted to be used both during streaming AND after stream ends
+        const processEvent = (event: string, data: string) => {
+          try {
+            if (event === PreSearchSseEvents.START) {
+              onStreamStartRef.current?.();
+            } else if (event === PreSearchSseEvents.QUERY) {
+              const queryData = JSON.parse(data);
+              queriesMap.set(queryData.index, {
+                query: queryData.query,
+                rationale: queryData.rationale,
+                searchDepth: queryData.searchDepth || WebSearchDepths.BASIC,
+                index: queryData.index,
+                total: queryData.total,
+              });
+              // Convert Maps to arrays sorted by index
+              const queries = Array.from(queriesMap.values()).sort((a, b) => a.index - b.index);
+              const results = Array.from(resultsMap.values());
+              setPartialSearchData({ queries, results });
+            } else if (event === PreSearchSseEvents.RESULT) {
+              const resultData = JSON.parse(data);
+              resultsMap.set(resultData.index, {
+                query: resultData.query,
+                answer: resultData.answer,
+                results: resultData.results || [],
+                responseTime: resultData.responseTime,
+              });
+              // Convert Maps to arrays sorted by index
+              const queries = Array.from(queriesMap.values()).sort((a, b) => a.index - b.index);
+              const results = Array.from(resultsMap.values());
+              setPartialSearchData({ queries, results });
+            } else if (event === PreSearchSseEvents.DONE) {
+              const finalData = JSON.parse(data);
+              setPartialSearchData(finalData);
+              onStreamCompleteRef.current?.(finalData);
+            } else if (event === PreSearchSseEvents.FAILED) {
+              const errorData = JSON.parse(data);
+              setError(new Error(errorData.error || 'Pre-search failed'));
+            }
+          } catch {
+            // Failed to parse event, continue
+          }
+        };
 
         while (true) {
           const { done, value } = await reader.read();
@@ -161,9 +207,6 @@ function PreSearchStreamComponent({
           const lines = buffer.split('\n');
           buffer = lines.pop() || '';
 
-          let currentEvent = '';
-          let currentData = '';
-
           for (const line of lines) {
             if (line.startsWith('event:')) {
               currentEvent = line.slice(6).trim();
@@ -171,51 +214,20 @@ function PreSearchStreamComponent({
               currentData = line.slice(5).trim();
             } else if (line === '' && currentEvent && currentData) {
               // Process complete event
-              try {
-                if (currentEvent === PreSearchSseEvents.START) {
-                  onStreamStartRef.current?.();
-                } else if (currentEvent === PreSearchSseEvents.QUERY) {
-                  const queryData = JSON.parse(currentData);
-                  queriesMap.set(queryData.index, {
-                    query: queryData.query,
-                    rationale: queryData.rationale,
-                    searchDepth: queryData.searchDepth || WebSearchDepths.BASIC,
-                    index: queryData.index,
-                    total: queryData.total,
-                  });
-                  // Convert Maps to arrays sorted by index
-                  const queries = Array.from(queriesMap.values()).sort((a, b) => a.index - b.index);
-                  const results = Array.from(resultsMap.values());
-                  setPartialSearchData({ queries, results });
-                } else if (currentEvent === PreSearchSseEvents.RESULT) {
-                  const resultData = JSON.parse(currentData);
-                  resultsMap.set(resultData.index, {
-                    query: resultData.query,
-                    answer: resultData.answer,
-                    results: resultData.results || [],
-                    responseTime: resultData.responseTime,
-                  });
-                  // Convert Maps to arrays sorted by index
-                  const queries = Array.from(queriesMap.values()).sort((a, b) => a.index - b.index);
-                  const results = Array.from(resultsMap.values());
-                  setPartialSearchData({ queries, results });
-                } else if (currentEvent === PreSearchSseEvents.DONE) {
-                  const finalData = JSON.parse(currentData);
-                  setPartialSearchData(finalData);
-                  onStreamCompleteRef.current?.(finalData);
-                } else if (currentEvent === PreSearchSseEvents.FAILED) {
-                  const errorData = JSON.parse(currentData);
-                  setError(new Error(errorData.error || 'Pre-search failed'));
-                }
-              } catch {
-                // Failed to parse event, continue
-              }
+              processEvent(currentEvent, currentData);
 
               // Reset for next event
               currentEvent = '';
               currentData = '';
             }
           }
+        }
+
+        // ✅ CRITICAL FIX: Process any remaining buffered event after stream ends
+        // If the last event doesn't have a trailing newline, it won't be processed in the loop
+        // This ensures the final 'done' event is always processed, even without a trailing newline
+        if (currentEvent && currentData) {
+          processEvent(currentEvent, currentData);
         }
       } catch (err) {
         if (err instanceof Error && err.name === 'AbortError') {

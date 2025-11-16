@@ -26,15 +26,24 @@ Object.defineProperty(globalThis, 'TextEncoder', {
 
 // Mock next-intl for testing - MUST be in setupFiles for vi.mock() to work
 vi.mock('next-intl', () => {
+  // Translation map for common keys used in tests
+  const translationMap: Record<string, string> = {
+    strengths: 'strengths',
+    areasForImprovement: 'areas for improvement',
+    summary: 'summary',
+    // Add more as needed
+  };
+
   // Create mock functions with 'mock' prefix to avoid ESLint hook warnings
-  const mockTranslations = () => (key: string) => key;
+  const mockTranslations = () => (key: string) => translationMap[key] || key;
   const mockLocale = () => 'en';
 
   return {
     useTranslations: mockTranslations,
     useLocale: mockLocale,
-    getTranslations: () => (key: string) => key,
-    NextIntlClientProvider: ({ children }: { children: React.ReactNode }) => children,
+    getTranslations: () => (key: string) => translationMap[key] || key,
+    // ✅ TYPE-SAFE: Mock NextIntlClientProvider with proper typing
+    NextIntlClientProvider: ({ children }: { children: unknown; locale?: string; messages?: unknown }) => children,
   };
 });
 

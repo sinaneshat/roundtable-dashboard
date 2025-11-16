@@ -270,7 +270,23 @@ export function setupLocalStorageMock(): void {
  * ✅ ZOD-FIRST: Uses Zod-inferred types from StoredPreSearchSchema
  * ✅ TYPE-SAFE: No inline hardcoded types, imports from source of truth
  *
- * @param data - Partial pre-search data (only required fields needed)
+ * @param data - Partial pre-search data
+ * @param data.id - Pre-search record ID
+ * @param data.threadId - Thread ID
+ * @param data.roundNumber - Round number
+ * @param data.status - Pre-search status (pending, streaming, complete, failed)
+ * @param data.userQuery - User's search query
+ * @param data.searchData - Optional search data payload
+ * @param data.searchData.queries - Optional array of search queries
+ * @param data.searchData.results - Optional array of search results
+ * @param data.searchData.analysis - Optional analysis string
+ * @param data.searchData.successCount - Optional success count
+ * @param data.searchData.failureCount - Optional failure count
+ * @param data.searchData.totalResults - Optional total results count
+ * @param data.searchData.totalTime - Optional total time
+ * @param data.errorMessage - Optional error message
+ * @param data.createdAt - Optional creation timestamp
+ * @param data.completedAt - Optional completion timestamp
  * @returns Fully-typed StoredPreSearch object
  */
 export function createMockPreSearch(data: {
@@ -337,6 +353,8 @@ export function createMockPreSearch(data: {
  * ✅ TYPE-SAFE: No hardcoded return types, uses const inference
  *
  * @param options - Configuration for number of queries and results
+ * @param options.numQueries - Number of search queries to generate
+ * @param options.includeResults - Whether to include search results
  * @returns PreSearchDataPayload-compatible object
  */
 export function createMockSearchData(options?: {

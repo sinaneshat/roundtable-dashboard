@@ -378,12 +378,16 @@ async function extractPageContent(
         });
       }
 
-      // Extract metadata
+      // Extract metadata with type-safe element checking
       const getMetaContent = (name: string): string | null => {
         const meta = document.querySelector(
           `meta[property="${name}"], meta[name="${name}"]`,
-        ) as HTMLMetaElement;
-        return meta?.content || null;
+        );
+        // Type guard: check if element is HTMLMetaElement
+        if (meta instanceof HTMLMetaElement) {
+          return meta.content || null;
+        }
+        return null;
       };
 
       const title
@@ -415,11 +419,13 @@ async function extractPageContent(
           || getMetaContent('twitter:image')
           || null;
 
-      // Get favicon
+      // Get favicon with type-safe element checking
       const faviconUrl = (() => {
-        const favicon = document.querySelector('link[rel="icon"], link[rel="shortcut icon"]') as HTMLLinkElement;
-        if (favicon?.href)
+        const favicon = document.querySelector('link[rel="icon"], link[rel="shortcut icon"]');
+        // Type guard: check if element is HTMLLinkElement
+        if (favicon instanceof HTMLLinkElement && favicon.href) {
           return favicon.href;
+        }
 
         // Try standard favicon path
         return `${window.location.origin}/favicon.ico`;
@@ -1068,7 +1074,8 @@ async function withRetry<T>(
     try {
       return await fn();
     } catch (error) {
-      lastError = error as Error;
+      // ✅ TYPE-SAFE: Use normalizeError instead of type assertion
+      lastError = normalizeError(error);
 
       // Don't retry on last attempt
       if (attempt < maxRetries - 1) {
