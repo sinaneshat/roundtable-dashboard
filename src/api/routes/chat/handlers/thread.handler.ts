@@ -296,8 +296,10 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
       console.error(`💾 Title and slug updated in database`);
 
       // Update thread object with AI-generated title for response
-      thread.title = title;
-      thread.slug = slug;
+      if (thread) {
+        thread.title = title;
+        thread.slug = slug;
+      }
 
       const db = await getDbAsync();
       await invalidateThreadCache(db, user.id);
