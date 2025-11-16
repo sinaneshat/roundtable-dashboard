@@ -20,12 +20,17 @@ import {
 import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 
+import type { WebSearchResultItem } from '@/api/routes/chat/schema';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Progress } from '@/components/ui/progress';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/ui/cn';
+
+import { WebSearchConfigPanel } from './web-search-config-panel';
+import { WebSearchContentPreview } from './web-search-content-preview';
+import { WebSearchImageGallery } from './web-search-image-gallery';
 
 type GeneratedQuery = {
   query: string;
@@ -38,6 +43,7 @@ type GeneratedQuery = {
 
 type WebSearchConfigurationDisplayProps = {
   queries?: GeneratedQuery[];
+  results?: WebSearchResultItem[];
   totalResults?: number;
   successCount?: number;
   failureCount?: number;
@@ -51,10 +57,19 @@ type WebSearchConfigurationDisplayProps = {
   searchPlan?: string;
   isStreamingPlan?: boolean;
   className?: string;
+  onConfigChange?: (config: {
+    maxResults: number;
+    searchDepth: 'basic' | 'advanced';
+    numQueries: number;
+  }) => void;
 };
+
+// Empty array constant to avoid React infinite render loop warning
+const EMPTY_RESULTS: WebSearchResultItem[] = [];
 
 export function WebSearchConfigurationDisplay({
   queries,
+  results,
   totalResults = 0,
   successCount = 0,
   failureCount = 0,
@@ -63,12 +78,16 @@ export function WebSearchConfigurationDisplay({
   searchPlan,
   isStreamingPlan = false,
   className,
+  onConfigChange,
 }: WebSearchConfigurationDisplayProps) {
   const t = useTranslations('chat.tools.webSearch.configuration');
   const tPreSearch = useTranslations('chat.preSearch.plan');
   const tDepth = useTranslations('chat.preSearch.searchDepth');
+  const tImages = useTranslations('chat.tools.webSearch.images');
+  const tContent = useTranslations('chat.tools.webSearch.contentPreview');
   const [isOpen, setIsOpen] = useState(false);
   const [isPlanExpanded, setIsPlanExpanded] = useState(true);
+  const [isImagesOpen, setIsImagesOpen] = useState(false);
 
   // Don't render if no data available
   if ((!queries || queries.length === 0) && !autoParameters && !searchPlan) {
@@ -78,6 +97,15 @@ export function WebSearchConfigurationDisplay({
   const totalQueries = queries?.length || 0;
   const successRate = totalQueries > 0 ? (successCount / totalQueries) * 100 : 0;
   const avgTimePerQuery = totalQueries > 0 ? totalTime / totalQueries : 0;
+
+  // Use EMPTY_RESULTS if results is undefined to avoid default prop warning
+  const safeResults = results || EMPTY_RESULTS;
+
+  // Calculate derived data for Tavily features
+  const hasImages = safeResults.some(r => r.metadata?.imageUrl || (r.images && r.images.length > 0));
+  const hasRawContent = safeResults.some(r => r.rawContent || r.fullContent);
+  const totalWordCount = safeResults.reduce((sum, r) => sum + (r.metadata?.wordCount || 0), 0);
+  const resultsWithContent = safeResults.filter(r => r.rawContent || r.fullContent);
 
   return (
     <div className={cn('space-y-3', className)}>
@@ -114,6 +142,17 @@ export function WebSearchConfigurationDisplay({
             </CollapsibleContent>
           </div>
         </Collapsible>
+      )}
+
+      {/* Configuration Controls - NEW */}
+      {onConfigChange && (
+        <WebSearchConfigPanel
+          maxResults={totalResults}
+          searchDepth={autoParameters?.searchDepth as 'basic' | 'advanced' || 'basic'}
+          numQueries={totalQueries}
+          onConfigChange={onConfigChange}
+          defaultExpanded={false}
+        />
       )}
 
       {/* Configuration Details - Collapsible */}
@@ -356,6 +395,74 @@ export function WebSearchConfigurationDisplay({
           </div>
         </CollapsibleContent>
       </Collapsible>
+
+      {/* Image Gallery - NEW (Tavily Feature) */}
+      {hasImages && (
+        <Collapsible open={isImagesOpen} onOpenChange={setIsImagesOpen}>
+          <CollapsibleTrigger asChild>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="w-full justify-between px-3 py-2 h-auto hover:bg-muted/50 border border-border/40 rounded-lg"
+            >
+              <div className="flex items-center gap-2">
+                <Sparkles className="size-4 text-primary" />
+                <span className="text-sm font-medium">{tImages('title')}</span>
+                <Badge variant="secondary" className="text-xs">
+                  {safeResults.reduce((count, r) => {
+                    const metaImageCount = r.metadata?.imageUrl ? 1 : 0;
+                    const arrayImageCount = r.images?.length || 0;
+                    return count + metaImageCount + arrayImageCount;
+                  }, 0)}
+                  {' '}
+                  images
+                </Badge>
+              </div>
+              {isImagesOpen
+                ? <ChevronUp className="size-4 text-muted-foreground" />
+                : <ChevronDown className="size-4 text-muted-foreground" />}
+            </Button>
+          </CollapsibleTrigger>
+          <CollapsibleContent className="pt-3">
+            <WebSearchImageGallery results={safeResults} />
+          </CollapsibleContent>
+        </Collapsible>
+      )}
+
+      {/* Raw Content Preview - NEW (Tavily Feature) */}
+      {hasRawContent && resultsWithContent.length > 0 && (
+        <div className="space-y-2">
+          <div className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg bg-muted/20 border border-border/30">
+            <div className="flex items-center gap-2">
+              <Hash className="size-4 text-muted-foreground" />
+              <span className="text-sm font-medium text-foreground">
+                {tContent('title')}
+              </span>
+              <Badge variant="secondary" className="text-xs">
+                {resultsWithContent.length}
+                {' '}
+                {resultsWithContent.length === 1 ? 'page' : 'pages'}
+              </Badge>
+              {totalWordCount > 0 && (
+                <Badge variant="outline" className="text-xs">
+                  {totalWordCount.toLocaleString()}
+                  {' '}
+                  words
+                </Badge>
+              )}
+            </div>
+          </div>
+          <div className="space-y-2">
+            {resultsWithContent.map((result, idx) => (
+              <WebSearchContentPreview
+                key={result.url}
+                result={result}
+                defaultExpanded={idx === 0}
+              />
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

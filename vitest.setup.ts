@@ -27,7 +27,7 @@ Object.defineProperty(globalThis, 'TextEncoder', {
 // Mock next-intl for testing - MUST be in setupFiles for vi.mock() to work
 vi.mock('next-intl', () => {
   // Translation map for common keys used in tests
-  const translationMap: Record<string, string> = {
+  const translationMap: Record<string, string | string[]> = {
     strengths: 'strengths',
     summary: 'summary',
     // Moderator namespace translations
@@ -59,16 +59,40 @@ vi.mock('next-intl', () => {
     participants: 'Participants',
     noParticipants: 'No participants to display',
     noAnalysis: 'Click \'Analyze Round\' to get AI-powered insights on participant responses',
+    // Chat streaming namespace translations (arrays for rotating messages)
+    thinkingMessages: ['Thinking...', 'Consulting the AI...', 'Summoning wisdom...'],
+    analyzingMessages: ['Analyzing responses...', 'Preparing analysis...', 'Synthesizing insights...'],
   };
 
-  // Create mock functions with 'mock' prefix to avoid ESLint hook warnings
-  const mockTranslations = () => (key: string) => translationMap[key] || key;
+  // Create mock function that supports both regular strings and t.raw() for arrays
+  const mockTranslations = () => {
+    const t = (key: string) => {
+      const value = translationMap[key];
+      return typeof value === 'string' ? value : key;
+    };
+    // Add raw() method for accessing array values
+    t.raw = (key: string) => {
+      const value = translationMap[key];
+      return Array.isArray(value) ? value : [key];
+    };
+    return t;
+  };
   const mockLocale = () => 'en';
 
   return {
     useTranslations: mockTranslations,
     useLocale: mockLocale,
-    getTranslations: () => (key: string) => translationMap[key] || key,
+    getTranslations: () => {
+      const t = (key: string) => {
+        const value = translationMap[key];
+        return typeof value === 'string' ? value : key;
+      };
+      t.raw = (key: string) => {
+        const value = translationMap[key];
+        return Array.isArray(value) ? value : [key];
+      };
+      return t;
+    },
     // ✅ TYPE-SAFE: Mock NextIntlClientProvider with proper typing
     NextIntlClientProvider: ({ children }: { children: unknown; locale?: string; messages?: unknown }) => children,
   };
