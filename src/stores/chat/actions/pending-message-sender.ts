@@ -82,28 +82,52 @@ export function shouldSendPendingMessage(state: PendingMessageState): Validation
   // Calculate next round number
   const newRoundNumber = calculateNextRoundNumber(state.messages);
 
-  // ✅ CRITICAL FIX: Only wait for pre-search if it's STREAMING
-  // Previous logic created chicken-and-egg problem:
-  // - Frontend waited for COMPLETE pre-search before sending message
-  // - Backend only creates PENDING pre-search WHEN message is sent
-  // - Result: Message never sends for rounds 1+
+  // ✅ CRITICAL FIX: Web search blocking logic for mid-conversation toggle
   //
-  // New logic:
-  // - No pre-search record? → Send (backend creates PENDING in streaming handler)
-  // - Pre-search PENDING? → Send (orchestrator will start it)
-  // - Pre-search STREAMING? → Wait (avoid race conditions)
-  // - Pre-search COMPLETE? → Send (use results)
-  // - Pre-search FAILED? → Send (don't block on search failures)
+  // FLOW:
+  // 1. User toggles web search ON mid-conversation
+  // 2. Backend creates PENDING pre-search immediately (streaming.handler.ts:162-169)
+  // 3. PreSearchOrchestrator syncs it to store (polls every 2s)
+  // 4. PreSearchStream component triggers execution (PENDING → STREAMING)
+  // 5. Web search completes (STREAMING → COMPLETE)
+  // 6. Participants can start responding
+  //
+  // BLOCKING LOGIC:
+  // - No pre-search record + web search enabled? → Wait (backend creating it, orchestrator syncing)
+  // - Pre-search PENDING? → Wait (hasn't started execution yet)
+  // - Pre-search STREAMING? → Wait (search in progress)
+  // - Pre-search COMPLETE? → Send (results available)
+  // - Pre-search FAILED? → Send (don't block on failures)
+  //
+  // BUG FIXES:
+  // 1. Added PENDING status check (was only checking STREAMING)
+  // 2. Added optimistic wait when pre-search doesn't exist yet (race condition fix)
   const webSearchEnabled = state.thread?.enableWebSearch ?? state.enableWebSearch;
 
   if (webSearchEnabled) {
     const preSearchForRound = state.preSearches.find(ps => ps.roundNumber === newRoundNumber);
 
-    // Only block if pre-search is actively STREAMING
-    // This prevents sending duplicate messages while search is in progress
-    if (preSearchForRound && preSearchForRound.status === AnalysisStatuses.STREAMING) {
+    // ✅ FIX #2: Optimistic wait when pre-search doesn't exist yet
+    // Race condition: Backend creates PENDING pre-search, but orchestrator hasn't synced it yet
+    // Polling interval is 2s, so there's a 0-2s window where preSearchForRound is undefined
+    // If we send message during this window, participants start WITHOUT web search
+    // Solution: Wait for orchestrator to sync the pre-search that backend created
+    if (!preSearchForRound) {
+      return { shouldSend: false, roundNumber: newRoundNumber, reason: 'waiting for pre-search creation' };
+    }
+
+    // ✅ FIX #1: Block on PENDING status (not just STREAMING)
+    // When backend creates PENDING pre-search and orchestrator syncs it before execution,
+    // we need to wait for PreSearchStream to trigger execution (PENDING → STREAMING)
+    // Previous bug: Only checked STREAMING, so messages sent when status was PENDING
+    if (preSearchForRound.status === AnalysisStatuses.PENDING
+      || preSearchForRound.status === AnalysisStatuses.STREAMING) {
       return { shouldSend: false, roundNumber: newRoundNumber, reason: 'waiting for pre-search' };
     }
+
+    // Pre-search is COMPLETE or FAILED - allow message to send
+    // COMPLETE: Participants can use search results
+    // FAILED: Don't block conversation on search failures
   }
 
   // All validations passed
@@ -133,8 +157,14 @@ export function participantsMatch(
 /**
  * Checks if pre-search needs to complete before proceeding
  *
- * ✅ CRITICAL FIX: Only wait if pre-search is STREAMING
- * Previous logic created chicken-and-egg problem.
+ * ✅ UPDATED: Wait for pre-search in PENDING or STREAMING status
+ * Also wait if pre-search doesn't exist yet (optimistic wait for backend creation)
+ *
+ * BLOCKING CONDITIONS:
+ * - No pre-search + web search enabled: Wait (backend creating it)
+ * - Pre-search PENDING: Wait (execution not started)
+ * - Pre-search STREAMING: Wait (search in progress)
+ * - Pre-search COMPLETE/FAILED: Don't wait (proceed with message)
  *
  * Extracted for reusability across multiple locations.
  */
@@ -149,8 +179,14 @@ export function shouldWaitForPreSearch(params: {
 
   const preSearch = params.preSearches.find(ps => ps.roundNumber === params.roundNumber);
 
-  // Only wait if pre-search is actively STREAMING
-  // This prevents chicken-and-egg problem where message can't send because
-  // pre-search doesn't exist, but pre-search is only created when message is sent
-  return preSearch ? preSearch.status === AnalysisStatuses.STREAMING : false;
+  // ✅ FIX: Wait if pre-search doesn't exist yet (backend creating it, orchestrator syncing)
+  if (!preSearch) {
+    return true; // Optimistic wait
+  }
+
+  // ✅ FIX: Wait if pre-search is PENDING or STREAMING
+  // PENDING: PreSearchStream hasn't triggered execution yet
+  // STREAMING: Web search in progress
+  return preSearch.status === AnalysisStatuses.PENDING
+    || preSearch.status === AnalysisStatuses.STREAMING;
 }

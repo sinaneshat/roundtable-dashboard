@@ -604,7 +604,10 @@ export default function ChatThreadScreen({
                 } else {
                   // ✅ CRITICAL FIX: Preserve error message when analysis fails
                   // Use dedicated updateAnalysisError action to atomically update status + error
-                  const errorMessage = error?.message || 'Analysis failed. Please try again.';
+                  // Pattern: Handle unknown error type with type guard (established pattern from lib/utils/error-handling.ts)
+                  const errorMessage = error instanceof Error
+                    ? error.message
+                    : 'Analysis failed. Please try again.';
                   updateAnalysisError(roundNumber, errorMessage);
                 }
 

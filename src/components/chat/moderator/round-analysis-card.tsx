@@ -27,7 +27,7 @@ type RoundAnalysisCardProps = {
   isLatest?: boolean;
   className?: string;
   onStreamStart?: () => void;
-  onStreamComplete?: (completedAnalysisData?: ModeratorAnalysisPayload | null, error?: Error) => void;
+  onStreamComplete?: (completedAnalysisData?: ModeratorAnalysisPayload | null, error?: unknown) => void;
   streamingRoundNumber?: number | null;
   onActionClick?: (action: RecommendedAction) => void;
   /** Callback to regenerate entire round (participants + analysis) */

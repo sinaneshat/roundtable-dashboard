@@ -19,7 +19,7 @@ import { SkillsComparisonChart } from './skills-comparison-chart';
 type ModeratorAnalysisStreamProps = {
   threadId: string;
   analysis: StoredModeratorAnalysis;
-  onStreamComplete?: (completedAnalysisData?: ModeratorAnalysisPayload | null, error?: Error) => void;
+  onStreamComplete?: (completedAnalysisData?: ModeratorAnalysisPayload | null, error?: unknown) => void;
   onStreamStart?: () => void;
   onActionClick?: (action: RecommendedAction) => void;
 };
@@ -212,7 +212,7 @@ function ModeratorAnalysisStreamComponent({
   const shouldShowError = error && !is409Conflict.value && errorType !== StreamErrorTypes.ABORT;
 
   // ✅ Enum Pattern: Get user-friendly error message based on error type
-  const getErrorMessage = (type: StreamErrorType | null, error: Error | unknown): string => {
+  const getErrorMessage = (type: StreamErrorType | null, error: unknown): string => {
     if (!type)
       return error instanceof Error ? error.message : 'Unknown error';
 

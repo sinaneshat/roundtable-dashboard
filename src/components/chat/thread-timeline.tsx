@@ -52,7 +52,7 @@ type ThreadTimelineProps = {
 
   // Analysis handlers (optional - view-only for public)
   onAnalysisStreamStart?: (roundNumber: number) => void;
-  onAnalysisStreamComplete?: (roundNumber: number, data?: ModeratorAnalysisPayload | null, error?: Error) => void;
+  onAnalysisStreamComplete?: (roundNumber: number, data?: ModeratorAnalysisPayload | null, error?: unknown) => void;
   onActionClick?: (action: RecommendedAction) => void;
 
   // Error retry (optional)

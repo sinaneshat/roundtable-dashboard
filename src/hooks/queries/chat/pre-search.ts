@@ -42,16 +42,22 @@ export function useThreadPreSearchesQuery(
     enabled: enabled !== undefined ? enabled : (isAuthenticated && !!threadId),
     // ✅ CRITICAL FIX: Poll for pre-search status updates in preview environments
     // In Cloudflare Workers edge environments, query invalidation may not propagate immediately
-    // Poll every 2s when pre-search is pending/streaming to catch status updates quickly
+    // Poll every 500ms when pre-search is pending/streaming to catch status updates quickly
     // Stop polling once all pre-searches are complete/failed
+    //
+    // ✅ PERFORMANCE FIX: Reduced from 2000ms to 500ms for better UX
+    // - Reduces race condition window from 0-2s to 0-500ms
+    // - Faster UI updates when backend creates/updates pre-search records
+    // - Minimal API cost increase (pre-search requests are lightweight)
     refetchInterval: (query) => {
       // Check if any pre-search is pending or streaming
       const hasActivePreSearch = query.state.data?.data?.items?.some(
         ps => ps.status === 'pending' || ps.status === 'streaming',
       );
 
-      // Poll every 2s if there are active pre-searches, otherwise don't poll
-      return hasActivePreSearch ? 2000 : false;
+      // Poll every 500ms if there are active pre-searches, otherwise don't poll
+      // This provides responsive UX while minimizing unnecessary API calls
+      return hasActivePreSearch ? 500 : false;
     },
     refetchIntervalInBackground: false, // Only poll when tab is active
   });
