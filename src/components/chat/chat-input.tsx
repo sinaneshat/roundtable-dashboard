@@ -192,7 +192,7 @@ export const ChatInput = memo(({
       <div
         className={cn(
           'relative flex flex-col overflow-hidden',
-          'rounded-3xl',
+          'rounded-2xl sm:rounded-3xl',
           'border border-transparent',
           'bg-gradient-to-r from-white/10 via-white/5 to-white/10 p-px',
           'shadow-lg',
@@ -202,7 +202,7 @@ export const ChatInput = memo(({
           className,
         )}
       >
-        <div className="flex flex-col rounded-2xl bg-white/5 backdrop-blur-xl overflow-hidden h-full">
+        <div className="flex flex-col rounded-xl sm:rounded-2xl bg-white/5 backdrop-blur-xl overflow-hidden h-full">
           {/* Quota Alert Extension - appears at top when quota exceeded */}
           {quotaCheckType && <QuotaAlertExtension checkType={quotaCheckType} />}
 
@@ -220,7 +220,7 @@ export const ChatInput = memo(({
             )}
           >
             {/* Textarea */}
-            <div className="relative flex items-end px-3 py-2">
+            <div className="relative flex items-end px-2 sm:px-4 py-2 sm:py-2.5">
               <textarea
                 ref={textareaRef}
                 value={value}
@@ -232,7 +232,7 @@ export const ChatInput = memo(({
                     ? t('chat.input.streamingPlaceholder')
                     : placeholder || t('chat.input.placeholder')
                 }
-                className="flex-1 bg-transparent border-0 text-base focus:outline-none focus:ring-0 placeholder:text-muted-foreground/60 disabled:opacity-50 disabled:cursor-not-allowed resize-none overflow-y-auto transition-all duration-200"
+                className="flex-1 bg-transparent border-0 text-sm sm:text-base focus:outline-none focus:ring-0 placeholder:text-muted-foreground/60 disabled:opacity-50 disabled:cursor-not-allowed resize-none overflow-y-auto transition-all duration-200"
                 style={{ minHeight: `${minHeight}px` }}
                 aria-disabled={isDisabled}
                 aria-label={isStreaming ? t('chat.input.streamingLabel') : t('chat.input.label')}
@@ -241,7 +241,7 @@ export const ChatInput = memo(({
 
             {/* Toolbar and submit */}
             <div>
-              <div className="px-3 py-2 flex items-center gap-2">
+              <div className="px-2 sm:px-3 py-1.5 sm:py-2 flex items-center gap-1.5 sm:gap-2">
                 {/* Speech recognition button */}
                 {enableSpeech && isSpeechSupported && (
                   <Button
@@ -272,9 +272,9 @@ export const ChatInput = memo(({
                         type="button"
                         size="icon"
                         onClick={onStop}
-                        className="size-8 sm:size-9 rounded-full shrink-0 relative touch-manipulation active:scale-95 transition-transform bg-white text-black hover:bg-white/90"
+                        className="size-9 rounded-full shrink-0 relative touch-manipulation active:scale-95 transition-transform bg-white text-black hover:bg-white/90"
                       >
-                        <Square className="size-4" />
+                        <Square className="size-4 sm:size-[18px]" />
                         {streamingProgress && (
                           <span className="absolute -top-1 -right-1 text-[10px] font-medium bg-primary text-primary-foreground rounded-full px-1.5 min-w-[22px] text-center">
                             {streamingProgress}
@@ -287,9 +287,9 @@ export const ChatInput = memo(({
                         type="submit"
                         size="icon"
                         disabled={isDisabled || !hasValidInput}
-                        className="size-8 sm:size-9 rounded-full shrink-0 touch-manipulation active:scale-95 transition-transform disabled:active:scale-100 bg-white text-black hover:bg-white/90 disabled:bg-white/20 disabled:text-white/40"
+                        className="size-9 rounded-full shrink-0 touch-manipulation active:scale-95 transition-transform disabled:active:scale-100 bg-white text-black hover:bg-white/90 disabled:bg-white/20 disabled:text-white/40"
                       >
-                        <ArrowUp className="size-4" />
+                        <ArrowUp className="size-4 sm:size-[18px]" />
                       </Button>
                     )}
               </div>

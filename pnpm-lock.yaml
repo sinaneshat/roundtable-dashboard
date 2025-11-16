@@ -86,6 +86,9 @@ importers:
       '@radix-ui/react-tooltip':
         specifier: ^1.2.8
         version: 1.2.8(@types/react-dom@19.2.2(@types/react@19.2.2))(@types/react@19.2.2)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
+      '@radix-ui/react-visually-hidden':
+        specifier: ^1.2.4
+        version: 1.2.4(@types/react-dom@19.2.2(@types/react@19.2.2))(@types/react@19.2.2)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
       '@react-email/components':
         specifier: 0.5.0
         version: 0.5.0(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
@@ -112,7 +115,7 @@ importers:
         version: 1.0.20
       better-auth:
         specifier: ^1.3.27
-        version: 1.3.27(next@15.5.6(@babel/core@7.26.10)(@opentelemetry/api@1.9.0)(@playwright/test@1.55.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vue@3.5.22(typescript@5.9.3))
+        version: 1.3.27(next@15.5.6(@babel/core@7.28.4)(@opentelemetry/api@1.9.0)(@playwright/test@1.55.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vue@3.5.22(typescript@5.9.3))
       better-sqlite3:
         specifier: ^12.4.1
         version: 12.4.1
@@ -148,7 +151,7 @@ importers:
         version: 7.1.0
       geist:
         specifier: ^1.5.1
-        version: 1.5.1(next@15.5.6(@babel/core@7.26.10)(@opentelemetry/api@1.9.0)(@playwright/test@1.55.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))
+        version: 1.5.1(next@15.5.6(@babel/core@7.28.4)(@opentelemetry/api@1.9.0)(@playwright/test@1.55.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))
       hono:
         specifier: ^4.10.1
         version: 4.10.1
@@ -160,16 +163,16 @@ importers:
         version: 12.23.24(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
       next:
         specifier: 15.5.6
-        version: 15.5.6(@babel/core@7.26.10)(@opentelemetry/api@1.9.0)(@playwright/test@1.55.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
+        version: 15.5.6(@babel/core@7.28.4)(@opentelemetry/api@1.9.0)(@playwright/test@1.55.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
       next-intl:
         specifier: ^4.3.12
-        version: 4.3.12(next@15.5.6(@babel/core@7.26.10)(@opentelemetry/api@1.9.0)(@playwright/test@1.55.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react@19.2.0)(typescript@5.9.3)
+        version: 4.3.12(next@15.5.6(@babel/core@7.28.4)(@opentelemetry/api@1.9.0)(@playwright/test@1.55.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react@19.2.0)(typescript@5.9.3)
       next-themes:
         specifier: ^0.4.6
         version: 0.4.6(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
       nuqs:
         specifier: ^2.7.2
-        version: 2.7.2(next@15.5.6(@babel/core@7.26.10)(@opentelemetry/api@1.9.0)(@playwright/test@1.55.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react@19.2.0)
+        version: 2.7.2(next@15.5.6(@babel/core@7.28.4)(@opentelemetry/api@1.9.0)(@playwright/test@1.55.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react@19.2.0)
       posthog-js:
         specifier: ^1.276.0
         version: 1.276.0
@@ -260,7 +263,7 @@ importers:
         version: 4.3.1(@opentelemetry/api@1.9.0)(@playwright/test@1.55.0)(postcss@8.5.6)(ts-node@10.9.2(@types/node@24.8.1)(typescript@5.9.3))
       '@serwist/next':
         specifier: ^9.2.1
-        version: 9.2.1(next@15.5.6(@babel/core@7.26.10)(@opentelemetry/api@1.9.0)(@playwright/test@1.55.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(typescript@5.9.3)(webpack@5.102.1(esbuild@0.25.10))
+        version: 9.2.1(next@15.5.6(@babel/core@7.28.4)(@opentelemetry/api@1.9.0)(@playwright/test@1.55.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(typescript@5.9.3)(webpack@5.102.1(esbuild@0.25.10))
       '@sparticuz/chromium':
         specifier: ^141.0.0
         version: 141.0.0
@@ -3232,6 +3235,19 @@ packages:
       '@types/react-dom':
         optional: true
 
+  '@radix-ui/react-primitive@2.1.4':
+    resolution: {integrity: sha512-9hQc4+GNVtJAIEPEqlYqW5RiYdrr8ea5XQ0ZOnD6fgru+83kqT15mq2OCcbe8KnjRZl5vF3ks69AKz3kh1jrhg==}
+    peerDependencies:
+      '@types/react': '*'
+      '@types/react-dom': '*'
+      react: ^16.8 || ^17.0 || ^18.0 || ^19.0 || ^19.0.0-rc
+      react-dom: ^16.8 || ^17.0 || ^18.0 || ^19.0 || ^19.0.0-rc
+    peerDependenciesMeta:
+      '@types/react':
+        optional: true
+      '@types/react-dom':
+        optional: true
+
   '@radix-ui/react-progress@1.1.7':
     resolution: {integrity: sha512-vPdg/tF6YC/ynuBIJlk1mm7Le0VgW6ub6J2UWnTQ7/D23KXcPI1qy+0vBkgKgd38RCMJavBXpB83HPNFMTb0Fg==}
     peerDependencies:
@@ -3321,6 +3337,15 @@ packages:
 
   '@radix-ui/react-slot@1.2.3':
     resolution: {integrity: sha512-aeNmHnBxbi2St0au6VBVC7JXFlhLlOnvIIlePNniyUNAClzmtAUEY8/pBiK3iHjufOlwA+c20/8jngo7xcrg8A==}
+    peerDependencies:
+      '@types/react': '*'
+      react: ^16.8 || ^17.0 || ^18.0 || ^19.0 || ^19.0.0-rc
+    peerDependenciesMeta:
+      '@types/react':
+        optional: true
+
+  '@radix-ui/react-slot@1.2.4':
+    resolution: {integrity: sha512-Jl+bCv8HxKnlTLVrcDE8zTMJ09R9/ukw4qBs/oZClOfoQk/cOTbDn+NceXfV7j09YPVQUryJPHurafcSg6EVKA==}
     peerDependencies:
       '@types/react': '*'
       react: ^16.8 || ^17.0 || ^18.0 || ^19.0 || ^19.0.0-rc
@@ -3489,6 +3514,19 @@ packages:
 
   '@radix-ui/react-visually-hidden@1.2.3':
     resolution: {integrity: sha512-pzJq12tEaaIhqjbzpCuv/OypJY/BPavOofm+dbab+MHLajy277+1lLm6JFcGgF5eskJ6mquGirhXY2GD/8u8Ug==}
+    peerDependencies:
+      '@types/react': '*'
+      '@types/react-dom': '*'
+      react: ^16.8 || ^17.0 || ^18.0 || ^19.0 || ^19.0.0-rc
+      react-dom: ^16.8 || ^17.0 || ^18.0 || ^19.0 || ^19.0.0-rc
+    peerDependenciesMeta:
+      '@types/react':
+        optional: true
+      '@types/react-dom':
+        optional: true
+
+  '@radix-ui/react-visually-hidden@1.2.4':
+    resolution: {integrity: sha512-kaeiyGCe844dkb9AVF+rb4yTyb1LiLN/e3es3nLiRyN4dC8AduBYPMnnNlDjX2VDOcvDEiPnRNMJeWCfsX0txg==}
     peerDependencies:
       '@types/react': '*'
       '@types/react-dom': '*'
@@ -14629,6 +14667,15 @@ snapshots:
       '@types/react': 19.2.2
       '@types/react-dom': 19.2.2(@types/react@19.2.2)
 
+  '@radix-ui/react-primitive@2.1.4(@types/react-dom@19.2.2(@types/react@19.2.2))(@types/react@19.2.2)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)':
+    dependencies:
+      '@radix-ui/react-slot': 1.2.4(@types/react@19.2.2)(react@19.2.0)
+      react: 19.2.0
+      react-dom: 19.2.0(react@19.2.0)
+    optionalDependencies:
+      '@types/react': 19.2.2
+      '@types/react-dom': 19.2.2(@types/react@19.2.2)
+
   '@radix-ui/react-progress@1.1.7(@types/react-dom@19.2.2(@types/react@19.2.2))(@types/react@19.2.2)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)':
     dependencies:
       '@radix-ui/react-context': 1.1.2(@types/react@19.2.2)(react@19.2.0)
@@ -14761,6 +14808,13 @@ snapshots:
       '@types/react': 19.0.10
 
   '@radix-ui/react-slot@1.2.3(@types/react@19.2.2)(react@19.2.0)':
+    dependencies:
+      '@radix-ui/react-compose-refs': 1.1.2(@types/react@19.2.2)(react@19.2.0)
+      react: 19.2.0
+    optionalDependencies:
+      '@types/react': 19.2.2
+
+  '@radix-ui/react-slot@1.2.4(@types/react@19.2.2)(react@19.2.0)':
     dependencies:
       '@radix-ui/react-compose-refs': 1.1.2(@types/react@19.2.2)(react@19.2.0)
       react: 19.2.0
@@ -15032,6 +15086,15 @@ snapshots:
   '@radix-ui/react-visually-hidden@1.2.3(@types/react-dom@19.2.2(@types/react@19.2.2))(@types/react@19.2.2)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)':
     dependencies:
       '@radix-ui/react-primitive': 2.1.3(@types/react-dom@19.2.2(@types/react@19.2.2))(@types/react@19.2.2)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
+      react: 19.2.0
+      react-dom: 19.2.0(react@19.2.0)
+    optionalDependencies:
+      '@types/react': 19.2.2
+      '@types/react-dom': 19.2.2(@types/react@19.2.2)
+
+  '@radix-ui/react-visually-hidden@1.2.4(@types/react-dom@19.2.2(@types/react@19.2.2))(@types/react@19.2.2)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)':
+    dependencies:
+      '@radix-ui/react-primitive': 2.1.4(@types/react-dom@19.2.2(@types/react@19.2.2))(@types/react@19.2.2)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
       react: 19.2.0
       react-dom: 19.2.0(react@19.2.0)
     optionalDependencies:
@@ -15511,14 +15574,14 @@ snapshots:
     optionalDependencies:
       typescript: 5.9.3
 
-  '@serwist/next@9.2.1(next@15.5.6(@babel/core@7.26.10)(@opentelemetry/api@1.9.0)(@playwright/test@1.55.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(typescript@5.9.3)(webpack@5.102.1(esbuild@0.25.10))':
+  '@serwist/next@9.2.1(next@15.5.6(@babel/core@7.28.4)(@opentelemetry/api@1.9.0)(@playwright/test@1.55.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(typescript@5.9.3)(webpack@5.102.1(esbuild@0.25.10))':
     dependencies:
       '@serwist/build': 9.2.1(typescript@5.9.3)
       '@serwist/webpack-plugin': 9.2.1(typescript@5.9.3)(webpack@5.102.1(esbuild@0.25.10))
       '@serwist/window': 9.2.1(typescript@5.9.3)
       chalk: 5.6.0
       glob: 10.4.5
-      next: 15.5.6(@babel/core@7.26.10)(@opentelemetry/api@1.9.0)(@playwright/test@1.55.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
+      next: 15.5.6(@babel/core@7.28.4)(@opentelemetry/api@1.9.0)(@playwright/test@1.55.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
       serwist: 9.2.1(typescript@5.9.3)
       zod: 4.1.5
     optionalDependencies:
@@ -17329,7 +17392,7 @@ snapshots:
 
   basic-ftp@5.0.5: {}
 
-  better-auth@1.3.27(next@15.5.6(@babel/core@7.26.10)(@opentelemetry/api@1.9.0)(@playwright/test@1.55.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vue@3.5.22(typescript@5.9.3)):
+  better-auth@1.3.27(next@15.5.6(@babel/core@7.28.4)(@opentelemetry/api@1.9.0)(@playwright/test@1.55.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vue@3.5.22(typescript@5.9.3)):
     dependencies:
       '@better-auth/core': 1.3.27
       '@better-auth/utils': 0.3.0
@@ -17345,7 +17408,7 @@ snapshots:
       nanostores: 1.0.1
       zod: 4.1.12
     optionalDependencies:
-      next: 15.5.6(@babel/core@7.26.10)(@opentelemetry/api@1.9.0)(@playwright/test@1.55.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
+      next: 15.5.6(@babel/core@7.28.4)(@opentelemetry/api@1.9.0)(@playwright/test@1.55.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
       react: 19.2.0
       react-dom: 19.2.0(react@19.2.0)
       vue: 3.5.22(typescript@5.9.3)
@@ -19429,9 +19492,9 @@ snapshots:
 
   fzf@0.5.2: {}
 
-  geist@1.5.1(next@15.5.6(@babel/core@7.26.10)(@opentelemetry/api@1.9.0)(@playwright/test@1.55.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)):
+  geist@1.5.1(next@15.5.6(@babel/core@7.28.4)(@opentelemetry/api@1.9.0)(@playwright/test@1.55.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)):
     dependencies:
-      next: 15.5.6(@babel/core@7.26.10)(@opentelemetry/api@1.9.0)(@playwright/test@1.55.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
+      next: 15.5.6(@babel/core@7.28.4)(@opentelemetry/api@1.9.0)(@playwright/test@1.55.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
 
   gel@2.1.0:
     dependencies:
@@ -21191,11 +21254,11 @@ snapshots:
 
   netmask@2.0.2: {}
 
-  next-intl@4.3.12(next@15.5.6(@babel/core@7.26.10)(@opentelemetry/api@1.9.0)(@playwright/test@1.55.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react@19.2.0)(typescript@5.9.3):
+  next-intl@4.3.12(next@15.5.6(@babel/core@7.28.4)(@opentelemetry/api@1.9.0)(@playwright/test@1.55.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react@19.2.0)(typescript@5.9.3):
     dependencies:
       '@formatjs/intl-localematcher': 0.5.10
       negotiator: 1.0.0
-      next: 15.5.6(@babel/core@7.26.10)(@opentelemetry/api@1.9.0)(@playwright/test@1.55.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
+      next: 15.5.6(@babel/core@7.28.4)(@opentelemetry/api@1.9.0)(@playwright/test@1.55.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
       react: 19.2.0
       use-intl: 4.3.12(react@19.2.0)
     optionalDependencies:
@@ -21231,7 +21294,7 @@ snapshots:
       - '@babel/core'
       - babel-plugin-macros
 
-  next@15.5.6(@babel/core@7.26.10)(@opentelemetry/api@1.9.0)(@playwright/test@1.55.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0):
+  next@15.5.6(@babel/core@7.28.4)(@opentelemetry/api@1.9.0)(@playwright/test@1.55.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0):
     dependencies:
       '@next/env': 15.5.6
       '@swc/helpers': 0.5.15
@@ -21239,7 +21302,7 @@ snapshots:
       postcss: 8.4.31
       react: 19.2.0
       react-dom: 19.2.0(react@19.2.0)
-      styled-jsx: 5.1.6(@babel/core@7.26.10)(react@19.2.0)
+      styled-jsx: 5.1.6(@babel/core@7.28.4)(react@19.2.0)
     optionalDependencies:
       '@next/swc-darwin-arm64': 15.5.6
       '@next/swc-darwin-x64': 15.5.6
@@ -21305,12 +21368,12 @@ snapshots:
     dependencies:
       boolbase: 1.0.0
 
-  nuqs@2.7.2(next@15.5.6(@babel/core@7.26.10)(@opentelemetry/api@1.9.0)(@playwright/test@1.55.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react@19.2.0):
+  nuqs@2.7.2(next@15.5.6(@babel/core@7.28.4)(@opentelemetry/api@1.9.0)(@playwright/test@1.55.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react@19.2.0):
     dependencies:
       '@standard-schema/spec': 1.0.0
       react: 19.2.0
     optionalDependencies:
-      next: 15.5.6(@babel/core@7.26.10)(@opentelemetry/api@1.9.0)(@playwright/test@1.55.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
+      next: 15.5.6(@babel/core@7.28.4)(@opentelemetry/api@1.9.0)(@playwright/test@1.55.0)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
 
   nypm@0.6.0:
     dependencies:
@@ -22934,12 +22997,12 @@ snapshots:
     optionalDependencies:
       '@babel/core': 7.26.10
 
-  styled-jsx@5.1.6(@babel/core@7.26.10)(react@19.2.0):
+  styled-jsx@5.1.6(@babel/core@7.28.4)(react@19.2.0):
     dependencies:
       client-only: 0.0.1
       react: 19.2.0
     optionalDependencies:
-      '@babel/core': 7.26.10
+      '@babel/core': 7.28.4
 
   stylis@4.3.6: {}
 

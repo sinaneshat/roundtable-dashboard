@@ -384,12 +384,17 @@
     },
     "webSearch": {
       "title": "Web Search",
+      "toggle": "Web Search",
       "enabled": "Search On",
       "disabled": "Search Off",
       "description": {
         "enabled": "Participants can browse the web for information",
         "disabled": "Click to enable web browsing for participants"
       }
+    },
+    "toolbar": {
+      "options": "Options",
+      "selected": "selected"
     },
     "preSearch": {
       "title": "Web Research",
@@ -650,6 +655,7 @@
     "removedFromFavoritesDescription": "Thread has been removed from your favorites",
     "scrollToBottom": "Scroll to bottom",
     "searchChats": "Search chats...",
+    "searchChatsDescription": "Search and navigate through your chat conversations",
     "noChatsYet": "No chats yet",
     "noChatsDescription": "Start a new conversation to begin collaborating with AI participants",
     "status": {
@@ -959,8 +965,6 @@
     "stop": "Stop",
     "stopAnalysis": "Stop Analysis",
     "retry": "Retry",
-    "retryAnalysis": "Retry Analysis",
-    "retryRound": "Retry Round",
     "viewFullAnalysis": "View Full Analysis",
     "participantAnalysis": "Participant Analysis",
     "completed": "Completed",

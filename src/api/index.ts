@@ -272,10 +272,13 @@ app.use('*', bodyLimit({
 
 // CORS configuration - Use environment variables for dynamic origin configuration
 app.use('*', (c, next) => {
-  // Get the current environment's allowed origin from NEXT_PUBLIC_APP_URL
-  const appUrl = c.env.NEXT_PUBLIC_APP_URL;
-  const webappEnv = c.env.NEXT_PUBLIC_WEBAPP_ENV || 'local';
-  const isDevelopment = webappEnv === 'local' || c.env.NODE_ENV === 'development';
+  // CRITICAL FIX: Use process.env fallback for Next.js dev mode
+  // In Cloudflare Workers: c.env has the bindings
+  // In Next.js dev: c.env may be empty, use process.env
+  const appUrl = c.env?.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_APP_URL;
+  const webappEnv = c.env?.NEXT_PUBLIC_WEBAPP_ENV || process.env.NEXT_PUBLIC_WEBAPP_ENV || 'local';
+  const nodeEnv = c.env?.NODE_ENV || process.env.NODE_ENV;
+  const isDevelopment = webappEnv === 'local' || nodeEnv === 'development';
 
   // Build allowed origins dynamically based on environment
   const allowedOrigins: string[] = [];

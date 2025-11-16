@@ -115,7 +115,7 @@ function AssistantGroupCard({
 
   return (
     <div key={`assistant-group-${group.participantKey}-${group.messages[0]?.index}`} className="mb-4 flex justify-start">
-      <div className="max-w-[85%]">
+      <div className="w-full sm:max-w-[85%]">
         {/* Header at top of message box */}
         <motion.div
           initial={{ opacity: 0, y: -8 }}
@@ -630,7 +630,7 @@ export const ChatMessageList = memo(
             return (
               <div key={`user-group-wrapper-${group.messages[0]?.index}`}>
                 <div key={`user-group-${group.messages[0]?.index}`} className="mb-4 flex justify-end">
-                  <div className="max-w-[80%]">
+                  <div className="w-full sm:max-w-[80%]">
                     {/* Header at top of message box */}
                     <motion.div
                       initial={{ opacity: 0, y: -8 }}

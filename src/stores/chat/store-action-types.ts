@@ -149,12 +149,6 @@ export type SendMessage = (message: string) => Promise<void>;
 export type StartRound = () => Promise<void>;
 
 /**
- * Retry failed operations
- * Bound from AI SDK v5 chat hook - re-executes failed streaming
- */
-export type Retry = () => Promise<void>;
-
-/**
  * Stop current streaming operation
  * Bound from AI SDK v5 chat hook - cancels in-flight requests
  */
@@ -175,7 +169,6 @@ export type SetCurrentParticipantIndex = (currentParticipantIndex: number) => vo
 export type SetError = (error: Error | null) => void;
 export type SetSendMessage = (fn?: SendMessage) => void;
 export type SetStartRound = (fn?: StartRound) => void;
-export type SetRetry = (fn?: Retry) => void;
 export type SetStop = (fn?: Stop) => void;
 export type SetChatSetMessages = (fn?: ChatSetMessages) => void;
 
@@ -244,14 +237,7 @@ export type ClearPreSearchTracking = (roundNumber: number) => void;
  */
 export type OnComplete = () => void;
 
-/**
- * Callback invoked when retry is triggered
- * @param roundNumber - The round number being retried
- */
-export type OnRetry = (roundNumber: number) => void;
-
 export type SetOnComplete = (callback?: OnComplete) => void;
-export type SetOnRetry = (callback?: OnRetry) => void;
 
 // ============================================================================
 // SCREEN ACTIONS (Screen mode and read-only state)
@@ -393,7 +379,6 @@ export type ThreadActionsType = {
   setError: SetError;
   setSendMessage: SetSendMessage;
   setStartRound: SetStartRound;
-  setRetry: SetRetry;
   setStop: SetStop;
   setChatSetMessages: SetChatSetMessages;
 };
@@ -426,7 +411,6 @@ export type TrackingActionsType = {
 
 export type CallbacksActionsType = {
   setOnComplete: SetOnComplete;
-  setOnRetry: SetOnRetry;
 };
 
 export type ScreenActionsType = {

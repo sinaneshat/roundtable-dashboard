@@ -7,20 +7,17 @@ import { useShallow } from 'zustand/react/shallow';
 import type { FeedbackType } from '@/api/core/enums';
 import { AnalysisStatuses } from '@/api/core/enums';
 import type { ChatMessage, ChatParticipant, ChatThread, ModeratorAnalysisPayload } from '@/api/routes/chat/schema';
-import { AvatarGroup } from '@/components/chat/avatar-group';
 import { ChatDeleteDialog } from '@/components/chat/chat-delete-dialog';
 import { ChatInput } from '@/components/chat/chat-input';
+import { ChatInputToolbarMenu } from '@/components/chat/chat-input-toolbar-menu';
 import { ChatThreadActions } from '@/components/chat/chat-thread-actions';
 import { ConversationModeModal } from '@/components/chat/conversation-mode-modal';
 import { ModelSelectionModal } from '@/components/chat/model-selection-modal';
-import { clearTriggeredAnalysesForRound } from '@/components/chat/moderator/moderator-analysis-stream';
 import { StreamingParticipantsLoader } from '@/components/chat/streaming-participants-loader';
 import { useThreadHeader } from '@/components/chat/thread-header-context';
 import { ThreadTimeline } from '@/components/chat/thread-timeline';
 import { UnifiedErrorBoundary } from '@/components/chat/unified-error-boundary';
-import { WebSearchToggle } from '@/components/chat/web-search-toggle';
 import { useChatStore } from '@/components/providers/chat-store-provider';
-import { Button } from '@/components/ui/button';
 import { useCustomRolesQuery, useThreadChangelogQuery, useThreadFeedbackQuery } from '@/hooks/queries/chat';
 import { useModelsQuery } from '@/hooks/queries/models';
 import type { TimelineItem } from '@/hooks/utils';
@@ -31,7 +28,6 @@ import {
   useThreadTimeline,
 } from '@/hooks/utils';
 import type { ChatModeId } from '@/lib/config/chat-modes';
-import { getChatModeById } from '@/lib/config/chat-modes';
 import { queryKeys } from '@/lib/data/query-keys';
 import { chatMessagesToUIMessages } from '@/lib/utils/message-transforms';
 import {
@@ -127,9 +123,7 @@ export default function ChatThreadScreen({
   const messages = useChatStore(s => s.messages);
   const isStreaming = useChatStore(s => s.isStreaming);
   const currentParticipantIndex = useChatStore(s => s.currentParticipantIndex);
-  const retryRound = useChatStore(s => s.retry);
   const stopStreaming = useChatStore(s => s.stop);
-  const setOnRetry = useChatStore(s => s.setOnRetry);
   const contextParticipants = useChatStore(s => s.participants);
   const preSearches = useChatStore(s => s.preSearches);
 
@@ -261,7 +255,6 @@ export default function ChatThreadScreen({
   const updateAnalysisData = useChatStore(s => s.updateAnalysisData);
   const updateAnalysisStatus = useChatStore(s => s.updateAnalysisStatus);
   const updateAnalysisError = useChatStore(s => s.updateAnalysisError);
-  const removePendingAnalysis = useChatStore(s => s.removeAnalysis);
 
   // ✅ SAFETY MECHANISM: Auto-complete stuck analyses after timeout
   // Prevents analyses stuck at 'streaming' from blocking new rounds
@@ -540,24 +533,6 @@ export default function ChatThreadScreen({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [thread.id]);
 
-  // Register retry handler (stable, no infinite loop)
-  useEffect(() => {
-    setOnRetry(() => (roundNumber: number) => {
-      // AI SDK v5 Pattern: Immediate state cleanup before streaming starts
-      actions.startRegeneration(roundNumber);
-      removePendingAnalysis(roundNumber);
-      clearTriggeredAnalysesForRound(roundNumber);
-      feedbackActions.clearRoundFeedback(roundNumber);
-      actions.setStreamingRoundNumber(null);
-    });
-
-    return () => {
-      setOnRetry(undefined);
-    };
-    // Only re-register when thread ID changes
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [thread.id]);
-
   // ✅ REMOVED: Virtualization removed, so streamingRoundNumber management not needed
   // Components stay mounted regardless of streaming state
   const handlePromptSubmit = useCallback(
@@ -586,7 +561,7 @@ export default function ChatThreadScreen({
         <div className="flex flex-col min-h-dvh relative">
           <div
             id="chat-scroll-container"
-            className="container max-w-3xl mx-auto px-3 sm:px-4 md:px-6 pt-0 pb-32 sm:pb-36 flex-1"
+            className="container max-w-3xl mx-auto px-2 sm:px-4 md:px-6 pt-0 pb-32 sm:pb-36 flex-1"
           >
             <ThreadTimeline
               timelineItems={messagesWithAnalysesAndChangelog}
@@ -635,7 +610,6 @@ export default function ChatThreadScreen({
                 // This eliminates race condition with server DB commit
               }}
               onActionClick={recommendedActions.handleActionClick}
-              onRetry={retryRound}
               preSearches={preSearches}
             />
 
@@ -660,7 +634,7 @@ export default function ChatThreadScreen({
             ref={inputContainerRef}
             className="sticky bottom-0 z-50 bg-gradient-to-t from-background via-background to-transparent pt-4 sm:pt-6 pb-3 sm:pb-4 mt-auto"
           >
-            <div className="container max-w-3xl mx-auto px-3 sm:px-4 md:px-6">
+            <div className="container max-w-3xl mx-auto px-2 sm:px-4 md:px-6">
               <ChatInput
                 value={inputValue}
                 onChange={setInputValue}
@@ -681,52 +655,16 @@ export default function ChatThreadScreen({
                       actions.setHasPendingConfigChanges(true);
                     }}
                 toolbar={(
-                  <>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      disabled={isRoundInProgress}
-                      onClick={isModelModalOpen.onTrue}
-                      className="h-9 rounded-2xl gap-1.5 text-xs relative px-3"
-                    >
-                      <span className="hidden xs:inline sm:inline">{t('models.aiModels')}</span>
-                      {selectedParticipants.length > 0 && (
-                        <AvatarGroup
-                          participants={selectedParticipants}
-                          allModels={allEnabledModels}
-                          maxVisible={3}
-                          size="sm"
-                        />
-                      )}
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      disabled={isRoundInProgress}
-                      onClick={isModeModalOpen.onTrue}
-                      className="h-9 rounded-2xl gap-1.5 text-xs relative px-3"
-                    >
-                      {(() => {
-                        const currentMode = getChatModeById(selectedMode || (thread.mode as ChatModeId));
-                        const ModeIcon = currentMode?.icon;
-                        return (
-                          <>
-                            {ModeIcon && <ModeIcon className="size-4" />}
-                            <span className="hidden xs:inline sm:inline">
-                              {currentMode?.label || t('modes.mode')}
-                            </span>
-                          </>
-                        );
-                      })()}
-                    </Button>
-                    <WebSearchToggle
-                      enabled={enableWebSearch}
-                      onToggle={threadActions.handleWebSearchToggle}
-                      disabled={isRoundInProgress}
-                    />
-                  </>
+                  <ChatInputToolbarMenu
+                    selectedParticipants={selectedParticipants}
+                    allModels={allEnabledModels}
+                    onOpenModelModal={isModelModalOpen.onTrue}
+                    selectedMode={selectedMode || (thread.mode as ChatModeId)}
+                    onOpenModeModal={isModeModalOpen.onTrue}
+                    enableWebSearch={enableWebSearch}
+                    onWebSearchToggle={threadActions.handleWebSearchToggle}
+                    disabled={isRoundInProgress}
+                  />
                 )}
               />
             </div>

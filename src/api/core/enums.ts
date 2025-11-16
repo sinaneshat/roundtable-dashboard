@@ -62,6 +62,12 @@ export const ThreadStatusSchema = z.enum(THREAD_STATUSES).openapi({
 
 export type ThreadStatus = z.infer<typeof ThreadStatusSchema>;
 
+export const ThreadStatuses = {
+  ACTIVE: 'active' as const,
+  ARCHIVED: 'archived' as const,
+  DELETED: 'deleted' as const,
+} as const;
+
 // ============================================================================
 // CHANGELOG
 // ============================================================================
@@ -258,6 +264,12 @@ export const HEALTH_STATUSES = ['healthy', 'degraded', 'unhealthy'] as const;
 export const HealthStatusSchema = z.enum(HEALTH_STATUSES);
 
 export type HealthStatus = z.infer<typeof HealthStatusSchema>;
+
+export const HealthStatuses = {
+  HEALTHY: 'healthy' as const,
+  DEGRADED: 'degraded' as const,
+  UNHEALTHY: 'unhealthy' as const,
+} as const;
 
 // ============================================================================
 // STREAMING EVENT TYPE

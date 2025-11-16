@@ -89,7 +89,7 @@ import { getParticipantId, getRoundNumber } from '@/lib/utils/metadata';
 
 import type { ApplyRecommendedActionOptions } from './actions/recommended-action-application';
 import { applyRecommendedAction as applyRecommendedActionLogic } from './actions/recommended-action-application';
-import type { Retry, SendMessage, StartRound } from './store-action-types';
+import type { SendMessage, StartRound } from './store-action-types';
 import {
   ANALYSIS_DEFAULTS,
   CALLBACKS_DEFAULTS,
@@ -548,8 +548,6 @@ const createThreadSlice: StateCreator<
     set({ sendMessage: fn }, false, 'thread/setSendMessage'),
   setStartRound: (fn?: StartRound) =>
     set({ startRound: fn }, false, 'thread/setStartRound'),
-  setRetry: (fn?: Retry) =>
-    set({ retry: fn }, false, 'thread/setRetry'),
   setStop: (fn?: (() => void)) =>
     set({ stop: fn }, false, 'thread/setStop'),
   setChatSetMessages: (fn?: ((messages: UIMessage[]) => void)) =>
@@ -662,8 +660,6 @@ const createCallbacksSlice: StateCreator<
 
   setOnComplete: (callback?: () => void) =>
     set({ onComplete: callback }, false, 'callbacks/setOnComplete'),
-  setOnRetry: (callback?: (roundNumber: number) => void) =>
-    set({ onRetry: callback }, false, 'callbacks/setOnRetry'),
 });
 
 /**

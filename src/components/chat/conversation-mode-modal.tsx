@@ -77,19 +77,14 @@ export function ConversationModeModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         glass={true}
-        className={cn(className)}
-        style={{
-          width: '90vw',
-          minWidth: '320px',
-          maxWidth: '440px',
-        }}
+        className={cn('sm:max-w-md', className)}
       >
         <DialogHeader glass>
           <DialogTitle className="text-xl">{t('title')}</DialogTitle>
           <DialogDescription>{t('subtitle')}</DialogDescription>
         </DialogHeader>
 
-        <DialogBody glass className="flex flex-col gap-2.5 py-4 px-6">
+        <DialogBody glass className="flex flex-col gap-2.5 py-4">
           {enabledModes.map((mode) => {
             const ModeIcon = mode.icon;
             const isSelected = selectedMode === mode.id;

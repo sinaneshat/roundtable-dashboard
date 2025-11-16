@@ -25,7 +25,7 @@ export default function ChatOverviewLoading() {
     <div className="relative min-h-svh flex flex-col overflow-x-hidden">
       {/* Main content - flows naturally, page scrolls */}
       {/* ✅ MATCHES ChatOverviewScreen.tsx:403 - pb-32 for consistent spacing */}
-      <div className="container max-w-3xl mx-auto px-4 sm:px-6 pt-12 pb-32 flex-1 relative">
+      <div className="container max-w-3xl mx-auto px-2 sm:px-4 md:px-6 pt-12 pb-32 flex-1 relative">
         {/* Hero Section */}
         <div className="py-6 sm:py-8">
           <div className="flex flex-col items-center gap-4 sm:gap-5 md:gap-6 text-center relative">
@@ -33,7 +33,7 @@ export default function ChatOverviewLoading() {
             {/* Logo */}
             <div className="relative h-20 w-20 xs:h-24 xs:w-24 sm:h-28 sm:w-28 md:h-32 md:w-32 lg:h-36 lg:w-36 z-10" style={{ overflow: 'visible' }}>
               <RadialGlow
-                size={2400}
+                size={800}
                 offsetY={40}
                 duration={15}
                 animate
@@ -87,7 +87,7 @@ export default function ChatOverviewLoading() {
       {/* Sticky input container - stays at bottom within content flow */}
       {/* ✅ MATCHES ChatOverviewScreen.tsx:585 - pt-6 pb-4 for consistent spacing */}
       <div className="sticky bottom-0 z-50 bg-gradient-to-t from-background via-background to-transparent pt-6 pb-4 mt-auto">
-        <div className="container max-w-3xl mx-auto px-4 sm:px-6">
+        <div className="container max-w-3xl mx-auto px-2 sm:px-4 md:px-6">
           <div className={cn(chatGlass.inputBox, 'rounded-lg shadow-2xl p-4')}>
             <Skeleton className="h-20 w-full bg-white/10" />
           </div>

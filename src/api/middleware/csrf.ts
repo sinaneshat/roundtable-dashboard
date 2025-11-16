@@ -28,9 +28,13 @@ export const csrfProtection: MiddlewareHandler<ApiEnv> = async (c: Context<ApiEn
     return next();
   }
 
-  const appUrl = c.env.NEXT_PUBLIC_APP_URL;
-  const webappEnv = c.env.NEXT_PUBLIC_WEBAPP_ENV || 'local';
-  const isDevelopment = webappEnv === 'local' || c.env.NODE_ENV === 'development';
+  // CRITICAL FIX: Use process.env fallback for Next.js dev mode
+  // In Cloudflare Workers: c.env has the bindings
+  // In Next.js dev: c.env may be empty, use process.env
+  const appUrl = c.env?.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_APP_URL;
+  const webappEnv = c.env?.NEXT_PUBLIC_WEBAPP_ENV || process.env.NEXT_PUBLIC_WEBAPP_ENV || 'local';
+  const nodeEnv = c.env?.NODE_ENV || process.env.NODE_ENV;
+  const isDevelopment = webappEnv === 'local' || nodeEnv === 'development';
 
   const allowedOrigins: string[] = [];
 

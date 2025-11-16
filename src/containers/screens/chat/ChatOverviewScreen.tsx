@@ -9,11 +9,11 @@ import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
-import { MessageRoles } from '@/api/core/enums';
+import { AnalysisStatuses, MessageRoles } from '@/api/core/enums';
 import type { ModeratorAnalysisPayload } from '@/api/routes/chat/schema';
-import { AvatarGroup } from '@/components/chat/avatar-group';
 import type { ParticipantConfig } from '@/components/chat/chat-form-schemas';
 import { ChatInput } from '@/components/chat/chat-input';
+import { ChatInputToolbarMenu } from '@/components/chat/chat-input-toolbar-menu';
 import { ChatMessageList } from '@/components/chat/chat-message-list';
 import { ChatQuickStart } from '@/components/chat/chat-quick-start';
 import { ConversationModeModal } from '@/components/chat/conversation-mode-modal';
@@ -22,9 +22,7 @@ import { RoundAnalysisCard } from '@/components/chat/moderator/round-analysis-ca
 import { StreamingParticipantsLoader } from '@/components/chat/streaming-participants-loader';
 import { useThreadHeader } from '@/components/chat/thread-header-context';
 import { UnifiedErrorBoundary } from '@/components/chat/unified-error-boundary';
-import { WebSearchToggle } from '@/components/chat/web-search-toggle';
 import { useChatStore } from '@/components/providers/chat-store-provider';
-import { Button } from '@/components/ui/button';
 import { RadialGlow } from '@/components/ui/radial-glow';
 import { BRAND } from '@/constants/brand';
 import { useCustomRolesQuery } from '@/hooks/queries/chat';
@@ -36,11 +34,10 @@ import {
   useModelLookup,
 } from '@/hooks/utils';
 import { useSession } from '@/lib/auth/client';
-import { getChatModeById, getDefaultChatMode } from '@/lib/config/chat-modes';
+import { getDefaultChatMode } from '@/lib/config/chat-modes';
 // ✅ REMOVED: queryKeys - no longer invalidating queries on completion
 import { showApiErrorToast } from '@/lib/toast';
 // ✅ REMOVED: waitForIdleOrRender - was a timeout workaround (2s) for race conditions
-import { isRoundIncomplete } from '@/lib/utils/analysis-utils';
 import {
   useChatFormActions,
   useOverviewActions,
@@ -119,12 +116,7 @@ export default function ChatOverviewScreen() {
   // ============================================================================
 
   // AI SDK actions
-  const { retry: retryRound, stop: stopStreaming } = useChatStore(
-    useShallow(s => ({
-      retry: s.retry,
-      stop: s.stop,
-    })),
-  );
+  const stopStreaming = useChatStore(s => s.stop);
 
   // Form actions - direct setters (non-consolidated)
   const { setInputValue, setSelectedMode, setSelectedParticipants, removeParticipant } = useChatStore(
@@ -138,9 +130,6 @@ export default function ChatOverviewScreen() {
 
   // Overview reset operation
   const resetToOverview = useChatStore(s => s.resetToOverview);
-
-  // Regeneration action
-  const retry = useChatStore(s => s.retry);
 
   // Refs for tracking
   const hasSentInitialPromptRef = useRef(false);
@@ -287,10 +276,10 @@ export default function ChatOverviewScreen() {
   // - Analysis streaming (happens after AI streaming completes)
   // This caused unnecessary API calls polling /pre-searches and /analyses during streaming
   const hasActivePreSearch = preSearches.some(
-    ps => ps.status === 'pending' || ps.status === 'streaming',
+    ps => ps.status === AnalysisStatuses.PENDING || ps.status === AnalysisStatuses.STREAMING,
   );
   const hasStreamingAnalysis = analyses.some(
-    a => a.status === 'pending' || a.status === 'streaming',
+    a => a.status === AnalysisStatuses.PENDING || a.status === AnalysisStatuses.STREAMING,
   );
 
   useScreenInitialization({
@@ -327,20 +316,6 @@ export default function ChatOverviewScreen() {
   );
 
   // Check if first round is incomplete
-  // ✅ 0-BASED: First round is round 0
-  const firstRoundIncomplete = useMemo(() => {
-    if (!analyses[0] || analyses[0].roundNumber !== 0) {
-      return false;
-    }
-    return isRoundIncomplete(messages, contextParticipants, 0);
-  }, [messages, contextParticipants, analyses]);
-
-  // Handle retry for incomplete/failed rounds
-  const handleRetryRound = useCallback((_roundNumber: number) => {
-    // For overview mode, retry is same as regenerating round 1
-    retry?.();
-  }, [retry]);
-
   const currentStreamingParticipant = contextParticipants[currentParticipantIndex] || null;
 
   // React 19 Pattern: Initialize thread header on mount, update when title changes
@@ -481,7 +456,7 @@ export default function ChatOverviewScreen() {
 
         <div
           id="chat-scroll-container"
-          className={`container max-w-3xl mx-auto px-3 sm:px-4 md:px-6 flex-1 relative z-10 ${
+          className={`container max-w-3xl mx-auto px-2 sm:px-4 md:px-6 flex-1 relative z-10 ${
             showInitialUI
               ? '!flex !flex-col !justify-start !items-center pt-4'
               : 'pt-0 pb-32 sm:pb-36'
@@ -565,43 +540,16 @@ export default function ChatOverviewScreen() {
                       quotaCheckType="threads"
                       onRemoveParticipant={isStreaming ? undefined : removeParticipant}
                       toolbar={(
-                        <>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            disabled={isStreaming}
-                            onClick={() => modelModal.onTrue()}
-                            className="h-9 rounded-2xl gap-1.5 text-xs px-3"
-                          >
-                            <span>{t('chat.models.aiModels')}</span>
-                            <AvatarGroup participants={selectedParticipants} allModels={allEnabledModels} size="sm" maxVisible={3} />
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            disabled={isStreaming}
-                            onClick={() => modeModal.onTrue()}
-                            className="h-9 rounded-2xl gap-1.5 text-xs px-3"
-                          >
-                            {(() => {
-                              const currentMode = getChatModeById(selectedMode || getDefaultChatMode());
-                              const ModeIcon = currentMode?.icon;
-                              return (
-                                <>
-                                  {ModeIcon && <ModeIcon className="size-4" />}
-                                  <span>{currentMode?.label || t('chat.modes.mode')}</span>
-                                </>
-                              );
-                            })()}
-                          </Button>
-                          <WebSearchToggle
-                            enabled={enableWebSearch}
-                            onToggle={isStreaming ? undefined : formActions.handleWebSearchToggle}
-                            disabled={isStreaming}
-                          />
-                        </>
+                        <ChatInputToolbarMenu
+                          selectedParticipants={selectedParticipants}
+                          allModels={allEnabledModels}
+                          onOpenModelModal={() => modelModal.onTrue()}
+                          selectedMode={selectedMode || getDefaultChatMode()}
+                          onOpenModeModal={() => modeModal.onTrue()}
+                          enableWebSearch={enableWebSearch}
+                          onWebSearchToggle={formActions.handleWebSearchToggle}
+                          disabled={isStreaming}
+                        />
                       )}
                     />
                   </motion.div>
@@ -619,7 +567,7 @@ export default function ChatOverviewScreen() {
                 exit={{ opacity: 0, y: -20 }}
                 transition={{ duration: 0.3 }}
               >
-                <UnifiedErrorBoundary context="message-list" onReset={retryRound}>
+                <UnifiedErrorBoundary context="message-list">
                   {/* Split messages for correct ordering: user → pre-search → assistant */}
                   <ChatMessageList
                     messages={messages.filter((m: UIMessage) => m.role === MessageRoles.USER)}
@@ -695,13 +643,9 @@ export default function ChatOverviewScreen() {
 
                 {streamError && !isStreaming && (
                   <div className="flex justify-center mt-4">
-                    <button
-                      type="button"
-                      onClick={retryRound}
-                      className="px-4 py-2 text-sm font-medium rounded-lg bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 transition-colors touch-manipulation active:scale-95"
-                    >
-                      {t('chat.errors.retry')}
-                    </button>
+                    <div className="px-4 py-2 text-sm text-destructive">
+                      {streamError instanceof Error ? streamError.message : String(streamError)}
+                    </div>
                   </div>
                 )}
 
@@ -729,7 +673,7 @@ export default function ChatOverviewScreen() {
               transition={{ duration: 0.4, ease: 'easeOut' }}
               className="sticky bottom-0 z-50 bg-gradient-to-t from-background via-background to-transparent pt-4 sm:pt-6 pb-3 sm:pb-4 mt-auto"
             >
-              <div className="container max-w-3xl mx-auto px-3 sm:px-4 md:px-6">
+              <div className="container max-w-3xl mx-auto px-2 sm:px-4 md:px-6">
                 <ChatInput
                   value={inputValue}
                   onChange={setInputValue}
@@ -742,43 +686,16 @@ export default function ChatOverviewScreen() {
                   quotaCheckType="threads"
                   onRemoveParticipant={isStreaming ? undefined : removeParticipant}
                   toolbar={(
-                    <>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        disabled={isStreaming}
-                        onClick={() => modelModal.onTrue()}
-                        className="h-9 rounded-2xl gap-1.5 text-xs px-3"
-                      >
-                        <span>{t('chat.models.aiModels')}</span>
-                        <AvatarGroup participants={selectedParticipants} allModels={allEnabledModels} size="sm" maxVisible={3} />
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        disabled={isStreaming}
-                        onClick={() => modeModal.onTrue()}
-                        className="h-9 rounded-2xl gap-1.5 text-xs px-3"
-                      >
-                        {(() => {
-                          const currentMode = getChatModeById(selectedMode || getDefaultChatMode());
-                          const ModeIcon = currentMode?.icon;
-                          return (
-                            <>
-                              {ModeIcon && <ModeIcon className="size-4" />}
-                              <span>{currentMode?.label || t('chat.modes.mode')}</span>
-                            </>
-                          );
-                        })()}
-                      </Button>
-                      <WebSearchToggle
-                        enabled={enableWebSearch}
-                        onToggle={isStreaming ? undefined : formActions.handleWebSearchToggle}
-                        disabled={isStreaming}
-                      />
-                    </>
+                    <ChatInputToolbarMenu
+                      selectedParticipants={selectedParticipants}
+                      allModels={allEnabledModels}
+                      onOpenModelModal={() => modelModal.onTrue()}
+                      selectedMode={selectedMode || getDefaultChatMode()}
+                      onOpenModeModal={() => modeModal.onTrue()}
+                      enableWebSearch={enableWebSearch}
+                      onWebSearchToggle={formActions.handleWebSearchToggle}
+                      disabled={isStreaming}
+                    />
                   )}
                 />
               </div>

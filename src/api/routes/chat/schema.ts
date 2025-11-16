@@ -1153,34 +1153,8 @@ export type MessageWithParticipant = z.infer<typeof MessageWithParticipantSchema
 // ============================================================================
 
 /**
- * Web search flat display component props schema
+ * Web search display component props schema
  * Single source of truth for component prop validation
- */
-export const WebSearchFlatDisplayPropsSchema = z.object({
-  results: z.array(WebSearchResultItemSchema),
-  answer: z.string().nullable().optional().describe('AI-generated answer summary'),
-  className: z.string().optional(),
-  meta: WebSearchResultMetaSchema.optional(),
-  complexity: WebSearchComplexitySchema.optional(),
-}).openapi('WebSearchFlatDisplayProps');
-
-export type WebSearchFlatDisplayProps = z.infer<typeof WebSearchFlatDisplayPropsSchema>;
-
-/**
- * Search result item component props schema
- * Used for rendering individual search results
- */
-export const SearchResultItemPropsSchema = z.object({
-  result: WebSearchResultItemSchema,
-  index: RoundNumberSchema,
-  totalCount: z.number().int().positive(),
-}).openapi('SearchResultItemProps');
-
-export type SearchResultItemProps = z.infer<typeof SearchResultItemPropsSchema>;
-
-/**
- * Web search display component props schema (card-based variant)
- * Single source of truth for card-based display component prop validation
  */
 export const WebSearchDisplayPropsSchema = z.object({
   results: z.array(WebSearchResultItemSchema),

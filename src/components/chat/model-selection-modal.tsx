@@ -218,20 +218,16 @@ export function ModelSelectionModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         glass={true}
-        className={cn(
-          'w-[95vw] sm:w-[90vw] max-w-[512px] overflow-hidden',
-          className,
-        )}
+        className={cn('sm:max-w-3xl', className)}
       >
-        {/* Fixed Header Section */}
-        <div className="space-y-2 sm:space-y-3 shrink-0">
-          <DialogHeader glass className="px-3 sm:px-4 md:px-6 pt-3 sm:pt-4 md:pt-6 pb-2 sm:pb-3">
-            <DialogTitle className="text-base sm:text-lg md:text-xl">{t('title')}</DialogTitle>
-            <DialogDescription className="text-xs sm:text-sm">{t('subtitle')}</DialogDescription>
-          </DialogHeader>
+        <DialogHeader glass>
+          <DialogTitle className="text-xl">{t('title')}</DialogTitle>
+          <DialogDescription>{t('subtitle')}</DialogDescription>
+        </DialogHeader>
 
-          {/* Search Input */}
-          <DialogBody glass className="relative px-3 sm:px-4 md:px-6 pb-4">
+        {/* Search Input */}
+        <DialogBody className="relative py-4 bg-black/30 px-4 sm:px-5 md:px-6">
+          <div className="relative w-full">
             <input
               ref={searchInputRef}
               type="text"
@@ -239,10 +235,10 @@ export function ModelSelectionModal({
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
               className={cn(
-                'flex h-9 w-full rounded-md border border-input bg-transparent py-1 text-base shadow-xs transition-[color,box-shadow] outline-none',
+                'flex h-9 w-full rounded-md border border-input bg-transparent py-1 text-sm shadow-xs transition-[color,box-shadow] outline-none',
                 'placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground dark:bg-input/30',
                 'focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]',
-                'disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm',
+                'disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50',
                 searchQuery ? 'pl-3 pr-9' : 'px-3',
               )}
             />
@@ -262,23 +258,23 @@ export function ModelSelectionModal({
                 </button>
               </div>
             )}
-          </DialogBody>
-        </div>
+          </div>
+        </DialogBody>
 
         {/* Scrollable Model List */}
-        <DialogBody glass className="h-[50vh] sm:h-[320px] max-h-[400px] border-t border-white/5 overflow-hidden">
-          <ScrollArea className="h-full w-full max-w-[512px]">
+        <DialogBody className="h-[420px] border-t border-white/5 bg-black/30 !px-0">
+          <ScrollArea className="h-full w-full">
             {groupedModels.length === 0
               ? (
-                  <div className="flex flex-col items-center justify-center py-8 sm:py-12 text-center px-3 sm:px-4 md:px-6">
+                  <div className="flex flex-col items-start justify-center py-12 px-4">
                     <p className="text-sm text-muted-foreground">{tModels('noModelsFound')}</p>
                   </div>
                 )
               : groupedModels.map((group, groupIndex) => (
-                  <div key={group.title} className="w-full max-w-[512px] min-w-0 overflow-hidden">
-                    <div className="sticky top-0 z-10 w-full max-w-[512px] overflow-hidden">
+                  <div key={group.title} className="w-full min-w-0">
+                    <div className="sticky top-0 z-10 w-full">
                       <div
-                        className={cn('bg-black/80 backdrop-blur-3xl px-3 sm:px-4 md:px-6 py-2.5')}
+                        className={cn('bg-black/80 backdrop-blur-3xl px-4 py-2.5')}
                         style={{
                           ...heavyGlassCardStyles,
                         }}
@@ -294,22 +290,22 @@ export function ModelSelectionModal({
                             {group.title}
                           </span>
                           {groupIndex === 0 && selectedCount > 0 && (
-                            <div className="flex items-center gap-1 sm:gap-2 shrink-0">
-                              <Badge variant="default" className="text-[9px] sm:text-[10px] px-1 sm:px-1.5 py-0 h-3.5 sm:h-4">
+                            <div className="flex items-center gap-2 shrink-0">
+                              <Badge variant="default" className="text-[10px] px-1.5 py-0 h-4">
                                 {selectedCount}
                                 /
                                 {maxModels}
                               </Badge>
-                              <span className="text-[9px] sm:text-[10px] opacity-70 hidden sm:inline whitespace-nowrap">{tModels('dragToReorder')}</span>
+                              <span className="text-[10px] opacity-70 hidden sm:inline whitespace-nowrap">{tModels('dragToReorder')}</span>
                             </div>
                           )}
                           {groupIndex === 1 && (
-                            <Badge variant="secondary" className="text-[9px] sm:text-[10px] px-1 sm:px-1.5 py-0 h-3.5 sm:h-4 shrink-0">
+                            <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 shrink-0">
                               {tModels('topModels')}
                             </Badge>
                           )}
                           {groupIndex > 1 && (
-                            <span className="text-[9px] sm:text-[10px] opacity-80 shrink-0 whitespace-nowrap">
+                            <span className="text-[10px] opacity-80 shrink-0 whitespace-nowrap">
                               {group.models.length}
                               {' '}
                               {group.models.length === 1 ? tModels('model') : tModels('models')}
@@ -330,7 +326,7 @@ export function ModelSelectionModal({
                               const otherModels = orderedModels.filter(om => om.participant === null);
                               onReorder([...reordered, ...otherModels]);
                             }}
-                            className="block w-full min-w-0 max-w-[512px] overflow-hidden"
+                            className="flex flex-col gap-2 w-full px-4 py-2"
                           >
                             {group.models.map(orderedModel => (
                               <ModelItem
@@ -351,7 +347,7 @@ export function ModelSelectionModal({
                           </Reorder.Group>
                         )
                       : (
-                          <div className="block w-full min-w-0 max-w-[512px] overflow-hidden">
+                          <div className="flex flex-col gap-2 w-full px-4 py-2">
                             {group.models.map(orderedModel => (
                               <ModelItem
                                 key={orderedModel.model.id}
@@ -375,8 +371,7 @@ export function ModelSelectionModal({
           </ScrollArea>
         </DialogBody>
 
-        {/* Fixed Footer Section */}
-        {children && <div className="px-3 sm:px-4 md:px-6 pb-4 shrink-0">{children}</div>}
+        {children}
       </DialogContent>
     </Dialog>
   );

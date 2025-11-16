@@ -265,7 +265,6 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
   // ✅ QUOTA INVALIDATION: Use refs to capture latest functions and avoid circular deps
   const sendMessageRef = useRef(chat.sendMessage);
   const startRoundRef = useRef(chat.startRound);
-  const retryRef = useRef(chat.retry);
   const stopRef = useRef(chat.stop);
   const setMessagesRef = useRef(chat.setMessages);
 
@@ -273,10 +272,9 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
   useEffect(() => {
     sendMessageRef.current = chat.sendMessage;
     startRoundRef.current = chat.startRound;
-    retryRef.current = chat.retry;
     stopRef.current = chat.stop;
     setMessagesRef.current = chat.setMessages;
-  }, [chat.sendMessage, chat.startRound, chat.retry, chat.stop, chat.setMessages]);
+  }, [chat.sendMessage, chat.startRound, chat.stop, chat.setMessages]);
 
   // ✅ CRITICAL FIX: Register chat hook functions with store
   // The pending message effect (line 440) needs access to sendMessage from store state
@@ -288,11 +286,6 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
     currentState.setStartRound(chat.startRound
       ? async () => {
         chat.startRound();
-      }
-      : undefined);
-    currentState.setRetry(chat.retry
-      ? async () => {
-        chat.retry();
       }
       : undefined);
     currentState.setStop(chat.stop);
@@ -501,17 +494,12 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
     return startRoundRef.current();
   }, []) as () => Promise<void>; // Empty deps = stable reference
 
-  const retryWithPromise = useCallback(async () => {
-    retryRef.current();
-  }, []); // Empty deps = stable reference
-
   // Sync callbacks to store ONCE on mount only
   // Callbacks have empty deps so they're stable - no need to sync on every change
   useEffect(() => {
     storeRef.current?.setState({
       sendMessage: sendMessageWithQuotaInvalidation,
       startRound: startRoundWithQuotaInvalidation,
-      retry: retryWithPromise,
       stop: stopRef.current,
       chatSetMessages: setMessagesRef.current,
       // NOTE: Reactive values (messages, isStreaming, currentParticipantIndex) are synced

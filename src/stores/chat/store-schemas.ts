@@ -49,7 +49,6 @@ import type {
   MarkAnalysisCreated,
   MarkPreSearchTriggered,
   OnComplete,
-  OnRetry,
   PrepareForNewMessage,
   RemoveAnalysis,
   RemoveParticipant,
@@ -62,8 +61,6 @@ import type {
   ResetToNewChat,
   ResetToOverview,
   ResetUI,
-  Retry,
-  SendMessage,
   SetAnalyses,
   SetChatSetMessages,
   SetCreatedThreadId,
@@ -84,13 +81,11 @@ import type {
   SetIsWaitingForChangelog,
   SetMessages,
   SetOnComplete,
-  SetOnRetry,
   SetParticipants,
   SetPendingFeedback,
   SetPendingMessage,
   SetPreSearches,
   SetRegeneratingRoundNumber,
-  SetRetry,
   SetScreenMode,
   SetSelectedMode,
   SetSelectedParticipants,
@@ -102,8 +97,6 @@ import type {
   SetThread,
   SetWaitingToStartStreaming,
   StartRegeneration,
-  StartRound,
-  Stop,
   UpdateAnalysisData,
   UpdateAnalysisError,
   UpdateAnalysisStatus,
@@ -144,13 +137,8 @@ export const ScreenModeSchema = z.enum(['overview', 'thread', 'public']);
 // ============================================================================
 
 // Schema for AI SDK callback functions - typed with z.custom<T>()
-const SendMessageFnSchema = z.custom<SendMessage>();
-const StartRoundFnSchema = z.custom<StartRound>();
-const RetryFnSchema = z.custom<Retry>();
-const StopFnSchema = z.custom<Stop>();
 const ChatSetMessagesFnSchema = z.custom<ChatSetMessages>();
 const OnCompleteFnSchema = z.custom<OnComplete>();
-const OnRetryFnSchema = z.custom<OnRetry>();
 
 // ============================================================================
 // FORM SLICE SCHEMAS
@@ -273,10 +261,9 @@ export const ThreadStateSchema = z.object({
   isStreaming: z.boolean(),
   currentParticipantIndex: z.number(),
   error: z.custom<Error | null>(),
-  sendMessage: SendMessageFnSchema.optional(),
-  startRound: StartRoundFnSchema.optional(),
-  retry: RetryFnSchema.optional(),
-  stop: StopFnSchema.optional(),
+  sendMessage: z.custom<((content: string) => Promise<void>) | undefined>().optional(),
+  startRound: z.custom<(() => Promise<void>) | undefined>().optional(),
+  stop: z.custom<(() => void) | undefined>().optional(),
   chatSetMessages: ChatSetMessagesFnSchema.optional(),
 });
 
@@ -289,7 +276,6 @@ export const ThreadActionsSchema = z.object({
   setError: z.custom<SetError>(),
   setSendMessage: z.custom<SetSendMessage>(),
   setStartRound: z.custom<SetStartRound>(),
-  setRetry: z.custom<SetRetry>(),
   setStop: z.custom<SetStop>(),
   setChatSetMessages: z.custom<SetChatSetMessages>(),
 });
@@ -368,12 +354,10 @@ export const TrackingSliceSchema = z.intersection(TrackingStateSchema, TrackingA
 
 export const CallbacksStateSchema = z.object({
   onComplete: OnCompleteFnSchema.optional(),
-  onRetry: OnRetryFnSchema.optional(),
 });
 
 export const CallbacksActionsSchema = z.object({
   setOnComplete: z.custom<SetOnComplete>(),
-  setOnRetry: z.custom<SetOnRetry>(),
 });
 
 export const CallbacksSliceSchema = z.intersection(CallbacksStateSchema, CallbacksActionsSchema);

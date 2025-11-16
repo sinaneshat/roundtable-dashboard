@@ -7,7 +7,7 @@ import { useState } from 'react';
 import type { WebSearchDisplayProps } from '@/api/routes/chat/schema';
 import { LLMAnswerDisplay } from '@/components/chat/llm-answer-display';
 import { WebSearchImageGallery } from '@/components/chat/web-search-image-gallery';
-import { WebSearchResultCard } from '@/components/chat/web-search-result-card';
+import { WebSearchResultItem } from '@/components/chat/web-search-result-item';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -15,14 +15,10 @@ import { Card } from '@/components/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/ui/cn';
 
-// Export the flat version as default (no nested cards)
-export { WebSearchFlatDisplay as default } from './web-search-flat-display';
-
-// Card-based display component (alternative to flat display)
+// Card-based display component
 export function WebSearchDisplay({
   results,
   className,
@@ -30,10 +26,21 @@ export function WebSearchDisplay({
   answer,
   isStreaming = false,
   requestId,
-}: WebSearchDisplayProps & { isStreaming?: boolean; requestId?: string }) {
+  query,
+  autoParameters,
+}: WebSearchDisplayProps & {
+  isStreaming?: boolean;
+  requestId?: string;
+  query?: string;
+  autoParameters?: {
+    topic?: string;
+    timeRange?: string;
+    searchDepth?: string;
+    reasoning?: string;
+  };
+}) {
   const t = useTranslations('chat.tools.webSearch');
   const [isOpen, setIsOpen] = useState(true);
-  const [viewMode, setViewMode] = useState<'cards' | 'compact'>('cards');
 
   // Show loading state while streaming
   if (isStreaming && (!results || results.length === 0)) {
@@ -198,24 +205,57 @@ export function WebSearchDisplay({
                   transition={{ duration: 0.2 }}
                   className="border-t border-border/50"
                 >
-                  {/* View mode toggle */}
-                  <div className="p-3 border-b border-border/30 bg-muted/30">
-                    <Tabs value={viewMode} onValueChange={v => setViewMode(v as 'cards' | 'compact')}>
-                      <TabsList className="grid w-full max-w-xs grid-cols-2">
-                        <TabsTrigger value="cards">
-                          <Globe className="size-4 mr-2" />
-                          Cards View
-                        </TabsTrigger>
-                        <TabsTrigger value="compact">
-                          <Search className="size-4 mr-2" />
-                          Compact View
-                        </TabsTrigger>
-                      </TabsList>
-                    </Tabs>
-                  </div>
-
                   {/* Results display */}
                   <div className="p-4 space-y-4">
+                    {/* Search Query Display */}
+                    {query && (
+                      <div className="flex items-start gap-2 p-3 rounded-lg bg-muted/30 border border-border/40">
+                        <div className="flex-shrink-0 pt-0.5">
+                          <div className="size-6 rounded-full bg-primary/10 flex items-center justify-center">
+                            <Globe className="size-3.5 text-primary" />
+                          </div>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-medium text-muted-foreground mb-1">Search Query</p>
+                          <p className="text-sm font-medium text-foreground">
+                            &quot;
+                            {query}
+                            &quot;
+                          </p>
+                          {autoParameters?.reasoning && (
+                            <p className="text-xs text-muted-foreground/80 mt-1.5 italic">{autoParameters.reasoning}</p>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Auto-detected Parameters */}
+                    {autoParameters && (autoParameters.topic || autoParameters.searchDepth || autoParameters.timeRange) && (
+                      <div className="flex flex-wrap gap-1.5">
+                        {autoParameters.topic && (
+                          <Badge variant="secondary" className="text-xs">
+                            Topic:
+                            {' '}
+                            {autoParameters.topic}
+                          </Badge>
+                        )}
+                        {autoParameters.searchDepth && (
+                          <Badge variant="secondary" className="text-xs">
+                            Depth:
+                            {' '}
+                            {autoParameters.searchDepth}
+                          </Badge>
+                        )}
+                        {autoParameters.timeRange && (
+                          <Badge variant="secondary" className="text-xs">
+                            Time:
+                            {' '}
+                            {autoParameters.timeRange}
+                          </Badge>
+                        )}
+                      </div>
+                    )}
+
                     {/* LLM Answer - Display prominently at top with streaming support */}
                     {(answer || isStreaming) && <LLMAnswerDisplay answer={answer ?? null} isStreaming={isStreaming} />}
 
@@ -223,59 +263,15 @@ export function WebSearchDisplay({
                     {hasImages && <WebSearchImageGallery results={successfulResults} />}
 
                     {/* Search Results */}
-                    {viewMode === 'cards'
-                      ? (
-                          <div className="space-y-4">
-                            {successfulResults.map((result, index) => (
-                              <WebSearchResultCard
-                                key={result.url}
-                                result={result}
-                                index={index}
-                                defaultExpanded={index === 0 && hasFullContent}
-                              />
-                            ))}
-                          </div>
-                        )
-                      : (
-                          <div className="space-y-2">
-                            {successfulResults.map((result, index) => (
-                              <motion.div
-                                key={result.url}
-                                initial={{ opacity: 0, x: -20 }}
-                                animate={{ opacity: 1, x: 0 }}
-                                transition={{ delay: index * 0.03 }}
-                                className="p-3 rounded-md border border-border/30 bg-card/50 hover:bg-card/80 transition-colors"
-                              >
-                                <div className="flex items-start gap-3">
-                                  <Badge variant="outline" className="text-xs mt-0.5">
-                                    {index + 1}
-                                  </Badge>
-                                  <div className="flex-1 min-w-0 space-y-1">
-                                    <h4 className="text-sm font-medium line-clamp-1">
-                                      {result.title}
-                                    </h4>
-                                    <a
-                                      href={result.url}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="text-xs text-primary hover:underline truncate block"
-                                    >
-                                      {result.domain}
-                                    </a>
-                                    <p className="text-xs text-muted-foreground line-clamp-2">
-                                      {result.excerpt || result.content}
-                                    </p>
-                                    {result.fullContent && (
-                                      <Badge variant="secondary" className="text-xs">
-                                        Full content available
-                                      </Badge>
-                                    )}
-                                  </div>
-                                </div>
-                              </motion.div>
-                            ))}
-                          </div>
-                        )}
+                    <div className="space-y-0">
+                      {successfulResults.map((result, index) => (
+                        <WebSearchResultItem
+                          key={result.url}
+                          result={result}
+                          showDivider={index < successfulResults.length - 1}
+                        />
+                      ))}
+                    </div>
 
                     {/* Error display */}
                     {hasErrors && (

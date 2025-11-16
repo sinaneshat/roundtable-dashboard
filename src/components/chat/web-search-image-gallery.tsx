@@ -135,7 +135,7 @@ export function WebSearchImageGallery({ results, className }: WebSearchImageGall
 
       {/* Image Preview Dialog - Enhanced with AI descriptions */}
       <Dialog open={!!selectedImage} onOpenChange={() => setSelectedImage(null)}>
-        <DialogContent className="max-w-5xl max-h-[90vh]">
+        <DialogContent className="w-[calc(100vw-2.5rem)] sm:w-[calc(100vw-3rem)] max-w-4xl max-h-[90vh]">
           <DialogHeader>
             <DialogTitle className="line-clamp-2 pr-8">{selectedImage?.title}</DialogTitle>
             <DialogDescription className="flex items-center gap-2 mt-2">

@@ -5,8 +5,9 @@ import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
-import { Dialog, DialogBody, DialogContent, DialogHeader } from '@/components/ui/dialog';
+import { Dialog, DialogBody, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { VisuallyHidden } from '@/components/ui/visually-hidden';
 import { useThreadsQuery } from '@/hooks/queries/chat';
 import { useDebouncedValue } from '@/hooks/utils';
 import { cn } from '@/lib/ui/cn';
@@ -34,26 +35,24 @@ function SearchResultItem({
       href={href}
       onClick={onClose}
       className={cn(
-        'flex items-center gap-3 px-4 py-3 hover:bg-accent/50 transition-colors cursor-pointer',
-        selectedIndex === index && 'bg-accent',
+        'flex items-center gap-3 mx-2 my-1 px-3 py-2.5 rounded-full transition-all duration-200',
+        'hover:bg-white/10 active:scale-[0.98]',
+        selectedIndex === index ? 'bg-white/15 shadow-sm' : 'bg-transparent',
       )}
       onMouseEnter={() => {
         onSelect(index);
       }}
     >
-      <div className="flex-1 min-w-0 overflow-hidden" style={{ maxWidth: '36rem' }}>
-        <p
-          className="text-sm font-medium truncate overflow-hidden text-ellipsis whitespace-nowrap"
-          style={{ maxWidth: '36rem' }}
-        >
+      <div className="flex-1 min-w-0 overflow-hidden">
+        <p className="text-sm font-medium truncate text-foreground">
           {thread.title}
         </p>
-        <p className="text-xs text-muted-foreground truncate overflow-hidden text-ellipsis whitespace-nowrap">
+        <p className="text-xs text-muted-foreground truncate">
           {new Date(thread.updatedAt).toLocaleDateString()}
         </p>
       </div>
       {thread.isFavorite && (
-        <div className="size-2 rounded-full bg-yellow-500" />
+        <div className="size-2 rounded-full bg-yellow-500 shrink-0" />
       )}
     </Link>
   );
@@ -210,30 +209,43 @@ export function CommandSearch({ isOpen, onClose }: CommandSearchProps) {
         ref={modalRef}
         glass={true}
         showCloseButton={false}
-        className="max-w-2xl p-0 gap-0"
+        className="!max-w-2xl p-0 gap-0"
+        style={{
+          width: 'calc(100vw - 2.5rem)',
+          maxWidth: '672px',
+        }}
       >
         {/* Fixed Header Section */}
-        <DialogHeader glass className="!flex-row items-center gap-3">
-          <Search className="size-5 text-muted-foreground" />
+        <DialogHeader className="flex flex-row items-center gap-3 bg-black/40 px-4 sm:px-5 md:px-6 py-4">
+          <VisuallyHidden>
+            <DialogTitle>{t('chat.searchChats')}</DialogTitle>
+            <DialogDescription>{t('chat.searchChatsDescription')}</DialogDescription>
+          </VisuallyHidden>
+          <Search className="size-5 text-muted-foreground shrink-0" />
           <input
             ref={searchInputRef}
             type="text"
             placeholder={t('chat.searchChats')}
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
-            className="flex-1 bg-transparent border-none outline-none text-sm placeholder:text-muted-foreground"
+            className="flex-1 min-w-0 bg-transparent border-none outline-none text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-0"
+            autoComplete="off"
+            autoCorrect="off"
+            autoCapitalize="off"
+            spellCheck="false"
           />
           <button
             type="button"
             onClick={handleClose}
-            className="size-8 flex items-center justify-center hover:bg-white/10 rounded-md transition-colors"
+            className="size-9 shrink-0 flex items-center justify-center hover:bg-white/10 rounded-lg transition-colors"
+            aria-label={t('actions.close')}
           >
-            <X className="size-4" />
+            <X className="size-4.5 text-muted-foreground" />
           </button>
         </DialogHeader>
 
         {/* Scrollable Results Section */}
-        <DialogBody glass className="h-[400px] border-t border-white/5">
+        <DialogBody className="h-[400px] border-t border-white/5 bg-black/30">
           <ScrollArea ref={scrollAreaRef} className="h-full">
             {isLoading && !threads.length
               ? (
@@ -243,7 +255,7 @@ export function CommandSearch({ isOpen, onClose }: CommandSearchProps) {
                 )
               : threads.length > 0
                 ? (
-                    <div>
+                    <div className="py-2">
                       {threads.map((thread, index) => (
                         <SearchResultItem
                           key={thread.id}
@@ -271,19 +283,19 @@ export function CommandSearch({ isOpen, onClose }: CommandSearchProps) {
         </DialogBody>
 
         {/* Fixed Footer Section */}
-        <div className="flex items-center gap-4 px-6 py-3 border-t border-white/5 text-xs text-muted-foreground shrink-0">
-          <div className="flex items-center gap-1">
-            <kbd className="px-1.5 py-0.5 rounded bg-background border border-border">↑</kbd>
-            <kbd className="px-1.5 py-0.5 rounded bg-background border border-border">↓</kbd>
-            <span className="ml-1">{t('navigation.navigation')}</span>
+        <div className="flex items-center gap-4 px-4 sm:px-6 py-3 border-t border-white/5 text-xs text-muted-foreground shrink-0 bg-black/30">
+          <div className="flex items-center gap-1.5">
+            <kbd className="px-2 py-1 rounded-md bg-white/5 border border-white/10 text-white/70 font-mono text-xs">↑</kbd>
+            <kbd className="px-2 py-1 rounded-md bg-white/5 border border-white/10 text-white/70 font-mono text-xs">↓</kbd>
+            <span className="ml-0.5 text-white/50">{t('navigation.navigation')}</span>
           </div>
-          <div className="flex items-center gap-1">
-            <kbd className="px-1.5 py-0.5 rounded bg-background border border-border">↵</kbd>
-            <span className="ml-1">{t('actions.select')}</span>
+          <div className="flex items-center gap-1.5">
+            <kbd className="px-2 py-1 rounded-md bg-white/5 border border-white/10 text-white/70 font-mono text-xs">↵</kbd>
+            <span className="ml-0.5 text-white/50">{t('actions.select')}</span>
           </div>
-          <div className="flex items-center gap-1">
-            <kbd className="px-1.5 py-0.5 rounded bg-background border border-border">Esc</kbd>
-            <span className="ml-1">{t('actions.close')}</span>
+          <div className="flex items-center gap-1.5">
+            <kbd className="px-2 py-1 rounded-md bg-white/5 border border-white/10 text-white/70 font-mono text-xs">Esc</kbd>
+            <span className="ml-0.5 text-white/50">{t('actions.close')}</span>
           </div>
         </div>
       </DialogContent>

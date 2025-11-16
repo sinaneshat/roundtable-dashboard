@@ -13,6 +13,7 @@ export { useDebouncedValue } from './use-debounced-value';
 export type { UseFlowLoadingOptions, UseFlowLoadingReturn } from './use-flow-loading';
 export { useFlowLoading } from './use-flow-loading';
 export { useFuzzySearch } from './use-fuzzy-search';
+export { useMediaQuery } from './use-media-query';
 export type { UseMessagePartsOptions, UseMessagePartsReturn } from './use-message-parts';
 export { useMessageParts } from './use-message-parts';
 export { useIsMobile } from './use-mobile';

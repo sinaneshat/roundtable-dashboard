@@ -83,7 +83,6 @@ export const THREAD_DEFAULTS = {
   // AI SDK methods
   sendMessage: undefined as ((content: string) => Promise<void>) | undefined,
   startRound: undefined as (() => Promise<void>) | undefined,
-  retry: undefined as (() => Promise<void>) | undefined,
   stop: undefined as (() => void) | undefined,
   chatSetMessages: undefined as ((messages: UIMessage[] | ((messages: UIMessage[]) => UIMessage[])) => void) | undefined,
 } as const;
@@ -128,7 +127,6 @@ export const TRACKING_DEFAULTS = {
 
 export const CALLBACKS_DEFAULTS = {
   onComplete: undefined as (() => void) | undefined,
-  onRetry: undefined as ((roundNumber: number) => void) | undefined,
 } as const;
 
 // ============================================================================
@@ -178,7 +176,6 @@ export const COMPLETE_RESET_STATE = {
   error: THREAD_DEFAULTS.error,
   sendMessage: THREAD_DEFAULTS.sendMessage,
   startRound: THREAD_DEFAULTS.startRound,
-  retry: THREAD_DEFAULTS.retry,
   stop: THREAD_DEFAULTS.stop,
   chatSetMessages: THREAD_DEFAULTS.chatSetMessages,
   // Flags state
@@ -199,7 +196,6 @@ export const COMPLETE_RESET_STATE = {
   triggeredPreSearchRounds: TRACKING_DEFAULTS.triggeredPreSearchRounds,
   // Callbacks state
   onComplete: CALLBACKS_DEFAULTS.onComplete,
-  onRetry: CALLBACKS_DEFAULTS.onRetry,
   // Screen state
   screenMode: SCREEN_DEFAULTS.screenMode,
   isReadOnly: SCREEN_DEFAULTS.isReadOnly,
@@ -231,12 +227,10 @@ export const THREAD_RESET_STATE = {
   // AI SDK methods (thread-related)
   sendMessage: THREAD_DEFAULTS.sendMessage,
   startRound: THREAD_DEFAULTS.startRound,
-  retry: THREAD_DEFAULTS.retry,
   stop: THREAD_DEFAULTS.stop,
   chatSetMessages: THREAD_DEFAULTS.chatSetMessages,
   // Callbacks (included in thread reset)
   onComplete: CALLBACKS_DEFAULTS.onComplete,
-  onRetry: CALLBACKS_DEFAULTS.onRetry,
 } as const;
 
 /**

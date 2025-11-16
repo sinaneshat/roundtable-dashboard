@@ -1,6 +1,7 @@
 import type { RouteHandler } from '@hono/zod-openapi';
 
 import { createHandler, Responses } from '@/api/core';
+import { HealthStatuses } from '@/api/core/enums';
 import type { ApiEnv } from '@/api/types';
 import { getDbAsync } from '@/db';
 import { STATIC_CACHE_TAGS } from '@/db/cache/cache-tags';
@@ -17,7 +18,7 @@ export const healthHandler: RouteHandler<typeof healthRoute, ApiEnv> = createHan
     operationName: 'healthCheck',
   },
   async (c) => {
-    return Responses.health(c, 'healthy');
+    return Responses.health(c, HealthStatuses.HEALTHY);
   },
 );
 
@@ -46,11 +47,11 @@ export const detailedHealthHandler: RouteHandler<typeof detailedHealthRoute, Api
     };
 
     // Calculate overall status based on dependency health
-    const overallStatus = Object.values(dependencies).some(dep => dep.status === 'unhealthy')
-      ? 'unhealthy'
-      : Object.values(dependencies).some(dep => dep.status === 'degraded')
-        ? 'degraded'
-        : 'healthy';
+    const overallStatus = Object.values(dependencies).some(dep => dep.status === HealthStatuses.UNHEALTHY)
+      ? HealthStatuses.UNHEALTHY
+      : Object.values(dependencies).some(dep => dep.status === HealthStatuses.DEGRADED)
+        ? HealthStatuses.DEGRADED
+        : HealthStatuses.HEALTHY;
 
     const duration = Date.now() - startTime;
 
@@ -74,13 +75,13 @@ async function checkDatabase(_c: HealthCheckContext) {
     await db.run('SELECT 1');
 
     return {
-      status: 'healthy' as const,
+      status: HealthStatuses.HEALTHY,
       message: 'Database is responsive',
       duration: Date.now() - startTime,
     };
   } catch (error) {
     return {
-      status: 'unhealthy' as const,
+      status: HealthStatuses.UNHEALTHY,
       message: `Database connection failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
       duration: Date.now() - startTime,
     };
@@ -102,19 +103,19 @@ function checkEnvironment(c: HealthCheckContext) {
 
     if (missingVars.length > 0) {
       return {
-        status: 'degraded' as const,
+        status: HealthStatuses.DEGRADED,
         message: `Missing environment variables: ${missingVars.join(', ')}`,
         details: { missingVars },
       };
     }
 
     return {
-      status: 'healthy' as const,
+      status: HealthStatuses.HEALTHY,
       message: 'All required environment variables are present',
     };
   } catch (error) {
     return {
-      status: 'unhealthy' as const,
+      status: HealthStatuses.UNHEALTHY,
       message: `Environment check failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
     };
   }

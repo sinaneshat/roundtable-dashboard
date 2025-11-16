@@ -30,11 +30,11 @@ const sizeClasses: Record<ModalSize, string> = {
 };
 
 const sizeStyles: Record<ModalSize, React.CSSProperties> = {
-  sm: { width: '90vw', minWidth: '320px', maxWidth: '384px' }, // Small - Simple forms
-  md: { width: '90vw', minWidth: '320px', maxWidth: '448px' }, // Medium - Default
-  lg: { width: '90vw', minWidth: '320px', maxWidth: '672px' }, // Large - Complex content
-  xl: { width: '95vw', minWidth: '320px', maxWidth: '896px' }, // Extra Large - Pricing tables
-  full: { width: '95vw', minWidth: '320px', maxWidth: '1152px' }, // Full - Maximum width
+  sm: { width: 'calc(100vw - 2.5rem)', minWidth: '280px', maxWidth: '384px' }, // Small - Simple forms, 20px margin per side
+  md: { width: 'calc(100vw - 2.5rem)', minWidth: '280px', maxWidth: '448px' }, // Medium - Default, 20px margin per side
+  lg: { width: 'calc(100vw - 2.5rem)', minWidth: '280px', maxWidth: '672px' }, // Large - Complex content, 20px margin per side
+  xl: { width: 'calc(100vw - 3rem)', minWidth: '280px', maxWidth: '896px' }, // Extra Large - Pricing tables, 24px margin per side
+  full: { width: 'calc(100vw - 3rem)', minWidth: '280px', maxWidth: '1152px' }, // Full - Maximum width, 24px margin per side
 };
 
 /**
@@ -85,7 +85,7 @@ export function BaseModal({
         }}
       >
         {/* Fixed Header */}
-        <DialogHeader className={cn((useScrollArea || !preventScroll) && 'px-6 pt-6 pb-4 shrink-0 bg-black/50 backdrop-blur-lg')}>
+        <DialogHeader className={cn((useScrollArea || !preventScroll) && 'shrink-0 bg-black/50 backdrop-blur-lg')}>
           <DialogTitle>{title}</DialogTitle>
           {description && <DialogDescription>{description}</DialogDescription>}
         </DialogHeader>
@@ -94,7 +94,7 @@ export function BaseModal({
         {useScrollArea
           ? (
               <ScrollArea className={cn('border-t border-white/10 bg-black/50 backdrop-blur-lg')} style={{ height: scrollAreaHeight }}>
-                <div className="px-6 py-4">
+                <div className="px-4 sm:px-5 md:px-6 py-3 sm:py-4">
                   {children}
                 </div>
               </ScrollArea>
@@ -103,8 +103,8 @@ export function BaseModal({
               <div
                 className={cn(
                   'flex-1 bg-black/50 backdrop-blur-lg',
-                  !preventScroll && 'overflow-y-auto px-6',
-                  preventScroll && 'px-6',
+                  !preventScroll && 'overflow-y-auto px-4 sm:px-5 md:px-6',
+                  preventScroll && 'px-4 sm:px-5 md:px-6',
                 )}
               >
                 {children}
@@ -113,12 +113,12 @@ export function BaseModal({
 
         {/* Fixed footer */}
         {footer && (
-          <div className="flex justify-end gap-2 px-6 py-4 border-t shrink-0 bg-black/50 backdrop-blur-lg">
+          <div className="flex justify-end gap-2 px-4 sm:px-5 md:px-6 py-3 sm:py-4 border-t shrink-0 bg-black/50 backdrop-blur-lg">
             {footer}
           </div>
         )}
 
-        {!preventScroll && !footer && !useScrollArea && <div className="pb-6" />}
+        {!preventScroll && !footer && !useScrollArea && <div className="pb-4 sm:pb-5 md:pb-6" />}
       </DialogContent>
     </Dialog>
   );
