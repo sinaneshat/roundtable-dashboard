@@ -115,13 +115,13 @@ export function ThreadTimeline({
 
   // ✅ VIRTUALIZATION: Window-level virtualization with streaming protection
   // Reduces DOM nodes from ~100+ messages to ~10-15 visible items for performance
-  // ✅ RELAXED OVERSCAN: Increased from 5 to 15 to prevent text collision during fast scrolling
+  // ✅ MOBILE OPTIMIZED: Hook automatically increases overscan to 25+ on touch devices
   const ESTIMATE_SIZE = 400; // Estimated height per timeline item
   const { virtualItems, totalSize, bottomPadding, scrollMargin, measureElement } = useVirtualizedTimeline({
     timelineItems,
     scrollContainerId,
     estimateSize: ESTIMATE_SIZE,
-    overscan: 15, // ✅ INCREASED: 15 items above/below viewport prevents overlapping during fast scrolls
+    overscan: 15, // Desktop: 15 items | Mobile: 25+ (auto-adjusted by hook)
     bottomPadding: 200,
     streamingRounds, // Pass streaming rounds to prevent unmounting during streams
   });
@@ -133,6 +133,8 @@ export function ThreadTimeline({
         height: `${totalSize}px`,
         width: '100%',
         paddingBottom: `${bottomPadding}px`,
+        // ✅ MOBILE FIX: Add will-change for better mobile transform performance
+        willChange: 'height',
       }}
     >
       {virtualItems.map((virtualItem) => {
@@ -160,6 +162,8 @@ export function ThreadTimeline({
               left: 0,
               width: '100%',
               transform: `translateY(${virtualItem.start - scrollMargin}px)`,
+              // ✅ MOBILE FIX: Add will-change for better mobile transform performance
+              willChange: 'transform',
             }}
           >
             {item.type === 'changelog' && item.data.length > 0 && (

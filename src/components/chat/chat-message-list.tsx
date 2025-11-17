@@ -611,7 +611,7 @@ export const ChatMessageList = memo(
     });
 
     return (
-      <>
+      <div className="touch-pan-y">
         {messageGroups.map((group, groupIndex) => {
           const roundNumber = group.type === 'user-group'
             ? getRoundNumber(group.messages[0]?.message.metadata) ?? 0
@@ -757,7 +757,7 @@ export const ChatMessageList = memo(
 
           return null;
         })}
-      </>
+      </div>
     );
   },
   // Custom comparison function to optimize re-renders

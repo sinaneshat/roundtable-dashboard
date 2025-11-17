@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { getRoundNumber } from '@/lib/utils/metadata';
 
+import { useTouchDevice } from './use-touch-device';
 import type { TimelineItem } from './useThreadTimeline';
 
 /**
@@ -36,6 +37,7 @@ export type UseVirtualizedTimelineOptions = {
    * Number of items to render outside the visible viewport
    * Higher values = smoother scrolling but more DOM elements
    * Default: 10 (relaxed - renders 10 items above and below viewport for smooth fast scrolling)
+   * Mobile: 25+ recommended for fast touch scrolling to prevent text overlap
    * Previous: 1 (too aggressive, caused overlapping during fast scrolls)
    */
   overscan?: number;
@@ -180,7 +182,7 @@ export function useVirtualizedTimeline({
   timelineItems,
   scrollContainerId = 'chat-scroll-container',
   estimateSize = 400,
-  overscan = 10, // ✅ INCREASED from 1 to 10 for smoother fast scrolling
+  overscan = 10, // ✅ INCREASED from 1 to 10 for smoother fast scrolling (25+ on mobile)
   enabled = true,
   onScrollOffsetChange,
   enableSmoothScroll = true,
@@ -188,6 +190,9 @@ export function useVirtualizedTimeline({
   bottomPadding = 200,
   streamingRounds,
 }: UseVirtualizedTimelineOptions): UseVirtualizedTimelineResult {
+  // ✅ MOBILE FIX: Detect touch devices for mobile-specific optimizations
+  const isTouchDevice = useTouchDevice();
+
   // Track scroll container element for measuring scroll margin
   const scrollContainerRef = useRef<HTMLElement | null>(null);
   // Track current scroll animation
@@ -202,24 +207,48 @@ export function useVirtualizedTimeline({
   // This accounts for headers/toolbars above the scrollable content
   const [scrollMargin, setScrollMargin] = useState(0);
 
-  // Measure scroll margin when container changes
+  // ✅ MOBILE FIX: Measure scroll margin and recalculate on viewport changes
+  // Mobile keyboards and orientation changes require dynamic recalculation
   useEffect(() => {
-    const container = document.getElementById(scrollContainerId);
-    if (container) {
-      // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect, react-hooks/set-state-in-effect -- Measuring DOM element on mount
-      setScrollMargin(container.offsetTop || 0);
-    }
+    const measureScrollMargin = () => {
+      const container = document.getElementById(scrollContainerId);
+      if (container) {
+        // Use getBoundingClientRect for accurate positioning including transforms
+        const rect = container.getBoundingClientRect();
+        // Use rect.top instead of offsetTop for dynamic positioning
+        // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- Required for dynamic viewport measurement
+        setScrollMargin(Math.max(0, rect.top));
+      }
+    };
+
+    // Measure initially
+    measureScrollMargin();
+
+    // ✅ MOBILE FIX: Recalculate on window resize (handles orientation changes)
+    window.addEventListener('resize', measureScrollMargin);
+
+    // ✅ MOBILE FIX: Recalculate on visual viewport changes (keyboard open/close)
+    window.visualViewport?.addEventListener('resize', measureScrollMargin);
+
+    return () => {
+      window.removeEventListener('resize', measureScrollMargin);
+      window.visualViewport?.removeEventListener('resize', measureScrollMargin);
+    };
   }, [scrollContainerId]);
 
-  // Custom scroll function with smooth easing animation
+  // ✅ MOBILE FIX: Disable custom smooth scroll on touch devices
+  // Custom easing animations conflict with native mobile scroll momentum
+  // Touch devices expect instant response, not programmatic animations
   const scrollToFn: VirtualizerOptions<Window, Element>['scrollToFn'] = useCallback(
     (offset, canSmooth, _instance) => {
-      if (!enableSmoothScroll || !canSmooth) {
-        // Use default scroll behavior if smooth scroll disabled
+      // ✅ MOBILE FIX: Always use native scroll on touch devices
+      if (isTouchDevice || !enableSmoothScroll || !canSmooth) {
+        // Use default scroll behavior (native smooth scroll is fine on mobile)
         window.scrollTo({ top: offset, behavior: canSmooth ? 'smooth' : 'auto' });
         return;
       }
 
+      // Desktop only: Custom easing animation
       const duration = smoothScrollDuration;
       const start = window.scrollY;
       const startTime = (scrollingRef.current = Date.now());
@@ -242,7 +271,7 @@ export function useVirtualizedTimeline({
 
       requestAnimationFrame(run);
     },
-    [enableSmoothScroll, smoothScrollDuration],
+    [isTouchDevice, enableSmoothScroll, smoothScrollDuration],
   );
 
   // ✅ CRITICAL: Custom range extractor to prevent streaming items from being unmounted
@@ -315,16 +344,20 @@ export function useVirtualizedTimeline({
     [streamingRounds, timelineItems],
   );
 
+  // ✅ MOBILE FIX: Increase overscan significantly on touch devices
+  // Fast touch scrolling needs larger buffer to prevent text overlap
+  const effectiveOverscan = isTouchDevice ? Math.max(overscan, 25) : overscan;
+
   // Initialize window virtualizer
   const virtualizer = useWindowVirtualizer({
     count: timelineItems.length,
     estimateSize: () => estimateSize,
-    overscan,
+    overscan: effectiveOverscan,
     enabled,
     // Use computed scroll margin value
     scrollMargin,
-    // Custom scroll function for smooth easing
-    scrollToFn: enableSmoothScroll ? scrollToFn : undefined,
+    // Custom scroll function for smooth easing (disabled on mobile)
+    scrollToFn: enableSmoothScroll && !isTouchDevice ? scrollToFn : undefined,
     // ✅ CRITICAL: Custom range extractor prevents streaming items from unmounting
     rangeExtractor,
   });
@@ -383,17 +416,6 @@ export function useVirtualizedTimeline({
       onScrollOffsetChange(offset);
     }
   }, [virtualizer.scrollOffset, onScrollOffsetChange]);
-
-  // Handle window resize to recalculate scroll margin
-  useEffect(() => {
-    const handleResize = () => {
-      // Force virtualizer to recalculate with new scroll margin
-      virtualizer.measure();
-    };
-
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, [virtualizer]);
 
   return {
     virtualizer,

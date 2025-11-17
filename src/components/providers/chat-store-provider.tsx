@@ -81,6 +81,16 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
   const enableWebSearch = useStore(store, s => s.enableWebSearch);
   const createdThreadId = useStore(store, s => s.createdThreadId);
 
+  // ✅ CRITICAL FIX: Subscribe to state needed by pending message sender effect
+  // These subscriptions ensure effect re-runs when state changes
+  const pendingMessage = useStore(store, s => s.pendingMessage);
+  const expectedParticipantIds = useStore(store, s => s.expectedParticipantIds);
+  const hasSentPendingMessage = useStore(store, s => s.hasSentPendingMessage);
+  const isStreaming = useStore(store, s => s.isStreaming);
+  const isWaitingForChangelog = useStore(store, s => s.isWaitingForChangelog);
+  const screenMode = useStore(store, s => s.screenMode);
+  const preSearches = useStore(store, s => s.preSearches);
+
   // ✅ OPTIMIZATION: Error handling via callback (not store state)
   const handleError = useCallback((error: Error) => {
     showApiErrorToast('Chat error', error);
@@ -161,26 +171,8 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
     // ============================================================================
     // TASK 2: PENDING MESSAGE SEND (after changelog + pre-search)
     // ============================================================================
-    // Moved from store subscription (store.ts:991-1072)
-    // Provider can directly call sendMessage when conditions are met
-
-    const {
-      pendingMessage,
-      expectedParticipantIds,
-      hasSentPendingMessage,
-      isStreaming,
-      participants: storeParticipants,
-      sendMessage,
-      messages: storeMessages,
-      isWaitingForChangelog,
-      setHasSentPendingMessage,
-      setStreamingRoundNumber,
-      setHasPendingConfigChanges,
-      screenMode,
-      thread: storeThread,
-      enableWebSearch,
-      preSearches,
-    } = currentState;
+    // ✅ CRITICAL FIX: Now uses subscribed state from useStore hooks above
+    // This ensures effect re-runs when state changes (like pre-search status)
 
     // Guard: Only send on overview/thread screens (not public)
     if (screenMode === 'public') {
@@ -193,7 +185,7 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
     }
 
     // Compare participant model IDs
-    const currentModelIds = storeParticipants
+    const currentModelIds = participants
       .filter(p => p.isEnabled)
       .map(p => p.modelId)
       .sort()
@@ -214,7 +206,7 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
     // getCurrentRoundNumber returns 0 for empty messages (the current round we're in)
     // Adding 1 incorrectly makes first round = 1 instead of 0
     // calculateNextRoundNumber handles this correctly: -1 + 1 = 0 for first round
-    const newRoundNumber = calculateNextRoundNumber(storeMessages);
+    const newRoundNumber = calculateNextRoundNumber(messages);
 
     // ============================================================================
     // ✅ CRITICAL FIX: Create pre-search BEFORE participant streaming
@@ -234,7 +226,7 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
     // 4. Only when COMPLETE, proceed with sendMessage()
     //
     // REFERENCE: WEB_SEARCH_ORDERING_FIX_STRATEGY.md
-    const webSearchEnabled = storeThread?.enableWebSearch ?? enableWebSearch;
+    const webSearchEnabled = thread?.enableWebSearch ?? enableWebSearch;
     const preSearchForRound = preSearches.find(ps => ps.roundNumber === newRoundNumber);
 
     // ✅ STEP 1: Create pre-search if web search enabled and doesn't exist
@@ -243,7 +235,7 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
       queueMicrotask(() => {
         createPreSearch.mutateAsync({
           param: {
-            threadId: storeThread?.id || '',
+            threadId: thread?.id || '',
             roundNumber: newRoundNumber.toString(),
           },
           json: {
@@ -271,6 +263,9 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
     // ============================================================================
     // ✅ STEP 3: All conditions met - send message (participants will start)
     // ============================================================================
+    // Get setter functions from store (these don't change, so safe to call here)
+    const { setHasSentPendingMessage, setStreamingRoundNumber, setHasPendingConfigChanges, sendMessage } = store.getState();
+
     setHasSentPendingMessage(true);
     setStreamingRoundNumber(newRoundNumber);
     setHasPendingConfigChanges(false);
@@ -279,7 +274,23 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
     queueMicrotask(() => {
       sendMessage?.(pendingMessage);
     });
-  }, [store, createPreSearch]);
+  }, [
+    // ✅ CRITICAL FIX: Include all subscribed state in dependencies
+    // This ensures effect re-runs when any of these values change
+    pendingMessage,
+    expectedParticipantIds,
+    hasSentPendingMessage,
+    isStreaming,
+    participants,
+    messages,
+    isWaitingForChangelog,
+    screenMode,
+    thread,
+    enableWebSearch,
+    preSearches, // ← KEY FIX: Effect re-runs when pre-searches change!
+    createPreSearch,
+    store,
+  ]);
 
   // Initialize AI SDK hook with store state
   // ✅ CRITICAL FIX: Pass onComplete callback for immediate analysis triggering
@@ -538,101 +549,86 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
   // ✅ CRITICAL FIX: Watch for pending message conditions and trigger send
   // This replaces the removed store subscription (store.ts:991-1072)
   // handleComplete only fires after rounds complete, so we need this for new message submissions
-  const pendingMessage = useStore(store, s => s.pendingMessage);
-  const expectedParticipantIds = useStore(store, s => s.expectedParticipantIds);
-  const hasSentPendingMessage = useStore(store, s => s.hasSentPendingMessage);
-  const isStreaming = useStore(store, s => s.isStreaming);
-  const isWaitingForChangelog = useStore(store, s => s.isWaitingForChangelog);
-  const screenMode = useStore(store, s => s.screenMode);
-  const storeParticipantsForSend = useStore(store, s => s.participants);
-  const storePreSearchesForSend = useStore(store, s => s.preSearches);
+  // ✅ NOTE: Using state values from top-level useStore hooks (lines 86-92)
 
   useEffect(() => {
-    const currentState = store.getState();
-    const {
-      pendingMessage: statePendingMessage,
-      expectedParticipantIds: stateExpectedParticipantIds,
-      hasSentPendingMessage: stateHasSentPendingMessage,
-      isStreaming: stateIsStreaming,
-      participants: storeParticipants,
-      sendMessage,
-      messages: storeMessages,
-      isWaitingForChangelog: stateIsWaitingForChangelog,
-      setHasSentPendingMessage,
-      setStreamingRoundNumber,
-      setHasPendingConfigChanges,
-      screenMode: stateScreenMode,
-      thread: storeThread,
-      enableWebSearch: stateEnableWebSearch,
-      preSearches: statePreSearches,
-    } = currentState;
+    // ✅ CRITICAL FIX: Use subscribed state from top-level useStore hooks
+    // This ensures effect re-runs when state changes
 
     // Guard: Only send on overview/thread screens (not public)
-    if (stateScreenMode === 'public') {
+    if (screenMode === 'public') {
       return;
     }
 
     // Check if we should send pending message
-    if (!statePendingMessage || !stateExpectedParticipantIds || stateHasSentPendingMessage || stateIsStreaming) {
+    if (!pendingMessage || !expectedParticipantIds || hasSentPendingMessage || isStreaming) {
       return;
     }
 
     // ✅ CRITICAL FIX: Guard against sendMessage being undefined
     // The sendMessage callback wrapper always exists, but the underlying ref might not be ready
     // Check the ref directly to ensure AI SDK hook has initialized
+    const { sendMessage } = store.getState();
     if (!sendMessage || !sendMessageRef.current) {
       return; // Wait for sendMessage to be available
     }
 
     // Compare participant model IDs
-    const currentModelIds = storeParticipants
+    const currentModelIds = participants
       .filter(p => p.isEnabled)
       .map(p => p.modelId)
       .sort()
       .join(',');
-    const expectedModelIds = stateExpectedParticipantIds.sort().join(',');
+    const expectedModelIds = expectedParticipantIds.sort().join(',');
 
     if (currentModelIds !== expectedModelIds) {
       return;
     }
 
     // Check changelog wait state
-    if (stateIsWaitingForChangelog) {
+    if (isWaitingForChangelog) {
       return;
     }
 
-    // Calculate next round number (using shared utility for consistency)
-    // ✅ BUG FIX: Use calculateNextRoundNumber instead of getCurrentRoundNumber + 1
-    // getCurrentRoundNumber returns 0 for empty messages (the current round we're in)
-    // Adding 1 incorrectly makes first round = 1 instead of 0
-    // calculateNextRoundNumber handles this correctly: -1 + 1 = 0 for first round
-    const newRoundNumber = calculateNextRoundNumber(storeMessages);
+    // Calculate next round number
+    const newRoundNumber = calculateNextRoundNumber(messages);
 
-    // ✅ CRITICAL FIX: Wait for pre-search if it's PENDING or STREAMING
-    // ❌ REMOVED DEADLOCK: Don't wait for pre-search to exist before sending message
-    // Previous bug: Waited for pre-search to exist, but pre-search only created when sendMessage called
-    // New flow:
-    //   1. Send message immediately (backend creates PENDING pre-search during handling)
-    //   2. Orchestrator syncs pre-search to store
-    //   3. If pre-search is PENDING/STREAMING, participants wait for completion
-    //   4. When COMPLETE, participants start streaming
-    const webSearchEnabled = storeThread?.enableWebSearch ?? stateEnableWebSearch;
-    const preSearchForRound = statePreSearches.find(ps => ps.roundNumber === newRoundNumber);
+    // ============================================================================
+    // ✅ CRITICAL FIX: Create pre-search BEFORE participant streaming (SAME AS FIRST EFFECT)
+    // ============================================================================
+    const webSearchEnabled = thread?.enableWebSearch ?? enableWebSearch;
+    const preSearchForRound = preSearches.find(ps => ps.roundNumber === newRoundNumber);
 
-    // ✅ CORRECT: Only wait if pre-search exists AND is actively running
-    // Don't block if pre-search doesn't exist yet - backend will create it
+    // ✅ STEP 1: Create pre-search if web search enabled and doesn't exist
+    if (webSearchEnabled && !preSearchForRound) {
+      queueMicrotask(() => {
+        createPreSearch.mutateAsync({
+          param: {
+            threadId: thread?.id || '',
+            roundNumber: newRoundNumber.toString(),
+          },
+          json: {
+            userQuery: pendingMessage,
+          },
+        }).catch((error) => {
+          console.error('[ChatStoreProvider] Failed to create pre-search:', error);
+        });
+      });
+      return; // Wait for pre-search to be created
+    }
+
+    // ✅ STEP 2: Wait for pre-search execution if it's PENDING or STREAMING
     if (webSearchEnabled && preSearchForRound) {
-      // If pre-search exists and is PENDING or STREAMING, wait for completion
       if (preSearchForRound.status === AnalysisStatuses.PENDING || preSearchForRound.status === AnalysisStatuses.STREAMING) {
         return; // Don't send message yet - wait for pre-search to complete
       }
-
-      // If pre-search is COMPLETE or FAILED, continue with sending message
     }
 
     // ✅ CRITICAL FIX: Set flags and send message atomically
     // Set hasSentPendingMessage BEFORE calling sendMessage to prevent duplicate sends
     // If sendMessage fails, we'll catch the error and reset the flag
+    const { setHasSentPendingMessage, setStreamingRoundNumber, setHasPendingConfigChanges } = store.getState();
+
     setHasSentPendingMessage(true);
     setStreamingRoundNumber(newRoundNumber);
     setHasPendingConfigChanges(false);
@@ -643,7 +639,7 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
       // NOTE: We do NOT reset hasSentPendingMessage on error to prevent infinite retry loops
       // The flag is only reset when user submits a new message via prepareForNewMessage
       try {
-        const result = sendMessage(statePendingMessage);
+        const result = sendMessage(pendingMessage);
 
         // If sendMessage returns a promise, log rejection but don't reset flag
         if (result && typeof result.catch === 'function') {
@@ -658,6 +654,8 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
       }
     });
   }, [
+    // ✅ CRITICAL FIX: Include all subscribed state in dependencies
+    // This ensures effect re-runs when any of these values change
     store,
     pendingMessage,
     expectedParticipantIds,
@@ -665,8 +663,13 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
     isStreaming,
     isWaitingForChangelog,
     screenMode,
-    storeParticipantsForSend,
-    storePreSearchesForSend,
+    participants, // ← Fixed from storeParticipantsForSend
+    preSearches, // ← KEY FIX: Effect re-runs when pre-searches change!
+    messages,
+    thread,
+    enableWebSearch,
+    createPreSearch,
+    sendMessageRef,
   ]);
 
   // ✅ CLEANUP: Comprehensive navigation cleanup

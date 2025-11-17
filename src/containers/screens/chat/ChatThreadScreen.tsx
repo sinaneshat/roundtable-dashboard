@@ -665,7 +665,7 @@ export default function ChatThreadScreen({
           {/* Chat input container - sticky positioning with visual viewport support for keyboard */}
           <div
             ref={inputContainerRef}
-            className="sticky z-50 w-full"
+            className="sticky z-[100] w-full will-change-[bottom]"
             style={{
               bottom: `${keyboardOffset + 16}px`,
             }}

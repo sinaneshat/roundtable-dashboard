@@ -27,6 +27,7 @@ export { useSpeechRecognition } from './use-speech-recognition';
 export { useSyncedMessageRefs } from './use-synced-message-refs';
 export { useSyncedRefs } from './use-synced-refs';
 export { toast, useToast } from './use-toast';
+export { useTouchDevice } from './use-touch-device';
 export { useVisualViewportPosition } from './use-visual-viewport-position';
 export { useChatScroll } from './useChatScroll';
 export type { TimelineItem, UseThreadTimelineOptions } from './useThreadTimeline';

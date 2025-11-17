@@ -59,7 +59,7 @@ export function StickyHeader({
       className={cn(
         'sticky top-0',
         getZIndexClass(zIndex),
-        !noBackground && 'bg-gradient-to-t from-black/90 to-transparent',
+        !noBackground && 'backdrop-blur-md bg-gradient-to-r from-black/90 via-black/50 to-transparent',
         className,
       )}
       style={
