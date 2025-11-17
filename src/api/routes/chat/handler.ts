@@ -19,6 +19,7 @@ export {
   updateParticipantHandler,
 } from './handlers/participant.handler';
 export {
+  createPreSearchHandler,
   executePreSearchHandler,
   getThreadPreSearchesHandler,
 } from './handlers/pre-search.handler';

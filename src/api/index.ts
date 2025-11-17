@@ -75,6 +75,7 @@ import {
   addParticipantHandler,
   analyzeRoundHandler,
   createCustomRoleHandler,
+  createPreSearchHandler,
   createThreadHandler,
   deleteCustomRoleHandler,
   deleteParticipantHandler,
@@ -102,6 +103,7 @@ import {
   addParticipantRoute,
   analyzeRoundRoute,
   createCustomRoleRoute,
+  createPreSearchRoute,
   createThreadRoute,
   deleteCustomRoleRoute,
   deleteParticipantRoute,
@@ -493,6 +495,7 @@ const appRoutes = app
   .openapi(deleteCustomRoleRoute, deleteCustomRoleHandler) // Delete custom role template
   // Pre-search (protected, web search results)
   .openapi(getThreadPreSearchesRoute, getThreadPreSearchesHandler) // Get all pre-search results for thread
+  .openapi(createPreSearchRoute, createPreSearchHandler) // Create PENDING pre-search record (fixes web search ordering)
   .openapi(executePreSearchRoute, executePreSearchHandler) // Stream pre-search execution
   // Moderator Analysis (protected, backend-triggered only)
   .openapi(getThreadAnalysesRoute, getThreadAnalysesHandler) // Get persisted moderator analyses (read-only)

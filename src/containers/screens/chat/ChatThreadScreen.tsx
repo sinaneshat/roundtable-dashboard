@@ -26,6 +26,7 @@ import {
   useChatScroll,
   useFlowLoading,
   useThreadTimeline,
+  useVisualViewportPosition,
 } from '@/hooks/utils';
 import type { ChatModeId } from '@/lib/config/chat-modes';
 import { queryKeys } from '@/lib/data/query-keys';
@@ -501,6 +502,10 @@ export default function ChatThreadScreen({
   const { showLoader, loadingDetails } = useFlowLoading({ mode: 'thread' });
   const isAnalyzing = loadingDetails.isStreamingAnalysis;
 
+  // Visual viewport positioning for mobile keyboard handling
+  // Returns bottom offset to adjust for keyboard (0 when no keyboard, >0 when keyboard open)
+  const keyboardOffset = useVisualViewportPosition();
+
   // Get setSelectedMode and setEnableWebSearch for thread initialization
   const setSelectedMode = useChatStore(s => s.setSelectedMode);
   const setEnableWebSearch = useChatStore(s => s.setEnableWebSearch);
@@ -587,7 +592,7 @@ export default function ChatThreadScreen({
         <div className="flex flex-col min-h-dvh relative">
           <div
             id="chat-scroll-container"
-            className="container max-w-3xl mx-auto px-2 sm:px-4 md:px-6 pt-0 pb-32 sm:pb-36 flex-1"
+            className="container max-w-3xl mx-auto px-2 sm:px-4 md:px-6 pt-0 pb-[240px] flex-1"
           >
             <ThreadTimeline
               timelineItems={messagesWithAnalysesAndChangelog}
@@ -656,9 +661,14 @@ export default function ChatThreadScreen({
               </div>
             )}
           </div>
+
+          {/* Chat input container - sticky positioning with visual viewport support for keyboard */}
           <div
             ref={inputContainerRef}
-            className="md:sticky md:bottom-0 z-50 bg-gradient-to-t from-background via-background to-transparent pt-4 sm:pt-6 pb-3 sm:pb-4 md:pb-keyboard-safe mt-auto"
+            className="sticky z-50 w-full"
+            style={{
+              bottom: `${keyboardOffset + 16}px`,
+            }}
           >
             <div className="container max-w-3xl mx-auto px-2 sm:px-4 md:px-6">
               <ChatInput

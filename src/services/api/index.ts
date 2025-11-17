@@ -72,6 +72,8 @@ export {
 // ============================================================================
 
 export {
+  type CreatePreSearchRequest,
+  createPreSearchService,
   getThreadPreSearchesService,
   type PreSearchRequest,
 } from './chat-pre-search';

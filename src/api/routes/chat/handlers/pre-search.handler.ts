@@ -39,9 +39,96 @@ import type { ApiEnv } from '@/api/types';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db/schema';
 
-import type { executePreSearchRoute, getThreadPreSearchesRoute } from '../route';
+import type { createPreSearchRoute, executePreSearchRoute, getThreadPreSearchesRoute } from '../route';
 import type { GeneratedSearchQuery, WebSearchResult } from '../schema';
 import { PreSearchRequestSchema } from '../schema';
+
+// ============================================================================
+// POST Create Pre-Search Handler (Record Creation)
+// ============================================================================
+
+/**
+ * Create PENDING pre-search record
+ *
+ * **PURPOSE**: Fix web search ordering bug by creating pre-search record BEFORE participants stream
+ *
+ * **CRITICAL FLOW CHANGE**:
+ * OLD (Broken):
+ *   User sends message → Participant streaming starts → Pre-search created during streaming
+ *
+ * NEW (Fixed):
+ *   User sends message → Pre-search created (PENDING) → Search executes → Participants start
+ *
+ * **DATABASE-FIRST PATTERN** (matches thread.handler.ts:269-278):
+ * - Creates PENDING record immediately
+ * - Idempotent (returns existing if already exists)
+ * - Does NOT execute search (that happens via executePreSearchHandler)
+ * - Frontend calls this BEFORE calling sendMessage()
+ *
+ * **FLOW**:
+ * 1. Frontend detects user sent message with web search enabled
+ * 2. Frontend calls this endpoint → Creates PENDING record
+ * 3. Frontend waits for PENDING record to sync
+ * 4. PreSearchStream component triggers execution (PENDING → STREAMING)
+ * 5. Search completes (STREAMING → COMPLETE)
+ * 6. Frontend calls sendMessage() → Participants start
+ *
+ * **REFERENCE**: thread.handler.ts:269-278 (Round 0 pattern that works correctly)
+ */
+export const createPreSearchHandler: RouteHandler<typeof createPreSearchRoute, ApiEnv> = createHandler(
+  {
+    auth: 'session',
+    validateParams: ThreadRoundParamSchema,
+    validateBody: PreSearchRequestSchema,
+    operationName: 'createPreSearch',
+  },
+  async (c) => {
+    const { user } = c.auth();
+    const { threadId, roundNumber } = c.validated.params;
+    const { userQuery } = c.validated.body;
+    const db = await getDbAsync();
+
+    const roundNum = Number.parseInt(roundNumber, 10);
+    if (Number.isNaN(roundNum) || roundNum < 0) {
+      throw createError.badRequest('Invalid round number');
+    }
+
+    // Verify thread ownership and web search enabled
+    const thread = await verifyThreadOwnership(threadId, user.id, db);
+    if (!thread.enableWebSearch) {
+      throw createError.badRequest('Web search is not enabled for this thread');
+    }
+
+    // ✅ IDEMPOTENT: Check if record already exists
+    const existingSearch = await db.query.chatPreSearch.findFirst({
+      where: (fields, { and, eq: eqOp }) => and(
+        eqOp(fields.threadId, threadId),
+        eqOp(fields.roundNumber, roundNum),
+      ),
+    });
+
+    if (existingSearch) {
+      // Record already exists - return it (idempotent)
+      return Responses.ok(c, existingSearch);
+    }
+
+    // ✅ CREATE PENDING RECORD: This is the fix!
+    // Pre-search record MUST exist before participants start streaming
+    const [preSearch] = await db
+      .insert(tables.chatPreSearch)
+      .values({
+        id: ulid(),
+        threadId,
+        roundNumber: roundNum,
+        userQuery,
+        status: AnalysisStatuses.PENDING,
+        createdAt: new Date(),
+      })
+      .returning();
+
+    return Responses.ok(c, preSearch);
+  },
+);
 
 // ============================================================================
 // POST Pre-Search Handler (Streaming)

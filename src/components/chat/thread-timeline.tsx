@@ -117,7 +117,7 @@ export function ThreadTimeline({
   // Reduces DOM nodes from ~100+ messages to ~10-15 visible items for performance
   // ✅ RELAXED OVERSCAN: Increased from 5 to 15 to prevent text collision during fast scrolling
   const ESTIMATE_SIZE = 400; // Estimated height per timeline item
-  const { virtualItems, totalSizeWithPadding, measureElement } = useVirtualizedTimeline({
+  const { virtualItems, totalSize, bottomPadding, scrollMargin, measureElement } = useVirtualizedTimeline({
     timelineItems,
     scrollContainerId,
     estimateSize: ESTIMATE_SIZE,
@@ -130,7 +130,9 @@ export function ThreadTimeline({
     <div
       style={{
         position: 'relative',
-        minHeight: `${totalSizeWithPadding}px`,
+        height: `${totalSize}px`,
+        width: '100%',
+        paddingBottom: `${bottomPadding}px`,
       }}
     >
       {virtualItems.map((virtualItem) => {
@@ -157,9 +159,7 @@ export function ThreadTimeline({
               top: 0,
               left: 0,
               width: '100%',
-              transform: `translateY(${virtualItem.start}px)`,
-              minHeight: `${ESTIMATE_SIZE * 0.5}px`, // ✅ Minimum height prevents collapse during fast scrolls
-              paddingBottom: '8px', // ✅ Gap between items prevents text collision
+              transform: `translateY(${virtualItem.start - scrollMargin}px)`,
             }}
           >
             {item.type === 'changelog' && item.data.length > 0 && (

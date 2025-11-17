@@ -21,9 +21,55 @@ export type PreSearchRequest = InferRequestType<
   ApiClientType['chat']['threads'][':threadId']['rounds'][':roundNumber']['pre-search']['$post']
 >;
 
+export type CreatePreSearchRequest = InferRequestType<
+  ApiClientType['chat']['threads'][':threadId']['rounds'][':roundNumber']['pre-search']['create']['$post']
+>;
+
 // ============================================================================
 // Service Functions
 // ============================================================================
+
+/**
+ * Create PENDING pre-search record
+ *
+ * ✅ NEW: Fixes web search ordering bug
+ * ✅ IDEMPOTENT: Returns existing record if already exists
+ * ✅ USED BY: useCreatePreSearch mutation hook
+ *
+ * @param params - Request parameters
+ * @param params.param - Route parameters
+ * @param params.param.threadId - Thread ID
+ * @param params.param.roundNumber - Round number
+ * @param params.json - Request body
+ * @param params.json.userQuery - User query for web search
+ */
+export async function createPreSearchService(params: {
+  param: {
+    threadId: string;
+    roundNumber: string;
+  };
+  json: {
+    userQuery: string;
+  };
+}) {
+  const client = await createApiClient();
+
+  const response = await client.chat.threads[':threadId'].rounds[':roundNumber']['pre-search'].create.$post({
+    param: {
+      threadId: params.param.threadId,
+      roundNumber: params.param.roundNumber,
+    },
+    json: {
+      userQuery: params.json.userQuery,
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to create pre-search: ${response.statusText}`);
+  }
+
+  return response.json();
+}
 
 /**
  * Get all pre-search results for a thread

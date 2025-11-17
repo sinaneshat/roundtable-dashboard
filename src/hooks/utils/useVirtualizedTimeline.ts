@@ -113,6 +113,12 @@ export type UseVirtualizedTimelineResult = {
   bottomPadding: number;
 
   /**
+   * Scroll margin (offset from top of viewport)
+   * Must be subtracted from item transforms for correct positioning
+   */
+  scrollMargin: number;
+
+  /**
    * Measure function to attach to rendered elements
    * Required for dynamic sizing - call this on each rendered element's ref
    */
@@ -395,6 +401,7 @@ export function useVirtualizedTimeline({
     totalSize,
     totalSizeWithPadding,
     bottomPadding,
+    scrollMargin,
     measureElement,
     scrollToIndex,
     scrollToOffset,

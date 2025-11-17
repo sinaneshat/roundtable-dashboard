@@ -25,78 +25,12 @@ Object.defineProperty(globalThis, 'TextEncoder', {
 });
 
 // Mock next-intl for testing - MUST be in setupFiles for vi.mock() to work
-vi.mock('next-intl', () => {
-  // Translation map for common keys used in tests
-  const translationMap: Record<string, string | string[]> = {
-    strengths: 'strengths',
-    summary: 'summary',
-    // Moderator namespace translations
-    skillsComparison: 'Skills Comparison',
-    leaderboard: 'Leaderboard',
-    overallRating: 'Overall Rating',
-    rating: 'Rating',
-    outOfTen: 'out of 10',
-    rank: 'Rank #{rank}',
-    analyzeRound: 'Analyze Round',
-    analyzing: 'Analyzing',
-    roundAnalysis: 'Round {number} Analysis',
-    skillsMatrix: 'Skills Matrix',
-    areasForImprovement: 'Areas for Improvement',
-    conclusion: 'Conclusion',
-    keyInsights: 'Key Insights',
-    consensus: 'Points of Agreement',
-    consensusPoints: 'Points of Agreement',
-    divergentApproaches: 'Different Perspectives',
-    comparativeAnalysis: 'Comparative Analysis',
-    strengthsByCategory: 'Strengths by Category',
-    tradeoffs: 'Trade-offs & Considerations',
-    decisionFramework: 'Decision Framework',
-    criteriaToConsider: 'Criteria to Consider',
-    scenarioRecommendations: 'Scenario-Based Recommendations',
-    recommendedActions: 'Recommended Next Steps',
-    topPerformer: 'Top Performer',
-    participantNumber: 'Participant #{number}',
-    participants: 'Participants',
-    noParticipants: 'No participants to display',
-    noAnalysis: 'Click \'Analyze Round\' to get AI-powered insights on participant responses',
-    // Chat streaming namespace translations (arrays for rotating messages)
-    thinkingMessages: ['Thinking...', 'Consulting the AI...', 'Summoning wisdom...'],
-    analyzingMessages: ['Analyzing responses...', 'Preparing analysis...', 'Synthesizing insights...'],
-  };
-
-  // Create mock function that supports both regular strings and t.raw() for arrays
-  const mockTranslations = () => {
-    const t = (key: string) => {
-      const value = translationMap[key];
-      return typeof value === 'string' ? value : key;
-    };
-    // Add raw() method for accessing array values
-    t.raw = (key: string) => {
-      const value = translationMap[key];
-      return Array.isArray(value) ? value : [key];
-    };
-    return t;
-  };
-  const mockLocale = () => 'en';
-
-  return {
-    useTranslations: mockTranslations,
-    useLocale: mockLocale,
-    getTranslations: () => {
-      const t = (key: string) => {
-        const value = translationMap[key];
-        return typeof value === 'string' ? value : key;
-      };
-      t.raw = (key: string) => {
-        const value = translationMap[key];
-        return Array.isArray(value) ? value : [key];
-      };
-      return t;
-    },
-    // ✅ TYPE-SAFE: Mock NextIntlClientProvider with proper typing
-    NextIntlClientProvider: ({ children }: { children: unknown; locale?: string; messages?: unknown }) => children,
-  };
-});
+vi.mock('next-intl', () => ({
+  useTranslations: () => (key: string) => key,
+  useLocale: () => 'en',
+  getTranslations: () => (key: string) => key,
+  NextIntlClientProvider: ({ children }: { children: unknown; locale?: string; messages?: unknown }) => children,
+}));
 
 // Mock @opennextjs/cloudflare - ESM-only package
 vi.mock('@opennextjs/cloudflare', () => ({

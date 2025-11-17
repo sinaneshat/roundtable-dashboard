@@ -34,6 +34,7 @@ import { createContext, use, useCallback, useEffect, useRef } from 'react';
 import { useStore } from 'zustand';
 
 import { AnalysisStatuses, MessagePartTypes, MessageRoles } from '@/api/core/enums';
+import { useCreatePreSearchMutation } from '@/hooks/mutations';
 import { useMultiParticipantChat } from '@/hooks/utils';
 import { queryKeys } from '@/lib/data/query-keys';
 import { showApiErrorToast } from '@/lib/toast';
@@ -61,6 +62,9 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
   // Use ref for queryClient to avoid dependency loops in callbacks
   // queryClient from useQueryClient() is stable, so we only need to capture it once
   const queryClientRef = useRef(queryClient);
+
+  // ✅ NEW: Pre-search creation mutation (fixes web search ordering)
+  const createPreSearch = useCreatePreSearchMutation();
 
   // Official Zustand Pattern: Initialize store once per provider
   // Store ref initialization during render is intentional and safe
@@ -212,29 +216,61 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
     // calculateNextRoundNumber handles this correctly: -1 + 1 = 0 for first round
     const newRoundNumber = calculateNextRoundNumber(storeMessages);
 
-    // ✅ CRITICAL FIX: Wait for pre-search if it's PENDING or STREAMING
-    // ❌ REMOVED DEADLOCK: Don't wait for pre-search to exist before sending message
-    // Previous bug: Waited for pre-search to exist, but pre-search only created when sendMessage called
-    // New flow:
-    //   1. Send message immediately (backend creates PENDING pre-search during handling)
-    //   2. Orchestrator syncs pre-search to store
-    //   3. If pre-search is PENDING/STREAMING, participants wait for completion
-    //   4. When COMPLETE, participants start streaming
+    // ============================================================================
+    // ✅ CRITICAL FIX: Create pre-search BEFORE participant streaming
+    // ============================================================================
+    // This fixes the web search ordering bug where participants speak before search executes
+    //
+    // OLD FLOW (Broken):
+    //   User message → sendMessage() → Participant streaming → Pre-search created during streaming
+    //
+    // NEW FLOW (Fixed):
+    //   User message → Create PENDING pre-search → Execute search → COMPLETE → sendMessage()
+    //
+    // STEPS:
+    // 1. Check if web search enabled
+    // 2. If pre-search doesn't exist, create it (this effect will re-run after creation)
+    // 3. Wait for pre-search to complete (PENDING → STREAMING → COMPLETE)
+    // 4. Only when COMPLETE, proceed with sendMessage()
+    //
+    // REFERENCE: WEB_SEARCH_ORDERING_FIX_STRATEGY.md
     const webSearchEnabled = storeThread?.enableWebSearch ?? enableWebSearch;
     const preSearchForRound = preSearches.find(ps => ps.roundNumber === newRoundNumber);
 
-    // ✅ CORRECT: Only wait if pre-search exists AND is actively running
-    // Don't block if pre-search doesn't exist yet - backend will create it
+    // ✅ STEP 1: Create pre-search if web search enabled and doesn't exist
+    if (webSearchEnabled && !preSearchForRound) {
+      // Create PENDING pre-search record
+      queueMicrotask(() => {
+        createPreSearch.mutateAsync({
+          param: {
+            threadId: storeThread?.id || '',
+            roundNumber: newRoundNumber.toString(),
+          },
+          json: {
+            userQuery: pendingMessage,
+          },
+        }).catch((error) => {
+          console.error('[ChatStoreProvider] Failed to create pre-search:', error);
+          // If pre-search creation fails, continue with message anyway (degraded UX)
+          // This prevents total failure - participants will stream without search context
+        });
+      });
+
+      return; // Wait for pre-search to be created (orchestrator will sync it, effect will re-run)
+    }
+
+    // ✅ STEP 2: Wait for pre-search execution if it's PENDING or STREAMING
     if (webSearchEnabled && preSearchForRound) {
-      // If pre-search exists and is PENDING or STREAMING, wait for completion
       if (preSearchForRound.status === AnalysisStatuses.PENDING || preSearchForRound.status === AnalysisStatuses.STREAMING) {
         return; // Don't send message yet - wait for pre-search to complete
       }
 
-      // If pre-search is COMPLETE or FAILED, continue with sending message
+      // Pre-search is COMPLETE or FAILED - continue with sending message
     }
 
-    // All conditions met - send the message
+    // ============================================================================
+    // ✅ STEP 3: All conditions met - send message (participants will start)
+    // ============================================================================
     setHasSentPendingMessage(true);
     setStreamingRoundNumber(newRoundNumber);
     setHasPendingConfigChanges(false);
@@ -243,7 +279,7 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
     queueMicrotask(() => {
       sendMessage?.(pendingMessage);
     });
-  }, [store]);
+  }, [store, createPreSearch]);
 
   // Initialize AI SDK hook with store state
   // ✅ CRITICAL FIX: Pass onComplete callback for immediate analysis triggering

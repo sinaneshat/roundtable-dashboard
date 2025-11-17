@@ -11,12 +11,10 @@ import type { RouteHandler } from '@hono/zod-openapi';
 import type { UIMessage } from 'ai';
 import { RetryError, streamText } from 'ai';
 import { and, asc, eq } from 'drizzle-orm';
-import { ulid } from 'ulid';
 
 import { executeBatch } from '@/api/common/batch-operations';
 import { createError, structureAIProviderError } from '@/api/common/error-handling';
 import { createHandler } from '@/api/core';
-import { AnalysisStatuses } from '@/api/core/enums';
 import { saveStreamedMessage } from '@/api/services/message-persistence.service';
 import { getModelById } from '@/api/services/models-config.service';
 import { initializeOpenRouter, openRouterService } from '@/api/services/openrouter.service';
@@ -125,75 +123,32 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
     const currentRoundNumber = roundResult.roundNumber;
 
     // =========================================================================
-    // STEP 3.5: ✅ CRITICAL FIX - Create PENDING pre-search BEFORE streaming
+    // STEP 3.5: ✅ PRE-SEARCH CREATION REMOVED (Fixed web search ordering)
     // =========================================================================
-    // BUG FIX: Pre-search record must exist BEFORE streaming orchestration starts
+    // PRE-SEARCH NOW CREATED BEFORE STREAMING (not during)
     //
-    // FLOW:
-    // 1. Calculate round number (STEP 3)
-    // 2. Create PENDING pre-search record (THIS STEP)
-    // 3. Handle regeneration (STEP 4)
-    // 4. Streaming orchestration starts (STEP 6+)
+    // OLD FLOW (Broken - caused participants to speak before web search):
+    //   User message → Participant streaming → Pre-search created here → Search executes
     //
-    // Why this order matters:
-    // - Frontend PreSearchOrchestrator expects record to exist before streaming
-    // - Regeneration may delete existing pre-search, so we create fresh PENDING record first
-    // - Record creation is idempotent (checks for existing record)
+    // NEW FLOW (Fixed - correct event ordering):
+    //   User message → Frontend creates PENDING pre-search → Search executes → COMPLETE → Participants start
     //
-    // Conditions:
-    // 1. Web search is enabled (thread.enableWebSearch OR providedEnableWebSearch)
-    // 2. This is the first participant (participantIndex === 0)
-    // 3. This is NOT a regeneration (regeneration clears existing pre-search)
-    // 4. Pre-search record doesn't already exist for this round
-    const isFirstParticipant = (participantIndex ?? DEFAULT_PARTICIPANT_INDEX) === DEFAULT_PARTICIPANT_INDEX;
-    const effectiveWebSearchEnabled = providedEnableWebSearch ?? thread.enableWebSearch;
-
-    if (effectiveWebSearchEnabled && isFirstParticipant && !regenerateRound) {
-      try {
-        // Log pre-search creation attempt for debugging
-        // console.log(`[PreSearch] Attempting to create PENDING record for round ${currentRoundNumber} (thread: ${threadId})`);
-
-        const existingPreSearch = await db.query.chatPreSearch.findFirst({
-          where: and(
-            eq(tables.chatPreSearch.threadId, threadId),
-            eq(tables.chatPreSearch.roundNumber, currentRoundNumber),
-          ),
-        });
-
-        if (!existingPreSearch) {
-          const preSearchId = ulid();
-
-          await db.insert(tables.chatPreSearch).values({
-            id: preSearchId,
-            threadId,
-            roundNumber: currentRoundNumber,
-            userQuery: extractTextFromParts(message.parts),
-            status: AnalysisStatuses.PENDING,
-            createdAt: new Date(),
-          });
-
-          // ✅ CRITICAL FIX: Check if pre-search should block participant streaming
-          // For OVERVIEW screen (round 0): Pre-search is created during thread creation
-          // - Frontend waits for COMPLETE before calling startRound
-          // For THREAD screen (round N > 0): Pre-search is created HERE
-          // - But we continue to create user message below
-          // - Frontend pending message effect will wait for PENDING → COMPLETE before sending
-          // - This allows user message to be saved while web search executes
-        } else if (existingPreSearch.status === AnalysisStatuses.PENDING || existingPreSearch.status === AnalysisStatuses.STREAMING) {
-          // Pre-search exists and is in progress - continue
-          // Frontend will wait for completion before triggering participants
-        } else {
-          // Pre-search complete or failed - OK to proceed with participants
-        }
-      } catch (error) {
-        // ✅ Non-blocking: Don't let pre-search creation errors break streaming
-        // But DO log the error for debugging
-        console.error(`[PreSearch] ❌ Failed to create pre-search for round ${currentRoundNumber}:`, error);
-      }
-    } else {
-      // Log why pre-search creation was skipped
-      // console.log(`[PreSearch] ⏭️  Skipping pre-search creation: webSearch=${effectiveWebSearchEnabled}, firstParticipant=${isFirstParticipant}, notRegeneration=${!regenerateRound}`);
-    }
+    // CHANGES:
+    // - Round 0: Pre-search created in thread.handler.ts:269-278 (thread creation) ✅ Already correct
+    // - Round N: Pre-search created by frontend via createPreSearchHandler BEFORE sendMessage() ✅ Fixed
+    //
+    // REMOVED:
+    // - Pre-search creation code (lines 128-196) moved to createPreSearchHandler
+    // - Frontend now calls createPreSearchRoute BEFORE participant streaming
+    // - Ensures PENDING record exists before participants start
+    //
+    // REFERENCE:
+    // - New endpoint: POST /chat/threads/:threadId/rounds/:roundNumber/pre-search/create
+    // - Handler: createPreSearchHandler in pre-search.handler.ts
+    // - Frontend: useCreatePreSearch hook + chat-store-provider.tsx
+    //
+    // This comment serves as historical record of the bug fix.
+    // See WEB_SEARCH_ORDERING_FIX_STRATEGY.md for complete details.
 
     // =========================================================================
     // STEP 4: Handle regeneration (delete old round data)

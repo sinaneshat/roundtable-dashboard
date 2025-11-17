@@ -49,6 +49,7 @@ function RoundFeedbackComponent({
             size="sm"
             onClick={handleLike}
             disabled={disabled || isPending}
+            aria-label={t('like')}
             className={cn(
               'h-7 w-7 p-0 rounded-md transition-colors',
               currentFeedback === FeedbackTypes.LIKE
@@ -77,6 +78,7 @@ function RoundFeedbackComponent({
             size="sm"
             onClick={handleDislike}
             disabled={disabled || isPending}
+            aria-label={t('dislike')}
             className={cn(
               'h-7 w-7 p-0 rounded-md transition-colors',
               currentFeedback === FeedbackTypes.DISLIKE

@@ -338,6 +338,42 @@ export const getThreadChangelogRoute = createRoute({
 });
 
 /**
+ * POST Create Pre-Search Route - Create PENDING pre-search record
+ * ✅ NEW: Creates PENDING record BEFORE participant streaming
+ * ✅ IDEMPOTENT: Returns existing record if already exists
+ * ✅ DATABASE-FIRST: Matches thread creation pattern (thread.handler.ts:269-278)
+ */
+export const createPreSearchRoute = createRoute({
+  method: 'post',
+  path: '/chat/threads/:threadId/rounds/:roundNumber/pre-search/create',
+  tags: ['chat'],
+  summary: 'Create PENDING pre-search record before participant streaming',
+  description: 'Creates a PENDING pre-search record that must exist BEFORE participants start streaming. This ensures correct event ordering: user message → pre-search (PENDING → STREAMING → COMPLETE) → participants. Does NOT execute the search - that happens via the execute endpoint.',
+  request: {
+    params: ThreadRoundParamSchema,
+    body: {
+      required: true,
+      content: {
+        'application/json': {
+          schema: PreSearchRequestSchema,
+        },
+      },
+    },
+  },
+  responses: {
+    [HttpStatusCodes.OK]: {
+      description: 'Pre-search record created or already exists (idempotent)',
+      content: {
+        'application/json': {
+          schema: PreSearchResponseSchema,
+        },
+      },
+    },
+    ...createMutationRouteResponses(),
+  },
+});
+
+/**
  * POST Pre-Search Route - Execute or return existing search
  * ✅ FOLLOWS: analyzeRoundRoute pattern exactly
  * ✅ IDEMPOTENT: Returns existing if already completed

@@ -32,6 +32,7 @@ import {
   useChatScroll,
   useFlowLoading,
   useModelLookup,
+  useVisualViewportPosition,
 } from '@/hooks/utils';
 import { useSession } from '@/lib/auth/client';
 import { getDefaultChatMode } from '@/lib/config/chat-modes';
@@ -420,6 +421,10 @@ export default function ChatOverviewScreen() {
 
   const inputContainerRef = useRef<HTMLDivElement | null>(null);
 
+  // Visual viewport positioning for mobile keyboard handling
+  // Returns bottom offset to adjust for keyboard (0 when no keyboard, >0 when keyboard open)
+  const keyboardOffset = useVisualViewportPosition();
+
   return (
     <UnifiedErrorBoundary context="chat">
       <div className={`flex flex-col relative ${showInitialUI ? '' : 'min-h-dvh'}`}>
@@ -567,6 +572,7 @@ export default function ChatOverviewScreen() {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -20 }}
                 transition={{ duration: 0.3 }}
+                className="pb-[240px]"
               >
                 <UnifiedErrorBoundary context="message-list">
                   {/* Split messages for correct ordering: user → pre-search → assistant */}
@@ -663,16 +669,15 @@ export default function ChatOverviewScreen() {
           </AnimatePresence>
         </div>
 
-        {/* Chat input - sticky at bottom when chat has started */}
+        {/* Chat input - sticky positioning with visual viewport support for keyboard */}
         <AnimatePresence>
           {!showInitialUI && (
-            <motion.div
+            <div
               ref={inputContainerRef}
-              initial={{ opacity: 0, y: 100 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 100 }}
-              transition={{ duration: 0.4, ease: 'easeOut' }}
-              className="md:sticky md:bottom-0 z-50 bg-gradient-to-t from-background via-background to-transparent pt-4 sm:pt-6 pb-3 sm:pb-4 md:pb-keyboard-safe mt-auto"
+              className="sticky z-50 w-full"
+              style={{
+                bottom: `${keyboardOffset + 16}px`,
+              }}
             >
               <div className="container max-w-3xl mx-auto px-2 sm:px-4 md:px-6">
                 <ChatInput
@@ -700,7 +705,7 @@ export default function ChatOverviewScreen() {
                   )}
                 />
               </div>
-            </motion.div>
+            </div>
           )}
         </AnimatePresence>
 
