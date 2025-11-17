@@ -69,11 +69,12 @@ export type UseVirtualizedTimelineOptions = {
   smoothScrollDuration?: number;
 
   /**
-   * Extra padding at bottom of scroll area (in pixels)
+   * Extra padding at end of scroll area (in pixels)
    * Prevents content from being hidden behind sticky elements (like input box)
+   * Uses virtualizer's built-in paddingEnd option
    * Default: 200px
    */
-  bottomPadding?: number;
+  paddingEnd?: number;
 
   /**
    * Set of round numbers that are currently streaming
@@ -103,16 +104,10 @@ export type UseVirtualizedTimelineResult = {
   totalSize: number;
 
   /**
-   * Total size with bottom padding applied
-   * Use this for container minHeight to include padding
+   * Padding at end of scroll area (in pixels)
+   * Already included in getTotalSize()
    */
-  totalSizeWithPadding: number;
-
-  /**
-   * Bottom padding value (in pixels)
-   * Applied to total size for extra scroll area
-   */
-  bottomPadding: number;
+  paddingEnd: number;
 
   /**
    * Scroll margin (offset from top of viewport)
@@ -187,7 +182,7 @@ export function useVirtualizedTimeline({
   onScrollOffsetChange,
   enableSmoothScroll = true,
   smoothScrollDuration = 1000,
-  bottomPadding = 200,
+  paddingEnd = 200,
   streamingRounds,
 }: UseVirtualizedTimelineOptions): UseVirtualizedTimelineResult {
   // ✅ MOBILE FIX: Detect touch devices for mobile-specific optimizations
@@ -239,12 +234,16 @@ export function useVirtualizedTimeline({
   // ✅ MOBILE FIX: Disable custom smooth scroll on touch devices
   // Custom easing animations conflict with native mobile scroll momentum
   // Touch devices expect instant response, not programmatic animations
+  // ✅ OFFICIAL PATTERN: scrollToFn signature matches TanStack Virtual docs
   const scrollToFn: VirtualizerOptions<Window, Element>['scrollToFn'] = useCallback(
-    (offset, canSmooth, _instance) => {
+    (offset, options, _instance) => {
+      // Extract behavior from options object (official pattern)
+      const shouldSmooth = options?.behavior === 'smooth';
+
       // ✅ MOBILE FIX: Always use native scroll on touch devices
-      if (isTouchDevice || !enableSmoothScroll || !canSmooth) {
+      if (isTouchDevice || !enableSmoothScroll || !shouldSmooth) {
         // Use default scroll behavior (native smooth scroll is fine on mobile)
-        window.scrollTo({ top: offset, behavior: canSmooth ? 'smooth' : 'auto' });
+        window.scrollTo({ top: offset, behavior: shouldSmooth ? 'smooth' : 'auto' });
         return;
       }
 
@@ -348,7 +347,8 @@ export function useVirtualizedTimeline({
   // Fast touch scrolling needs larger buffer to prevent text overlap
   const effectiveOverscan = isTouchDevice ? Math.max(overscan, 25) : overscan;
 
-  // Initialize window virtualizer
+  // ✅ OFFICIAL PATTERN: Initialize window virtualizer with built-in paddingEnd
+  // getTotalSize() automatically includes paddingEnd in total height calculation
   const virtualizer = useWindowVirtualizer({
     count: timelineItems.length,
     estimateSize: () => estimateSize,
@@ -356,8 +356,11 @@ export function useVirtualizedTimeline({
     enabled,
     // Use computed scroll margin value
     scrollMargin,
-    // Custom scroll function for smooth easing (disabled on mobile)
-    scrollToFn: enableSmoothScroll && !isTouchDevice ? scrollToFn : undefined,
+    // ✅ OFFICIAL PATTERN: Built-in paddingEnd option (replaces manual padding)
+    paddingEnd,
+    // ✅ OFFICIAL PATTERN: Always provide scrollToFn (handles logic inside)
+    // Custom easing disabled on mobile, but function still provided for all cases
+    scrollToFn,
     // ✅ CRITICAL: Custom range extractor prevents streaming items from unmounting
     rangeExtractor,
   });
@@ -365,11 +368,9 @@ export function useVirtualizedTimeline({
   // Get virtual items (only items that should be rendered)
   const virtualItems = virtualizer.getVirtualItems();
 
-  // Get total size of all items
+  // ✅ OFFICIAL PATTERN: getTotalSize() already includes paddingEnd
+  // No need to manually add padding - virtualizer handles it automatically
   const totalSize = virtualizer.getTotalSize();
-
-  // Calculate total size with bottom padding
-  const totalSizeWithPadding = totalSize + bottomPadding;
 
   // Measure element function (attaches to refs for dynamic sizing)
   const measureElement = virtualizer.measureElement;
@@ -421,8 +422,7 @@ export function useVirtualizedTimeline({
     virtualizer,
     virtualItems,
     totalSize,
-    totalSizeWithPadding,
-    bottomPadding,
+    paddingEnd,
     scrollMargin,
     measureElement,
     scrollToIndex,
