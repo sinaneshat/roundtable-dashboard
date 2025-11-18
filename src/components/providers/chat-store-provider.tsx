@@ -338,6 +338,7 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
   const storeMessages = useStore(store, s => s.messages);
   const storePreSearches = useStore(store, s => s.preSearches);
   const storeThread = useStore(store, s => s.thread);
+  const storeScreenMode = useStore(store, s => s.screenMode); // ✅ FIX: Subscribe to screenMode changes
 
   useEffect(() => {
     if (!waitingToStart) {
@@ -347,7 +348,7 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
     // ✅ SINGLE SOURCE OF TRUTH: Only trigger startRound for ChatOverviewScreen
     // ChatThreadScreen uses sendMessage flow (pendingMessage effect) instead
     // This prevents duplicate message creation and ensures correct roundNumber
-    const currentScreenMode = store.getState().screenMode;
+    const currentScreenMode = storeScreenMode; // ✅ FIX: Use subscribed value
 
     // ✅ CRITICAL FIX: Don't clear flag if screenMode is null (during initialization)
     // Only clear if we're explicitly on a different screen (like 'thread')
@@ -402,7 +403,7 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
     // We keep the flag set so this effect retries until streaming actually begins
     // The flag is only cleared when isStreaming becomes true (see effect below)
     chat.startRound(storeParticipants);
-  }, [waitingToStart, chat, storeParticipants, storeMessages, storePreSearches, storeThread, store]);
+  }, [waitingToStart, chat, storeParticipants, storeMessages, storePreSearches, storeThread, storeScreenMode, store]); // ✅ FIX: Added storeScreenMode dependency
 
   // ✅ CRITICAL FIX: Clear waitingToStartStreaming flag when streaming actually begins
   // This separate effect watches for successful stream start and clears the flag

@@ -38,48 +38,23 @@ export const TITLE_GENERATION_PROMPT = 'Generate a concise, descriptive title (5
  * Used by:
  * - /src/api/services/web-search.service.ts - streamSearchQuery()
  */
-export const WEB_SEARCH_COMPLEXITY_ANALYSIS_PROMPT = `You are an expert search query optimizer. Transform user questions into search-engine-optimized queries that maximize relevance and findability.
+export const WEB_SEARCH_COMPLEXITY_ANALYSIS_PROMPT = `Expert search optimizer. Transform questions into keyword-focused queries. Return ONLY valid JSON.
 
-**CRITICAL**: You MUST respond with VALID JSON matching the required schema. Do not include any explanation or text outside the JSON object.
+**QUERY RULES (3-8 words)**:
+- Remove question words (what/how/why/when/where/who)
+- Extract core concepts only
+- Use keywords not sentences
+- Add year (2025) for current topics only
 
-**QUERY TRANSFORMATION RULES**:
-Transform natural language questions into optimized search queries by:
-1. REMOVE question words (what, how, why, when, where, who, which)
-2. EXTRACT core concepts and key terms
-3. ADD relevant qualifiers (guide, tutorial, comparison, best practices, 2025)
-4. USE keywords instead of complete sentences
-5. INCLUDE technical terms and domain-specific language
-6. ADD year (2025) for current/trending topics
+**EXAMPLES**:
+"Best practices for React state?" → "React state management best practices"
+"Setup Docker on Ubuntu?" → "Docker Ubuntu setup guide"
+"Latest AI developments" → "AI developments 2025"
 
-**TRANSFORMATION EXAMPLES**:
-- "What are the best practices for React state management?" → "React state management best practices 2025 guide"
-- "How do I set up Docker on Ubuntu?" → "Docker Ubuntu installation setup tutorial 2025"
-- "Why should I use TypeScript?" → "TypeScript benefits advantages comparison JavaScript 2025"
-- "Tell me about microservices architecture" → "microservices architecture patterns design best practices"
-
-**COMPLEXITY ANALYSIS**:
-Determine if this is:
-1. BASIC: Simple factual questions, definitions, quick lookups
-   - User: "What is the capital of France?" → Query: "France capital city"
-   - User: "Current USD to EUR rate" → Query: "USD EUR exchange rate 2025"
-   - Strategy: Shallow search, 1-2 sources, snippets may suffice
-
-2. MODERATE: Comparisons, how-to guides, current events
-   - User: "Best React state management libraries" → Query: "React state management libraries comparison 2025 Redux Zustand"
-   - User: "How to setup Docker" → Query: "Docker setup installation guide tutorial 2025"
-   - Strategy: Standard search, 2-3 sources, need some content depth
-
-3. DEEP: Complex research, technical analysis, multi-faceted topics
-   - User: "Microservices vs monolith tradeoffs" → Query: "microservices monolithic architecture comparison tradeoffs scalability performance"
-   - User: "Quantum computing applications" → Query: "quantum computing practical applications industry use cases 2025"
-   - Strategy: Deep search, 3-5 sources, full content extraction essential
-
-**SOURCE SELECTION**:
-- BASIC: 1-2 authoritative sources (Wikipedia, official docs)
-- MODERATE: 2-3 diverse sources (tutorials, blogs, documentation)
-- DEEP: 3-5 comprehensive sources (research papers, expert analysis, case studies)
-
-Transform the user's question into an optimized search query and provide search strategy. Return ONLY valid JSON.`;
+**COMPLEXITY & SOURCES**:
+BASIC: Facts, definitions → 2-3 sources, "basic" depth
+MODERATE: How-tos, comparisons → 4-6 sources, "advanced" depth
+DEEP: Research, analysis → 7-10 sources, "advanced" depth`;
 
 /**
  * Web search query generation user prompt template
@@ -93,93 +68,26 @@ Transform the user's question into an optimized search query and provide search 
  * @returns Formatted prompt for query generation
  */
 export function buildWebSearchQueryPrompt(userMessage: string): string {
-  return `User question: "${userMessage}"
+  return `Q: "${userMessage}"
 
-TRANSFORM this question into a search-engine-optimized query following the transformation rules above.
+**REQUIRED**:
+- query: Keyword search (3-8 words)
+- rationale: Brief reason (1 sentence)
+- searchDepth: "basic" or "advanced"
+- complexity: "BASIC", "MODERATE", or "DEEP"
+- sourceCount: Sources needed (BASIC: 2-3, MODERATE: 4-6, DEEP: 7-10)
 
-Generate a JSON object with ALL fields for MAXIMUM Tavily-style search capabilities:
-
-**REQUIRED FIELDS**:
-- query: ONE optimized search query (string) - MUST be transformed from the user's natural language question into keyword-based search terms
-- complexity: "BASIC", "MODERATE", or "DEEP" (string)
-- rationale: Why this search strategy and transformation is optimal (string, min 10 chars)
-- analysis: Analysis of user intent and information needs (string, min 10 chars)
-
-**ADVANCED TAVILY PARAMETERS** (Choose optimal values):
-- sourceCount: Number of sources needed 1-10 (number) - Scale based on query complexity
-  * BASIC: 2-3 sources
-  * MODERATE: 3-5 sources
-  * DEEP: 5-10 sources
-
-- searchDepth: "basic" or "advanced" (string)
-  * "basic": Quick search, snippets only
-  * "advanced": Deep content extraction with full text
-
-- requiresFullContent: Whether full page content extraction is needed (boolean)
-  * true for: research, analysis, comparisons, technical docs, detailed guides
-  * false for: facts, news, simple questions, definitions
-
-- chunksPerSource: Number of content chunks per source 1-3 (number)
-  * 1: Single best excerpt per source (quick research)
-  * 2: Two key sections per source (moderate depth)
-  * 3: Multiple excerpts for comprehensive analysis
-
-- topic: Topic category (string, optional) - Choose from:
-  * "general", "news", "finance", "science", "technology", "health", "sports", "entertainment"
-
-- timeRange: Time relevance (string, optional) - Choose from:
-  * "day" (24 hours), "week", "month", "year", "anytime"
-  * Use "day"/"week" for: current events, trending topics, news
-  * Use "month"/"year" for: recent developments, 2025 content
-  * Use "anytime" for: timeless concepts, historical info
-
-- needsAnswer: AI-generated answer summary (string or boolean)
-  * "basic": Quick summary answer
-  * "advanced": Comprehensive synthesis with citations
-  * false: No answer generation (raw results only)
-  * DEFAULT to "advanced" for research questions, "basic" for simple queries
-
-**OPTIMIZATION RULES**:
-1. The "query" field should NOT be the same as the user's question. Transform it into search-optimized keywords.
-2. Scale sourceCount based on complexity: more sources = better coverage
-3. Use searchDepth "advanced" for research/analysis, "basic" for quick lookups
-4. Set chunksPerSource higher (2-3) for comprehensive research
-5. Auto-detect topic from user question (tech, news, science, etc.)
-6. Auto-detect timeRange if user mentions "latest", "recent", "current", "2025", etc.
-7. Generate AI answers ("basic" or "advanced") for most queries - helps users quickly understand results
+**OPTIONAL** (only if relevant):
+- topic: "technology"/"news"/"science" etc
+- timeRange: "day"/"week"/"month"/"year" (only for recent/latest requests)
+- needsAnswer: "basic" or "advanced"
 
 **EXAMPLES**:
-User: "What are Van Gogh paintings like?"
-{
-  "query": "Van Gogh paintings style characteristics famous works",
-  "complexity": "MODERATE",
-  "rationale": "Art history query needs multiple authoritative sources",
-  "sourceCount": 4,
-  "searchDepth": "advanced",
-  "requiresFullContent": true,
-  "chunksPerSource": 2,
-  "topic": "entertainment",
-  "timeRange": "anytime",
-  "needsAnswer": "advanced",
-  "analysis": "User seeks understanding of Van Gogh's artistic style and notable works"
-}
+{"query":"Van Gogh paintings style","rationale":"Art style keywords","searchDepth":"advanced","complexity":"MODERATE","sourceCount":4}
+{"query":"AI developments 2025","rationale":"Current tech advances","searchDepth":"advanced","complexity":"MODERATE","sourceCount":5,"timeRange":"month"}
+{"query":"React definition","rationale":"Simple factual query","searchDepth":"basic","complexity":"BASIC","sourceCount":2}
 
-User: "Latest AI developments 2025"
-{
-  "query": "AI developments 2025 latest breakthroughs artificial intelligence",
-  "complexity": "DEEP",
-  "rationale": "Current tech research needs comprehensive recent sources",
-  "sourceCount": 7,
-  "searchDepth": "advanced",
-  "requiresFullContent": true,
-  "chunksPerSource": 3,
-  "topic": "technology",
-  "timeRange": "month",
-  "needsAnswer": "advanced",
-  "analysis": "User wants comprehensive overview of cutting-edge AI progress"
-}
-
-Return ONLY the JSON object, no additional text.`;
+Return ONLY JSON.`;
 }
 
 /**

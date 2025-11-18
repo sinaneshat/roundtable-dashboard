@@ -509,9 +509,10 @@ export const GeneratedSearchQuerySchema = z.object({
   query: z.string().describe('The generated search query'),
   rationale: z.string().describe('Explanation for why this query will help answer the user question'),
   searchDepth: WebSearchDepthSchema.describe('Recommended search depth for this query'),
+  complexity: WebSearchComplexitySchema.describe('Query complexity level: BASIC (2-3 sources), MODERATE (4-6 sources), DEEP (7-10 sources)'),
+  // ✅ DYNAMIC SOURCE COUNT: AI determines optimal source count based on query complexity
+  sourceCount: z.number().min(1).max(10).describe('Dynamic source count: BASIC=2-3, MODERATE=4-6, DEEP=7-10 (AI-determined based on complexity)'),
   // ✅ TAVILY-STYLE: AI-driven advanced parameters
-  complexity: WebSearchComplexitySchema.optional().describe('Query complexity level'),
-  sourceCount: z.number().min(1).max(10).optional().describe('Optimal number of sources to extract (1-10, AI-determined)'),
   requiresFullContent: z.boolean().optional().describe('Whether full content extraction is needed'),
   chunksPerSource: z.number().int().min(1).max(3).optional().describe('Number of content chunks per source for deep research (1-3)'),
   topic: WebSearchTopicSchema.optional().describe('Auto-detected topic category'),

@@ -404,14 +404,24 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
               }),
             });
 
+            // ✅ DYNAMIC SOURCE COUNT: Fallback based on complexity if AI doesn't provide sourceCount
+            const complexity = generatedQuery.complexity ?? WebSearchComplexities.MODERATE;
+            let defaultSourceCount = 5; // MODERATE default
+            if (complexity === WebSearchComplexities.BASIC) {
+              defaultSourceCount = 3;
+            } else if (complexity === WebSearchComplexities.DEEP) {
+              defaultSourceCount = 8;
+            }
+
             // ✅ TAVILY-STYLE: Use ALL AI-driven parameters for maximum search capability
             // AI dynamically chooses: source count, depth, chunks, topic, time range, answer mode
             // This provides Tavily-level comprehensive search with intelligent optimization
             result = await performWebSearch(
               {
                 query: generatedQuery.query,
-                // ✅ AI-DRIVEN: Dynamic source count (1-10) based on query complexity
-                maxResults: generatedQuery.sourceCount ?? 10, // Default to 10 for comprehensive coverage
+                // ✅ AI-DRIVEN: Dynamic source count based on query complexity
+                // BASIC: 2-3, MODERATE: 4-6, DEEP: 7-10
+                maxResults: generatedQuery.sourceCount ?? defaultSourceCount,
                 // ✅ AI-DRIVEN: Search depth from AI analysis
                 searchDepth: generatedQuery.searchDepth ?? WebSearchDepths.ADVANCED,
                 // ✅ AI-DRIVEN: Dynamic chunks per source for research depth
@@ -431,7 +441,7 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
                 autoParameters: false,
               },
               c.env,
-              generatedQuery.complexity ?? WebSearchComplexities.MODERATE,
+              complexity,
             );
             const searchDuration = performance.now() - searchStartTime;
 

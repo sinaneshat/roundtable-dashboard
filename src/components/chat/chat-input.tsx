@@ -203,16 +203,6 @@ export const ChatInput = memo(({
     prevIsListening.current = isNowListening;
   }, [isListening, value]);
 
-  // ✅ FIX: Sync final transcript ref with value when not listening
-  // This prevents drift between the ref and actual textarea value
-  // ensuring all spoken words accumulate properly
-  useEffect(() => {
-    if (!isListening) {
-      finalTranscriptRef.current = value;
-      currentInterimRef.current = '';
-    }
-  }, [value, isListening]);
-
   // AI SDK v5 Pattern: Use requestAnimationFrame for focus after DOM renders
   useEffect(() => {
     if (autoFocus && textareaRef.current) {
@@ -303,13 +293,10 @@ export const ChatInput = memo(({
                 onChange={(e) => {
                   const newValue = e.target.value;
                   onChange(newValue);
-                  // ✅ FIX: Always update final transcript on manual typing
-                  // When user manually edits during listening, preserve their edits
-                  // for next speech appending. Clear interim since it's now part of manual edit.
-                  if (!isListening) {
-                    finalTranscriptRef.current = newValue;
-                    currentInterimRef.current = '';
-                  }
+                  // ✅ FIX: Always update refs on manual typing, even during listening
+                  // This ensures manual edits are preserved and speech continues to build on them
+                  finalTranscriptRef.current = newValue;
+                  currentInterimRef.current = '';
                 }}
                 onKeyDown={handleKeyDown}
                 disabled={isDisabled}
