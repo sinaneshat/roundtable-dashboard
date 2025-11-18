@@ -5,12 +5,20 @@
  * Runs before each build to:
  * 1. Clear Next.js cache for fresh builds
  * 2. Generate service worker version for cache invalidation
+ * 3. Set Node.js memory limit for builds
  */
 
 import { execSync } from 'node:child_process';
 import { join } from 'node:path';
 
 const ROOT_DIR = join(__dirname, '..');
+
+// Set Node.js memory limit for build (required for Cloudflare Pages)
+// This prevents heap out of memory errors during Next.js build
+if (!process.env.NODE_OPTIONS) {
+  process.env.NODE_OPTIONS = '--max-old-space-size=4096';
+  console.log('✓ Set Node.js heap size to 4096 MB');
+}
 
 // Clear Next.js cache
 try {
