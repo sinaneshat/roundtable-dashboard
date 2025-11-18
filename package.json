@@ -48,7 +48,7 @@
     "email:preview": "email dev --dir src/emails --port 3001",
     "email:build": "email build --dir src/emails --out dist/emails",
     "email:export": "email export --dir src/emails --out dist/emails",
-    "build": "node -v && next build",
+    "build": "node -v && cross-env NODE_OPTIONS='--max-old-space-size=4096' next build",
     "start": "next start",
     "build-stats": "cross-env ANALYZE=true npm run build",
     "clean": "rimraf .next .open-next out",
