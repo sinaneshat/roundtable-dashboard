@@ -31,17 +31,20 @@ export function TypingText({
     if (!enabled) {
       setDisplayedText(text);
       onComplete?.();
-      return;
+      return undefined;
     }
 
     setDisplayedText('');
     setCurrentIndex(0);
 
+    // ✅ MEMORY LEAK FIX: Store interval ID in variable to properly clean up
+    let intervalId: NodeJS.Timeout | null = null;
+
     const startTimeout = setTimeout(() => {
-      const interval = setInterval(() => {
+      intervalId = setInterval(() => {
         setCurrentIndex((prev) => {
           if (prev >= text.length) {
-            clearInterval(interval);
+            if (intervalId) clearInterval(intervalId);
             onComplete?.();
             return prev;
           }
@@ -49,11 +52,13 @@ export function TypingText({
           return prev + 1;
         });
       }, speed);
-
-      return () => clearInterval(interval);
     }, delay);
 
-    return () => clearTimeout(startTimeout);
+    // ✅ MEMORY LEAK FIX: Clean up BOTH timeout AND interval
+    return () => {
+      clearTimeout(startTimeout);
+      if (intervalId) clearInterval(intervalId);
+    };
   }, [text, speed, delay, onComplete, enabled]);
 
   return (

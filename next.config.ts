@@ -48,46 +48,23 @@ const nextConfig: NextConfig = {
 
   // Cache optimization headers
   async headers() {
-    // In development, disable all caching for fresh updates
-    const isDevelopment = process.env.NODE_ENV === 'development';
-
     return [
-      // Development: Disable caching for HTML pages only (not static assets)
-      ...(isDevelopment
-        ? [
-            {
-              source: '/:path((?!_next/static|_next/image|favicon\\.ico|icons).*)',
-              headers: [
-                {
-                  key: 'Cache-Control',
-                  value: 'no-store, must-revalidate',
-                },
-                {
-                  key: 'X-Development-Mode',
-                  value: 'true',
-                },
-              ],
-            },
-          ]
-        : []),
       {
-        // Static assets - allow browser caching even in dev for performance
+        // Static assets cache optimization
         source: '/_next/static/:path*',
         headers: [
           {
             key: 'Cache-Control',
-            value: isDevelopment
-              ? 'public, max-age=31536000, immutable' // Same as production for performance
-              : 'public, max-age=31536000, immutable',
+            value: 'public, max-age=31536000, immutable', // 1 year
           },
           {
             key: 'X-Cache-Type',
-            value: isDevelopment ? 'development-no-cache' : 'static-asset',
+            value: 'static-asset',
           },
         ],
       },
       {
-        // Image optimization - cache in both dev and prod
+        // Image optimization
         source: '/_next/image',
         headers: [
           {
@@ -96,7 +73,7 @@ const nextConfig: NextConfig = {
           },
           {
             key: 'X-Cache-Type',
-            value: isDevelopment ? 'dev-optimized-image' : 'optimized-image',
+            value: 'optimized-image',
           },
           {
             key: 'Referrer-Policy',
@@ -254,28 +231,17 @@ const nextConfig: NextConfig = {
 
 };
 
-// Configure Serwist PWA with environment-aware cache invalidation
+// Configure Serwist PWA
 const withSerwist = withSerwistInit({
   swSrc: 'src/app/sw.ts',
   swDest: 'public/sw.js',
-  // Disable in development - only enable in production builds
+  // Disable Serwist in development for faster builds
   disable: process.env.NODE_ENV === 'development',
   // Additional Serwist configuration
-  cacheOnNavigation: false, // Disable navigation caching in all environments
-  reloadOnOnline: process.env.NODE_ENV === 'production',
-  // Only auto-register in production builds
-  register: process.env.NODE_ENV === 'production',
+  cacheOnNavigation: true,
+  reloadOnOnline: true,
+  register: true,
   scope: '/',
-  // Inject build metadata to force SW updates on new deployments
-  // This ensures the service worker file content changes on every build
-  additionalPrecacheEntries: process.env.NODE_ENV === 'production'
-    ? [
-        {
-          url: '/__BUILD_MANIFEST__',
-          revision: process.env.NEXT_PUBLIC_SW_VERSION || Date.now().toString(),
-        },
-      ]
-    : undefined,
 });
 
 const withNextIntl = createNextIntlPlugin('./src/i18n/request.ts');
