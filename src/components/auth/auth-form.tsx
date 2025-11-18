@@ -106,81 +106,77 @@ function AuthFormContent() {
 
   if (magicLinkSent.value) {
     return (
-      <div className="relative">
-        <Card className="w-full max-w-md mx-auto">
-          <CardHeader className="text-center">
-            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-chart-3/20 mb-4">
-              <Mail className="h-6 w-6 text-chart-3" />
-            </div>
-            <CardTitle>{t('auth.magicLink.title')}</CardTitle>
-            <CardDescription>
-              {t('auth.magicLink.emailSentMessage', { email: sentEmail })}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button
-              variant="outline"
-              className="w-full"
-              onClick={() => {
-                magicLinkSent.onFalse();
-                form.reset();
-              }}
-            >
-              {t('auth.magicLink.useDifferentEmail')}
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
+      <Card className="w-full">
+        <CardHeader className="text-center">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-chart-3/20 mb-4">
+            <Mail className="h-6 w-6 text-chart-3" />
+          </div>
+          <CardTitle>{t('auth.magicLink.title')}</CardTitle>
+          <CardDescription>
+            {t('auth.magicLink.emailSentMessage', { email: sentEmail })}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button
+            variant="outline"
+            className="w-full"
+            onClick={() => {
+              magicLinkSent.onFalse();
+              form.reset();
+            }}
+          >
+            {t('auth.magicLink.useDifferentEmail')}
+          </Button>
+        </CardContent>
+      </Card>
     );
   }
 
   return (
-    <div className="relative">
-      <Card className="w-full max-w-md mx-auto">
-        <CardHeader className="text-center">
-          <CardTitle>{t('auth.signIn.title')}</CardTitle>
-          <CardDescription>
-            {t('auth.signIn.description')}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(handleMagicLink)} className="space-y-4">
-              <RHFTextField
-                name="email"
-                title={t('auth.email')}
-                placeholder={t('auth.emailPlaceholder')}
-                fieldType="email"
-                required
-                disabled={isLoading.value}
-              />
-              <Button type="submit" className="w-full" disabled={isLoading.value}>
-                {isLoading.value ? t('actions.loading') : t('auth.magicLink.sendButton')}
-              </Button>
-            </form>
-          </Form>
+    <Card className="w-full">
+      <CardHeader className="text-center">
+        <CardTitle>{t('auth.signIn.title')}</CardTitle>
+        <CardDescription>
+          {t('auth.signIn.description')}
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(handleMagicLink)} className="space-y-4">
+            <RHFTextField
+              name="email"
+              title={t('auth.email')}
+              placeholder={t('auth.emailPlaceholder')}
+              fieldType="email"
+              required
+              disabled={isLoading.value}
+            />
+            <Button type="submit" className="w-full" disabled={isLoading.value}>
+              {isLoading.value ? t('actions.loading') : t('auth.magicLink.sendButton')}
+            </Button>
+          </form>
+        </Form>
 
-          <div className="relative">
-            <div className="absolute inset-0 flex items-center">
-              <span className="w-full border-t" />
-            </div>
-            <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-background px-2 text-muted-foreground">
-                {t('common.or')}
-              </span>
-            </div>
+        <div className="relative">
+          <div className="absolute inset-0 flex items-center">
+            <span className="w-full border-t" />
           </div>
-
-          <GoogleButton className="w-full" />
-
-          <div className="text-center">
-            <p className="text-sm text-muted-foreground">
-              {t('auth.secureAuthentication')}
-            </p>
+          <div className="relative flex justify-center text-xs uppercase">
+            <span className="bg-background px-2 text-muted-foreground">
+              {t('common.or')}
+            </span>
           </div>
-        </CardContent>
-      </Card>
-    </div>
+        </div>
+
+        <GoogleButton className="w-full" />
+
+        <div className="text-center">
+          <p className="text-sm text-muted-foreground">
+            {t('auth.secureAuthentication')}
+          </p>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -192,13 +188,11 @@ export function AuthForm() {
   return (
     <Suspense
       fallback={(
-        <div className="relative">
-          <Card className="w-full max-w-md mx-auto">
-            <CardHeader className="text-center">
-              <CardTitle>Loading...</CardTitle>
-            </CardHeader>
-          </Card>
-        </div>
+        <Card className="w-full">
+          <CardHeader className="text-center">
+            <CardTitle>Loading...</CardTitle>
+          </CardHeader>
+        </Card>
       )}
     >
       <AuthFormContent />

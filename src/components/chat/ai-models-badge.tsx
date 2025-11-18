@@ -52,17 +52,15 @@ export function AIModelsBadge({
               }}
             >
               <Avatar
-                className={cn(config.avatar, 'ring-2 ring-black bg-black border-2 border-black relative')}
-                style={{ backgroundColor: '#000000' }}
+                className={cn(config.avatar, 'ring-2 ring-card bg-card border-2 border-card relative')}
               >
-                <div className="absolute inset-0 bg-black rounded-full" style={{ backgroundColor: '#000000' }} />
+                <div className="absolute inset-0 bg-card rounded-full" />
                 <AvatarImage
                   src={getProviderIcon(provider)}
                   alt={modelName}
-                  className="object-contain p-1 relative z-10 bg-black rounded-full"
-                  style={{ backgroundColor: '#000000' }}
+                  className="object-contain p-1 relative z-10 bg-card rounded-full"
                 />
-                <AvatarFallback className="text-[8px] bg-black relative z-10" style={{ backgroundColor: '#000000' }}>
+                <AvatarFallback className="text-[8px] bg-card relative z-10">
                   {modelName.slice(0, 2).toUpperCase()}
                 </AvatarFallback>
               </Avatar>

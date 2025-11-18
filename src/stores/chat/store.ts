@@ -157,6 +157,8 @@ const createFormSlice: StateCreator<
     set({ selectedParticipants: participants }, false, 'form/setSelectedParticipants'),
   setEnableWebSearch: (enabled: boolean) =>
     set({ enableWebSearch: enabled }, false, 'form/setEnableWebSearch'),
+  setModelOrder: (modelIds: string[]) =>
+    set({ modelOrder: modelIds }, false, 'form/setModelOrder'),
   addParticipant: (participant: ParticipantConfig) =>
     set(state => ({
       selectedParticipants: state.selectedParticipants.some(p => p.modelId === participant.modelId)

@@ -1,10 +1,11 @@
 'use client';
 
 import { cva } from 'class-variance-authority';
+import { motion } from 'framer-motion';
 import type { LucideIcon } from 'lucide-react';
 import { ChevronDown } from 'lucide-react';
-import type { ComponentProps, ReactNode } from 'react';
-import { createContext, use, useCallback, useMemo, useState } from 'react';
+import type { ComponentProps, ReactElement, ReactNode } from 'react';
+import { createContext, isValidElement, use, useCallback, useMemo, useState } from 'react';
 
 import type { ChainOfThoughtStepStatus } from '@/api/core/enums';
 import { ChainOfThoughtStepStatuses } from '@/api/core/enums';
@@ -139,13 +140,62 @@ export function ChainOfThoughtHeader({
 // Content
 // ============================================================================
 
-type ChainOfThoughtContentProps = ComponentProps<typeof CollapsibleContent>;
+type ChainOfThoughtContentProps = ComponentProps<typeof CollapsibleContent> & {
+  /** Enable stagger animation for children elements */
+  staggerChildren?: boolean;
+};
 
 export function ChainOfThoughtContent({
   className,
   children,
+  staggerChildren = true,
   ...props
 }: ChainOfThoughtContentProps) {
+  const containerVariants = {
+    hidden: { opacity: 0 },
+    show: {
+      opacity: 1,
+      transition: {
+        duration: 0.2,
+        ease: [0.32, 0.72, 0, 1] as const,
+        staggerChildren: staggerChildren ? 0.04 : 0,
+        delayChildren: staggerChildren ? 0.05 : 0,
+        when: 'beforeChildren' as const,
+      },
+    },
+  };
+
+  const itemVariants = {
+    hidden: { opacity: 0, y: 2 },
+    show: {
+      opacity: 1,
+      y: 0,
+      transition: {
+        duration: 0.2,
+        ease: [0.32, 0.72, 0, 1] as const,
+      },
+    },
+  };
+
+  // Convert children to array for stable mapping with proper keys
+  const childrenArray = !staggerChildren || !children
+    ? null
+    : (Array.isArray(children) ? children : [children]).filter(child => isValidElement(child));
+
+  const animatedChildren = childrenArray?.map((child) => {
+    const reactChild = child as ReactElement<{ id?: string }>;
+    // Use child's key if available, otherwise use a stable identifier from props
+    const childKey = reactChild.key
+      || reactChild.props.id
+      || `child-${childrenArray.indexOf(child)}`;
+
+    return (
+      <motion.div key={childKey} variants={itemVariants}>
+        {child}
+      </motion.div>
+    );
+  });
+
   return (
     <CollapsibleContent
       className={cn(
@@ -154,7 +204,18 @@ export function ChainOfThoughtContent({
       )}
       {...props}
     >
-      {children}
+      {staggerChildren && animatedChildren
+        ? (
+            <motion.div
+              variants={containerVariants}
+              initial="hidden"
+              animate="show"
+              className="space-y-3"
+            >
+              {animatedChildren}
+            </motion.div>
+          )
+        : children}
     </CollapsibleContent>
   );
 }

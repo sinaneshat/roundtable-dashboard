@@ -14,18 +14,18 @@ import {
   Settings,
   Sparkles,
   Target,
-  TrendingUp,
-  Zap,
 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 
 import type { WebSearchResultItem } from '@/api/routes/chat/schema';
+import { AnimatedBadge, AnimatedListItem } from '@/components/ui/animated-card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Progress } from '@/components/ui/progress';
 import { Separator } from '@/components/ui/separator';
+import { FadeInText, TypingText } from '@/components/ui/typing-text';
 import { cn } from '@/lib/ui/cn';
 
 import { WebSearchConfigPanel } from './web-search-config-panel';
@@ -86,7 +86,6 @@ export function WebSearchConfigurationDisplay({
   const tImages = useTranslations('chat.tools.webSearch.images');
   const tContent = useTranslations('chat.tools.webSearch.contentPreview');
   const [isOpen, setIsOpen] = useState(false);
-  const [isPlanExpanded, setIsPlanExpanded] = useState(true);
   const [isImagesOpen, setIsImagesOpen] = useState(false);
 
   // Don't render if no data available
@@ -96,7 +95,6 @@ export function WebSearchConfigurationDisplay({
 
   const totalQueries = queries?.length || 0;
   const successRate = totalQueries > 0 ? (successCount / totalQueries) * 100 : 0;
-  const avgTimePerQuery = totalQueries > 0 ? totalTime / totalQueries : 0;
 
   // Use EMPTY_RESULTS if results is undefined to avoid default prop warning
   const safeResults = results || EMPTY_RESULTS;
@@ -109,39 +107,26 @@ export function WebSearchConfigurationDisplay({
 
   return (
     <div className={cn('space-y-3', className)}>
-      {/* Search Plan - Display Prominently at Top */}
+      {/* Search Plan - Animated */}
       {searchPlan && (
-        <Collapsible open={isPlanExpanded} onOpenChange={setIsPlanExpanded}>
-          <div className="rounded-lg bg-primary/5 border border-primary/20">
-            <CollapsibleTrigger asChild>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="w-full justify-between px-3 py-2 h-auto hover:bg-primary/10"
-              >
-                <div className="flex items-center gap-2">
-                  <div className="size-5 rounded-full bg-primary/10 flex items-center justify-center">
-                    <Sparkles className="size-3 text-primary" />
-                  </div>
-                  <span className="text-sm font-medium text-foreground">{tPreSearch('title')}</span>
-                  {isStreamingPlan && (
-                    <Badge variant="secondary" className="text-xs animate-pulse">
-                      Generating...
-                    </Badge>
-                  )}
-                </div>
-                {isPlanExpanded
-                  ? <ChevronUp className="size-4 text-muted-foreground" />
-                  : <ChevronDown className="size-4 text-muted-foreground" />}
-              </Button>
-            </CollapsibleTrigger>
-            <CollapsibleContent className="px-3 pb-3">
-              <div className="pt-2 text-sm text-foreground/90 leading-relaxed">
-                {searchPlan}
-              </div>
-            </CollapsibleContent>
+        <div className="space-y-2">
+          <FadeInText>
+            <div className="flex items-center gap-2">
+              <Sparkles className="size-4 text-primary" />
+              <span className="text-sm font-medium text-foreground">{tPreSearch('title')}</span>
+              {isStreamingPlan && (
+                <AnimatedBadge delay={0.1}>
+                  <Badge variant="secondary" className="text-xs animate-pulse">
+                    Generating...
+                  </Badge>
+                </AnimatedBadge>
+              )}
+            </div>
+          </FadeInText>
+          <div className="text-sm text-foreground/80 leading-relaxed pl-6">
+            <TypingText text={searchPlan} speed={15} delay={100} enabled={isStreamingPlan} />
           </div>
-        </Collapsible>
+        </div>
       )}
 
       {/* Configuration Controls - NEW */}
@@ -155,13 +140,13 @@ export function WebSearchConfigurationDisplay({
         />
       )}
 
-      {/* Configuration Details - Collapsible */}
+      {/* Configuration Details - Minimal */}
       <Collapsible open={isOpen} onOpenChange={setIsOpen}>
         <CollapsibleTrigger asChild>
           <Button
             variant="ghost"
             size="sm"
-            className="w-full justify-between px-3 py-2 h-auto hover:bg-muted/50 border border-border/40 rounded-lg"
+            className="w-full justify-between px-0 py-2 h-auto hover:bg-transparent"
           >
             <div className="flex items-center gap-2">
               <Settings className="size-4 text-muted-foreground" />
@@ -180,53 +165,28 @@ export function WebSearchConfigurationDisplay({
           </Button>
         </CollapsibleTrigger>
 
-        <CollapsibleContent className="pt-3">
-          <div className="space-y-4 px-3 py-3 rounded-lg bg-muted/20 border border-border/30">
-            {/* Performance Summary Cards */}
+        <CollapsibleContent className="pt-2 pl-6">
+          <div className="space-y-3">
+            {/* Performance Summary - Simplified */}
             {totalQueries > 0 && (
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                {/* Queries Count */}
-                <div className="p-2.5 rounded-md bg-background border border-border/40 space-y-1">
-                  <div className="flex items-center gap-1.5">
-                    <Hash className="size-3 text-muted-foreground" />
-                    <span className="text-xs text-muted-foreground">{t('queries')}</span>
-                  </div>
-                  <p className="text-lg font-bold text-foreground">{totalQueries}</p>
+              <div className="flex flex-wrap gap-x-4 gap-y-2 text-xs text-muted-foreground">
+                <div className="flex items-center gap-1.5">
+                  <Hash className="size-3" />
+                  <span className="font-medium">{totalQueries}</span>
+                  <span>{t('queries')}</span>
                 </div>
-
-                {/* Results Count */}
-                <div className="p-2.5 rounded-md bg-background border border-border/40 space-y-1">
-                  <div className="flex items-center gap-1.5">
-                    <Search className="size-3 text-muted-foreground" />
-                    <span className="text-xs text-muted-foreground">{t('results')}</span>
-                  </div>
-                  <p className="text-lg font-bold text-foreground">{totalResults}</p>
+                <div className="flex items-center gap-1.5">
+                  <Search className="size-3" />
+                  <span className="font-medium">{totalResults}</span>
+                  <span>{t('results')}</span>
                 </div>
-
-                {/* Total Time */}
-                <div className="p-2.5 rounded-md bg-background border border-border/40 space-y-1">
-                  <div className="flex items-center gap-1.5">
-                    <Clock className="size-3 text-muted-foreground" />
-                    <span className="text-xs text-muted-foreground">{t('totalTime')}</span>
-                  </div>
-                  <p className="text-lg font-bold text-foreground">
+                <div className="flex items-center gap-1.5">
+                  <Clock className="size-3" />
+                  <span className="font-medium">
                     {totalTime < 1000
                       ? `${totalTime}ms`
                       : `${(totalTime / 1000).toFixed(1)}s`}
-                  </p>
-                </div>
-
-                {/* Average Time */}
-                <div className="p-2.5 rounded-md bg-background border border-border/40 space-y-1">
-                  <div className="flex items-center gap-1.5">
-                    <Zap className="size-3 text-muted-foreground" />
-                    <span className="text-xs text-muted-foreground">{t('avgTime')}</span>
-                  </div>
-                  <p className="text-lg font-bold text-foreground">
-                    {avgTimePerQuery < 1000
-                      ? `${avgTimePerQuery.toFixed(0)}ms`
-                      : `${(avgTimePerQuery / 1000).toFixed(1)}s`}
-                  </p>
+                  </span>
                 </div>
               </div>
             )}
@@ -315,82 +275,55 @@ export function WebSearchConfigurationDisplay({
               </>
             )}
 
-            {/* Generated Queries List */}
+            {/* Generated Queries - Simplified List */}
             {queries && queries.length > 0 && (
-              <>
-                <Separator />
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2">
-                    <Search className="size-4 text-primary" />
-                    <span className="text-sm font-medium text-foreground">{t('generatedQueries')}</span>
-                  </div>
-
-                  <div className="space-y-2">
-                    {queries.map((query) => {
-                    // Use query.index if available, otherwise use query + searchDepth for uniqueness
-                      const uniqueKey = query.index !== undefined
-                        ? `query-${query.index}`
-                        : `query-${query.query}-${query.searchDepth}`;
-                      const displayIndex = query.index !== undefined ? query.index + 1 : 0;
-
-                      return (
-                        <div
-                          key={uniqueKey}
-                          className="p-3 rounded-md bg-background border border-border/40 space-y-2"
-                        >
-                          <div className="flex items-start gap-2">
-                            {displayIndex > 0 && (
-                              <Badge variant="outline" className="text-xs shrink-0 mt-0.5">
-                                {displayIndex}
-                              </Badge>
-                            )}
-                            <div className="flex-1 min-w-0 space-y-2">
-                              <p className="text-sm font-medium text-foreground break-words">
-                                {query.query}
-                              </p>
-
-                              {query.rationale && (
-                                <p className="text-xs text-muted-foreground leading-relaxed">
-                                  <span className="font-medium">
-                                    {t('rationale')}
-                                    :
-                                  </span>
-                                  {' '}
-                                  {query.rationale}
-                                </p>
-                              )}
-
-                              <div className="flex flex-wrap gap-2">
-                                {query.searchDepth && (
-                                  <Badge
-                                    variant={query.searchDepth === 'advanced' ? 'default' : 'secondary'}
-                                    className="text-xs"
-                                  >
-                                    <Layers className="size-3 mr-1" />
-                                    {tDepth(query.searchDepth)}
-                                  </Badge>
-                                )}
-                                {query.complexity && (
-                                  <Badge variant="outline" className="text-xs capitalize">
-                                    <TrendingUp className="size-3 mr-1" />
-                                    {t(`complexity.${query.complexity}`, { defaultValue: query.complexity })}
-                                  </Badge>
-                                )}
-                                {query.sourceCount !== undefined && (
-                                  <Badge variant="outline" className="text-xs">
-                                    <Hash className="size-3 mr-1" />
-                                    {t('sourceCount.optimal', { count: query.sourceCount })}
-                                  </Badge>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <Search className="size-4 text-muted-foreground" />
+                  <span className="text-xs font-medium text-foreground/70">{t('generatedQueries')}</span>
                 </div>
-              </>
+
+                <div className="space-y-2">
+                  {queries.map((query, idx) => {
+                    const uniqueKey = query.index !== undefined
+                      ? `query-${query.index}`
+                      : `query-${query.query}-${query.searchDepth}`;
+                    const displayIndex = query.index !== undefined ? query.index + 1 : 0;
+
+                    return (
+                      <AnimatedListItem key={uniqueKey} index={idx} className="pl-6 space-y-1">
+                        <div className="flex items-start gap-2">
+                          {displayIndex > 0 && (
+                            <FadeInText delay={idx * 0.05}>
+                              <span className="text-xs text-muted-foreground shrink-0 mt-0.5">
+                                {displayIndex}
+                                .
+                              </span>
+                            </FadeInText>
+                          )}
+                          <p className="text-xs text-foreground/80 break-words flex-1">
+                            <TypingText
+                              text={query.query}
+                              speed={10}
+                              delay={idx * 50 + 50}
+                            />
+                          </p>
+                        </div>
+                        {query.searchDepth && (
+                          <AnimatedBadge delay={idx * 0.05 + 0.2}>
+                            <Badge
+                              variant={query.searchDepth === 'advanced' ? 'default' : 'secondary'}
+                              className="text-xs h-5 ml-5"
+                            >
+                              {tDepth(query.searchDepth)}
+                            </Badge>
+                          </AnimatedBadge>
+                        )}
+                      </AnimatedListItem>
+                    );
+                  })}
+                </div>
+              </div>
             )}
           </div>
         </CollapsibleContent>

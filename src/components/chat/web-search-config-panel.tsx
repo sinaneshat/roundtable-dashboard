@@ -26,8 +26,8 @@ type WebSearchConfigPanelProps = {
 };
 
 export function WebSearchConfigPanel({
-  maxResults = 5,
-  searchDepth = 'basic',
+  maxResults = 10,
+  searchDepth = 'advanced',
   numQueries = 3,
   onConfigChange,
   className,

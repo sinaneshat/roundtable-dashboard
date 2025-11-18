@@ -334,11 +334,13 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
           // Create fallback query with optimized search terms
           generatedQuery = {
             query: optimizedQuery,
-            searchDepth: WebSearchDepths.BASIC,
-            complexity: WebSearchComplexities.BASIC,
+            searchDepth: WebSearchDepths.ADVANCED,
+            complexity: WebSearchComplexities.MODERATE,
             rationale: 'Simple query optimization (AI generation unavailable)',
-            sourceCount: 2,
-            requiresFullContent: false,
+            sourceCount: 10,
+            requiresFullContent: true,
+            chunksPerSource: 2,
+            needsAnswer: 'advanced',
             analysis: `Fallback: Using simplified query transformation from "${body.userQuery}"`,
           };
 
@@ -349,7 +351,7 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
               timestamp: Date.now(),
               query: generatedQuery.query, // ✅ Uses optimized query, not raw user input
               rationale: generatedQuery.rationale,
-              searchDepth: WebSearchDepths.BASIC,
+              searchDepth: WebSearchDepths.ADVANCED,
               index: 0,
               total: 1,
               fallback: true,
@@ -409,7 +411,7 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
               {
                 query: generatedQuery.query,
                 // ✅ AI-DRIVEN: Dynamic source count (1-10) based on query complexity
-                maxResults: generatedQuery.sourceCount ?? 5, // Default to 5 for better coverage
+                maxResults: generatedQuery.sourceCount ?? 10, // Default to 10 for comprehensive coverage
                 // ✅ AI-DRIVEN: Search depth from AI analysis
                 searchDepth: generatedQuery.searchDepth ?? WebSearchDepths.ADVANCED,
                 // ✅ AI-DRIVEN: Dynamic chunks per source for research depth

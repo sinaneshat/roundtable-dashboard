@@ -8,6 +8,7 @@ import { getMessages, getTranslations } from 'next-intl/server';
 import React from 'react';
 
 import { AppProviders } from '@/components/providers';
+import { PWAUpdatePrompt } from '@/components/pwa/pwa-update-prompt';
 import {
   AeoMetaTags,
   SoftwareApplicationSchema,
@@ -114,6 +115,9 @@ export default async function Layout({ children, modal }: RootLayoutProps) {
         />
       </head>
       <body>
+        {/* Production: PWA update detection and prompt */}
+        <PWAUpdatePrompt />
+
         {/* Liquid Glass SVG Filter Definitions (Apple WWDC 2025) */}
         <LiquidGlassFilters />
 

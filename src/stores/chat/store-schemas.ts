@@ -80,6 +80,7 @@ import type {
   SetIsStreaming,
   SetIsWaitingForChangelog,
   SetMessages,
+  SetModelOrder,
   SetOnComplete,
   SetParticipants,
   SetPendingFeedback,
@@ -149,6 +150,7 @@ export const FormStateSchema = z.object({
   selectedMode: ChatModeSchema.nullable(),
   selectedParticipants: z.array(ParticipantConfigSchema),
   enableWebSearch: z.boolean(),
+  modelOrder: z.array(z.string()),
 });
 
 export const FormActionsSchema = z.object({
@@ -156,6 +158,7 @@ export const FormActionsSchema = z.object({
   setSelectedMode: z.custom<SetSelectedMode>(),
   setSelectedParticipants: z.custom<SetSelectedParticipants>(),
   setEnableWebSearch: z.custom<SetEnableWebSearch>(),
+  setModelOrder: z.custom<SetModelOrder>(),
   addParticipant: z.custom<AddParticipant>(),
   removeParticipant: z.custom<RemoveParticipant>(),
   updateParticipant: z.custom<UpdateParticipant>(),

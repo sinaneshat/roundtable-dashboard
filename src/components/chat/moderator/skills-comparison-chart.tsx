@@ -1,12 +1,12 @@
 'use client';
 import chroma from 'chroma-js';
-import { motion } from 'framer-motion';
 import Image from 'next/image';
 import { useTranslations } from 'next-intl';
 import { useMemo } from 'react';
 import { PolarAngleAxis, PolarGrid, Radar, RadarChart } from 'recharts';
 
 import type { ParticipantAnalysis } from '@/api/routes/chat/schema';
+import { AnimatedCard } from '@/components/ui/animated-card';
 import type { ChartConfig } from '@/components/ui/chart';
 import {
   ChartContainer,
@@ -86,12 +86,7 @@ export function SkillsComparisonChart({ participants }: SkillsComparisonChartPro
     };
   });
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 4 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3, ease: 'easeOut' }}
-      className="space-y-3"
-    >
+    <AnimatedCard className="space-y-3">
       <h3 className="text-sm font-semibold px-1">{t('skillsComparison')}</h3>
       <div className="flex flex-wrap justify-center gap-2 px-1">
         {participantData.map((entry) => {
@@ -149,6 +144,6 @@ export function SkillsComparisonChart({ participants }: SkillsComparisonChartPro
           </RadarChart>
         </ChartContainer>
       </div>
-    </motion.div>
+    </AnimatedCard>
   );
 }

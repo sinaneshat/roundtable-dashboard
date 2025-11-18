@@ -3,8 +3,7 @@ import type { MetadataRoute } from 'next';
 import { BRAND } from '@/constants/brand';
 
 /**
- * PWA Manifest for improved mobile experience and SEO
- * Enhances installability and provides app metadata for search engines
+ * PWA Manifest
  */
 export default function manifest(): MetadataRoute.Manifest {
   return {
@@ -15,59 +14,16 @@ export default function manifest(): MetadataRoute.Manifest {
     display: 'standalone',
     background_color: BRAND.colors.dark,
     theme_color: BRAND.colors.primary,
-    orientation: 'portrait-primary',
-    categories: ['productivity', 'business', 'education', 'ai'],
+    scope: '/',
     icons: [
-      {
-        src: '/favicon.ico',
-        sizes: 'any',
-        type: 'image/x-icon',
-      },
       {
         src: '/apple-touch-icon.png',
         sizes: '180x180',
         type: 'image/png',
       },
-      // Standard icons
-      {
-        src: '/icons/icon-72x72.png',
-        sizes: '72x72',
-        type: 'image/png',
-        purpose: 'any',
-      },
-      {
-        src: '/icons/icon-96x96.png',
-        sizes: '96x96',
-        type: 'image/png',
-        purpose: 'any',
-      },
-      {
-        src: '/icons/icon-128x128.png',
-        sizes: '128x128',
-        type: 'image/png',
-        purpose: 'any',
-      },
-      {
-        src: '/icons/icon-144x144.png',
-        sizes: '144x144',
-        type: 'image/png',
-        purpose: 'any',
-      },
-      {
-        src: '/icons/icon-152x152.png',
-        sizes: '152x152',
-        type: 'image/png',
-        purpose: 'any',
-      },
       {
         src: '/icons/icon-192x192.png',
         sizes: '192x192',
-        type: 'image/png',
-        purpose: 'any',
-      },
-      {
-        src: '/icons/icon-384x384.png',
-        sizes: '384x384',
         type: 'image/png',
         purpose: 'any',
       },
@@ -77,7 +33,6 @@ export default function manifest(): MetadataRoute.Manifest {
         type: 'image/png',
         purpose: 'any',
       },
-      // Maskable icons for adaptive icon support
       {
         src: '/icons/icon-maskable-192x192.png',
         sizes: '192x192',
@@ -91,27 +46,5 @@ export default function manifest(): MetadataRoute.Manifest {
         purpose: 'maskable',
       },
     ],
-    screenshots: [
-      {
-        src: '/static/og-image.png',
-        sizes: '1200x630',
-        type: 'image/png',
-        form_factor: 'wide',
-      },
-    ],
-    shortcuts: [
-      {
-        name: 'Start New Chat',
-        short_name: 'New Chat',
-        description: 'Start a new AI collaboration session',
-        url: '/chat',
-        icons: [{ src: '/static/logo.png', sizes: '192x192' }],
-      },
-    ],
-    related_applications: [],
-    prefer_related_applications: false,
-    scope: '/',
-    dir: 'ltr',
-    lang: 'en-US',
   };
 }

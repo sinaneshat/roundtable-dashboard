@@ -4,7 +4,9 @@ import { ChevronRight } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
 import type { RecommendedAction, RoundSummary } from '@/api/routes/chat/schema';
+import { AnimatedListItem } from '@/components/ui/animated-card';
 import { Badge } from '@/components/ui/badge';
+import { FadeInText, TypingText } from '@/components/ui/typing-text';
 import { cn } from '@/lib/ui/cn';
 
 import { ModelBadge } from '../model-badge';
@@ -51,18 +53,17 @@ export function RoundSummarySection({
       {/* Key Insights */}
       {keyInsights && keyInsights.length > 0 && (
         <div className="space-y-1.5">
-          <h4 className="text-xs font-medium text-muted-foreground">{t('keyInsights')}</h4>
+          <FadeInText delay={0.05}>
+            <h4 className="text-xs font-medium text-muted-foreground">{t('keyInsights')}</h4>
+          </FadeInText>
           <div className="space-y-1">
-            {keyInsights.map(insight => (
-              <div
-                key={insight}
-                className="flex items-start gap-2"
-              >
+            {keyInsights.map((insight, index) => (
+              <AnimatedListItem key={insight} index={index} className="flex items-start gap-2">
                 <span className="shrink-0 mt-0.5 text-primary">•</span>
                 <p className="text-sm leading-relaxed text-foreground/90 flex-1">
-                  {insight}
+                  <TypingText text={insight} speed={8} delay={index * 50 + 100} enabled={isStreaming} />
                 </p>
-              </div>
+              </AnimatedListItem>
             ))}
           </div>
         </div>
@@ -71,18 +72,17 @@ export function RoundSummarySection({
       {/* Consensus Points */}
       {consensusPoints && consensusPoints.length > 0 && (
         <div className="space-y-1.5">
-          <h4 className="text-xs font-medium text-muted-foreground">{t('consensusPoints')}</h4>
+          <FadeInText delay={0.15}>
+            <h4 className="text-xs font-medium text-muted-foreground">{t('consensusPoints')}</h4>
+          </FadeInText>
           <div className="space-y-1">
-            {consensusPoints.map(point => (
-              <div
-                key={point}
-                className="flex items-start gap-2"
-              >
+            {consensusPoints.map((point, index) => (
+              <AnimatedListItem key={point} index={index} className="flex items-start gap-2">
                 <span className="shrink-0 mt-0.5 text-primary">•</span>
                 <p className="text-sm leading-relaxed text-foreground/90 flex-1">
-                  {point}
+                  <TypingText text={point} speed={8} delay={index * 50 + 200} enabled={isStreaming} />
                 </p>
-              </div>
+              </AnimatedListItem>
             ))}
           </div>
         </div>
@@ -212,9 +212,11 @@ export function RoundSummarySection({
       {/* Overall Summary */}
       {overallSummary && (
         <div className="space-y-1.5">
-          <h4 className="text-xs font-medium text-muted-foreground">{t('summary')}</h4>
+          <FadeInText delay={0.25}>
+            <h4 className="text-xs font-medium text-muted-foreground">{t('summary')}</h4>
+          </FadeInText>
           <p className="whitespace-pre-line text-sm leading-relaxed text-foreground/80">
-            {overallSummary}
+            <TypingText text={overallSummary} speed={10} delay={300} enabled={isStreaming} />
           </p>
         </div>
       )}
@@ -222,9 +224,11 @@ export function RoundSummarySection({
       {/* Conclusion */}
       {conclusion && (
         <div className="space-y-1.5">
-          <h4 className="text-xs font-medium text-primary">{t('conclusion')}</h4>
+          <FadeInText delay={0.35}>
+            <h4 className="text-xs font-medium text-primary">{t('conclusion')}</h4>
+          </FadeInText>
           <p className="whitespace-pre-line text-sm leading-relaxed text-foreground">
-            {conclusion}
+            <TypingText text={conclusion} speed={10} delay={400} enabled={isStreaming} />
           </p>
         </div>
       )}

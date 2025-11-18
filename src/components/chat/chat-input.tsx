@@ -1,12 +1,13 @@
 'use client';
 import type { ChatStatus } from 'ai';
-import { ArrowUp, Mic, Square } from 'lucide-react';
+import { ArrowUp, Mic, Square, StopCircle } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import type { FormEvent } from 'react';
 import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 
 import type { ParticipantConfig } from '@/components/chat/chat-form-schemas';
 import { QuotaAlertExtension } from '@/components/chat/quota-alert-extension';
+import { VoiceVisualization } from '@/components/chat/voice-visualization';
 import { Button } from '@/components/ui/button';
 import { useUsageStatsQuery } from '@/hooks/queries';
 import {
@@ -31,7 +32,6 @@ type ChatInputProps = {
   participants?: ParticipantConfig[];
   onRemoveParticipant?: (participantId: string) => void;
   className?: string;
-  currentParticipantIndex?: number;
   // Speech recognition props
   enableSpeech?: boolean;
   minHeight?: number;
@@ -56,7 +56,6 @@ export const ChatInput = memo(({
   participants = EMPTY_PARTICIPANTS,
   onRemoveParticipant: _onRemoveParticipant,
   className,
-  currentParticipantIndex,
   // Speech recognition props
   enableSpeech = true,
   minHeight = 80,
@@ -67,10 +66,6 @@ export const ChatInput = memo(({
   const t = useTranslations();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const isStreaming = status !== 'ready';
-  const streamingProgress
-    = isStreaming && currentParticipantIndex !== undefined && participants.length > 1
-      ? `${currentParticipantIndex}/${participants.length}`
-      : null;
 
   // Check if quota is exceeded (from quota alert extension)
   const { data: statsData } = useUsageStatsQuery();
@@ -121,33 +116,102 @@ export const ChatInput = memo(({
   useKeyboardAwareScroll(textareaRef, { enabled: true });
 
   // Speech recognition
-  const handleTranscription = useCallback(
-    (transcript: string) => {
-      // Insert transcription at cursor position or append
-      const textarea = textareaRef.current;
-      if (!textarea) {
-        onChange(`${value} ${transcript}`);
-        return;
+  // ✅ PATTERN: Separate final and interim transcripts (react-speech-recognition pattern)
+  // finalTranscript = all finalized speech results (never changes once set)
+  // interimTranscript = current unfinal speech (changes as user speaks)
+  // display = finalTranscript + interimTranscript (always)
+  const finalTranscriptRef = useRef('');
+  const currentInterimRef = useRef('');
+  const isListeningRef = useRef(false);
+
+  const handleFinalTranscript = useCallback((text: string) => {
+    const trimmedText = text.trim();
+    if (trimmedText) {
+      // ✅ Append to final transcript with proper spacing
+      if (finalTranscriptRef.current) {
+        const needsSpace = !finalTranscriptRef.current.endsWith(' ');
+        finalTranscriptRef.current = needsSpace
+          ? `${finalTranscriptRef.current} ${trimmedText}`
+          : `${finalTranscriptRef.current}${trimmedText}`;
+      } else {
+        finalTranscriptRef.current = trimmedText;
       }
 
-      const start = textarea.selectionStart;
-      const end = textarea.selectionEnd;
-      const newValue = `${value.slice(0, start) + transcript} ${value.slice(end)}`;
-      onChange(newValue);
+      // Clear interim since it just got finalized
+      currentInterimRef.current = '';
 
-      // Set cursor position after inserted text
-      setTimeout(() => {
-        const newPosition = start + transcript.length + 1;
-        textarea.setSelectionRange(newPosition, newPosition);
-        textarea.focus();
-      }, 0);
-    },
-    [value, onChange],
-  );
+      // Display only final (interim is empty now)
+      onChange(finalTranscriptRef.current);
+    }
+  }, [onChange]);
 
-  const { isListening, isSupported: isSpeechSupported, toggle: toggleSpeech } = useSpeechRecognition({
-    onTranscript: handleTranscription,
+  const handleInterimTranscript = useCallback((interim: string) => {
+    // Store current interim
+    currentInterimRef.current = interim.trim();
+
+    // ✅ ALWAYS display: finalTranscript + interimTranscript
+    // Never try to strip or detect - just combine them
+    if (currentInterimRef.current) {
+      const needsSpace = finalTranscriptRef.current && !finalTranscriptRef.current.endsWith(' ');
+      const fullText = needsSpace
+        ? `${finalTranscriptRef.current} ${currentInterimRef.current}`
+        : `${finalTranscriptRef.current}${currentInterimRef.current}`;
+      onChange(fullText);
+    } else {
+      // No interim, show only final
+      onChange(finalTranscriptRef.current);
+    }
+  }, [onChange]);
+
+  const {
+    isListening,
+    isSupported: isSpeechSupported,
+    toggle: toggleSpeech,
+    audioLevels,
+  } = useSpeechRecognition({
+    onTranscript: handleFinalTranscript,
+    onInterimTranscript: handleInterimTranscript,
+    continuous: true,
+    enableAudioVisualization: true,
   });
+
+  // Update listening ref and initialize transcripts when recording starts/stops
+  const prevIsListening = useRef(false);
+  useEffect(() => {
+    const wasListening = prevIsListening.current;
+    const isNowListening = isListening;
+
+    // Only process on listening state transitions
+    if (wasListening === isNowListening) {
+      return;
+    }
+
+    isListeningRef.current = isNowListening;
+
+    // ✅ When recording STARTS, capture current input as initial final transcript
+    if (!wasListening && isNowListening) {
+      finalTranscriptRef.current = value;
+      currentInterimRef.current = '';
+    }
+
+    // ✅ When recording STOPS, sync final transcript with current value
+    if (wasListening && !isNowListening) {
+      finalTranscriptRef.current = value;
+      currentInterimRef.current = '';
+    }
+
+    prevIsListening.current = isNowListening;
+  }, [isListening, value]);
+
+  // ✅ FIX: Sync final transcript ref with value when not listening
+  // This prevents drift between the ref and actual textarea value
+  // ensuring all spoken words accumulate properly
+  useEffect(() => {
+    if (!isListening) {
+      finalTranscriptRef.current = value;
+      currentInterimRef.current = '';
+    }
+  }, [value, isListening]);
 
   // AI SDK v5 Pattern: Use requestAnimationFrame for focus after DOM renders
   useEffect(() => {
@@ -196,9 +260,9 @@ export const ChatInput = memo(({
       <div
         className={cn(
           'relative flex flex-col overflow-hidden',
-          'rounded-2xl sm:rounded-3xl',
-          'border border-transparent',
-          'bg-gradient-to-r from-white/10 via-white/5 to-white/10 p-px',
+          'rounded-2xl',
+          'border border-border',
+          'bg-card',
           'shadow-lg',
           'transition-opacity duration-200',
           isDisabled && !isQuotaExceeded && 'opacity-60 cursor-not-allowed',
@@ -206,9 +270,17 @@ export const ChatInput = memo(({
           className,
         )}
       >
-        <div className="flex flex-col rounded-xl sm:rounded-2xl bg-white/5 backdrop-blur-xl overflow-hidden h-full">
+        <div className="flex flex-col overflow-hidden h-full">
           {/* Quota Alert Extension - appears at top when quota exceeded */}
           {quotaCheckType && <QuotaAlertExtension checkType={quotaCheckType} />}
+
+          {/* Voice Visualization - appears at top when recording */}
+          {enableSpeech && isSpeechSupported && (
+            <VoiceVisualization
+              isActive={isListening}
+              audioLevels={audioLevels}
+            />
+          )}
 
           <form
             onSubmit={(e) => {
@@ -228,13 +300,25 @@ export const ChatInput = memo(({
               <textarea
                 ref={textareaRef}
                 value={value}
-                onChange={e => onChange(e.target.value)}
+                onChange={(e) => {
+                  const newValue = e.target.value;
+                  onChange(newValue);
+                  // ✅ FIX: Always update final transcript on manual typing
+                  // When user manually edits during listening, preserve their edits
+                  // for next speech appending. Clear interim since it's now part of manual edit.
+                  if (!isListening) {
+                    finalTranscriptRef.current = newValue;
+                    currentInterimRef.current = '';
+                  }
+                }}
                 onKeyDown={handleKeyDown}
                 disabled={isDisabled}
                 placeholder={
                   isStreaming
                     ? t('chat.input.streamingPlaceholder')
-                    : placeholder || t('chat.input.placeholder')
+                    : isListening
+                      ? 'Listening... speak now'
+                      : placeholder || t('chat.input.placeholder')
                 }
                 className="flex-1 bg-transparent border-0 text-sm sm:text-base focus:outline-none focus:ring-0 placeholder:text-muted-foreground/60 disabled:opacity-50 disabled:cursor-not-allowed resize-none overflow-y-auto transition-all duration-200"
                 style={{ minHeight: `${minHeight}px` }}
@@ -246,56 +330,57 @@ export const ChatInput = memo(({
             {/* Toolbar and submit */}
             <div>
               <div className="px-2 sm:px-3 py-1.5 sm:py-2 flex items-center gap-1.5 sm:gap-2">
-                {/* Speech recognition button */}
-                {enableSpeech && isSpeechSupported && (
-                  <Button
-                    type="button"
-                    size="icon"
-                    variant={isListening ? 'default' : 'ghost'}
-                    onClick={toggleSpeech}
-                    disabled={isDisabled}
-                    className={cn(
-                      'size-8 sm:size-9 shrink-0',
-                      isListening && 'animate-pulse',
-                    )}
-                    title={t('chat.input.voiceInput')}
-                  >
-                    <Mic className="size-4" />
-                  </Button>
+                {/* Left side: Toolbar (AI Models + Mode + WebSearch) */}
+                {toolbar && (
+                  <div className="flex-1 flex items-center gap-2">
+                    {toolbar}
+                  </div>
                 )}
 
-                {/* Existing toolbar */}
-                {toolbar}
+                {/* Right side: Speech + Submit buttons */}
+                <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+                  {/* Speech recognition button */}
+                  {enableSpeech && isSpeechSupported && (
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant={isListening ? 'default' : 'ghost'}
+                      onClick={toggleSpeech}
+                      disabled={isDisabled && !isListening}
+                      className={cn(
+                        'size-9 shrink-0 rounded-full',
+                        isListening && 'bg-destructive hover:bg-destructive/90 text-destructive-foreground animate-pulse',
+                      )}
+                      title={isListening ? 'Stop recording' : t('chat.input.voiceInput')}
+                    >
+                      {isListening ? <StopCircle className="size-4" /> : <Mic className="size-4" />}
+                    </Button>
+                  )}
 
-                <div className="flex-1" />
-
-                {/* Submit/Stop button */}
-                {isStreaming && onStop
-                  ? (
-                      <Button
-                        type="button"
-                        size="icon"
-                        onClick={onStop}
-                        className="size-9 rounded-full shrink-0 relative touch-manipulation active:scale-95 transition-transform bg-white text-black hover:bg-white/90"
-                      >
-                        <Square className="size-4 sm:size-[18px]" />
-                        {streamingProgress && (
-                          <span className="absolute -top-1 -right-1 text-[10px] font-medium bg-primary text-primary-foreground rounded-full px-1.5 min-w-[22px] text-center">
-                            {streamingProgress}
-                          </span>
-                        )}
-                      </Button>
-                    )
-                  : (
-                      <Button
-                        type="submit"
-                        size="icon"
-                        disabled={isDisabled || !hasValidInput}
-                        className="size-9 rounded-full shrink-0 touch-manipulation active:scale-95 transition-transform disabled:active:scale-100 bg-white text-black hover:bg-white/90 disabled:bg-white/20 disabled:text-white/40"
-                      >
-                        <ArrowUp className="size-4 sm:size-[18px]" />
-                      </Button>
-                    )}
+                  {/* Submit/Stop button */}
+                  {isStreaming && onStop
+                    ? (
+                        <Button
+                          type="button"
+                          size="icon"
+                          onClick={onStop}
+                          className="size-9 rounded-full shrink-0 touch-manipulation active:scale-95 transition-transform bg-white text-black hover:bg-white/90"
+                          aria-label={t('chat.input.stopStreaming')}
+                        >
+                          <Square className="size-4" />
+                        </Button>
+                      )
+                    : (
+                        <Button
+                          type="submit"
+                          size="icon"
+                          disabled={isDisabled || !hasValidInput}
+                          className="size-9 rounded-full shrink-0 touch-manipulation active:scale-95 transition-transform disabled:active:scale-100 bg-white text-black hover:bg-white/90 disabled:bg-white/20 disabled:text-white/40"
+                        >
+                          <ArrowUp className="size-4" />
+                        </Button>
+                      )}
+                </div>
               </div>
             </div>
           </form>

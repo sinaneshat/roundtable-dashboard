@@ -13,10 +13,11 @@ import { AnalysisStatuses, MessageRoles } from '@/api/core/enums';
 import type { ModeratorAnalysisPayload } from '@/api/routes/chat/schema';
 import type { ParticipantConfig } from '@/components/chat/chat-form-schemas';
 import { ChatInput } from '@/components/chat/chat-input';
-import { ChatInputToolbarMenu } from '@/components/chat/chat-input-toolbar-menu';
+import { ChatInputEnhancedToolbar } from '@/components/chat/chat-input-enhanced-toolbar';
 import { ChatMessageList } from '@/components/chat/chat-message-list';
 import { ChatQuickStart } from '@/components/chat/chat-quick-start';
 import { ConversationModeModal } from '@/components/chat/conversation-mode-modal';
+import type { OrderedModel } from '@/components/chat/model-item';
 import { ModelSelectionModal } from '@/components/chat/model-selection-modal';
 import { RoundAnalysisCard } from '@/components/chat/moderator/round-analysis-card';
 import { StreamingParticipantsLoader } from '@/components/chat/streaming-participants-loader';
@@ -120,12 +121,13 @@ export default function ChatOverviewScreen() {
   const stopStreaming = useChatStore(s => s.stop);
 
   // Form actions - direct setters (non-consolidated)
-  const { setInputValue, setSelectedMode, setSelectedParticipants, removeParticipant } = useChatStore(
+  const { setInputValue, setSelectedMode, setSelectedParticipants, removeParticipant, setEnableWebSearch } = useChatStore(
     useShallow(s => ({
       setInputValue: s.setInputValue,
       setSelectedMode: s.setSelectedMode,
       setSelectedParticipants: s.setSelectedParticipants,
       removeParticipant: s.removeParticipant,
+      setEnableWebSearch: s.setEnableWebSearch,
     })),
   );
 
@@ -162,29 +164,45 @@ export default function ChatOverviewScreen() {
     can_upgrade: true,
   };
 
-  const orderedModels = useMemo(() => {
+  // Track visual order of models independently of selection
+  const [modelOrder, setModelOrder] = useChatStore(
+    useShallow(s => [s.modelOrder, s.setModelOrder]),
+  );
+
+  // Initialize model order when models first load
+  useEffect(() => {
+    if (allEnabledModels.length > 0 && modelOrder.length === 0) {
+      setModelOrder(allEnabledModels.map(m => m.id));
+    }
+  }, [allEnabledModels, modelOrder.length, setModelOrder]);
+
+  // eslint-disable-next-line react-hooks/preserve-manual-memoization
+  const orderedModels = useMemo((): OrderedModel[] => {
     if (allEnabledModels.length === 0)
       return [];
 
-    const selectedModels = selectedParticipants
-      .sort((a, b) => a.priority - b.priority)
-      .flatMap((p, index) => {
-        const model = allEnabledModels.find(m => m.id === p.modelId);
-        return model ? [{ model, participant: p, order: index }] : [];
-      });
+    // Create maps for quick lookup
+    const participantMap = new Map(
+      selectedParticipants.map(p => [p.modelId, p]),
+    );
+    const modelMap = new Map(allEnabledModels.map(m => [m.id, m]));
 
-    const selectedIds = new Set(selectedParticipants.map(p => p.modelId));
-    const unselectedModels = allEnabledModels
-      .filter(m => !selectedIds.has(m.id))
-      .sort((a, b) => a.name.localeCompare(b.name))
-      .map((m, index) => ({
-        model: m,
-        participant: null,
-        order: selectedModels.length + index,
-      }));
+    // Use modelOrder to determine sequence, fallback to allEnabledModels order
+    const orderedIds = modelOrder.length > 0 ? modelOrder : allEnabledModels.map(m => m.id);
 
-    return [...selectedModels, ...unselectedModels];
-  }, [selectedParticipants, allEnabledModels]);
+    return orderedIds
+      .map((modelId) => {
+        const model = modelMap.get(modelId);
+        if (!model)
+          return null;
+        return {
+          model,
+          participant: participantMap.get(modelId) || null,
+          order: orderedIds.indexOf(modelId),
+        };
+      })
+      .filter(Boolean) as typeof orderedModels;
+  }, [selectedParticipants, allEnabledModels, modelOrder]);
 
   const handleToggleModel = useCallback((modelId: string) => {
     const orderedModel = orderedModels.find(om => om.model.id === modelId);
@@ -192,22 +210,34 @@ export default function ChatOverviewScreen() {
       return;
 
     if (orderedModel.participant) {
-      // Remove model
+      // Remove model - update priorities for remaining participants
       const filtered = selectedParticipants.filter(p => p.id !== orderedModel.participant!.id);
-      const reindexed = filtered.map((p, index) => ({ ...p, priority: index }));
+      // Recalculate priorities based on visual order
+      const reindexed = filtered.map((p) => {
+        const visualIndex = modelOrder.indexOf(p.modelId);
+        return { ...p, priority: visualIndex };
+      }).sort((a, b) => a.priority - b.priority);
       setSelectedParticipants(reindexed);
     } else {
-      // Add model
+      // Add model - assign priority based on position in visual order
       participantIdCounterRef.current += 1;
+      const visualIndex = modelOrder.indexOf(modelId);
       const newParticipant: ParticipantConfig = {
         id: `participant-${participantIdCounterRef.current}`,
         modelId,
         role: '',
-        priority: selectedParticipants.length,
+        priority: visualIndex,
       };
-      setSelectedParticipants([...selectedParticipants, newParticipant]);
+      // Insert and re-sort all participants by their visual order
+      const updated = [...selectedParticipants, newParticipant]
+        .map((p) => {
+          const idx = modelOrder.indexOf(p.modelId);
+          return { ...p, priority: idx };
+        })
+        .sort((a, b) => a.priority - b.priority);
+      setSelectedParticipants(updated);
     }
-  }, [orderedModels, selectedParticipants, setSelectedParticipants]);
+  }, [orderedModels, selectedParticipants, setSelectedParticipants, modelOrder]);
 
   const handleRoleChange = useCallback((modelId: string, role: string, customRoleId?: string) => {
     setSelectedParticipants(
@@ -226,6 +256,11 @@ export default function ChatOverviewScreen() {
   }, [selectedParticipants, setSelectedParticipants]);
 
   const handleReorderModels = useCallback((newOrder: typeof orderedModels) => {
+    // Update visual order of all models
+    const newModelOrder = newOrder.map(om => om.model.id);
+    setModelOrder(newModelOrder);
+
+    // Update participant priorities based on new visual order
     const reorderedParticipants = newOrder
       .filter(om => om.participant !== null)
       .map((om, index) => ({
@@ -233,7 +268,7 @@ export default function ChatOverviewScreen() {
         priority: index,
       }));
     setSelectedParticipants(reorderedParticipants);
-  }, [setSelectedParticipants]);
+  }, [setSelectedParticipants, setModelOrder]);
 
   // Initialize default participants if needed
   const initialParticipants = useMemo<ParticipantConfig[]>(() => {
@@ -407,12 +442,14 @@ export default function ChatOverviewScreen() {
 
   // Scroll management - auto-scroll during streaming (if user is near bottom)
   // Always scroll when analysis appears (regardless of position)
+  // ✅ FIX: Pass currentParticipantIndex to trigger auto-scroll on participant turn-taking
   useChatScroll({
     messages,
     analyses,
     isStreaming,
     scrollContainerId: 'chat-scroll-container',
     enableNearBottomDetection: !showInitialUI, // Only enable detection when chat is visible
+    currentParticipantIndex,
   });
 
   // Streaming loader state calculation
@@ -439,17 +476,19 @@ export default function ChatOverviewScreen() {
               className="fixed inset-0 pointer-events-none overflow-hidden"
               style={{ zIndex: 0, willChange: 'opacity' }}
             >
-              {/* Position at logo center: pt-4 (1rem mobile) + logo half (2rem mobile, 3.5rem sm, 4rem md, 4.5rem lg) */}
+              {/* Position behind logo, right of center at top */}
               <div
-                className="absolute left-1/2 -translate-x-1/2"
+                className="absolute"
                 style={{
-                  top: 'calc(1rem + 2rem)', // Mobile: pt-4 + half of h-16
+                  top: '-100px',
+                  left: '63%',
+                  transform: 'translateX(-50%)',
                   willChange: 'transform',
                 }}
               >
                 <RadialGlow
-                  size={800}
-                  offsetY={40}
+                  size={500}
+                  offsetY={0}
                   duration={18}
                   animate={true}
                   useLogoColors={true}
@@ -477,10 +516,10 @@ export default function ChatOverviewScreen() {
                 transition={{ duration: 0.4, ease: 'easeOut' }}
                 className="w-full"
               >
-                <div className="flex flex-col items-center gap-3 sm:gap-4 md:gap-6 text-center relative">
+                <div className="flex flex-col items-center gap-8 sm:gap-10 text-center relative">
 
                   <motion.div
-                    className="relative h-16 w-16 xs:h-20 xs:w-20 sm:h-28 sm:w-28 md:h-32 md:w-32 lg:h-36 lg:w-36 z-10"
+                    className="relative h-24 w-24 sm:h-28 sm:w-28 z-10"
                     initial={{ scale: 0.9, opacity: 0 }}
                     animate={{ scale: 1, opacity: 1 }}
                     exit={{ scale: 0.5, opacity: 0, y: -50 }}
@@ -490,34 +529,36 @@ export default function ChatOverviewScreen() {
                       src={BRAND.logos.main}
                       alt={BRAND.name}
                       fill
-                      sizes="(max-width: 480px) 80px, (max-width: 640px) 112px, (max-width: 768px) 128px, (max-width: 1024px) 128px, 144px"
+                      sizes="(max-width: 640px) 96px, 112px"
                       className="object-contain relative z-10"
                       priority
                     />
                   </motion.div>
 
-                  <motion.h1
-                    className="text-xl xs:text-2xl sm:text-4xl md:text-5xl lg:text-6xl font-bold text-gray-900 dark:text-white px-4"
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -30 }}
-                    transition={{ delay: 0.25, duration: 0.4, ease: 'easeOut' }}
-                  >
-                    {BRAND.name}
-                  </motion.h1>
+                  <div className="flex flex-col items-center gap-2">
+                    <motion.h1
+                      className="text-4xl sm:text-5xl font-semibold text-white px-4 leading-tight"
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -30 }}
+                      transition={{ delay: 0.25, duration: 0.4, ease: 'easeOut' }}
+                    >
+                      {BRAND.name}
+                    </motion.h1>
 
-                  <motion.p
-                    className="text-sm xs:text-base sm:text-xl md:text-2xl text-gray-600 dark:text-gray-300 max-w-2xl px-4"
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -30 }}
-                    transition={{ delay: 0.35, duration: 0.4, ease: 'easeOut' }}
-                  >
-                    {BRAND.tagline}
-                  </motion.p>
+                    <motion.p
+                      className="text-base sm:text-lg text-gray-300 max-w-2xl px-4 leading-relaxed"
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -30 }}
+                      transition={{ delay: 0.35, duration: 0.4, ease: 'easeOut' }}
+                    >
+                      {BRAND.tagline}
+                    </motion.p>
+                  </div>
 
                   <motion.div
-                    className="w-full mt-3 sm:mt-4 md:mt-8"
+                    className="w-full mt-8 sm:mt-12"
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, scale: 0.95 }}
@@ -542,18 +583,17 @@ export default function ChatOverviewScreen() {
                       onStop={stopStreaming}
                       placeholder={t('chat.input.placeholder')}
                       participants={selectedParticipants}
-                      currentParticipantIndex={currentParticipantIndex}
                       quotaCheckType="threads"
                       onRemoveParticipant={isStreaming ? undefined : removeParticipant}
                       toolbar={(
-                        <ChatInputToolbarMenu
+                        <ChatInputEnhancedToolbar
                           selectedParticipants={selectedParticipants}
                           allModels={allEnabledModels}
                           onOpenModelModal={() => modelModal.onTrue()}
                           selectedMode={selectedMode || getDefaultChatMode()}
                           onOpenModeModal={() => modeModal.onTrue()}
                           enableWebSearch={enableWebSearch}
-                          onWebSearchToggle={formActions.handleWebSearchToggle}
+                          onWebSearchToggle={setEnableWebSearch}
                           disabled={isStreaming}
                         />
                       )}
@@ -674,7 +714,7 @@ export default function ChatOverviewScreen() {
           {!showInitialUI && (
             <div
               ref={inputContainerRef}
-              className="sticky z-50 w-full"
+              className="sticky z-[100] w-full will-change-[bottom]"
               style={{
                 bottom: `${keyboardOffset + 16}px`,
               }}
@@ -688,18 +728,17 @@ export default function ChatOverviewScreen() {
                   onStop={stopStreaming}
                   placeholder={t('chat.input.placeholder')}
                   participants={selectedParticipants}
-                  currentParticipantIndex={currentParticipantIndex}
                   quotaCheckType="threads"
                   onRemoveParticipant={isStreaming ? undefined : removeParticipant}
                   toolbar={(
-                    <ChatInputToolbarMenu
+                    <ChatInputEnhancedToolbar
                       selectedParticipants={selectedParticipants}
                       allModels={allEnabledModels}
                       onOpenModelModal={() => modelModal.onTrue()}
                       selectedMode={selectedMode || getDefaultChatMode()}
                       onOpenModeModal={() => modeModal.onTrue()}
                       enableWebSearch={enableWebSearch}
-                      onWebSearchToggle={formActions.handleWebSearchToggle}
+                      onWebSearchToggle={setEnableWebSearch}
                       disabled={isStreaming}
                     />
                   )}

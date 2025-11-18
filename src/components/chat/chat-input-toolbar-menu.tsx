@@ -1,6 +1,6 @@
 'use client';
 
-import { ChevronDown, MessagesSquare, Sparkles } from 'lucide-react';
+import { ChevronDown, Globe, MessagesSquare, Sparkles } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { memo, useEffect, useState } from 'react';
 
@@ -8,7 +8,6 @@ import type { ChatMode } from '@/api/core/enums';
 import type { EnhancedModelResponse } from '@/api/routes/models/schema';
 import { AvatarGroup } from '@/components/chat/avatar-group';
 import type { ParticipantConfig } from '@/components/chat/chat-form-schemas';
-import { WebSearchToggle } from '@/components/chat/web-search-toggle';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -94,11 +93,21 @@ export const ChatInputToolbarMenu = memo(({
           {ModeIcon && <ModeIcon className="size-4" />}
           <span>{currentMode?.label || t('chat.modes.mode')}</span>
         </Button>
-        <WebSearchToggle
-          enabled={enableWebSearch}
-          onToggle={disabled ? undefined : onWebSearchToggle}
+        <button
+          type="button"
           disabled={disabled}
-        />
+          onClick={() => onWebSearchToggle?.(!enableWebSearch)}
+          className={cn(
+            'flex items-center justify-center rounded-full transition-colors',
+            'h-9 w-9 p-0',
+            'disabled:opacity-50 disabled:cursor-not-allowed',
+            enableWebSearch
+              ? 'bg-primary/10 border border-primary/50 text-primary hover:bg-primary/20 hover:border-primary/60'
+              : 'bg-muted/40 border border-border/50 hover:bg-muted/60',
+          )}
+        >
+          <Globe className="size-4" />
+        </button>
       </div>
     );
   }
@@ -124,7 +133,7 @@ export const ChatInputToolbarMenu = memo(({
         align="start"
         side="top"
         sideOffset={8}
-        className="w-56 bg-black/95 backdrop-blur-xl border-white/10"
+        className="w-56 bg-card/95 backdrop-blur-xl border-white/10"
       >
         <DropdownMenuLabel className="text-white/60">
           {t('chat.toolbar.options')}

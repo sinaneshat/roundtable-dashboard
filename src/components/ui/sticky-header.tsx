@@ -16,7 +16,7 @@
 import { motion } from 'motion/react';
 import type { ReactNode } from 'react';
 
-import { cn, getZIndexClass } from '@/lib/ui/cn';
+import { cn } from '@/lib/ui/cn';
 
 type StickyHeaderProps = {
   children: ReactNode;
@@ -57,18 +57,8 @@ export function StickyHeader({
         damping: 40,
       }}
       className={cn(
-        'sticky top-0',
-        getZIndexClass(zIndex),
-        !noBackground && 'backdrop-blur-md bg-gradient-to-r from-black/90 via-black/50 to-transparent',
         className,
       )}
-      style={
-        !noBackground
-          ? {
-              boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
-            }
-          : undefined
-      }
     >
       {children}
     </motion.div>

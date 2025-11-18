@@ -289,18 +289,18 @@ function ModeratorAnalysisStreamComponent({
     >
       {validLeaderboard.length > 0 && (
         <motion.div
-          initial={{ opacity: 0, y: 10 }}
+          initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3 }}
+          transition={{ duration: 0.25, ease: [0.32, 0.72, 0, 1] }}
         >
           <LeaderboardCard leaderboard={validLeaderboard} />
         </motion.div>
       )}
       {validParticipantAnalyses.length > 0 && (
         <motion.div
-          initial={{ opacity: 0, y: 10 }}
+          initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3, delay: 0.1 }}
+          transition={{ duration: 0.25, delay: 0.1, ease: [0.32, 0.72, 0, 1] }}
         >
           <SkillsComparisonChart participants={validParticipantAnalyses} />
         </motion.div>
@@ -310,16 +310,19 @@ function ModeratorAnalysisStreamComponent({
           className="space-y-3"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          transition={{ duration: 0.3, delay: 0.2 }}
+          transition={{ duration: 0.25, delay: 0.15, ease: [0.32, 0.72, 0, 1] }}
         >
           {validParticipantAnalyses.map((participant, index) => (
             <motion.div
               key={`${analysis.id}-participant-${participant.participantIndex}`}
-              initial={{ opacity: 0, x: -10 }}
+              initial={{ opacity: 0, x: -8 }}
               animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.3, delay: 0.1 * index }}
+              transition={{ duration: 0.2, delay: index * 0.05, ease: [0.32, 0.72, 0, 1] }}
             >
-              <ParticipantAnalysisCard analysis={participant} />
+              <ParticipantAnalysisCard
+                analysis={participant}
+                isStreaming={analysis.status === AnalysisStatuses.STREAMING}
+              />
             </motion.div>
           ))}
         </motion.div>

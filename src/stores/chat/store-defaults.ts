@@ -30,6 +30,7 @@ export const FORM_DEFAULTS = {
   selectedMode: 'analyzing' as ChatModeId | null, // ✅ FIX: Default to 'analyzing' mode
   selectedParticipants: [] as ParticipantConfig[],
   enableWebSearch: false, // ⚠️ NOTE: This is ONLY used for new chats - thread screen syncs from thread.enableWebSearch
+  modelOrder: [] as string[], // Visual order of models for drag-and-drop
 } as const;
 
 // ============================================================================
@@ -157,6 +158,7 @@ export const COMPLETE_RESET_STATE = {
   selectedMode: FORM_DEFAULTS.selectedMode,
   selectedParticipants: FORM_DEFAULTS.selectedParticipants,
   enableWebSearch: FORM_DEFAULTS.enableWebSearch,
+  modelOrder: FORM_DEFAULTS.modelOrder,
   // Feedback state
   feedbackByRound: FEEDBACK_DEFAULTS.feedbackByRound,
   pendingFeedback: FEEDBACK_DEFAULTS.pendingFeedback,

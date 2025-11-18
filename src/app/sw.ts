@@ -11,7 +11,27 @@ declare global {
 
 declare const self: ServiceWorkerGlobalScope;
 
-// Comprehensive caching strategies for offline-first PWA
+// Build metadata for cache invalidation - version changes on every build
+// This ensures service worker updates are detected in production
+const SW_VERSION = process.env.NEXT_PUBLIC_SW_VERSION || 'dev';
+const BUILD_TIME = process.env.NEXT_PUBLIC_BUILD_TIME || new Date().toISOString();
+
+// Log version on activation for debugging
+// eslint-disable-next-line no-console
+console.log(`[SW] Version: ${SW_VERSION}, Build: ${BUILD_TIME}`);
+
+// Development mode: Do absolutely nothing - no caching, no service worker
+// This file should never be built or executed in development due to next.config.ts disable flag
+// Note: This code is only here as a safety net - Serwist is disabled in next.config.ts for development
+if (process.env.NODE_ENV === 'development') {
+  // eslint-disable-next-line no-console
+  console.warn('[DEV SW] Service worker should not be active in development - this indicates a configuration error');
+
+  // Don't initialize Serwist in development
+  throw new Error('Service worker should not be active in development - check next.config.ts');
+}
+
+// Production mode: Comprehensive caching strategies for offline-first PWA
 const serwist = new Serwist({
   precacheEntries: self.__SW_MANIFEST,
   precacheOptions: {
@@ -114,3 +134,10 @@ const serwist = new Serwist({
 });
 
 serwist.addEventListeners();
+
+// Handle update requests from PWAUpdatePrompt component
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    void self.skipWaiting();
+  }
+});

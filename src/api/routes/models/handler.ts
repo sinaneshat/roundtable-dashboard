@@ -22,12 +22,12 @@ import type { RouteHandler } from '@hono/zod-openapi';
 import { createHandler, Responses } from '@/api/core';
 import { isRestrictedFreeModel } from '@/api/services/model-validation.service';
 import { getAllModels } from '@/api/services/models-config.service';
-import { canAccessModelByPricing, getFlagshipScore, getMaxModelsForTier, getRequiredTierForModel, getTierName, getTiersInOrder, SUBSCRIPTION_TIER_NAMES } from '@/api/services/product-logic.service';
+import type { SubscriptionTier } from '@/api/services/product-logic.service';
+import { canAccessModelByPricing, getFlagshipScore, getMaxModelsForTier, getRequiredTierForModel, getTierName, SUBSCRIPTION_TIER_NAMES } from '@/api/services/product-logic.service';
 import { getUserTier } from '@/api/services/usage-tracking.service';
 import type { ApiEnv } from '@/api/types';
 
 import type { listModelsRoute } from './route';
-import type { TierGroup } from './schema';
 
 // ============================================================================
 // Handlers
@@ -119,86 +119,29 @@ export const listModelsHandler: RouteHandler<typeof listModelsRoute, ApiEnv> = c
     });
 
     // ============================================================================
-    // ✅ DEFAULT MODEL: Select best model for user's tier
+    // ✅ SIMPLIFIED ORDERING: Accessible models first, then by tier
     // ============================================================================
-    // Priority: highest quality accessible model for user's tier
-    const accessibleModels = modelsWithTierInfo.filter(m => m.is_accessible_to_user);
-    const defaultModelId = accessibleModels.length > 0
-      ? accessibleModels[0]!.id // First model (Gemini 2.5 Pro) or best accessible
-      : modelsWithTierInfo[0]!.id; // Fallback to first model (always exists)
-
-    // ============================================================================
-    // ✅ FLAGSHIP MODELS: Top 10 most popular with max 2 per provider
-    // ============================================================================
-    // Ensures provider diversity in "Most Popular" section
-    // Algorithm:
-    // 1. Filter models with flagship score >= 70
-    // 2. Group by provider
-    // 3. Take max 2 highest-scored models from each provider
-    // 4. Sort all selected models by score
-    // 5. Take top 10 overall
-    const flagshipCandidates = modelsWithTierInfo.filter(m => getFlagshipScore(m) >= 70);
-
-    // Sort by flagship score first
-    flagshipCandidates.sort((a, b) => {
-      const scoreA = getFlagshipScore(a);
-      const scoreB = getFlagshipScore(b);
-      return scoreB - scoreA;
-    });
-
-    // Group by provider and take max 2 from each
-    const modelsByProvider = new Map<string, typeof modelsWithTierInfo>();
-
-    for (const model of flagshipCandidates) {
-      const provider = model.provider;
-      if (!modelsByProvider.has(provider)) {
-        modelsByProvider.set(provider, []);
+    // Sort models: accessible first (by flagship score), then inaccessible (by required tier)
+    const sortedModels = modelsWithTierInfo.sort((a, b) => {
+      // Accessible models always come before inaccessible
+      if (a.is_accessible_to_user !== b.is_accessible_to_user) {
+        return a.is_accessible_to_user ? -1 : 1;
       }
 
-      const providerModels = modelsByProvider.get(provider)!;
-      // Only add if this provider has less than 2 models already
-      if (providerModels.length < 2) {
-        providerModels.push(model);
+      // Within accessible models, sort by flagship score (higher is better)
+      if (a.is_accessible_to_user && b.is_accessible_to_user) {
+        return getFlagshipScore(b) - getFlagshipScore(a);
       }
-    }
 
-    // Flatten and sort by flagship score again
-    const diverseFlagshipModels: typeof modelsWithTierInfo = [];
-    for (const providerModels of modelsByProvider.values()) {
-      diverseFlagshipModels.push(...providerModels);
-    }
-
-    diverseFlagshipModels.sort((a, b) => {
-      const scoreA = getFlagshipScore(a);
-      const scoreB = getFlagshipScore(b);
-      return scoreB - scoreA;
+      // Within inaccessible models, sort by required tier (lower tier first)
+      const tierOrder: SubscriptionTier[] = ['free', 'starter', 'pro', 'power'];
+      return tierOrder.indexOf(a.required_tier) - tierOrder.indexOf(b.required_tier);
     });
 
-    // Limit to top 10 flagship models (max 2 per provider)
-    const top10Flagship = diverseFlagshipModels.slice(0, 10);
-
     // ============================================================================
-    // ✅ TIER GROUPS: Group remaining models by subscription tier
+    // ✅ DEFAULT MODEL: Select best accessible model
     // ============================================================================
-    // Exclude flagship models to avoid duplication
-    // Uses existing getTiersInOrder() for consistent tier ordering
-    const flagshipModelIds = new Set(top10Flagship.map(m => m.id));
-    const nonFlagshipModels = modelsWithTierInfo.filter(m => !flagshipModelIds.has(m.id));
-
-    const tierGroups: TierGroup[] = getTiersInOrder().map((tier) => {
-      const tierModels = nonFlagshipModels.filter(m => m.required_tier === tier);
-
-      // Sort models within tier by context window size (descending)
-      // Larger context = more capable for most use cases
-      tierModels.sort((a, b) => (b.context_length || 0) - (a.context_length || 0));
-
-      return {
-        tier,
-        tier_name: SUBSCRIPTION_TIER_NAMES[tier],
-        models: tierModels,
-        is_user_tier: tier === userTier,
-      };
-    }).filter(group => group.models.length > 0); // Only include tiers that have models
+    const defaultModelId = sortedModels.find(m => m.is_accessible_to_user)?.id || sortedModels[0]!.id;
 
     // ============================================================================
     // ✅ USER TIER CONFIG: All limits and metadata for frontend
@@ -216,13 +159,11 @@ export const listModelsHandler: RouteHandler<typeof listModelsRoute, ApiEnv> = c
     };
 
     // ============================================================================
-    // ✅ RETURN RESPONSE: Standard collection response format
+    // ✅ RETURN RESPONSE: Simplified single sorted list
     // ============================================================================
-    const response = Responses.collection(c, modelsWithTierInfo, {
-      total: modelsWithTierInfo.length,
+    const response = Responses.collection(c, sortedModels, {
+      total: sortedModels.length,
       default_model_id: defaultModelId,
-      flagship_models: top10Flagship,
-      tier_groups: tierGroups,
       user_tier_config: userTierConfig,
     });
 

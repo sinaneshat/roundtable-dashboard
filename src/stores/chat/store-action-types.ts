@@ -59,6 +59,7 @@ export type SetInputValue = (value: string) => void;
 export type SetSelectedMode = (mode: ChatModeId | null) => void;
 export type SetSelectedParticipants = (participants: ParticipantConfig[]) => void;
 export type SetEnableWebSearch = (enabled: boolean) => void;
+export type SetModelOrder = (modelIds: string[]) => void;
 export type AddParticipant = (participant: ParticipantConfig) => void;
 export type RemoveParticipant = (participantId: string) => void;
 export type UpdateParticipant = (participantId: string, updates: Partial<ParticipantConfig>) => void;
@@ -325,6 +326,7 @@ export type FormActionsType = {
   setSelectedMode: SetSelectedMode;
   setSelectedParticipants: SetSelectedParticipants;
   setEnableWebSearch: SetEnableWebSearch;
+  setModelOrder: SetModelOrder;
   addParticipant: AddParticipant;
   removeParticipant: RemoveParticipant;
   updateParticipant: UpdateParticipant;

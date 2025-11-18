@@ -84,33 +84,22 @@ export function ModelItem({
       <div className="flex items-center gap-2 sm:gap-3 w-full min-w-0">
         {enableDrag && (
           <div
-            className={cn(
-              'shrink-0 text-muted-foreground p-1 sm:p-0.5 -ml-1 sm:ml-0',
-              !isDisabled && 'cursor-grab active:cursor-grabbing touch-none',
-              isDisabled && 'cursor-not-allowed opacity-30',
-            )}
-            onPointerDown={isDisabled ? undefined : e => controls.start(e)}
-            style={isDisabled ? undefined : { touchAction: 'none' }}
-            aria-label={isDisabled ? tModels('dragDisabled') : tModels('dragToReorder')}
+            className="shrink-0 text-muted-foreground p-1 sm:p-0.5 -ml-1 sm:ml-0 cursor-grab active:cursor-grabbing touch-none"
+            onPointerDown={e => controls.start(e)}
+            style={{ touchAction: 'none' }}
+            aria-label={tModels('dragToReorder')}
             onClick={e => e.stopPropagation()}
             onKeyDown={(e) => {
-              if (!isDisabled && (e.key === 'Enter' || e.key === ' ')) {
+              if (e.key === 'Enter' || e.key === ' ') {
                 e.preventDefault();
               }
             }}
             role="button"
-            tabIndex={isDisabled ? -1 : 0}
+            tabIndex={0}
           >
             <GripVertical className="size-4 sm:size-4" />
           </div>
         )}
-        <Switch
-          checked={isSelected}
-          onCheckedChange={isDisabled ? undefined : onToggle}
-          disabled={isDisabled}
-          className="shrink-0 scale-90 sm:scale-100"
-          onClick={e => e.stopPropagation()}
-        />
         <div className="flex items-center gap-2 flex-1 min-w-0 overflow-hidden">
           <Avatar className="size-8 sm:size-9 shrink-0">
             <AvatarImage src={getProviderIcon(model.provider)} alt={model.name} />
@@ -121,6 +110,28 @@ export function ModelItem({
           <div className="flex-1 min-w-0 overflow-hidden space-y-0.5 sm:space-y-1">
             <div className="flex items-center gap-1.5 min-w-0 overflow-hidden">
               <span className="text-xs sm:text-sm font-semibold truncate min-w-0">{model.name}</span>
+              {/* Role Selector - Next to model title */}
+              {!isDisabledDueToTier && (isSelected || !isDisabled) && (
+                <div
+                  className="shrink-0"
+                  onClick={e => e.stopPropagation()}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.stopPropagation();
+                    }
+                  }}
+                  role="presentation"
+                >
+                  <RoleSelector
+                    participant={participant}
+                    allParticipants={allParticipants}
+                    customRoles={customRoles}
+                    onRoleChange={onRoleChange}
+                    onClearRole={onClearRole}
+                    onRequestSelection={!participant ? onToggle : undefined}
+                  />
+                </div>
+              )}
               {isDisabledDueToTier && (model.required_tier_name || model.required_tier) && (
                 <Badge variant="secondary" className="text-[9px] sm:text-[10px] px-1 sm:px-1.5 py-0.5 h-3.5 sm:h-4 font-semibold bg-amber-500/20 text-amber-400 border-amber-500/30 shrink-0 uppercase">
                   {model.required_tier_name || model.required_tier}
@@ -138,40 +149,27 @@ export function ModelItem({
           </div>
         </div>
 
-        {/* Lock Icon for Inaccessible Models */}
-        {isDisabledDueToTier && (
-          <Link
-            href="/chat/pricing"
-            className="shrink-0 p-1 sm:p-1.5 rounded-md touch-manipulation"
-            onClick={e => e.stopPropagation()}
-            aria-label="Upgrade to unlock this model"
-          >
-            <Lock className="size-4 sm:size-5 text-amber-400" />
-          </Link>
-        )}
-
-        {/* Role Selector - Only show for selected or accessible models */}
-        {!isDisabledDueToTier && (isSelected || !isDisabled) && (
-          <div
-            className="shrink-0 min-w-0"
-            onClick={e => e.stopPropagation()}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.stopPropagation();
-              }
-            }}
-            role="presentation"
-          >
-            <RoleSelector
-              participant={participant}
-              allParticipants={allParticipants}
-              customRoles={customRoles}
-              onRoleChange={onRoleChange}
-              onClearRole={onClearRole}
-              onRequestSelection={!participant ? onToggle : undefined}
-            />
-          </div>
-        )}
+        {/* Show lock icon for inaccessible models, toggle switch for accessible */}
+        {isDisabledDueToTier
+          ? (
+              <Link
+                href="/chat/pricing"
+                className="shrink-0 p-1 sm:p-1.5 rounded-md touch-manipulation"
+                onClick={e => e.stopPropagation()}
+                aria-label="Upgrade to unlock this model"
+              >
+                <Lock className="size-4 sm:size-5 text-amber-400" />
+              </Link>
+            )
+          : (
+              <Switch
+                checked={isSelected}
+                onCheckedChange={isDisabled ? undefined : onToggle}
+                disabled={isDisabled}
+                className="shrink-0 scale-90 sm:scale-100"
+                onClick={e => e.stopPropagation()}
+              />
+            )}
       </div>
     </div>
   );

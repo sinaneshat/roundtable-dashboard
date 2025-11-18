@@ -380,8 +380,8 @@ const UIMessageSchema = z.object({
 export const WebSearchParametersSchema = z.object({
   // Core search parameters
   query: z.string().min(1).describe('Search query to find information on the web'),
-  maxResults: z.number().int().positive().min(1).max(20).optional().default(5).describe('Maximum number of search results to return (1-20, default 5)'),
-  searchDepth: WebSearchDepthSchema.optional().default('basic').describe('Search depth: basic for fast results, advanced for comprehensive search'),
+  maxResults: z.number().int().positive().min(1).max(20).optional().default(10).describe('Maximum number of search results to return (1-20, default 10)'),
+  searchDepth: WebSearchDepthSchema.optional().default('advanced').describe('Search depth: basic for fast results, advanced for comprehensive search'),
 
   // Topic and content filtering
   topic: WebSearchTopicSchema.optional().describe('Search topic category for specialized search optimization'),
@@ -391,14 +391,14 @@ export const WebSearchParametersSchema = z.object({
   endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe('End date for date range filter (YYYY-MM-DD)'),
 
   // Content extraction options
-  chunksPerSource: z.number().int().min(1).max(3).optional().default(1).describe('Number of content chunks per source (1-3, for advanced search)'),
-  includeImages: z.boolean().optional().default(false).describe('Include images from search results'),
-  includeImageDescriptions: z.boolean().optional().default(false).describe('Generate AI descriptions for images'),
-  includeRawContent: z.union([z.boolean(), WebSearchRawContentFormatSchema]).optional().describe('Include raw page content (boolean or format: markdown/text)'),
+  chunksPerSource: z.number().int().min(1).max(3).optional().default(2).describe('Number of content chunks per source (1-3, for advanced search)'),
+  includeImages: z.boolean().optional().default(true).describe('Include images from search results'),
+  includeImageDescriptions: z.boolean().optional().default(true).describe('Generate AI descriptions for images'),
+  includeRawContent: z.union([z.boolean(), WebSearchRawContentFormatSchema]).optional().default('markdown').describe('Include raw page content (boolean or format: markdown/text)'),
   maxTokens: z.number().int().positive().optional().describe('Maximum tokens for content extraction'),
 
   // Answer generation
-  includeAnswer: z.union([z.boolean(), WebSearchAnswerModeSchema]).optional().default(false).describe('Include AI-generated answer summary (boolean or mode: basic/advanced)'),
+  includeAnswer: z.union([z.boolean(), WebSearchAnswerModeSchema]).optional().default('advanced').describe('Include AI-generated answer summary (boolean or mode: basic/advanced)'),
 
   // Domain filtering
   includeDomains: z.array(z.string()).optional().describe('Only search within these domains'),
@@ -406,7 +406,7 @@ export const WebSearchParametersSchema = z.object({
 
   // Geographic and metadata
   country: z.string().length(2).optional().describe('ISO 3166-1 alpha-2 country code for geographic prioritization'),
-  includeFavicon: z.boolean().optional().default(false).describe('Include website favicons in results'),
+  includeFavicon: z.boolean().optional().default(true).describe('Include website favicons in results'),
 
   // Auto-parameters mode
   autoParameters: z.boolean().optional().default(false).describe('Automatically detect and apply optimal search parameters'),

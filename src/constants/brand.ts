@@ -4,8 +4,8 @@ export const BRAND = {
   displayName: 'Roundtable.now', // User-facing brand name (domain format)
   domain: 'roundtable.now', // Domain name without protocol
   domainDisplay: 'Roundtable.now', // Spoken/readable domain format
-  tagline: 'Multiple AI Models Brainstorm Together',
-  description: 'AI collaboration platform where multiple minds meet.',
+  tagline: 'Watch multiple models debate and brainstorm together',
+  description: 'Watch multiple models debate and brainstorm together',
   venture: 'Roundtable',
 
   // URLs

@@ -1137,10 +1137,16 @@
   "namespace": "Namespace",
   "navigation": {
     "chat": "Chat",
+    "dashboard": "Dashboard",
+    "debates": "Debates",
+    "features": "Features",
+    "messages": "Messages",
     "navigation": "Navigation",
     "newChat": "New Chat",
     "pricing": "Pricing",
-    "signOut": "Sign Out"
+    "searchChats": "Search chats",
+    "signOut": "Sign Out",
+    "upgrade": "Upgrade"
   },
   "networkStatus": {
     "connectionError": "Connection Error",
@@ -1213,7 +1219,7 @@
       "luxuryTier": "Premium Gift - Included Free",
       "activatedByDefault": "Activated by default for you"
     },
-    "modal": {
+    "page": {
       "description": "Choose the perfect plan for your needs",
       "title": "Pricing & Plans"
     }

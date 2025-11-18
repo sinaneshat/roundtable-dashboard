@@ -1,10 +1,10 @@
 'use client';
-import { motion } from 'framer-motion';
 import { Award, Medal, Trophy } from 'lucide-react';
 import Image from 'next/image';
 import { useTranslations } from 'next-intl';
 
 import type { LeaderboardEntry } from '@/api/routes/chat/schema';
+import { AnimatedCard, AnimatedListItem } from '@/components/ui/animated-card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { useModelsQuery } from '@/hooks/queries/models';
@@ -81,12 +81,7 @@ export function LeaderboardCard({ leaderboard }: LeaderboardCardProps) {
       };
     });
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 4 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3, ease: 'easeOut' }}
-      className="space-y-3"
-    >
+    <AnimatedCard className="space-y-3">
       <div className="flex items-center gap-2 px-1">
         <Trophy className="size-4 text-primary" />
         <h3 className="text-sm font-semibold text-foreground">{t('leaderboard')}</h3>
@@ -98,11 +93,9 @@ export function LeaderboardCard({ leaderboard }: LeaderboardCardProps) {
       </div>
       <div className="space-y-2">
         {rankedParticipants.map((participant, index) => (
-          <motion.div
+          <AnimatedListItem
             key={`participant-${participant.participantIndex}`}
-            initial={{ opacity: 0, x: -10 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.3, delay: index * 0.05, ease: 'easeOut' }}
+            index={index}
             className={cn(
               'group relative rounded-lg border p-3 transition-all duration-200',
               'hover:shadow-md',
@@ -175,9 +168,9 @@ export function LeaderboardCard({ leaderboard }: LeaderboardCardProps) {
                 </Badge>
               </div>
             )}
-          </motion.div>
+          </AnimatedListItem>
         ))}
       </div>
-    </motion.div>
+    </AnimatedCard>
   );
 }

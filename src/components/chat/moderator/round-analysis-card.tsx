@@ -1,5 +1,6 @@
 'use client';
 
+import { motion } from 'framer-motion';
 import { Clock } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -30,6 +31,8 @@ type RoundAnalysisCardProps = {
   onStreamComplete?: (completedAnalysisData?: ModeratorAnalysisPayload | null, error?: unknown) => void;
   streamingRoundNumber?: number | null;
   onActionClick?: (action: RecommendedAction) => void;
+  demoOpen?: boolean; // Demo mode controlled accordion state
+  demoShowContent?: boolean; // Demo mode controlled content visibility
 };
 export function RoundAnalysisCard({
   analysis,
@@ -40,6 +43,8 @@ export function RoundAnalysisCard({
   onStreamComplete,
   streamingRoundNumber,
   onActionClick,
+  demoOpen,
+  demoShowContent,
 }: RoundAnalysisCardProps) {
   const t = useTranslations('moderator');
   const statusConfig = {
@@ -76,7 +81,9 @@ export function RoundAnalysisCard({
       });
     }
   }, [streamingRoundNumber, isLatest, analysis.roundNumber]);
-  const isOpen = isManuallyControlled ? manuallyOpen : isLatest;
+
+  // Demo mode override: If demoOpen is provided, use it instead of computed state
+  const isOpen = demoOpen !== undefined ? demoOpen : (isManuallyControlled ? manuallyOpen : isLatest);
 
   // ✅ Disable accordion interaction during streaming
   const isStreamingOrPending = analysis.status === AnalysisStatuses.PENDING || analysis.status === AnalysisStatuses.STREAMING;
@@ -123,63 +130,74 @@ export function RoundAnalysisCard({
             </div>
           </ChainOfThoughtHeader>
         </div>
-        <ChainOfThoughtContent>
-          <div className="space-y-4">
-            {analysis.userQuestion && analysis.userQuestion !== 'N/A' && (
-              <div className="space-y-1">
-                <p className="text-xs font-semibold text-muted-foreground">Question:</p>
-                <p className="text-sm text-foreground/80 leading-relaxed">
-                  {analysis.userQuestion}
-                </p>
-              </div>
-            )}
-            {(analysis.status === AnalysisStatuses.PENDING || analysis.status === AnalysisStatuses.STREAMING)
-              ? (
-                  <ModeratorAnalysisStream
-                    key={analysis.id}
-                    threadId={threadId}
-                    analysis={analysis}
-                    onStreamStart={onStreamStart}
-                    onStreamComplete={onStreamComplete}
-                    onActionClick={onActionClick}
-                  />
-                )
-              : analysis.status === AnalysisStatuses.COMPLETE && analysis.analysisData
+        <ChainOfThoughtContent staggerChildren={demoShowContent === undefined}>
+          {/* Demo mode: only show content when demoShowContent is true */}
+          {(demoShowContent === undefined || demoShowContent) && (
+            <div className="space-y-4">
+              {analysis.userQuestion && analysis.userQuestion !== 'N/A' && (
+                <div className="space-y-1">
+                  <p className="text-xs font-semibold text-muted-foreground">Question:</p>
+                  <p className="text-sm text-foreground/80 leading-relaxed">
+                    {analysis.userQuestion}
+                  </p>
+                </div>
+              )}
+              {(analysis.status === AnalysisStatuses.PENDING || analysis.status === AnalysisStatuses.STREAMING)
                 ? (
-                    <div className="space-y-4">
-                      {analysis.analysisData.leaderboard && analysis.analysisData.leaderboard.length > 0 && (
-                        <LeaderboardCard leaderboard={analysis.analysisData.leaderboard} />
-                      )}
-                      {analysis.analysisData.participantAnalyses && analysis.analysisData.participantAnalyses.length > 0 && (
-                        <>
-                          <SkillsComparisonChart participants={analysis.analysisData.participantAnalyses} />
-                          <div className="space-y-3">
-                            {analysis.analysisData.participantAnalyses.map(participant => (
-                              <ParticipantAnalysisCard
-                                key={`${analysis.id}-participant-${participant.participantIndex}`}
-                                analysis={participant}
-                              />
-                            ))}
-                          </div>
-                        </>
-                      )}
-                      {analysis.analysisData.roundSummary && (
-                        <RoundSummarySection
-                          roundSummary={analysis.analysisData.roundSummary}
-                          onActionClick={onActionClick}
-                        />
-                      )}
-                    </div>
+                    <ModeratorAnalysisStream
+                      key={analysis.id}
+                      threadId={threadId}
+                      analysis={analysis}
+                      onStreamStart={onStreamStart}
+                      onStreamComplete={onStreamComplete}
+                      onActionClick={onActionClick}
+                    />
                   )
-                : analysis.status === AnalysisStatuses.FAILED
+                : analysis.status === AnalysisStatuses.COMPLETE && analysis.analysisData
                   ? (
-                      <div className="flex items-center gap-2 py-1.5 text-xs text-destructive">
-                        <span className="size-1.5 rounded-full bg-destructive/80" />
-                        <span>{analysis.errorMessage || t('errorAnalyzing')}</span>
+                      <div className="space-y-4">
+                        {analysis.analysisData.leaderboard && analysis.analysisData.leaderboard.length > 0 && (
+                          <LeaderboardCard leaderboard={analysis.analysisData.leaderboard} />
+                        )}
+                        {analysis.analysisData.participantAnalyses && analysis.analysisData.participantAnalyses.length > 0 && (
+                          <>
+                            <SkillsComparisonChart participants={analysis.analysisData.participantAnalyses} />
+                            <div className="space-y-3">
+                              {analysis.analysisData.participantAnalyses.map((participant, index) => (
+                                <motion.div
+                                  key={`${analysis.id}-participant-${participant.participantIndex}`}
+                                  initial={{ opacity: 0, y: 8 }}
+                                  animate={{ opacity: 1, y: 0 }}
+                                  transition={{
+                                    duration: 0.3,
+                                    delay: index * 0.1,
+                                    ease: [0.4, 0, 0.2, 1],
+                                  }}
+                                >
+                                  <ParticipantAnalysisCard analysis={participant} />
+                                </motion.div>
+                              ))}
+                            </div>
+                          </>
+                        )}
+                        {analysis.analysisData.roundSummary && (
+                          <RoundSummarySection
+                            roundSummary={analysis.analysisData.roundSummary}
+                            onActionClick={onActionClick}
+                          />
+                        )}
                       </div>
                     )
-                  : null}
-          </div>
+                  : analysis.status === AnalysisStatuses.FAILED
+                    ? (
+                        <div className="flex items-center gap-2 py-1.5 text-xs text-destructive">
+                          <span className="size-1.5 rounded-full bg-destructive/80" />
+                          <span>{analysis.errorMessage || t('errorAnalyzing')}</span>
+                        </div>
+                      )
+                    : null}
+            </div>
+          )}
         </ChainOfThoughtContent>
       </ChainOfThought>
     </div>

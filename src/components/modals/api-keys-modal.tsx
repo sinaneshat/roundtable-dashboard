@@ -8,7 +8,7 @@
  * - Optimistic updates after key creation
  * - Quick links to API documentation
  *
- * Following patterns from pricing-modal.tsx and base-modal.tsx
+ * Following patterns from base-modal.tsx
  */
 
 'use client';

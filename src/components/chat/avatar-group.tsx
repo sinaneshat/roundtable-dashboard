@@ -55,7 +55,7 @@ export function AvatarGroup({
             <Avatar
               className={cn(
                 sizeClasses[size],
-                'relative bg-black border-2 border-black transition-transform hover:scale-110 hover:z-50',
+                'relative bg-card border-2 border-card transition-transform hover:scale-110 hover:z-50',
               )}
             >
               <AvatarImage
@@ -63,7 +63,7 @@ export function AvatarGroup({
                 alt={model.name}
                 className="object-contain p-0.5 relative z-10"
               />
-              <AvatarFallback className={cn(textSizeClasses[size], 'bg-black font-semibold relative z-10')}>
+              <AvatarFallback className={cn(textSizeClasses[size], 'bg-card font-semibold relative z-10')}>
                 {model.name.slice(0, 2).toUpperCase()}
               </AvatarFallback>
             </Avatar>

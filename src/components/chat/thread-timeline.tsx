@@ -63,6 +63,10 @@ type ThreadTimelineProps = {
 
   // Pre-search state (from store)
   preSearches?: StoredPreSearch[];
+
+  // Demo mode controlled accordion states (optional - for LiveChatDemo only)
+  demoPreSearchOpen?: boolean;
+  demoAnalysisOpen?: boolean;
 };
 
 export function ThreadTimeline({
@@ -84,6 +88,8 @@ export function ThreadTimeline({
   onRetry,
   isReadOnly = false,
   preSearches = EMPTY_PRE_SEARCHES,
+  demoPreSearchOpen,
+  demoAnalysisOpen,
 }: ThreadTimelineProps) {
   // ✅ STREAMING SAFETY: Calculate which rounds are currently streaming
   // Prevents virtualization from removing DOM elements during active streaming
@@ -164,8 +170,6 @@ export function ThreadTimeline({
               left: 0,
               width: '100%',
               transform: `translateY(${virtualItem.start - scrollMargin}px)`,
-              // ✅ MOBILE FIX: Add will-change for better mobile transform performance
-              willChange: 'transform',
             }}
           >
             {item.type === 'changelog' && item.data.length > 0 && (
@@ -194,6 +198,7 @@ export function ThreadTimeline({
                     threadId={threadId}
                     preSearches={preSearches}
                     streamingRoundNumber={streamingRoundNumber}
+                    demoPreSearchOpen={demoPreSearchOpen}
                   />
                 </UnifiedErrorBoundary>
 
@@ -247,6 +252,8 @@ export function ThreadTimeline({
                     onAnalysisStreamComplete?.(item.data.roundNumber, completedData, error);
                   }}
                   onActionClick={isReadOnly ? undefined : onActionClick}
+                  demoOpen={demoAnalysisOpen}
+                  demoShowContent={demoAnalysisOpen ? item.data.analysisData !== undefined : undefined}
                 />
               </div>
             )}

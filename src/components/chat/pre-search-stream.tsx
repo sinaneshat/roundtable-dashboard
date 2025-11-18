@@ -413,10 +413,10 @@ function PreSearchStreamComponent({
         return (
           <motion.div
             key={uniqueKey}
-            initial={{ opacity: 0, y: 10 }}
+            initial={{ opacity: 0, y: 4 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3, delay: 0.1 * queryIndex }}
-            className="space-y-3"
+            transition={{ duration: 0.2, delay: 0.05 * queryIndex }}
+            className="space-y-2"
           >
             {/* Query header with mode and progress indicator */}
             <div className="space-y-2">

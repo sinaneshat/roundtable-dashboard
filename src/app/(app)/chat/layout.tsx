@@ -15,10 +15,8 @@ export async function generateMetadata(): Promise<Metadata> {
 
 export default async function ChatLayoutPage({
   children,
-  modal,
 }: {
   children: React.ReactNode;
-  modal?: React.ReactNode;
 }) {
-  return <ChatLayout modal={modal}>{children}</ChatLayout>;
+  return <ChatLayout>{children}</ChatLayout>;
 }

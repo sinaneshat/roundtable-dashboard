@@ -148,19 +148,6 @@ export const EnhancedModelSchema = BaseModelSchema.extend({
 export type EnhancedModelResponse = z.infer<typeof EnhancedModelSchema>;
 
 /**
- * Tier Group Schema - Groups models by subscription tier
- * Computed on backend for consistent tier-based UI rendering
- */
-export const TierGroupSchema = z.object({
-  tier: subscriptionTierSchemaOpenAPI,
-  tier_name: z.string(), // Human-readable tier name (e.g., "Free Plan")
-  models: z.array(EnhancedModelSchema),
-  is_user_tier: z.boolean(), // True if this is the user's current tier
-});
-
-export type TierGroup = z.infer<typeof TierGroupSchema>;
-
-/**
  * User Tier Configuration Schema
  * ✅ SERVER-COMPUTED: All tier limits and metadata from backend
  * Provides everything frontend needs to enforce tier restrictions without business logic
@@ -175,17 +162,15 @@ export const UserTierConfigSchema = z.object({
 export type UserTierConfig = z.infer<typeof UserTierConfigSchema>;
 
 /**
- * List models response with top 100 models, tier grouping, and flagship models
- * ✅ ESTABLISHED PATTERN: Separate concerns between display (flagship_models) and access control (tier_groups)
+ * List models response - simplified single sorted list
+ * Models are sorted by accessibility: accessible models first (by quality), then inaccessible (by tier)
  */
 export const ListModelsResponseSchema = createApiResponseSchema(
   z.object({
     items: z.array(EnhancedModelSchema),
     count: z.number(),
     total: z.number(),
-    default_model_id: z.string(), // Default model selected based on user's tier and popularity
-    flagship_models: z.array(EnhancedModelSchema), // ✅ Most popular models shown first (Claude, GPT-4, Gemini, etc.)
-    tier_groups: z.array(TierGroupSchema), // Models grouped by subscription tier
+    default_model_id: z.string(), // Default model selected based on user's tier
     user_tier_config: UserTierConfigSchema, // User's tier configuration with limits
   }),
 );

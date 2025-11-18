@@ -10,9 +10,11 @@ import { CustomDataPart } from '@/components/chat/custom-data-part';
 import { MessageErrorDetails } from '@/components/chat/message-error-details';
 import { ToolCallPart } from '@/components/chat/tool-call-part';
 import { ToolResultPart } from '@/components/chat/tool-result-part';
+import { Badge } from '@/components/ui/badge';
 import type { DbMessageMetadata } from '@/db/schemas/chat-metadata';
 import { isAssistantMessageMetadata } from '@/db/schemas/chat-metadata';
 import type { MessagePart, MessageStatus } from '@/lib/schemas/message-schemas';
+import { cn } from '@/lib/ui/cn';
 
 type ModelMessageCardProps = {
   model?: EnhancedModelResponse;
@@ -30,6 +32,48 @@ type ModelMessageCardProps = {
   hideAvatar?: boolean;
 };
 const DEFAULT_PARTS: MessagePart[] = [];
+
+// Helper function to get role badge styling based on role text
+function getRoleBadgeVariant(role: string | null | undefined): {
+  variant: 'default' | 'secondary' | 'outline';
+  className: string;
+} {
+  if (!role)
+    return { variant: 'secondary', className: '' };
+
+  const roleLower = role.toLowerCase();
+
+  // Primary roles - Blue
+  if (roleLower.includes('primary') || roleLower.includes('main') || roleLower.includes('lead')) {
+    return {
+      variant: 'default',
+      className: 'bg-blue-500/90 text-white border-blue-500/20',
+    };
+  }
+
+  // Creative roles - Purple
+  if (roleLower.includes('creative') || roleLower.includes('artist') || roleLower.includes('designer')) {
+    return {
+      variant: 'default',
+      className: 'bg-purple-500/90 text-white border-purple-500/20',
+    };
+  }
+
+  // Research/Analysis roles - Green
+  if (roleLower.includes('research') || roleLower.includes('analyst') || roleLower.includes('scientist')) {
+    return {
+      variant: 'default',
+      className: 'bg-green-500/90 text-white border-green-500/20',
+    };
+  }
+
+  // Default - Secondary gray
+  return {
+    variant: 'secondary',
+    className: 'bg-muted text-muted-foreground',
+  };
+}
+
 export const ModelMessageCard = memo(({
   model,
   role,
@@ -54,6 +98,7 @@ export const ModelMessageCard = memo(({
   const hasError = isError || assistantMetadata?.hasError;
   const modelName = model?.name || assistantMetadata?.model || 'AI Assistant';
   const requiredTierName = model?.required_tier_name;
+  const roleBadgeStyle = getRoleBadgeVariant(role);
 
   return (
     <div className={`space-y-1 ${className || ''}`}>
@@ -61,27 +106,24 @@ export const ModelMessageCard = memo(({
         <MessageContent variant="flat" className={hasError ? 'text-destructive' : undefined}>
           <>
             {!hideInlineHeader && (
-              <div className="flex items-center gap-2 mb-2 -mt-1 flex-wrap">
-                <span className="text-sm font-medium text-foreground/90">
+              <div className="flex items-center gap-2 mb-3 -mt-1 flex-wrap">
+                <span className="text-base font-medium text-foreground">
                   {modelName}
                 </span>
                 {role && (
-                  <>
-                    <span className="text-muted-foreground/50 text-xs">•</span>
-                    <span className="text-muted-foreground/70 text-xs">
-                      {String(role)}
-                    </span>
-                  </>
+                  <Badge
+                    variant={roleBadgeStyle.variant}
+                    className={cn('text-xs font-medium px-2 py-0.5', roleBadgeStyle.className)}
+                  >
+                    {String(role)}
+                  </Badge>
                 )}
                 {!modelIsAccessible && requiredTierName && (
-                  <>
-                    <span className="text-muted-foreground/50 text-xs">•</span>
-                    <span className="text-muted-foreground/70 text-xs">
-                      {requiredTierName}
-                      {' '}
-                      required
-                    </span>
-                  </>
+                  <Badge variant="outline" className="text-xs text-muted-foreground">
+                    {requiredTierName}
+                    {' '}
+                    required
+                  </Badge>
                 )}
                 {showStatusIndicator && (
                   <span className="ml-1 size-1.5 rounded-full bg-primary/60 animate-pulse" />
@@ -102,7 +144,7 @@ export const ModelMessageCard = memo(({
                 return (
                   <Streamdown
                     key={messageId ? `${messageId}-text-${partIndex}` : `text-${partIndex}`}
-                    className="size-full [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
+                    className="size-full text-foreground [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 leading-relaxed"
                   >
                     {part.text}
                   </Streamdown>

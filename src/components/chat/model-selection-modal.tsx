@@ -8,7 +8,6 @@ import { useMemo, useRef, useState } from 'react';
 
 import type { SubscriptionTier } from '@/api/services/product-logic.service';
 import type { ParticipantConfig } from '@/components/chat/chat-form-schemas';
-import { Badge } from '@/components/ui/badge';
 import {
   Dialog,
   DialogBody,
@@ -27,20 +26,15 @@ import { ModelItem } from './model-item';
 /**
  * ModelSelectionModal Component
  *
- * Tier-grouped AI model selection modal with search and drag-reordering.
- * Matches original implementation from chat-participants-list.tsx
- *
- * Group Order: Selected Models → Most Popular → Free → Starter → Pro → Power
+ * Simplified AI model selection modal with search and drag-reordering.
+ * Models are displayed in a single flat list sorted by the backend:
+ * - Accessible models first (sorted by quality/flagship score)
+ * - Inaccessible models after (sorted by required tier)
  */
 
 type CustomRole = NonNullable<
   Extract<ListCustomRolesResponse, { success: true }>['data']
 >['items'][number];
-
-type ModelGroup = {
-  title: string;
-  models: OrderedModel[];
-};
 
 export type ModelSelectionModalProps = {
   /** Controls dialog open/close state */
@@ -101,6 +95,7 @@ export function ModelSelectionModal({
   const tModels = useTranslations('chat.models');
   const [searchQuery, setSearchQuery] = useState('');
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
 
   // Filter models based on search query
   const filteredModels = useMemo(() => {
@@ -120,96 +115,11 @@ export function ModelSelectionModal({
     });
   }, [orderedModels, searchQuery]);
 
-  // Group models: Selected → Flagship → Free → Starter → Pro → Power
-  const groupedModels = useMemo<ModelGroup[]>(() => {
-    const groups: ModelGroup[] = [];
-    const selectedModelIds = new Set(
-      filteredModels.filter(om => om.participant !== null).map(om => om.model.id),
-    );
+  // No grouping - simple flat list already sorted by backend
+  // Backend sorts: accessible models first (by quality), then inaccessible (by tier)
 
-    // 1. Selected models - always first
-    const selectedModels = filteredModels.filter(om => om.participant !== null);
-    if (selectedModels.length > 0) {
-      groups.push({ title: tModels('selectedModels') || 'Selected Models', models: selectedModels });
-    }
-
-    // 2. Flagship/Most Popular models (excluding selected)
-    const flagshipModelIds = new Set([
-      'anthropic/claude-sonnet-4',
-      'anthropic/claude-4-sonnet',
-      'anthropic/claude-sonnet-4.5',
-      'openai/gpt-4o',
-      'openai/chatgpt-4o-latest',
-      'google/gemini-pro-1.5',
-      'google/gemini-2.0-flash-thinking-exp:free',
-      'deepseek/deepseek-chat',
-    ]);
-
-    const flagshipModels = filteredModels.filter(om =>
-      flagshipModelIds.has(om.model.id) && !selectedModelIds.has(om.model.id),
-    );
-
-    if (flagshipModels.length > 0) {
-      groups.push({ title: tModels('mostPopular') || 'Most Popular', models: flagshipModels });
-    }
-
-    // 3. Tier groups (excluding selected and flagship)
-    const tierModels = filteredModels.filter(om =>
-      !selectedModelIds.has(om.model.id) && !flagshipModelIds.has(om.model.id),
-    );
-
-    const tierMap = new Map<string, OrderedModel[]>();
-
-    tierModels.forEach((om) => {
-      const tierName = om.model.required_tier_name || om.model.required_tier || 'free';
-      const normalizedTier = tierName.toLowerCase();
-      if (!tierMap.has(normalizedTier)) {
-        tierMap.set(normalizedTier, []);
-      }
-      tierMap.get(normalizedTier)!.push(om);
-    });
-
-    // Define tier order matching backend
-    const tierOrder = [
-      { key: 'free', label: 'Free' },
-      { key: 'starter', label: 'Starter' },
-      { key: 'pro', label: 'Pro' },
-      { key: 'power', label: 'Power' },
-      { key: 'premium', label: 'Premium' },
-      { key: 'enterprise', label: 'Enterprise' },
-    ];
-
-    // Add tier groups in order
-    tierOrder.forEach(({ key, label }) => {
-      const models = tierMap.get(key);
-      if (models && models.length > 0) {
-        groups.push({ title: label, models });
-      }
-    });
-
-    // Add any remaining tiers not in predefined order
-    Array.from(tierMap.keys()).forEach((tierKey) => {
-      if (!tierOrder.some(t => t.key === tierKey)) {
-        const models = tierMap.get(tierKey)!;
-        const label = tierKey.charAt(0).toUpperCase() + tierKey.slice(1);
-        groups.push({ title: label, models });
-      }
-    });
-
-    return groups;
-  }, [filteredModels, tModels]);
-
-  // Handle toggle with prevention for last selected model
+  // Handle toggle - allow deselecting all models
   const handleToggle = (modelId: string) => {
-    const model = orderedModels.find(om => om.model.id === modelId);
-    if (!model)
-      return;
-
-    // Prevent deselecting the last selected model
-    if (model.participant !== null && selectedCount <= 1) {
-      return;
-    }
-
     onToggle(modelId);
   };
 
@@ -266,110 +176,66 @@ export function ModelSelectionModal({
           </DialogBody>
         </div>
 
-        {/* Scrollable Model List */}
+        {/* Scrollable Model List - Simple flat list */}
         <ScrollArea
-          className="border-t border-white/5 bg-black/30 w-full overflow-hidden"
+          ref={scrollAreaRef}
+          className="border-t border-white/5 bg-card/30 w-full overflow-hidden"
           style={{ height: 'clamp(250px, 60vh, 600px)' }}
         >
           <div className="w-full">
-            {groupedModels.length === 0
+            {filteredModels.length === 0
               ? (
                   <div className="flex flex-col items-start justify-center py-12 px-4 sm:px-5 md:px-6">
                     <p className="text-sm text-muted-foreground">{tModels('noModelsFound')}</p>
                   </div>
                 )
-              : groupedModels.map((group, groupIndex) => (
-                  <div key={group.title} className="w-full">
-                    {/* Group Header - Sticky */}
-                    <div className="sticky top-0 z-10 w-full bg-black/90 backdrop-blur-xl px-3 sm:px-4 md:px-6 py-2 sm:py-2.5 border-b border-white/10">
-                      <div className="flex items-center justify-between gap-1.5 sm:gap-2">
-                        <span className={cn(
-                          'text-xs sm:text-xs font-semibold truncate',
-                          groupIndex === 0 && 'text-foreground',
-                          groupIndex === 1 && 'text-accent-foreground',
-                          groupIndex > 1 && 'text-muted-foreground uppercase tracking-wider',
-                        )}
-                        >
-                          {group.title}
-                        </span>
-                        {groupIndex === 0 && selectedCount > 0 && (
-                          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-                            <Badge variant="default" className="text-[9px] sm:text-[10px] px-1.5 py-0 h-4">
-                              {selectedCount}
-                              /
-                              {maxModels}
-                            </Badge>
-                            <span className="text-[9px] sm:text-[10px] opacity-70 hidden sm:inline whitespace-nowrap">{tModels('dragToReorder')}</span>
-                          </div>
-                        )}
-                        {groupIndex === 1 && (
-                          <Badge variant="secondary" className="text-[9px] sm:text-[10px] px-1.5 py-0 h-4 shrink-0">
-                            {tModels('topModels')}
-                          </Badge>
-                        )}
-                        {groupIndex > 1 && (
-                          <span className="text-[9px] sm:text-[10px] opacity-80 shrink-0 whitespace-nowrap">
-                            {group.models.length}
-                            {' '}
-                            {group.models.length === 1 ? tModels('model') : tModels('models')}
-                          </span>
-                        )}
-                      </div>
+              : enableDrag
+                ? (
+                    <Reorder.Group
+                      axis="y"
+                      values={filteredModels}
+                      onReorder={onReorder}
+                      layoutScroll
+                      className="flex flex-col gap-1.5 sm:gap-2 w-full px-2 sm:px-4 md:px-6 py-1.5 sm:py-2"
+                    >
+                      {filteredModels.map(orderedModel => (
+                        <ModelItem
+                          key={orderedModel.model.id}
+                          orderedModel={orderedModel}
+                          allParticipants={allParticipants}
+                          customRoles={customRoles}
+                          onToggle={() => handleToggle(orderedModel.model.id)}
+                          onRoleChange={(role, customRoleId) =>
+                            onRoleChange(orderedModel.model.id, role, customRoleId)}
+                          onClearRole={() => onClearRole(orderedModel.model.id)}
+                          selectedCount={selectedCount}
+                          maxModels={maxModels}
+                          enableDrag={enableDrag}
+                          userTierInfo={userTierInfo}
+                        />
+                      ))}
+                    </Reorder.Group>
+                  )
+                : (
+                    <div className="flex flex-col gap-1.5 sm:gap-2 w-full px-2 sm:px-4 md:px-6 py-1.5 sm:py-2">
+                      {filteredModels.map(orderedModel => (
+                        <ModelItem
+                          key={orderedModel.model.id}
+                          orderedModel={orderedModel}
+                          allParticipants={allParticipants}
+                          customRoles={customRoles}
+                          onToggle={() => handleToggle(orderedModel.model.id)}
+                          onRoleChange={(role, customRoleId) =>
+                            onRoleChange(orderedModel.model.id, role, customRoleId)}
+                          onClearRole={() => onClearRole(orderedModel.model.id)}
+                          selectedCount={selectedCount}
+                          maxModels={maxModels}
+                          enableDrag={false}
+                          userTierInfo={userTierInfo}
+                        />
+                      ))}
                     </div>
-
-                    {/* Group Models */}
-                    {enableDrag && groupIndex === 0
-                      ? (
-                          <Reorder.Group
-                            axis="y"
-                            values={group.models}
-                            onReorder={(reordered) => {
-                              // Update only the selected models order
-                              const otherModels = orderedModels.filter(om => om.participant === null);
-                              onReorder([...reordered, ...otherModels]);
-                            }}
-                            className="flex flex-col gap-1.5 sm:gap-2 w-full px-2 sm:px-4 md:px-6 py-1.5 sm:py-2"
-                          >
-                            {group.models.map(orderedModel => (
-                              <ModelItem
-                                key={orderedModel.model.id}
-                                orderedModel={orderedModel}
-                                allParticipants={allParticipants}
-                                customRoles={customRoles}
-                                onToggle={() => handleToggle(orderedModel.model.id)}
-                                onRoleChange={(role, customRoleId) =>
-                                  onRoleChange(orderedModel.model.id, role, customRoleId)}
-                                onClearRole={() => onClearRole(orderedModel.model.id)}
-                                selectedCount={selectedCount}
-                                maxModels={maxModels}
-                                enableDrag={enableDrag}
-                                userTierInfo={userTierInfo}
-                              />
-                            ))}
-                          </Reorder.Group>
-                        )
-                      : (
-                          <div className="flex flex-col gap-1.5 sm:gap-2 w-full px-2 sm:px-4 md:px-6 py-1.5 sm:py-2">
-                            {group.models.map(orderedModel => (
-                              <ModelItem
-                                key={orderedModel.model.id}
-                                orderedModel={orderedModel}
-                                allParticipants={allParticipants}
-                                customRoles={customRoles}
-                                onToggle={() => handleToggle(orderedModel.model.id)}
-                                onRoleChange={(role, customRoleId) =>
-                                  onRoleChange(orderedModel.model.id, role, customRoleId)}
-                                onClearRole={() => onClearRole(orderedModel.model.id)}
-                                selectedCount={selectedCount}
-                                maxModels={maxModels}
-                                enableDrag={false}
-                                userTierInfo={userTierInfo}
-                              />
-                            ))}
-                          </div>
-                        )}
-                  </div>
-                ))}
+                  )}
           </div>
         </ScrollArea>
 

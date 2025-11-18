@@ -25,6 +25,8 @@ type PreSearchCardProps = {
   isLatest?: boolean;
   className?: string;
   streamingRoundNumber?: number | null;
+  demoOpen?: boolean; // Demo mode controlled accordion state
+  demoShowContent?: boolean; // Demo mode controlled content visibility
 };
 
 export function PreSearchCard({
@@ -33,6 +35,8 @@ export function PreSearchCard({
   isLatest = false,
   className,
   streamingRoundNumber,
+  demoOpen,
+  demoShowContent,
 }: PreSearchCardProps) {
   const t = useTranslations();
 
@@ -96,7 +100,8 @@ export function PreSearchCard({
 
   // Determine accordion state (follows RoundAnalysisCard pattern)
   // Pattern from round-analysis-card.tsx:86
-  const isOpen = isManuallyControlled ? manuallyOpen : isLatest;
+  // Demo mode override: If demoOpen is provided, use it instead of computed state
+  const isOpen = demoOpen !== undefined ? demoOpen : (isManuallyControlled ? manuallyOpen : isLatest);
 
   return (
     <div className={cn('py-1.5', className)}>
@@ -129,26 +134,29 @@ export function PreSearchCard({
           </ChainOfThoughtHeader>
         </div>
 
-        <ChainOfThoughtContent>
-          <div className="space-y-4">
-            {/* PreSearchStream handles all states: PENDING, STREAMING, and COMPLETE */}
-            {!hasError && (
-              <PreSearchStream
-                threadId={threadId}
-                preSearch={preSearch}
-                onStreamStart={handleStreamStart}
-                onStreamComplete={handleStreamComplete}
-              />
-            )}
+        <ChainOfThoughtContent staggerChildren={demoShowContent === undefined}>
+          {/* Demo mode: only show content when demoShowContent is true */}
+          {(demoShowContent === undefined || demoShowContent) && (
+            <div className="space-y-4">
+              {/* PreSearchStream handles all states: PENDING, STREAMING, and COMPLETE */}
+              {!hasError && (
+                <PreSearchStream
+                  threadId={threadId}
+                  preSearch={preSearch}
+                  onStreamStart={handleStreamStart}
+                  onStreamComplete={handleStreamComplete}
+                />
+              )}
 
-            {/* Failed state */}
-            {hasError && preSearch.errorMessage && (
-              <div className="flex items-center gap-2 py-1.5 text-xs text-destructive">
-                <span className="size-1.5 rounded-full bg-destructive/80" />
-                <span>{preSearch.errorMessage}</span>
-              </div>
-            )}
-          </div>
+              {/* Failed state */}
+              {hasError && preSearch.errorMessage && (
+                <div className="flex items-center gap-2 py-1.5 text-xs text-destructive">
+                  <span className="size-1.5 rounded-full bg-destructive/80" />
+                  <span>{preSearch.errorMessage}</span>
+                </div>
+              )}
+            </div>
+          )}
         </ChainOfThoughtContent>
       </ChainOfThought>
     </div>

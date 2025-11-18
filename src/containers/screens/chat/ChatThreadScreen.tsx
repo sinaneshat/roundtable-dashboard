@@ -12,6 +12,7 @@ import { ChatInput } from '@/components/chat/chat-input';
 import { ChatInputToolbarMenu } from '@/components/chat/chat-input-toolbar-menu';
 import { ChatThreadActions } from '@/components/chat/chat-thread-actions';
 import { ConversationModeModal } from '@/components/chat/conversation-mode-modal';
+import type { OrderedModel } from '@/components/chat/model-item';
 import { ModelSelectionModal } from '@/components/chat/model-selection-modal';
 import { StreamingParticipantsLoader } from '@/components/chat/streaming-participants-loader';
 import { useThreadHeader } from '@/components/chat/thread-header-context';
@@ -385,9 +386,18 @@ export default function ChatThreadScreen({
   const inputValue = useChatStore(s => s.inputValue);
   const setInputValue = useChatStore(s => s.setInputValue);
   const removeParticipant = useChatStore(s => s.removeParticipant);
+  const modelOrder = useChatStore(s => s.modelOrder);
+  const setModelOrder = useChatStore(s => s.setModelOrder);
 
   // Prepare data for ModelSelectionModal
   const allEnabledModels = useMemo(() => modelsData?.data?.items || [], [modelsData?.data?.items]);
+
+  // Initialize model order when models first load
+  useEffect(() => {
+    if (allEnabledModels.length > 0 && modelOrder.length === 0) {
+      setModelOrder(allEnabledModels.map(m => m.id));
+    }
+  }, [allEnabledModels, modelOrder.length, setModelOrder]);
   const customRoles = useMemo(() => customRolesData?.pages.flatMap(page =>
     (page?.success && page.data?.items) ? page.data.items : [],
   ) || [], [customRolesData?.pages]);
@@ -409,25 +419,32 @@ export default function ChatThreadScreen({
   }, [modelsData?.data?.user_tier_config]);
 
   // Create orderedModels for ModelSelectionModal
-  const orderedModels = useMemo(() => {
+  const orderedModels = useMemo((): OrderedModel[] => {
     if (allEnabledModels.length === 0)
       return [];
 
-    const selectedModels = selectedParticipants
-      .sort((a, b) => a.priority - b.priority)
-      .flatMap((p, index) => {
-        const model = allEnabledModels.find(m => m.id === p.modelId);
-        return model ? [{ model, participant: p, order: index }] : [];
-      });
+    // Create maps for quick lookup
+    const participantMap = new Map(
+      selectedParticipants.map(p => [p.modelId, p]),
+    );
+    const modelMap = new Map(allEnabledModels.map(m => [m.id, m]));
 
-    const selectedIds = new Set(selectedParticipants.map(p => p.modelId));
-    const unselectedModels = allEnabledModels
-      .filter(m => !selectedIds.has(m.id))
-      .sort((a, b) => a.name.localeCompare(b.name))
-      .map((m, index) => ({ model: m, participant: null, order: selectedModels.length + index }));
+    // Use modelOrder to determine sequence, fallback to allEnabledModels order
+    const orderedIds = modelOrder.length > 0 ? modelOrder : allEnabledModels.map(m => m.id);
 
-    return [...selectedModels, ...unselectedModels];
-  }, [selectedParticipants, allEnabledModels]);
+    return orderedIds
+      .map((modelId) => {
+        const model = modelMap.get(modelId);
+        if (!model)
+          return null;
+        return {
+          model,
+          participant: participantMap.get(modelId) || null,
+          order: orderedIds.indexOf(modelId),
+        };
+      })
+      .filter(Boolean) as typeof orderedModels;
+  }, [selectedParticipants, allEnabledModels, modelOrder]);
 
   // Form actions hook
   const formActions = useChatFormActions();
@@ -447,11 +464,16 @@ export default function ChatThreadScreen({
 
   // Modal callbacks for ModelSelectionModal
   const handleModelReorder = useCallback((reordered: typeof orderedModels) => {
+    // Update visual order of all models
+    const newModelOrder = reordered.map(om => om.model.id);
+    setModelOrder(newModelOrder);
+
+    // Update participant priorities based on new visual order
     const reorderedParticipants = reordered
       .filter(om => om.participant !== null)
       .map((om, index) => ({ ...om.participant!, priority: index }));
     threadActions.handleParticipantsChange(reorderedParticipants);
-  }, [threadActions]);
+  }, [threadActions, setModelOrder]);
 
   const handleModelToggle = useCallback((modelId: string) => {
     const orderedModel = orderedModels.find(om => om.model.id === modelId);
@@ -459,21 +481,33 @@ export default function ChatThreadScreen({
       return;
 
     if (orderedModel.participant) {
-      // Remove participant
+      // Remove participant - update priorities for remaining participants
       const filtered = selectedParticipants.filter(p => p.id !== orderedModel.participant!.id);
-      const reindexed = filtered.map((p, index) => ({ ...p, priority: index }));
+      // Recalculate priorities based on visual order
+      const reindexed = filtered.map((p) => {
+        const visualIndex = modelOrder.indexOf(p.modelId);
+        return { ...p, priority: visualIndex };
+      }).sort((a, b) => a.priority - b.priority);
       threadActions.handleParticipantsChange(reindexed);
     } else {
-      // Add participant
+      // Add participant - assign priority based on position in visual order
+      const visualIndex = modelOrder.indexOf(modelId);
       const newParticipant = {
         id: `participant-${Date.now()}`,
         modelId,
         role: '',
-        priority: selectedParticipants.length,
+        priority: visualIndex,
       };
-      threadActions.handleParticipantsChange([...selectedParticipants, newParticipant]);
+      // Insert and re-sort all participants by their visual order
+      const updated = [...selectedParticipants, newParticipant]
+        .map((p) => {
+          const idx = modelOrder.indexOf(p.modelId);
+          return { ...p, priority: idx };
+        })
+        .sort((a, b) => a.priority - b.priority);
+      threadActions.handleParticipantsChange(updated);
     }
-  }, [orderedModels, selectedParticipants, threadActions]);
+  }, [orderedModels, selectedParticipants, threadActions, modelOrder]);
 
   const handleModelRoleChange = useCallback((modelId: string, role: string, customRoleId?: string) => {
     const updated = selectedParticipants.map(p =>
@@ -490,12 +524,14 @@ export default function ChatThreadScreen({
   }, [selectedParticipants, threadActions]);
 
   // Unified scroll management using useChatScroll hook
+  // ✅ FIX: Pass currentParticipantIndex to trigger auto-scroll on participant turn-taking
   const { scrolledToAnalysesRef } = useChatScroll({
     messages,
     analyses,
     isStreaming,
     scrollContainerId: 'chat-scroll-container',
     enableNearBottomDetection: true,
+    currentParticipantIndex,
   });
 
   // Streaming loader state calculation
@@ -679,7 +715,6 @@ export default function ChatThreadScreen({
                 onStop={stopStreaming}
                 placeholder={t('input.placeholder')}
                 participants={selectedParticipants}
-                currentParticipantIndex={currentParticipantIndex}
                 quotaCheckType="messages"
                 onRemoveParticipant={isRoundInProgress
                   ? undefined

@@ -1,12 +1,11 @@
 'use client';
-import { FolderKanban, MessageSquarePlus, Plus, Search, Sparkles, Star } from 'lucide-react';
+import { MessageSquarePlus, Plus, Search, Sparkles, Star } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
-import type { SubscriptionTier } from '@/api/services/product-logic.service';
 import type { Chat } from '@/components/chat/chat-list';
 import { ChatList, groupChatsByPeriod } from '@/components/chat/chat-list';
 import {
@@ -15,15 +14,6 @@ import {
 } from '@/components/chat/chat-sidebar-skeleton';
 import { CommandSearch } from '@/components/chat/command-search';
 import { NavUser } from '@/components/chat/nav-user';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
 import {
   Empty,
   EmptyDescription,
@@ -35,7 +25,6 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Sidebar,
   SidebarContent,
-  SidebarFooter,
   SidebarGroup,
   SidebarHeader,
   SidebarMenu,
@@ -48,7 +37,6 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { BRAND } from '@/constants/brand';
 import { useDeleteThreadMutation } from '@/hooks/mutations/chat-mutations';
 import { useThreadsQuery } from '@/hooks/queries/chat';
-import { useUsageStatsQuery } from '@/hooks/queries/usage';
 import { useNavigationReset } from '@/hooks/utils/use-navigation-reset';
 import { toastManager } from '@/lib/toast/toast-manager';
 
@@ -69,7 +57,6 @@ function AppSidebarComponent({ ...props }: React.ComponentProps<typeof Sidebar>)
     error,
   } = useThreadsQuery();
   const deleteThreadMutation = useDeleteThreadMutation();
-  const { data: usageData } = useUsageStatsQuery();
   const chats: Chat[] = useMemo(() => {
     if (!threadsData?.pages)
       return [];
@@ -157,8 +144,6 @@ function AppSidebarComponent({ ...props }: React.ComponentProps<typeof Sidebar>)
   const deletingChatId = deleteThreadMutation.isPending && deleteThreadMutation.variables?.param?.id
     ? deleteThreadMutation.variables.param.id
     : null;
-  const subscriptionTier = (usageData?.success ? usageData.data.subscription.tier : 'free') as SubscriptionTier;
-  const isFreeUser = subscriptionTier === 'free';
   const handleScroll = useCallback(() => {
     if (!sidebarContentRef.current || !hasNextPage || isFetchingNextPage)
       return;
@@ -187,7 +172,7 @@ function AppSidebarComponent({ ...props }: React.ComponentProps<typeof Sidebar>)
                   <Link href="/chat" onClick={handleNavLinkClick}>
                     <Image
                       src={BRAND.logos.main}
-                      alt={`${BRAND.displayName} Logo`}
+                      alt={`${BRAND.name} Logo`}
                       width={40}
                       height={40}
                       className="size-10 object-contain shrink-0"
@@ -197,7 +182,7 @@ function AppSidebarComponent({ ...props }: React.ComponentProps<typeof Sidebar>)
                       className="truncate min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-base font-bold"
                       style={{ maxWidth: '11rem' }}
                     >
-                      {BRAND.displayName}
+                      {BRAND.name}
                     </span>
                   </Link>
                 </SidebarMenuButton>
@@ -208,7 +193,7 @@ function AppSidebarComponent({ ...props }: React.ComponentProps<typeof Sidebar>)
                 <Link href="/chat" onClick={handleNavLinkClick} className="p-0 m-0 block">
                   <Image
                     src={BRAND.logos.main}
-                    alt={`${BRAND.displayName} Logo`}
+                    alt={`${BRAND.name} Logo`}
                     width={48}
                     height={48}
                     className="size-12 object-contain shrink-0"
@@ -246,24 +231,28 @@ function AppSidebarComponent({ ...props }: React.ComponentProps<typeof Sidebar>)
                     className="truncate min-w-0 overflow-hidden text-ellipsis whitespace-nowrap"
                     style={{ maxWidth: '12rem' }}
                   >
-                    {t('chat.searchChats')}
+                    {t('navigation.searchChats')}
                   </span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
 
               <SidebarMenuItem className="group-data-[collapsible=icon]:hidden">
-                <SidebarMenuButton disabled>
-                  <FolderKanban className="size-4 shrink-0" />
-                  <span
-                    className="truncate min-w-0 overflow-hidden text-ellipsis whitespace-nowrap"
-                    style={{ maxWidth: '9rem' }}
-                  >
-                    Projects
-                  </span>
-                  <Badge variant="secondary" className="ml-auto text-[10px] px-1.5 py-0 shrink-0">
-                    Soon
-                  </Badge>
+                <SidebarMenuButton asChild className="bg-sidebar-accent/50 hover:bg-sidebar-accent">
+                  <Link href="/chat/pricing">
+                    <Sparkles className="size-4 shrink-0" />
+                    <span
+                      className="truncate min-w-0 overflow-hidden text-ellipsis whitespace-nowrap"
+                      style={{ maxWidth: '12rem' }}
+                    >
+                      {t('navigation.upgrade')}
+                    </span>
+                  </Link>
                 </SidebarMenuButton>
+              </SidebarMenuItem>
+
+              {/* User Account - Expanded */}
+              <SidebarMenuItem className="group-data-[collapsible=icon]:hidden">
+                <NavUser />
               </SidebarMenuItem>
 
               {/* Icon Buttons - Collapsed */}
@@ -283,7 +272,7 @@ function AppSidebarComponent({ ...props }: React.ComponentProps<typeof Sidebar>)
                       setOpenMobile(false);
                     }
                   }}
-                  tooltip={t('chat.searchChats')}
+                  tooltip={t('navigation.searchChats')}
                 >
                   <Search />
                 </SidebarMenuButton>
@@ -291,11 +280,19 @@ function AppSidebarComponent({ ...props }: React.ComponentProps<typeof Sidebar>)
 
               <SidebarMenuItem className="hidden group-data-[collapsible=icon]:flex">
                 <SidebarMenuButton
-                  disabled
-                  tooltip="Projects (Coming Soon)"
+                  asChild
+                  tooltip={t('navigation.upgrade')}
+                  className="bg-sidebar-accent/50 hover:bg-sidebar-accent"
                 >
-                  <FolderKanban />
+                  <Link href="/chat/pricing">
+                    <Sparkles />
+                  </Link>
                 </SidebarMenuButton>
+              </SidebarMenuItem>
+
+              {/* User Account - Collapsed */}
+              <SidebarMenuItem className="hidden group-data-[collapsible=icon]:flex">
+                <NavUser />
               </SidebarMenuItem>
             </SidebarMenu>
           </SidebarHeader>
@@ -399,38 +396,6 @@ function AppSidebarComponent({ ...props }: React.ComponentProps<typeof Sidebar>)
               </div>
             </ScrollArea>
           </SidebarContent>
-          <SidebarFooter>
-            {isFreeUser && (
-              <div className="group-data-[collapsible=icon]:hidden">
-                <Card variant="glass-subtle" className="border-sidebar-border py-0">
-                  <CardHeader className="px-3 pt-3 pb-2">
-                    <div className="flex items-center gap-2">
-                      <Sparkles className="size-4 text-amber-500 shrink-0" />
-                      <CardTitle className="text-sm font-semibold">
-                        {t('pricing.card.upgradePlan')}
-                      </CardTitle>
-                    </div>
-                    <CardDescription className="text-xs leading-snug mt-1">
-                      {t('pricing.card.upgradeDescription')}
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="px-3 pb-3 pt-0">
-                    <Button
-                      variant="outline"
-                      className="w-full justify-center text-xs border-sidebar-border hover:bg-white/10 hover:backdrop-blur-sm active:bg-white/15 active:scale-[0.998] transition-all duration-200"
-                      size="sm"
-                      asChild
-                    >
-                      <Link href="/chat/pricing">
-                        {t('pricing.card.upgradeToPro')}
-                      </Link>
-                    </Button>
-                  </CardContent>
-                </Card>
-              </div>
-            )}
-            <NavUser />
-          </SidebarFooter>
           <SidebarRail />
         </Sidebar>
         <CommandSearch

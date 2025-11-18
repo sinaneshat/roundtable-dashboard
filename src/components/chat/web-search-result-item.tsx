@@ -1,46 +1,21 @@
 'use client';
 import {
-  BookOpen,
-  Calendar,
   ChevronDown,
-  Clock,
-  FileText,
   Globe,
-  Lightbulb,
-  Newspaper,
   Star,
-  TrendingUp,
-  User,
 } from 'lucide-react';
-import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 
-import { UNKNOWN_DOMAIN, WebSearchContentTypes } from '@/api/core/enums';
+import { UNKNOWN_DOMAIN } from '@/api/core/enums';
 import type { WebSearchResultItemProps } from '@/api/routes/chat/schema';
-import { WebSearchContentPreview } from '@/components/chat/web-search-content-preview';
+import { AnimatedBadge } from '@/components/ui/animated-card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Progress } from '@/components/ui/progress';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { FadeInText, TypingText } from '@/components/ui/typing-text';
 import { cn } from '@/lib/ui/cn';
 import { buildGoogleFaviconUrl, safeExtractDomain } from '@/lib/utils';
-
-// Helper function to get content type icon
-function getContentTypeIcon(contentType?: string) {
-  switch (contentType) {
-    case WebSearchContentTypes.NEWS:
-      return Newspaper;
-    case WebSearchContentTypes.ARTICLE:
-      return FileText;
-    case WebSearchContentTypes.RESEARCH:
-      return BookOpen;
-    case WebSearchContentTypes.BLOG:
-      return TrendingUp;
-    default:
-      return Globe;
-  }
-}
 
 export function WebSearchResultItem({
   result,
@@ -48,7 +23,6 @@ export function WebSearchResultItem({
   className,
   citationNumber,
 }: WebSearchResultItemProps & { citationNumber?: number }) {
-  const t = useTranslations('chat.tools.webSearch');
   const [faviconError, setFaviconError] = useState(false);
   const [fallbackFaviconError, setFallbackFaviconError] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
@@ -97,18 +71,18 @@ export function WebSearchResultItem({
   };
 
   return (
-    <div className={cn('flex gap-3 py-2.5', showDivider && 'border-b border-border/20', className)}>
+    <div className={cn('flex gap-3 py-2', showDivider && 'border-b border-border/10', className)}>
       {/* Citation number or Avatar */}
       {citationNumber
         ? (
             <div className="flex-shrink-0 mt-0.5">
-              <div className="size-8 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center">
-                <span className="text-xs font-bold text-primary">{citationNumber}</span>
+              <div className="size-6 rounded-full bg-primary/10 flex items-center justify-center">
+                <span className="text-xs font-semibold text-primary">{citationNumber}</span>
               </div>
             </div>
           )
         : (
-            <Avatar className="size-8 flex-shrink-0 mt-0.5">
+            <Avatar className="size-6 flex-shrink-0 mt-0.5">
               <AvatarImage
                 src={faviconSrc || ''}
                 alt={cleanDomain}
@@ -121,8 +95,8 @@ export function WebSearchResultItem({
                   }
                 }}
               />
-              <AvatarFallback className="bg-muted/50 text-muted-foreground" role="img" aria-label={cleanDomain}>
-                <Globe className="size-4" aria-hidden="true" />
+              <AvatarFallback className="bg-muted/30 text-muted-foreground" role="img" aria-label={cleanDomain}>
+                <Globe className="size-3" aria-hidden="true" />
               </AvatarFallback>
             </Avatar>
           )}
@@ -138,7 +112,7 @@ export function WebSearchResultItem({
                 rel="noopener noreferrer"
                 className="font-medium text-sm hover:text-primary transition-colors line-clamp-1 block"
               >
-                {result.title}
+                <FadeInText delay={0.05}>{result.title}</FadeInText>
               </a>
             </TooltipTrigger>
             <TooltipContent>
@@ -148,52 +122,56 @@ export function WebSearchResultItem({
         </TooltipProvider>
 
         <div className="flex items-center justify-between gap-2">
-          <p className="text-xs text-muted-foreground truncate">{cleanDomain}</p>
+          <FadeInText delay={0.1}>
+            <p className="text-xs text-muted-foreground truncate">{cleanDomain}</p>
+          </FadeInText>
 
-          {/* Relevance Score - Inline with domain, closer to content */}
+          {/* Relevance Score - Animated */}
           {result.score > 0 && (
-            <Badge
-              variant="outline"
-              className={cn(
-                'text-xs h-5 flex-shrink-0',
-                relevancePercentage >= 80
-                  ? 'bg-green-500/10 text-green-700 border-green-500/20 dark:text-green-400'
-                  : relevancePercentage >= 60
-                    ? 'bg-yellow-500/10 text-yellow-700 border-yellow-500/20 dark:text-yellow-400'
-                    : 'bg-orange-500/10 text-orange-700 border-orange-500/20 dark:text-orange-400',
-              )}
-            >
-              <Star
+            <AnimatedBadge delay={0.15}>
+              <Badge
+                variant="outline"
                 className={cn(
-                  'size-3 mr-1',
+                  'text-xs h-5 flex-shrink-0',
                   relevancePercentage >= 80
-                    ? 'fill-green-600/20'
+                    ? 'bg-green-500/10 text-green-700 border-green-500/20 dark:text-green-400'
                     : relevancePercentage >= 60
-                      ? 'fill-yellow-600/20'
-                      : 'fill-orange-600/20',
+                      ? 'bg-yellow-500/10 text-yellow-700 border-yellow-500/20 dark:text-yellow-400'
+                      : 'bg-orange-500/10 text-orange-700 border-orange-500/20 dark:text-orange-400',
                 )}
-              />
-              {relevancePercentage}
-              %
-            </Badge>
+              >
+                <Star
+                  className={cn(
+                    'size-3 mr-1',
+                    relevancePercentage >= 80
+                      ? 'fill-green-600/20'
+                      : relevancePercentage >= 60
+                        ? 'fill-yellow-600/20'
+                        : 'fill-orange-600/20',
+                  )}
+                />
+                {relevancePercentage}
+                %
+              </Badge>
+            </AnimatedBadge>
           )}
         </div>
 
-        {/* Description Preview */}
+        {/* Description Preview - Animated */}
         {result.metadata?.description && (
           <p className="text-xs text-muted-foreground italic line-clamp-2 pt-0.5">
-            {result.metadata.description}
+            <TypingText text={result.metadata.description} speed={5} delay={150} />
           </p>
         )}
 
-        {/* Featured Image from scraped content - Show inline */}
+        {/* Featured Image - Minimal */}
         {result.metadata?.imageUrl && (
-          <div className="rounded-md overflow-hidden border border-border/30 bg-muted/30 my-1.5">
+          <div className="rounded overflow-hidden my-1">
             {/* eslint-disable-next-line next/no-img-element -- External image from search result */}
             <img
               src={result.metadata.imageUrl}
               alt={result.title}
-              className="w-full h-auto max-h-48 object-cover"
+              className="w-full h-auto max-h-40 object-cover"
               loading="lazy"
               onError={(e) => {
                 e.currentTarget.style.display = 'none';
@@ -202,183 +180,59 @@ export function WebSearchResultItem({
           </div>
         )}
 
-        {/* Additional images from scraped content */}
-        {result.images && result.images.length > 0 && (
-          <div className="grid grid-cols-3 gap-1.5 my-1.5">
-            {result.images.slice(0, 3).map(img => (
-              <div key={img.url} className="rounded overflow-hidden border border-border/30 bg-muted/30 aspect-video">
-                {/* eslint-disable-next-line next/no-img-element -- External images from search results */}
-                <img
-                  src={img.url}
-                  alt={img.alt || img.description || result.title}
-                  className="w-full h-full object-cover"
-                  loading="lazy"
-                  onError={(e) => {
-                    e.currentTarget.style.display = 'none';
-                  }}
-                />
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Content preview - Show full scraped content with expand/collapse */}
+        {/* Content preview - Animated typing */}
         {displayContent && (
           <div className="text-xs text-foreground/70 leading-relaxed">
-            <p className={cn(!isExpanded && isLongContent && 'line-clamp-3')}>
-              {displayContent}
-            </p>
+            <div className={cn(!isExpanded && isLongContent && 'line-clamp-3')}>
+              <TypingText text={displayContent} speed={3} delay={200} />
+            </div>
 
             {isLongContent && (
-              <Button
-                variant="link"
-                size="sm"
-                onClick={() => setIsExpanded(!isExpanded)}
-                className="p-0 h-auto text-xs mt-1"
-              >
-                <ChevronDown
-                  className={cn('size-3 mr-1 transition-transform', isExpanded && 'rotate-180')}
-                />
-                {isExpanded ? 'Show less' : 'Show more'}
-              </Button>
+              <FadeInText delay={0.5}>
+                <Button
+                  variant="link"
+                  size="sm"
+                  onClick={() => setIsExpanded(!isExpanded)}
+                  className="p-0 h-auto text-xs mt-1"
+                >
+                  <ChevronDown
+                    className={cn('size-3 mr-1 transition-transform', isExpanded && 'rotate-180')}
+                  />
+                  {isExpanded ? 'Show less' : 'Show more'}
+                </Button>
+              </FadeInText>
             )}
           </div>
         )}
 
-        {/* Detailed Relevance Tooltip - Only show on hover */}
-        {result.score > 0 && false && (
-          <div className="pt-1 hidden">
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <div className="space-y-1">
-                    <div className="flex items-center justify-between text-xs">
-                      <div className="flex items-center gap-1 text-muted-foreground">
-                        <Star
-                          className={cn(
-                            'size-3',
-                            relevancePercentage >= 80
-                              ? 'text-green-600 fill-green-600/20 dark:text-green-400'
-                              : relevancePercentage >= 60
-                                ? 'text-yellow-600 fill-yellow-600/20 dark:text-yellow-400'
-                                : 'text-orange-600 fill-orange-600/20 dark:text-orange-400',
-                          )}
-                        />
-                        <span>{t('relevanceLabel')}</span>
-                      </div>
-                      <Badge
-                        variant="outline"
-                        className={cn(
-                          'text-xs h-5',
-                          relevancePercentage >= 80
-                            ? 'bg-green-500/10 text-green-700 border-green-500/20 dark:text-green-400'
-                            : relevancePercentage >= 60
-                              ? 'bg-yellow-500/10 text-yellow-700 border-yellow-500/20 dark:text-yellow-400'
-                              : 'bg-orange-500/10 text-orange-700 border-orange-500/20 dark:text-orange-400',
-                        )}
-                      >
-                        {relevancePercentage}
-                        % match
-                      </Badge>
-                    </div>
-                    <Progress
-                      value={relevancePercentage}
-                      className={cn(
-                        'h-1.5',
-                        relevancePercentage >= 80
-                          ? '[&>div]:bg-green-600 dark:[&>div]:bg-green-400'
-                          : relevancePercentage >= 60
-                            ? '[&>div]:bg-yellow-600 dark:[&>div]:bg-yellow-400'
-                            : '[&>div]:bg-orange-600 dark:[&>div]:bg-orange-400',
-                      )}
-                    />
-                  </div>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p className="text-xs text-muted-foreground">Relevance hidden</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          </div>
-        )}
-
-        {/* Metadata badges */}
-        {(result.metadata?.author
-          || result.publishedDate
-          || result.metadata?.readingTime
-          || result.metadata?.wordCount
-          || result.contentType) && (
-          <div className="flex flex-wrap gap-1.5 pt-1">
-            {/* Content Type Badge */}
-            {result.contentType && (() => {
-              const Icon = getContentTypeIcon(result.contentType);
-              return (
-                <Badge variant="outline" className="text-xs h-5">
-                  <Icon className="size-3 mr-1" />
-                  {t(`contentType.${result.contentType}`)}
-                </Badge>
-              );
-            })()}
-
-            {/* Author Badge */}
-            {result.metadata?.author && (
-              <Badge variant="outline" className="text-xs h-5">
-                <User className="size-3 mr-1" />
-                {result.metadata.author}
-              </Badge>
-            )}
-
-            {/* Published Date Badge */}
-            {result.publishedDate && (
-              <Badge variant="outline" className="text-xs h-5">
-                <Calendar className="size-3 mr-1" />
-                {formatDate(result.publishedDate)}
-              </Badge>
-            )}
-
-            {/* Reading Time Badge */}
-            {result.metadata?.readingTime && (
-              <Badge variant="outline" className="text-xs h-5">
-                <Clock className="size-3 mr-1" />
-                {result.metadata.readingTime}
-                {' '}
-                {t('metadata.minRead')}
-              </Badge>
-            )}
-
-            {/* Word Count Badge */}
-            {result.metadata?.wordCount && (
-              <Badge variant="outline" className="text-xs h-5">
-                {result.metadata.wordCount.toLocaleString()}
-                {' '}
-                {t('metadata.words')}
-              </Badge>
-            )}
-          </div>
-        )}
-
-        {/* Key Points */}
-        {result.keyPoints && result.keyPoints.length > 0 && (
-          <div className="pt-2 space-y-1">
-            <div className="flex items-center gap-1 text-xs font-medium text-foreground">
-              <Lightbulb className="size-3" />
-              <span>{t('keyPoints')}</span>
+        {/* Metadata - Animated */}
+        {(result.metadata?.author || result.publishedDate) && (
+          <FadeInText delay={0.3}>
+            <div className="flex items-center gap-2 text-xs text-muted-foreground pt-0.5">
+              {result.metadata?.author && (
+                <span>{result.metadata.author}</span>
+              )}
+              {result.metadata?.author && result.publishedDate && (
+                <span>•</span>
+              )}
+              {result.publishedDate && (
+                <span>{formatDate(result.publishedDate)}</span>
+              )}
             </div>
-            <ul className="space-y-0.5 pl-4">
-              {result.keyPoints.map(point => (
-                <li key={point} className="text-xs text-muted-foreground list-disc">
-                  {point}
-                </li>
-              ))}
-            </ul>
-          </div>
+          </FadeInText>
         )}
 
-        {/* Full Content Preview - Show for results with fullContent or rawContent */}
-        {(result.fullContent || result.rawContent) && (
-          <div className="pt-2">
-            <WebSearchContentPreview result={result} />
-          </div>
+        {/* Key Points - Animated list */}
+        {result.keyPoints && result.keyPoints.length > 0 && (
+          <ul className="space-y-0.5 pl-4 pt-1">
+            {result.keyPoints.map((point, idx) => (
+              <FadeInText key={point} delay={0.4 + (idx * 0.05)}>
+                <li className="text-xs text-muted-foreground list-disc">
+                  <TypingText text={point} speed={5} delay={50 * idx} />
+                </li>
+              </FadeInText>
+            ))}
+          </ul>
         )}
       </div>
     </div>

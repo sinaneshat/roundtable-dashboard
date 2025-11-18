@@ -1,13 +1,12 @@
 'use client';
 
-import { motion } from 'framer-motion';
 import { ExternalLink, Sparkles } from 'lucide-react';
-import type { Components } from 'react-markdown';
-import ReactMarkdown from 'react-markdown';
 
+import { AnimatedBadge } from '@/components/ui/animated-card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
+import { FadeInText, TypingText } from '@/components/ui/typing-text';
 import { cn } from '@/lib/ui/cn';
 
 type LLMAnswerDisplayProps = {
@@ -17,75 +16,18 @@ type LLMAnswerDisplayProps = {
   sources?: Array<{ url: string; title: string }>;
 };
 
-// Custom markdown components for rich rendering
-const markdownComponents: Partial<Components> = {
-  // Style links with external link icon
-  a: ({ href, children, ...props }: { href?: string; children?: React.ReactNode }) => (
-    <a
-      href={href}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="text-primary hover:text-primary/80 underline decoration-primary/30 underline-offset-4 transition-colors inline-flex items-center gap-1 group"
-      {...props}
-    >
-      {children}
-      <ExternalLink className="size-3 opacity-50 group-hover:opacity-100 transition-opacity" />
-    </a>
-  ),
-  // Style paragraphs
-  p: ({ children }: { children?: React.ReactNode }) => (
-    <p className="leading-relaxed mb-2 last:mb-0">
-      {children}
-    </p>
-  ),
-  // Style lists
-  ul: ({ children }: { children?: React.ReactNode }) => (
-    <ul className="list-disc list-inside space-y-1 my-2">
-      {children}
-    </ul>
-  ),
-  ol: ({ children }: { children?: React.ReactNode }) => (
-    <ol className="list-decimal list-inside space-y-1 my-2">
-      {children}
-    </ol>
-  ),
-  // Style code blocks
-  code: ({ inline, children, ...props }: { inline?: boolean; children?: React.ReactNode }) => {
-    if (inline) {
-      return (
-        <code className="bg-muted px-1.5 py-0.5 rounded text-xs font-mono" {...props}>
-          {children}
-        </code>
-      );
-    }
-    return (
-      <code className="block bg-muted p-3 rounded-lg text-xs font-mono my-2 overflow-x-auto" {...props}>
-        {children}
-      </code>
-    );
-  },
-  // Style blockquotes
-  blockquote: ({ children }: { children?: React.ReactNode }) => (
-    <blockquote className="border-l-4 border-primary/30 pl-4 py-1 my-2 italic text-muted-foreground">
-      {children}
-    </blockquote>
-  ),
-  // Style headings
-  h1: ({ children }: { children?: React.ReactNode }) => <h1 className="text-xl font-bold mt-4 mb-2">{children}</h1>,
-  h2: ({ children }: { children?: React.ReactNode }) => <h2 className="text-lg font-semibold mt-3 mb-2">{children}</h2>,
-  h3: ({ children }: { children?: React.ReactNode }) => <h3 className="text-base font-semibold mt-2 mb-1">{children}</h3>,
-};
-
 export function LLMAnswerDisplay({ answer, isStreaming = false, className, sources }: LLMAnswerDisplayProps) {
   // Show skeleton before first chunk arrives
   if (!answer && isStreaming) {
     return (
       <div className={cn('space-y-2 llm-answer-skeleton', className)}>
         <div className="flex items-center gap-2 mb-3">
-          <Badge variant="secondary" className="text-xs">
-            <Sparkles className="size-3 mr-1 animate-pulse" />
-            AI synthesizing answer...
-          </Badge>
+          <AnimatedBadge delay={0.05}>
+            <Badge variant="secondary" className="text-xs">
+              <Sparkles className="size-3 mr-1 animate-pulse" />
+              AI synthesizing answer...
+            </Badge>
+          </AnimatedBadge>
         </div>
         <Skeleton className="h-4 w-full skeleton-line" />
         <Skeleton className="h-4 w-5/6 skeleton-line" />
@@ -102,24 +44,17 @@ export function LLMAnswerDisplay({ answer, isStreaming = false, className, sourc
   return (
     <div className={cn('space-y-2', className)}>
       {/* Simplified header */}
-      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-        <Sparkles className="size-3" />
-        <span>AI Summary</span>
-        {isStreaming && <span className="animate-pulse">•••</span>}
-      </div>
+      <FadeInText delay={0.05}>
+        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <Sparkles className="size-3" />
+          <span>AI Summary</span>
+          {isStreaming && <span className="animate-pulse">•••</span>}
+        </div>
+      </FadeInText>
 
-      {/* Markdown content - clean, no wrapper */}
+      {/* Markdown content with typing effect */}
       <div className="prose prose-sm dark:prose-invert max-w-none text-sm">
-        <ReactMarkdown components={markdownComponents}>
-          {answer}
-        </ReactMarkdown>
-        {isStreaming && (
-          <motion.span
-            className="inline-block w-1 h-3 ml-0.5 bg-primary rounded-sm align-middle"
-            animate={{ opacity: [0, 1, 0] }}
-            transition={{ duration: 0.8, repeat: Infinity }}
-          />
-        )}
+        <TypingText text={answer} speed={5} delay={100} enabled={isStreaming} />
       </div>
 
       {/* Compact source list - no border */}

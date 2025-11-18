@@ -127,7 +127,7 @@ export default async function Image() {
             zIndex: 1,
           }}
         >
-          {t('pricing.modal.title')}
+          {t('pricing.page.title')}
         </div>
 
         {/* Subtitle */}
@@ -142,7 +142,7 @@ export default async function Image() {
             zIndex: 1,
           }}
         >
-          {t('pricing.modal.description')}
+          {t('pricing.page.description')}
         </div>
 
         {/* Real Subscription Tiers */}

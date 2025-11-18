@@ -1,5 +1,5 @@
 'use client';
-import { ChevronsUpDown, CreditCard, Key, Loader2, LogOut, Sparkles } from 'lucide-react';
+import { CreditCard, Key, Loader2, LogOut, Sparkles } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
@@ -27,9 +27,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
-  SidebarMenu,
   SidebarMenuButton,
-  SidebarMenuItem,
   useSidebar,
 } from '@/components/ui/sidebar';
 import {
@@ -113,116 +111,114 @@ export function NavUser() {
   };
   const subscriptionTier = (usageData?.success ? usageData.data.subscription.tier : 'free') as SubscriptionTier;
   const isPremium = subscriptionTier !== 'free';
+
   return (
     <>
-      <SidebarMenu>
-        <SidebarMenuItem>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <SidebarMenuButton
-                size="lg"
-                className="data-[state=open]:bg-white/10 data-[state=open]:backdrop-blur-sm"
-              >
-                <Avatar className="h-8 w-8 rounded-full">
-                  <AvatarImage
-                    src={user?.image || undefined}
-                    alt={user?.name || t('user.defaultName')}
-                  />
-                  <AvatarFallback className="rounded-full">{userInitials}</AvatarFallback>
-                </Avatar>
-                <div className="grid flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
-                  <span className="truncate font-semibold">{user?.name || t('user.defaultName')}</span>
-                  <span className="truncate text-xs">{user?.email}</span>
-                </div>
-                <ChevronsUpDown className="ml-auto size-4 group-data-[collapsible=icon]:hidden" />
-              </SidebarMenuButton>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent
-              className="w-[--radix-dropdown-menu-trigger-width] min-w-56 rounded-lg"
-              side={isMobile ? 'bottom' : 'right'}
-              align="end"
-              sideOffset={4}
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <SidebarMenuButton
+            tooltip={user?.name || t('user.defaultName')}
+            className="data-[state=open]:bg-sidebar-accent"
+          >
+            <Avatar className="size-4 shrink-0">
+              <AvatarImage
+                src={user?.image || undefined}
+                alt={user?.name || t('user.defaultName')}
+              />
+              <AvatarFallback>{userInitials}</AvatarFallback>
+            </Avatar>
+            <span
+              className="truncate min-w-0 overflow-hidden text-ellipsis whitespace-nowrap group-data-[collapsible=icon]:hidden"
+              style={{ maxWidth: '12rem' }}
             >
-              <DropdownMenuLabel className="p-0 font-normal">
-                <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
-                  <Avatar className="h-8 w-8 rounded-full">
-                    <AvatarImage
-                      src={user?.image || undefined}
-                      alt={user?.name || t('user.defaultName')}
-                    />
-                    <AvatarFallback className="rounded-full">{userInitials}</AvatarFallback>
-                  </Avatar>
-                  <div className="grid flex-1 text-left text-sm leading-tight">
-                    <span className="truncate font-semibold">
-                      {user?.name || t('user.defaultName')}
-                    </span>
-                    <span className="truncate text-xs">{user?.email}</span>
-                  </div>
-                </div>
-              </DropdownMenuLabel>
-              <DropdownMenuSeparator />
-
-              {/* Usage Metrics - Collapsed by default in Accordion */}
-              <div className="px-2">
-                <Accordion type="single" collapsible>
-                  <AccordionItem value="usage" className="border-none">
-                    <AccordionTrigger className="py-2 text-xs font-medium text-muted-foreground hover:no-underline">
-                      {t('usage.planUsage')}
-                    </AccordionTrigger>
-                    <AccordionContent className="pb-2">
-                      <UsageMetrics />
-                    </AccordionContent>
-                  </AccordionItem>
-                </Accordion>
+              {user?.name || t('user.defaultName')}
+            </span>
+          </SidebarMenuButton>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent
+          className="w-56 rounded-lg"
+          side={isMobile ? 'bottom' : 'right'}
+          align="end"
+          sideOffset={4}
+        >
+          <DropdownMenuLabel className="p-0 font-normal">
+            <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
+              <Avatar className="h-8 w-8 rounded-full">
+                <AvatarImage
+                  src={user?.image || undefined}
+                  alt={user?.name || t('user.defaultName')}
+                />
+                <AvatarFallback className="rounded-full">{userInitials}</AvatarFallback>
+              </Avatar>
+              <div className="grid flex-1 text-left text-sm leading-tight">
+                <span className="truncate font-semibold">
+                  {user?.name || t('user.defaultName')}
+                </span>
+                <span className="truncate text-xs">{user?.email}</span>
               </div>
+            </div>
+          </DropdownMenuLabel>
+          <DropdownMenuSeparator />
 
+          {/* Usage Metrics */}
+          <div className="px-2">
+            <Accordion type="single" collapsible>
+              <AccordionItem value="usage" className="border-none">
+                <AccordionTrigger className="py-2 text-xs font-medium text-muted-foreground hover:no-underline">
+                  {t('usage.planUsage')}
+                </AccordionTrigger>
+                <AccordionContent className="pb-2">
+                  <UsageMetrics />
+                </AccordionContent>
+              </AccordionItem>
+            </Accordion>
+          </div>
+
+          <DropdownMenuSeparator />
+          <DropdownMenuGroup>
+            <DropdownMenuItem asChild>
+              <Link href="/chat/pricing">
+                <Sparkles />
+                {isPremium ? t('navigation.pricing') : t('pricing.card.upgradeToPro')}
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={showApiKeysModal.onTrue}>
+              <Key />
+              API Keys
+            </DropdownMenuItem>
+          </DropdownMenuGroup>
+          {activeSubscription && (
+            <>
               <DropdownMenuSeparator />
               <DropdownMenuGroup>
-                <DropdownMenuItem asChild>
-                  <Link href="/chat/pricing">
-                    <Sparkles />
-                    {isPremium ? t('navigation.pricing') : t('pricing.card.upgradeToPro')}
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={showApiKeysModal.onTrue}>
-                  <Key />
-                  API Keys
+                <DropdownMenuItem
+                  onClick={handleManageBilling}
+                  disabled={customerPortalMutation.isPending || cancelSubscriptionMutation.isPending}
+                >
+                  {customerPortalMutation.isPending
+                    ? (
+                        <>
+                          <Loader2 className="size-4 animate-spin" />
+                          {t('pricing.card.processing')}
+                        </>
+                      )
+                    : (
+                        <>
+                          <CreditCard />
+                          {t('pricing.card.manageBilling')}
+                        </>
+                      )}
                 </DropdownMenuItem>
               </DropdownMenuGroup>
-              {activeSubscription && (
-                <>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuGroup>
-                    <DropdownMenuItem
-                      onClick={handleManageBilling}
-                      disabled={customerPortalMutation.isPending || cancelSubscriptionMutation.isPending}
-                    >
-                      {customerPortalMutation.isPending
-                        ? (
-                            <>
-                              <Loader2 className="size-4 animate-spin" />
-                              {t('pricing.card.processing')}
-                            </>
-                          )
-                        : (
-                            <>
-                              <CreditCard />
-                              {t('pricing.card.manageBilling')}
-                            </>
-                          )}
-                    </DropdownMenuItem>
-                  </DropdownMenuGroup>
-                </>
-              )}
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={handleSignOut}>
-                <LogOut />
-                {t('navigation.signOut')}
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </SidebarMenuItem>
-      </SidebarMenu>
+            </>
+          )}
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={handleSignOut}>
+            <LogOut />
+            {t('navigation.signOut')}
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
       <CancelSubscriptionDialog
         open={showCancelDialog.value}
         onOpenChange={showCancelDialog.setValue}

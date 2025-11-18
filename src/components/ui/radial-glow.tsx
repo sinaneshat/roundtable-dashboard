@@ -1,7 +1,6 @@
 "use client";
 import React from "react";
 import { motion } from "motion/react";
-import { BRAND } from "@/constants/brand";
 
 type RadialGlowProps = {
   /** Size of the glow in pixels */
@@ -12,28 +11,9 @@ type RadialGlowProps = {
   animate?: boolean;
   /** Vertical offset from center */
   offsetY?: number;
-  /** Use logo gradient colors (rainbow) */
+  /** Use logo gradient colors (rainbow) - deprecated, now uses dark blue */
   useLogoColors?: boolean;
   className?: string;
-};
-
-// Convert logo gradient colors to subtle, semi-transparent versions
-const createRainbowGradient = (opacity: number = 0.02) => {
-  const colors = BRAND.logoGradient.map(color => {
-    // Convert hex to rgb and add opacity
-    const r = parseInt(color.slice(1, 3), 16);
-    const g = parseInt(color.slice(3, 5), 16);
-    const b = parseInt(color.slice(5, 7), 16);
-    return `rgba(${r}, ${g}, ${b}, ${opacity})`;
-  });
-
-  // Create a conic gradient (color rays emanating from center)
-  const colorStops = colors.map((color, i) => {
-    const percentage = (i / colors.length) * 100;
-    return `${color} ${percentage}%`;
-  }).join(', ');
-
-  return `conic-gradient(from 0deg, ${colorStops}, ${colors[0]} 100%)`;
 };
 
 export const RadialGlow = ({
@@ -83,102 +63,68 @@ export const RadialGlow = ({
           WebkitFontSmoothing: 'antialiased',
         }}
       >
-        {useLogoColors ? (
-          <>
-            {/* Rainbow radial gradient - primary layer */}
-            <motion.div
-              className="absolute inset-0 rounded-full will-change-transform"
-              style={{
-                background: createRainbowGradient(0.15),
-                filter: 'blur(100px)',
-                transform: 'translateZ(0)',
-                backfaceVisibility: 'hidden',
-              }}
-              initial={{ scale: 1 }}
-              animate={animate ? {
-                scale: [1, 1.1, 1],
-              } : {}}
-              transition={{
-                duration: duration * 2,
-                repeat: Infinity,
-                ease: "easeInOut",
-                delay: 0.2,
-              }}
-            />
+        {/* Dark blue radial glow - primary layer */}
+        <motion.div
+          className="absolute inset-0 rounded-full will-change-transform"
+          style={{
+            background: `radial-gradient(circle, rgba(30, 58, 138, 0.20) 0%, rgba(30, 64, 175, 0.14) 25%, rgba(37, 99, 235, 0.09) 50%, transparent 70%)`,
+            filter: 'blur(100px)',
+            transform: 'translateZ(0)',
+            backfaceVisibility: 'hidden',
+          }}
+          initial={{ scale: 1 }}
+          animate={animate ? {
+            scale: [1, 1.1, 1],
+          } : {}}
+          transition={{
+            duration: duration * 2,
+            repeat: Infinity,
+            ease: "easeInOut",
+            delay: 0.2,
+          }}
+        />
 
-            {/* Rainbow radial gradient - secondary layer (larger, more subtle) */}
-            <motion.div
-              className="absolute inset-0 rounded-full will-change-transform"
-              style={{
-                background: createRainbowGradient(0.12),
-                filter: 'blur(140px)',
-                transform: 'translateZ(0) scale(1.3)',
-                backfaceVisibility: 'hidden',
-              }}
-              initial={{ scale: 1 }}
-              animate={animate ? {
-                scale: [1, 1.15, 1],
-              } : {}}
-              transition={{
-                duration: duration * 2.5,
-                repeat: Infinity,
-                ease: "easeInOut",
-                delay: 0.3,
-              }}
-            />
+        {/* Dark blue radial glow - secondary layer (larger, more subtle) */}
+        <motion.div
+          className="absolute inset-0 rounded-full will-change-transform"
+          style={{
+            background: `radial-gradient(circle, rgba(30, 64, 175, 0.15) 0%, rgba(37, 99, 235, 0.10) 30%, rgba(59, 130, 246, 0.06) 60%, transparent 80%)`,
+            filter: 'blur(140px)',
+            transform: 'translateZ(0) scale(1.3)',
+            backfaceVisibility: 'hidden',
+          }}
+          initial={{ scale: 1 }}
+          animate={animate ? {
+            scale: [1, 1.15, 1],
+          } : {}}
+          transition={{
+            duration: duration * 2.5,
+            repeat: Infinity,
+            ease: "easeInOut",
+            delay: 0.3,
+          }}
+        />
 
-            {/* Rainbow radial gradient - tertiary layer (largest, most subtle) */}
-            <motion.div
-              className="absolute inset-0 rounded-full will-change-transform"
-              style={{
-                background: createRainbowGradient(0.08),
-                filter: 'blur(180px)',
-                transform: 'translateZ(0) scale(1.6)',
-                backfaceVisibility: 'hidden',
-              }}
-              initial={{ scale: 1 }}
-              animate={animate ? {
-                scale: [1, 1.2, 1],
-              } : {}}
-              transition={{
-                duration: duration * 3,
-                repeat: Infinity,
-                ease: "easeInOut",
-                delay: 0.4,
-              }}
-            />
-          </>
-        ) : (
-          <>
-            {/* Fallback to simple radial gradients */}
-            <motion.div
-              className="absolute inset-0 rounded-full will-change-transform"
-              style={{
-                background: `radial-gradient(circle, rgba(139, 92, 246, 0.06) 0%, transparent 70%)`,
-                filter: 'blur(80px)',
-                transform: 'translateZ(0)',
-              }}
-            />
-
-            <motion.div
-              className="absolute inset-0 rounded-full will-change-transform"
-              style={{
-                background: `radial-gradient(circle, rgba(59, 130, 246, 0.04) 20%, transparent 80%)`,
-                filter: 'blur(100px)',
-                transform: 'translateZ(0) scale(1.2)',
-              }}
-            />
-
-            <motion.div
-              className="absolute inset-0 rounded-full will-change-transform"
-              style={{
-                background: `radial-gradient(circle, rgba(139, 92, 246, 0.02) 30%, transparent 90%)`,
-                filter: 'blur(120px)',
-                transform: 'translateZ(0) scale(1.4)',
-              }}
-            />
-          </>
-        )}
+        {/* Dark blue radial glow - tertiary layer (largest, most subtle) */}
+        <motion.div
+          className="absolute inset-0 rounded-full will-change-transform"
+          style={{
+            background: `radial-gradient(circle, rgba(37, 99, 235, 0.12) 0%, rgba(59, 130, 246, 0.08) 40%, rgba(96, 165, 250, 0.04) 70%, transparent 90%)`,
+            filter: 'blur(180px)',
+            transform: 'translateZ(0) scale(1.6)',
+            backfaceVisibility: 'hidden',
+          }}
+          initial={{ scale: 1 }}
+          animate={animate ? {
+            scale: [1, 1.2, 1],
+          } : {}}
+          transition={{
+            duration: duration * 3,
+            repeat: Infinity,
+            ease: "easeInOut",
+            delay: 0.4,
+          }}
+        />
       </motion.div>
     </div>
   );

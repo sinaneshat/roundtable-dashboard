@@ -15,6 +15,11 @@ type UseChatScrollParams = {
    * Default: 100ms
    */
   scrollThrottleMs?: number;
+  /**
+   * Current participant index during streaming
+   * Used to trigger auto-scroll when participants take turns
+   */
+  currentParticipantIndex?: number;
 };
 
 type UseChatScrollResult = {
@@ -45,6 +50,7 @@ type UseChatScrollResult = {
  * @param params.enableNearBottomDetection - Whether to enable near-bottom detection (default: true)
  * @param params.autoScrollThreshold - Distance from bottom in pixels to consider "near bottom" (default: 200)
  * @param params.scrollThrottleMs - Throttle time in milliseconds for scroll events (default: 100)
+ * @param params.currentParticipantIndex - Current participant index during streaming (triggers scroll on participant turn-taking)
  * @returns Object containing refs and scroll control functions
  *
  * @example
@@ -75,6 +81,7 @@ export function useChatScroll({
   enableNearBottomDetection = true,
   autoScrollThreshold = 200,
   scrollThrottleMs = 100,
+  currentParticipantIndex,
 }: UseChatScrollParams): UseChatScrollResult {
   // Track if user is near bottom of scroll (for auto-scroll opt-out)
   const isNearBottomRef = useRef(true);
@@ -161,6 +168,7 @@ export function useChatScroll({
   }, [enableNearBottomDetection, autoScrollThreshold, scrollThrottleMs]);
 
   // Effect 2: Auto-scroll on new analyses or during streaming
+  // ✅ FIX: Also trigger on participant turn-taking by depending on currentParticipantIndex
   useEffect(() => {
     if (messages.length === 0) {
       return;
@@ -177,6 +185,7 @@ export function useChatScroll({
     // Determine if we should scroll
     // - During participant streaming: Only scroll if user is near bottom (allows opt-out)
     // - New analysis: Only scroll if user is near bottom (allows opt-out)
+    // - Participant turn-taking: Scroll when currentParticipantIndex changes during streaming
     // User can freely scroll during any stream type without being forced back to bottom
     const shouldScroll = (isStreaming || hasNewAnalysis) && isNearBottomRef.current;
 
@@ -191,7 +200,7 @@ export function useChatScroll({
         scrollToBottom(isStreaming ? 'smooth' : 'auto');
       });
     }
-  }, [messages.length, analyses, isStreaming, scrollToBottom]);
+  }, [messages.length, analyses, isStreaming, currentParticipantIndex, scrollToBottom]);
 
   return {
     isNearBottomRef,

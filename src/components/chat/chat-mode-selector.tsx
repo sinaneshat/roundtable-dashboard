@@ -55,7 +55,7 @@ export function ChatModeSelector({
                 <Button
                   type="button"
                   variant="outline"
-                  size="sm"
+                  size="default"
                   disabled={disabled}
                   className="h-9 rounded-2xl gap-1.5 text-xs relative px-3"
                 >

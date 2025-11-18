@@ -1132,7 +1132,7 @@ export async function* streamSearchResults(
   env: ApiEnv['Bindings'],
   logger?: TypedLogger,
 ): AsyncGenerator<StreamSearchEvent> {
-  const { query, maxResults = 5, searchDepth = 'basic' } = params;
+  const { query, maxResults = 10, searchDepth = 'advanced' } = params;
   const startTime = performance.now();
   const requestId = generateId();
 
@@ -1354,9 +1354,9 @@ export async function performWebSearch(
   // ✅ P0 FIX: Generate unique request ID for tracking
   const requestId = generateId();
 
-  // Determine max results (default 5, max 20)
-  const maxResults = Math.min(params.maxResults || 5, 20);
-  const searchDepth = params.searchDepth || 'basic';
+  // Determine max results (default 10, max 20)
+  const maxResults = Math.min(params.maxResults || 10, 20);
+  const searchDepth = params.searchDepth || 'advanced';
 
   // ✅ CACHE: Try cache first for performance boost
   const cached = await getCachedSearch(params.query, maxResults, searchDepth, env, logger);

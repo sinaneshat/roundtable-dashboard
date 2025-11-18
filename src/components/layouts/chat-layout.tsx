@@ -21,7 +21,6 @@ import { listModelsService } from '@/services/api/models';
 
 type ChatLayoutProps = {
   children: React.ReactNode;
-  modal?: React.ReactNode;
 };
 
 /**
@@ -61,7 +60,7 @@ type ChatLayoutProps = {
  * - Client Components consume hydrated cache
  * - Layout prefetching provides optimal UX for user dashboards
  */
-export default async function ChatLayout({ children, modal }: ChatLayoutProps) {
+export default async function ChatLayout({ children }: ChatLayoutProps) {
   const queryClient = getQueryClient();
 
   // Prefetch all critical data in parallel for optimal performance
@@ -139,7 +138,6 @@ export default async function ChatLayout({ children, modal }: ChatLayoutProps) {
           </SidebarInset>
         </SidebarProvider>
       </ThreadHeaderProvider>
-      {modal}
     </HydrationBoundary>
   );
 }

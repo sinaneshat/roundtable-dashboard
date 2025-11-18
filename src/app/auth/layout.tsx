@@ -4,7 +4,7 @@ import type React from 'react';
 import { Suspense } from 'react';
 
 import { redirectIfAuthenticated } from '@/app/auth/actions';
-import { AuthLayout } from '@/components/layouts';
+import { AuthShowcaseLayout } from '@/components/auth/auth-showcase-layout';
 import { PageLoadingFallback } from '@/components/loading';
 import { getQueryClient } from '@/lib/data/query-client';
 
@@ -17,7 +17,7 @@ function AuthLayoutContent({ children }: { children: React.ReactNode }) {
 
   return (
     <Suspense fallback={<PageLoadingFallback text={t('authentication')} />}>
-      <AuthLayout>{children}</AuthLayout>
+      <AuthShowcaseLayout>{children}</AuthShowcaseLayout>
     </Suspense>
   );
 }

@@ -342,7 +342,7 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
   };
   return (
     <div className={cn('w-full relative z-20', className)}>
-      <div className="flex flex-col gap-0">
+      <div className="flex flex-col">
         {suggestions.map((suggestion, index) => {
           const modeConfig = getModeConfig(suggestion.mode);
           const isLast = index === suggestions.length - 1;
@@ -351,6 +351,8 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
               key={suggestion.title}
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
+              whileHover={{ scale: 1.01, transition: { duration: 0.2, ease: 'easeOut' } }}
+              whileTap={{ scale: 0.99, transition: { duration: 0.1 } }}
               transition={{
                 duration: 0.4,
                 delay: index * 0.1,
@@ -358,24 +360,24 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
               }}
               onClick={() => onSuggestionClick(suggestion.prompt, suggestion.mode, suggestion.participants)}
               className={cn(
-                'group/suggestion w-full text-left p-3 sm:p-4 md:p-5 rounded-2xl cursor-pointer focus-visible:ring-2 focus-visible:ring-white/20 focus-visible:outline-none touch-manipulation',
-                // Glass effect only on hover
-                'hover:bg-white/10 hover:backdrop-blur-sm',
-                'active:bg-white/15 active:scale-[0.998]',
-                'transition-all duration-200',
+                'group/suggestion w-full text-left px-4 py-3 rounded-2xl cursor-pointer focus-visible:ring-2 focus-visible:ring-white/20 focus-visible:outline-none touch-manipulation',
+                // Glass effect with backdrop blur on hover
+                'hover:bg-white/10 hover:backdrop-blur-md',
+                'active:bg-white/[0.15]',
+                'transition-all duration-200 ease-out',
                 !isLast && 'border-b border-white/[0.06]',
               )}
             >
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4 md:gap-6">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 sm:gap-3">
                 {/* Left: Question */}
-                <h3 className="text-sm sm:text-[15px] md:text-base font-medium text-white/90 leading-snug line-clamp-2 flex-1 min-w-0">
+                <h3 className="text-sm sm:text-[15px] font-normal text-white leading-snug flex-1 min-w-0">
                   {suggestion.title}
                 </h3>
 
                 {/* Right: Mode and avatars */}
-                <div className="flex items-center gap-2 sm:gap-3 md:gap-4 shrink-0">
-                  <div className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1 sm:py-1.5 rounded-full bg-white/5 border border-white/10">
-                    <span className={cn('text-[10px] sm:text-xs font-medium whitespace-nowrap', modeConfig.color)}>
+                <div className="flex items-center gap-2 shrink-0">
+                  <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-2xl bg-white/[0.04] border border-white/[0.06]">
+                    <span className={cn('text-[11px] font-medium whitespace-nowrap', modeConfig.color)}>
                       {modeConfig.label}
                     </span>
                   </div>
@@ -384,7 +386,7 @@ export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartP
                   <AvatarGroup
                     participants={suggestion.participants}
                     allModels={allModels}
-                    maxVisible={3}
+                    maxVisible={4}
                     size="sm"
                   />
                 </div>
