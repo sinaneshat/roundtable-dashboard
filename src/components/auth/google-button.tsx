@@ -3,6 +3,7 @@
 import { useTranslations } from 'next-intl';
 
 import { Button } from '@/components/ui/button';
+import { authClient } from '@/lib/auth/client';
 
 type GoogleButtonProps = {
   callbackURL?: string;
@@ -19,16 +20,22 @@ type GoogleButtonProps = {
  * Uses Better Auth's social provider to authenticate with Google
  */
 export function GoogleButton({
+  callbackURL = '/chat',
+  errorCallbackURL = '/auth/error',
+  newUserCallbackURL = '/chat',
   children,
   className,
   disabled = false,
 }: GoogleButtonProps) {
   const t = useTranslations();
 
-  const handleGoogleSignIn = () => {
-    // TODO: Implement Google OAuth flow
-    // For now, this is disabled for demo mode
-    // signIn('google', { callbackUrl: '/chat' });
+  const handleGoogleSignIn = async () => {
+    await authClient.signIn.social({
+      provider: 'google',
+      callbackURL,
+      errorCallbackURL,
+      newUserCallbackURL,
+    });
   };
 
   return (
