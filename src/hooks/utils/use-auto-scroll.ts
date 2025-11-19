@@ -13,6 +13,32 @@
 
 import { useEffect, useRef } from 'react';
 
+// ============================================================================
+// CSS OVERFLOW VALUES - Following 5-part enum pattern
+// ============================================================================
+
+/**
+ * CSS overflow property values that enable scrolling
+ * Used for detecting scrollable containers
+ */
+const SCROLLABLE_OVERFLOW_VALUES = ['auto', 'scroll'] as const;
+
+/**
+ * Type for scrollable overflow values
+ */
+type ScrollableOverflow = typeof SCROLLABLE_OVERFLOW_VALUES[number];
+
+/**
+ * Check if CSS overflow value enables scrolling
+ */
+function isScrollableOverflow(value: string): value is ScrollableOverflow {
+  return SCROLLABLE_OVERFLOW_VALUES.includes(value as ScrollableOverflow);
+}
+
+// ============================================================================
+// TYPE DEFINITIONS
+// ============================================================================
+
 /**
  * Options for auto-scroll behavior
  */
@@ -38,6 +64,10 @@ export type UseAutoScrollWithTriggerReturn<T extends HTMLElement> = {
   /** Manual scroll function */
   scrollToBottom: () => void;
 };
+
+// ============================================================================
+// HELPER FUNCTIONS
+// ============================================================================
 
 /**
  * Check if user is scrolled to bottom of container
@@ -73,6 +103,7 @@ function scrollToBottom(
 
 /**
  * Get scroll container (finds nearest scrollable parent)
+ * Walks up DOM tree to find first element with scrollable overflow
  */
 function getScrollContainer(element: HTMLElement | null): HTMLElement | null {
   if (!element)
@@ -82,7 +113,7 @@ function getScrollContainer(element: HTMLElement | null): HTMLElement | null {
 
   while (parent) {
     const { overflow, overflowY } = window.getComputedStyle(parent);
-    const isScrollable = overflow === 'auto' || overflow === 'scroll' || overflowY === 'auto' || overflowY === 'scroll';
+    const isScrollable = isScrollableOverflow(overflow) || isScrollableOverflow(overflowY);
 
     if (isScrollable) {
       return parent;
@@ -93,6 +124,10 @@ function getScrollContainer(element: HTMLElement | null): HTMLElement | null {
 
   return document.documentElement;
 }
+
+// ============================================================================
+// HOOK EXPORTS
+// ============================================================================
 
 /**
  * Auto-scroll hook for streaming content
