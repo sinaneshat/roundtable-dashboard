@@ -15,7 +15,7 @@ import { revalidateTag } from 'next/cache';
 import { ulid } from 'ulid';
 import { z } from 'zod';
 
-import { MessageRoles } from '@/api/core/enums';
+import { AnalysisStatuses, MessageRoles } from '@/api/core/enums';
 import type { ErrorMetadata } from '@/api/services/error-metadata.service';
 import ErrorMetadataService from '@/api/services/error-metadata.service';
 import { filterDbToParticipantMessages } from '@/api/services/message-type-guards';
@@ -546,7 +546,7 @@ async function createPendingAnalysis(
         roundNumber,
         mode: validatedMode,
         userQuestion,
-        status: 'pending',
+        status: AnalysisStatuses.PENDING,
         participantMessageIds,
         analysisData: null,
         completedAt: null,

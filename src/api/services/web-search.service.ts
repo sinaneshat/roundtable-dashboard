@@ -29,11 +29,8 @@ import { generateId, generateText, streamObject, streamText } from 'ai';
 
 import { createError, normalizeError } from '@/api/common/error-handling';
 import { AIModels } from '@/api/core/ai-models';
-import type {
-  WebSearchComplexity,
-  WebSearchTimeRange,
-  WebSearchTopic,
-} from '@/api/core/enums';
+import type { WebSearchComplexity, WebSearchTimeRange, WebSearchTopic } from '@/api/core/enums';
+import { UIMessageRoles } from '@/api/core/enums';
 import type { WebSearchParameters, WebSearchResult, WebSearchResultItem } from '@/api/routes/chat/schema';
 // ============================================================================
 // Zod Schemas
@@ -771,7 +768,7 @@ async function generateImageDescriptions(
               model: client.chat(AIModels.WEB_SEARCH), // Use vision-capable model
               messages: [
                 {
-                  role: 'user',
+                  role: UIMessageRoles.USER,
                   content: [
                     {
                       type: 'text',
@@ -943,7 +940,7 @@ async function generateAnswerSummary(
       messages: [
         {
           id: 'answer-gen',
-          role: 'user',
+          role: UIMessageRoles.USER,
           parts: [
             {
               type: 'text',
@@ -1002,7 +999,7 @@ async function detectSearchParameters(
       messages: [
         {
           id: 'param-detect',
-          role: 'user',
+          role: UIMessageRoles.USER,
           parts: [
             {
               type: 'text',

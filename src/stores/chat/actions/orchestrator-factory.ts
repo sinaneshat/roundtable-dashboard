@@ -216,11 +216,10 @@ export function createOrchestrator<
   return function useOrchestrator(
     options: OrchestratorOptions<TQueryArgs>,
   ): OrchestratorReturn {
-    // ✅ TYPE SAFETY NOTE: Generic array defaults require temporary variable
-    // TypeScript limitation: Destructuring defaults with generics cause inference errors
-    // Solution: Extract queryArgs separately with explicit type assertion
+    // ✅ TYPE SAFETY: Extract queryArgs with proper generic type inference
+    // TypeScript infers TQueryArgs correctly from readonly unknown[] default
     const { threadId, enabled = true } = options;
-    const queryArgs = options.queryArgs ?? ([] as unknown as TQueryArgs);
+    const queryArgs = (options.queryArgs ?? []) as TQueryArgs;
 
     // Get store state and actions using injected hook
     // ✅ DEPENDENCY INJECTION: useStoreHook passed as config parameter

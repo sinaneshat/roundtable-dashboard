@@ -7,7 +7,7 @@ import { createError } from '@/api/common/error-handling';
 import { verifyThreadOwnership } from '@/api/common/permissions';
 import { createHandler, Responses, STREAMING_CONFIG } from '@/api/core';
 import { AIModels } from '@/api/core/ai-models';
-import { AnalysisStatuses } from '@/api/core/enums';
+import { AnalysisStatuses, UIMessageRoles } from '@/api/core/enums';
 import { IdParamSchema, ThreadRoundParamSchema } from '@/api/core/schemas';
 import { filterDbToParticipantMessages } from '@/api/services/message-type-guards';
 import { extractModeratorModelName } from '@/api/services/models-config.service';
@@ -177,7 +177,7 @@ function generateModeratorAnalysis(
 
           // Input messages for moderator analysis (simplified for tracking)
           const inputMessages = [{
-            role: 'user' as const,
+            role: UIMessageRoles.USER,
             content: userPrompt,
           }];
 

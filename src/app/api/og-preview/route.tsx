@@ -13,6 +13,7 @@
 /* eslint-disable react/no-array-index-key */
 import { ImageResponse } from 'next/og';
 
+import { ChatModes } from '@/api/core/enums';
 import { BRAND } from '@/constants/brand';
 import {
   createGradient,
@@ -30,7 +31,7 @@ import {
 // This mock uses example model IDs to demonstrate icon resolution across different providers
 const MOCK_THREAD = {
   title: 'How to Build a Scalable SaaS Platform',
-  mode: 'analyzing' as const,
+  mode: ChatModes.ANALYZING,
   messagePreview: 'I\'m looking to understand the best practices for building a modern SaaS application with proper authentication, billing, and scalability...',
   participants: [
     { modelId: 'anthropic/claude-3.5-sonnet', role: 'The Architect' },

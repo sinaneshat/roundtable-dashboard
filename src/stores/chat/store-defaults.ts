@@ -15,6 +15,7 @@
 import type { UIMessage } from 'ai';
 
 import type { FeedbackType } from '@/api/core/enums';
+import { ChatModes } from '@/api/core/enums';
 import type { ChatParticipant, ChatThread, StoredModeratorAnalysis, StoredPreSearch } from '@/api/routes/chat/schema';
 import type { ParticipantConfig } from '@/components/chat/chat-form-schemas';
 import type { ChatModeId } from '@/lib/config/chat-modes';
@@ -27,7 +28,7 @@ import type { ScreenMode } from './actions/screen-initialization';
 
 export const FORM_DEFAULTS = {
   inputValue: '',
-  selectedMode: 'analyzing' as ChatModeId | null, // ✅ FIX: Default to 'analyzing' mode
+  selectedMode: ChatModes.ANALYZING as ChatModeId | null, // ✅ FIX: Default to 'analyzing' mode
   selectedParticipants: [] as ParticipantConfig[],
   enableWebSearch: false, // ⚠️ NOTE: This is ONLY used for new chats - thread screen syncs from thread.enableWebSearch
   modelOrder: [] as string[], // Visual order of models for drag-and-drop

@@ -15,6 +15,8 @@
  * @see exercises/05-context-engineering in AI SDK v5 course
  */
 
+import { ChatModes } from '@/api/core/enums';
+
 // ============================================================================
 // Application-Specific Prompts - Single Source of Truth
 // ============================================================================
@@ -130,7 +132,7 @@ export function buildParticipantSystemPrompt(role?: string | null): string {
  */
 export const MODERATOR_ANALYSIS_JSON_STRUCTURE = {
   roundNumber: 0, // ✅ 0-BASED: Example showing first round
-  mode: 'analyzing',
+  mode: ChatModes.ANALYZING,
   userQuestion: 'string',
   leaderboard: [{
     rank: 1,
