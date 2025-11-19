@@ -18,10 +18,10 @@
 
 import { useQueryClient } from '@tanstack/react-query';
 import type { TextPart, UIMessage } from 'ai';
+import { useRouter } from 'next/navigation';
 import { startTransition, useEffect, useMemo, useRef, useState } from 'react';
 
 import { AnalysisStatuses } from '@/api/core/enums';
-import { navigateToThread } from '@/app/(app)/chat/actions';
 import { useChatStore } from '@/components/providers/chat-store-provider';
 import { queryKeys } from '@/lib/data/query-keys';
 import { getRoundNumber } from '@/lib/utils/metadata';
@@ -272,6 +272,7 @@ export function useFlowStateMachine(
 ): UseFlowOrchestratorReturn {
   const { mode } = options;
   const queryClient = useQueryClient();
+  const router = useRouter();
 
   // ============================================================================
   // GATHER CONTEXT FROM STORE
@@ -422,27 +423,28 @@ export function useFlowStateMachine(
             });
           }
 
-          // ✅ CRITICAL FIX: After invalidating cache, execute navigation in same effect run
+          // After invalidating cache, execute navigation in same effect run
           // This handles the streaming_analysis → navigating transition where we need both actions
-          // Uses server action with revalidatePath + redirect for proper Next.js RSC revalidation
           if (mode === 'overview' && context.threadSlug && !context.hasNavigated) {
             const slug = context.threadSlug; // Capture for closure
             startTransition(() => {
               setHasNavigated(true);
-              // Use server action for proper cache revalidation before navigation
-              void navigateToThread(slug);
+              queueMicrotask(() => {
+                router.push(`/chat/${slug}`);
+              });
             });
           }
           break;
         }
 
         case 'NAVIGATE': {
-          // Execute navigation using server action for proper cache revalidation
+          // Execute navigation
           if (mode === 'overview' && action.slug) {
             startTransition(() => {
               setHasNavigated(true);
-              // Use server action for proper cache revalidation before navigation
-              void navigateToThread(action.slug);
+              queueMicrotask(() => {
+                router.push(`/chat/${action.slug}`);
+              });
             });
           }
           break;
@@ -460,6 +462,7 @@ export function useFlowStateMachine(
     participants,
     thread,
     queryClient,
+    router,
     markAnalysisCreated,
     hasAnalysisBeenCreated,
     createPendingAnalysis,
