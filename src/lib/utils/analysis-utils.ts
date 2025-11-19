@@ -10,7 +10,7 @@
 
 import type { DeepPartial, UIMessage } from 'ai';
 
-import { MessageRoles } from '@/api/core/enums';
+import { AnalysisStatuses, MessageRoles } from '@/api/core/enums';
 import type { ChatParticipant, ModeratorAnalysisPayload, StoredModeratorAnalysis } from '@/api/routes/chat/schema';
 import { ModeratorAnalysisPayloadSchema } from '@/api/routes/chat/schema';
 import { DbMessageMetadataSchema } from '@/db/schemas/chat-metadata';
@@ -483,14 +483,14 @@ export function deduplicateAnalyses(
 
   const validAnalyses = uniqueById.filter((item) => {
     // Exclude failed analyses
-    if (excludeFailed && item.status === 'failed') {
+    if (excludeFailed && item.status === AnalysisStatuses.FAILED) {
       return false;
     }
 
     // ✅ TIMEOUT PROTECTION: Exclude stuck streaming analyses
     // If analysis has been 'streaming' or 'pending' for >60 seconds, treat as failed
     // This prevents infinite loading when SSE streams fail
-    if ((item.status === 'streaming' || item.status === 'pending') && item.createdAt) {
+    if ((item.status === AnalysisStatuses.STREAMING || item.status === AnalysisStatuses.PENDING) && item.createdAt) {
       const createdTime = item.createdAt instanceof Date
         ? item.createdAt.getTime()
         : new Date(item.createdAt).getTime();
