@@ -315,7 +315,7 @@ export function ChatParticipantsList({
                         {selectedModels.length > 0 && (
                           <div className="border-b">
                             <div
-                              className="px-3 py-2 text-xs font-semibold text-foreground bg-background/15 border-b border-white/10 sticky top-0 z-20 backdrop-blur-[60px] shadow-lg"
+                              className="px-3 py-2 text-xs font-semibold text-foreground bg-background border-b border-border sticky top-0 z-20 shadow-lg"
                             >
                               <div className="flex items-center justify-between">
                                 <span className="flex items-center gap-2">
@@ -416,15 +416,6 @@ export function ParticipantsPreview({
         maxVisible={3}
         size="sm"
       />
-      {/* Count Badge */}
-      {participants.length > 0 && (
-        <Badge
-          variant="secondary"
-          className="rounded-full font-semibold tabular-nums h-6 min-w-[24px] text-xs px-2 shrink-0"
-        >
-          {participants.length}
-        </Badge>
-      )}
     </div>
   );
 }

@@ -39,8 +39,8 @@ export function CancelSubscriptionDialog({
   });
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
-      <AlertDialogContent glass={true} className="max-w-lg">
-        <AlertDialogHeader glass>
+      <AlertDialogContent className="max-w-lg">
+        <AlertDialogHeader>
           <div className="flex items-center gap-3">
             <div className="flex size-10 items-center justify-center rounded-full bg-destructive/10">
               <XCircle className="size-5 text-destructive" />
@@ -50,7 +50,7 @@ export function CancelSubscriptionDialog({
             </AlertDialogTitle>
           </div>
           <AlertDialogDescription className="space-y-4 pt-4">
-            <div className="rounded-lg p-3 border border-white/10 shadow-lg bg-card/40">
+            <div className="rounded-lg p-3 border border-border shadow-lg bg-card">
               <div className="flex items-center gap-2">
                 <Badge variant="secondary" className="capitalize">
                   {subscriptionTier}
@@ -77,7 +77,7 @@ export function CancelSubscriptionDialog({
                 {t('billing.cancelSubscription.description')}
               </p>
             </div>
-            <div className="rounded-lg border border-destructive/20 p-4 shadow-lg bg-card/40">
+            <div className="rounded-lg border border-destructive/20 p-4 shadow-lg bg-card">
               <div className="space-y-3">
                 <div className="flex items-center gap-2">
                   <AlertCircle className="size-4 text-destructive" />
@@ -106,7 +106,7 @@ export function CancelSubscriptionDialog({
               </div>
             </div>
             {endDate && (
-              <div className="rounded-lg border border-white/10 p-4 shadow-lg bg-card/40">
+              <div className="rounded-lg border border-border p-4 shadow-lg bg-card">
                 <div className="space-y-2">
                   <p className="text-sm font-semibold text-foreground">
                     {t('billing.cancelSubscription.timeline.title')}
@@ -141,7 +141,7 @@ export function CancelSubscriptionDialog({
             </p>
           </AlertDialogDescription>
         </AlertDialogHeader>
-        <AlertDialogFooter glass>
+        <AlertDialogFooter>
           <AlertDialogCancel disabled={isProcessing}>
             {t('actions.cancel')}
           </AlertDialogCancel>

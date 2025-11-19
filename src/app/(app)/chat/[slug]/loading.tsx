@@ -65,7 +65,7 @@ export default function ChatThreadLoading() {
 
       {/* Sticky input container - stays at bottom within content flow */}
       {/* ✅ MATCHES ChatThreadScreen.tsx:1262 - pt-6 pb-4 for consistent spacing */}
-      <div className="sticky bottom-0 z-50 bg-gradient-to-t from-background via-background to-transparent pt-6 pb-4 mt-auto">
+      <div className="sticky bottom-0 z-30 bg-gradient-to-t from-background via-background to-transparent pt-6 pb-4 mt-auto">
         <div className="container max-w-3xl mx-auto px-4 sm:px-6">
           <div className={cn(chatGlass.inputBox, 'rounded-lg shadow-2xl p-4')}>
             <Skeleton className="h-20 w-full bg-white/10" />

@@ -140,11 +140,11 @@ export function PWAUpdatePrompt() {
         {`
           @keyframes slideInUpdate {
             from {
-              transform: translateY(-100%);
+              transform: translateX(100%);
               opacity: 0;
             }
             to {
-              transform: translateY(0);
+              transform: translateX(0);
               opacity: 1;
             }
           }
@@ -153,9 +153,8 @@ export function PWAUpdatePrompt() {
       <div
         style={{
           position: 'fixed',
-          top: '16px',
-          left: '50%',
-          transform: 'translateX(-50%)',
+          bottom: '24px',
+          right: '24px',
           backgroundColor: 'rgba(59, 130, 246, 0.95)',
           color: 'white',
           padding: '12px 16px',
@@ -168,7 +167,8 @@ export function PWAUpdatePrompt() {
           gap: '12px',
           boxShadow: '0 8px 16px rgba(0, 0, 0, 0.15)',
           animation: 'slideInUpdate 0.4s ease-out',
-          maxWidth: '90vw',
+          maxWidth: '400px',
+          minWidth: '320px',
         }}
       >
         <RefreshCw size={20} style={{ flexShrink: 0 }} />

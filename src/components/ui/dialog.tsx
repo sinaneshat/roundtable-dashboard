@@ -45,10 +45,9 @@ function DialogOverlay({
       data-slot="dialog-overlay"
       className={cn(
         "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 fixed inset-0 z-50",
-        glass ? "bg-black/60" : "bg-black/50",
+        glass ? "bg-black/80" : "bg-black/50",
         className
       )}
-      style={glass ? { backdropFilter: 'blur(25px)', WebkitBackdropFilter: 'blur(25px)' } : undefined}
       {...props}
     />
   )
@@ -77,11 +76,10 @@ function DialogContent({
           "fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] duration-200",
           "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
           glass
-            ? cn("gap-0 rounded-lg border bg-black/80 p-0 shadow-lg overflow-hidden backdrop-blur-lg")
+            ? cn("gap-0 rounded-lg border border-border bg-card p-0 shadow-lg overflow-hidden")
             : "gap-4 rounded-lg border bg-background p-6 shadow-lg",
           className
         )}
-        style={glass ? { backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)' } : undefined}
         {...props}
       >
         {children}
@@ -109,7 +107,7 @@ function DialogHeader({ className, glass = false, ...props }: DialogHeaderProps)
       data-slot="dialog-header"
       className={cn(
         "flex flex-col space-y-1.5 text-left",
-        glass && "bg-black/40 px-4 sm:px-5 md:px-6 pt-4 sm:pt-5 md:pt-6 pb-3 sm:pb-4",
+        glass && "bg-card px-4 sm:px-5 md:px-6 pt-4 sm:pt-5 md:pt-6 pb-3 sm:pb-4",
         className
       )}
       {...props}
@@ -130,7 +128,7 @@ function DialogBody({ className, glass = false, ...props }: DialogBodyProps) {
     <div
       data-slot="dialog-body"
       className={cn(
-        glass && "bg-black/30 px-4 sm:px-5 md:px-6",
+        glass && "bg-background px-4 sm:px-5 md:px-6",
         className
       )}
       {...props}
@@ -144,7 +142,7 @@ function DialogFooter({ className, glass = false, ...props }: DialogFooterProps)
       data-slot="dialog-footer"
       className={cn(
         "flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2",
-        glass && "bg-black/30 px-4 sm:px-5 md:px-6 pb-4 sm:pb-5 md:pb-6 pt-3 sm:pt-4",
+        glass && "bg-background px-4 sm:px-5 md:px-6 pb-4 sm:pb-5 md:pb-6 pt-3 sm:pt-4",
         className
       )}
       {...props}

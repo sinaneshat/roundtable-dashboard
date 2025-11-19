@@ -3,7 +3,6 @@
 // ✅ REMOVED: useQueryClient - no longer invalidating queries on completion
 import type { UIMessage } from 'ai';
 import { AnimatePresence, motion } from 'motion/react';
-import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
@@ -525,13 +524,11 @@ export default function ChatOverviewScreen() {
                     exit={{ scale: 0.5, opacity: 0, y: -50 }}
                     transition={{ delay: 0.1, duration: 0.5, ease: 'easeOut' }}
                   >
-                    <Image
+                    <img
                       src={BRAND.logos.main}
                       alt={BRAND.name}
-                      fill
-                      sizes="(max-width: 640px) 96px, 112px"
-                      className="object-contain relative z-10"
-                      priority
+                      className="w-full h-full object-contain relative z-10"
+                      loading="eager"
                     />
                   </motion.div>
 
@@ -714,7 +711,7 @@ export default function ChatOverviewScreen() {
           {!showInitialUI && (
             <div
               ref={inputContainerRef}
-              className="sticky z-[100] w-full will-change-[bottom]"
+              className="sticky z-30 w-full will-change-[bottom] bg-background"
               style={{
                 bottom: `${keyboardOffset + 16}px`,
               }}

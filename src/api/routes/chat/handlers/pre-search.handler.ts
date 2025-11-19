@@ -414,7 +414,7 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
             }
 
             // ✅ TAVILY-STYLE: Use ALL AI-driven parameters for maximum search capability
-            // AI dynamically chooses: source count, depth, chunks, topic, time range, answer mode
+            // AI dynamically chooses: source count, depth, chunks, topic, time range, answer mode, images
             // This provides Tavily-level comprehensive search with intelligent optimization
             result = await performWebSearch(
               {
@@ -426,9 +426,12 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
                 searchDepth: generatedQuery.searchDepth ?? WebSearchDepths.ADVANCED,
                 // ✅ AI-DRIVEN: Dynamic chunks per source for research depth
                 chunksPerSource: generatedQuery.chunksPerSource ?? 2,
-                // ✅ TAVILY FEATURES: Images with AI descriptions
-                includeImages: true,
-                includeImageDescriptions: true,
+                // ✅ AI-DRIVEN: Dynamic image decisions based on query nature
+                // Visual queries (art, design, photos) → true, Text-only (code, definitions) → false
+                includeImages: generatedQuery.includeImages ?? false,
+                // ✅ AI-DRIVEN: Image descriptions only when needed for analysis
+                // Complex visual analysis → true, Simple display → false
+                includeImageDescriptions: generatedQuery.includeImageDescriptions ?? false,
                 // ✅ AI-DRIVEN: Answer generation mode from AI decision
                 includeAnswer: generatedQuery.needsAnswer ?? 'advanced',
                 // ✅ TAVILY FEATURES: Favicons and raw content

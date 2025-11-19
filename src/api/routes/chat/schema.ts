@@ -518,6 +518,9 @@ export const GeneratedSearchQuerySchema = z.object({
   topic: WebSearchTopicSchema.optional().describe('Auto-detected topic category'),
   timeRange: WebSearchTimeRangeSchema.optional().describe('Auto-detected time relevance'),
   needsAnswer: z.union([z.boolean(), WebSearchAnswerModeSchema]).optional().describe('Whether to generate AI answer summary (boolean or mode: basic/advanced)'),
+  // ✅ DYNAMIC IMAGE DECISIONS: AI determines if images are needed
+  includeImages: z.boolean().optional().describe('Whether to fetch and include images from search results (true for visual queries, false for text-only)'),
+  includeImageDescriptions: z.boolean().optional().describe('Whether images need AI-generated descriptions (true for complex visual analysis, false for simple display)'),
   analysis: z.string().optional().describe('Analysis of user intent and information needs'),
 }).openapi('GeneratedSearchQuery');
 

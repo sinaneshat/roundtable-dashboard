@@ -1,6 +1,6 @@
 'use client';
 
-import { ChevronDown, Globe, MessagesSquare, Sparkles } from 'lucide-react';
+import { Globe, MessagesSquare, MoreHorizontal, Sparkles } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { memo, useEffect, useState } from 'react';
 
@@ -74,7 +74,7 @@ export const ChatInputToolbarMenu = memo(({
           onClick={onOpenModelModal}
           className="h-9 rounded-2xl gap-1.5 text-xs px-3"
         >
-          <span>{t('chat.models.aiModels')}</span>
+          <span>{t('chat.models.models')}</span>
           <AvatarGroup
             participants={selectedParticipants}
             allModels={allModels}
@@ -122,18 +122,18 @@ export const ChatInputToolbarMenu = memo(({
           size="sm"
           disabled={disabled}
           className={cn(
-            'h-9 rounded-2xl gap-1.5 text-xs px-2.5',
+            'h-9 w-9 rounded-full p-0',
             'hover:bg-white/10',
           )}
         >
-          <ChevronDown className="size-4" />
+          <MoreHorizontal className="size-5" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent
         align="start"
         side="top"
         sideOffset={8}
-        className="w-56 bg-card/95 backdrop-blur-xl border-white/10"
+        className="w-56 bg-card border-border"
       >
         <DropdownMenuLabel className="text-white/60">
           {t('chat.toolbar.options')}

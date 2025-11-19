@@ -8,7 +8,6 @@ import type { ChatMode } from '@/api/core/enums';
 import type { EnhancedModelResponse } from '@/api/routes/models/schema';
 import { AvatarGroup } from '@/components/chat/avatar-group';
 import type { ParticipantConfig } from '@/components/chat/chat-form-schemas';
-import { Badge } from '@/components/ui/badge';
 import { getChatModeById } from '@/lib/config/chat-modes';
 import { cn } from '@/lib/ui/cn';
 
@@ -53,9 +52,7 @@ export const ChatInputEnhancedToolbar = memo(({
 
   const currentMode = getChatModeById(selectedMode);
   const ModeIcon = currentMode?.icon;
-  const participantCount = selectedParticipants.length;
   const visibleCount = 3;
-  const extraCount = Math.max(0, participantCount - visibleCount);
 
   return (
     <div className="flex items-center gap-3">
@@ -75,24 +72,12 @@ export const ChatInputEnhancedToolbar = memo(({
           {t('chat.models.aiModels')}
         </span>
 
-        <div className="flex items-center gap-1.5">
-          <AvatarGroup
-            participants={selectedParticipants}
-            allModels={allModels}
-            size="sm"
-            maxVisible={visibleCount}
-          />
-
-          {extraCount > 0 && (
-            <Badge
-              variant="secondary"
-              className="h-6 min-w-[24px] rounded-full px-1.5 text-[10px] font-semibold"
-            >
-              +
-              {extraCount}
-            </Badge>
-          )}
-        </div>
+        <AvatarGroup
+          participants={selectedParticipants}
+          allModels={allModels}
+          size="sm"
+          maxVisible={visibleCount}
+        />
       </button>
 
       {/* Mode Chip */}

@@ -73,8 +73,6 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions) {
   const animationFrameRef = useRef<number | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const isListeningRef = useRef(false);
-  const resultIndexRef = useRef(0);
-  const lastCommittedInterimRef = useRef<string | null>(null);
 
   // Check browser support - only after mount to avoid hydration mismatch
   const isSupported = isMounted
@@ -103,43 +101,28 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions) {
       recognition.lang = lang;
 
       recognition.onresult = (event) => {
-        const results = event.results;
+        let interimTranscript = '';
 
-        // Process only NEW results from the last index we handled
-        for (let i = resultIndexRef.current; i < results.length; i++) {
-          const result = results[i];
-          if (!result)
-            continue;
+        // ✅ OFFICIAL PATTERN: Use event.resultIndex (browser tells us where to start)
+        // Process all results from resultIndex onwards (new/updated results only)
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const transcript = event.results[i][0].transcript;
 
-          const transcript = result[0]?.transcript || '';
-
-          if (result.isFinal) {
-            // ✅ FIX: Skip final results that match the last manually committed interim
-            // This prevents duplication when stop() commits interim and API also finalizes it
-            const trimmedTranscript = transcript.trim();
-            if (trimmedTranscript && trimmedTranscript !== lastCommittedInterimRef.current) {
-              onTranscript(trimmedTranscript);
-            }
-            // Clear the last committed interim ref after processing
-            lastCommittedInterimRef.current = null;
-            // Move to next result index since this one is finalized
-            resultIndexRef.current = i + 1;
-            // ✅ FIX: Clear interim display and notify component
-            // This ensures the next interim starts fresh and component shows only finalized text
-            setInterimTranscript('');
-            if (onInterimTranscript) {
-              onInterimTranscript('');
+          if (event.results[i].isFinal) {
+            // Final result - commit to permanent transcript
+            if (transcript.trim()) {
+              onTranscript(transcript.trim());
             }
           } else {
-            // Interim result - only show the LATEST interim (most recent non-final result)
-            // The latest interim already contains all accumulated text for the current phrase
-            if (i === results.length - 1) {
-              setInterimTranscript(transcript);
-              if (onInterimTranscript) {
-                onInterimTranscript(transcript);
-              }
-            }
+            // Interim result - accumulate all interim text from this event
+            interimTranscript += transcript;
           }
+        }
+
+        // Update interim display (shows accumulated interim or clears if finalized)
+        setInterimTranscript(interimTranscript);
+        if (onInterimTranscript) {
+          onInterimTranscript(interimTranscript);
         }
       };
 
@@ -160,17 +143,12 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions) {
 
       recognition.onstart = () => {
         setError(null);
-        // Reset result index and committed interim ref when starting new recognition
-        resultIndexRef.current = 0;
-        lastCommittedInterimRef.current = null;
       };
 
       recognition.onend = () => {
         // If continuous mode and still listening, restart automatically
         if (continuous && isListeningRef.current) {
           try {
-            // Reset result index for new recognition session
-            resultIndexRef.current = 0;
             recognition.start();
           } catch (err) {
             console.error('[Speech Recognition] Error restarting:', err);
@@ -178,7 +156,6 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions) {
         } else {
           setIsListening(false);
           setInterimTranscript('');
-          resultIndexRef.current = 0;
         }
       };
 
@@ -286,28 +263,18 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions) {
     if (!recognitionRef.current || !isListening)
       return;
 
-    // ✅ FIX: Commit any pending interim transcript before stopping
-    // When user manually stops recording, treat current interim as final
-    // to prevent losing the last spoken words
-    const currentInterim = interimTranscript.trim();
-    if (currentInterim && onTranscript) {
-      // Store this committed text to prevent duplicate processing
-      // if the speech API also finalizes the same text
-      lastCommittedInterimRef.current = currentInterim;
-      onTranscript(currentInterim);
-    }
-
-    // Clear interim display to show only finalized text
-    setInterimTranscript('');
-
-    // Stop listening flag AFTER committing interim to prevent race conditions
+    // Stop listening flag before calling stop()
     isListeningRef.current = false;
 
     try {
+      // Browser will automatically finalize any pending interim results
       recognitionRef.current.stop();
     } catch (err) {
       console.error('[Speech Recognition] Error stopping:', err);
     }
+
+    // Clear interim display
+    setInterimTranscript('');
 
     // Cleanup audio visualization
     if (animationFrameRef.current) {
@@ -325,7 +292,7 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions) {
 
     setAudioLevels([]);
     setIsListening(false);
-  }, [isListening, interimTranscript, onTranscript]);
+  }, [isListening]);
 
   const toggle = useCallback(() => {
     if (isListening) {

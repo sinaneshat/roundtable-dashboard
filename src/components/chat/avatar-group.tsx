@@ -71,10 +71,18 @@ export function AvatarGroup({
         );
       })}
       {remainingCount > 0 && (
-        <span className={cn(textSizeClasses[size], 'font-bold text-muted-foreground ml-2 tabular-nums')}>
-          +
-          {remainingCount}
-        </span>
+        <div
+          className={cn(
+            sizeClasses[size],
+            'flex items-center justify-center rounded-full bg-white text-black font-bold border-2 border-card',
+            size === 'sm' ? 'ml-1' : 'ml-2',
+          )}
+        >
+          <span className={cn(textSizeClasses[size], 'tabular-nums')}>
+            +
+            {remainingCount}
+          </span>
+        </div>
       )}
     </div>
   );

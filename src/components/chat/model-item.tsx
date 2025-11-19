@@ -1,5 +1,10 @@
 'use client';
-import { GripVertical, Lock } from 'lucide-react';
+import {
+  GripVertical,
+  Lock,
+  Plus,
+  X,
+} from 'lucide-react';
 import { Reorder, useDragControls } from 'motion/react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
@@ -12,9 +17,8 @@ import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/ui/cn';
 import { getProviderIcon } from '@/lib/utils/ai-display';
+import { getRoleBadgeStyle } from '@/lib/utils/role-colors';
 import type { ListCustomRolesResponse } from '@/services/api/chat-roles';
-
-import { RoleSelector } from './role-selector';
 
 type CustomRole = NonNullable<Extract<ListCustomRolesResponse, { success: true }>['data']>['items'][number];
 export type OrderedModel = {
@@ -38,18 +42,22 @@ export type ModelItemProps = {
     current_tier: SubscriptionTier;
     can_upgrade: boolean;
   };
+  /** Callback to open role assignment panel for this model */
+  onOpenRolePanel?: () => void;
 };
+
 export function ModelItem({
   orderedModel,
-  allParticipants,
-  customRoles,
+  allParticipants: _allParticipants,
+  customRoles: _customRoles,
   onToggle,
-  onRoleChange,
-  onClearRole,
+  onRoleChange: _onRoleChange,
+  onClearRole: _onClearRole,
   selectedCount,
   maxModels,
   enableDrag = true,
   userTierInfo: _userTierInfo,
+  onOpenRolePanel,
 }: ModelItemProps) {
   const controls = useDragControls();
   const tModels = useTranslations('chat.models');
@@ -65,8 +73,10 @@ export function ModelItem({
       role="button"
       tabIndex={isDisabled ? -1 : 0}
       className={cn(
-        'px-3 sm:px-4 py-2.5 sm:py-3 hover:bg-white/5 active:bg-white/10 transition-colors rounded-lg sm:rounded-xl mx-1 sm:mx-2 my-0.5 sm:my-1 block w-full',
-        !isDisabled && 'cursor-pointer touch-manipulation',
+        'p-4 w-full rounded-xl',
+        'cursor-pointer transition-all duration-200',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20',
+        !isDisabled && 'hover:bg-white/5 hover:backdrop-blur-sm',
         isDisabled && 'opacity-50 cursor-not-allowed',
       )}
       onClick={isDisabled ? undefined : () => onToggle()}
@@ -81,10 +91,10 @@ export function ModelItem({
             }
       }
     >
-      <div className="flex items-center gap-2 sm:gap-3 w-full min-w-0">
+      <div className="flex items-center gap-3 w-full min-w-0">
         {enableDrag && (
           <div
-            className="shrink-0 text-muted-foreground p-1 sm:p-0.5 -ml-1 sm:ml-0 cursor-grab active:cursor-grabbing touch-none"
+            className="shrink-0 text-muted-foreground cursor-grab active:cursor-grabbing touch-none"
             onPointerDown={e => controls.start(e)}
             style={{ touchAction: 'none' }}
             aria-label={tModels('dragToReorder')}
@@ -97,23 +107,24 @@ export function ModelItem({
             role="button"
             tabIndex={0}
           >
-            <GripVertical className="size-4 sm:size-4" />
+            <GripVertical className="size-5" />
           </div>
         )}
-        <div className="flex items-center gap-2 flex-1 min-w-0 overflow-hidden">
-          <Avatar className="size-8 sm:size-9 shrink-0">
+        <div className="flex items-center gap-3 flex-1 min-w-0 overflow-hidden">
+          <Avatar className="size-10 shrink-0">
             <AvatarImage src={getProviderIcon(model.provider)} alt={model.name} />
             <AvatarFallback className="text-xs">
               {model.name.slice(0, 2).toUpperCase()}
             </AvatarFallback>
           </Avatar>
-          <div className="flex-1 min-w-0 overflow-hidden space-y-0.5 sm:space-y-1">
-            <div className="flex items-center gap-1.5 min-w-0 overflow-hidden">
-              <span className="text-xs sm:text-sm font-semibold truncate min-w-0">{model.name}</span>
-              {/* Role Selector - Next to model title */}
-              {!isDisabledDueToTier && (isSelected || !isDisabled) && (
+          <div className="flex-1 min-w-0 overflow-hidden space-y-1">
+            <div className="flex items-center gap-2 min-w-0 overflow-hidden">
+              <span className="text-sm font-semibold truncate min-w-0">{model.name}</span>
+
+              {/* Role badges or Add Role button */}
+              {!isDisabledDueToTier && isSelected && (
                 <div
-                  className="shrink-0"
+                  className="shrink-0 flex items-center gap-1"
                   onClick={e => e.stopPropagation()}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' || e.key === ' ') {
@@ -122,28 +133,57 @@ export function ModelItem({
                   }}
                   role="presentation"
                 >
-                  <RoleSelector
-                    participant={participant}
-                    allParticipants={allParticipants}
-                    customRoles={customRoles}
-                    onRoleChange={onRoleChange}
-                    onClearRole={onClearRole}
-                    onRequestSelection={!participant ? onToggle : undefined}
-                  />
+                  {participant?.role
+                    ? (
+                        <div className="inline-flex items-center gap-1">
+                          <Badge
+                            className="text-[10px] px-2 py-0.5 h-5 font-semibold border cursor-pointer hover:opacity-80 transition-opacity rounded-full"
+                            style={getRoleBadgeStyle(participant.role)}
+                            onClick={() => onOpenRolePanel?.()}
+                          >
+                            {participant.role}
+                          </Badge>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              _onClearRole();
+                            }}
+                            className="shrink-0 p-0.5 rounded-sm hover:bg-white/10 transition-colors"
+                            aria-label="Clear role"
+                          >
+                            <X className="h-3 w-3 text-muted-foreground" />
+                          </button>
+                        </div>
+                      )
+                    : (
+                        <button
+                          type="button"
+                          className="inline-flex items-center gap-1 h-6 px-2.5 rounded-full text-[11px] font-medium border border-dashed border-muted-foreground/40 text-muted-foreground hover:border-primary/50 hover:text-primary hover:bg-primary/5 transition-colors"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onOpenRolePanel?.();
+                          }}
+                        >
+                          <Plus className="h-3.5 w-3.5" />
+                          {tModels('addRole')}
+                        </button>
+                      )}
                 </div>
               )}
+
               {isDisabledDueToTier && (model.required_tier_name || model.required_tier) && (
-                <Badge variant="secondary" className="text-[9px] sm:text-[10px] px-1 sm:px-1.5 py-0.5 h-3.5 sm:h-4 font-semibold bg-amber-500/20 text-amber-400 border-amber-500/30 shrink-0 uppercase">
+                <Badge variant="secondary" className="text-[10px] px-2 py-0.5 h-5 font-semibold bg-amber-500/20 text-amber-400 border-amber-500/30 shrink-0 uppercase">
                   {model.required_tier_name || model.required_tier}
                 </Badge>
               )}
               {isDisabledDueToLimit && !isDisabledDueToTier && (
-                <Badge variant="outline" className="text-[9px] sm:text-[10px] px-1 sm:px-1.5 py-0 h-3.5 sm:h-4 border-warning/50 text-warning shrink-0">
+                <Badge variant="outline" className="text-[10px] px-2 py-0.5 h-5 border-warning/50 text-warning shrink-0">
                   {tModels('limitReached')}
                 </Badge>
               )}
             </div>
-            <div className="text-[11px] sm:text-xs text-muted-foreground line-clamp-2 sm:line-clamp-1 w-full min-w-0">
+            <div className="text-xs text-muted-foreground truncate w-full min-w-0">
               {model.description}
             </div>
           </div>
@@ -154,11 +194,11 @@ export function ModelItem({
           ? (
               <Link
                 href="/chat/pricing"
-                className="shrink-0 p-1 sm:p-1.5 rounded-md touch-manipulation"
+                className="shrink-0 p-1.5 rounded-md touch-manipulation"
                 onClick={e => e.stopPropagation()}
                 aria-label="Upgrade to unlock this model"
               >
-                <Lock className="size-4 sm:size-5 text-amber-400" />
+                <Lock className="size-5 text-amber-400" />
               </Link>
             )
           : (
@@ -166,7 +206,7 @@ export function ModelItem({
                 checked={isSelected}
                 onCheckedChange={isDisabled ? undefined : onToggle}
                 disabled={isDisabled}
-                className="shrink-0 scale-90 sm:scale-100"
+                className="shrink-0"
                 onClick={e => e.stopPropagation()}
               />
             )}

@@ -207,12 +207,11 @@ export function CommandSearch({ isOpen, onClose }: CommandSearchProps) {
     <Dialog open={isOpen} onOpenChange={open => !open && handleClose()}>
       <DialogContent
         ref={modalRef}
-        glass={true}
         showCloseButton={false}
         className="!max-w-2xl !w-[calc(100vw-2.5rem)] p-0 gap-0"
       >
         {/* Fixed Header Section */}
-        <DialogHeader className="flex flex-row items-center gap-3 bg-card/40 px-4 sm:px-5 md:px-6 py-4">
+        <DialogHeader className="flex flex-row items-center gap-3 bg-card px-4 sm:px-5 md:px-6 py-4">
           <VisuallyHidden>
             <DialogTitle>{t('chat.searchChats')}</DialogTitle>
             <DialogDescription>{t('chat.searchChatsDescription')}</DialogDescription>
@@ -241,7 +240,7 @@ export function CommandSearch({ isOpen, onClose }: CommandSearchProps) {
         </DialogHeader>
 
         {/* Scrollable Results Section */}
-        <DialogBody className="h-[400px] border-t border-white/5 bg-card/30">
+        <DialogBody className="h-[400px] border-t border-border bg-card">
           <ScrollArea ref={scrollAreaRef} className="h-full">
             {isLoading && !threads.length
               ? (
@@ -279,7 +278,7 @@ export function CommandSearch({ isOpen, onClose }: CommandSearchProps) {
         </DialogBody>
 
         {/* Fixed Footer Section */}
-        <div className="flex items-center gap-4 px-4 sm:px-6 py-3 border-t border-white/5 text-xs text-muted-foreground shrink-0 bg-card/30">
+        <div className="flex items-center gap-4 px-4 sm:px-6 py-3 border-t border-border text-xs text-muted-foreground shrink-0 bg-card">
           <div className="flex items-center gap-1.5">
             <kbd className="px-2 py-1 rounded-md bg-white/5 border border-white/10 text-white/70 font-mono text-xs">↑</kbd>
             <kbd className="px-2 py-1 rounded-md bg-white/5 border border-white/10 text-white/70 font-mono text-xs">↓</kbd>

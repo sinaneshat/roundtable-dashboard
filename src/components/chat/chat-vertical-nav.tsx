@@ -1,8 +1,7 @@
 'use client';
 import { LayoutGrid, MessageSquare, Plus, Search, Sparkles } from 'lucide-react';
-import Image from 'next/image';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useCallback, useState } from 'react';
 
@@ -25,6 +24,7 @@ import { cn } from '@/lib/ui/cn';
  */
 export function ChatVerticalNav() {
   const router = useRouter();
+  const pathname = usePathname();
   const t = useTranslations();
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const handleNavigationReset = useNavigationReset();
@@ -38,7 +38,7 @@ export function ChatVerticalNav() {
   return (
     <>
       {/* Vertical sidebar - fixed on left side */}
-      <div className="fixed left-0 top-0 z-50 flex h-full w-20 flex-col items-center gap-4 border-r border-border/50 bg-background/95 backdrop-blur-sm py-6">
+      <div className="fixed left-0 top-0 z-50 flex h-full w-20 flex-col items-center gap-4 border-r border-border bg-background py-6">
 
         {/* Logo at top */}
         <Link
@@ -47,13 +47,11 @@ export function ChatVerticalNav() {
           className="flex items-center justify-center mb-2"
         >
           <div className="relative h-12 w-12">
-            <Image
+            <img
               src={BRAND.logos.main}
               alt={BRAND.name}
-              fill
-              sizes="48px"
-              className="object-contain"
-              priority
+              className="w-full h-full object-contain"
+              loading="eager"
             />
           </div>
         </Link>
@@ -86,6 +84,7 @@ export function ChatVerticalNav() {
               'h-10 w-10 rounded-full',
               'hover:bg-white/10 hover:backdrop-blur-sm',
               'transition-all duration-200',
+              pathname === '/chat' && 'bg-white/10',
             )}
             aria-label={t('navigation.newChat')}
           >
@@ -128,15 +127,18 @@ export function ChatVerticalNav() {
           <Button
             variant="ghost"
             size="icon"
+            asChild
             className={cn(
               'h-10 w-10 rounded-full',
               'hover:bg-white/10 hover:backdrop-blur-sm',
               'transition-all duration-200',
+              pathname?.startsWith('/chat/pricing') && 'bg-white/10',
             )}
-            aria-label={t('navigation.features')}
-            disabled
+            aria-label={t('navigation.upgrade')}
           >
-            <Sparkles className="h-5 w-5 text-amber-500" />
+            <Link href="/chat/pricing">
+              <Sparkles className="h-5 w-5 text-amber-500" />
+            </Link>
           </Button>
         </nav>
 

@@ -86,7 +86,7 @@ export default function ChatOverviewLoading() {
 
       {/* Sticky input container - stays at bottom within content flow */}
       {/* ✅ MATCHES ChatOverviewScreen.tsx:585 - pt-6 pb-4 for consistent spacing */}
-      <div className="sticky bottom-0 z-50 bg-gradient-to-t from-background via-background to-transparent pt-6 pb-4 mt-auto">
+      <div className="sticky bottom-0 z-30 bg-gradient-to-t from-background via-background to-transparent pt-6 pb-4 mt-auto">
         <div className="container max-w-3xl mx-auto px-2 sm:px-4 md:px-6">
           <div className={cn(chatGlass.inputBox, 'rounded-lg shadow-2xl p-4')}>
             <Skeleton className="h-20 w-full bg-white/10" />

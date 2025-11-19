@@ -52,9 +52,13 @@ export const WEB_SEARCH_COMPLEXITY_ANALYSIS_PROMPT = `Expert search optimizer. T
 "Latest AI developments" → "AI developments 2025"
 
 **COMPLEXITY & SOURCES**:
-BASIC: Facts, definitions → 2-3 sources, "basic" depth
-MODERATE: How-tos, comparisons → 4-6 sources, "advanced" depth
-DEEP: Research, analysis → 7-10 sources, "advanced" depth`;
+BASIC: Facts, definitions → 2-3 sources, "basic" depth, images optional
+MODERATE: How-tos, comparisons → 4-6 sources, "advanced" depth, images if helpful
+DEEP: Research, analysis → 7-10 sources, "advanced" depth, images for visual content
+
+**IMAGE DECISIONS**:
+- includeImages: true for visual/creative queries (art, design, photos, diagrams), false for pure text (definitions, code, concepts)
+- includeImageDescriptions: true only if images need detailed analysis, false for simple display`;
 
 /**
  * Web search query generation user prompt template
@@ -81,11 +85,14 @@ export function buildWebSearchQueryPrompt(userMessage: string): string {
 - topic: "technology"/"news"/"science" etc
 - timeRange: "day"/"week"/"month"/"year" (only for recent/latest requests)
 - needsAnswer: "basic" or "advanced"
+- includeImages: true for visual queries, false for text-only
+- includeImageDescriptions: true if images need analysis, false for simple display
 
 **EXAMPLES**:
-{"query":"Van Gogh paintings style","rationale":"Art style keywords","searchDepth":"advanced","complexity":"MODERATE","sourceCount":4}
-{"query":"AI developments 2025","rationale":"Current tech advances","searchDepth":"advanced","complexity":"MODERATE","sourceCount":5,"timeRange":"month"}
-{"query":"React definition","rationale":"Simple factual query","searchDepth":"basic","complexity":"BASIC","sourceCount":2}
+{"query":"Van Gogh paintings style","rationale":"Art style with visual examples","searchDepth":"advanced","complexity":"MODERATE","sourceCount":4,"includeImages":true,"includeImageDescriptions":true}
+{"query":"AI developments 2025","rationale":"Current tech advances","searchDepth":"advanced","complexity":"MODERATE","sourceCount":5,"timeRange":"month","includeImages":false}
+{"query":"React definition","rationale":"Simple factual query","searchDepth":"basic","complexity":"BASIC","sourceCount":2,"includeImages":false}
+{"query":"modern minimalist interior design","rationale":"Visual design query","searchDepth":"advanced","complexity":"DEEP","sourceCount":7,"includeImages":true,"includeImageDescriptions":false}
 
 Return ONLY JSON.`;
 }

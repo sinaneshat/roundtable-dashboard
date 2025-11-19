@@ -58,14 +58,14 @@ export function ChatDeleteDialog({
   };
   return (
     <AlertDialog open={isOpen} onOpenChange={onOpenChange}>
-      <AlertDialogContent glass={true}>
-        <AlertDialogHeader glass>
+      <AlertDialogContent>
+        <AlertDialogHeader>
           <AlertDialogTitle>{t('deleteThreadConfirmTitle')}</AlertDialogTitle>
           <AlertDialogDescription>
             {t('deleteThreadConfirmDescription')}
           </AlertDialogDescription>
         </AlertDialogHeader>
-        <AlertDialogFooter glass>
+        <AlertDialogFooter>
           <AlertDialogCancel disabled={deleteThreadMutation.isPending}>
             {tActions('cancel')}
           </AlertDialogCancel>

@@ -1,5 +1,4 @@
 {
-  "+": "+",
   "/auth/sign-in": "/Auth/Sign-In",
   "/chat": "/chat",
   "2d": "2d",
@@ -321,6 +320,7 @@
     },
     "models": {
       "aiModels": "AI Models",
+      "models": "Models",
       "searchModels": "Search AI models...",
       "noModelsFound": "No models found.",
       "selectedModels": "Selected Models",
@@ -338,6 +338,7 @@
       "yourModels": "Your Models",
       "availableModels": "Available Models",
       "premiumModels": "Premium Models",
+      "addRole": "Add Role",
       "modal": {
         "title": "Choose, reorder, and assign roles",
         "subtitle": "Manage your AI models and their roles",
@@ -347,7 +348,7 @@
       }
     },
     "roles": {
-      "addRole": "+ Role",
+      "addRole": "Add Role",
       "searchOrCreateRole": "Search or create role...",
       "createCustomRole": "Create Custom Role",
       "defaultRoles": "Default Roles",
@@ -355,7 +356,21 @@
       "create": "Create",
       "creating": "Creating...",
       "noRolesFound": "No roles found.",
-      "deleteCustomRole": "Delete custom role"
+      "deleteCustomRole": "Delete custom role",
+      "panel": {
+        "title": "Set Role for {model}",
+        "subtitle": "Select a role or enter a custom one",
+        "back": "Back",
+        "close": "Close",
+        "currentRole": "Current Role",
+        "clear": "Clear",
+        "predefinedRoles": "Predefined Roles",
+        "customRoles": "Custom Roles",
+        "customRoleInput": "Custom Role",
+        "customRolePlaceholder": "Enter custom role name...",
+        "customRoleHint": "Press Enter or click Save to assign",
+        "save": "Save"
+      }
     },
     "modes": {
       "mode": "Mode",
@@ -699,7 +714,8 @@
       "threadPlaceholder": "Continue the conversation...",
       "voiceInput": "Voice input",
       "label": "Message input",
-      "streamingLabel": "Message input (disabled while AI responds)"
+      "streamingLabel": "Message input (disabled while AI responds)",
+      "stopStreaming": "Stop streaming"
     },
     "disclaimer": "AI can make mistakes. Please double-check responses.",
     "sources": {

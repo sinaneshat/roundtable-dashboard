@@ -1,7 +1,6 @@
 'use client';
 import type { UIMessage } from 'ai';
 import { AnimatePresence, motion } from 'motion/react';
-import Image from 'next/image';
 import { useTranslations } from 'next-intl';
 import { memo, useEffect, useMemo, useState } from 'react';
 import { Streamdown } from 'streamdown';
@@ -756,13 +755,11 @@ export const ChatMessageList = memo(
                                 if (part.type === 'file' && part.mediaType?.startsWith('image/')) {
                                   return (
                                     <div key={`${message.id}-image-${part.url}`} className="my-2">
-                                      <Image
+                                      <img
                                         src={part.url}
                                         alt={part.filename || 'Attachment'}
                                         className="max-w-full max-h-[400px] rounded-lg border border-border"
-                                        width={800}
-                                        height={400}
-                                        unoptimized
+                                        loading="lazy"
                                       />
                                       {part.filename && (
                                         <p className="mt-1 text-xs text-muted-foreground">{part.filename}</p>

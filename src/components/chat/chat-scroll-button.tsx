@@ -75,8 +75,8 @@ export function ChatScrollButton({ variant = 'floating', className }: ChatScroll
       className={cn(
         'fixed bottom-32 right-4 z-30',
         'size-10 rounded-full shadow-lg',
-        'bg-background/95 backdrop-blur-sm',
-        'border-border/40',
+        'bg-background',
+        'border-border',
         'hover:bg-accent hover:text-accent-foreground',
         'transition-all duration-200',
         'md:right-6 lg:right-8',

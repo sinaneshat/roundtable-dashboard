@@ -1,6 +1,5 @@
 'use client';
-import { CreditCard, Key, Loader2, LogOut, Sparkles } from 'lucide-react';
-import Link from 'next/link';
+import { CreditCard, Key, Loader2, LogOut } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import * as React from 'react';
@@ -110,7 +109,6 @@ export function NavUser() {
     }
   };
   const subscriptionTier = (usageData?.success ? usageData.data.subscription.tier : 'free') as SubscriptionTier;
-  const isPremium = subscriptionTier !== 'free';
 
   return (
     <>
@@ -138,7 +136,7 @@ export function NavUser() {
         <DropdownMenuContent
           className="w-56 rounded-lg"
           side={isMobile ? 'bottom' : 'right'}
-          align="end"
+          align="start"
           sideOffset={4}
         >
           <DropdownMenuLabel className="p-0 font-normal">
@@ -176,12 +174,6 @@ export function NavUser() {
 
           <DropdownMenuSeparator />
           <DropdownMenuGroup>
-            <DropdownMenuItem asChild>
-              <Link href="/chat/pricing">
-                <Sparkles />
-                {isPremium ? t('navigation.pricing') : t('pricing.card.upgradeToPro')}
-              </Link>
-            </DropdownMenuItem>
             <DropdownMenuItem onClick={showApiKeysModal.onTrue}>
               <Key />
               API Keys

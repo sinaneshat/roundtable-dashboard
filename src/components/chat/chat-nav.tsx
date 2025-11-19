@@ -1,8 +1,7 @@
 'use client';
 import { MessageSquarePlus, Plus, Search, Sparkles, Star } from 'lucide-react';
-import Image from 'next/image';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
@@ -42,6 +41,7 @@ import { toastManager } from '@/lib/toast/toast-manager';
 
 function AppSidebarComponent({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const router = useRouter();
+  const pathname = usePathname();
   const t = useTranslations();
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const sidebarContentRef = useRef<HTMLDivElement>(null);
@@ -170,11 +170,9 @@ function AppSidebarComponent({ ...props }: React.ComponentProps<typeof Sidebar>)
               <SidebarMenuItem className="group-data-[collapsible=icon]:hidden mb-2">
                 <SidebarMenuButton size="lg" asChild className="hover:bg-transparent">
                   <Link href="/chat" onClick={handleNavLinkClick}>
-                    <Image
+                    <img
                       src={BRAND.logos.main}
                       alt={`${BRAND.name} Logo`}
-                      width={40}
-                      height={40}
                       className="size-10 object-contain shrink-0"
                       loading="lazy"
                     />
@@ -191,11 +189,9 @@ function AppSidebarComponent({ ...props }: React.ComponentProps<typeof Sidebar>)
               {/* Logo - Collapsed */}
               <SidebarMenuItem className="hidden group-data-[collapsible=icon]:flex mb-2 items-center justify-center">
                 <Link href="/chat" onClick={handleNavLinkClick} className="p-0 m-0 block">
-                  <Image
+                  <img
                     src={BRAND.logos.main}
                     alt={`${BRAND.name} Logo`}
-                    width={48}
-                    height={48}
                     className="size-12 object-contain shrink-0"
                     loading="lazy"
                   />
@@ -204,7 +200,7 @@ function AppSidebarComponent({ ...props }: React.ComponentProps<typeof Sidebar>)
 
               {/* Action Buttons - Expanded */}
               <SidebarMenuItem className="group-data-[collapsible=icon]:hidden">
-                <SidebarMenuButton asChild>
+                <SidebarMenuButton asChild isActive={pathname === '/chat'}>
                   <Link href="/chat" onClick={handleNavLinkClick}>
                     <Plus className="size-4 shrink-0" />
                     <span
@@ -237,7 +233,7 @@ function AppSidebarComponent({ ...props }: React.ComponentProps<typeof Sidebar>)
               </SidebarMenuItem>
 
               <SidebarMenuItem className="group-data-[collapsible=icon]:hidden">
-                <SidebarMenuButton asChild className="bg-sidebar-accent/50 hover:bg-sidebar-accent">
+                <SidebarMenuButton asChild isActive={pathname?.startsWith('/chat/pricing')}>
                   <Link href="/chat/pricing">
                     <Sparkles className="size-4 shrink-0" />
                     <span
@@ -257,7 +253,7 @@ function AppSidebarComponent({ ...props }: React.ComponentProps<typeof Sidebar>)
 
               {/* Icon Buttons - Collapsed */}
               <SidebarMenuItem className="hidden group-data-[collapsible=icon]:flex">
-                <SidebarMenuButton asChild tooltip={t('navigation.newChat')}>
+                <SidebarMenuButton asChild tooltip={t('navigation.newChat')} isActive={pathname === '/chat'}>
                   <Link href="/chat" onClick={handleNavLinkClick}>
                     <Plus />
                   </Link>
@@ -282,7 +278,7 @@ function AppSidebarComponent({ ...props }: React.ComponentProps<typeof Sidebar>)
                 <SidebarMenuButton
                   asChild
                   tooltip={t('navigation.upgrade')}
-                  className="bg-sidebar-accent/50 hover:bg-sidebar-accent"
+                  isActive={pathname?.startsWith('/chat/pricing')}
                 >
                   <Link href="/chat/pricing">
                     <Sparkles />

@@ -179,6 +179,9 @@ importers:
       posthog-node:
         specifier: ^5.10.3
         version: 5.11.2
+      randomcolor:
+        specifier: ^0.6.2
+        version: 0.6.2
       react:
         specifier: 19.2.0
         version: 19.2.0
@@ -303,6 +306,9 @@ importers:
       '@types/node':
         specifier: ^24.8.1
         version: 24.10.1
+      '@types/randomcolor':
+        specifier: ^0.5.9
+        version: 0.5.9
       '@types/react':
         specifier: ^19.2.2
         version: 19.2.6
@@ -4850,6 +4856,9 @@ packages:
   '@types/prismjs@1.26.5':
     resolution: {integrity: sha512-AUZTa7hQ2KY5L7AmtSiqxlhWxb4ina0yd8hNbl4TWuqnv/pFP0nDMb3YrfSBf4hJVGLh2YEIBfKaBW/9UEl6IQ==}
 
+  '@types/randomcolor@0.5.9':
+    resolution: {integrity: sha512-k58cfpkK15AKn1m+oRd9nh5BnuiowhbyvBBdAzcddtARMr3xRzP0VlFaAKovSG6N6Knx08EicjPlOMzDejerrQ==}
+
   '@types/rclone.js@0.6.3':
     resolution: {integrity: sha512-BssKAAVRY//fxGKso8SatyOwiD7X0toDofNnVxZlIXmN7UHrn2UBTxldNAjgUvWA91qJyeEPfKmeJpZVhLugXg==}
 
@@ -9305,6 +9314,9 @@ packages:
 
   randombytes@2.1.0:
     resolution: {integrity: sha512-vYl3iOX+4CKUWuxGi9Ukhie6fsqXqS9FE2Zaic4tNFD2N2QQaXOMFbuKK4QmDHC0JO6B1Zp41J0LpT0oR68amQ==}
+
+  randomcolor@0.6.2:
+    resolution: {integrity: sha512-Mn6TbyYpFgwFuQ8KJKqf3bqqY9O1y37/0jgSK/61PUxV4QfIMv0+K2ioq8DfOjkBslcjwSzRfIDEXfzA9aCx7A==}
 
   range-parser@1.2.1:
     resolution: {integrity: sha512-Hrgsx+orqoygnmhFbKaHE6c296J+HTAQXoxEF6gNupROmmGJRoyzfG3ccAveqCBrwr/2yxQ5BVd/GTl5agOwSg==}
@@ -16722,6 +16734,8 @@ snapshots:
 
   '@types/prismjs@1.26.5': {}
 
+  '@types/randomcolor@0.5.9': {}
+
   '@types/rclone.js@0.6.3':
     dependencies:
       '@types/node': 24.10.1
@@ -21919,6 +21933,8 @@ snapshots:
   randombytes@2.1.0:
     dependencies:
       safe-buffer: 5.2.1
+
+  randomcolor@0.6.2: {}
 
   range-parser@1.2.1: {}
 
