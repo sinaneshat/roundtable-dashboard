@@ -20,7 +20,7 @@ if (typeof globalThis.require === 'undefined') {
     if (id.startsWith('@/')) {
       // Convert @/ alias to absolute path based on project root
       const relativePath = id.substring(2); // Remove '@/'
-      let absolutePath = path.resolve(__dirname, 'src', relativePath);
+      const absolutePath = path.resolve(__dirname, 'src', relativePath);
 
       // Try different extensions if base path doesn't exist
       const extensions = ['.tsx', '.ts', '.jsx', '.js', '/index.tsx', '/index.ts'];
