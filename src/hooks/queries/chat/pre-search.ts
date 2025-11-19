@@ -41,6 +41,13 @@ export function useThreadPreSearchesQuery(
     staleTime: STALE_TIMES.preSearch,
     placeholderData: previousData => previousData,
     enabled: enabled !== undefined ? enabled : (isAuthenticated && !!threadId),
+
+    // ✅ REFETCH CONTROL: Prevent unnecessary refetches that cause infinite polling
+    // Only refetch via polling interval or explicit invalidation
+    refetchOnMount: false, // Don't refetch when component mounts (use cached data)
+    refetchOnWindowFocus: false, // Don't refetch when user switches back to tab
+    refetchOnReconnect: false, // Don't refetch when network reconnects
+
     // ✅ CRITICAL FIX: Poll for pre-search status updates in preview environments
     // In Cloudflare Workers edge environments, query invalidation may not propagate immediately
     // Poll every 500ms when pre-search is pending/streaming to catch status updates quickly

@@ -35,6 +35,7 @@ import { buildParticipantSystemPrompt } from '@/api/services/prompts.service';
 import { handleRoundRegeneration } from '@/api/services/regeneration.service';
 import { markStreamActive, markStreamCompleted, markStreamFailed } from '@/api/services/resumable-stream-kv.service';
 import { calculateRoundNumber } from '@/api/services/round.service';
+import { appendStreamChunk, completeStreamBuffer, failStreamBuffer, initializeStreamBuffer } from '@/api/services/stream-buffer.service';
 import type { CloudflareAiBinding } from '@/api/services/streaming-orchestration.service';
 import {
   buildSystemPromptWithContext,
@@ -622,8 +623,17 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
     await incrementMessageUsage(user.id, 1);
 
     // =========================================================================
-    // ✅ RESUMABLE STREAMS: Mark stream as active in KV for resume detection
+    // ✅ RESUMABLE STREAMS: Initialize stream buffer for resumption
     // =========================================================================
+    await initializeStreamBuffer(
+      streamMessageId,
+      threadId,
+      currentRoundNumber,
+      participantIndex ?? DEFAULT_PARTICIPANT_INDEX,
+      c.env,
+    );
+
+    // ✅ RESUMABLE STREAMS: Mark stream as active in KV for resume detection
     await markStreamActive(
       threadId,
       currentRoundNumber,
@@ -884,6 +894,44 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
         }
 
         return undefined;
+      },
+
+      // ✅ RESUMABLE STREAMS: Buffer SSE chunks for stream resumption
+      // AI SDK v5 Pattern: consumeSseStream callback provides access to raw SSE stream
+      // We buffer chunks to KV to enable resumption after page reload
+      consumeSseStream: async ({ stream }) => {
+        // Buffer the stream asynchronously (don't block the response)
+        // The stream continues to the client automatically
+        const bufferStream = async () => {
+          try {
+            const reader = stream.getReader();
+
+            while (true) {
+              const { done, value } = await reader.read();
+
+              if (done) {
+                // Stream completed - mark buffer as complete
+                await completeStreamBuffer(streamMessageId, c.env);
+                break;
+              }
+
+              // Value is already a string from ReadableStream<string>
+              // Append chunk to buffer
+              await appendStreamChunk(streamMessageId, value, c.env);
+            }
+          } catch (error) {
+            // Buffer failure shouldn't break streaming
+            const errorMessage = error instanceof Error ? error.message : 'Stream buffer error';
+            await failStreamBuffer(streamMessageId, errorMessage, c.env);
+          }
+        };
+
+        // Use waitUntil to buffer asynchronously without blocking response
+        if (executionCtx) {
+          executionCtx.waitUntil(bufferStream());
+        } else {
+          bufferStream().catch(() => {});
+        }
       },
 
       onError: (error) => {

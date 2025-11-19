@@ -23,6 +23,7 @@
 'use client';
 
 import type { StoredModeratorAnalysis } from '@/api/routes/chat/schema';
+import { useChatStore } from '@/components/providers/chat-store-provider';
 import { useThreadAnalysesQuery } from '@/hooks/queries/chat';
 import type { ChatModeId } from '@/lib/config/chat-modes';
 import { deduplicateAnalyses } from '@/lib/utils/analysis-utils';
@@ -61,8 +62,9 @@ function deduplicateWithStoreContext(items: StoredModeratorAnalysis[], options?:
 
 export const useAnalysisOrchestrator = createOrchestrator<StoredModeratorAnalysis, StoredModeratorAnalysis, number>({
   queryHook: useThreadAnalysesQuery,
-  storeSelector: s => (s as { analyses: StoredModeratorAnalysis[] }).analyses,
-  storeSetter: s => (s as { setAnalyses: (items: StoredModeratorAnalysis[]) => void }).setAnalyses,
+  useStoreHook: useChatStore,
+  storeSelector: s => s.analyses,
+  storeSetter: s => s.setAnalyses,
   extractItems: response => (response as { data?: { items?: StoredModeratorAnalysis[] } })?.data?.items || [],
   transformItems: transformModeratorAnalyses,
   getItemKey: item => item.roundNumber,

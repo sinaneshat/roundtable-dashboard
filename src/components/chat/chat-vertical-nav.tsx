@@ -1,5 +1,6 @@
 'use client';
 import { LayoutGrid, MessageSquare, Plus, Search, Sparkles } from 'lucide-react';
+import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
@@ -47,11 +48,13 @@ export function ChatVerticalNav() {
           className="flex items-center justify-center mb-2"
         >
           <div className="relative h-12 w-12">
-            <img
+            <Image
               src={BRAND.logos.main}
               alt={BRAND.name}
               className="w-full h-full object-contain"
-              loading="eager"
+              width={48}
+              height={48}
+              priority
             />
           </div>
         </Link>

@@ -92,8 +92,6 @@ type UseMultiParticipantChatReturn = {
   error: Error | null;
   /** Retry the last round (regenerate entire round from scratch - deletes all messages and re-sends user prompt) */
   retry: () => void;
-  /** Stop the current streaming session */
-  stop: () => void;
   /** Manually set messages (used for optimistic updates or message deletion) */
   setMessages: (messages: UIMessage[] | ((messages: UIMessage[]) => UIMessage[])) => void;
 };
@@ -416,7 +414,6 @@ export function useMultiParticipantChat(
     status,
     error: chatError,
     setMessages,
-    stop,
   } = useChat({
     id: threadId,
     transport,
@@ -1037,16 +1034,9 @@ export function useMultiParticipantChat(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages, sendMessage, status, setMessages, resetErrorTracking]);
 
-  /**
-   * Stop the current streaming session
-   */
-  const stopStreaming = useCallback(() => {
-    stop();
-    setIsExplicitlyStreaming(false);
-    setCurrentParticipantIndex(DEFAULT_PARTICIPANT_INDEX);
-    isTriggeringRef.current = false;
-    lastUsedParticipantIndex.current = null; // Reset when stopping
-  }, [stop]);
+  // ✅ RESUMABLE STREAMS: Stop functionality removed
+  // Stream resumption is incompatible with abort signals
+  // Streams now continue until completion and can resume after page reload
 
   // ✅ CRITICAL FIX: Derive isStreaming from BOTH manual flag AND AI SDK status
   // AI SDK v5 Pattern: status can be 'ready' | 'streaming' | 'awaiting_message'
@@ -1064,7 +1054,6 @@ export function useMultiParticipantChat(
     currentParticipantIndex,
     error: chatError || null,
     retry,
-    stop: stopStreaming,
     setMessages,
   };
 }

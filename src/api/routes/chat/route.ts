@@ -854,3 +854,57 @@ export const getStreamStatusRoute = createRoute({
     ...createProtectedRouteResponses(),
   },
 });
+
+/**
+ * GET /chat/threads/:threadId/streams/:streamId/resume
+ * ✅ RESUMABLE STREAMS: Resume buffered participant stream
+ */
+export const resumeStreamRoute = createRoute({
+  method: 'get',
+  path: '/chat/threads/:threadId/streams/:streamId/resume',
+  tags: ['chat'],
+  summary: 'Resume buffered participant stream',
+  description: `Resume a participant stream from buffered SSE chunks. Returns the full stream as SSE for client consumption.
+
+**Stream ID Format**: {threadId}_r{roundNumber}_p{participantIndex}
+
+**Response Types**:
+- text/event-stream: SSE stream with buffered chunks (if stream has data)
+- 204 No Content: No stream buffer exists or stream has no chunks
+
+**Usage Pattern**:
+1. Frontend detects page reload and active stream
+2. Calls this endpoint to resume from buffer
+3. Backend returns buffered SSE chunks
+4. Frontend processes as normal stream
+
+**Example**: GET /chat/threads/thread_123/streams/thread_123_r0_p0/resume`,
+  request: {
+    params: z.object({
+      threadId: z.string().openapi({
+        description: 'Thread ID',
+        example: 'thread_abc123',
+      }),
+      streamId: z.string().openapi({
+        description: 'Stream ID (format: {threadId}_r{roundNumber}_p{participantIndex})',
+        example: 'thread_abc123_r0_p0',
+      }),
+    }),
+  },
+  responses: {
+    [HttpStatusCodes.OK]: {
+      description: 'Buffered stream chunks returned as SSE',
+      content: {
+        'text/event-stream': {
+          schema: z.any().openapi({
+            description: 'Server-Sent Events stream',
+          }),
+        },
+      },
+    },
+    [HttpStatusCodes.NO_CONTENT]: {
+      description: 'No stream buffer exists or stream has no chunks',
+    },
+    ...createProtectedRouteResponses(),
+  },
+});

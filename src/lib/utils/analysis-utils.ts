@@ -174,6 +174,41 @@ export function hasRoundSummaryContent(
 }
 
 /**
+ * Check if participant analysis has any renderable content
+ *
+ * **TYPE-SAFE**: Uses type guards to check for actual content
+ * Prevents empty participant cards from rendering during streaming
+ *
+ * @param participant - Partial participant analysis (can be incomplete during streaming)
+ * @returns True if participant has any displayable content
+ */
+export function hasParticipantContent(
+  participant: unknown,
+): boolean {
+  // ✅ TYPE-SAFE: Use type guard instead of force cast
+  if (!isObject(participant)) {
+    return false;
+  }
+
+  // TypeScript now knows participant is Record<string, unknown>
+  const p = participant;
+  const hasProperty = (key: string): boolean => key in p;
+
+  // Must have participantIndex to be valid
+  if (!hasProperty('participantIndex') || typeof p.participantIndex !== 'number') {
+    return false;
+  }
+
+  return Boolean(
+    (hasProperty('summary') && typeof p.summary === 'string' && p.summary.length > 0)
+    || (hasProperty('pros') && Array.isArray(p.pros) && p.pros.length > 0)
+    || (hasProperty('cons') && Array.isArray(p.cons) && p.cons.length > 0)
+    || (hasProperty('skillsMatrix') && Array.isArray(p.skillsMatrix) && p.skillsMatrix.length > 0)
+    || (hasProperty('overallRating') && typeof p.overallRating === 'number' && !Number.isNaN(p.overallRating)),
+  );
+}
+
+/**
  * Validate analysis data against schema (strict type checking)
  *
  * **SINGLE SOURCE OF TRUTH**: Use this for strict validation that requires

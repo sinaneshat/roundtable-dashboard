@@ -1,6 +1,6 @@
 'use client';
 import { experimental_useObject as useObject } from '@ai-sdk/react';
-import { motion } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
 import { memo, useCallback, useEffect, useRef } from 'react';
 
 import type { StreamErrorType } from '@/api/core/enums';
@@ -8,13 +8,12 @@ import { AnalysisStatuses, StreamErrorTypes } from '@/api/core/enums';
 import type { ModeratorAnalysisPayload, RecommendedAction, StoredModeratorAnalysis } from '@/api/routes/chat/schema';
 import { ModeratorAnalysisPayloadSchema } from '@/api/routes/chat/schema';
 import { ChatLoading } from '@/components/chat/chat-loading';
-import { useBoolean } from '@/hooks/utils';
-import { hasAnalysisData } from '@/lib/utils/analysis-utils';
+import { useAutoScroll, useBoolean } from '@/hooks/utils';
+import { hasAnalysisData, hasParticipantContent, hasRoundSummaryContent } from '@/lib/utils/analysis-utils';
 
 import { LeaderboardCard } from './leaderboard-card';
 import { ParticipantAnalysisCard } from './participant-analysis-card';
 import { RoundSummarySection } from './round-summary-section';
-import { SkillsComparisonChart } from './skills-comparison-chart';
 
 type ModeratorAnalysisStreamProps = {
   threadId: string;
@@ -61,9 +60,6 @@ function ModeratorAnalysisStreamComponent({
   onStreamStart,
   onActionClick,
 }: ModeratorAnalysisStreamProps) {
-  const is409Conflict = useBoolean(false);
-  const streamErrorTypeRef = useRef<StreamErrorType | null>(null);
-
   // ✅ CRITICAL FIX: Store callbacks in refs for stability and to allow calling after unmount
   // This prevents analysis from getting stuck in "streaming" state when component unmounts
   // Follows the same pattern as use-multi-participant-chat.ts callback refs
@@ -85,12 +81,65 @@ function ModeratorAnalysisStreamComponent({
 
   // ✅ Create stable wrapper for onActionClick that can be safely passed to child components
   // This prevents ref access during render
-  const stableOnActionClick = useCallback((action: RecommendedAction) => {
-    onActionClickRef.current?.(action);
+  const stableOnActionClick = useCallback((_action: RecommendedAction) => {
+    // Disabled for demo mode - no action clicks allowed
+    // onActionClickRef.current?.(action);
   }, []);
 
+  // ✅ Error handling state for UI display
+  const streamErrorTypeRef = useRef<StreamErrorType>(StreamErrorTypes.UNKNOWN);
+  const is409Conflict = useBoolean(false);
+
+  // ✅ FIX: Track if we've already started streaming to prevent infinite loop
+  // Without this, calling onStreamStart → updateAnalysisStatus creates new state
+  // → triggers re-render → useEffect runs again → infinite loop
+  const hasStartedStreamingRef = useRef(false);
+
+  // ✅ Unified auto-scroll: Only scrolls if user is at bottom
+  const isStreaming = analysis.status === AnalysisStatuses.STREAMING;
+  const bottomRef = useAutoScroll(isStreaming);
+
+  // ✅ Reset the streaming flag when analysis ID changes (new analysis)
+  useEffect(() => {
+    hasStartedStreamingRef.current = false;
+  }, [analysis.id]);
+
+  useEffect(() => {
+    onStreamCompleteRef.current = onStreamComplete;
+  }, [onStreamComplete]);
+
+  useEffect(() => {
+    onStreamStartRef.current = onStreamStart;
+  }, [onStreamStart]);
+
+  useEffect(() => {
+    onActionClickRef.current = onActionClick;
+  }, [onActionClick]);
+
+  // ✅ MOCK MODE: Mock streaming effect (disabled in favor of real API)
+  // useEffect(() => {
+  //   if (analysis.status === AnalysisStatuses.PENDING || analysis.status === AnalysisStatuses.STREAMING) {
+  //     if (!hasStartedStreamingRef.current) {
+  //       hasStartedStreamingRef.current = true;
+  //       onStreamStartRef.current?.();
+  //     }
+  //     const mockData = createMockAnalysisData(analysis.roundNumber);
+  //     let progress = 0;
+  //     const interval = setInterval(() => {
+  //       progress += 0.1;
+  //       if (progress >= 1) {
+  //         clearInterval(interval);
+  //         setPartialAnalysis(mockData);
+  //         onStreamCompleteRef.current?.(mockData);
+  //       }
+  //     }, 800);
+  //     return () => clearInterval(interval);
+  //   }
+  //   return undefined;
+  // }, [analysis.status, analysis.roundNumber]);
+
   // AI SDK v5 Pattern: useObject hook for streaming structured data
-  const { object: partialAnalysis, error, submit, stop } = useObject({
+  const { object: partialAnalysis, error: _error, submit } = useObject({
     api: `/api/v1/chat/threads/${threadId}/rounds/${analysis.roundNumber}/analyze`,
     schema: ModeratorAnalysisPayloadSchema,
     // ✅ AI SDK v5 Pattern: onFinish callback for handling completion and errors
@@ -145,18 +194,18 @@ function ModeratorAnalysisStreamComponent({
   useEffect(() => {
     return () => {
       // Stop any active streaming
-      stop();
+      // stop();
 
       // ✅ CRITICAL FIX: Do NOT delete analysis ID from triggered map on unmount
       // This prevents double-calling when component unmounts/remounts (e.g., React Strict Mode, parent re-renders)
       // The ID is only cleared via clearTriggeredAnalysesForRound() during regeneration
       // triggeredAnalysisIds.delete(analysis.id); // REMOVED - causes double streaming
     };
-  }, [analysis.id, stop]);
+  }, []); // Removed analysis.id, stop from deps as they are no longer used
 
   // ✅ CRITICAL FIX: Prevent duplicate submissions at both analysis ID and round number level
   // Use useEffect that only runs when analysis becomes ready (status changes to PENDING/STREAMING)
-  // NOT dependent on participantMessageIds to avoid re-triggering for reasoning models
+  // NOTE: participantMessageIds intentionally NOT in dependencies to avoid re-trigger on metadata updates
   useEffect(() => {
     const roundAlreadyTriggered = triggeredRounds.get(threadId)?.has(analysis.roundNumber) ?? false;
 
@@ -184,8 +233,7 @@ function ModeratorAnalysisStreamComponent({
         submitRef.current(body);
       });
     }
-    // Note: participantMessageIds NOT in deps to avoid re-trigger on metadata updates
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- analysis.participantMessageIds intentionally excluded to prevent re-trigger on metadata updates for reasoning models
   }, [analysis.id, analysis.roundNumber, analysis.status, threadId]);
 
   // Mark completed/failed analyses as triggered to prevent re-triggering on re-renders
@@ -206,39 +254,6 @@ function ModeratorAnalysisStreamComponent({
     } else {
       triggeredRounds.set(threadId, new Set([analysis.roundNumber]));
     }
-  }
-  // ✅ Enum Pattern: Determine if error should be displayed based on error type
-  const errorType = streamErrorTypeRef.current;
-  const shouldShowError = error && !is409Conflict.value && errorType !== StreamErrorTypes.ABORT;
-
-  // ✅ Enum Pattern: Get user-friendly error message based on error type
-  const getErrorMessage = (type: StreamErrorType | null, error: unknown): string => {
-    if (!type)
-      return error instanceof Error ? error.message : 'Unknown error';
-
-    switch (type) {
-      case StreamErrorTypes.VALIDATION:
-        return 'Analysis format validation failed. Please try again.';
-      case StreamErrorTypes.NETWORK:
-        return 'Network error occurred. Please check your connection and try again.';
-      case StreamErrorTypes.CONFLICT:
-        return 'Analysis is already being generated for this round.';
-      case StreamErrorTypes.UNKNOWN:
-        return error instanceof Error ? error.message : 'An unexpected error occurred.';
-      default:
-        return 'Failed to complete analysis.';
-    }
-  };
-
-  if (shouldShowError) {
-    return (
-      <div className="flex flex-col gap-2 py-2">
-        <div className="flex items-center gap-2 text-sm text-destructive">
-          <span className="size-1.5 rounded-full bg-destructive/80" />
-          <span>{getErrorMessage(errorType, error)}</span>
-        </div>
-      </div>
-    );
   }
 
   // ✅ AI SDK v5 Pattern: Handle streaming state properly
@@ -281,59 +296,103 @@ function ModeratorAnalysisStreamComponent({
   const validLeaderboard = leaderboard.filter((item: unknown): item is NonNullable<typeof item> => item != null) as ModeratorAnalysisPayload['leaderboard'];
   const validParticipantAnalyses = participantAnalyses.filter((item: unknown): item is NonNullable<typeof item> => item != null) as ModeratorAnalysisPayload['participantAnalyses'];
   const validRoundSummary = roundSummary as ModeratorAnalysisPayload['roundSummary'];
+
+  // ✅ CONTENT-AWARE ANIMATION FIX: Use enum-based validator for type-safe content checking
+  // Prevents empty containers from expanding with layout animations
+  const hasSummaryContent = hasRoundSummaryContent(validRoundSummary);
+
+  const containerVariants = {
+    hidden: { opacity: 0 },
+    show: {
+      opacity: 1,
+      transition: {
+        staggerChildren: 0.15,
+        delayChildren: 0.1,
+      },
+    },
+  };
+
+  const itemVariants = {
+    hidden: { opacity: 0, y: 20 },
+    show: {
+      opacity: 1,
+      y: 0,
+      transition: {
+        type: 'spring' as const,
+        stiffness: 300,
+        damping: 24,
+      },
+    },
+  };
+
   return (
     <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
+      layout
+      variants={containerVariants}
+      initial="hidden"
+      animate="show"
       className="space-y-4"
     >
-      {validLeaderboard.length > 0 && (
-        <motion.div
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.25, ease: [0.32, 0.72, 0, 1] }}
-        >
-          <LeaderboardCard leaderboard={validLeaderboard} />
-        </motion.div>
-      )}
-      {validParticipantAnalyses.length > 0 && (
-        <motion.div
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.25, delay: 0.1, ease: [0.32, 0.72, 0, 1] }}
-        >
-          <SkillsComparisonChart participants={validParticipantAnalyses} />
-        </motion.div>
-      )}
-      {validParticipantAnalyses.length > 0 && (
-        <motion.div
-          className="space-y-3"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.25, delay: 0.15, ease: [0.32, 0.72, 0, 1] }}
-        >
-          {validParticipantAnalyses.map((participant, index) => (
-            <motion.div
-              key={`${analysis.id}-participant-${participant.participantIndex}`}
-              initial={{ opacity: 0, x: -8 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.2, delay: index * 0.05, ease: [0.32, 0.72, 0, 1] }}
-            >
-              <ParticipantAnalysisCard
-                analysis={participant}
-                isStreaming={analysis.status === AnalysisStatuses.STREAMING}
-              />
-            </motion.div>
-          ))}
-        </motion.div>
-      )}
-      {validRoundSummary && (
-        <RoundSummarySection
-          roundSummary={validRoundSummary}
-          onActionClick={stableOnActionClick}
-          isStreaming={analysis.status === AnalysisStatuses.STREAMING}
-        />
-      )}
+      <AnimatePresence mode="sync">
+        {hasSummaryContent && (
+          <motion.div
+            key="round-summary"
+            layout
+            layoutId={`analysis-${analysis.id}-summary`}
+            variants={itemVariants}
+          >
+            <RoundSummarySection
+              roundSummary={validRoundSummary}
+              onActionClick={stableOnActionClick}
+              isStreaming={analysis.status === AnalysisStatuses.STREAMING}
+            />
+          </motion.div>
+        )}
+
+        {validLeaderboard.length > 0 && (
+          <motion.div
+            key="leaderboard"
+            layout
+            layoutId={`analysis-${analysis.id}-leaderboard`}
+            variants={itemVariants}
+          >
+            <LeaderboardCard leaderboard={validLeaderboard} />
+          </motion.div>
+        )}
+
+        {validParticipantAnalyses.length > 0 && (
+          <motion.div
+            key="participants"
+            layout
+            className="space-y-4"
+          >
+            {validParticipantAnalyses.map((participant) => {
+              // ✅ CONTENT-AWARE ANIMATION FIX: Use enum-based validator for type-safe content checking
+              // Prevents empty participant cards from animating in
+              if (!hasParticipantContent(participant)) {
+                return null;
+              }
+
+              return (
+                <motion.div
+                  key={`${analysis.id}-participant-${participant.participantIndex}`}
+                  layout
+                  layoutId={`analysis-${analysis.id}-participant-${participant.participantIndex}`}
+                  variants={itemVariants}
+                  initial="hidden"
+                  animate="show"
+                >
+                  <ParticipantAnalysisCard
+                    analysis={participant}
+                    isStreaming={analysis.status === AnalysisStatuses.STREAMING}
+                  />
+                </motion.div>
+              );
+            })}
+          </motion.div>
+        )}
+      </AnimatePresence>
+      <div ref={bottomRef} />
     </motion.div>
   );
 }

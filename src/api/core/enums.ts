@@ -280,6 +280,26 @@ export const STREAMING_EVENT_TYPES = ['start', 'chunk', 'complete', 'failed'] as
 export type StreamingEventType = (typeof STREAMING_EVENT_TYPES)[number];
 
 // ============================================================================
+// STREAM BUFFER STATUS (Resumable Streams)
+// ============================================================================
+
+export const STREAM_STATUSES = ['active', 'completed', 'failed', 'expired'] as const;
+
+export const StreamStatusSchema = z.enum(STREAM_STATUSES).openapi({
+  description: 'Stream buffer status for resumable AI SDK streams',
+  example: 'active',
+});
+
+export type StreamStatus = z.infer<typeof StreamStatusSchema>;
+
+export const StreamStatuses = {
+  ACTIVE: 'active' as const,
+  COMPLETED: 'completed' as const,
+  FAILED: 'failed' as const,
+  EXPIRED: 'expired' as const,
+} as const;
+
+// ============================================================================
 // FEEDBACK TYPE
 // ============================================================================
 
@@ -690,6 +710,43 @@ export const ScreenModes = {
   OVERVIEW: 'overview' as const,
   THREAD: 'thread' as const,
   PUBLIC: 'public' as const,
+} as const;
+
+// ============================================================================
+// PENDING MESSAGE VALIDATION REASON
+// ============================================================================
+
+// 1️⃣ ARRAY CONSTANT - All validation failure reasons
+export const PENDING_MESSAGE_VALIDATION_REASONS = [
+  'public screen mode',
+  'no pending message or expected participants',
+  'already sent',
+  'currently streaming',
+  'participant mismatch',
+  'waiting for changelog',
+  'waiting for pre-search creation',
+  'waiting for pre-search',
+] as const;
+
+// 3️⃣ ZOD SCHEMA - Runtime validation
+export const PendingMessageValidationReasonSchema = z.enum(PENDING_MESSAGE_VALIDATION_REASONS).openapi({
+  description: 'Reason why pending message cannot be sent',
+  example: 'waiting for pre-search',
+});
+
+// 4️⃣ TYPESCRIPT TYPE - Validation reason type
+export type PendingMessageValidationReason = z.infer<typeof PendingMessageValidationReasonSchema>;
+
+// 5️⃣ CONSTANT OBJECT - For validation logic
+export const PendingMessageValidationReasons = {
+  PUBLIC_SCREEN_MODE: 'public screen mode' as const,
+  NO_PENDING_MESSAGE: 'no pending message or expected participants' as const,
+  ALREADY_SENT: 'already sent' as const,
+  CURRENTLY_STREAMING: 'currently streaming' as const,
+  PARTICIPANT_MISMATCH: 'participant mismatch' as const,
+  WAITING_FOR_CHANGELOG: 'waiting for changelog' as const,
+  WAITING_FOR_PRE_SEARCH_CREATION: 'waiting for pre-search creation' as const,
+  WAITING_FOR_PRE_SEARCH: 'waiting for pre-search' as const,
 } as const;
 
 // ============================================================================

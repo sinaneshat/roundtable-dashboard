@@ -104,11 +104,12 @@ export function canNavigateWithoutAnalysis(
 /**
  * Determine if navigation should proceed
  *
- * @param hasNavigated - Whether navigation has already occurred
- * @param hasUpdatedThread - Whether thread slug has been updated
- * @param analysisComplete - Whether first analysis is complete
- * @param canSkipAnalysis - Whether navigation can proceed without analysis
- * @param hasSlug - Whether AI-generated slug exists
+ * @param params - Navigation decision parameters
+ * @param params.hasNavigated - Whether navigation has already occurred
+ * @param params.hasUpdatedThread - Whether thread slug has been updated
+ * @param params.analysisComplete - Whether first analysis is complete
+ * @param params.canSkipAnalysis - Whether navigation can proceed without analysis
+ * @param params.hasSlug - Whether AI-generated slug exists
  * @returns true if navigation should proceed
  */
 export function shouldNavigateToThread(params: {

@@ -23,10 +23,11 @@ export default defineConfig({
     // Setup files
     setupFiles: ['./vitest.setup.ts'],
 
-    // ✅ FIX: Add server-side deps configuration for CSS imports
+    // ✅ FIX: Add server-side deps configuration for CSS imports and next-intl
     server: {
       deps: {
-        inline: [/@.*/], // Inline all scoped packages to avoid CSS import issues
+        // https://github.com/vercel/next.js/issues/77200
+        inline: [/@.*/, 'next-intl'], // Inline scoped packages and next-intl for ESM support
       },
     },
 

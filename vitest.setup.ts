@@ -1,9 +1,50 @@
 // Learn more: https://vitest.dev/guide/
 import '@testing-library/jest-dom/vitest';
 
+import { createRequire } from 'node:module';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { TextDecoder as NodeTextDecoder, TextEncoder as NodeTextEncoder } from 'node:util';
 
 import { vi } from 'vitest';
+
+// ✅ Enable require() in ES modules for orchestrator-factory dynamic imports
+// This allows the orchestrator to use require() to avoid circular dependencies
+if (typeof globalThis.require === 'undefined') {
+  const __filename = fileURLToPath(import.meta.url);
+  const __dirname = path.dirname(__filename);
+  const nodeRequire = createRequire(import.meta.url);
+
+  // Wrap nodeRequire to handle @/ path alias
+  const customRequire = (id: string) => {
+    if (id.startsWith('@/')) {
+      // Convert @/ alias to absolute path based on project root
+      const relativePath = id.substring(2); // Remove '@/'
+      let absolutePath = path.resolve(__dirname, 'src', relativePath);
+
+      // Try different extensions if base path doesn't exist
+      const extensions = ['.tsx', '.ts', '.jsx', '.js', '/index.tsx', '/index.ts'];
+      for (const ext of extensions) {
+        try {
+          const testPath = absolutePath + ext;
+          return nodeRequire(testPath);
+        } catch {
+          // Try next extension
+        }
+      }
+
+      // If no extension works, try the original path
+      return nodeRequire(absolutePath);
+    }
+    return nodeRequire(id);
+  };
+
+  Object.defineProperty(globalThis, 'require', {
+    value: customRequire,
+    writable: true,
+    configurable: true,
+  });
+}
 
 // Mock CSS imports (CSS modules, regular CSS, etc.)
 vi.mock('*.css', () => ({}));
@@ -24,13 +65,8 @@ Object.defineProperty(globalThis, 'TextEncoder', {
   configurable: true,
 });
 
-// Mock next-intl for testing - MUST be in setupFiles for vi.mock() to work
-vi.mock('next-intl', () => ({
-  useTranslations: () => (key: string) => key,
-  useLocale: () => 'en',
-  getTranslations: () => (key: string) => key,
-  NextIntlClientProvider: ({ children }: { children: unknown; locale?: string; messages?: unknown }) => children,
-}));
+// ✅ REMOVED: next-intl mock - using real NextIntlClientProvider from test-providers.tsx
+// The test-providers.tsx provides proper translations via NextIntlClientProvider with full messages
 
 // Mock @opennextjs/cloudflare - ESM-only package
 vi.mock('@opennextjs/cloudflare', () => ({

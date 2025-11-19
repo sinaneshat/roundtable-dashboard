@@ -94,6 +94,7 @@ import {
   getThreadSlugStatusHandler,
   listCustomRolesHandler,
   listThreadsHandler,
+  resumeStreamHandler,
   setRoundFeedbackHandler,
   streamChatHandler,
   updateCustomRoleHandler,
@@ -123,6 +124,7 @@ import {
   getThreadSlugStatusRoute,
   listCustomRolesRoute,
   listThreadsRoute,
+  resumeStreamRoute,
   setRoundFeedbackRoute,
   streamChatRoute,
   updateCustomRoleRoute,
@@ -486,6 +488,7 @@ const appRoutes = app
   .openapi(getThreadChangelogRoute, getThreadChangelogHandler) // Get configuration changelog
   .openapi(streamChatRoute, streamChatHandler) // Stream AI responses via SSE
   .openapi(getStreamStatusRoute, getStreamStatusHandler) // Check participant stream status for resumption
+  .openapi(resumeStreamRoute, resumeStreamHandler) // Resume buffered participant stream
   // Participant Management (protected)
   .openapi(addParticipantRoute, addParticipantHandler) // Add AI model participant to thread
   .openapi(updateParticipantRoute, updateParticipantHandler) // Update participant role/priority/settings

@@ -313,16 +313,14 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
   // ✅ QUOTA INVALIDATION: Use refs to capture latest functions and avoid circular deps
   const sendMessageRef = useRef(chat.sendMessage);
   const startRoundRef = useRef(chat.startRound);
-  const stopRef = useRef(chat.stop);
   const setMessagesRef = useRef(chat.setMessages);
 
   // Keep refs in sync with latest chat methods
   useEffect(() => {
     sendMessageRef.current = chat.sendMessage;
     startRoundRef.current = chat.startRound;
-    stopRef.current = chat.stop;
     setMessagesRef.current = chat.setMessages;
-  }, [chat.sendMessage, chat.startRound, chat.stop, chat.setMessages]);
+  }, [chat.sendMessage, chat.startRound, chat.setMessages]);
 
   // ✅ REMOVED: Old effect that stored unwrapped chat methods
   // This effect was overwriting the wrapped versions with quota/pre-search invalidation
@@ -403,7 +401,8 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
     // We keep the flag set so this effect retries until streaming actually begins
     // The flag is only cleared when isStreaming becomes true (see effect below)
     chat.startRound(storeParticipants);
-  }, [waitingToStart, chat.startRound, storeParticipants, storeMessages, storePreSearches, storeThread, storeScreenMode, store]); // ✅ FIX: Depend on chat.startRound instead of chat to detect when it becomes available
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Only depend on chat.startRound, not entire chat object to avoid unnecessary re-renders
+  }, [waitingToStart, chat.startRound, storeParticipants, storeMessages, storePreSearches, storeThread, storeScreenMode, store, effectiveThreadId]);
 
   // ✅ CRITICAL FIX: Clear waitingToStartStreaming flag when streaming actually begins
   // This separate effect watches for successful stream start and clears the flag
@@ -534,7 +533,7 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
     storeRef.current?.setState({
       sendMessage: sendMessageWithQuotaInvalidation,
       startRound: startRoundWithQuotaInvalidation,
-      stop: stopRef.current,
+      // ✅ RESUMABLE STREAMS: stop removed - incompatible with stream resumption
       chatSetMessages: setMessagesRef.current,
       // NOTE: Reactive values (messages, isStreaming, currentParticipantIndex) are synced
       // in dedicated effects above (lines 329-354) with proper change detection

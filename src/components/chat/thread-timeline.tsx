@@ -204,7 +204,7 @@ export function ThreadTimeline({
 
                 {/* PreSearchCard now rendered inside ChatMessageList between user and assistant messages */}
 
-                {!isStreaming && (() => {
+                {!isStreaming && !isReadOnly && (() => {
                   const hasRoundError = item.data.some((msg) => {
                     const parseResult = DbMessageMetadataSchema.safeParse(msg.metadata);
                     return parseResult.success && messageHasError(parseResult.data);
@@ -219,11 +219,11 @@ export function ThreadTimeline({
                           roundNumber={roundNumber}
                           currentFeedback={feedbackByRound.get(roundNumber) ?? null}
                           onFeedbackChange={
-                            isReadOnly || !getFeedbackHandler
+                            !getFeedbackHandler
                               ? () => {}
                               : getFeedbackHandler(roundNumber)
                           }
-                          disabled={isReadOnly || isStreaming}
+                          disabled={isStreaming}
                           isPending={pendingFeedback?.roundNumber === roundNumber}
                           pendingType={
                             pendingFeedback?.roundNumber === roundNumber

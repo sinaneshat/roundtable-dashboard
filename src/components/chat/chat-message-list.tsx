@@ -1,6 +1,7 @@
 'use client';
 import type { UIMessage } from 'ai';
 import { AnimatePresence, motion } from 'motion/react';
+import Image from 'next/image';
 import { useTranslations } from 'next-intl';
 import { memo, useEffect, useMemo, useState } from 'react';
 import { Streamdown } from 'streamdown';
@@ -15,7 +16,7 @@ import { PreSearchCard } from '@/components/chat/pre-search-card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { isAssistantMessageMetadata } from '@/db/schemas/chat-metadata';
 import { useUsageStatsQuery } from '@/hooks/queries/usage';
-import { useModelLookup } from '@/hooks/utils';
+import { useAutoScroll, useModelLookup } from '@/hooks/utils';
 import type { MessagePart, MessageStatus } from '@/lib/schemas/message-schemas';
 import { extractColorFromImage } from '@/lib/ui';
 import { cn } from '@/lib/ui/cn';
@@ -435,6 +436,9 @@ export const ChatMessageList = memo(
     const userAvatarSrc = userAvatar?.src || userInfo.image || '';
     const userAvatarName = userAvatar?.name || userInfo.name;
 
+    // ✅ AI SDK ELEMENTS PATTERN: Auto-scroll during streaming to keep messages in view
+    const bottomRef = useAutoScroll(isStreaming);
+
     // ✅ DEDUPLICATION: Prevent duplicate message IDs and filter participant trigger messages
     // Note: Component supports grouping multiple consecutive user messages for UI flexibility
     const deduplicatedMessages = useMemo(() => {
@@ -754,12 +758,15 @@ export const ChatMessageList = memo(
                                 }
                                 if (part.type === 'file' && part.mediaType?.startsWith('image/')) {
                                   return (
-                                    <div key={`${message.id}-image-${part.url}`} className="my-2">
-                                      <img
+                                    <div key={`${message.id}-image-${part.url}`} className="my-2 relative max-w-full max-h-[400px]">
+                                      <Image
                                         src={part.url}
                                         alt={part.filename || 'Attachment'}
-                                        className="max-w-full max-h-[400px] rounded-lg border border-border"
-                                        loading="lazy"
+                                        className="rounded-lg border border-border object-contain"
+                                        width={800}
+                                        height={400}
+                                        style={{ maxWidth: '100%', height: 'auto' }}
+                                        unoptimized
                                       />
                                       {part.filename && (
                                         <p className="mt-1 text-xs text-muted-foreground">{part.filename}</p>
@@ -841,6 +848,8 @@ export const ChatMessageList = memo(
             return null;
           })}
         </AnimatePresence>
+        {/* ✅ AI SDK ELEMENTS PATTERN: Scroll anchor for auto-scroll during streaming */}
+        <div ref={bottomRef} />
       </div>
     );
   },

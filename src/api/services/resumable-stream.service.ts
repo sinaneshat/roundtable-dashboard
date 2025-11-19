@@ -18,6 +18,8 @@
  * @module api/services/resumable-stream
  */
 
+import type { StreamStatus } from '@/api/core/enums';
+import { StreamStatuses } from '@/api/core/enums';
 import type { ApiEnv } from '@/api/types';
 import type { TypedLogger } from '@/api/types/logger';
 
@@ -30,11 +32,6 @@ import type { TypedLogger } from '@/api/types/logger';
  * Streams that take longer than 1 hour are considered stale
  */
 export const STREAM_TTL_SECONDS = 60 * 60; // 1 hour
-
-/**
- * Stream status enum
- */
-export type StreamStatus = 'active' | 'completed' | 'failed' | 'expired';
 
 /**
  * Stream metadata stored in KV
@@ -117,7 +114,7 @@ export async function createResumableStream(
       threadId,
       roundNumber,
       participantIndex,
-      status: 'active',
+      status: StreamStatuses.ACTIVE,
       createdAt: now,
       updatedAt: now,
       chunkCount: 0,
@@ -347,7 +344,7 @@ export async function updateStreamStatus(
     metadata.status = status;
     metadata.updatedAt = new Date().toISOString();
 
-    if (status === 'completed' || status === 'failed') {
+    if (status === StreamStatuses.COMPLETED || status === StreamStatuses.FAILED) {
       metadata.completedAt = new Date().toISOString();
     }
 

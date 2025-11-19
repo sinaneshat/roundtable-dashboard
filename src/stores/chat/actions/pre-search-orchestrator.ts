@@ -21,6 +21,7 @@
 'use client';
 
 import type { StoredPreSearch } from '@/api/routes/chat/schema';
+import { useChatStore } from '@/components/providers/chat-store-provider';
 import { useThreadPreSearchesQuery } from '@/hooks/queries/chat/pre-search';
 import { transformPreSearches } from '@/lib/utils/date-transforms';
 
@@ -45,8 +46,9 @@ export type UsePreSearchOrchestratorReturn = OrchestratorReturn;
  */
 export const usePreSearchOrchestrator = createOrchestrator<StoredPreSearch, StoredPreSearch, number>({
   queryHook: useThreadPreSearchesQuery,
-  storeSelector: s => (s as { preSearches: StoredPreSearch[] }).preSearches,
-  storeSetter: s => (s as { setPreSearches: (items: StoredPreSearch[]) => void }).setPreSearches,
+  useStoreHook: useChatStore,
+  storeSelector: s => s.preSearches,
+  storeSetter: s => s.setPreSearches,
   extractItems: response => (response as { data?: { items?: StoredPreSearch[] } })?.data?.items || [],
   transformItems: transformPreSearches,
   getItemKey: item => item.roundNumber,

@@ -387,9 +387,10 @@ function PreSearchStreamComponent({
       className="space-y-6"
     >
       {/* Search Plan & Configuration Summary - Show at top when we have query data */}
-      {validQueries.length > 0 && (
+      {/* ✅ CONTENT-AWARE ANIMATION FIX: Only show when queries have actual text content */}
+      {validQueries.length > 0 && validQueries.some(q => q?.query) && (
         <WebSearchConfigurationDisplay
-          queries={validQueries.map(q => ({
+          queries={validQueries.filter(q => q?.query).map(q => ({
             query: q.query,
             rationale: q.rationale,
             searchDepth: q.searchDepth as 'basic' | 'advanced',
@@ -405,6 +406,12 @@ function PreSearchStreamComponent({
       )}
 
       {validQueries.map((query, queryIndex) => {
+        // ✅ CONTENT-AWARE ANIMATION FIX: Only render if query has actual text content
+        // Prevents empty query containers from animating in before content arrives
+        if (!query?.query) {
+          return null;
+        }
+
         const searchResult = validResults.find(r => r?.query === query?.query);
         const hasResult = !!searchResult;
         const uniqueKey = query?.query || `${preSearch.id}-search-${queryIndex}`;

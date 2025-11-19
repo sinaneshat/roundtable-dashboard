@@ -3,6 +3,7 @@
 // ✅ REMOVED: useQueryClient - no longer invalidating queries on completion
 import type { UIMessage } from 'ai';
 import { AnimatePresence, motion } from 'motion/react';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
@@ -152,9 +153,9 @@ export default function ChatOverviewScreen() {
     [modelsData?.data?.items],
   );
 
-  const customRoles = customRolesData?.pages.flatMap(page =>
+  const customRoles = customRolesData?.pages?.flatMap(page =>
     (page?.success && page.data?.items) ? page.data.items : [],
-  ) || [];
+  ) ?? [];
 
   const userTierConfig = modelsData?.data?.user_tier_config || {
     tier: 'free' as const,
@@ -524,11 +525,13 @@ export default function ChatOverviewScreen() {
                     exit={{ scale: 0.5, opacity: 0, y: -50 }}
                     transition={{ delay: 0.1, duration: 0.5, ease: 'easeOut' }}
                   >
-                    <img
+                    <Image
                       src={BRAND.logos.main}
                       alt={BRAND.name}
                       className="w-full h-full object-contain relative z-10"
-                      loading="eager"
+                      width={120}
+                      height={120}
+                      priority
                     />
                   </motion.div>
 

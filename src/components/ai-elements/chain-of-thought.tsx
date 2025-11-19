@@ -5,12 +5,13 @@ import { motion } from 'framer-motion';
 import type { LucideIcon } from 'lucide-react';
 import { ChevronDown } from 'lucide-react';
 import type { ComponentProps, ReactElement, ReactNode } from 'react';
-import { createContext, isValidElement, use, useCallback, useMemo, useState } from 'react';
+import { Children, createContext, Fragment, isValidElement, use, useCallback, useMemo, useState } from 'react';
 
 import type { ChainOfThoughtStepStatus } from '@/api/core/enums';
 import { ChainOfThoughtStepStatuses } from '@/api/core/enums';
 import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { ANIMATION_EASING, ANIMATION_TIMINGS } from '@/constants/animations';
 import { cn } from '@/lib/ui/cn';
 
 /**
@@ -80,17 +81,22 @@ export function ChainOfThought({
 
   return (
     <ChainOfThoughtContext value={contextValue}>
-      <Collapsible open={open} onOpenChange={handleOpenChange} disabled={disabled}>
-        <div
+      <Collapsible open={open} onOpenChange={handleOpenChange} disabled={disabled} asChild>
+        <motion.div
+          layout
+          transition={{
+            layout: ANIMATION_EASING.LAYOUT,
+          }}
           className={cn(
             'rounded-lg border border-border/50 bg-muted/30',
             disabled && 'opacity-100',
             className,
           )}
-          {...props}
         >
-          {children}
-        </div>
+          <div {...props}>
+            {children}
+          </div>
+        </motion.div>
       </Collapsible>
     </ChainOfThoughtContext>
   );
@@ -156,10 +162,10 @@ export function ChainOfThoughtContent({
     show: {
       opacity: 1,
       transition: {
-        duration: 0.2,
-        ease: [0.32, 0.72, 0, 1] as const,
-        staggerChildren: staggerChildren ? 0.04 : 0,
-        delayChildren: staggerChildren ? 0.05 : 0,
+        duration: ANIMATION_TIMINGS.DURATION_FAST,
+        ease: ANIMATION_EASING.DEFAULT,
+        staggerChildren: staggerChildren ? ANIMATION_TIMINGS.STAGGER_NORMAL : 0,
+        delayChildren: staggerChildren ? ANIMATION_TIMINGS.DELAY_SHORT : 0,
         when: 'beforeChildren' as const,
       },
     },
@@ -171,16 +177,31 @@ export function ChainOfThoughtContent({
       opacity: 1,
       y: 0,
       transition: {
-        duration: 0.2,
-        ease: [0.32, 0.72, 0, 1] as const,
+        duration: ANIMATION_TIMINGS.DURATION_FAST,
+        ease: ANIMATION_EASING.DEFAULT,
       },
     },
   };
 
-  // Convert children to array for stable mapping with proper keys
+  // Helper to flatten children including Fragments
+  const flattenChildren = (children: ReactNode): ReactNode[] => {
+    const flat: ReactNode[] = [];
+    // eslint-disable-next-line react/no-children-for-each -- Necessary to flatten Fragment children for stagger animation
+    Children.forEach(children, (child) => {
+      if (isValidElement(child) && child.type === Fragment) {
+        // Type-safe access to Fragment children
+        const fragmentProps = child.props as { children?: ReactNode };
+        flat.push(...flattenChildren(fragmentProps.children));
+      } else {
+        flat.push(child);
+      }
+    });
+    return flat;
+  };
+
   const childrenArray = !staggerChildren || !children
     ? null
-    : (Array.isArray(children) ? children : [children]).filter(child => isValidElement(child));
+    : flattenChildren(children).filter(child => isValidElement(child));
 
   const animatedChildren = childrenArray?.map((child) => {
     const reactChild = child as ReactElement<{ id?: string }>;

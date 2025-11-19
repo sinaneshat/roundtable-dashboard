@@ -25,6 +25,8 @@
  * @module api/services/resumable-stream-kv
  */
 
+import type { StreamStatus } from '@/api/core/enums';
+import { StreamStatuses } from '@/api/core/enums';
 import type { ApiEnv } from '@/api/types';
 import type { TypedLogger } from '@/api/types/logger';
 
@@ -33,12 +35,8 @@ import type { TypedLogger } from '@/api/types/logger';
 // ============================================================================
 
 /**
- * Stream status for lifecycle tracking
- */
-export type StreamStatus = 'active' | 'completed' | 'failed';
-
-/**
  * Stream state stored in KV
+ * ✅ ENUM PATTERN: Uses StreamStatus from core enums
  */
 export type StreamState = {
   threadId: string;
@@ -80,12 +78,17 @@ export async function markStreamActive(
   env: ApiEnv['Bindings'],
   logger?: TypedLogger,
 ): Promise<void> {
+  // ✅ LOCAL DEV: Skip tracking if KV not available
+  if (!env?.KV) {
+    return;
+  }
+
   try {
     const state: StreamState = {
       threadId,
       roundNumber,
       participantIndex,
-      status: 'active',
+      status: StreamStatuses.ACTIVE,
       messageId: null,
       createdAt: new Date().toISOString(),
       completedAt: null,
@@ -137,12 +140,17 @@ export async function markStreamCompleted(
   env: ApiEnv['Bindings'],
   logger?: TypedLogger,
 ): Promise<void> {
+  // ✅ LOCAL DEV: Skip tracking if KV not available
+  if (!env?.KV) {
+    return;
+  }
+
   try {
     const state: StreamState = {
       threadId,
       roundNumber,
       participantIndex,
-      status: 'completed',
+      status: StreamStatuses.COMPLETED,
       messageId,
       createdAt: new Date().toISOString(),
       completedAt: new Date().toISOString(),
@@ -194,12 +202,17 @@ export async function markStreamFailed(
   env: ApiEnv['Bindings'],
   logger?: TypedLogger,
 ): Promise<void> {
+  // ✅ LOCAL DEV: Skip tracking if KV not available
+  if (!env?.KV) {
+    return;
+  }
+
   try {
     const state: StreamState = {
       threadId,
       roundNumber,
       participantIndex,
-      status: 'failed',
+      status: StreamStatuses.FAILED,
       messageId: null,
       createdAt: new Date().toISOString(),
       completedAt: new Date().toISOString(),
@@ -250,6 +263,11 @@ export async function getStreamState(
   env: ApiEnv['Bindings'],
   logger?: TypedLogger,
 ): Promise<StreamState | null> {
+  // ✅ LOCAL DEV: Return null if KV not available
+  if (!env?.KV) {
+    return null;
+  }
+
   try {
     const state = await env.KV.get(
       getStreamStateKey(threadId, roundNumber, participantIndex),
@@ -296,6 +314,11 @@ export async function clearStreamState(
   env: ApiEnv['Bindings'],
   logger?: TypedLogger,
 ): Promise<void> {
+  // ✅ LOCAL DEV: Skip if KV not available
+  if (!env?.KV) {
+    return;
+  }
+
   try {
     await env.KV.delete(getStreamStateKey(threadId, roundNumber, participantIndex));
 

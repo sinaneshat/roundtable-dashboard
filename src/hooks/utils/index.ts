@@ -8,6 +8,8 @@
  */
 
 export { useAutoResizeTextarea } from './use-auto-resize-textarea';
+export type { UseAutoScrollOptions, UseAutoScrollWithTriggerReturn } from './use-auto-scroll';
+export { useAutoScroll, useAutoScrollWithTrigger } from './use-auto-scroll';
 export { useBoolean } from './use-boolean';
 export { useDebouncedValue } from './use-debounced-value';
 export type { UseFlowLoadingOptions, UseFlowLoadingReturn } from './use-flow-loading';

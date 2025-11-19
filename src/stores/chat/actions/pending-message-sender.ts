@@ -7,7 +7,12 @@
 
 import type { UIMessage } from 'ai';
 
-import { AnalysisStatuses } from '@/api/core/enums';
+import type { PendingMessageValidationReason, ScreenMode } from '@/api/core/enums';
+import {
+  AnalysisStatuses,
+  PendingMessageValidationReasons,
+  ScreenModes,
+} from '@/api/core/enums';
 import type { ChatParticipant, ChatThread, StoredPreSearch } from '@/api/routes/chat/schema';
 import { calculateNextRoundNumber } from '@/lib/utils/round-utils';
 
@@ -20,7 +25,7 @@ export type PendingMessageState = {
   hasSentPendingMessage: boolean;
   isStreaming: boolean;
   isWaitingForChangelog: boolean;
-  screenMode: 'overview' | 'thread' | 'public';
+  screenMode: ScreenMode;
   participants: ChatParticipant[];
   messages: UIMessage[];
   preSearches: StoredPreSearch[];
@@ -34,7 +39,7 @@ export type PendingMessageState = {
 export type ValidationResult = {
   shouldSend: boolean;
   roundNumber: number | null;
-  reason?: string;
+  reason?: PendingMessageValidationReason;
 };
 
 /**
@@ -45,20 +50,20 @@ export type ValidationResult = {
  */
 export function shouldSendPendingMessage(state: PendingMessageState): ValidationResult {
   // Early exits for invalid states
-  if (state.screenMode === 'public') {
-    return { shouldSend: false, roundNumber: null, reason: 'public screen mode' };
+  if (state.screenMode === ScreenModes.PUBLIC) {
+    return { shouldSend: false, roundNumber: null, reason: PendingMessageValidationReasons.PUBLIC_SCREEN_MODE };
   }
 
   if (!state.pendingMessage || !state.expectedParticipantIds) {
-    return { shouldSend: false, roundNumber: null, reason: 'no pending message or expected participants' };
+    return { shouldSend: false, roundNumber: null, reason: PendingMessageValidationReasons.NO_PENDING_MESSAGE };
   }
 
   if (state.hasSentPendingMessage) {
-    return { shouldSend: false, roundNumber: null, reason: 'already sent' };
+    return { shouldSend: false, roundNumber: null, reason: PendingMessageValidationReasons.ALREADY_SENT };
   }
 
   if (state.isStreaming) {
-    return { shouldSend: false, roundNumber: null, reason: 'currently streaming' };
+    return { shouldSend: false, roundNumber: null, reason: PendingMessageValidationReasons.CURRENTLY_STREAMING };
   }
 
   // Check participant model IDs match
@@ -71,12 +76,12 @@ export function shouldSendPendingMessage(state: PendingMessageState): Validation
   const expectedModelIds = state.expectedParticipantIds.sort().join(',');
 
   if (currentModelIds !== expectedModelIds) {
-    return { shouldSend: false, roundNumber: null, reason: 'participant mismatch' };
+    return { shouldSend: false, roundNumber: null, reason: PendingMessageValidationReasons.PARTICIPANT_MISMATCH };
   }
 
   // Check changelog completion
   if (state.isWaitingForChangelog) {
-    return { shouldSend: false, roundNumber: null, reason: 'waiting for changelog' };
+    return { shouldSend: false, roundNumber: null, reason: PendingMessageValidationReasons.WAITING_FOR_CHANGELOG };
   }
 
   // Calculate next round number
@@ -113,7 +118,7 @@ export function shouldSendPendingMessage(state: PendingMessageState): Validation
     // If we send message during this window, participants start WITHOUT web search
     // Solution: Wait for orchestrator to sync the pre-search that backend created
     if (!preSearchForRound) {
-      return { shouldSend: false, roundNumber: newRoundNumber, reason: 'waiting for pre-search creation' };
+      return { shouldSend: false, roundNumber: newRoundNumber, reason: PendingMessageValidationReasons.WAITING_FOR_PRE_SEARCH_CREATION };
     }
 
     // ✅ FIX #1: Block on PENDING status (not just STREAMING)
@@ -122,7 +127,7 @@ export function shouldSendPendingMessage(state: PendingMessageState): Validation
     // Previous bug: Only checked STREAMING, so messages sent when status was PENDING
     if (preSearchForRound.status === AnalysisStatuses.PENDING
       || preSearchForRound.status === AnalysisStatuses.STREAMING) {
-      return { shouldSend: false, roundNumber: newRoundNumber, reason: 'waiting for pre-search' };
+      return { shouldSend: false, roundNumber: newRoundNumber, reason: PendingMessageValidationReasons.WAITING_FOR_PRE_SEARCH };
     }
 
     // Pre-search is COMPLETE or FAILED - allow message to send

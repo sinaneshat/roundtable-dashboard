@@ -59,6 +59,13 @@ export type OrchestratorConfig<
   queryHook: (threadId: string, enabled: boolean, ...args: TQueryArgs) => UseQueryResult<TResponse>;
 
   /**
+   * Zustand store hook for accessing store state
+   * @example useChatStore
+   * ✅ DEPENDENCY INJECTION: Passed as parameter to avoid circular dependencies and enable testing
+   */
+  useStoreHook: <T>(selector: (store: ChatStore) => T) => T;
+
+  /**
    * Zustand store selector to get current items from store
    * @example s => s.analyses
    */
@@ -186,6 +193,7 @@ export function createOrchestrator<
 ) {
   const {
     queryHook,
+    useStoreHook,
     storeSelector,
     storeSetter,
     extractItems,
@@ -214,17 +222,11 @@ export function createOrchestrator<
     const { threadId, enabled = true } = options;
     const queryArgs = options.queryArgs ?? ([] as unknown as TQueryArgs);
 
-    // Get store state and actions (using generic hook pattern)
-    const useStore = <T>(selector: (store: ChatStore) => T): T => {
-      // eslint-disable-next-line ts/no-require-imports
-      const { useChatStore } = require('@/components/providers/chat-store-provider') as {
-        useChatStore: <U>(selector: (store: ChatStore) => U) => U;
-      };
-      return useChatStore(selector);
-    };
-
-    const currentItems = useStore<TItem[]>(storeSelector);
-    const setItems = useStore<(items: TItem[]) => void>(storeSetter);
+    // Get store state and actions using injected hook
+    // ✅ DEPENDENCY INJECTION: useStoreHook passed as config parameter
+    // This avoids circular dependencies and enables testing
+    const currentItems = useStoreHook<TItem[]>(storeSelector);
+    const setItems = useStoreHook<(items: TItem[]) => void>(storeSetter);
 
     // Query server data
     const { data: response, isLoading } = queryHook(

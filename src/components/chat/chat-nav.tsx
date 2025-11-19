@@ -170,11 +170,14 @@ function AppSidebarComponent({ ...props }: React.ComponentProps<typeof Sidebar>)
               <SidebarMenuItem className="group-data-[collapsible=icon]:hidden mb-2">
                 <SidebarMenuButton size="lg" asChild className="hover:bg-transparent">
                   <Link href="/chat" onClick={handleNavLinkClick}>
+                    {/* ✅ FIX: Use plain img tag to prevent hydration mismatch */}
+                    {/* eslint-disable-next-line next/no-img-element */}
                     <img
                       src={BRAND.logos.main}
                       alt={`${BRAND.name} Logo`}
                       className="size-10 object-contain shrink-0"
-                      loading="lazy"
+                      width={40}
+                      height={40}
                     />
                     <span
                       className="truncate min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-base font-bold"
@@ -189,11 +192,14 @@ function AppSidebarComponent({ ...props }: React.ComponentProps<typeof Sidebar>)
               {/* Logo - Collapsed */}
               <SidebarMenuItem className="hidden group-data-[collapsible=icon]:flex mb-2 items-center justify-center">
                 <Link href="/chat" onClick={handleNavLinkClick} className="p-0 m-0 block">
+                  {/* ✅ FIX: Use plain img tag to prevent hydration mismatch */}
+                  {/* eslint-disable-next-line next/no-img-element */}
                   <img
                     src={BRAND.logos.main}
                     alt={`${BRAND.name} Logo`}
                     className="size-12 object-contain shrink-0"
-                    loading="lazy"
+                    width={48}
+                    height={48}
                   />
                 </Link>
               </SidebarMenuItem>
