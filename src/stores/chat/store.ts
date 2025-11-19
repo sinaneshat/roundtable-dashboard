@@ -74,7 +74,7 @@ import { devtools } from 'zustand/middleware';
 import { createStore } from 'zustand/vanilla';
 
 import type { AnalysisStatus, FeedbackType } from '@/api/core/enums';
-import { AnalysisStatuses, ChatModeSchema } from '@/api/core/enums';
+import { AnalysisStatuses, ChatModeSchema, ScreenModes } from '@/api/core/enums';
 import type {
   ModeratorAnalysisPayload,
   PreSearchDataPayload,
@@ -699,7 +699,16 @@ const createOperationsSlice: StateCreator<
     set(THREAD_RESET_STATE as Partial<ChatStore>, false, 'operations/resetThreadState'),
 
   resetToOverview: () =>
-    set(COMPLETE_RESET_STATE as Partial<ChatStore>, false, 'operations/resetToOverview'),
+    set({
+      ...COMPLETE_RESET_STATE,
+      // ✅ CRITICAL FIX: Set screenMode to 'overview' instead of null
+      // This prevents race condition where provider effect waits for screenMode='overview'
+      // but useScreenInitialization hasn't run yet to set it
+      screenMode: ScreenModes.OVERVIEW,
+      // ✅ Create fresh Set instances (same as resetToNewChat)
+      createdAnalysisRounds: new Set(),
+      triggeredPreSearchRounds: new Set(),
+    }, false, 'operations/resetToOverview'),
 
   initializeThread: (thread: ChatThread, participants: ChatParticipant[], initialMessages?: UIMessage[]) => {
     const messagesToSet = initialMessages || [];
@@ -789,6 +798,10 @@ const createOperationsSlice: StateCreator<
     // ✅ RESET: Apply complete reset state
     set({
       ...COMPLETE_RESET_STATE,
+      // ✅ CRITICAL FIX: Set screenMode to 'overview' instead of null
+      // This prevents race condition where provider effect waits for screenMode='overview'
+      // but useScreenInitialization hasn't run yet to set it
+      screenMode: ScreenModes.OVERVIEW,
       // ✅ CRITICAL: Reset tracking Sets (need new instances)
       createdAnalysisRounds: new Set(),
       triggeredPreSearchRounds: new Set(),

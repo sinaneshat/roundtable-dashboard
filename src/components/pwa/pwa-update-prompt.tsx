@@ -1,14 +1,24 @@
 'use client';
 
 import { RefreshCw, X } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { useEffect, useState } from 'react';
+
+import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/ui/cn';
+import { glassCardStyles, glassVariants } from '@/lib/ui/glassmorphism';
 
 /**
  * PWA Update Prompt - Detects and prompts users to update when new version available
- * Works in both development and production environments
- * Monitors service worker updates and cache changes
+ *
+ * Features:
+ * - Glass-morphism design matching established design system
+ * - Pill-shaped buttons following shadcn/ui patterns
+ * - Service worker update detection
+ * - Slide-in animation with proper Tailwind classes
  */
 export function PWAUpdatePrompt() {
+  const t = useTranslations('pwa');
   const [updateAvailable, setUpdateAvailable] = useState(false);
   const [registration, setRegistration] = useState<ServiceWorkerRegistration | null>(null);
   const [dismissed, setDismissed] = useState(false);
@@ -135,92 +145,54 @@ export function PWAUpdatePrompt() {
   }
 
   return (
-    <>
-      <style jsx>
-        {`
-          @keyframes slideInUpdate {
-            from {
-              transform: translateX(100%);
-              opacity: 0;
-            }
-            to {
-              transform: translateX(0);
-              opacity: 1;
-            }
-          }
-        `}
-      </style>
-      <div
-        style={{
-          position: 'fixed',
-          bottom: '24px',
-          right: '24px',
-          backgroundColor: 'rgba(59, 130, 246, 0.95)',
-          color: 'white',
-          padding: '12px 16px',
-          fontSize: '14px',
-          borderRadius: '8px',
-          zIndex: 999999,
-          fontFamily: 'system-ui, sans-serif',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '12px',
-          boxShadow: '0 8px 16px rgba(0, 0, 0, 0.15)',
-          animation: 'slideInUpdate 0.4s ease-out',
-          maxWidth: '400px',
-          minWidth: '320px',
-        }}
-      >
-        <RefreshCw size={20} style={{ flexShrink: 0 }} />
-        <span style={{ flex: 1 }}>New version available</span>
-        <button
-          type="button"
-          onClick={handleUpdate}
-          style={{
-            background: 'white',
-            color: '#3b82f6',
-            border: 'none',
-            padding: '6px 12px',
-            borderRadius: '4px',
-            cursor: 'pointer',
-            fontSize: '13px',
-            fontWeight: '600',
-            whiteSpace: 'nowrap',
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = '#f0f9ff';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = 'white';
-          }}
-        >
-          Update now
-        </button>
-        <button
-          type="button"
-          onClick={handleDismiss}
-          style={{
-            background: 'transparent',
-            border: 'none',
-            color: 'white',
-            cursor: 'pointer',
-            padding: '2px',
-            display: 'flex',
-            alignItems: 'center',
-            opacity: 0.8,
-            flexShrink: 0,
-          }}
-          aria-label="Dismiss update notification"
-          onMouseEnter={(e) => {
-            e.currentTarget.style.opacity = '1';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.opacity = '0.8';
-          }}
-        >
-          <X size={18} />
-        </button>
+    <div
+      role="alert"
+      aria-live="polite"
+      className={cn(
+        // Glass-morphism styling
+        glassVariants.medium,
+        'border',
+        // Positioning and layout
+        'fixed bottom-6 right-6 z-[100]',
+        'flex items-center gap-3',
+        'px-4 py-3',
+        'max-w-[400px] min-w-[320px]',
+        // Rounded corners for glass effect
+        'rounded-2xl',
+        // Animation
+        'animate-in slide-in-from-right-full fade-in duration-300',
+      )}
+      style={glassCardStyles.medium}
+    >
+      {/* Icon */}
+      <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary/20">
+        <RefreshCw className="size-4 text-primary" />
       </div>
-    </>
+
+      {/* Message */}
+      <span className="flex-1 text-sm font-medium text-foreground">
+        {t('newVersionAvailable')}
+      </span>
+
+      {/* Update button - pill-shaped (default) */}
+      <Button
+        size="sm"
+        onClick={handleUpdate}
+        className="shrink-0"
+      >
+        {t('updateNow')}
+      </Button>
+
+      {/* Dismiss button */}
+      <Button
+        variant="ghost"
+        size="icon"
+        onClick={handleDismiss}
+        aria-label={t('dismiss')}
+        className="size-8 shrink-0 text-muted-foreground hover:text-foreground"
+      >
+        <X className="size-4" />
+      </Button>
+    </div>
   );
 }

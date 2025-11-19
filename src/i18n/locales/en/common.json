@@ -1241,6 +1241,11 @@
       "title": "Pricing & Plans"
     }
   },
+  "pwa": {
+    "dismiss": "Dismiss update notification",
+    "newVersionAvailable": "New version available",
+    "updateNow": "Update now"
+  },
   "privacy": {
     "description": "Description",
     "title": "Title"
