@@ -11,6 +11,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 
+import { PreSearchStatuses } from '@/api/core/enums';
 import { useSession } from '@/lib/auth/client';
 import { queryKeys } from '@/lib/data/query-keys';
 import { STALE_TIMES } from '@/lib/data/stale-times';
@@ -52,7 +53,7 @@ export function useThreadPreSearchesQuery(
     refetchInterval: (query) => {
       // Check if any pre-search is pending or streaming
       const hasActivePreSearch = query.state.data?.data?.items?.some(
-        ps => ps.status === 'pending' || ps.status === 'streaming',
+        ps => ps.status === PreSearchStatuses.STREAMING || ps.status === PreSearchStatuses.ACTIVE,
       );
 
       // Poll every 500ms if there are active pre-searches, otherwise don't poll

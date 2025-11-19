@@ -137,11 +137,12 @@ export function ChatThreadActions({ thread, slug, onDeleteClick, isPublicMode = 
       props: { subject: shareTitle, body: `${shareDescription}\n\n${shareUrl}`, url: shareUrl },
     },
   ];
+
   return (
     <TooltipProvider>
       <div className="flex items-center gap-1">
-        {/* Share button - shown when thread is public and not in public mode */}
-        {!isPublicMode && displayIsPublic && (
+        {/* Share button - always shown and not in public mode */}
+        {!isPublicMode && (
           <DropdownMenu open={isShareOpen} onOpenChange={setIsShareOpen}>
             <Tooltip delayDuration={300}>
               <TooltipTrigger asChild>
@@ -151,57 +152,97 @@ export function ChatThreadActions({ thread, slug, onDeleteClick, isPublicMode = 
                     size="sm"
                     aria-label={t('shareThread')}
                     className="gap-2 transition-all duration-200"
+                    disabled={togglePublicMutation.isPending}
                   >
-                    <Share2 className="size-4" />
+                    {togglePublicMutation.isPending && !displayIsPublic
+                      ? <Loader2 className="size-4 animate-spin" />
+                      : <Share2 className="size-4" />}
                     <span className="hidden sm:inline">Share</span>
                   </Button>
                 </DropdownMenuTrigger>
               </TooltipTrigger>
               <TooltipContent side="bottom">
-                <p className="text-sm">{t('shareThread')}</p>
+                <p className="text-sm">{displayIsPublic ? t('shareThread') : t('makePublicAndShare')}</p>
               </TooltipContent>
             </Tooltip>
             <DropdownMenuContent side="bottom" align="end" className="w-56">
-              <DropdownMenuLabel>
-                <div className="flex flex-col gap-1">
-                  <span className="font-medium">{t('shareThread')}</span>
-                  <span className="text-xs font-normal text-muted-foreground">
-                    {t('shareThreadDescription')}
-                  </span>
-                </div>
-              </DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              {shareButtons.map(({ name, icon, Component, props }) => (
-                <Component
-                  key={name}
-                  {...props}
-                  beforeOnClick={() => {
-                    setIsShareOpen(false);
-                  }}
-                >
-                  <DropdownMenuItem
-                    className="cursor-pointer"
-                    onSelect={(e) => {
-                      e.preventDefault();
-                    }}
-                  >
-                    {icon}
-                    <span>{name}</span>
-                  </DropdownMenuItem>
-                </Component>
-              ))}
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={handleCopyLink} className="cursor-pointer">
-                {copySuccess ? <Check className="size-4" /> : <Copy className="size-4" />}
-                <span className={cn(copySuccess && 'text-green-500')}>
-                  {copySuccess ? t('linkCopied') : t('copyLink')}
-                </span>
-              </DropdownMenuItem>
+              {displayIsPublic
+                ? (
+                    <>
+                      <DropdownMenuLabel>
+                        <div className="flex flex-col gap-1">
+                          <span className="font-medium">{t('shareThread')}</span>
+                          <span className="text-xs font-normal text-muted-foreground">
+                            {t('shareThreadDescription')}
+                          </span>
+                        </div>
+                      </DropdownMenuLabel>
+                      <DropdownMenuSeparator />
+                      {shareButtons.map(({ name, icon, Component, props }) => (
+                        <Component
+                          key={name}
+                          {...props}
+                          beforeOnClick={() => {
+                            setIsShareOpen(false);
+                          }}
+                        >
+                          <DropdownMenuItem
+                            className="cursor-pointer"
+                            onSelect={(e) => {
+                              e.preventDefault();
+                            }}
+                          >
+                            {icon}
+                            <span>{name}</span>
+                          </DropdownMenuItem>
+                        </Component>
+                      ))}
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onClick={handleCopyLink} className="cursor-pointer">
+                        {copySuccess ? <Check className="size-4" /> : <Copy className="size-4" />}
+                        <span className={cn(copySuccess && 'text-green-500')}>
+                          {copySuccess ? t('linkCopied') : t('copyLink')}
+                        </span>
+                      </DropdownMenuItem>
+                    </>
+                  )
+                : (
+                    <>
+                      <DropdownMenuLabel>
+                        <div className="flex flex-col gap-1">
+                          <span className="font-medium">{t('shareThread')}</span>
+                          <span className="text-xs font-normal text-muted-foreground">
+                            {t('makePublicFirstDescription')}
+                          </span>
+                        </div>
+                      </DropdownMenuLabel>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        onClick={handleTogglePublic}
+                        disabled={togglePublicMutation.isPending}
+                        className="cursor-pointer"
+                      >
+                        {togglePublicMutation.isPending
+                          ? (
+                              <>
+                                <Loader2 className="size-4 animate-spin" />
+                                <span>{t('makingPublic')}</span>
+                              </>
+                            )
+                          : (
+                              <>
+                                <Globe className="size-4" />
+                                <span>{t('makePublic')}</span>
+                              </>
+                            )}
+                      </DropdownMenuItem>
+                    </>
+                  )}
             </DropdownMenuContent>
           </DropdownMenu>
         )}
 
-        {/* Three-dot menu - contains other actions (not share) */}
+        {/* Three-dot menu - contains other actions */}
         {!isPublicMode && (
           <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
             <Tooltip delayDuration={300}>
@@ -222,32 +263,30 @@ export function ChatThreadActions({ thread, slug, onDeleteClick, isPublicMode = 
               </TooltipContent>
             </Tooltip>
             <DropdownMenuContent side="bottom" align="end" className="w-56">
-              {/* Make Public/Private toggle */}
-              <DropdownMenuItem
-                onClick={handleTogglePublic}
-                disabled={togglePublicMutation.isPending}
-              >
-                {togglePublicMutation.isPending
-                  ? (
-                      <>
-                        <Loader2 className="size-4 animate-spin" />
-                        <span>{displayIsPublic ? t('makingPrivate') : t('makingPublic')}</span>
-                      </>
-                    )
-                  : displayIsPublic
-                    ? (
-                        <>
-                          <Lock className="size-4" />
-                          <span>{t('makePrivate')}</span>
-                        </>
-                      )
-                    : (
-                        <>
-                          <Globe className="size-4" />
-                          <span>{t('makePublic')}</span>
-                        </>
-                      )}
-              </DropdownMenuItem>
+              {/* Make Public/Private toggle - only show "Make Private" if already public */}
+              {displayIsPublic && (
+                <>
+                  <DropdownMenuItem
+                    onClick={handleTogglePublic}
+                    disabled={togglePublicMutation.isPending}
+                  >
+                    {togglePublicMutation.isPending
+                      ? (
+                          <>
+                            <Loader2 className="size-4 animate-spin" />
+                            <span>{t('makingPrivate')}</span>
+                          </>
+                        )
+                      : (
+                          <>
+                            <Lock className="size-4" />
+                            <span>{t('makePrivate')}</span>
+                          </>
+                        )}
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                </>
+              )}
 
               {/* Star/Favorite - with amber/yellow color */}
               <DropdownMenuItem

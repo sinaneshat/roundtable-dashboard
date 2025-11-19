@@ -732,6 +732,8 @@
     "makingPrivate": "Making private...",
     "makePublic": "Make Public",
     "makingPublic": "Making public...",
+    "makePublicAndShare": "Make public and share",
+    "makePublicFirstDescription": "Make this thread public to share it with others",
     "makePublicConfirmDescription": "Anyone with the link will be able to view this thread and its messages.",
     "makePublicConfirmTitle": "Make this thread public?",
     "moreOptions": "More options",

@@ -19,6 +19,7 @@ import { asc, eq } from 'drizzle-orm';
 import { ulid } from 'ulid';
 
 import { createError } from '@/api/common/error-handling';
+import { UIMessageRoles } from '@/api/core/enums';
 import { buildParticipantSystemPrompt } from '@/api/services/prompts.service';
 import { buildSearchContext } from '@/api/services/search-context-builder';
 import type { TypedLogger } from '@/api/types/logger';
@@ -349,8 +350,8 @@ export async function prepareValidatedMessages(
 
   // Ensure conversation ends with user message
   const lastModelMessage = modelMessages[modelMessages.length - 1];
-  if (!lastModelMessage || lastModelMessage.role !== 'user') {
-    const lastUserMessage = nonEmptyMessages.findLast(m => m.role === 'user');
+  if (!lastModelMessage || lastModelMessage.role !== UIMessageRoles.USER) {
+    const lastUserMessage = nonEmptyMessages.findLast(m => m.role === UIMessageRoles.USER);
     if (!lastUserMessage) {
       throw createError.badRequest('No valid user message found in conversation history');
     }
@@ -364,7 +365,7 @@ export async function prepareValidatedMessages(
       ...nonEmptyMessages,
       {
         id: `user-continuation-${ulid()}`,
-        role: 'user',
+        role: UIMessageRoles.USER,
         parts: [{ type: 'text', text: lastUserText.text }],
       },
     ]);
@@ -382,7 +383,7 @@ export async function prepareValidatedMessages(
  * @returns User query text or empty string
  */
 export function extractUserQuery(messages: UIMessage[]): string {
-  const lastUserMessage = messages.findLast(m => m.role === 'user');
+  const lastUserMessage = messages.findLast(m => m.role === UIMessageRoles.USER);
   if (!lastUserMessage)
     return '';
 

@@ -339,7 +339,7 @@ export default function ChatThreadScreen({
   //
   // Analysis orchestrator handles analyses separately (different polling intervals)
   const hasStreamingAnalysis = analyses.some(
-    a => a.status === 'pending' || a.status === 'streaming',
+    a => a.status === AnalysisStatuses.PENDING || a.status === AnalysisStatuses.STREAMING,
   );
 
   // Unified screen initialization with regeneration support

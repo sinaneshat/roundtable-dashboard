@@ -403,7 +403,7 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
     // We keep the flag set so this effect retries until streaming actually begins
     // The flag is only cleared when isStreaming becomes true (see effect below)
     chat.startRound(storeParticipants);
-  }, [waitingToStart, chat, storeParticipants, storeMessages, storePreSearches, storeThread, storeScreenMode, store]); // ✅ FIX: Added storeScreenMode dependency
+  }, [waitingToStart, chat.startRound, storeParticipants, storeMessages, storePreSearches, storeThread, storeScreenMode, store]); // ✅ FIX: Depend on chat.startRound instead of chat to detect when it becomes available
 
   // ✅ CRITICAL FIX: Clear waitingToStartStreaming flag when streaming actually begins
   // This separate effect watches for successful stream start and clears the flag

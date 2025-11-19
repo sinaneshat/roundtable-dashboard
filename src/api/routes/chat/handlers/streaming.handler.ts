@@ -15,6 +15,7 @@ import { and, asc, eq } from 'drizzle-orm';
 import { executeBatch } from '@/api/common/batch-operations';
 import { createError, structureAIProviderError } from '@/api/common/error-handling';
 import { createHandler } from '@/api/core';
+import { UIMessageRoles } from '@/api/core/enums';
 import { saveStreamedMessage } from '@/api/services/message-persistence.service';
 import { getModelById } from '@/api/services/models-config.service';
 import { initializeOpenRouter, openRouterService } from '@/api/services/openrouter.service';
@@ -267,7 +268,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
     // =========================================================================
     // STEP 9: Save New User Message (ONLY first participant)
     // =========================================================================
-    if ((message as UIMessage).role === 'user' && participantIndex === 0) {
+    if ((message as UIMessage).role === UIMessageRoles.USER && participantIndex === 0) {
       const lastMessage = message as UIMessage;
       const existsInDb = await db.query.chatMessage.findFirst({
         where: eq(tables.chatMessage.id, lastMessage.id),
@@ -836,7 +837,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
 
       // ✅ CRITICAL: Exclude assistant messages from current round
       // These are concurrent participant responses, not conversation history
-      if (m.role === 'assistant') {
+      if (m.role === UIMessageRoles.ASSISTANT) {
         const msgMeta = m.metadata as { roundNumber?: number } | undefined;
         if (msgMeta?.roundNumber === currentRoundNumber) {
           return false;

@@ -211,6 +211,172 @@ Participant streaming allowed to start
 
 ---
 
+## PART 3.5: STREAM COMPLETION DETECTION (CLOUDFLARE KV)
+
+### Overview
+
+**What It Is:** Lightweight system to detect when AI responses complete during page reloads
+**What It's NOT:** Full stream resumption with mid-stream reconnection
+**Storage:** Cloudflare KV (eventually consistent, 1-hour TTL)
+**Compatibility:** ✅ SAFE with abort/stop functionality (no conflicts)
+
+### How It Works
+
+**Stream Lifecycle Tracking:**
+```
+1. Backend marks stream as ACTIVE in KV when participant starts
+2. Frontend receives normal SSE stream (no buffering)
+3. Backend marks stream as COMPLETED when participant finishes
+4. On page reload: Frontend checks KV status
+5. If completed: Fetch final message from database
+```
+
+**What User Experiences:**
+
+**Normal Flow (no reload):**
+- User sees AI response streaming word-by-word
+- Response completes and saves to database
+- No status checks needed - everything in-memory
+
+**Page Reload During Streaming:**
+- User refreshes page while AI is responding
+- Frontend loads thread and checks for active streams
+- If stream completed: Shows completed message from database
+- If stream still active: Shows loading indicator until complete
+- Partial progress lost (no mid-stream resumption)
+
+**Behind the Scenes:**
+
+**Stream Status Endpoint:**
+```
+GET /api/v1/chat/threads/:threadId/streams/:streamId
+
+Responses:
+- 204 No Content: No stream exists or still streaming
+- 200 OK: Stream completed/failed (includes metadata)
+```
+
+**Stream ID Format:**
+```
+{threadId}_r{roundNumber}_p{participantIndex}
+
+Example: thread_abc123_r0_p0 (Round 0, Participant 0)
+```
+
+**KV Storage:**
+```typescript
+{
+  threadId: "thread_abc123",
+  roundNumber: 0,
+  participantIndex: 0,
+  status: "active" | "completed" | "failed",
+  messageId: "thread_abc123_r0_p0" (when completed),
+  createdAt: "2025-01-19T10:00:00Z",
+  completedAt: "2025-01-19T10:00:15Z" (when completed),
+  errorMessage: "..." (if failed)
+}
+```
+
+### Key Differences from Full Resumption
+
+**This Implementation (Stream Completion Detection):**
+- ✅ Detects when streams finish during page reload
+- ✅ Works with Cloudflare KV (eventually consistent)
+- ✅ Compatible with stop/abort functionality
+- ✅ Simple and reliable
+- ❌ Doesn't resume mid-stream (loses partial progress)
+- ❌ Doesn't buffer chunks
+
+**Full Resumption (NOT Implemented):**
+- ✅ Can resume from checkpoint mid-stream
+- ✅ Preserves partial progress
+- ❌ Requires Redis with pub/sub
+- ❌ Incompatible with abort/stop (browser abort breaks resumption)
+- ❌ Complex error handling
+- ❌ Not suitable for KV (eventually consistent)
+
+### Why This Approach?
+
+**Cloudflare KV Limitations:**
+- Eventually consistent (not strongly consistent like Redis)
+- No pub/sub mechanism for real-time updates
+- Better suited for status tracking than chunk buffering
+
+**Trade-offs Accepted:**
+- Lose partial progress on page reload (acceptable for 5-15s responses)
+- Simpler implementation (no chunk buffering complexity)
+- No abort conflicts (critical for UX - users need stop button)
+
+### Stop Button Compatibility
+
+**✅ NO CONFLICTS** - This implementation does NOT use `useChat({ resume: true })`
+
+**Why No Conflict:**
+```typescript
+// Our implementation (streaming.handler.ts:410-425)
+const { messages, stop } = useChat({
+  id: threadId,
+  transport,
+  // ✅ NO resume: true - default is false
+  // ✅ Stop button works perfectly
+  // ✅ Page reload detection via KV status checks
+});
+```
+
+**Official AI SDK Warning (Does Not Apply):**
+> "Stream resumption is not compatible with abort functionality. Closing a tab triggers abort signal that breaks resumption."
+
+**Our Status:** ✅ SAFE - We don't use resumption, so no abort conflict exists
+
+### Error Handling
+
+**Stream Failures:**
+- Status updates to `failed` in KV
+- Error message stored for debugging
+- Frontend shows error state to user
+- Retry button available for entire round
+
+**Network Issues:**
+- Page reload loses in-flight stream
+- User sees loading until stream completes or timeout
+- Completed messages always recoverable from database
+
+**Timeout Protection:**
+- KV entries expire after 1 hour
+- Prevents stale status from blocking future rounds
+- Graceful degradation if KV unavailable
+
+### Implementation Files
+
+**Backend:**
+- `src/api/routes/chat/handlers/streaming.handler.ts:625-817` - Stream lifecycle tracking
+- `src/api/routes/chat/handlers/stream-status.handler.ts` - Status check endpoint
+- `src/api/services/resumable-stream-kv.service.ts` - KV operations
+
+**Frontend:**
+- `src/hooks/utils/use-multi-participant-chat.ts` - Stream orchestration (NO resume:true)
+- Status checks happen via normal database queries (no special polling)
+
+**API Routes:**
+- `POST /api/v1/chat` - Streaming endpoint (marks streams active/completed)
+- `GET /api/v1/chat/threads/:threadId/streams/:streamId` - Status check
+
+### Testing
+
+**Scenarios Covered:**
+- Normal streaming without reload
+- Page reload during streaming
+- Stream completion detection
+- Multiple concurrent streams
+- Error state handling
+- Stop button interaction
+
+**Test Files:**
+- Stream lifecycle tracking tested in integration tests
+- No special "resumption" tests needed (we don't resume)
+
+---
+
 ## PART 4: ROUND ANALYSIS
 
 ### Analysis Trigger
@@ -943,6 +1109,23 @@ Use this checklist when adding new async features:
 ---
 
 ## VERSION HISTORY
+
+**Version 2.4** - Stream Completion Detection Documentation
+**Last Updated:** January 19, 2025
+**Changes:**
+- Added Part 3.5: Stream Completion Detection (Cloudflare KV)
+- Documented KV-based stream lifecycle tracking system
+- Clarified differences between stream completion detection vs. full resumption
+- Confirmed NO conflict with abort/stop functionality (we don't use `resume: true`)
+- Explained why full resumption not implemented (KV limitations, abort incompatibility)
+- Updated implementation file references for stream status tracking
+
+**Key Clarifications**:
+- ✅ Our system tracks stream completion, NOT mid-stream resumption
+- ✅ Compatible with stop button (no abort conflicts)
+- ✅ Cloudflare KV used for status tracking (1-hour TTL)
+- ❌ No chunk buffering (partial progress lost on reload)
+- ❌ No Redis/pub-sub requirement
 
 **Version 2.3** - Race Condition Test Implementation
 **Last Updated:** January 19, 2025

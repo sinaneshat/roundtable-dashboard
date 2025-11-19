@@ -24,6 +24,8 @@ import {
   ChatModeSchema,
   ErrorTypeSchema,
   FinishReasonSchema,
+  MessageRoles,
+  UIMessageRoles,
   WebSearchContentTypeSchema,
   WebSearchDepthSchema,
 } from '@/api/core/enums';
@@ -330,7 +332,7 @@ export type DbChangelogData = z.infer<typeof DbChangelogDataSchema>;
 export function isUserMessageMetadata(
   metadata: DbMessageMetadata,
 ): metadata is DbUserMessageMetadata {
-  return metadata.role === 'user';
+  return metadata.role === MessageRoles.USER;
 }
 
 /**
@@ -339,7 +341,7 @@ export function isUserMessageMetadata(
 export function isAssistantMessageMetadata(
   metadata: DbMessageMetadata,
 ): metadata is DbAssistantMessageMetadata {
-  return metadata.role === 'assistant';
+  return metadata.role === MessageRoles.ASSISTANT;
 }
 
 /**
@@ -348,7 +350,7 @@ export function isAssistantMessageMetadata(
 export function isPreSearchMessageMetadata(
   metadata: DbMessageMetadata,
 ): metadata is DbPreSearchMessageMetadata {
-  return metadata.role === 'system' && 'isPreSearch' in metadata && metadata.isPreSearch === true;
+  return metadata.role === UIMessageRoles.SYSTEM && 'isPreSearch' in metadata && metadata.isPreSearch === true;
 }
 
 /**
@@ -358,7 +360,7 @@ export function isPreSearchMessageMetadata(
 export function isParticipantMessageMetadata(
   metadata: DbMessageMetadata,
 ): metadata is DbAssistantMessageMetadata {
-  return metadata.role === 'assistant' && 'participantId' in metadata;
+  return metadata.role === MessageRoles.ASSISTANT && 'participantId' in metadata;
 }
 
 /**
