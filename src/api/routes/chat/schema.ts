@@ -1000,6 +1000,31 @@ export const RoundFeedbackDataSchema = chatRoundFeedbackSelectSchema
 export type RoundFeedbackData = z.infer<typeof RoundFeedbackDataSchema>;
 
 // ============================================================================
+// RESUMABLE STREAM SCHEMAS
+// ============================================================================
+
+/**
+ * Stream status response schema
+ * Used for checking if participant stream is active/completed for resumption
+ */
+export const StreamStateSchema = z.object({
+  threadId: z.string(),
+  roundNumber: RoundNumberSchema,
+  participantIndex: RoundNumberSchema,
+  status: z.enum(['active', 'completed', 'failed']),
+  messageId: z.string().nullable(),
+  createdAt: z.string().datetime(),
+  completedAt: z.string().datetime().nullable(),
+  errorMessage: z.string().nullable(),
+}).openapi('StreamState');
+
+export type StreamState = z.infer<typeof StreamStateSchema>;
+
+export const StreamStatusResponseSchema = createApiResponseSchema(StreamStateSchema).openapi('StreamStatusResponse');
+
+export type StreamStatusResponse = z.infer<typeof StreamStatusResponseSchema>;
+
+// ============================================================================
 // PRE-SEARCH STREAMING DATA SCHEMAS
 // ============================================================================
 // Following AI SDK v5 pattern for custom data streaming

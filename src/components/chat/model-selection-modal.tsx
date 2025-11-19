@@ -181,8 +181,8 @@ export function ModelSelectionModal({
 
   // Usage stats for custom role limits
   const { data: usageData } = useUsageStatsQuery();
-  const customRoleLimit = usageData?.success ? usageData.data.customRoles.limit : 0;
-  const customRoleRemaining = usageData?.success ? usageData.data.customRoles.remaining : 0;
+  const customRoleLimit = usageData?.data?.customRoles?.limit ?? 0;
+  const customRoleRemaining = usageData?.data?.customRoles?.remaining ?? 0;
   const canCreateCustomRoles = customRoleLimit > 0 && customRoleRemaining > 0;
 
   // Filter models based on search query

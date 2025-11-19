@@ -7,7 +7,7 @@
 [![Cloudflare Workers](https://img.shields.io/badge/Cloudflare-Workers-orange)](https://workers.cloudflare.com)
 [![React](https://img.shields.io/badge/React-19.1.0-61dafb)](https://reactjs.org)
 
-*Enterprise SaaS platform for AI collaboration. Multiple AI Models Brainstorm Together.*
+*Watch multiple models debate and brainstorm together*
 
 [Features](#-features) • [Quick Start](#-quick-start) • [Architecture](#-architecture) • [Documentation](#-documentation) • [Deployment](#-deployment)
 
@@ -17,7 +17,7 @@
 
 ## 📖 Overview
 
-Roundtable Platform is an enterprise-grade SaaS application designed for AI collaboration where multiple AI models brainstorm together. Built with cutting-edge web technologies and deployed on Cloudflare's global edge network, it provides lightning-fast performance, robust security, and comprehensive user management functionality.
+Roundtable Platform is an enterprise-grade SaaS application where you can watch multiple models debate and brainstorm together. Built with cutting-edge web technologies and deployed on Cloudflare's global edge network, it provides lightning-fast performance, robust security, and comprehensive user management functionality.
 
 ### 🎯 Key Highlights
 
@@ -58,6 +58,7 @@ Roundtable Platform is an enterprise-grade SaaS application designed for AI coll
 - **R2 Storage**: Object storage for files and assets
 - **KV Storage**: Low-latency key-value store for caching
 - **Email Services**: AWS SES integration for transactional emails
+- **Web Search**: AI-optimized query generation (3-8 keywords) for relevant results
 
 ### 🌐 Localization Features
 - **English-Only**: Streamlined English interface with dynamic translation keys
@@ -537,7 +538,7 @@ pnpm i18n:check-unused     # Find unused translation keys
 
 **Roundtable Platform**
 
-*Enterprise SaaS platform for AI collaboration. Multiple AI Models Brainstorm Together.*
+*Watch multiple models debate and brainstorm together*
 
 *Built by [Roundtable](https://roundtable.now/) for the AI collaboration community*
 

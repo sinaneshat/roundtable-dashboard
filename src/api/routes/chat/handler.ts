@@ -31,6 +31,9 @@ export {
   updateCustomRoleHandler,
 } from './handlers/role.handler';
 export {
+  getStreamStatusHandler,
+} from './handlers/stream-status.handler';
+export {
   streamChatHandler,
 } from './handlers/streaming.handler';
 export {

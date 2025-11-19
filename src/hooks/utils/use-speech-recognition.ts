@@ -18,6 +18,7 @@ type SpeechRecognition = {
 
 type SpeechRecognitionEvent = {
   results: SpeechRecognitionResultList;
+  resultIndex: number;
 };
 
 type SpeechRecognitionResultList = {
@@ -105,9 +106,16 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}) 
 
         // ✅ OFFICIAL PATTERN: Process from event.resultIndex onwards
         for (let i = event.resultIndex; i < event.results.length; i++) {
-          const transcript = event.results[i][0].transcript;
+          const result = event.results[i];
 
-          if (event.results[i].isFinal) {
+          // Type guard: Verify result exists
+          if (!result || !result[0]) {
+            continue;
+          }
+
+          const transcript = result[0].transcript;
+
+          if (result.isFinal) {
             // Append to session's final transcript
             if (sessionFinalTranscriptRef.current) {
               const needsSpace = !sessionFinalTranscriptRef.current.endsWith(' ');

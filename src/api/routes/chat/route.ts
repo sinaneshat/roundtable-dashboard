@@ -29,6 +29,7 @@ import {
   RoundFeedbackRequestSchema,
   SetRoundFeedbackResponseSchema,
   StreamChatRequestSchema,
+  StreamStatusResponseSchema,
   ThreadDetailResponseSchema,
   ThreadListQuerySchema,
   ThreadListResponseSchema,
@@ -799,6 +800,56 @@ export const getThreadFeedbackRoute = createRoute({
       content: {
         'application/json': { schema: GetThreadFeedbackResponseSchema },
       },
+    },
+    ...createProtectedRouteResponses(),
+  },
+});
+
+/**
+ * GET Stream Status Route - Check participant stream status for resumption
+ * ✅ RESUMABLE STREAMS: Check if participant stream is active/completed
+ */
+export const getStreamStatusRoute = createRoute({
+  method: 'get',
+  path: '/chat/threads/:threadId/streams/:streamId',
+  tags: ['chat'],
+  summary: 'Check participant stream status for resumption',
+  description: `Check if a participant stream is active, completed, or failed. Used by frontend to detect and resume ongoing streams after page reload.
+
+**Stream ID Format**: \`{threadId}_r{roundNumber}_p{participantIndex}\`
+
+**Response Codes**:
+- \`204 No Content\`: No stream exists or stream is still active (frontend should poll/wait)
+- \`200 OK\`: Stream completed or failed (includes stream metadata)
+
+**Usage Pattern**:
+1. Frontend detects page reload during streaming
+2. Calls this endpoint with stream ID
+3. If 204: Stream is active, wait or poll for completion
+4. If 200: Stream completed, fetch message from database
+
+**Example**: GET \`/chat/threads/thread_123/streams/thread_123_r0_p0\``,
+  request: {
+    params: z.object({
+      threadId: z.string().openapi({
+        description: 'Thread ID',
+        example: 'thread_abc123',
+      }),
+      streamId: z.string().openapi({
+        description: 'Stream ID (format: {threadId}_r{roundNumber}_p{participantIndex})',
+        example: 'thread_abc123_r0_p0',
+      }),
+    }),
+  },
+  responses: {
+    [HttpStatusCodes.OK]: {
+      description: 'Stream completed or failed - includes state metadata',
+      content: {
+        'application/json': { schema: StreamStatusResponseSchema },
+      },
+    },
+    [HttpStatusCodes.NO_CONTENT]: {
+      description: 'No stream exists or stream is still active',
     },
     ...createProtectedRouteResponses(),
   },

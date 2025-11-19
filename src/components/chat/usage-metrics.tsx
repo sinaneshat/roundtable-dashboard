@@ -20,9 +20,9 @@ export function UsageMetrics() {
   const t = useTranslations();
   const router = useRouter();
   const { data: usageData, isLoading, isError } = useUsageStatsQuery();
-  const threadsStatus = usageData?.success ? usageData.data.threads.status : 'default';
-  const messagesStatus = usageData?.success ? usageData.data.messages.status : 'default';
-  const analysisStatus = usageData?.success ? usageData.data.analysis.status : 'default';
+  const threadsStatus = usageData?.data?.threads?.status ?? 'default';
+  const messagesStatus = usageData?.data?.messages?.status ?? 'default';
+  const analysisStatus = usageData?.data?.analysis?.status ?? 'default';
   const isMaxedOut = threadsStatus === 'critical' || messagesStatus === 'critical' || analysisStatus === 'critical';
   const hasWarning = threadsStatus === 'warning' || messagesStatus === 'warning' || analysisStatus === 'warning' || isMaxedOut;
   if (isLoading) {

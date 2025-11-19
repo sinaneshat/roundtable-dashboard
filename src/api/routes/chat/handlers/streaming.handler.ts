@@ -32,6 +32,7 @@ import {
 } from '@/api/services/product-logic.service';
 import { buildParticipantSystemPrompt } from '@/api/services/prompts.service';
 import { handleRoundRegeneration } from '@/api/services/regeneration.service';
+import { markStreamActive, markStreamCompleted, markStreamFailed } from '@/api/services/resumable-stream-kv.service';
 import { calculateRoundNumber } from '@/api/services/round.service';
 import type { CloudflareAiBinding } from '@/api/services/streaming-orchestration.service';
 import {
@@ -619,6 +620,16 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
     await enforceMessageQuota(user.id);
     await incrementMessageUsage(user.id, 1);
 
+    // =========================================================================
+    // ✅ RESUMABLE STREAMS: Mark stream as active in KV for resume detection
+    // =========================================================================
+    await markStreamActive(
+      threadId,
+      currentRoundNumber,
+      participantIndex ?? DEFAULT_PARTICIPANT_INDEX,
+      c.env,
+    );
+
     // ✅ STREAM RESPONSE: Single stream with built-in AI SDK retry logic
     const finalResult = streamText({
       ...streamParams,
@@ -793,6 +804,17 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
         } catch {
           // Error in analytics setup - silently fail
         }
+
+        // =========================================================================
+        // ✅ RESUMABLE STREAMS: Mark stream as completed for resume detection
+        // =========================================================================
+        await markStreamCompleted(
+          threadId,
+          currentRoundNumber,
+          participantIndex ?? DEFAULT_PARTICIPANT_INDEX,
+          messageId,
+          c.env,
+        );
       },
     });
 
@@ -864,6 +886,20 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv> = c
       },
 
       onError: (error) => {
+        // =========================================================================
+        // ✅ RESUMABLE STREAMS: Mark stream as failed for resume detection
+        // =========================================================================
+        const errorMessage = error instanceof Error ? error.message : 'Unknown streaming error';
+        markStreamFailed(
+          threadId,
+          currentRoundNumber,
+          participantIndex ?? DEFAULT_PARTICIPANT_INDEX,
+          errorMessage,
+          c.env,
+        ).catch(() => {
+          // Silently fail - don't break error handling
+        });
+
         // ✅ PERFORMANCE OPTIMIZATION: Non-blocking error tracking
         // PostHog error tracking runs asynchronously via waitUntil()
         const trackError = async () => {

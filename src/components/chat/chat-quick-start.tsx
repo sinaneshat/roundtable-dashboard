@@ -27,7 +27,7 @@ type ChatQuickStartProps = {
 };
 export function ChatQuickStart({ onSuggestionClick, className }: ChatQuickStartProps) {
   const { data: usageData } = useUsageStatsQuery();
-  const userTier = (usageData?.success ? usageData.data.subscription.tier : 'free') as SubscriptionTier;
+  const userTier: SubscriptionTier = usageData?.data?.subscription?.tier ?? 'free';
   const { data: modelsResponse } = useModelsQuery();
 
   const allModels = useMemo(() => {

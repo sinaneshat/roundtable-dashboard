@@ -108,7 +108,7 @@ export function NavUser() {
       showApiErrorToast('Cancellation Failed', error);
     }
   };
-  const subscriptionTier = (usageData?.success ? usageData.data.subscription.tier : 'free') as SubscriptionTier;
+  const subscriptionTier: SubscriptionTier = usageData?.data?.subscription?.tier ?? 'free';
 
   return (
     <>
