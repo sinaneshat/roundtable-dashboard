@@ -52,20 +52,19 @@ declare global {
 }
 
 export type UseSpeechRecognitionOptions = {
-  onTranscript: (text: string) => void;
-  onInterimTranscript?: (text: string) => void;
   lang?: string;
   continuous?: boolean;
   enableAudioVisualization?: boolean;
 };
 
-export function useSpeechRecognition(options: UseSpeechRecognitionOptions) {
-  const { onTranscript, onInterimTranscript, lang = 'en-US', continuous = true, enableAudioVisualization = true } = options;
+export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}) {
+  const { lang = 'en-US', continuous = true, enableAudioVisualization = true } = options;
 
   const [isListening, setIsListening] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
   const [audioLevels, setAudioLevels] = useState<number[]>([]);
   const [interimTranscript, setInterimTranscript] = useState('');
+  const [finalTranscript, setFinalTranscript] = useState('');
   const [error, setError] = useState<string | null>(null);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -73,6 +72,7 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions) {
   const animationFrameRef = useRef<number | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const isListeningRef = useRef(false);
+  const sessionFinalTranscriptRef = useRef('');
 
   // Check browser support - only after mount to avoid hydration mismatch
   const isSupported = isMounted
@@ -101,29 +101,31 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions) {
       recognition.lang = lang;
 
       recognition.onresult = (event) => {
-        let interimTranscript = '';
+        let interim = '';
 
-        // ✅ OFFICIAL PATTERN: Use event.resultIndex (browser tells us where to start)
-        // Process all results from resultIndex onwards (new/updated results only)
+        // ✅ OFFICIAL PATTERN: Process from event.resultIndex onwards
         for (let i = event.resultIndex; i < event.results.length; i++) {
           const transcript = event.results[i][0].transcript;
 
           if (event.results[i].isFinal) {
-            // Final result - commit to permanent transcript
-            if (transcript.trim()) {
-              onTranscript(transcript.trim());
+            // Append to session's final transcript
+            if (sessionFinalTranscriptRef.current) {
+              const needsSpace = !sessionFinalTranscriptRef.current.endsWith(' ');
+              sessionFinalTranscriptRef.current = needsSpace
+                ? `${sessionFinalTranscriptRef.current} ${transcript}`
+                : `${sessionFinalTranscriptRef.current}${transcript}`;
+            } else {
+              sessionFinalTranscriptRef.current = transcript;
             }
+            setFinalTranscript(sessionFinalTranscriptRef.current);
           } else {
-            // Interim result - accumulate all interim text from this event
-            interimTranscript += transcript;
+            // Accumulate interim
+            interim += transcript;
           }
         }
 
-        // Update interim display (shows accumulated interim or clears if finalized)
-        setInterimTranscript(interimTranscript);
-        if (onInterimTranscript) {
-          onInterimTranscript(interimTranscript);
-        }
+        // Update interim
+        setInterimTranscript(interim);
       };
 
       recognition.onerror = (event) => {
@@ -143,6 +145,8 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions) {
 
       recognition.onstart = () => {
         setError(null);
+        // DON'T reset - let it accumulate across sessions
+        setInterimTranscript('');
       };
 
       recognition.onend = () => {
@@ -171,7 +175,7 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions) {
         }
       }
     };
-  }, [isSupported, continuous, lang, onTranscript, onInterimTranscript]);
+  }, [isSupported, continuous, lang]);
 
   // Audio visualization using Web Audio API
   useEffect(() => {
@@ -302,14 +306,22 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions) {
     }
   }, [isListening, start, stop]);
 
+  const reset = useCallback(() => {
+    sessionFinalTranscriptRef.current = '';
+    setFinalTranscript('');
+    setInterimTranscript('');
+  }, []);
+
   return {
     isListening,
     isSupported,
     start,
     stop,
     toggle,
+    reset,
     audioLevels,
     interimTranscript,
+    finalTranscript,
     error,
   };
 }

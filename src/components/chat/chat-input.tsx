@@ -3,7 +3,7 @@ import type { ChatStatus } from 'ai';
 import { ArrowUp, Mic, Square, StopCircle } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import type { FormEvent } from 'react';
-import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
+import { memo, useEffect, useMemo, useRef } from 'react';
 
 import type { ParticipantConfig } from '@/components/chat/chat-form-schemas';
 import { QuotaAlertExtension } from '@/components/chat/quota-alert-extension';
@@ -115,93 +115,52 @@ export const ChatInput = memo(({
   // Mobile keyboard handling: Simple scroll into view on focus
   useKeyboardAwareScroll(textareaRef, { enabled: true });
 
-  // Speech recognition
-  // ✅ PATTERN: Separate final and interim transcripts (react-speech-recognition pattern)
-  // finalTranscript = all finalized speech results (never changes once set)
-  // interimTranscript = current unfinal speech (changes as user speaks)
-  // display = finalTranscript + interimTranscript (always)
-  const finalTranscriptRef = useRef('');
-  const currentInterimRef = useRef('');
-  const isListeningRef = useRef(false);
-
-  const handleFinalTranscript = useCallback((text: string) => {
-    const trimmedText = text.trim();
-    if (trimmedText) {
-      // ✅ Append to final transcript with proper spacing
-      if (finalTranscriptRef.current) {
-        const needsSpace = !finalTranscriptRef.current.endsWith(' ');
-        finalTranscriptRef.current = needsSpace
-          ? `${finalTranscriptRef.current} ${trimmedText}`
-          : `${finalTranscriptRef.current}${trimmedText}`;
-      } else {
-        finalTranscriptRef.current = trimmedText;
-      }
-
-      // Clear interim since it just got finalized
-      currentInterimRef.current = '';
-
-      // Display only final (interim is empty now)
-      onChange(finalTranscriptRef.current);
-    }
-  }, [onChange]);
-
-  const handleInterimTranscript = useCallback((interim: string) => {
-    // Store current interim
-    currentInterimRef.current = interim.trim();
-
-    // ✅ ALWAYS display: finalTranscript + interimTranscript
-    // Never try to strip or detect - just combine them
-    if (currentInterimRef.current) {
-      const needsSpace = finalTranscriptRef.current && !finalTranscriptRef.current.endsWith(' ');
-      const fullText = needsSpace
-        ? `${finalTranscriptRef.current} ${currentInterimRef.current}`
-        : `${finalTranscriptRef.current}${currentInterimRef.current}`;
-      onChange(fullText);
-    } else {
-      // No interim, show only final
-      onChange(finalTranscriptRef.current);
-    }
-  }, [onChange]);
+  // Speech recognition - simple pattern: base text + hook's accumulated transcripts
+  const baseTextRef = useRef('');
 
   const {
     isListening,
     isSupported: isSpeechSupported,
     toggle: toggleSpeech,
+    reset: resetTranscripts,
     audioLevels,
+    finalTranscript,
+    interimTranscript,
   } = useSpeechRecognition({
-    onTranscript: handleFinalTranscript,
-    onInterimTranscript: handleInterimTranscript,
     continuous: true,
     enableAudioVisualization: true,
   });
 
-  // Update listening ref and initialize transcripts when recording starts/stops
+  // When recording starts, save what was already there and reset hook
   const prevIsListening = useRef(false);
   useEffect(() => {
-    const wasListening = prevIsListening.current;
-    const isNowListening = isListening;
+    if (!prevIsListening.current && isListening) {
+      baseTextRef.current = value;
+      resetTranscripts(); // Clear hook's accumulated transcripts
+    }
+    prevIsListening.current = isListening;
+  }, [isListening, value, resetTranscripts]);
 
-    // Only process on listening state transitions
-    if (wasListening === isNowListening) {
+  // Real-time display: baseText + finalTranscript (from hook) + interimTranscript
+  useEffect(() => {
+    if (!isListening)
       return;
+
+    const parts = [baseTextRef.current, finalTranscript, interimTranscript].filter(Boolean);
+    const displayText = parts.join(' ').trim();
+
+    if (displayText !== value) {
+      onChange(displayText);
     }
+  }, [isListening, finalTranscript, interimTranscript, value, onChange]);
 
-    isListeningRef.current = isNowListening;
-
-    // ✅ When recording STARTS, capture current input as initial final transcript
-    if (!wasListening && isNowListening) {
-      finalTranscriptRef.current = value;
-      currentInterimRef.current = '';
+  // When stopped, keep the final result
+  useEffect(() => {
+    if (prevIsListening.current && !isListening) {
+      const parts = [baseTextRef.current, finalTranscript].filter(Boolean);
+      onChange(parts.join(' ').trim());
     }
-
-    // ✅ When recording STOPS, sync final transcript with current value
-    if (wasListening && !isNowListening) {
-      finalTranscriptRef.current = value;
-      currentInterimRef.current = '';
-    }
-
-    prevIsListening.current = isNowListening;
-  }, [isListening, value]);
+  }, [isListening, finalTranscript, onChange]);
 
   // AI SDK v5 Pattern: Use requestAnimationFrame for focus after DOM renders
   useEffect(() => {
@@ -291,12 +250,7 @@ export const ChatInput = memo(({
                 ref={textareaRef}
                 value={value}
                 onChange={(e) => {
-                  const newValue = e.target.value;
-                  onChange(newValue);
-                  // ✅ FIX: Always update refs on manual typing, even during listening
-                  // This ensures manual edits are preserved and speech continues to build on them
-                  finalTranscriptRef.current = newValue;
-                  currentInterimRef.current = '';
+                  onChange(e.target.value);
                 }}
                 onKeyDown={handleKeyDown}
                 disabled={isDisabled}
