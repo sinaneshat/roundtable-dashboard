@@ -2,6 +2,7 @@
 
 import { CreditCard, ExternalLink, Loader2 } from 'lucide-react';
 import { motion } from 'motion/react';
+import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 
@@ -50,6 +51,7 @@ export function PricingContent({
   showSubscriptionBanner = false,
 }: PricingContentProps) {
   const t = useTranslations();
+  const router = useRouter();
   const [selectedInterval, setSelectedInterval] = useState<UIBillingInterval>('month');
 
   // Get active subscription (excluding canceled or scheduled for cancellation)
@@ -109,7 +111,7 @@ export function PricingContent({
         <div className="text-center space-y-3">
           <p className="text-sm font-medium text-destructive">{t('common.error')}</p>
           <p className="text-xs text-muted-foreground">{t('plans.errorDescription')}</p>
-          <Button variant="outline" size="sm" onClick={() => window.location.reload()}>
+          <Button variant="outline" size="sm" onClick={() => router.refresh()}>
             {t('states.error.retry')}
           </Button>
         </div>

@@ -150,7 +150,7 @@ export function BillingFailureClient({ failureData }: BillingFailureClientProps)
         {}
         <StaggerItem className="flex w-full flex-col items-center gap-3 sm:flex-row sm:justify-center">
           <Button
-            onClick={() => router.push('/chat/pricing')}
+            onClick={() => router.replace('/chat/pricing')}
             size="lg"
             className="w-full sm:w-auto sm:min-w-[200px]"
           >
@@ -158,7 +158,7 @@ export function BillingFailureClient({ failureData }: BillingFailureClientProps)
           </Button>
 
           <Button
-            onClick={() => router.push('/chat')}
+            onClick={() => router.replace('/chat')}
             variant="outline"
             size="lg"
             className="w-full sm:w-auto sm:min-w-[200px]"

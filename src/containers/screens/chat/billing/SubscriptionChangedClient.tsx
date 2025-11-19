@@ -75,7 +75,7 @@ function SubscriptionChangedContent() {
       return;
 
     if (countdown <= 0) {
-      router.push('/chat');
+      router.replace('/chat');
       return;
     }
 
@@ -113,7 +113,7 @@ function SubscriptionChangedContent() {
 
           <StaggerItem className="flex flex-col items-center gap-4">
             <Button
-              onClick={() => router.push('/chat/pricing')}
+              onClick={() => router.replace('/chat/pricing')}
               size="lg"
               className="min-w-[200px]"
             >
@@ -387,14 +387,14 @@ function SubscriptionChangedContent() {
 
         <StaggerItem className="flex flex-col sm:flex-row items-center gap-4">
           <Button
-            onClick={() => router.push('/chat')}
+            onClick={() => router.replace('/chat')}
             size="lg"
             className="min-w-[200px]"
           >
             {t('billing.success.startChat')}
           </Button>
           <Button
-            onClick={() => router.push('/chat/pricing')}
+            onClick={() => router.replace('/chat/pricing')}
             variant="outline"
             size="lg"
             className="min-w-[200px]"
