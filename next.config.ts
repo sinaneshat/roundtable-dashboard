@@ -106,36 +106,6 @@ const nextConfig: NextConfig = {
         ],
       },
       {
-        // Scalar API documentation - needs permissive CSP
-        source: '/api/v1/scalar',
-        headers: [
-          {
-            key: 'Content-Security-Policy',
-            value: [
-              'default-src \'self\' \'unsafe-inline\' \'unsafe-eval\' data: blob:',
-              'script-src \'self\' \'unsafe-inline\' \'unsafe-eval\' https://cdn.jsdelivr.net https://unpkg.com https://cdnjs.cloudflare.com',
-              'style-src \'self\' \'unsafe-inline\' https://fonts.googleapis.com https://cdn.jsdelivr.net https://unpkg.com',
-              'font-src \'self\' https://fonts.gstatic.com https://cdn.jsdelivr.net',
-              'img-src \'self\' data: blob: https:',
-              'connect-src \'self\' https: wss: ws:',
-              'worker-src \'self\' blob:',
-              'child-src \'self\' blob:',
-              'frame-ancestors \'none\'',
-              'base-uri \'self\'',
-              'form-action \'self\'',
-            ].join('; '),
-          },
-          {
-            key: 'X-Frame-Options',
-            value: 'DENY',
-          },
-          {
-            key: 'X-Content-Type-Options',
-            value: 'nosniff',
-          },
-        ],
-      },
-      {
         // API routes - no cache by default (handled by middleware)
         source: '/api/:path*',
         headers: [
@@ -146,8 +116,8 @@ const nextConfig: NextConfig = {
         ],
       },
       {
-        // Basic security headers for all routes except Scalar
-        source: '/((?!api/v1/scalar).*)',
+        // Default security headers for all routes
+        source: '/:path*',
         headers: [
           {
             key: 'X-Content-Type-Options',
@@ -172,6 +142,28 @@ const nextConfig: NextConfig = {
               'worker-src \'self\' blob: https://*.posthog.com https://us.posthog.com https://eu.posthog.com https://us-assets.i.posthog.com https://internal-j.posthog.com',
               'font-src \'self\' data: https://*.posthog.com https://us.posthog.com https://eu.posthog.com https://us-assets.i.posthog.com https://internal-j.posthog.com',
               'frame-src \'self\' https://*.posthog.com https://us.posthog.com https://eu.posthog.com https://us-assets.i.posthog.com https://internal-j.posthog.com',
+              'frame-ancestors \'none\'',
+              'base-uri \'self\'',
+              'form-action \'self\'',
+            ].join('; '),
+          },
+        ],
+      },
+      {
+        // Scalar API documentation - permissive CSP override (must come after default)
+        source: '/api/v1/scalar',
+        headers: [
+          {
+            key: 'Content-Security-Policy',
+            value: [
+              'default-src \'self\' \'unsafe-inline\' \'unsafe-eval\' data: blob:',
+              'script-src \'self\' \'unsafe-inline\' \'unsafe-eval\' https://cdn.jsdelivr.net https://unpkg.com https://cdnjs.cloudflare.com',
+              'style-src \'self\' \'unsafe-inline\' https://fonts.googleapis.com https://cdn.jsdelivr.net https://unpkg.com',
+              'font-src \'self\' https://fonts.gstatic.com https://cdn.jsdelivr.net',
+              'img-src \'self\' data: blob: https:',
+              'connect-src \'self\' https: wss: ws:',
+              'worker-src \'self\' blob:',
+              'child-src \'self\' blob:',
               'frame-ancestors \'none\'',
               'base-uri \'self\'',
               'form-action \'self\'',
