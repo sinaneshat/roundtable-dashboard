@@ -91,13 +91,13 @@ describe('web Search Schema Validation', () => {
       expect(result.success).toBe(true);
     });
 
-    it('should validate sourceCount range (1-5)', () => {
+    it('should validate sourceCount range (1-10)', () => {
       const testCases = [
         { sourceCount: 0, shouldPass: false },
         { sourceCount: 1, shouldPass: true },
-        { sourceCount: 3, shouldPass: true },
         { sourceCount: 5, shouldPass: true },
-        { sourceCount: 6, shouldPass: false },
+        { sourceCount: 10, shouldPass: true },
+        { sourceCount: 11, shouldPass: false },
       ];
 
       testCases.forEach(({ sourceCount, shouldPass }) => {

@@ -33,6 +33,8 @@ import { ChatStoreContext, ChatStoreProvider } from '../chat-store-provider';
 // Mock next-intl
 vi.mock('next-intl', () => ({
   useTranslations: () => (key: string) => key,
+  useLocale: () => 'en',
+  NextIntlClientProvider: ({ children }: { children: unknown; locale?: string; messages?: unknown }) => children,
 }));
 
 // Mock next/navigation

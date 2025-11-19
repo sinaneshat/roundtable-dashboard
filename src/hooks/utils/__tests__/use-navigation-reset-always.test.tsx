@@ -10,11 +10,14 @@
  * - Should immediately navigate to /chat
  */
 
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { renderHook } from '@testing-library/react';
 import { usePathname } from 'next/navigation';
-import { describe, expect, it, vi } from 'vitest';
+import type { ReactNode } from 'react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useChatStore } from '@/components/providers/chat-store-provider';
+import type { ChatStore } from '@/stores/chat/store-schemas';
 
 import { useNavigationReset } from '../use-navigation-reset';
 
@@ -30,17 +33,42 @@ vi.mock('@/components/providers/chat-store-provider', () => ({
 
 describe('useNavigationReset - Always Reset Behavior', () => {
   const mockResetToNewChat = vi.fn();
+  let queryClient: QueryClient;
 
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(useChatStore).mockReturnValue(mockResetToNewChat);
+
+    // Create fresh QueryClient for each test
+    queryClient = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+        mutations: { retry: false },
+      },
+    });
+
+    // Mock useChatStore to return mock function
+    vi.mocked(useChatStore).mockImplementation(<T,>(selector: (state: ChatStore) => T): T => {
+      const mockState = {
+        resetToNewChat: mockResetToNewChat,
+        thread: null,
+        createdThreadId: null,
+      } as unknown as ChatStore;
+      return selector(mockState);
+    });
   });
+
+  // Wrapper component to provide QueryClient
+  const createWrapper = () => {
+    return function Wrapper({ children }: { children: ReactNode }) {
+      return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
+    };
+  };
 
   it('should reset state when called from /chat (overview screen)', () => {
     // Simulate being on /chat (overview screen)
     vi.mocked(usePathname).mockReturnValue('/chat');
 
-    const { result } = renderHook(() => useNavigationReset());
+    const { result } = renderHook(() => useNavigationReset(), { wrapper: createWrapper() });
 
     // Call the reset handler
     result.current();
@@ -53,7 +81,7 @@ describe('useNavigationReset - Always Reset Behavior', () => {
     // Simulate being on thread screen
     vi.mocked(usePathname).mockReturnValue('/chat/some-thread-slug');
 
-    const { result } = renderHook(() => useNavigationReset());
+    const { result } = renderHook(() => useNavigationReset(), { wrapper: createWrapper() });
 
     // Call the reset handler
     result.current();
@@ -66,7 +94,7 @@ describe('useNavigationReset - Always Reset Behavior', () => {
     // Simulate being on /chat
     vi.mocked(usePathname).mockReturnValue('/chat');
 
-    const { result } = renderHook(() => useNavigationReset());
+    const { result } = renderHook(() => useNavigationReset(), { wrapper: createWrapper() });
 
     // Call multiple times (user clicking "New Chat" repeatedly)
     result.current();
@@ -90,7 +118,7 @@ describe('useNavigationReset - Always Reset Behavior', () => {
       mockResetToNewChat.mockClear();
       vi.mocked(usePathname).mockReturnValue(path);
 
-      const { result } = renderHook(() => useNavigationReset());
+      const { result } = renderHook(() => useNavigationReset(), { wrapper: createWrapper() });
       result.current();
 
       // ✅ Should reset from ANY path
@@ -101,7 +129,7 @@ describe('useNavigationReset - Always Reset Behavior', () => {
   it('should return stable callback reference', () => {
     vi.mocked(usePathname).mockReturnValue('/chat');
 
-    const { result, rerender } = renderHook(() => useNavigationReset());
+    const { result, rerender } = renderHook(() => useNavigationReset(), { wrapper: createWrapper() });
 
     const firstCallback = result.current;
     rerender();
@@ -119,7 +147,7 @@ describe('useNavigationReset - Always Reset Behavior', () => {
           vi.mocked(usePathname).mockReturnValue(pathname);
           return useNavigationReset();
         },
-        { initialProps: { pathname: '/chat/thread-1' } },
+        { initialProps: { pathname: '/chat/thread-1' }, wrapper: createWrapper() },
       );
 
       mockResetToNewChat.mockClear();
@@ -138,7 +166,7 @@ describe('useNavigationReset - Always Reset Behavior', () => {
           vi.mocked(usePathname).mockReturnValue(pathname);
           return useNavigationReset();
         },
-        { initialProps: { pathname: '/chat' } },
+        { initialProps: { pathname: '/chat' }, wrapper: createWrapper() },
       );
 
       mockResetToNewChat.mockClear();
@@ -157,7 +185,7 @@ describe('useNavigationReset - Always Reset Behavior', () => {
           vi.mocked(usePathname).mockReturnValue(pathname);
           return useNavigationReset();
         },
-        { initialProps: { pathname: '/chat/thread-1' } },
+        { initialProps: { pathname: '/chat/thread-1' }, wrapper: createWrapper() },
       );
 
       mockResetToNewChat.mockClear();

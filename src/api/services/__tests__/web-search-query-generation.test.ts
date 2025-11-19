@@ -12,9 +12,12 @@
  * Pattern follows: Vitest + AI SDK v5 testing patterns
  */
 
+import { streamObject } from 'ai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { WebSearchComplexities, WebSearchDepths } from '@/api/core/enums';
+import { simpleOptimizeQuery } from '@/api/services/query-optimizer.service';
+import { streamSearchQuery } from '@/api/services/web-search.service';
 import type { ApiEnv } from '@/api/types';
 
 // Mock AI SDK v5
@@ -54,17 +57,13 @@ describe('web Search Query Generation', () => {
       const expectedPattern = /react.*state.*management.*best.*practices/i;
       const shouldNotContain = ['what', 'are', 'the', 'for'];
 
-      // Import after mocks are set up
-      const { streamSearchQuery } = await import('@/api/services/web-search.service');
-      const { streamObject } = await import('ai');
-
-      // Mock AI response with optimized query
+      // Mock AI response with optimized query (SHORT and keyword-focused)
       (streamObject as ReturnType<typeof vi.fn>).mockReturnValue({
         partialObjectStream: (async function* () {
-          yield { query: 'React state management best practices 2025' };
+          yield { query: 'React state management best practices' };
         })(),
         object: Promise.resolve({
-          query: 'React state management best practices 2025',
+          query: 'React state management best practices',
           complexity: WebSearchComplexities.BASIC,
           rationale: 'Optimized search for state management best practices',
           sourceCount: 3,
@@ -87,21 +86,18 @@ describe('web Search Query Generation', () => {
     });
 
     it('should remove question words from queries', async () => {
-      const { streamSearchQuery } = await import('@/api/services/web-search.service');
-      const { streamObject } = await import('ai');
-
       const testCases = [
         {
           input: 'How do I set up Docker on Ubuntu?',
-          expectedOptimized: 'Docker Ubuntu installation setup tutorial 2025',
+          expectedOptimized: 'Docker Ubuntu setup guide',
         },
         {
           input: 'Why should I use TypeScript?',
-          expectedOptimized: 'TypeScript benefits advantages comparison JavaScript 2025',
+          expectedOptimized: 'TypeScript benefits vs JavaScript',
         },
         {
           input: 'Where can I find TypeScript documentation?',
-          expectedOptimized: 'TypeScript official documentation guide',
+          expectedOptimized: 'TypeScript documentation',
         },
       ];
 
@@ -136,10 +132,8 @@ describe('web Search Query Generation', () => {
       // This test verifies the fix is in place
 
       const userInput = 'What are the latest trends in AI?';
-      const { simpleOptimizeQuery } = await import('@/api/services/query-optimizer.service');
 
       // Simulate AI generation failure
-      const { streamObject } = await import('ai');
       const mockError = new Error('AI generation failed');
       const rejectedPromise = Promise.reject(mockError);
       rejectedPromise.catch(() => {}); // Prevent unhandled rejection
@@ -150,8 +144,6 @@ describe('web Search Query Generation', () => {
         })(),
         object: rejectedPromise,
       });
-
-      const { streamSearchQuery } = await import('@/api/services/web-search.service');
 
       try {
         await streamSearchQuery(userInput, mockEnv);
@@ -174,8 +166,6 @@ describe('web Search Query Generation', () => {
     it('should optimize query even in simple fallback mode', async () => {
       // ✅ THIS IS THE FIX: Simple query optimization function
       // This is what should be used in fallback instead of raw user input
-
-      const { simpleOptimizeQuery } = await import('@/api/services/query-optimizer.service');
 
       const testCases = [
         {
@@ -204,9 +194,6 @@ describe('web Search Query Generation', () => {
 
   describe('query Validation', () => {
     it('should validate generated query is not empty', async () => {
-      const { streamSearchQuery } = await import('@/api/services/web-search.service');
-      const { streamObject } = await import('ai');
-
       // Mock empty query generation (should fail validation)
       (streamObject as ReturnType<typeof vi.fn>).mockReturnValue({
         partialObjectStream: (async function* () {
@@ -230,9 +217,6 @@ describe('web Search Query Generation', () => {
     });
 
     it('should validate generated query is different from user input', async () => {
-      const { streamSearchQuery } = await import('@/api/services/web-search.service');
-      const { streamObject } = await import('ai');
-
       const userInput = 'React state management';
 
       // Mock AI returning exact user input (should be optimized)
@@ -269,7 +253,6 @@ describe('web Search Query Generation', () => {
       // when AI query generation fails
 
       const userInput = 'What are the best practices for React hooks?';
-      const { simpleOptimizeQuery } = await import('@/api/services/query-optimizer.service');
 
       // ✅ FIXED IMPLEMENTATION (using simpleOptimizeQuery):
       const optimizedQuery = simpleOptimizeQuery(userInput);

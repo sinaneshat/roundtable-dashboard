@@ -6,66 +6,30 @@
  * 2. WebSearchToggle calls onToggle when clicked
  * 3. PreSearchCard renders for PENDING status (shows loading)
  * 4. PreSearchCard renders for STREAMING status (shows stream component)
- * 5. PreSearchCard renders for COMPLETED status (shows results panel)
+ * 5. PreSearchCard renders for COMPLETED status (shows results via PreSearchStream)
  * 6. PreSearchCard renders for FAILED status (shows error)
- * 7. PreSearchPanel displays search results correctly
+ * 7. PreSearchStream displays search results correctly for COMPLETE status
  *
  * Pattern follows: Testing Library best practices
  */
 
 import userEvent from '@testing-library/user-event';
+import React from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { AnalysisStatuses } from '@/api/core/enums';
 import { createMockMessages, createMockPreSearch, createMockSearchData, render, screen } from '@/lib/testing';
 
 import { PreSearchCard } from '../pre-search-card';
-import { PreSearchPanel } from '../pre-search-panel';
+import { PreSearchStream } from '../pre-search-stream';
 import { WebSearchToggle } from '../web-search-toggle';
 
-// Mock next-intl
-vi.mock('next-intl', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('next-intl')>();
-  return {
-    ...actual,
-    useTranslations: (namespace?: string) => (key: string) => {
-      // Namespaced translations (e.g., useTranslations('chat.webSearch'))
-      const namespacedTranslations: Record<string, Record<string, string>> = {
-        'chat.webSearch': {
-          'title': 'Web Search',
-          'description.enabled': 'Web search is enabled',
-          'description.disabled': 'Web search is disabled',
-        },
-      };
+// ✅ REMOVED: Mock next-intl - TestProviders already provides NextIntlClientProvider with real messages
+// The mock was redundant and could cause conflicts
 
-      // Full-path translations (e.g., useTranslations() with 'chat.preSearch.title')
-      const fullPathTranslations: Record<string, string> = {
-        'chat.preSearch.title': 'Pre-Search Results',
-        'chat.preSearch.searching': 'Searching...',
-        'chat.preSearch.error': 'Failed',
-        'chat.preSearch.retry': 'Retry',
-        'chat.preSearch.steps.searchingDesc': 'Searching the web...',
-      };
-
-      if (namespace && namespacedTranslations[namespace]) {
-        return namespacedTranslations[namespace][key] || key;
-      }
-
-      return fullPathTranslations[key] || key;
-    },
-  };
-});
-
-// Mock chat store provider
-vi.mock('@/components/providers/chat-store-provider', () => ({
-  useChatStore: (selector: (state: { updatePreSearchStatus: () => void; updatePreSearchData: () => void }) => unknown) => {
-    const mockStore = {
-      updatePreSearchStatus: vi.fn(),
-      updatePreSearchData: vi.fn(),
-    };
-    return selector ? selector(mockStore) : mockStore;
-  },
-}));
+// ✅ REMOVED: Mock chat store provider - TestProviders already provides real ChatStoreProvider
+// The test was failing because vi.mock didn't export ChatStoreProvider, causing TestProviders to fail
+// Since these tests don't interact with store actions, the real provider works fine
 
 // Mock query client
 vi.mock('@/lib/data/query-client', () => ({
@@ -162,10 +126,10 @@ describe('web Search UI Components', () => {
         { messages: createMockMessages() },
       );
 
-      // Should show "Pre-Search Results" heading
-      expect(screen.getByText(/pre-search results/i)).toBeInTheDocument();
+      // Should show "Web Research" heading (actual translation from chat.preSearch.title)
+      expect(screen.getByText(/web research/i)).toBeInTheDocument();
 
-      // Should show "Searching..." badge
+      // Should show "Searching" badge (actual translation from chat.preSearch.searching)
       expect(screen.getByText(/searching/i)).toBeInTheDocument();
     });
 
@@ -183,7 +147,7 @@ describe('web Search UI Components', () => {
         { messages: createMockMessages() },
       );
 
-      expect(screen.getByText(/pre-search results/i)).toBeInTheDocument();
+      expect(screen.getByText(/web research/i)).toBeInTheDocument();
       expect(screen.getByText(/searching/i)).toBeInTheDocument();
     });
 
@@ -203,7 +167,7 @@ describe('web Search UI Components', () => {
         { messages: createMockMessages() },
       );
 
-      expect(screen.getByText(/pre-search results/i)).toBeInTheDocument();
+      expect(screen.getByText(/web research/i)).toBeInTheDocument();
 
       // Should show search queries
       expect(screen.getByText('Test query 1')).toBeInTheDocument();
@@ -224,17 +188,22 @@ describe('web Search UI Components', () => {
         { messages: createMockMessages() },
       );
 
-      expect(screen.getByText(/pre-search results/i)).toBeInTheDocument();
-      expect(screen.getByText(/failed/i)).toBeInTheDocument();
+      expect(screen.getByText(/web research/i)).toBeInTheDocument();
+      // Error badge shows "Error" text (from chat.preSearch.error)
+      expect(screen.getByText(/error/i)).toBeInTheDocument();
     });
   });
 
-  describe('preSearchPanel - Results Display', () => {
+  describe('preSearchStream - Results Display (COMPLETE status)', () => {
     it('should display search results correctly', () => {
       const searchData = createMockSearchData({ numQueries: 2, includeResults: true });
+      const preSearch = createMockPreSearch({
+        status: AnalysisStatuses.COMPLETE,
+        searchData,
+      });
 
       render(
-        <PreSearchPanel preSearch={searchData} />,
+        <PreSearchStream threadId="thread-1" preSearch={preSearch} />,
         { messages: createMockMessages() },
       );
 
@@ -253,21 +222,29 @@ describe('web Search UI Components', () => {
 
     it('should show result count for each query', () => {
       const searchData = createMockSearchData({ numQueries: 1, includeResults: true });
+      const preSearch = createMockPreSearch({
+        status: AnalysisStatuses.COMPLETE,
+        searchData,
+      });
 
       render(
-        <PreSearchPanel preSearch={searchData} />,
+        <PreSearchStream threadId="thread-1" preSearch={preSearch} />,
         { messages: createMockMessages() },
       );
 
       // Each mock search has 2 results
-      expect(screen.getByText(/2 sources found/i)).toBeInTheDocument();
+      expect(screen.getByText(/2 sources/i)).toBeInTheDocument();
     });
 
     it('should show response time badges', () => {
       const searchData = createMockSearchData({ numQueries: 1, includeResults: true });
+      const preSearch = createMockPreSearch({
+        status: AnalysisStatuses.COMPLETE,
+        searchData,
+      });
 
       render(
-        <PreSearchPanel preSearch={searchData} />,
+        <PreSearchStream threadId="thread-1" preSearch={preSearch} />,
         { messages: createMockMessages() },
       );
 
@@ -277,9 +254,13 @@ describe('web Search UI Components', () => {
 
     it('should render nothing when no results', () => {
       const searchData = { queries: [], results: [] };
+      const preSearch = createMockPreSearch({
+        status: AnalysisStatuses.COMPLETE,
+        searchData,
+      });
 
       const { container } = render(
-        <PreSearchPanel preSearch={searchData} />,
+        <PreSearchStream threadId="thread-1" preSearch={preSearch} />,
         { messages: createMockMessages() },
       );
 
@@ -288,9 +269,13 @@ describe('web Search UI Components', () => {
 
     it('should show search depth badges (basic/advanced)', () => {
       const searchData = createMockSearchData({ numQueries: 2, includeResults: true });
+      const preSearch = createMockPreSearch({
+        status: AnalysisStatuses.COMPLETE,
+        searchData,
+      });
 
       render(
-        <PreSearchPanel preSearch={searchData} />,
+        <PreSearchStream threadId="thread-1" preSearch={preSearch} />,
         { messages: createMockMessages() },
       );
 
@@ -300,7 +285,7 @@ describe('web Search UI Components', () => {
     });
   });
 
-  describe('preSearchPanel - Edge Cases', () => {
+  describe('preSearchStream - Edge Cases', () => {
     it('should handle empty results array gracefully', () => {
       const searchData = {
         queries: [
@@ -314,9 +299,13 @@ describe('web Search UI Components', () => {
         ],
         results: [],
       };
+      const preSearch = createMockPreSearch({
+        status: AnalysisStatuses.COMPLETE,
+        searchData,
+      });
 
       const { container } = render(
-        <PreSearchPanel preSearch={searchData} />,
+        <PreSearchStream threadId="thread-1" preSearch={preSearch} />,
         { messages: createMockMessages() },
       );
 
@@ -351,9 +340,13 @@ describe('web Search UI Components', () => {
           },
         ],
       };
+      const preSearch = createMockPreSearch({
+        status: AnalysisStatuses.COMPLETE,
+        searchData,
+      });
 
       render(
-        <PreSearchPanel preSearch={searchData} />,
+        <PreSearchStream threadId="thread-1" preSearch={preSearch} />,
         { messages: createMockMessages() },
       );
 
@@ -366,12 +359,16 @@ describe('web Search UI Components', () => {
     });
   });
 
-  describe('preSearchPanel - Multiple Searches Separator', () => {
+  describe('preSearchStream - Multiple Searches Separator', () => {
     it('should show separators between multiple searches', () => {
       const searchData = createMockSearchData({ numQueries: 3, includeResults: true });
+      const preSearch = createMockPreSearch({
+        status: AnalysisStatuses.COMPLETE,
+        searchData,
+      });
 
       render(
-        <PreSearchPanel preSearch={searchData} />,
+        <PreSearchStream threadId="thread-1" preSearch={preSearch} />,
         { messages: createMockMessages() },
       );
 

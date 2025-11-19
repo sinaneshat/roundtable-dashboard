@@ -218,9 +218,8 @@ describe('thread Title Generation - Blocking/Synchronous Pattern', () => {
         const { title, slug } = await updateThreadTitleAndSlug(thread.id, aiTitle);
         thread.title = title;
         thread.slug = slug;
-      } catch (error) {
+      } catch {
         // Silent failure - keep default "New Chat" title
-        console.error('Failed to generate title:', error);
       }
 
       // ✅ VERIFY: Title generation was attempted
@@ -249,9 +248,8 @@ describe('thread Title Generation - Blocking/Synchronous Pattern', () => {
         const { title, slug } = await updateThreadTitleAndSlug(thread.id, aiTitle);
         thread.title = title;
         thread.slug = slug;
-      } catch (error) {
+      } catch {
         // Silent failure - keep default title
-        console.error('Failed to update title:', error);
       }
 
       // ✅ VERIFY: Both functions were called
@@ -281,9 +279,8 @@ describe('thread Title Generation - Blocking/Synchronous Pattern', () => {
         thread.slug = slug;
         const db = await getDbAsync();
         await invalidateThreadCache(db, 'user-123');
-      } catch (error) {
+      } catch {
         // Silent failure
-        console.error('Failed during title generation:', error);
       }
 
       // ✅ VERIFY: All functions were called
@@ -295,25 +292,27 @@ describe('thread Title Generation - Blocking/Synchronous Pattern', () => {
       expect(thread.title).toBe('Title');
     });
 
-    it('should log errors without throwing', async () => {
-      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-
+    it('should handle errors without throwing', async () => {
       vi.mocked(generateTitleFromMessage).mockRejectedValue(new Error('Complete failure'));
 
-      // ✅ BLOCKING: Error logged but doesn't throw
+      const thread = {
+        id: 'thread-123',
+        title: 'New Chat',
+        slug: 'new-chat',
+      };
+
+      // ✅ BLOCKING: Error doesn't throw (silent failure)
       try {
-        await generateTitleFromMessage('Test', mockEnv);
-      } catch (error) {
-        console.error('Failed to generate title:', error);
+        const aiTitle = await generateTitleFromMessage('Test', mockEnv);
+        const { title, slug } = await updateThreadTitleAndSlug(thread.id, aiTitle);
+        thread.title = title;
+        thread.slug = slug;
+      } catch {
+        // Silent failure - keep default title
       }
 
-      // ✅ VERIFY: Error was logged
-      expect(consoleErrorSpy).toHaveBeenCalledWith(
-        'Failed to generate title:',
-        expect.any(Error),
-      );
-
-      consoleErrorSpy.mockRestore();
+      // ✅ VERIFY: Thread keeps default title
+      expect(thread.title).toBe('New Chat');
     });
   });
 

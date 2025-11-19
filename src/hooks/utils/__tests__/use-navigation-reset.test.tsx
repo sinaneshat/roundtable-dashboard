@@ -9,9 +9,11 @@
  * - Browser back/forward navigation
  */
 
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { renderHook } from '@testing-library/react';
 import type { AppRouterInstance } from 'next/dist/shared/lib/app-router-context.shared-runtime';
 import { usePathname, useRouter } from 'next/navigation';
+import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useChatStore } from '@/components/providers/chat-store-provider';
@@ -35,10 +37,19 @@ vi.mock('@/components/providers/chat-store-provider', () => ({
 describe('useNavigationReset Hook', () => {
   let mockRouterPush: ReturnType<typeof vi.fn>;
   let mockPathnameValue: string;
+  let queryClient: QueryClient;
 
   beforeEach(() => {
     // Reset all mocks
     vi.clearAllMocks();
+
+    // Create fresh QueryClient for each test
+    queryClient = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+        mutations: { retry: false },
+      },
+    });
 
     // Setup router mock
     mockRouterPush = vi.fn();
@@ -59,14 +70,23 @@ describe('useNavigationReset Hook', () => {
     vi.mocked(useChatStore).mockImplementation(<T,>(selector: (state: ChatStore) => T): T => {
       const mockState = {
         resetToNewChat: mockResetToNewChat,
+        thread: null,
+        createdThreadId: null,
       } as unknown as ChatStore;
       return selector(mockState);
     });
   });
 
+  // Wrapper component to provide QueryClient
+  const createWrapper = () => {
+    return function Wrapper({ children }: { children: ReactNode }) {
+      return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
+    };
+  };
+
   describe('manual Reset Callback', () => {
     it('should return a callback function', () => {
-      const { result } = renderHook(() => useNavigationReset());
+      const { result } = renderHook(() => useNavigationReset(), { wrapper: createWrapper() });
 
       expect(typeof result.current).toBe('function');
     });
@@ -76,7 +96,7 @@ describe('useNavigationReset Hook', () => {
       mockPathnameValue = '/chat/existing-thread';
       vi.mocked(usePathname).mockReturnValue(mockPathnameValue);
 
-      const { result } = renderHook(() => useNavigationReset());
+      const { result } = renderHook(() => useNavigationReset(), { wrapper: createWrapper() });
 
       // Call the callback (simulating link click)
       result.current();
@@ -90,7 +110,7 @@ describe('useNavigationReset Hook', () => {
       mockPathnameValue = '/chat';
       vi.mocked(usePathname).mockReturnValue(mockPathnameValue);
 
-      const { result } = renderHook(() => useNavigationReset());
+      const { result } = renderHook(() => useNavigationReset(), { wrapper: createWrapper() });
 
       // Call the callback (simulating link click on /chat)
       result.current();
@@ -102,7 +122,7 @@ describe('useNavigationReset Hook', () => {
     });
 
     it('should be stable across renders', () => {
-      const { result, rerender } = renderHook(() => useNavigationReset());
+      const { result, rerender } = renderHook(() => useNavigationReset(), { wrapper: createWrapper() });
 
       const firstCallback = result.current;
       rerender();
@@ -119,7 +139,7 @@ describe('useNavigationReset Hook', () => {
       mockPathnameValue = '/chat/some-thread';
       vi.mocked(usePathname).mockReturnValue(mockPathnameValue);
 
-      const { rerender } = renderHook(() => useNavigationReset());
+      const { rerender } = renderHook(() => useNavigationReset(), { wrapper: createWrapper() });
 
       // Initially no reset
       expect(mockResetToNewChat).not.toHaveBeenCalled();
@@ -139,7 +159,7 @@ describe('useNavigationReset Hook', () => {
       mockPathnameValue = '/chat';
       vi.mocked(usePathname).mockReturnValue(mockPathnameValue);
 
-      const { rerender } = renderHook(() => useNavigationReset());
+      const { rerender } = renderHook(() => useNavigationReset(), { wrapper: createWrapper() });
 
       // Navigate again (still /chat)
       rerender();
@@ -153,7 +173,7 @@ describe('useNavigationReset Hook', () => {
       mockPathnameValue = '/chat/thread-1';
       vi.mocked(usePathname).mockReturnValue(mockPathnameValue);
 
-      const { rerender } = renderHook(() => useNavigationReset());
+      const { rerender } = renderHook(() => useNavigationReset(), { wrapper: createWrapper() });
 
       // Navigate to thread 2
       mockPathnameValue = '/chat/thread-2';
@@ -172,7 +192,7 @@ describe('useNavigationReset Hook', () => {
       mockPathnameValue = '/chat/some-thread';
       vi.mocked(usePathname).mockReturnValue(mockPathnameValue);
 
-      const { rerender } = renderHook(() => useNavigationReset());
+      const { rerender } = renderHook(() => useNavigationReset(), { wrapper: createWrapper() });
 
       // Browser back to /chat
       mockPathnameValue = '/chat';
@@ -191,7 +211,7 @@ describe('useNavigationReset Hook', () => {
       mockPathnameValue = '/chat';
       vi.mocked(usePathname).mockReturnValue(mockPathnameValue);
 
-      renderHook(() => useNavigationReset());
+      renderHook(() => useNavigationReset(), { wrapper: createWrapper() });
 
       // Should NOT reset on initial render when already on /chat
       expect(mockResetToNewChat).not.toHaveBeenCalled();
@@ -202,7 +222,7 @@ describe('useNavigationReset Hook', () => {
       mockPathnameValue = '/pricing';
       vi.mocked(usePathname).mockReturnValue(mockPathnameValue);
 
-      const { rerender } = renderHook(() => useNavigationReset());
+      const { rerender } = renderHook(() => useNavigationReset(), { wrapper: createWrapper() });
 
       // Rapid navigation: pricing -> thread -> /chat
       mockPathnameValue = '/chat/thread';
@@ -221,7 +241,7 @@ describe('useNavigationReset Hook', () => {
       mockPathnameValue = '/chat/thread';
       vi.mocked(usePathname).mockReturnValue(mockPathnameValue);
 
-      const { unmount } = renderHook(() => useNavigationReset());
+      const { unmount } = renderHook(() => useNavigationReset(), { wrapper: createWrapper() });
 
       // Should not throw on unmount
       expect(() => unmount()).not.toThrow();
@@ -245,7 +265,7 @@ describe('useNavigationReset Hook', () => {
       mockPathnameValue = '/chat/test-thread';
       vi.mocked(usePathname).mockReturnValue(mockPathnameValue);
 
-      const { result } = renderHook(() => useNavigationReset());
+      const { result } = renderHook(() => useNavigationReset(), { wrapper: createWrapper() });
 
       // Verify initial state
       expect(store.getState().thread).toBeDefined();
