@@ -233,40 +233,24 @@ app.use('*', contextStorage());
 // ============================================================================
 // ⚠️ IMPORTANT: Content-Security-Policy (CSP) Architecture
 //
-// CSP is handled SEPARATELY for API routes vs Next.js pages:
+// CSP is DISABLED for API routes because they return JSON, not HTML.
+// Only the /scalar route has CSP because it returns an HTML page.
 //
-// 📍 API Routes (/api/*): Hono handles CSP (this file)
-//   - Hono responses bypass Next.js header processing in Cloudflare Workers
-//   - Default strict CSP is set below for most API routes
-//   - Scalar docs route has permissive CSP override (see /scalar route below)
-//
+// 📍 API Routes (/api/*): No CSP needed (JSON responses)
+// 📍 Scalar Route (/api/v1/scalar): Permissive CSP for docs UI (see below)
 // 📍 Next.js Pages: next.config.ts handles CSP
-//   - Strict CSP for all non-API routes with PostHog allowlist
-//   - See next.config.ts headers() function
 //
-// ✅ What Hono's secureHeaders() provides:
-//   - Content-Security-Policy (strict default)
+// ✅ What Hono's secureHeaders() provides (with CSP disabled):
 //   - X-Content-Type-Options: nosniff
 //   - X-Frame-Options: DENY
 //   - X-XSS-Protection: 1; mode=block
 //   - Referrer-Policy: no-referrer
 //   - Strict-Transport-Security (when HTTPS)
 //
-// 🔧 To modify API CSP: Edit secureHeaders() below, NOT next.config.ts
+// 🔧 To modify Scalar CSP: Edit the /scalar middleware below
 // ============================================================================
 app.use('*', secureHeaders({
-  contentSecurityPolicy: {
-    defaultSrc: ['\'self\''],
-    scriptSrc: ['\'self\''],
-    styleSrc: ['\'self\'', '\'unsafe-inline\''],
-    imgSrc: ['\'self\'', 'data:', 'blob:', 'https:'],
-    fontSrc: ['\'self\'', 'data:'],
-    connectSrc: ['\'self\'', 'https://www.google.com', 'https://*.posthog.com', 'https://us.posthog.com'],
-    workerSrc: ['\'self\'', 'blob:'],
-    frameAncestors: ['\'none\''],
-    formAction: ['\'self\''],
-    baseUri: ['\'self\''],
-  },
+  contentSecurityPolicy: {}, // Empty object disables CSP - not needed for JSON APIs
 }));
 
 app.use('*', requestId());

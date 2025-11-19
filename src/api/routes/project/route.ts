@@ -1,4 +1,4 @@
-import { createRoute } from '@hono/zod-openapi';
+import { createRoute, z } from '@hono/zod-openapi';
 import * as HttpStatusCodes from 'stoker/http-status-codes';
 
 import { StandardApiResponses } from '@/api/core/response-schemas';
@@ -240,7 +240,11 @@ export const deleteKnowledgeFileRoute = createRoute({
   description: 'Delete a knowledge file from project',
   request: {
     params: IdParamSchema.extend({
-      fileId: IdParamSchema.shape.id,
+      fileId: z.string().openapi({
+        param: { name: 'fileId', in: 'path' },
+        description: 'Knowledge file identifier',
+        example: 'file_abc123',
+      }),
     }),
   },
   responses: {
