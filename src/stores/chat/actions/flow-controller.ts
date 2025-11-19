@@ -20,11 +20,11 @@
 'use client';
 
 import { useQueryClient } from '@tanstack/react-query';
+import { useRouter } from 'next/navigation';
 import { startTransition, useEffect, useMemo, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
 import { AnalysisStatuses } from '@/api/core/enums';
-import { navigateToThread } from '@/app/(app)/chat/actions';
 import { useChatStore } from '@/components/providers/chat-store-provider';
 import { useThreadSlugStatusQuery } from '@/hooks/queries/chat/threads';
 import { queryKeys } from '@/lib/data/query-keys';
@@ -47,6 +47,7 @@ export type UseFlowControllerOptions = {
 export function useFlowController(options: UseFlowControllerOptions = {}) {
   const { enabled = true } = options;
   const queryClient = useQueryClient();
+  const router = useRouter();
 
   // State selectors
   const streamingState = useChatStore(useShallow(s => ({
@@ -292,9 +293,10 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
         // The merge logic in useThreadAnalysesQuery already preserves cached analyses
         // that aren't on server yet, so invalidation is unnecessary and harmful here.
 
-        // Use server action for proper cache revalidation before navigation
         startTransition(() => {
-          void navigateToThread(slug);
+          queueMicrotask(() => {
+            router.push(`/chat/${slug}`);
+          });
         });
       }
     }
@@ -309,5 +311,6 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
     hasUpdatedThread,
     threadState.createdThreadId,
     queryClient,
+    router,
   ]);
 }
