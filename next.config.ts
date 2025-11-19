@@ -149,28 +149,9 @@ const nextConfig: NextConfig = {
           },
         ],
       },
-      {
-        // Scalar API documentation - permissive CSP override (must come after default)
-        source: '/api/v1/scalar',
-        headers: [
-          {
-            key: 'Content-Security-Policy',
-            value: [
-              'default-src \'self\' \'unsafe-inline\' \'unsafe-eval\' data: blob:',
-              'script-src \'self\' \'unsafe-inline\' \'unsafe-eval\' https://cdn.jsdelivr.net https://unpkg.com https://cdnjs.cloudflare.com',
-              'style-src \'self\' \'unsafe-inline\' https://fonts.googleapis.com https://cdn.jsdelivr.net https://unpkg.com',
-              'font-src \'self\' https://fonts.gstatic.com https://cdn.jsdelivr.net',
-              'img-src \'self\' data: blob: https:',
-              'connect-src \'self\' https: wss: ws:',
-              'worker-src \'self\' blob:',
-              'child-src \'self\' blob:',
-              'frame-ancestors \'none\'',
-              'base-uri \'self\'',
-              'form-action \'self\'',
-            ].join('; '),
-          },
-        ],
-      },
+      // Note: API routes (/api/*) CSP is handled by Hono middleware, not Next.js
+      // This is because Hono responses bypass Next.js header processing in Cloudflare Workers
+      // See: src/api/index.ts for API-specific CSP configuration
     ];
   },
 

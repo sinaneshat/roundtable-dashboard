@@ -229,29 +229,44 @@ app.use('*', trimTrailingSlash());
 // Core middleware
 app.use('*', contextStorage());
 
-// Security headers: CSP disabled in Hono - handled by Next.js
+// Security headers configuration
 // ============================================================================
-// ⚠️ IMPORTANT: Content-Security-Policy (CSP) Configuration
+// ⚠️ IMPORTANT: Content-Security-Policy (CSP) Architecture
 //
-// CSP is DISABLED in Hono middleware and handled exclusively by Next.js.
-// This prevents header conflicts and allows route-specific CSP policies.
+// CSP is handled SEPARATELY for API routes vs Next.js pages:
 //
-// 📍 CSP Configuration Location: next.config.ts (lines 149-181)
-//   - Default strict CSP for all routes (with PostHog allowlist)
-//   - Permissive CSP for Scalar API docs (/api/v1/scalar)
-//   - Route-specific CSP via headers() function
+// 📍 API Routes (/api/*): Hono handles CSP (this file)
+//   - Hono responses bypass Next.js header processing in Cloudflare Workers
+//   - Default strict CSP is set below for most API routes
+//   - Scalar docs route has permissive CSP override (see /scalar route below)
 //
-// ✅ What Hono's secureHeaders() STILL provides (with CSP disabled):
+// 📍 Next.js Pages: next.config.ts handles CSP
+//   - Strict CSP for all non-API routes with PostHog allowlist
+//   - See next.config.ts headers() function
+//
+// ✅ What Hono's secureHeaders() provides:
+//   - Content-Security-Policy (strict default)
 //   - X-Content-Type-Options: nosniff
 //   - X-Frame-Options: DENY
 //   - X-XSS-Protection: 1; mode=block
 //   - Referrer-Policy: no-referrer
 //   - Strict-Transport-Security (when HTTPS)
 //
-// 🔧 To modify CSP: Edit next.config.ts headers() function, NOT here
+// 🔧 To modify API CSP: Edit secureHeaders() below, NOT next.config.ts
 // ============================================================================
 app.use('*', secureHeaders({
-  contentSecurityPolicy: {}, // Empty object disables CSP - Next.js handles it
+  contentSecurityPolicy: {
+    defaultSrc: ['\'self\''],
+    scriptSrc: ['\'self\''],
+    styleSrc: ['\'self\'', '\'unsafe-inline\''],
+    imgSrc: ['\'self\'', 'data:', 'blob:', 'https:'],
+    fontSrc: ['\'self\'', 'data:'],
+    connectSrc: ['\'self\'', 'https://www.google.com', 'https://*.posthog.com', 'https://us.posthog.com'],
+    workerSrc: ['\'self\'', 'blob:'],
+    frameAncestors: ['\'none\''],
+    formAction: ['\'self\''],
+    baseUri: ['\'self\''],
+  },
 }));
 
 app.use('*', requestId());
@@ -624,6 +639,40 @@ appRoutes.get('/openapi.json', async (c) => {
 // ============================================================================
 
 // Scalar API documentation UI
+// CSP headers set directly in Hono since Next.js headers() don't apply to Hono routes in Cloudflare Workers
+// Middleware to set permissive CSP for Scalar before the response is generated
+appRoutes.use('/scalar', async (c, next) => {
+  await next();
+
+  // Get the response that was set
+  const response = c.res;
+
+  // Permissive CSP for Scalar API documentation
+  const csp = [
+    'default-src \'self\' \'unsafe-inline\' \'unsafe-eval\' data: blob:',
+    'script-src \'self\' \'unsafe-inline\' \'unsafe-eval\' https://cdn.jsdelivr.net https://unpkg.com https://cdnjs.cloudflare.com',
+    'style-src \'self\' \'unsafe-inline\' https://fonts.googleapis.com https://cdn.jsdelivr.net https://unpkg.com',
+    'font-src \'self\' https://fonts.gstatic.com https://cdn.jsdelivr.net',
+    'img-src \'self\' data: blob: https:',
+    'connect-src \'self\' https: wss: ws:',
+    'worker-src \'self\' blob:',
+    'child-src \'self\' blob:',
+    'frame-ancestors \'none\'',
+    'base-uri \'self\'',
+    'form-action \'self\'',
+  ].join('; ');
+
+  // Clone response with new CSP header
+  const newHeaders = new Headers(response.headers);
+  newHeaders.set('Content-Security-Policy', csp);
+
+  c.res = new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers: newHeaders,
+  });
+});
+
 appRoutes.get('/scalar', Scalar({
   url: '/api/v1/doc',
 }));
