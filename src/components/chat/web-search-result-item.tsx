@@ -15,7 +15,7 @@ import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { FadeInText, TypingText } from '@/components/ui/typing-text';
 import { cn } from '@/lib/ui/cn';
-import { buildGoogleFaviconUrl, safeExtractDomain } from '@/lib/utils';
+import { buildGoogleFaviconUrl, handleImageError, safeExtractDomain } from '@/lib/utils';
 
 export function WebSearchResultItem({
   result,
@@ -83,18 +83,20 @@ export function WebSearchResultItem({
           )
         : (
             <Avatar className="size-6 flex-shrink-0 mt-0.5">
-              <AvatarImage
-                src={faviconSrc || ''}
-                alt={cleanDomain}
-                role="img"
-                onError={() => {
-                  if (!faviconError) {
-                    setFaviconError(true);
-                  } else {
-                    setFallbackFaviconError(true);
-                  }
-                }}
-              />
+              {faviconSrc && (
+                <AvatarImage
+                  src={faviconSrc}
+                  alt={cleanDomain}
+                  role="img"
+                  onError={e => handleImageError(e, () => {
+                    if (!faviconError) {
+                      setFaviconError(true);
+                    } else {
+                      setFallbackFaviconError(true);
+                    }
+                  })}
+                />
+              )}
               <AvatarFallback className="bg-muted/30 text-muted-foreground" role="img" aria-label={cleanDomain}>
                 <Globe className="size-3" aria-hidden="true" />
               </AvatarFallback>
@@ -173,9 +175,9 @@ export function WebSearchResultItem({
               alt={result.title}
               className="w-full h-auto max-h-40 object-cover"
               loading="lazy"
-              onError={(e) => {
+              onError={e => handleImageError(e, () => {
                 e.currentTarget.style.display = 'none';
-              }}
+              })}
             />
           </div>
         )}

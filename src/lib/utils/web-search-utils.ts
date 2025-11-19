@@ -72,3 +72,29 @@ export function buildGoogleFaviconUrl(domain: string, size = 64): string {
   const cleanDomain = isValidUrl(domain) ? safeExtractDomain(domain, domain) : domain;
   return `https://www.google.com/s2/favicons?domain=${cleanDomain}&sz=${size}`;
 }
+
+/**
+ * Handles image load errors by suppressing console errors
+ * and optionally triggering a fallback action
+ *
+ * @param event - Image error event
+ * @param onFallback - Optional callback to trigger fallback behavior
+ *
+ * @example
+ * ```tsx
+ * <img
+ *   src={imageUrl}
+ *   onError={(e) => handleImageError(e, () => setImageFailed(true))}
+ * />
+ * ```
+ */
+export function handleImageError(
+  event: React.SyntheticEvent<HTMLImageElement>,
+  onFallback?: () => void,
+): void {
+  // Prevent default error propagation to console
+  event.preventDefault();
+
+  // Trigger fallback behavior if provided
+  onFallback?.();
+}

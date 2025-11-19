@@ -114,11 +114,44 @@ const serwist = new Serwist({
       }),
     },
 
-    // External resources - Stale While Revalidate
+    // Google Favicons - Network First with fallback
+    {
+      matcher: ({ url }) => url.origin === 'https://www.google.com' && url.pathname.startsWith('/s2/favicons'),
+      handler: new NetworkFirst({
+        cacheName: 'google-favicons',
+        networkTimeoutSeconds: 3,
+        plugins: [
+          {
+            handlerDidError: async () => {
+              // Silently fail for favicons - UI handles fallback
+              return null;
+            },
+            fetchDidFail: async () => {
+              // Suppress fetch errors for favicons
+              return undefined;
+            },
+          },
+        ],
+      }),
+    },
+
+    // External resources - Stale While Revalidate with error handling
     {
       matcher: ({ url, sameOrigin }) => !sameOrigin && url.protocol === 'https:',
       handler: new StaleWhileRevalidate({
         cacheName: 'external-cache',
+        plugins: [
+          {
+            handlerDidError: async () => {
+              // Return null for failed external resources
+              return null;
+            },
+            fetchDidFail: async () => {
+              // Suppress console errors for failed external fetches
+              return undefined;
+            },
+          },
+        ],
       }),
     },
   ],
