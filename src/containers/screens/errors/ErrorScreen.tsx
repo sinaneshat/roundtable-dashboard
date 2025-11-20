@@ -1,7 +1,7 @@
 'use client';
 
 import { AlertTriangle, RefreshCw } from 'lucide-react';
-import { useTranslations } from 'next-intl';
+import { NextIntlClientProvider, useTranslations } from 'next-intl';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -12,17 +12,15 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from '@/components/ui/empty';
+import messages from '@/i18n/locales/en/common.json';
 
 type ErrorScreenProps = {
   error: Error & { digest?: string };
   reset: () => void;
 };
 
-export default function ErrorScreen({ error: _error, reset }: ErrorScreenProps) {
+function ErrorScreenContent({ reset }: { reset: () => void }) {
   const t = useTranslations();
-
-  // Error logging is handled by Next.js error boundary automatically
-  // No need for useEffect here
 
   return (
     <div className="flex min-h-dvh items-center justify-center bg-gradient-to-br from-background via-muted/30 to-background px-4 py-12">
@@ -46,5 +44,13 @@ export default function ErrorScreen({ error: _error, reset }: ErrorScreenProps) 
         </EmptyContent>
       </Empty>
     </div>
+  );
+}
+
+export default function ErrorScreen({ error: _error, reset }: ErrorScreenProps) {
+  return (
+    <NextIntlClientProvider messages={messages} locale="en" timeZone="UTC">
+      <ErrorScreenContent reset={reset} />
+    </NextIntlClientProvider>
   );
 }

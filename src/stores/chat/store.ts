@@ -92,14 +92,18 @@ import { applyRecommendedAction as applyRecommendedActionLogic } from './actions
 import type { SendMessage, StartRound } from './store-action-types';
 import {
   ANALYSIS_DEFAULTS,
+  ANALYSIS_STATE_RESET,
   CALLBACKS_DEFAULTS,
   COMPLETE_RESET_STATE,
   DATA_DEFAULTS,
   FEEDBACK_DEFAULTS,
   FLAGS_DEFAULTS,
   FORM_DEFAULTS,
+  PENDING_MESSAGE_STATE_RESET,
   PRESEARCH_DEFAULTS,
+  REGENERATION_STATE_RESET,
   SCREEN_DEFAULTS,
+  STREAMING_STATE_RESET,
   THREAD_DEFAULTS,
   THREAD_RESET_STATE,
   TRACKING_DEFAULTS,
@@ -731,13 +735,11 @@ const createOperationsSlice: StateCreator<
 
   prepareForNewMessage: (message: string, participantIds: string[]) =>
     set(state => ({
-      // ✅ CRITICAL FIX: Clear streaming flags before preparing new message
-      // If previous round's flags weren't properly cleared, this ensures clean state
+      // ✅ TYPE-SAFE: Use reset groups to ensure ALL flags are cleared
+      // This prevents bugs where individual fields are forgotten
+      ...STREAMING_STATE_RESET,
+      ...REGENERATION_STATE_RESET,
       isCreatingAnalysis: false,
-      isRegenerating: false,
-      streamingRoundNumber: null,
-      regeneratingRoundNumber: null,
-      currentRoundNumber: null,
       // Prepare new message state
       isWaitingForChangelog: true,
       pendingMessage: message,
@@ -749,30 +751,37 @@ const createOperationsSlice: StateCreator<
 
   completeStreaming: () =>
     set({
-      isCreatingAnalysis: false,
-      isRegenerating: false,
-      streamingRoundNumber: null,
-      regeneratingRoundNumber: null,
-      currentRoundNumber: null,
+      // ✅ TYPE-SAFE: Use reset groups to ensure ALL streaming/analysis flags are cleared
+      // This prevents infinite loops when both provider and flow-state-machine call completeStreaming
+      ...STREAMING_STATE_RESET,
+      ...ANALYSIS_STATE_RESET,
+      ...PENDING_MESSAGE_STATE_RESET,
+      ...REGENERATION_STATE_RESET,
     }, false, 'operations/completeStreaming'),
 
   startRegeneration: (roundNumber: number) => {
-    const { clearAnalysisTracking } = get();
+    const { clearAnalysisTracking, clearPreSearchTracking } = get();
     clearAnalysisTracking(roundNumber);
+    clearPreSearchTracking(roundNumber);
     set({
+      // ✅ TYPE-SAFE: Clear all streaming state before starting regeneration
+      ...STREAMING_STATE_RESET,
+      ...ANALYSIS_STATE_RESET,
+      ...PENDING_MESSAGE_STATE_RESET,
+      // Then set regeneration-specific state
       isRegenerating: true,
-      isCreatingAnalysis: false,
       regeneratingRoundNumber: roundNumber,
-      streamingRoundNumber: null,
     }, false, 'operations/startRegeneration');
   },
 
   completeRegeneration: (_roundNumber: number) =>
     set({
-      isRegenerating: false,
-      regeneratingRoundNumber: null,
-      streamingRoundNumber: null,
-      currentRoundNumber: null,
+      // ✅ TYPE-SAFE: Clear ALL streaming/analysis/pending/regeneration flags
+      // This was CRITICAL bug - was only clearing 4 fields, blocking next round
+      ...STREAMING_STATE_RESET,
+      ...ANALYSIS_STATE_RESET,
+      ...PENDING_MESSAGE_STATE_RESET,
+      ...REGENERATION_STATE_RESET,
     }, false, 'operations/completeRegeneration'),
 
   /**

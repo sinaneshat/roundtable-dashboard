@@ -144,6 +144,53 @@ export const SCREEN_DEFAULTS = {
 } as const;
 
 // ============================================================================
+// TYPE-SAFE STATE RESET GROUPS
+// ============================================================================
+// These groups ensure that when resetting related state, ALL fields are included.
+// Using these groups prevents bugs where individual fields are forgotten.
+// TypeScript will error if these don't match the store schema.
+
+/**
+ * All streaming-related flags that must be cleared together
+ * Used when streaming completes (participants or analysis)
+ */
+export const STREAMING_STATE_RESET = {
+  isStreaming: false,
+  streamingRoundNumber: null as number | null,
+  currentRoundNumber: null as number | null,
+  waitingToStartStreaming: false,
+  currentParticipantIndex: 0,
+} as const;
+
+/**
+ * Analysis creation flags
+ * Used when analysis creation/streaming completes
+ */
+export const ANALYSIS_STATE_RESET = {
+  isCreatingAnalysis: false,
+  isWaitingForChangelog: false,
+} as const;
+
+/**
+ * Pending message state that must be cleared after message is sent
+ * Used when a message is fully processed
+ */
+export const PENDING_MESSAGE_STATE_RESET = {
+  pendingMessage: null as string | null,
+  expectedParticipantIds: null as string[] | null,
+  hasSentPendingMessage: false,
+} as const;
+
+/**
+ * Regeneration-specific flags
+ * Used when regeneration completes
+ */
+export const REGENERATION_STATE_RESET = {
+  isRegenerating: false,
+  regeneratingRoundNumber: null as number | null,
+} as const;
+
+// ============================================================================
 // AGGREGATED DEFAULT STATES FOR RESET OPERATIONS
 // ============================================================================
 

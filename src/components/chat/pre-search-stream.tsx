@@ -1,6 +1,6 @@
 'use client';
 
-import { motion } from 'framer-motion';
+import { AnimatePresence, LayoutGroup, motion } from 'framer-motion';
 import { Loader2, Search } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { memo, useEffect, useRef, useState } from 'react';
@@ -16,6 +16,14 @@ import { Separator } from '@/components/ui/separator';
 import { useBoolean } from '@/hooks/utils';
 
 import { WebSearchResultItem } from './web-search-result-item';
+
+// Layout transition for smooth height animations
+const layoutTransition = {
+  type: 'spring' as const,
+  stiffness: 500,
+  damping: 40,
+  mass: 1,
+};
 
 type PreSearchStreamProps = {
   threadId: string;
@@ -381,208 +389,274 @@ function PreSearchStreamComponent({
   const isStreamingNow = preSearch.status === AnalysisStatuses.STREAMING;
 
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      className="space-y-6"
-    >
-      {/* Search Plan & Configuration Summary - Show at top when we have query data */}
-      {/* ✅ CONTENT-AWARE ANIMATION FIX: Only show when queries have actual text content */}
-      {validQueries.length > 0 && validQueries.some(q => q?.query) && (
-        <WebSearchConfigurationDisplay
-          queries={validQueries.filter(q => q?.query).map(q => ({
-            query: q.query,
-            rationale: q.rationale,
-            searchDepth: q.searchDepth as 'basic' | 'advanced',
-            index: q.index,
-          }))}
-          searchPlan={analysis}
-          isStreamingPlan={isStreamingNow && !analysis}
-          totalResults={totalResults}
-          successCount={successCount}
-          failureCount={failureCount}
-          totalTime={totalTime}
-        />
-      )}
+    <LayoutGroup id={`presearch-${preSearch.id}`}>
+      <motion.div
+        layout
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        className="space-y-6"
+        transition={{ layout: layoutTransition }}
+      >
+        {/* Search Plan & Configuration Summary - Show at top when we have query data */}
+        {/* ✅ CONTENT-AWARE ANIMATION FIX: Only show when queries have actual text content */}
+        {validQueries.length > 0 && validQueries.some(q => q?.query) && (
+          <motion.div layout transition={{ layout: layoutTransition }}>
+            <WebSearchConfigurationDisplay
+              queries={validQueries.filter(q => q?.query).map(q => ({
+                query: q.query,
+                rationale: q.rationale,
+                searchDepth: q.searchDepth as 'basic' | 'advanced',
+                index: q.index,
+              }))}
+              searchPlan={analysis}
+              isStreamingPlan={isStreamingNow && !analysis}
+              totalResults={totalResults}
+              successCount={successCount}
+              failureCount={failureCount}
+              totalTime={totalTime}
+            />
+          </motion.div>
+        )}
 
-      {validQueries.map((query, queryIndex) => {
-        // ✅ CONTENT-AWARE ANIMATION FIX: Only render if query has actual text content
-        // Prevents empty query containers from animating in before content arrives
-        if (!query?.query) {
-          return null;
-        }
+        <AnimatePresence mode="popLayout" initial={false}>
+          {validQueries.map((query, queryIndex) => {
+            // ✅ CONTENT-AWARE ANIMATION FIX: Only render if query has actual text content
+            // Prevents empty query containers from animating in before content arrives
+            if (!query?.query) {
+              return null;
+            }
 
-        const searchResult = validResults.find(r => r?.query === query?.query);
-        const hasResult = !!searchResult;
-        const uniqueKey = query?.query || `${preSearch.id}-search-${queryIndex}`;
-        const hasResults = hasResult && searchResult.results && searchResult.results.length > 0;
+            const searchResult = validResults.find(r => r?.query === query?.query);
+            const hasResult = !!searchResult;
+            const uniqueKey = `query-${query?.query || queryIndex}`;
+            const hasResults = hasResult && searchResult.results && searchResult.results.length > 0;
 
-        return (
-          <motion.div
-            key={uniqueKey}
-            initial={{ opacity: 0, y: 4 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.2, delay: 0.05 * queryIndex }}
-            className="space-y-2"
-          >
-            {/* Query header with mode and progress indicator */}
-            <div className="space-y-2">
-              <div className="flex items-start gap-2">
-                <Search className="size-4 text-primary/70 mt-0.5 flex-shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    {query?.index !== undefined && query?.total !== undefined && (
-                      <Badge variant="outline" className="text-xs shrink-0">
-                        Query
-                        {' '}
-                        {query.index + 1}
-                        {' '}
-                        of
-                        {' '}
-                        {query.total}
-                      </Badge>
-                    )}
+            return (
+              <motion.div
+                key={uniqueKey}
+                layout
+                initial={{ opacity: 0, y: 12 }}
+                animate={{
+                  opacity: 1,
+                  y: 0,
+                  transition: {
+                    type: 'spring',
+                    stiffness: 400,
+                    damping: 30,
+                    delay: queryIndex * 0.08,
+                  },
+                }}
+                exit={{ opacity: 0, y: -8, transition: { duration: 0.15 } }}
+                transition={{ layout: layoutTransition }}
+                className="space-y-2"
+              >
+                {/* Query header with mode and progress indicator */}
+                <motion.div layout className="space-y-2" transition={{ layout: layoutTransition }}>
+                  <div className="flex items-start gap-2">
+                    <Search className="size-4 text-primary/70 mt-0.5 flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        {query?.index !== undefined && query?.total !== undefined && (
+                          <Badge variant="outline" className="text-xs shrink-0">
+                            Query
+                            {' '}
+                            {query.index + 1}
+                            {' '}
+                            of
+                            {' '}
+                            {query.total}
+                          </Badge>
+                        )}
+                      </div>
+                      <p className="text-sm font-medium text-foreground">
+                        {query?.query}
+                      </p>
+                      {query?.rationale && (
+                        <p className="text-xs text-muted-foreground mt-1 italic">
+                          {query.rationale}
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {query?.searchDepth && (
+                        <Badge variant={query.searchDepth === WebSearchDepths.ADVANCED ? 'default' : 'secondary'} className="text-xs">
+                          {query.searchDepth === WebSearchDepths.ADVANCED ? 'Advanced' : 'Simple'}
+                        </Badge>
+                      )}
+                      {isStreamingNow && !hasResult && (
+                        <div className="flex items-center gap-1">
+                          {[0, 1, 2].map(i => (
+                            <motion.div
+                              key={i}
+                              className="size-1.5 bg-primary/40 rounded-full"
+                              animate={{
+                                scale: [1, 1.3, 1],
+                                opacity: [0.4, 1, 0.4],
+                              }}
+                              transition={{
+                                repeat: Infinity,
+                                duration: 1.2,
+                                delay: i * 0.2,
+                              }}
+                            />
+                          ))}
+                        </div>
+                      )}
+                      {hasResult && searchResult.responseTime && (
+                        <Badge variant="outline" className="text-xs text-muted-foreground">
+                          {Math.round(searchResult.responseTime)}
+                          ms
+                        </Badge>
+                      )}
+                    </div>
                   </div>
-                  <p className="text-sm font-medium text-foreground">
-                    {query?.query}
-                  </p>
-                  {query?.rationale && (
-                    <p className="text-xs text-muted-foreground mt-1 italic">
-                      {query.rationale}
+
+                  {/* Result count or searching indicator */}
+                  {!hasResult && (
+                    <p className="text-xs text-muted-foreground pl-6">
+                      {t('steps.searchingDesc')}
                     </p>
                   )}
-                </div>
-                <div className="flex items-center gap-2">
-                  {query?.searchDepth && (
-                    <Badge variant={query.searchDepth === WebSearchDepths.ADVANCED ? 'default' : 'secondary'} className="text-xs">
-                      {query.searchDepth === WebSearchDepths.ADVANCED ? 'Advanced' : 'Simple'}
-                    </Badge>
+                  {hasResult && (
+                    <p className="text-xs text-muted-foreground pl-6">
+                      {searchResult.results.length}
+                      {' '}
+                      {searchResult.results.length === 1 ? 'source' : 'sources'}
+                    </p>
                   )}
-                  {isStreamingNow && !hasResult && (
-                    <div className="flex items-center gap-1">
-                      {[0, 1, 2].map(i => (
+                </motion.div>
+
+                {/* Results list */}
+                <AnimatePresence mode="popLayout" initial={false}>
+                  {hasResults && (
+                    <motion.div
+                      key={`results-${uniqueKey}`}
+                      layout
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{
+                        opacity: 1,
+                        height: 'auto',
+                        transition: {
+                          height: { type: 'spring', stiffness: 500, damping: 40 },
+                          opacity: { duration: 0.2, delay: 0.05 },
+                        },
+                      }}
+                      exit={{
+                        opacity: 0,
+                        height: 0,
+                        transition: { duration: 0.15 },
+                      }}
+                      className="pl-6 space-y-0 overflow-hidden"
+                    >
+                      {searchResult.results.map((result, idx) => (
                         <motion.div
-                          key={i}
-                          className="size-1.5 bg-primary/40 rounded-full"
+                          key={result.url}
+                          initial={{ opacity: 0, x: -8 }}
                           animate={{
-                            scale: [1, 1.3, 1],
-                            opacity: [0.4, 1, 0.4],
+                            opacity: 1,
+                            x: 0,
+                            transition: { delay: idx * 0.03 },
                           }}
-                          transition={{
-                            repeat: Infinity,
-                            duration: 1.2,
-                            delay: i * 0.2,
-                          }}
-                        />
+                        >
+                          <WebSearchResultItem
+                            result={result}
+                            showDivider={idx < searchResult.results.length - 1}
+                          />
+                        </motion.div>
                       ))}
-                    </div>
+                    </motion.div>
                   )}
-                  {hasResult && searchResult.responseTime && (
-                    <Badge variant="outline" className="text-xs text-muted-foreground">
-                      {Math.round(searchResult.responseTime)}
-                      ms
-                    </Badge>
-                  )}
-                </div>
-              </div>
+                </AnimatePresence>
 
-              {/* Result count or searching indicator */}
-              {!hasResult && (
-                <p className="text-xs text-muted-foreground pl-6">
-                  {t('steps.searchingDesc')}
-                </p>
-              )}
-              {hasResult && (
-                <p className="text-xs text-muted-foreground pl-6">
-                  {searchResult.results.length}
-                  {' '}
-                  {searchResult.results.length === 1 ? 'source' : 'sources'}
-                </p>
-              )}
-            </div>
+                {/* Image Gallery - Show all images from search results */}
+                {hasResults && (
+                  <motion.div
+                    layout
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: 0.1, layout: layoutTransition }}
+                    className="pl-6"
+                  >
+                    <WebSearchImageGallery results={searchResult.results} />
+                  </motion.div>
+                )}
 
-            {/* Results list */}
-            {hasResults && (
-              <div className="pl-6 space-y-0">
-                {searchResult.results.map((result, idx) => (
-                  <WebSearchResultItem
-                    key={result.url}
-                    result={result}
-                    showDivider={idx < searchResult.results.length - 1}
-                  />
-                ))}
-              </div>
-            )}
+                {/* Search Statistics */}
+                {hasResults && (() => {
+                  const totalImages = searchResult.results.reduce(
+                    (sum, r) => sum + (r.images?.length || 0) + (r.metadata?.imageUrl ? 1 : 0),
+                    0,
+                  );
+                  const totalWords = searchResult.results.reduce(
+                    (sum, r) => sum + (r.metadata?.wordCount || 0),
+                    0,
+                  );
+                  const resultsWithContent = searchResult.results.filter(r => r.fullContent);
+                  const hasMetadata = totalImages > 0 || totalWords > 0 || resultsWithContent.length > 0;
 
-            {/* Image Gallery - Show all images from search results */}
-            {hasResults && (
-              <div className="pl-6">
-                <WebSearchImageGallery results={searchResult.results} />
-              </div>
-            )}
+                  if (!hasMetadata)
+                    return null;
 
-            {/* Search Statistics */}
-            {hasResults && (() => {
-              const totalImages = searchResult.results.reduce(
-                (sum, r) => sum + (r.images?.length || 0) + (r.metadata?.imageUrl ? 1 : 0),
-                0,
-              );
-              const totalWords = searchResult.results.reduce(
-                (sum, r) => sum + (r.metadata?.wordCount || 0),
-                0,
-              );
-              const resultsWithContent = searchResult.results.filter(r => r.fullContent);
-              const hasMetadata = totalImages > 0 || totalWords > 0 || resultsWithContent.length > 0;
+                  return (
+                    <motion.div
+                      layout
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ delay: 0.15, layout: layoutTransition }}
+                      className="pl-6 flex items-center gap-2 flex-wrap text-xs text-muted-foreground"
+                    >
+                      {totalImages > 0 && (
+                        <Badge variant="outline" className="text-xs">
+                          {totalImages}
+                          {' '}
+                          {totalImages === 1 ? 'image' : 'images'}
+                        </Badge>
+                      )}
+                      {totalWords > 0 && (
+                        <Badge variant="outline" className="text-xs">
+                          {totalWords.toLocaleString()}
+                          {' '}
+                          words extracted
+                        </Badge>
+                      )}
+                      {resultsWithContent.length > 0 && (
+                        <Badge variant="outline" className="text-xs bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20">
+                          {resultsWithContent.length}
+                          {' '}
+                          full content
+                        </Badge>
+                      )}
+                    </motion.div>
+                  );
+                })()}
 
-              if (!hasMetadata)
-                return null;
+                {/* AI-Generated Answer Summary */}
+                {hasResult && (
+                  <motion.div
+                    layout
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: 0.2, layout: layoutTransition }}
+                    className="pl-6"
+                  >
+                    <LLMAnswerDisplay
+                      answer={searchResult.answer}
+                      isStreaming={isStreamingNow}
+                      sources={searchResult.results.map(r => ({ url: r.url, title: r.title }))}
+                    />
+                  </motion.div>
+                )}
 
-              return (
-                <div className="pl-6 flex items-center gap-2 flex-wrap text-xs text-muted-foreground">
-                  {totalImages > 0 && (
-                    <Badge variant="outline" className="text-xs">
-                      {totalImages}
-                      {' '}
-                      {totalImages === 1 ? 'image' : 'images'}
-                    </Badge>
-                  )}
-                  {totalWords > 0 && (
-                    <Badge variant="outline" className="text-xs">
-                      {totalWords.toLocaleString()}
-                      {' '}
-                      words extracted
-                    </Badge>
-                  )}
-                  {resultsWithContent.length > 0 && (
-                    <Badge variant="outline" className="text-xs bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20">
-                      {resultsWithContent.length}
-                      {' '}
-                      full content
-                    </Badge>
-                  )}
-                </div>
-              );
-            })()}
-
-            {/* AI-Generated Answer Summary */}
-            {hasResult && (
-              <div className="pl-6">
-                <LLMAnswerDisplay
-                  answer={searchResult.answer}
-                  isStreaming={isStreamingNow}
-                  sources={searchResult.results.map(r => ({ url: r.url, title: r.title }))}
-                />
-              </div>
-            )}
-
-            {/* Separator between searches */}
-            {queryIndex < validQueries.length - 1 && (
-              <Separator className="!mt-6" />
-            )}
-          </motion.div>
-        );
-      })}
-    </motion.div>
+                {/* Separator between searches */}
+                {queryIndex < validQueries.length - 1 && (
+                  <Separator className="!mt-6" />
+                )}
+              </motion.div>
+            );
+          })}
+        </AnimatePresence>
+      </motion.div>
+    </LayoutGroup>
   );
 }
 

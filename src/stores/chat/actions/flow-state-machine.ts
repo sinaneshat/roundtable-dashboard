@@ -316,7 +316,6 @@ export function useFlowStateMachine(
 
     // ✅ FIX: Check if analysis exists for CURRENT round, not ANY round
     const currentRoundAnalysis = analyses.find(a => a.roundNumber === currentRound);
-    const firstAnalysis = analyses[0];
 
     // ✅ FIX: Count participant messages for CURRENT round only
     // ✅ TYPE-SAFE: Use extraction utility instead of manual metadata access
@@ -333,7 +332,7 @@ export function useFlowStateMachine(
       hasMessages: messages.length > 0,
       participantCount: participants.length,
       allParticipantsResponded, // ✅ NEW: Round-specific participant completion
-      analysisStatus: firstAnalysis?.status || null,
+      analysisStatus: currentRoundAnalysis?.status || null,
       analysisExists: !!currentRoundAnalysis, // ✅ FIX: Round-specific check
       isAiSdkStreaming,
       isCreatingThread,

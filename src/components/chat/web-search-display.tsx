@@ -1,5 +1,5 @@
 'use client';
-import { AnimatePresence, motion } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { AlertCircle, ChevronDown, ChevronUp, Globe, Search } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useState } from 'react';
@@ -152,75 +152,72 @@ export function WebSearchDisplay({
             </Button>
           </CollapsibleTrigger>
 
-          <AnimatePresence>
-            {isOpen && (
-              <CollapsibleContent forceMount>
+          <CollapsibleContent className="border-t border-border/50">
+            {/* Results display - Clean, focused on rich content */}
+            <div className="p-4 space-y-4">
+              {/* 1. AI Answer Summary - Display prominently with streaming support */}
+              {(answer || isStreaming) && (
                 <motion.div
-                  initial={{ height: 0, opacity: 0 }}
-                  animate={{ height: 'auto', opacity: 1 }}
-                  exit={{ height: 0, opacity: 0 }}
-                  transition={{ duration: 0.2 }}
-                  className="border-t border-border/50"
+                  layout
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="p-4 rounded-lg bg-muted/10 border border-border/30"
                 >
-                  {/* Results display - Clean, focused on rich content */}
-                  <div className="p-4 space-y-4">
-                    {/* 1. AI Answer Summary - Display prominently with streaming support */}
-                    {(answer || isStreaming) && (
-                      <div className="p-4 rounded-lg bg-muted/10 border border-border/30">
-                        <LLMAnswerDisplay
-                          answer={answer ?? null}
-                          isStreaming={isStreaming}
-                          sources={successfulResults.map(r => ({ url: r.url, title: r.title }))}
-                        />
-                      </div>
-                    )}
-
-                    {/* 2. Image Gallery - Show rich visual content */}
-                    {hasImages && <WebSearchImageGallery results={successfulResults} />}
-
-                    {/* 3. Detailed Sources - Expandable detailed results */}
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between py-2 border-t border-border/20 pt-4">
-                        <div className="flex items-center gap-2">
-                          <Search className="size-4 text-muted-foreground" />
-                          <p className="text-sm font-medium text-foreground">
-                            Detailed Sources
-                          </p>
-                        </div>
-                        <Badge variant="secondary" className="text-xs">
-                          {successfulResults.length}
-                          {' '}
-                          {successfulResults.length === 1 ? 'source' : 'sources'}
-                        </Badge>
-                      </div>
-                      <div className="space-y-0">
-                        {successfulResults.map((result, index) => (
-                          <WebSearchResultItem
-                            key={result.url}
-                            result={result}
-                            showDivider={index < successfulResults.length - 1}
-                            citationNumber={index + 1}
-                          />
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Error display */}
-                    {hasErrors && (
-                      <Alert variant="destructive" className="mt-4">
-                        <AlertCircle className="size-4" />
-                        <AlertDescription>
-                          {t('error.failedToLoad', {
-                            count: totalResults - successfulResults.length,
-                          })}
-                        </AlertDescription>
-                      </Alert>
-                    )}
-                  </div>
+                  <LLMAnswerDisplay
+                    answer={answer ?? null}
+                    isStreaming={isStreaming}
+                    sources={successfulResults.map(r => ({ url: r.url, title: r.title }))}
+                  />
                 </motion.div>
-              </CollapsibleContent>
-            )}
-          </AnimatePresence>
+              )}
+
+              {/* 2. Image Gallery - Show rich visual content */}
+              {hasImages && (
+                <motion.div layout initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.1 }}>
+                  <WebSearchImageGallery results={successfulResults} />
+                </motion.div>
+              )}
+
+              {/* 3. Detailed Sources - Expandable detailed results */}
+              <motion.div layout className="space-y-2" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.15 }}>
+                <div className="flex items-center justify-between py-2 border-t border-border/20 pt-4">
+                  <div className="flex items-center gap-2">
+                    <Search className="size-4 text-muted-foreground" />
+                    <p className="text-sm font-medium text-foreground">
+                      Detailed Sources
+                    </p>
+                  </div>
+                  <Badge variant="secondary" className="text-xs">
+                    {successfulResults.length}
+                    {' '}
+                    {successfulResults.length === 1 ? 'source' : 'sources'}
+                  </Badge>
+                </div>
+                <div className="space-y-0">
+                  {successfulResults.map((result, index) => (
+                    <WebSearchResultItem
+                      key={result.url}
+                      result={result}
+                      showDivider={index < successfulResults.length - 1}
+                      citationNumber={index + 1}
+                    />
+                  ))}
+                </div>
+              </motion.div>
+
+              {/* Error display */}
+              {hasErrors && (
+                <Alert variant="destructive" className="mt-4">
+                  <AlertCircle className="size-4" />
+                  <AlertDescription>
+                    {t('error.failedToLoad', {
+                      count: totalResults - successfulResults.length,
+                    })}
+                  </AlertDescription>
+                </Alert>
+              )}
+            </div>
+          </CollapsibleContent>
         </Collapsible>
       </div>
     </motion.div>

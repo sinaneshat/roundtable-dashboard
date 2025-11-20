@@ -116,7 +116,12 @@ export default async function Layout({ children, modal }: RootLayoutProps) {
       </head>
       <body>
         {/* Production: PWA update detection and prompt */}
-        <PWAUpdatePrompt />
+        <PWAUpdatePrompt
+          messages={messages}
+          locale={locale}
+          timeZone={timeZone}
+          now={now}
+        />
 
         {/* Liquid Glass SVG Filter Definitions (Apple WWDC 2025) */}
         <LiquidGlassFilters />

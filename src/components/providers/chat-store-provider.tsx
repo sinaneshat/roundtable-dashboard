@@ -231,30 +231,101 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
 
     // ✅ STEP 1: Create pre-search if web search enabled and doesn't exist
     if (webSearchEnabled && !preSearchForRound) {
-      // Create PENDING pre-search record
+      // Create PENDING pre-search record AND immediately execute it
+      // ✅ CRITICAL FIX: Execute pre-search here instead of waiting for PreSearchStream component
+      // PreSearchStream only renders after user message exists, but message waits for pre-search
+      // This breaks the circular dependency: create → execute → complete → send message
+      const effectiveThreadId = thread?.id || '';
       queueMicrotask(() => {
         createPreSearch.mutateAsync({
           param: {
-            threadId: thread?.id || '',
+            threadId: effectiveThreadId,
             roundNumber: newRoundNumber.toString(),
           },
           json: {
             userQuery: pendingMessage,
           },
+        }).then(() => {
+          // ✅ IMMEDIATELY EXECUTE: Trigger pre-search execution after creation
+          // This replaces the PreSearchStream component's POST request
+          return fetch(
+            `/api/v1/chat/threads/${effectiveThreadId}/rounds/${newRoundNumber}/pre-search`,
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'text/event-stream',
+              },
+              body: JSON.stringify({ userQuery: pendingMessage }),
+            },
+          );
+        }).then(async (response) => {
+          if (!response.ok && response.status !== 409) {
+            // 409 = already executing, which is fine
+            console.error('[ChatStoreProvider] Pre-search execution failed:', response.status);
+          }
+          // Read the stream to completion (fire and forget)
+          // The orchestrator will sync the COMPLETE status to the store
+          const reader = response.body?.getReader();
+          if (reader) {
+            while (true) {
+              const { done } = await reader.read();
+              if (done)
+                break;
+            }
+          }
         }).catch((error) => {
-          console.error('[ChatStoreProvider] Failed to create pre-search:', error);
+          console.error('[ChatStoreProvider] Failed to create/execute pre-search:', error);
           // If pre-search creation fails, continue with message anyway (degraded UX)
           // This prevents total failure - participants will stream without search context
         });
       });
 
-      return; // Wait for pre-search to be created (orchestrator will sync it, effect will re-run)
+      return; // Wait for pre-search to complete (orchestrator will sync it, effect will re-run)
     }
 
-    // ✅ STEP 2: Wait for pre-search execution if it's PENDING or STREAMING
+    // ✅ STEP 2: Handle pre-search execution state
     if (webSearchEnabled && preSearchForRound) {
-      if (preSearchForRound.status === AnalysisStatuses.PENDING || preSearchForRound.status === AnalysisStatuses.STREAMING) {
+      // If pre-search is STREAMING, wait for it to complete
+      if (preSearchForRound.status === AnalysisStatuses.STREAMING) {
         return; // Don't send message yet - wait for pre-search to complete
+      }
+
+      // ✅ CRITICAL FIX: If pre-search is stuck in PENDING, trigger execution
+      // This handles the case where pre-search was created but never executed
+      // (e.g., due to component unmount, page refresh, or the circular dependency bug)
+      if (preSearchForRound.status === AnalysisStatuses.PENDING) {
+        const effectiveThreadId = thread?.id || '';
+        queueMicrotask(() => {
+          // Trigger pre-search execution
+          fetch(
+            `/api/v1/chat/threads/${effectiveThreadId}/rounds/${newRoundNumber}/pre-search`,
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'text/event-stream',
+              },
+              body: JSON.stringify({ userQuery: pendingMessage }),
+            },
+          ).then(async (response) => {
+            if (!response.ok && response.status !== 409) {
+              console.error('[ChatStoreProvider] Pre-search execution failed:', response.status);
+            }
+            // Read the stream to completion
+            const reader = response.body?.getReader();
+            if (reader) {
+              while (true) {
+                const { done } = await reader.read();
+                if (done)
+                  break;
+              }
+            }
+          }).catch((error) => {
+            console.error('[ChatStoreProvider] Failed to execute stuck pre-search:', error);
+          });
+        });
+        return; // Wait for pre-search to complete
       }
 
       // Pre-search is COMPLETE or FAILED - continue with sending message
@@ -601,26 +672,97 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
 
     // ✅ STEP 1: Create pre-search if web search enabled and doesn't exist
     if (webSearchEnabled && !preSearchForRound) {
+      // Create PENDING pre-search record AND immediately execute it
+      // ✅ CRITICAL FIX: Execute pre-search here instead of waiting for PreSearchStream component
+      // PreSearchStream only renders after user message exists, but message waits for pre-search
+      // This breaks the circular dependency: create → execute → complete → send message
+      const effectiveThreadId = thread?.id || '';
       queueMicrotask(() => {
         createPreSearch.mutateAsync({
           param: {
-            threadId: thread?.id || '',
+            threadId: effectiveThreadId,
             roundNumber: newRoundNumber.toString(),
           },
           json: {
             userQuery: pendingMessage,
           },
+        }).then(() => {
+          // ✅ IMMEDIATELY EXECUTE: Trigger pre-search execution after creation
+          // This replaces the PreSearchStream component's POST request
+          return fetch(
+            `/api/v1/chat/threads/${effectiveThreadId}/rounds/${newRoundNumber}/pre-search`,
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'text/event-stream',
+              },
+              body: JSON.stringify({ userQuery: pendingMessage }),
+            },
+          );
+        }).then(async (response) => {
+          if (!response.ok && response.status !== 409) {
+            // 409 = already executing, which is fine
+            console.error('[ChatStoreProvider] Pre-search execution failed:', response.status);
+          }
+          // Read the stream to completion (fire and forget)
+          // The orchestrator will sync the COMPLETE status to the store
+          const reader = response.body?.getReader();
+          if (reader) {
+            while (true) {
+              const { done } = await reader.read();
+              if (done)
+                break;
+            }
+          }
         }).catch((error) => {
-          console.error('[ChatStoreProvider] Failed to create pre-search:', error);
+          console.error('[ChatStoreProvider] Failed to create/execute pre-search:', error);
         });
       });
-      return; // Wait for pre-search to be created
+      return; // Wait for pre-search to complete (orchestrator will sync it, effect will re-run)
     }
 
-    // ✅ STEP 2: Wait for pre-search execution if it's PENDING or STREAMING
+    // ✅ STEP 2: Handle pre-search execution state
     if (webSearchEnabled && preSearchForRound) {
-      if (preSearchForRound.status === AnalysisStatuses.PENDING || preSearchForRound.status === AnalysisStatuses.STREAMING) {
+      // If pre-search is STREAMING, wait for it to complete
+      if (preSearchForRound.status === AnalysisStatuses.STREAMING) {
         return; // Don't send message yet - wait for pre-search to complete
+      }
+
+      // ✅ CRITICAL FIX: If pre-search is stuck in PENDING, trigger execution
+      // This handles the case where pre-search was created but never executed
+      if (preSearchForRound.status === AnalysisStatuses.PENDING) {
+        const effectiveThreadId = thread?.id || '';
+        queueMicrotask(() => {
+          // Trigger pre-search execution
+          fetch(
+            `/api/v1/chat/threads/${effectiveThreadId}/rounds/${newRoundNumber}/pre-search`,
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'text/event-stream',
+              },
+              body: JSON.stringify({ userQuery: pendingMessage }),
+            },
+          ).then(async (response) => {
+            if (!response.ok && response.status !== 409) {
+              console.error('[ChatStoreProvider] Pre-search execution failed:', response.status);
+            }
+            // Read the stream to completion
+            const reader = response.body?.getReader();
+            if (reader) {
+              while (true) {
+                const { done } = await reader.read();
+                if (done)
+                  break;
+              }
+            }
+          }).catch((error) => {
+            console.error('[ChatStoreProvider] Failed to execute stuck pre-search:', error);
+          });
+        });
+        return; // Wait for pre-search to complete
       }
     }
 

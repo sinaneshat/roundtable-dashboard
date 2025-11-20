@@ -1,9 +1,351 @@
 'use client';
 
-import { motion, type HTMLMotionProps, type Variants } from 'motion/react';
+import { AnimatePresence, LayoutGroup, motion, type HTMLMotionProps, type Variants } from 'motion/react';
 import type { ReactNode } from 'react';
 
 import { cn } from '@/lib/ui/cn';
+
+// =============================================================================
+// ANIMATION CONSTANTS - Consistent timing and easing across all components
+// =============================================================================
+
+export const ANIMATION_DURATION = {
+  fast: 0.15,
+  normal: 0.25,
+  slow: 0.35,
+} as const;
+
+export const ANIMATION_EASE = {
+  // Standard ease for most animations
+  standard: [0.32, 0.72, 0, 1] as const,
+  // For enter/exit animations
+  enter: [0, 0, 0.2, 1] as const,
+  exit: [0.4, 0, 1, 1] as const,
+  // Spring-like for layout animations
+  spring: [0.25, 0.1, 0.25, 1] as const,
+} as const;
+
+// Layout transition for height/accordion animations
+export const layoutTransition = {
+  type: 'spring' as const,
+  stiffness: 500,
+  damping: 40,
+  mass: 1,
+};
+
+// =============================================================================
+// STREAMING LIST COMPONENTS - For content that grows during streaming
+// =============================================================================
+
+type AnimatedStreamingListProps = {
+  children: ReactNode;
+  className?: string;
+  /** Unique ID for the layout group to prevent conflicts */
+  groupId?: string;
+};
+
+/**
+ * Container for lists that grow during streaming.
+ * Wraps children in LayoutGroup and provides coordinated height animations.
+ *
+ * @example
+ * ```tsx
+ * <AnimatedStreamingList groupId="search-results">
+ *   {items.map((item, i) => (
+ *     <AnimatedStreamingItem key={item.id} index={i}>
+ *       {item.content}
+ *     </AnimatedStreamingItem>
+ *   ))}
+ * </AnimatedStreamingList>
+ * ```
+ */
+export function AnimatedStreamingList({
+  children,
+  className,
+  groupId,
+}: AnimatedStreamingListProps) {
+  return (
+    <LayoutGroup id={groupId}>
+      <motion.div
+        layout
+        className={cn(className)}
+        transition={layoutTransition}
+      >
+        <AnimatePresence mode="popLayout" initial={false}>
+          {children}
+        </AnimatePresence>
+      </motion.div>
+    </LayoutGroup>
+  );
+}
+
+type AnimatedStreamingItemProps = {
+  children: ReactNode;
+  className?: string;
+  /** Unique key for AnimatePresence tracking */
+  itemKey: string;
+  /** Index for staggered animations */
+  index?: number;
+  /** Base delay before animation starts */
+  delay?: number;
+};
+
+/**
+ * Individual item in a streaming list with enter/exit animations.
+ * Uses layout prop for smooth height transitions when siblings change.
+ */
+export function AnimatedStreamingItem({
+  children,
+  className,
+  itemKey,
+  index = 0,
+  delay = 0,
+}: AnimatedStreamingItemProps) {
+  return (
+    <motion.div
+      key={itemKey}
+      layout
+      layoutId={itemKey}
+      className={cn(className)}
+      initial={{ opacity: 0, y: 8 }}
+      animate={{
+        opacity: 1,
+        y: 0,
+        transition: {
+          opacity: { duration: ANIMATION_DURATION.normal, delay: delay + (index * 0.05) },
+          y: { duration: ANIMATION_DURATION.normal, delay: delay + (index * 0.05) },
+        }
+      }}
+      exit={{
+        opacity: 0,
+        y: -8,
+        transition: {
+          duration: ANIMATION_DURATION.fast,
+        }
+      }}
+      transition={{
+        layout: layoutTransition,
+      }}
+    >
+      {children}
+    </motion.div>
+  );
+}
+
+// =============================================================================
+// ACCORDION/COLLAPSIBLE CONTENT ANIMATION
+// =============================================================================
+
+type AnimatedAccordionContentProps = {
+  children: ReactNode;
+  className?: string;
+  /** Whether the content is visible */
+  isOpen: boolean;
+  /** Callback when animation completes */
+  onAnimationComplete?: () => void;
+};
+
+/**
+ * Animated content wrapper for accordion/collapsible components.
+ * Uses layout animations for smooth height transitions.
+ *
+ * @example
+ * ```tsx
+ * <AnimatedAccordionContent isOpen={isExpanded}>
+ *   <div>Collapsible content here</div>
+ * </AnimatedAccordionContent>
+ * ```
+ */
+export function AnimatedAccordionContent({
+  children,
+  className,
+  isOpen,
+  onAnimationComplete,
+}: AnimatedAccordionContentProps) {
+  return (
+    <AnimatePresence mode="wait" initial={false}>
+      {isOpen && (
+        <motion.div
+          layout
+          initial={{ opacity: 0, height: 0 }}
+          animate={{
+            opacity: 1,
+            height: 'auto',
+            transition: {
+              height: {
+                type: 'spring',
+                stiffness: 500,
+                damping: 40,
+              },
+              opacity: { duration: ANIMATION_DURATION.fast, delay: 0.05 },
+            }
+          }}
+          exit={{
+            opacity: 0,
+            height: 0,
+            transition: {
+              height: {
+                type: 'spring',
+                stiffness: 500,
+                damping: 40,
+              },
+              opacity: { duration: ANIMATION_DURATION.fast },
+            }
+          }}
+          onAnimationComplete={onAnimationComplete}
+          className={cn('overflow-hidden', className)}
+        >
+          <motion.div layout>
+            {children}
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+}
+
+// =============================================================================
+// SECTION ANIMATIONS - For analysis sections and cards
+// =============================================================================
+
+type AnimatedSectionProps = {
+  children: ReactNode;
+  className?: string;
+  /** Unique key for layout animations */
+  sectionKey?: string;
+  /** Index for staggered animations */
+  index?: number;
+};
+
+/**
+ * Animated section wrapper with layout support.
+ * Use for sections that may appear/disappear during streaming.
+ */
+export function AnimatedSection({
+  children,
+  className,
+  sectionKey,
+  index = 0,
+}: AnimatedSectionProps) {
+  const variants: Variants = {
+    hidden: { opacity: 0, y: 20 },
+    visible: {
+      opacity: 1,
+      y: 0,
+      transition: {
+        type: 'spring',
+        stiffness: 300,
+        damping: 24,
+        delay: index * 0.1,
+      },
+    },
+  };
+
+  return (
+    <motion.div
+      layout
+      layoutId={sectionKey}
+      variants={variants}
+      initial="hidden"
+      animate="visible"
+      className={cn(className)}
+      transition={{
+        layout: layoutTransition,
+      }}
+    >
+      {children}
+    </motion.div>
+  );
+}
+
+// =============================================================================
+// STAGGER CONTAINER WITH LAYOUT SUPPORT
+// =============================================================================
+
+type AnimatedStaggerContainerProps = {
+  children: ReactNode;
+  className?: string;
+  /** Delay between each child animation */
+  staggerDelay?: number;
+  /** Initial delay before first child animates */
+  delayChildren?: number;
+  /** Enable layout animations for height changes */
+  enableLayout?: boolean;
+};
+
+/**
+ * Container that staggers children animations with optional layout support.
+ */
+export function AnimatedStaggerContainer({
+  children,
+  className,
+  staggerDelay = 0.08,
+  delayChildren = 0.1,
+  enableLayout = true,
+}: AnimatedStaggerContainerProps) {
+  const containerVariants: Variants = {
+    hidden: { opacity: 0 },
+    visible: {
+      opacity: 1,
+      transition: {
+        staggerChildren: staggerDelay,
+        delayChildren,
+      },
+    },
+  };
+
+  return (
+    <motion.div
+      layout={enableLayout}
+      variants={containerVariants}
+      initial="hidden"
+      animate="visible"
+      className={cn(className)}
+      transition={enableLayout ? { layout: layoutTransition } : undefined}
+    >
+      {children}
+    </motion.div>
+  );
+}
+
+type AnimatedStaggerItemProps = {
+  children: ReactNode;
+  className?: string;
+  /** Enable layout animations */
+  enableLayout?: boolean;
+};
+
+/**
+ * Child item for AnimatedStaggerContainer with coordinated animations.
+ */
+export function AnimatedStaggerItem({
+  children,
+  className,
+  enableLayout = true,
+}: AnimatedStaggerItemProps) {
+  const itemVariants: Variants = {
+    hidden: { opacity: 0, y: 12 },
+    visible: {
+      opacity: 1,
+      y: 0,
+      transition: {
+        duration: ANIMATION_DURATION.normal,
+        ease: ANIMATION_EASE.standard,
+      },
+    },
+  };
+
+  return (
+    <motion.div
+      layout={enableLayout}
+      variants={itemVariants}
+      className={cn(className)}
+      transition={enableLayout ? { layout: layoutTransition } : undefined}
+    >
+      {children}
+    </motion.div>
+  );
+}
 
 // Subtle animation variants
 const defaultFadeIn: Variants = {
