@@ -175,7 +175,7 @@ export default async function Image() {
               color: OG_COLORS.textSecondary,
             }}
           >
-            ✓
+            ✅
             {' '}
             {t('legal.trustBadges.userRights')}
           </div>
