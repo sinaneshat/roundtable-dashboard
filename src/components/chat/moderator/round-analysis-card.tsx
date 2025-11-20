@@ -1,5 +1,4 @@
 'use client';
-import { AnimatePresence, motion } from 'framer-motion';
 import { Clock } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -108,21 +107,6 @@ export function RoundAnalysisCard({
     previousStatusRef.current = analysis.status;
   }, [analysis.status, analysis.analysisData]);
 
-  const containerVariants = {
-    hidden: { opacity: 0 },
-    show: {
-      opacity: 1,
-      transition: {
-        staggerChildren: 0.1,
-      },
-    },
-  };
-
-  const itemVariants = {
-    hidden: { opacity: 0, y: 20 },
-    show: { opacity: 1, y: 0 },
-  };
-
   return (
     <div ref={containerRef} className={cn('py-1.5', className)}>
       <ChainOfThought
@@ -148,106 +132,61 @@ export function RoundAnalysisCard({
             </div>
           </ChainOfThoughtHeader>
         </div>
-        <ChainOfThoughtContent staggerChildren={demoShowContent === undefined}>
+        <ChainOfThoughtContent>
           {/* Demo mode: only show content when demoShowContent is true */}
           {(demoShowContent === undefined || demoShowContent) && (
             <>
               {analysis.userQuestion && analysis.userQuestion !== 'N/A' && (
-                <motion.div
-                  layout
-                  initial={{ opacity: 0, y: -10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="space-y-1"
-                >
+                <div className="space-y-1">
                   <p className="text-xs font-semibold text-muted-foreground">Question:</p>
                   <p className="text-sm text-foreground/80 leading-relaxed">
                     {analysis.userQuestion}
                   </p>
-                </motion.div>
+                </div>
               )}
-              <AnimatePresence mode="wait">
-                {(analysis.status === AnalysisStatuses.PENDING || analysis.status === AnalysisStatuses.STREAMING)
+              {(analysis.status === AnalysisStatuses.PENDING || analysis.status === AnalysisStatuses.STREAMING)
+                ? (
+                    <ModeratorAnalysisStream
+                      threadId={threadId}
+                      analysis={analysis}
+                      onStreamStart={onStreamStart}
+                      onStreamComplete={onStreamComplete}
+                      onActionClick={onActionClick}
+                    />
+                  )
+                : analysis.status === AnalysisStatuses.COMPLETE && analysis.analysisData
                   ? (
-                      <ModeratorAnalysisStream
-                        key={analysis.id}
-                        threadId={threadId}
-                        analysis={analysis}
-                        onStreamStart={onStreamStart}
-                        onStreamComplete={onStreamComplete}
-                        onActionClick={onActionClick}
-                      />
-                    )
-                  : analysis.status === AnalysisStatuses.COMPLETE && analysis.analysisData
-                    ? (
-                        <motion.div
-                          key="complete"
-                          layout
-                          variants={containerVariants}
-                          initial="hidden"
-                          animate="show"
-                          className="space-y-4"
-                        >
-                          {analysis.analysisData.leaderboard && analysis.analysisData.leaderboard.length > 0 && (
-                            <motion.div
-                              layout
-                              layoutId={`${analysis.id}-leaderboard`}
-                              variants={itemVariants}
-                            >
-                              <LeaderboardCard leaderboard={analysis.analysisData.leaderboard} />
-                            </motion.div>
-                          )}
-                          {analysis.analysisData.participantAnalyses && analysis.analysisData.participantAnalyses.length > 0 && (
-                            <>
-                              <motion.div
-                                layout
-                                layoutId={`${analysis.id}-skills-chart`}
-                                variants={itemVariants}
-                              >
-                                <SkillsComparisonChart participants={analysis.analysisData.participantAnalyses} />
-                              </motion.div>
-                              {analysis.analysisData.participantAnalyses.map(participant => (
-                                <motion.div
-                                  key={`${analysis.id}-participant-${participant.participantIndex}`}
-                                  layout
-                                  layoutId={`${analysis.id}-participant-${participant.participantIndex}`}
-                                  variants={itemVariants}
-                                >
-                                  <ParticipantAnalysisCard
-                                    analysis={participant}
-                                  />
-                                </motion.div>
-                              ))}
-                            </>
-                          )}
-                          {analysis.analysisData.roundSummary && (
-                            <motion.div
-                              layout
-                              layoutId={`${analysis.id}-summary`}
-                              variants={itemVariants}
-                            >
-                              <RoundSummarySection
-                                roundSummary={analysis.analysisData.roundSummary}
-                                onActionClick={onActionClick}
+                      <div className="space-y-4">
+                        {analysis.analysisData.leaderboard && analysis.analysisData.leaderboard.length > 0 && (
+                          <LeaderboardCard leaderboard={analysis.analysisData.leaderboard} />
+                        )}
+                        {analysis.analysisData.participantAnalyses && analysis.analysisData.participantAnalyses.length > 0 && (
+                          <>
+                            <SkillsComparisonChart participants={analysis.analysisData.participantAnalyses} />
+                            {analysis.analysisData.participantAnalyses.map(participant => (
+                              <ParticipantAnalysisCard
+                                key={`${analysis.id}-participant-${participant.participantIndex}`}
+                                analysis={participant}
                               />
-                            </motion.div>
-                          )}
-                        </motion.div>
+                            ))}
+                          </>
+                        )}
+                        {analysis.analysisData.roundSummary && (
+                          <RoundSummarySection
+                            roundSummary={analysis.analysisData.roundSummary}
+                            onActionClick={onActionClick}
+                          />
+                        )}
+                      </div>
+                    )
+                  : analysis.status === AnalysisStatuses.FAILED
+                    ? (
+                        <div className="flex items-center gap-2 py-1.5 text-xs text-destructive">
+                          <span className="size-1.5 rounded-full bg-destructive/80" />
+                          <span>{analysis.errorMessage || t('errorAnalyzing')}</span>
+                        </div>
                       )
-                    : analysis.status === AnalysisStatuses.FAILED
-                      ? (
-                          <motion.div
-                            key="failed"
-                            layout
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            className="flex items-center gap-2 py-1.5 text-xs text-destructive"
-                          >
-                            <span className="size-1.5 rounded-full bg-destructive/80" />
-                            <span>{analysis.errorMessage || t('errorAnalyzing')}</span>
-                          </motion.div>
-                        )
-                      : null}
-              </AnimatePresence>
+                    : null}
             </>
           )}
         </ChainOfThoughtContent>

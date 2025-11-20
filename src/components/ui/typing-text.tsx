@@ -15,11 +15,12 @@ type TypingTextProps = {
 /**
  * Reusable typing text animation component
  * Animates text character by character with configurable speed
+ * Default delay of 250ms ensures parent element is mounted and visible before typing starts
  */
 export function TypingText({
   text,
   speed = 20,
-  delay = 0,
+  delay = 250,
   className,
   onComplete,
   enabled = true,

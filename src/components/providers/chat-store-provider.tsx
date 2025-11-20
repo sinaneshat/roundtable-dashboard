@@ -63,6 +63,10 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
   // queryClient from useQueryClient() is stable, so we only need to capture it once
   const queryClientRef = useRef(queryClient);
 
+  // ✅ FIX: Track pre-search creation attempts to prevent infinite retry loops
+  // When creation fails (e.g., 500 error), we don't want to keep retrying
+  const preSearchCreationAttemptedRef = useRef<Set<number>>(new Set());
+
   // ✅ NEW: Pre-search creation mutation (fixes web search ordering)
   const createPreSearch = useCreatePreSearchMutation();
 
@@ -264,8 +268,7 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
             // 409 = already executing, which is fine
             console.error('[ChatStoreProvider] Pre-search execution failed:', response.status);
           }
-          // Read the stream to completion (fire and forget)
-          // The orchestrator will sync the COMPLETE status to the store
+          // Read the stream to completion
           const reader = response.body?.getReader();
           if (reader) {
             while (true) {
@@ -274,6 +277,12 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
                 break;
             }
           }
+          // ✅ CRITICAL FIX: Invalidate query to sync COMPLETE status to store
+          // Without this, the orchestrator won't know the pre-search completed
+          // and the effect won't re-run to send the message
+          queryClientRef.current.invalidateQueries({
+            queryKey: queryKeys.threads.preSearches(effectiveThreadId),
+          });
         }).catch((error) => {
           console.error('[ChatStoreProvider] Failed to create/execute pre-search:', error);
           // If pre-search creation fails, continue with message anyway (degraded UX)
@@ -281,7 +290,7 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
         });
       });
 
-      return; // Wait for pre-search to complete (orchestrator will sync it, effect will re-run)
+      return; // Wait for pre-search to complete (query invalidation will sync it, effect will re-run)
     }
 
     // ✅ STEP 2: Handle pre-search execution state
@@ -321,6 +330,10 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
                   break;
               }
             }
+            // ✅ CRITICAL FIX: Invalidate query to sync COMPLETE status to store
+            queryClientRef.current.invalidateQueries({
+              queryKey: queryKeys.threads.preSearches(effectiveThreadId),
+            });
           }).catch((error) => {
             console.error('[ChatStoreProvider] Failed to execute stuck pre-search:', error);
           });
@@ -672,54 +685,70 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
 
     // ✅ STEP 1: Create pre-search if web search enabled and doesn't exist
     if (webSearchEnabled && !preSearchForRound) {
-      // Create PENDING pre-search record AND immediately execute it
-      // ✅ CRITICAL FIX: Execute pre-search here instead of waiting for PreSearchStream component
-      // PreSearchStream only renders after user message exists, but message waits for pre-search
-      // This breaks the circular dependency: create → execute → complete → send message
-      const effectiveThreadId = thread?.id || '';
-      queueMicrotask(() => {
-        createPreSearch.mutateAsync({
-          param: {
-            threadId: effectiveThreadId,
-            roundNumber: newRoundNumber.toString(),
-          },
-          json: {
-            userQuery: pendingMessage,
-          },
-        }).then(() => {
-          // ✅ IMMEDIATELY EXECUTE: Trigger pre-search execution after creation
-          // This replaces the PreSearchStream component's POST request
-          return fetch(
-            `/api/v1/chat/threads/${effectiveThreadId}/rounds/${newRoundNumber}/pre-search`,
-            {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Accept': 'text/event-stream',
-              },
-              body: JSON.stringify({ userQuery: pendingMessage }),
+      // ✅ FIX: Check if we've already attempted to create pre-search for this round
+      // This prevents infinite retry loops when creation fails (e.g., 500 error)
+      if (preSearchCreationAttemptedRef.current.has(newRoundNumber)) {
+        // Already attempted and failed - fall through to send message without pre-search
+        // Silently continue without pre-search
+      } else {
+        // Mark this round as attempted BEFORE trying
+        preSearchCreationAttemptedRef.current.add(newRoundNumber);
+
+        // Create PENDING pre-search record AND immediately execute it
+        // ✅ CRITICAL FIX: Execute pre-search here instead of waiting for PreSearchStream component
+        // PreSearchStream only renders after user message exists, but message waits for pre-search
+        // This breaks the circular dependency: create → execute → complete → send message
+        const effectiveThreadId = thread?.id || '';
+        queueMicrotask(() => {
+          createPreSearch.mutateAsync({
+            param: {
+              threadId: effectiveThreadId,
+              roundNumber: newRoundNumber.toString(),
             },
-          );
-        }).then(async (response) => {
-          if (!response.ok && response.status !== 409) {
-            // 409 = already executing, which is fine
-            console.error('[ChatStoreProvider] Pre-search execution failed:', response.status);
-          }
-          // Read the stream to completion (fire and forget)
-          // The orchestrator will sync the COMPLETE status to the store
-          const reader = response.body?.getReader();
-          if (reader) {
-            while (true) {
-              const { done } = await reader.read();
-              if (done)
-                break;
+            json: {
+              userQuery: pendingMessage,
+            },
+          }).then(() => {
+            // ✅ IMMEDIATELY EXECUTE: Trigger pre-search execution after creation
+            // This replaces the PreSearchStream component's POST request
+            return fetch(
+              `/api/v1/chat/threads/${effectiveThreadId}/rounds/${newRoundNumber}/pre-search`,
+              {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Accept': 'text/event-stream',
+                },
+                body: JSON.stringify({ userQuery: pendingMessage }),
+              },
+            );
+          }).then(async (response) => {
+            if (!response.ok && response.status !== 409) {
+              // 409 = already executing, which is fine
+              console.error('[ChatStoreProvider] Pre-search execution failed:', response.status);
             }
-          }
-        }).catch((error) => {
-          console.error('[ChatStoreProvider] Failed to create/execute pre-search:', error);
+            // Read the stream to completion
+            const reader = response.body?.getReader();
+            if (reader) {
+              while (true) {
+                const { done } = await reader.read();
+                if (done)
+                  break;
+              }
+            }
+            // ✅ CRITICAL FIX: Invalidate query to sync COMPLETE status to store
+            // Without this, the orchestrator won't know the pre-search completed
+            // and the effect won't re-run to send the message
+            queryClientRef.current.invalidateQueries({
+              queryKey: queryKeys.threads.preSearches(effectiveThreadId),
+            });
+          }).catch((error) => {
+            console.error('[ChatStoreProvider] Failed to create/execute pre-search:', error);
+          });
         });
-      });
-      return; // Wait for pre-search to complete (orchestrator will sync it, effect will re-run)
+        return; // Wait for pre-search to complete (query invalidation will sync it, effect will re-run)
+      }
+      // If already attempted and failed, fall through to send message without pre-search
     }
 
     // ✅ STEP 2: Handle pre-search execution state
@@ -758,6 +787,10 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
                   break;
               }
             }
+            // ✅ CRITICAL FIX: Invalidate query to sync COMPLETE status to store
+            queryClientRef.current.invalidateQueries({
+              queryKey: queryKeys.threads.preSearches(effectiveThreadId),
+            });
           }).catch((error) => {
             console.error('[ChatStoreProvider] Failed to execute stuck pre-search:', error);
           });

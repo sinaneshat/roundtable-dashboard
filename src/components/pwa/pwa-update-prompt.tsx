@@ -1,22 +1,19 @@
 'use client';
 
-import { RefreshCw, X } from 'lucide-react';
+import { Download, X } from 'lucide-react';
 import type { AbstractIntlMessages } from 'next-intl';
 import { NextIntlClientProvider, useTranslations } from 'next-intl';
 import { useEffect, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/ui/cn';
-import { glassCardStyles, glassVariants } from '@/lib/ui/glassmorphism';
 
 /**
- * PWA Update Prompt - Detects and prompts users to update when new version available
+ * PWA Update Prompt - Notifies users when a new version is available
  *
- * Features:
- * - Glass-morphism design matching established design system
- * - Pill-shaped buttons following shadcn/ui patterns
- * - Service worker update detection
- * - Slide-in animation with proper Tailwind classes
+ * Uses shadcn Card component with glass variant for consistency
+ * with the rest of the design system.
  */
 type PWAUpdatePromptProps = {
   messages: AbstractIntlMessages;
@@ -34,7 +31,7 @@ function PWAUpdatePromptContent({
   registration: ServiceWorkerRegistration | null;
   onDismiss: () => void;
 }) {
-  const t = useTranslations();
+  const t = useTranslations('pwa');
 
   const handleUpdate = async () => {
     if (!registration?.waiting) {
@@ -58,47 +55,65 @@ function PWAUpdatePromptContent({
   }
 
   return (
-    <div
-      role="alert"
-      aria-live="polite"
+    <Card
+      variant="glass"
       className={cn(
-        glassVariants.medium,
-        'border',
-        'fixed bottom-6 right-6 z-[100]',
-        'flex items-center gap-3',
-        'px-4 py-3',
-        'max-w-[400px] min-w-[320px]',
-        'rounded-2xl',
-        'animate-in slide-in-from-right-full fade-in duration-300',
+        'fixed bottom-4 right-4 z-[100]',
+        'w-[360px] max-w-[calc(100vw-2rem)]',
+        'shadow-lg',
+        'animate-in slide-in-from-bottom-4 fade-in duration-300',
       )}
-      style={glassCardStyles.medium}
     >
-      <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary/20">
-        <RefreshCw className="size-4 text-primary" />
-      </div>
+      <CardContent className="p-4">
+        <div className="flex items-start gap-3">
+          {/* Icon */}
+          <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary/10">
+            <Download className="size-5 text-primary" />
+          </div>
 
-      <span className="flex-1 text-sm font-medium text-foreground">
-        {t('newVersionAvailable')}
-      </span>
+          {/* Content */}
+          <div className="flex-1 min-w-0 space-y-1">
+            <p className="text-sm font-semibold text-foreground">
+              {t('newVersionAvailable')}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {t('updateDescription')}
+            </p>
+          </div>
 
-      <Button
-        size="sm"
-        onClick={handleUpdate}
-        className="shrink-0"
-      >
-        {t('updateNow')}
-      </Button>
+          {/* Dismiss button */}
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onDismiss}
+            aria-label={t('dismiss')}
+            className="size-8 shrink-0 -mt-1 -mr-1"
+          >
+            <X className="size-4" />
+          </Button>
+        </div>
 
-      <Button
-        variant="ghost"
-        size="icon"
-        onClick={onDismiss}
-        aria-label={t('dismiss')}
-        className="size-8 shrink-0 text-muted-foreground hover:text-foreground"
-      >
-        <X className="size-4" />
-      </Button>
-    </div>
+        {/* Actions */}
+        <div className="flex items-center gap-2 mt-3 pt-3 border-t border-border/50">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onDismiss}
+            className="flex-1"
+          >
+            {t('later')}
+          </Button>
+          <Button
+            size="sm"
+            onClick={handleUpdate}
+            className="flex-1"
+            startIcon={<Download className="size-3.5" />}
+          >
+            {t('updateNow')}
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -108,17 +123,14 @@ export function PWAUpdatePrompt({ messages, locale, timeZone, now }: PWAUpdatePr
   const [dismissed, setDismissed] = useState(false);
 
   useEffect(() => {
-    // Only run in browser
     if (typeof window === 'undefined' || !('serviceWorker' in navigator)) {
       return;
     }
 
-    // Skip in development (no service worker in dev mode)
     if (process.env.NODE_ENV === 'development') {
       return;
     }
 
-    // Track service workers for cleanup
     let currentReg: ServiceWorkerRegistration | null = null;
     let installingWorker: ServiceWorker | null = null;
 
@@ -127,14 +139,12 @@ export function PWAUpdatePrompt({ messages, locale, timeZone, now }: PWAUpdatePr
         const registrations = await navigator.serviceWorker.getRegistrations();
 
         for (const reg of registrations) {
-          // Check if there's a waiting service worker
           if (reg.waiting) {
             setUpdateAvailable(true);
             setRegistration(reg);
             return;
           }
 
-          // Check for updates
           await reg.update();
         }
       } catch (error) {
@@ -142,7 +152,6 @@ export function PWAUpdatePrompt({ messages, locale, timeZone, now }: PWAUpdatePr
       }
     };
 
-    // Listen for service worker updates
     const handleControllerChange = () => {
       setUpdateAvailable(true);
     };
@@ -162,16 +171,12 @@ export function PWAUpdatePrompt({ messages, locale, timeZone, now }: PWAUpdatePr
       }
     };
 
-    // Check for updates on mount
     checkForUpdates();
 
-    // Check for updates every 60 seconds
     const interval = setInterval(checkForUpdates, 60000);
 
-    // Listen for controller changes
     navigator.serviceWorker.addEventListener('controllerchange', handleControllerChange);
 
-    // Listen for update found events
     const setupUpdateListener = async () => {
       try {
         const reg = await navigator.serviceWorker.ready;

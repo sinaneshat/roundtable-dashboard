@@ -1,5 +1,4 @@
 'use client';
-import { motion } from 'framer-motion';
 import { AlertCircle, ChevronDown, ChevronUp, Globe, Search } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useState } from 'react';
@@ -49,11 +48,7 @@ export function WebSearchDisplay({
           : 'synthesize';
 
     return (
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        className={cn('relative py-2', className)}
-      >
+      <div className={cn('relative py-2', className)}>
         <div>
           <div className="mb-3">
             {/* Simple header */}
@@ -86,7 +81,7 @@ export function WebSearchDisplay({
             <Skeleton className="h-12 w-5/6" />
           </div>
         </div>
-      </motion.div>
+      </div>
     );
   }
 
@@ -102,11 +97,7 @@ export function WebSearchDisplay({
   const hasImages = successfulResults.some(r => r.metadata?.imageUrl);
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      className={cn('relative py-2', className)}
-    >
+    <div className={cn('relative py-2', className)}>
       <div className="border-l-2 border-primary/20 pl-3">
         <Collapsible open={isOpen} onOpenChange={setIsOpen}>
           <CollapsibleTrigger asChild>
@@ -120,9 +111,8 @@ export function WebSearchDisplay({
                   <span className="font-medium">{t('title')}</span>
                 </div>
 
-                {/* Results summary badges - Simplified for clean UX */}
+                {/* Results summary badges */}
                 <div className="flex items-center gap-2 flex-wrap">
-                  {/* Results count */}
                   <Badge variant="secondary" className="text-xs">
                     <Search className="size-3 mr-1" />
                     {successfulResults.length}
@@ -153,33 +143,25 @@ export function WebSearchDisplay({
           </CollapsibleTrigger>
 
           <CollapsibleContent className="border-t border-border/50">
-            {/* Results display - Clean, focused on rich content */}
             <div className="p-4 space-y-4">
-              {/* 1. AI Answer Summary - Display prominently with streaming support */}
+              {/* AI Answer Summary */}
               {(answer || isStreaming) && (
-                <motion.div
-                  layout
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  className="p-4 rounded-lg bg-muted/10 border border-border/30"
-                >
+                <div className="p-4 rounded-lg bg-muted/10 border border-border/30">
                   <LLMAnswerDisplay
                     answer={answer ?? null}
                     isStreaming={isStreaming}
                     sources={successfulResults.map(r => ({ url: r.url, title: r.title }))}
                   />
-                </motion.div>
+                </div>
               )}
 
-              {/* 2. Image Gallery - Show rich visual content */}
+              {/* Image Gallery */}
               {hasImages && (
-                <motion.div layout initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.1 }}>
-                  <WebSearchImageGallery results={successfulResults} />
-                </motion.div>
+                <WebSearchImageGallery results={successfulResults} />
               )}
 
-              {/* 3. Detailed Sources - Expandable detailed results */}
-              <motion.div layout className="space-y-2" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.15 }}>
+              {/* Detailed Sources */}
+              <div className="space-y-2">
                 <div className="flex items-center justify-between py-2 border-t border-border/20 pt-4">
                   <div className="flex items-center gap-2">
                     <Search className="size-4 text-muted-foreground" />
@@ -203,7 +185,7 @@ export function WebSearchDisplay({
                     />
                   ))}
                 </div>
-              </motion.div>
+              </div>
 
               {/* Error display */}
               {hasErrors && (
@@ -220,6 +202,6 @@ export function WebSearchDisplay({
           </CollapsibleContent>
         </Collapsible>
       </div>
-    </motion.div>
+    </div>
   );
 }

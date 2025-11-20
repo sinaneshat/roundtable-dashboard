@@ -141,7 +141,19 @@ export const listModelsHandler: RouteHandler<typeof listModelsRoute, ApiEnv> = c
     // ============================================================================
     // ✅ DEFAULT MODEL: Select best accessible model
     // ============================================================================
-    const defaultModelId = sortedModels.find(m => m.is_accessible_to_user)?.id || sortedModels[0]!.id;
+    // In development mode, prefer Gemini Flash Lite (free) to reduce costs
+    const isDevMode = process.env.NEXT_PUBLIC_WEBAPP_ENV === 'local' || process.env.NODE_ENV === 'development';
+    const devDefaultModel = 'google/gemini-2.5-flash-lite';
+
+    let defaultModelId: string;
+    if (isDevMode) {
+      // In dev, prefer Gemini Flash Lite if accessible, otherwise fall back to first accessible
+      const devModel = sortedModels.find(m => m.id === devDefaultModel && m.is_accessible_to_user);
+      defaultModelId = devModel?.id || sortedModels.find(m => m.is_accessible_to_user)?.id || sortedModels[0]!.id;
+    } else {
+      // In production, use best accessible model (sorted by flagship score)
+      defaultModelId = sortedModels.find(m => m.is_accessible_to_user)?.id || sortedModels[0]!.id;
+    }
 
     // ============================================================================
     // ✅ USER TIER CONFIG: All limits and metadata for frontend

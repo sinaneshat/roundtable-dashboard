@@ -1,17 +1,17 @@
 'use client';
 
 import { cva } from 'class-variance-authority';
-import { motion } from 'framer-motion';
 import type { LucideIcon } from 'lucide-react';
 import { ChevronDown } from 'lucide-react';
-import type { ComponentProps, ReactElement, ReactNode } from 'react';
-import { Children, createContext, Fragment, isValidElement, use, useCallback, useMemo, useState } from 'react';
+import { motion } from 'motion/react';
+import type { ComponentProps, ReactNode } from 'react';
+import { Children, createContext, use, useCallback, useMemo, useState } from 'react';
 
 import type { ChainOfThoughtStepStatus } from '@/api/core/enums';
 import { ChainOfThoughtStepStatuses } from '@/api/core/enums';
 import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { ANIMATION_EASING, ANIMATION_TIMINGS } from '@/constants/animations';
+import { fadeIn, staggerContainer } from '@/lib/ui/animations';
 import { cn } from '@/lib/ui/cn';
 
 /**
@@ -81,22 +81,17 @@ export function ChainOfThought({
 
   return (
     <ChainOfThoughtContext value={contextValue}>
-      <Collapsible open={open} onOpenChange={handleOpenChange} disabled={disabled} asChild>
-        <motion.div
-          layout
-          transition={{
-            layout: ANIMATION_EASING.LAYOUT,
-          }}
+      <Collapsible open={open} onOpenChange={handleOpenChange} disabled={disabled}>
+        <div
           className={cn(
             'rounded-lg border border-border/50 bg-muted/30',
             disabled && 'opacity-100',
             className,
           )}
+          {...props}
         >
-          <div {...props}>
-            {children}
-          </div>
-        </motion.div>
+          {children}
+        </div>
       </Collapsible>
     </ChainOfThoughtContext>
   );
@@ -133,7 +128,7 @@ export function ChainOfThoughtHeader({
       <span>{children}</span>
       <ChevronDown
         className={cn(
-          'size-4 transition-transform duration-200',
+          'size-4',
           open && 'rotate-180',
           disabled && 'opacity-50',
         )}
@@ -154,89 +149,47 @@ type ChainOfThoughtContentProps = ComponentProps<typeof CollapsibleContent> & {
 export function ChainOfThoughtContent({
   className,
   children,
-  staggerChildren = true,
+  staggerChildren = false,
   ...props
 }: ChainOfThoughtContentProps) {
-  const containerVariants = {
-    hidden: { opacity: 0 },
-    show: {
-      opacity: 1,
-      transition: {
-        duration: ANIMATION_TIMINGS.DURATION_FAST,
-        ease: ANIMATION_EASING.DEFAULT,
-        staggerChildren: staggerChildren ? ANIMATION_TIMINGS.STAGGER_NORMAL : 0,
-        delayChildren: staggerChildren ? ANIMATION_TIMINGS.DELAY_SHORT : 0,
-        when: 'beforeChildren' as const,
-      },
-    },
-  };
+  const { open } = useChainOfThought();
 
-  const itemVariants = {
-    hidden: { opacity: 0, y: 2 },
-    show: {
-      opacity: 1,
-      y: 0,
-      transition: {
-        duration: ANIMATION_TIMINGS.DURATION_FAST,
-        ease: ANIMATION_EASING.DEFAULT,
-      },
-    },
-  };
-
-  // Helper to flatten children including Fragments
-  const flattenChildren = (children: ReactNode): ReactNode[] => {
-    const flat: ReactNode[] = [];
-    // eslint-disable-next-line react/no-children-for-each -- Necessary to flatten Fragment children for stagger animation
-    Children.forEach(children, (child) => {
-      if (isValidElement(child) && child.type === Fragment) {
-        // Type-safe access to Fragment children
-        const fragmentProps = child.props as { children?: ReactNode };
-        flat.push(...flattenChildren(fragmentProps.children));
-      } else {
-        flat.push(child);
-      }
-    });
-    return flat;
-  };
-
-  const childrenArray = !staggerChildren || !children
-    ? null
-    : flattenChildren(children).filter(child => isValidElement(child));
-
-  const animatedChildren = childrenArray?.map((child) => {
-    const reactChild = child as ReactElement<{ id?: string }>;
-    // Use child's key if available, otherwise use a stable identifier from props
-    const childKey = reactChild.key
-      || reactChild.props.id
-      || `child-${childrenArray.indexOf(child)}`;
-
+  // When staggerChildren is enabled, wrap each child in motion.div for sequenced animations
+  if (staggerChildren && open) {
+    const childArray = Children.toArray(children);
     return (
-      <motion.div key={childKey} variants={itemVariants}>
-        {child}
-      </motion.div>
+      <CollapsibleContent
+        className={cn(
+          'px-4 pb-4',
+          className,
+        )}
+        {...props}
+      >
+        <motion.div
+          className="space-y-3"
+          variants={staggerContainer}
+          initial="hidden"
+          animate="visible"
+        >
+          {childArray.map((child, index) => (
+            <motion.div key={index} variants={fadeIn}>
+              {child}
+            </motion.div>
+          ))}
+        </motion.div>
+      </CollapsibleContent>
     );
-  });
+  }
 
   return (
     <CollapsibleContent
       className={cn(
-        'px-4 pb-4 space-y-3 overflow-hidden',
+        'px-4 pb-4 space-y-3',
         className,
       )}
       {...props}
     >
-      {staggerChildren && animatedChildren
-        ? (
-            <motion.div
-              variants={containerVariants}
-              initial="hidden"
-              animate="show"
-              className="space-y-3"
-            >
-              {animatedChildren}
-            </motion.div>
-          )
-        : children}
+      {children}
     </CollapsibleContent>
   );
 }

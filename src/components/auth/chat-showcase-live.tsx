@@ -1,7 +1,6 @@
 'use client';
 
 import type { UIMessage } from 'ai';
-import { AnimatePresence, motion } from 'framer-motion';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { AnalysisStatuses, MessagePartTypes, MessageRoles } from '@/api/core/enums';
@@ -224,11 +223,12 @@ export function ChatShowcaseLive() {
       });
     }
 
-    // Show analysis when complete
-    if (stage === 'analysis-complete') {
+    // Show analysis during analysis stages
+    // Always use COMPLETE status with full data - no streaming needed
+    if (stage === 'analysis-start' || stage === 'analysis-complete') {
       items.push({
         type: 'analysis',
-        data: MOCK_ANALYSIS,
+        data: MOCK_ANALYSIS, // Always has COMPLETE status and full data
         key: 'round-1-analysis',
         roundNumber: 1,
       });
@@ -273,83 +273,68 @@ export function ChatShowcaseLive() {
   // Show loading indicator between stages
   const showLoader = stage === 'pre-search-complete' && !isStreaming;
 
-  // Exactly match ChatThreadScreen structure
+  // Simplified render without animation wrappers
   return (
     <div className="container max-w-3xl mx-auto px-2 sm:px-4 md:px-6 pt-6 pb-[240px] flex-1">
-      <AnimatePresence mode="wait">
-        <motion.div
-          key={`stage-${stage}`}
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -10 }}
-          transition={{
-            duration: 0.4,
-            ease: [0.4, 0, 0.2, 1],
-          }}
-        >
-          <ThreadTimeline
-            timelineItems={timelineItems}
-            scrollContainerId="chat-scroll-container"
-            user={MOCK_USER}
+      <div>
+        <ThreadTimeline
+          timelineItems={timelineItems}
+          scrollContainerId="chat-scroll-container"
+          user={MOCK_USER}
+          participants={MOCK_PARTICIPANTS.map((p, idx) => ({
+            id: `participant-${idx}`,
+            modelId: p.modelId,
+            role: p.role,
+            priority: idx,
+            threadId: 'demo-thread',
+            customRoleId: null,
+            isEnabled: true,
+            settings: null,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          }))}
+          threadId="demo-thread"
+          isStreaming={isStreaming}
+          currentParticipantIndex={currentParticipantIndex}
+          currentStreamingParticipant={currentStreamingParticipant
+            ? {
+                id: `participant-${currentParticipantIndex}`,
+                modelId: currentStreamingParticipant.modelId,
+                role: currentStreamingParticipant.role,
+                priority: currentParticipantIndex,
+                threadId: 'demo-thread',
+                customRoleId: null,
+                isEnabled: true,
+                settings: null,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+              }
+            : null}
+          streamingRoundNumber={1}
+          feedbackByRound={new Map()}
+          pendingFeedback={null}
+          isReadOnly={true}
+          preSearches={preSearches}
+          onAnalysisStreamStart={() => {}}
+          onAnalysisStreamComplete={() => {}}
+          demoPreSearchOpen={stage !== 'idle' && stage !== 'user-message'}
+          demoAnalysisOpen={stage === 'analysis-start' || stage === 'analysis-complete'}
+        />
+      </div>
+
+      {showLoader && (
+        <div className="mt-8 sm:mt-12">
+          <StreamingParticipantsLoader
             participants={MOCK_PARTICIPANTS.map((p, idx) => ({
               id: `participant-${idx}`,
               modelId: p.modelId,
               role: p.role,
               priority: idx,
-              threadId: 'demo-thread',
-              customRoleId: null,
-              isEnabled: true,
-              settings: null,
-              createdAt: new Date(),
-              updatedAt: new Date(),
             }))}
-            threadId="demo-thread"
-            isStreaming={isStreaming}
-            currentParticipantIndex={currentParticipantIndex}
-            currentStreamingParticipant={currentStreamingParticipant
-              ? {
-                  id: `participant-${currentParticipantIndex}`,
-                  modelId: currentStreamingParticipant.modelId,
-                  role: currentStreamingParticipant.role,
-                  priority: currentParticipantIndex,
-                  threadId: 'demo-thread',
-                  customRoleId: null,
-                  isEnabled: true,
-                  settings: null,
-                  createdAt: new Date(),
-                  updatedAt: new Date(),
-                }
-              : null}
-            streamingRoundNumber={1}
-            feedbackByRound={new Map()}
-            pendingFeedback={null}
-            isReadOnly={true}
-            preSearches={preSearches}
-            onAnalysisStreamStart={() => {}}
-            onAnalysisStreamComplete={() => {}}
+            currentParticipantIndex={0}
           />
-
-          {showLoader && (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              transition={{ duration: 0.3 }}
-              className="mt-8 sm:mt-12"
-            >
-              <StreamingParticipantsLoader
-                participants={MOCK_PARTICIPANTS.map((p, idx) => ({
-                  id: `participant-${idx}`,
-                  modelId: p.modelId,
-                  role: p.role,
-                  priority: idx,
-                }))}
-                currentParticipantIndex={0}
-              />
-            </motion.div>
-          )}
-        </motion.div>
-      </AnimatePresence>
+        </div>
+      )}
     </div>
   );
 }

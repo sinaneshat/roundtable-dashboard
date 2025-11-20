@@ -1,6 +1,5 @@
 'use client';
 import { experimental_useObject as useObject } from '@ai-sdk/react';
-import { AnimatePresence, LayoutGroup, motion } from 'framer-motion';
 import { memo, useCallback, useEffect, useRef } from 'react';
 
 import type { StreamErrorType } from '@/api/core/enums';
@@ -14,14 +13,6 @@ import { hasAnalysisData, hasParticipantContent, hasRoundSummaryContent } from '
 import { LeaderboardCard } from './leaderboard-card';
 import { ParticipantAnalysisCard } from './participant-analysis-card';
 import { RoundSummarySection } from './round-summary-section';
-
-// Layout transition for smooth height animations
-const layoutTransition = {
-  type: 'spring' as const,
-  stiffness: 500,
-  damping: 40,
-  mass: 1,
-};
 
 type ModeratorAnalysisStreamProps = {
   threadId: string;
@@ -305,120 +296,43 @@ function ModeratorAnalysisStreamComponent({
   const validParticipantAnalyses = participantAnalyses.filter((item: unknown): item is NonNullable<typeof item> => item != null) as ModeratorAnalysisPayload['participantAnalyses'];
   const validRoundSummary = roundSummary as ModeratorAnalysisPayload['roundSummary'];
 
-  // ✅ CONTENT-AWARE ANIMATION FIX: Use enum-based validator for type-safe content checking
-  // Prevents empty containers from expanding with layout animations
+  // Content checking
   const hasSummaryContent = hasRoundSummaryContent(validRoundSummary);
 
-  const containerVariants = {
-    hidden: { opacity: 0 },
-    show: {
-      opacity: 1,
-      transition: {
-        staggerChildren: 0.12,
-        delayChildren: 0.08,
-      },
-    },
-  };
-
-  const itemVariants = {
-    hidden: { opacity: 0, y: 16 },
-    show: {
-      opacity: 1,
-      y: 0,
-      transition: {
-        type: 'spring' as const,
-        stiffness: 400,
-        damping: 30,
-      },
-    },
-  };
-
   return (
-    <LayoutGroup id={`analysis-${analysis.id}`}>
-      <motion.div
-        layout
-        variants={containerVariants}
-        initial="hidden"
-        animate="show"
-        className="space-y-4"
-        transition={{ layout: layoutTransition }}
-      >
-        <AnimatePresence mode="popLayout" initial={false}>
-          {hasSummaryContent && (
-            <motion.div
-              key="round-summary"
-              layout
-              variants={itemVariants}
-              exit={{ opacity: 0, y: -8, transition: { duration: 0.15 } }}
-              transition={{ layout: layoutTransition }}
-            >
-              <RoundSummarySection
-                roundSummary={validRoundSummary}
-                onActionClick={stableOnActionClick}
+    <div className="space-y-4">
+      {validLeaderboard.length > 0 && (
+        <LeaderboardCard leaderboard={validLeaderboard} />
+      )}
+
+      {validParticipantAnalyses.length > 0 && (
+        <div className="space-y-4">
+          {validParticipantAnalyses.map((participant) => {
+            if (!hasParticipantContent(participant)) {
+              return null;
+            }
+
+            return (
+              <ParticipantAnalysisCard
+                key={`participant-${participant.participantIndex}`}
+                analysis={participant}
                 isStreaming={analysis.status === AnalysisStatuses.STREAMING}
               />
-            </motion.div>
-          )}
+            );
+          })}
+        </div>
+      )}
 
-          {validLeaderboard.length > 0 && (
-            <motion.div
-              key="leaderboard"
-              layout
-              variants={itemVariants}
-              exit={{ opacity: 0, y: -8, transition: { duration: 0.15 } }}
-              transition={{ layout: layoutTransition }}
-            >
-              <LeaderboardCard leaderboard={validLeaderboard} />
-            </motion.div>
-          )}
+      {hasSummaryContent && (
+        <RoundSummarySection
+          roundSummary={validRoundSummary}
+          onActionClick={stableOnActionClick}
+          isStreaming={analysis.status === AnalysisStatuses.STREAMING}
+        />
+      )}
 
-          {validParticipantAnalyses.length > 0 && (
-            <motion.div
-              key="participants"
-              layout
-              className="space-y-4"
-              transition={{ layout: layoutTransition }}
-            >
-              <AnimatePresence mode="popLayout" initial={false}>
-                {validParticipantAnalyses.map((participant, participantIdx) => {
-                  // ✅ CONTENT-AWARE ANIMATION FIX: Use enum-based validator for type-safe content checking
-                  // Prevents empty participant cards from animating in
-                  if (!hasParticipantContent(participant)) {
-                    return null;
-                  }
-
-                  return (
-                    <motion.div
-                      key={`participant-${participant.participantIndex}`}
-                      layout
-                      initial={{ opacity: 0, y: 12 }}
-                      animate={{
-                        opacity: 1,
-                        y: 0,
-                        transition: {
-                          type: 'spring',
-                          stiffness: 400,
-                          damping: 30,
-                          delay: participantIdx * 0.08,
-                        },
-                      }}
-                      exit={{ opacity: 0, y: -8, transition: { duration: 0.15 } }}
-                      transition={{ layout: layoutTransition }}
-                    >
-                      <ParticipantAnalysisCard
-                        analysis={participant}
-                        isStreaming={analysis.status === AnalysisStatuses.STREAMING}
-                      />
-                    </motion.div>
-                  );
-                })}
-              </AnimatePresence>
-            </motion.div>
-          )}
-        </AnimatePresence>
-        <div ref={bottomRef} />
-      </motion.div>
-    </LayoutGroup>
+      <div ref={bottomRef} />
+    </div>
   );
 }
 export const ModeratorAnalysisStream = memo(ModeratorAnalysisStreamComponent, (prevProps, nextProps) => {

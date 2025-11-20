@@ -1243,8 +1243,10 @@
   },
   "pwa": {
     "dismiss": "Dismiss update notification",
-    "newVersionAvailable": "New version available",
-    "updateNow": "Update now"
+    "later": "Later",
+    "newVersionAvailable": "Update available",
+    "updateDescription": "A new version is ready. Update now for the latest features and improvements.",
+    "updateNow": "Update"
   },
   "privacy": {
     "description": "Description",

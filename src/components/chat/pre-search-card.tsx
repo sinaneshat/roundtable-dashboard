@@ -134,7 +134,7 @@ export function PreSearchCard({
           </ChainOfThoughtHeader>
         </div>
 
-        <ChainOfThoughtContent staggerChildren={demoShowContent === undefined}>
+        <ChainOfThoughtContent>
           {/* Demo mode: only show content when demoShowContent is true */}
           {(demoShowContent === undefined || demoShowContent) && (
             <div className="space-y-4">
